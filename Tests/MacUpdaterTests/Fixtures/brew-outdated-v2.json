@@ -1,0 +1,30 @@
+{
+  "formulae": [
+    {
+      "name": "git",
+      "installed_versions": ["2.45.0"],
+      "current_version": "2.46.0",
+      "pinned": false
+    },
+    {
+      "name": "node",
+      "installed_versions": "24.0.0",
+      "current_version": "24.1.0",
+      "pinned": false
+    }
+  ],
+  "casks": [
+    {
+      "name": "visual-studio-code",
+      "installed_versions": ["1.90.0"],
+      "current_version": "1.91.0",
+      "auto_updates": true
+    },
+    {
+      "name": "postman",
+      "installed_versions": ["11.0.0"],
+      "current_version": "11.1.0",
+      "auto_updates": false
+    }
+  ]
+}

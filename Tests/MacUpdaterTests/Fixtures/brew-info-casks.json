@@ -1,0 +1,22 @@
+{
+  "casks": [
+    {
+      "token": "visual-studio-code",
+      "artifacts": [
+        { "app": ["Visual Studio Code.app"] }
+      ]
+    },
+    {
+      "token": "font-fira-code",
+      "artifacts": [
+        { "font": ["FiraCode-Regular.ttf"] }
+      ]
+    },
+    {
+      "token": "postman",
+      "artifacts": [
+        { "app": [{ "target": "Postman.app" }] }
+      ]
+    }
+  ]
+}
