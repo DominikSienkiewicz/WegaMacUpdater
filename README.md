@@ -1,89 +1,123 @@
 # Wega Mac Updater
+**Architected & Developed by [Dominik](https://www.linkedin.com/in/dominik-sienkiewicz/)** *Principal AI Engineer | Full Stack Architect*
 
-macOS-first SwiftUI rewrite of the old TypeScript `mac-updater` CLI.
+Native macOS app that keeps every application on your Mac up to date — Homebrew casks, Mac App Store, JetBrains IDEs, GitHub Releases, and Sparkle apps — from a single window, without ever opening a terminal.
 
-## Status
+![Swift](https://img.shields.io/badge/Swift-6.0-orange?style=for-the-badge&logo=swift&logoColor=white)
+![SwiftUI](https://img.shields.io/badge/SwiftUI-macOS_14%2B-blue?style=for-the-badge&logo=apple&logoColor=white)
+![Version](https://img.shields.io/badge/Version-0.0.1-lightgrey?style=for-the-badge)
+![Homebrew](https://img.shields.io/badge/Homebrew-required-FBB040?style=for-the-badge&logo=homebrew&logoColor=white)
+![Architecture](https://img.shields.io/badge/Architecture-SPM_Modules-purple?style=for-the-badge)
 
-This repository currently contains the first buildable Swift foundation:
+## The Vision: one window, zero terminals
 
-- `WegaMacUpdater` SwiftUI shell with Update, Uninstall, Migration, Inventory, and Info views.
-- `MacUpdaterCore` for process execution, Homebrew/MAS parsing, app scanning, cask matching, stale cask detection, and helper path validation.
-- Inventory marks apps as `Brew`, `App Store`, or `Manual`. App Store apps are detected via `Contents/_MASReceipt/receipt`. App Store IDs are populated via `mas list` (requires optional `mas` install).
-- Migration scans non-Homebrew, non-App Store apps for migration candidates. It checks Homebrew Cask availability and uses `mas search` in parallel to find Mac App Store equivalents (requires optional `mas` install and network access). Homebrew migration shows a confirmation dialog with the exact `brew install --cask <token>` command before executing, then streams live brew output into an inline log panel. On success the app moves to the migrated set; on failure the log is preserved for inspection.
-- Info tab shows app version and build number, GitHub and issue-tracker links, real-time system diagnostics (Homebrew version, mas-cli version, Privileged Helper presence), external tool licenses (Homebrew BSD 2-Clause, mas-cli MIT), and macOS version with CPU architecture.
-- `MacUpdaterHelperClient` for `SMAppService` helper status and registration.
-- `WegaMacUpdaterPrivilegedHelper` placeholder executable for the future signed LaunchDaemon/XPC helper.
-- `MacUpdaterTests` with fixture-based parser and validation tests, including `VersionComparisonTests` covering all version-comparison edge cases.
-- `VersionComparison` module in `MacUpdaterCore` provides shared, public functions for version normalization and comparison:
-  - `versionsEqual` handles Homebrew comma-format (`5.3.1,50301`), semver `+` build metadata (`0.4.13+1`), parenthesized build numbers (`7.0.0 (77593)`), and trailing-zero padding (`125.0` == `125.0.0`).
-  - `isUpgrade` guards against false positives and downgrade reporting using `lexicographicallyPrecedes`.
-  - `normalizeGitTag` strips `v`, `V`, `release-` prefixes and `-alpha`/`-beta`/`-build…` suffixes from GitHub release tags.
-- `JetBrainsUpdateChecker` in `MacUpdaterCore` detects updates for 14 JetBrains IDEs by querying the JetBrains Data Services API (`data.services.jetbrains.com`). This handles IDEs installed via Toolbox (where `brew outdated` never fires because the cask has `auto_updates: true`). The action in Update view opens JetBrains Toolbox.
-- `GitHubReleasesChecker` in `MacUpdaterCore` detects updates for 12 popular open-source apps (VS Code, Obsidian, Rectangle, AltTab, Stats, Maccy, MonitorControl, LinearMouse, IINA, HandBrake, Keka, GitHub Desktop) via the GitHub Releases API. The action in Update view opens the app's GitHub Releases page.
-- Update detection source priority: JetBrains (4) > GitHub (3) > Cask (2) > Sparkle (1). When multiple checkers match the same app, the highest-priority source wins to avoid duplicates and prefer the most accurate update path.
-- Both GitHub and JetBrains requests use `URLRequest.cachePolicy = .reloadRevalidatingCacheData` to send conditional HTTP headers (`If-None-Match` / `If-Modified-Since`) and avoid redundant transfers on repeated checks.
-- Uninstall view supports all app types: Homebrew casks (`brew uninstall --cask`), App Store, and manually installed apps (moved to Trash via `FileManager`). Displays per-row source badges and a confirmation dialog that shows both the brew zap count and the trash count.
-- All scan-directory logic (`/Applications`, `~/Applications`, and their immediate non-.app subdirectories) is centralized in the `buildScanDirs()` helper in `SharedViews.swift` and shared by Update, Inventory, Uninstall, and Migration views.
-- `ApplicationScanner` reads `Contents/Info.plist` directly via `PropertyListSerialization` instead of `Bundle(url:)` to avoid stale bundle caching after in-place app updates (e.g. JetBrains Toolbox replacing an IDE in-place).
+Package managers have proliferated — Homebrew casks, formulae, Mac App Store, Sparkle auto-updaters, JetBrains Toolbox, GitHub Releases. Each lives in a different UI or CLI. Wega centralises all of them: one native SwiftUI window that knows where every app came from and how to update it correctly. No `brew upgrade` in muscle memory, no App Store tab left open, no missed JetBrains IDE because Toolbox uses `auto_updates: true` and `brew outdated` never fires.
 
-The old `sudo` password storage model is intentionally not ported. Privileged work must go through a signed helper with typed, allowlisted operations.
+## How it works
+
+```
+Homebrew casks ────────────────────────────────────────────────────────────────────────┐
+Homebrew formulae ──────────────────────────────────────────────────────────────────── ┤
+Mac App Store (mas-cli) ────────────────────────────────────────────────────────────── ┤
+JetBrains Data Services API ────────────────────────────────────────────────────────── ┤─► Version comparison
+GitHub Releases API ────────────────────────────────────────────────────────────────── ┤   (priority dedup)  ──► Update list
+Sparkle (SUFeedURL from Info.plist) ────────────────────────────────────────────────── ┤
+/Applications + ~/Applications scan ───────────────────────────────────────────────────┘
+```
+
+1. **Scan** — `ApplicationScanner` walks `/Applications`, `~/Applications`, and every immediate non-.app subdirectory (e.g. `/Applications/JetBrains/`). It reads `Contents/Info.plist` directly via `PropertyListSerialization` — never `Bundle(url:)` — so freshly updated apps are always seen with their real version, not a stale cached one.
+2. **Classify** — each app is tagged: `isManagedByBrew` (token found in `brew list --cask`), `isManagedByMas` (receipt at `Contents/_MASReceipt/receipt`), or manual.
+3. **Check** — four parallel checkers run per app. Results are deduplicated by path, keeping the highest-priority source:
+
+| Priority | Source | When it fires |
+|----------|--------|---------------|
+| 4 | JetBrains Data Services | IntelliJ IDEA, PyCharm, WebStorm, GoLand, CLion, Rider, DataGrip, RubyMine, PHPStorm, DataSpell, Aqua, RustRover (14 IDEs) |
+| 3 | GitHub Releases API | VS Code, Obsidian, Rectangle, AltTab, Stats, Maccy, MonitorControl, LinearMouse, IINA, HandBrake, Keka, GitHub Desktop |
+| 2 | Homebrew Cask | Any cask where `brew info` reports a newer version; uses `brew list --cask --versions` as authoritative installed reference |
+| 1 | Sparkle | Any non-brew app that exposes `SUFeedURL` in its `Info.plist` |
+
+4. **Version normalisation** — a shared `VersionComparison` module handles every version format seen in the wild: `7.0.0 (77593)` vs `7.0.0.77593` (Zoom), `125.0` vs `125.0.0` (Google Drive), `5.3.1,50301` Homebrew comma-format, `0.4.13+1` semver build metadata, and `v1.12.7` / `release-3.5.8` / `v1.4.2-build164` GitHub tag prefixes. `isUpgrade` uses `lexicographicallyPrecedes` so a locally-ahead app (e.g. Logi Options 10.9.0 when brew tracks 10.7.0) is never reported as outdated.
+5. **Act** — each update source drives its own action: brew casks run `brew install --cask` with a live log panel; JetBrains apps open Toolbox; GitHub apps open the Releases page; Sparkle apps prompt inside the app itself.
+
+## Features
+
+### Update
+Checks Homebrew formulae + casks (greedy), Mac App Store, and all four manual-app checkers in one pass. Selectable list — update all or pick individually. Live brew log streamed into an inline panel. After update, running apps are detected and offered a one-click restart. Stale casks are cleaned before the outdated check runs.
+
+### Uninstall
+Scans every app on the system regardless of origin. Brew casks are removed with `brew uninstall --cask --zap`; App Store and manually installed apps are moved to Trash. Confirmation dialog shows exact counts — how many casks will be zapped, how many go to Trash.
+
+### Migration
+Finds manually-installed apps that have a Homebrew Cask equivalent and offers to migrate them with `brew install --cask`. Runs `mas search` in parallel for apps without a cask match to find App Store equivalents. After successful brew migration, scans `~/Library` for leftover preference files and offers to clean them with a checkbox sheet.
+
+### Inventory
+Full list of every `.app` on the system with source badge (Brew / App Store / Manual), version, bundle ID, and last-modified date. Filterable by source, sortable by any column, searchable by name or bundle ID. Four stat cards at the top show counts per category — tap any card to filter.
+
+### Info
+Real-time diagnostics: Homebrew version, mas-cli version, Privileged Helper status, macOS version, CPU architecture. App version, build, links. License block for bundled open-source tools.
+
+## Architecture
+
+```
+WegaMacUpdater (SwiftUI app target)
+├── ContentView          — sidebar + tab routing; brew-not-found gate
+├── UpdateView           — multi-source update orchestrator
+├── UninstallView        — all-app-type uninstaller
+├── MigrationView        — manual→brew/mas migration wizard
+├── InventoryView        — full app catalogue
+├── InfoView             — diagnostics + about
+└── SharedViews          — buildScanDirs(), WegaBadge, WegaCard, PackageRow, EmptyHero…
+
+MacUpdaterCore (library target — no SwiftUI dependency)
+├── ApplicationScanner   — filesystem scan, Info.plist parsing, brew/mas tagging
+├── BrewService          — brew outdated (greedy), install, uninstall, cask versions
+├── MasService           — mas outdated, list, search, upgrade
+├── JetBrainsUpdateChecker — data.services.jetbrains.com, 14 IDE mappings
+├── GitHubReleasesChecker  — api.github.com/releases/latest, 12 app mappings
+├── SparkleUpdateChecker   — SUFeedURL fetch + version parse
+├── VersionComparison    — versionsEqual, isUpgrade, normalizeGitTag (public, tested)
+├── CaskDatabaseClient   — full cask database fetch + disk cache
+├── CaskMatcher          — bundle-id / name → cask token matching
+├── StaleCaskDetector    — detects casks where installed .app is gone
+├── BinaryLocator        — resolves brew + mas executable paths
+└── Models               — ApplicationInfo, ManualOutdatedApp, UpdateSource…
+
+MacUpdaterTests
+└── VersionComparisonTests, ApplicationScannerMasTests, BrewInfoParserTests…
+```
+
+No `sudo`. No stored passwords. Homebrew runs as the logged-in user. Privileged operations (future) go through a signed XPC helper with typed, allowlisted requests — never a shell-string API.
 
 ## Requirements
 
-- macOS 14 or newer.
-- Xcode 26 or compatible Swift toolchain.
-- Homebrew installed at one of:
-  - `/opt/homebrew/bin/brew`
-  - `/usr/local/bin/brew`
-- Optional `mas` installed at one of:
-  - `/opt/homebrew/bin/mas`
-  - `/usr/local/bin/mas`
+- macOS 14 or newer
+- Xcode 26 or Swift 6.0 toolchain
+- Homebrew installed at `/opt/homebrew/bin/brew` or `/usr/local/bin/brew`
+- Optional: `mas` at `/opt/homebrew/bin/mas` or `/usr/local/bin/mas` (App Store features degrade gracefully without it)
 
-GUI apps do not inherit an interactive shell environment, so the app resolves Homebrew and `mas` through fixed executable paths instead of relying on `.zshrc` or `$PATH`.
+GUI apps do not inherit an interactive shell environment. Wega resolves all tool paths from fixed locations — no `.zshrc`, no `$PATH` dependency.
 
-## Build And Test
+## Build and test
 
 ```bash
-swift build
-swift test
-swift run WegaMacUpdater
+swift build               # compile all targets
+swift test                # run all tests
+swift run WegaMacUpdater  # launch app
 ```
 
-The package can be opened directly in Xcode via `Package.swift`. A dedicated signed `.app`/installer project is still needed before Developer ID distribution and notarization.
+Open `Package.swift` directly in Xcode for the full IDE experience. A signed `.app` bundle requires a separate Xcode project or `xcodebuild` invocation with a provisioning profile.
 
-## Security Model
+## Distribution
 
-- Homebrew commands run as the logged-in user.
-- `brew upgrade`, `brew uninstall`, and `mas upgrade` are not run as root.
-- The future helper must not expose `runCommand(String)` or any shell-string API.
-- Helper operations are constrained to typed requests:
-  - remove an app bundle only when the canonical path is allowlisted and the bundle identifier matches;
-  - remove approved user-library cleanup paths only;
-  - verify writability or return a clear explanation;
-  - optionally repair ownership for known Homebrew paths after explicit policy review.
-- Admin passwords are never stored in Keychain.
+Intended channel: Developer ID, outside the Mac App Store.
 
-## Distribution Notes
+- Developer ID Application signing
+- Hardened Runtime
+- Notarization
+- DMG placing `Wega Mac Updater.app` in `/Applications`
 
-The intended distribution channel is outside the Mac App Store:
+The future privileged helper lives inside the bundle at `Contents/Library/LaunchDaemons` and registers via `SMAppService.daemon(plistName:)`.
 
-- Developer ID signing.
-- Hardened Runtime.
-- Notarization.
-- DMG or installer that places `Wega Mac Updater.app` in `/Applications`.
+## License
 
-The privileged helper should live inside the signed app bundle under `Contents/Library/LaunchDaemons` and be registered through `SMAppService.daemon(plistName:)`. If macOS reports that approval is required, the app should send the user to Login Items & Background Items in System Settings.
-
-## Porting Scope
-
-The TypeScript sources in `../mac-updater` map to the new Swift modules as follows:
-
-| Old file | New area |
-| --- | --- |
-| `src/services/updater.ts` | `BrewService`, `MasService`, Update UI flow |
-| `src/services/scanner.ts` | `ApplicationScanner`, `CaskDatabaseClient`, `CaskMatcher` |
-| `src/services/uninstaller.ts` | Uninstall UI flow, `BrewService.uninstallCask` |
-| `src/services/migrator.ts` | Migration UI flow, future helper cleanup |
-| `src/utils/exec.ts` | `BinaryLocator`, `ProcessRunner`, `StaleCaskDetector` |
-| `src/utils/sudo.ts` | Replaced by helper/XPC design; not ported |
-| `src/constants.ts` | `MacUpdaterConstants` |
+[MIT](LICENSE)
