@@ -295,7 +295,7 @@ struct MigrationView: View {
                 await killProcess(info.processName)
             }
 
-            let stream = try model.brewService.events(arguments: ["install", "--cask", token])
+            let stream = try model.brewService.events(arguments: ["install", "--cask", "--force", token])
             var exitCode: Int32 = 0
             for try await event in stream {
                 switch event {
@@ -504,7 +504,7 @@ private struct MigrationConfirmSheet: View {
                     Text("Polecenie:")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.tertiary)
-                    Text("brew install --cask \(token)")
+                    Text("brew install --cask --force \(token)")
                         .font(.system(size: 12, design: .monospaced))
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
