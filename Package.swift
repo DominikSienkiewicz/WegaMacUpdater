@@ -19,7 +19,8 @@ let package = Package(
         .executableTarget(
             name: "WegaMacUpdater",
             dependencies: ["MacUpdaterCore"],
-            path: "Sources/MacUpdater"
+            path: "Sources/MacUpdater",
+            exclude: ["Info.plist"]
         ),
         .testTarget(
             name: "MacUpdaterTests",

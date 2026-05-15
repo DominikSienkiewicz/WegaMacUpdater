@@ -11,9 +11,12 @@ set -euo pipefail
 # Wymagania: Xcode Command Line Tools, swift, pkgbuild
 # ---------------------------------------------------------------------------
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
 BUNDLE_ID="com.wega.WegaMacUpdater"
 APP_NAME="WegaMacUpdater"
-VERSION="1.0.0"
+VERSION="0.0.1"
 MIN_MACOS="13.0"
 ARCH="arm64"           # zmień na "x86_64" lub "arm64-apple-macosx" jeśli potrzeba
 
