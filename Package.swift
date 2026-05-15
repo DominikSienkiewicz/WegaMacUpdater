@@ -11,36 +11,19 @@ let package = Package(
     products: [
         .executable(name: "WegaMacUpdater", targets: ["WegaMacUpdater"]),
         .library(name: "MacUpdaterCore", targets: ["MacUpdaterCore"]),
-        .library(name: "MacUpdaterHelperClient", targets: ["MacUpdaterHelperClient"]),
-        .executable(name: "WegaMacUpdaterPrivilegedHelper", targets: ["WegaMacUpdaterPrivilegedHelper"])
     ],
     targets: [
         .target(
             name: "MacUpdaterCore"
         ),
-        .target(
-            name: "MacUpdaterHelperClient",
-            dependencies: ["MacUpdaterCore"]
-        ),
         .executableTarget(
             name: "WegaMacUpdater",
-            dependencies: [
-                "MacUpdaterCore",
-                "MacUpdaterHelperClient"
-            ],
-            path: "Sources/MacUpdater"
-        ),
-        .executableTarget(
-            name: "WegaMacUpdaterPrivilegedHelper",
             dependencies: ["MacUpdaterCore"],
-            path: "Sources/MacUpdaterPrivilegedHelper"
+            path: "Sources/MacUpdater"
         ),
         .testTarget(
             name: "MacUpdaterTests",
-            dependencies: [
-                "MacUpdaterCore",
-                "MacUpdaterHelperClient"
-            ],
+            dependencies: ["MacUpdaterCore"],
             resources: [
                 .process("Fixtures")
             ]

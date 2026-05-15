@@ -97,8 +97,6 @@ struct InfoView: View {
                         DiagRow(label: "Homebrew", required: true, value: d.brewVersion)
                         Divider().opacity(0.3).padding(.leading, 30)
                         DiagRow(label: "mas-cli", required: false, value: d.masVersion)
-                        Divider().opacity(0.3).padding(.leading, 30)
-                        DiagRow(label: "Privileged Helper", active: d.helperActive)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
@@ -201,14 +199,10 @@ struct InfoView: View {
             masV = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        let helperPath = "/Library/PrivilegedHelperTools/com.wega.WegaMacUpdaterPrivilegedHelper"
-        let helperActive = FileManager.default.fileExists(atPath: helperPath)
-
         await MainActor.run {
             diagnostics = DiagnosticsResult(
                 brewVersion: brewV,
-                masVersion: masV,
-                helperActive: helperActive
+                masVersion: masV
             )
         }
     }
@@ -219,7 +213,6 @@ struct InfoView: View {
 struct DiagnosticsResult: Sendable {
     var brewVersion: String?
     var masVersion:  String?
-    var helperActive: Bool
 }
 
 // MARK: - Sub-views
