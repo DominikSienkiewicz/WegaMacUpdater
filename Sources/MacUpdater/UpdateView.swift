@@ -368,44 +368,18 @@ struct UpdateView: View {
             }
         }
 
+        var outcomes: [BrewUpgradeOutcome] = []
+
         // Brew upgrade — formulae
         if !formulaNames.isEmpty {
             let args = ["upgrade"] + formulaNames
-            brewLog.append("$ brew \(args.joined(separator: " "))")
-            do {
-                let stream = try model.brewService.events(arguments: args)
-                for try await event in stream {
-                    switch event {
-                    case .stdout(let chunk), .stderr(let chunk):
-                        let lines = chunk.components(separatedBy: "\n").filter { !$0.isEmpty }
-                        brewLog.append(contentsOf: lines)
-                        if brewLog.count > 500 { brewLog.removeFirst(brewLog.count - 500) }
-                    case .finished: break
-                    }
-                }
-            } catch {
-                brewLog.append("error: \(error.localizedDescription)")
-            }
+            outcomes.append(await runBrewUpgrade(arguments: args))
         }
 
         // Brew upgrade — casks
         if !caskNames.isEmpty {
             let args = ["upgrade", "--cask"] + caskNames
-            brewLog.append("$ brew \(args.joined(separator: " "))")
-            do {
-                let stream = try model.brewService.events(arguments: args)
-                for try await event in stream {
-                    switch event {
-                    case .stdout(let chunk), .stderr(let chunk):
-                        let lines = chunk.components(separatedBy: "\n").filter { !$0.isEmpty }
-                        brewLog.append(contentsOf: lines)
-                        if brewLog.count > 500 { brewLog.removeFirst(brewLog.count - 500) }
-                    case .finished: break
-                    }
-                }
-            } catch {
-                brewLog.append("error: \(error.localizedDescription)")
-            }
+            outcomes.append(await runBrewUpgrade(arguments: args))
         }
 
         // MAS upgrade
@@ -423,13 +397,53 @@ struct UpdateView: View {
         _ = try? await model.brewService.cleanup()
 
         selected.removeAll()
-        brewOutdated = nil; masOutdated = []; manualOutdated = []
-        status = .results
-        updating = false
         restartCandidates = candidates
-        banner = BannerData(variant: .success, title: "Zaktualizowano \(n) pakietów", message: "Wszystko gotowe.")
-        onWegaState?(WegaState(pose: .happy, line: "Gotowe! \(n) pakietów odświeżonych."))
-        onBadgeChange?(0)
+
+        // Re-query brew/mas so the list reflects reality, not optimistic clearing.
+        // If a cask failed (e.g. "App source not there"), it will still appear here.
+        await runCheck()
+
+        updating = false
+
+        let failedTokens = outcomes.flatMap(\.failedTokens)
+        let anyFailure = outcomes.contains { !$0.isSuccessful }
+        if anyFailure {
+            let detail = failedTokens.isEmpty
+                ? "Brew zgłosił błąd — sprawdź log poniżej."
+                : "Nie udało się: \(failedTokens.joined(separator: ", ")). Szczegóły w logu."
+            banner = BannerData(variant: .danger, title: "Aktualizacja niekompletna", message: detail)
+            onWegaState?(WegaState(pose: .alert, line: "Część pakietów się nie zaktualizowała."))
+        } else {
+            banner = BannerData(variant: .success, title: "Zaktualizowano \(n) pakietów", message: "Wszystko gotowe.")
+            onWegaState?(WegaState(pose: .happy, line: "Gotowe! \(n) pakietów odświeżonych."))
+        }
+    }
+
+    /// Runs `brew <arguments>` streaming output to the log, and returns an
+    /// outcome that reflects whether brew *actually* succeeded — exit code 0
+    /// alone is unreliable for cask upgrades.
+    private func runBrewUpgrade(arguments: [String]) async -> BrewUpgradeOutcome {
+        brewLog.append("$ brew \(arguments.joined(separator: " "))")
+        var captured = ""
+        var exitCode: Int32 = 0
+        do {
+            let stream = try model.brewService.events(arguments: arguments)
+            for try await event in stream {
+                switch event {
+                case .stdout(let chunk), .stderr(let chunk):
+                    captured += chunk
+                    let lines = chunk.components(separatedBy: "\n").filter { !$0.isEmpty }
+                    brewLog.append(contentsOf: lines)
+                    if brewLog.count > 500 { brewLog.removeFirst(brewLog.count - 500) }
+                case .finished(let result):
+                    exitCode = result.exitCode
+                }
+            }
+        } catch {
+            brewLog.append("error: \(error.localizedDescription)")
+            return BrewUpgradeOutcome(exitCode: -1, failedTokens: [], errorLines: [error.localizedDescription])
+        }
+        return BrewUpgradeOutcome.analyze(exitCode: exitCode, output: captured)
     }
 
     private func isProcessRunning(_ name: String) async -> Bool {
