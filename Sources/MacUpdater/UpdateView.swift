@@ -13,6 +13,7 @@ struct UpdateView: View {
     @State private var status:         UpdateStatus      = .ready
     @State private var brewOutdated:   BrewOutdated?
     @State private var masOutdated:    [MasOutdatedApp]  = []
+    @State private var npmOutdated:    [NpmGlobalOutdated] = []
     @State private var manualOutdated: [ManualOutdatedApp] = []
     @State private var manualBusy:     String?
     @State private var brewLog:        [String]          = []
@@ -26,7 +27,7 @@ struct UpdateView: View {
     @State private var restartBusy:        String?
     @State private var caskIconPaths:      [String: URL]     = [:]
 
-    // Unique keys: "f:<name>", "c:<name>", "a:<id>"
+    // Unique keys: "f:<name>", "c:<name>", "a:<id>", "n:<name>"
     private var allItems: [OutdatedItem] {
         var items: [OutdatedItem] = []
         if let b = brewOutdated {
@@ -34,6 +35,7 @@ struct UpdateView: View {
             items += b.casks.map    { OutdatedItem(key: "c:\($0.name)", name: $0.name, from: $0.installedVersions.first, to: $0.currentVersion, kind: .cask)    }
         }
         items += masOutdated.map { OutdatedItem(key: "a:\($0.appStoreID)", name: $0.name, from: $0.installedVersion, to: $0.currentVersion, kind: .appStore) }
+        items += npmOutdated.map { OutdatedItem(key: "n:\($0.name)", name: $0.name, from: $0.installedVersion, to: $0.latestVersion, kind: .npm) }
         return items
     }
 
@@ -152,9 +154,11 @@ struct UpdateView: View {
                         let formulae = allItems.filter { $0.kind == .formula }
                         let casks    = allItems.filter { $0.kind == .cask }
                         let store    = allItems.filter { $0.kind == .appStore }
+                        let npmPkgs  = allItems.filter { $0.kind == .npm }
                         if !formulae.isEmpty { UpdateSection(title: "Homebrew Formulae", subtitle: "narzędzia CLI",  icon: "terminal",  items: formulae, selected: $selected) }
                         if !casks.isEmpty    { UpdateSection(title: "Homebrew Casks",    subtitle: "aplikacje .app", icon: "app.gift", items: casks,    iconPaths: caskIconPaths, selected: $selected) }
                         if !store.isEmpty    { UpdateSection(title: "Mac App Store",     subtitle: "via mas-cli",      icon: "bag",      items: store,    selected: $selected) }
+                        if !npmPkgs.isEmpty  { UpdateSection(title: "npm globalne",      subtitle: "pakiety -g",       icon: "shippingbox", items: npmPkgs, selected: $selected) }
                         if !manualOutdated.isEmpty {
                             ManualUpdateSection(
                                 items: manualOutdated,
@@ -196,6 +200,11 @@ struct UpdateView: View {
         errorMessage = nil
         onWegaState?(WegaState(pose: .sniff, line: "Węszę po Homebrew…"))
 
+        // Refresh brew metadata before asking what is outdated — otherwise a
+        // newly-released cask/formula version that hasn't landed locally yet
+        // would be missed even though `brew info` against the API shows it.
+        _ = try? await model.brewService.update()
+
         // Usuń stale casks zanim sprawdzimy co jest outdated
         let installedTokens = (try? await model.brewService.installedCasks()) ?? []
         if !installedTokens.isEmpty {
@@ -212,6 +221,10 @@ struct UpdateView: View {
         do { masOutdated = try await model.masService.outdated() }
         catch MasServiceError.masNotFound { masOutdated = [] }
         catch { masOutdated = [] }
+
+        do { npmOutdated = try await model.npmService.outdated() }
+        catch NpmServiceError.npmNotFound { npmOutdated = [] }
+        catch { npmOutdated = [] }
 
         let brewOutdatedCasks = Set(brewOutdated?.casks.map(\.name) ?? [])
         manualOutdated = await scanManualUpdates(brewOutdatedCasks: brewOutdatedCasks)
@@ -357,6 +370,7 @@ struct UpdateView: View {
         let itemsToUpdate = selected.isEmpty ? Set(allItems.map(\.key)) : selected
         let formulaNames  = itemsToUpdate.compactMap { $0.hasPrefix("f:") ? String($0.dropFirst(2)) : nil }
         let caskNames     = itemsToUpdate.compactMap { $0.hasPrefix("c:") ? String($0.dropFirst(2)) : nil }
+        let npmNames      = itemsToUpdate.compactMap { $0.hasPrefix("n:") ? String($0.dropFirst(2)) : nil }
         let hasMasItems   = itemsToUpdate.contains { $0.hasPrefix("a:") }
         let n             = itemsToUpdate.count
 
@@ -380,6 +394,11 @@ struct UpdateView: View {
         if !caskNames.isEmpty {
             let args = ["upgrade", "--cask"] + caskNames
             outcomes.append(await runBrewUpgrade(arguments: args))
+        }
+
+        // npm global upgrade — one package at a time (npm semantics).
+        for pkg in npmNames {
+            await runNpmUpgrade(name: pkg)
         }
 
         // MAS upgrade
@@ -446,6 +465,25 @@ struct UpdateView: View {
         return BrewUpgradeOutcome.analyze(exitCode: exitCode, output: captured)
     }
 
+    private func runNpmUpgrade(name: String) async {
+        brewLog.append("$ npm install -g \(name)@latest")
+        do {
+            let stream = try model.npmService.upgradeEvents(name: name)
+            for try await event in stream {
+                switch event {
+                case .stdout(let chunk), .stderr(let chunk):
+                    let lines = chunk.components(separatedBy: "\n").filter { !$0.isEmpty }
+                    brewLog.append(contentsOf: lines)
+                    if brewLog.count > 500 { brewLog.removeFirst(brewLog.count - 500) }
+                case .finished:
+                    break
+                }
+            }
+        } catch {
+            brewLog.append("error: \(error.localizedDescription)")
+        }
+    }
+
     private func isProcessRunning(_ name: String) async -> Bool {
         await withCheckedContinuation { cont in
             DispatchQueue.global().async {
@@ -490,7 +528,7 @@ struct UpdateView: View {
 // MARK: - Supporting types
 
 private struct OutdatedItem: Identifiable {
-    enum Kind { case formula, cask, appStore }
+    enum Kind { case formula, cask, appStore, npm }
     let key:  String
     var id:   String { key }
     let name: String

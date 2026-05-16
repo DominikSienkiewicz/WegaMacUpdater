@@ -22,6 +22,7 @@ Mac App Store (mas-cli) ──────────────────�
 JetBrains Data Services API ────────────────────────────────────────────────────────── ┤─► Version comparison
 GitHub Releases API ────────────────────────────────────────────────────────────────── ┤   (priority dedup)  ──► Update list
 Sparkle (SUFeedURL from Info.plist) ────────────────────────────────────────────────── ┤
+npm globals (npm ls -g + npm view) ────────────────────────────────────────────────── ┤
 /Applications + ~/Applications scan ───────────────────────────────────────────────────┘
 ```
 
@@ -37,12 +38,17 @@ Sparkle (SUFeedURL from Info.plist) ──────────────�
 | 1 | Sparkle | Any non-brew app that exposes `SUFeedURL` in its `Info.plist` |
 
 4. **Version normalisation** — a shared `VersionComparison` module handles every version format seen in the wild: `7.0.0 (77593)` vs `7.0.0.77593` (Zoom), `125.0` vs `125.0.0` (Google Drive), `5.3.1,50301` Homebrew comma-format, `0.4.13+1` semver build metadata, and `v1.12.7` / `release-3.5.8` / `v1.4.2-build164` GitHub tag prefixes. `isUpgrade` uses `lexicographicallyPrecedes` so a locally-ahead app (e.g. Logi Options 10.9.0 when brew tracks 10.7.0) is never reported as outdated.
-5. **Act** — each update source drives its own action: brew casks run `brew install --cask` with a live log panel; JetBrains apps open Toolbox; GitHub apps open the Releases page; Sparkle apps prompt inside the app itself.
+5. **Act** — each update source drives its own action: brew casks run `brew install --cask` with a live log panel; JetBrains apps open Toolbox; GitHub apps open the Releases page; Sparkle apps prompt inside the app itself; npm globals are bumped with `npm install -g <pkg>@latest`.
+
+Before any of this, `runCheck()` calls `brew update` so a freshly-published cask/formula version that hasn't landed locally yet is still seen.
+
+### npm globals (sixth source)
+`NpmGlobalChecker` lists user-installed global packages with `npm ls -g --json --depth=0`, then resolves the latest version per package with `npm view <pkg> version`. `npm` itself and `corepack` are filtered out (managed by the Node distribution, not user-actionable here). The npm binary is located across Homebrew, Volta, fnm, and nvm install layouts — and as a last resort by asking the login shell (`$SHELL -lc 'command -v npm'`). This is what catches cases like the OpenAI Codex CLI being installed both as a Homebrew cask (up-to-date) and as `@openai/codex` under fnm (outdated) — brew alone would report nothing to do.
 
 ## Features
 
 ### Update
-Checks Homebrew formulae + casks (greedy), Mac App Store, and all four manual-app checkers in one pass. Selectable list — update all or pick individually. Live brew log streamed into an inline panel. After update, running apps are detected and offered a one-click restart. Stale casks are cleaned before the outdated check runs.
+Checks Homebrew formulae + casks (greedy), Mac App Store, npm globals, and all four manual-app checkers in one pass. Selectable list — update all or pick individually. Live log streamed into an inline panel. After update, running apps are detected and offered a one-click restart. Stale casks are cleaned and `brew update` runs before the outdated check.
 
 ### Uninstall
 Scans every app on the system regardless of origin. Brew casks are removed with `brew uninstall --cask --zap`; App Store and manually installed apps are moved to Trash. Confirmation dialog shows exact counts — how many casks will be zapped, how many go to Trash.
@@ -75,6 +81,7 @@ MacUpdaterCore (library target — no SwiftUI dependency)
 ├── JetBrainsUpdateChecker — data.services.jetbrains.com, 14 IDE mappings
 ├── GitHubReleasesChecker  — api.github.com/releases/latest, 12 app mappings
 ├── SparkleUpdateChecker   — SUFeedURL fetch + version parse
+├── NpmGlobalChecker       — `npm ls -g` + `npm view <pkg> version`; NpmLocator scans brew/Volta/fnm/nvm + login-shell fallback
 ├── VersionComparison    — versionsEqual, isUpgrade, normalizeGitTag (public, tested)
 ├── CaskDatabaseClient   — full cask database fetch + disk cache
 ├── CaskMatcher          — bundle-id / name → cask token matching
