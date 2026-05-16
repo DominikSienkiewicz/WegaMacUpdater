@@ -16,6 +16,7 @@ struct InventoryView: View {
     @EnvironmentObject private var model: AppViewModel
 
     @State private var apps:         [ApplicationInfo] = []
+    @State private var npmGlobals:   [NpmGlobalPackage] = []
     @State private var isScanning:   Bool              = false
     @State private var errorMessage: String?
     @State private var search:       String            = ""
@@ -65,10 +66,11 @@ struct InventoryView: View {
         VStack(spacing: 0) {
             // Stat cards
             HStack(spacing: 10) {
-                InventoryStatCard(label: "Homebrew",  value: brewCount,   sublabel: "cask + formula", color: .wegaHoney,  active: filter == .brew)      { setFilter(.brew) }
-                InventoryStatCard(label: "App Store", value: masCount,    sublabel: "ze sklepu",      color: .wegaInfo,   active: filter == .appStore)   { setFilter(.appStore) }
-                InventoryStatCard(label: "Ręcznie",   value: manualCount, sublabel: "poza brew/mas",  color: .wegaDanger, active: filter == .manual)     { setFilter(.manual) }
-                InventoryStatCard(label: "Razem",     value: apps.count,  sublabel: "wszystkie",      color: .primary,    active: filter == .all)        { setFilter(.all) }
+                InventoryStatCard(label: "Homebrew",  value: brewCount,        sublabel: "cask + formula", color: .wegaHoney,  active: filter == .brew)      { setFilter(.brew) }
+                InventoryStatCard(label: "App Store", value: masCount,         sublabel: "ze sklepu",      color: .wegaInfo,   active: filter == .appStore)   { setFilter(.appStore) }
+                InventoryStatCard(label: "Ręcznie",   value: manualCount,      sublabel: "poza brew/mas",  color: .wegaDanger, active: filter == .manual)     { setFilter(.manual) }
+                InventoryStatCard(label: "npm -g",    value: npmGlobals.count, sublabel: "CLI",            color: .wegaInfo,   active: false)                 { }
+                InventoryStatCard(label: "Razem",     value: apps.count,       sublabel: "wszystkie",      color: .primary,    active: filter == .all)        { setFilter(.all) }
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)
@@ -145,6 +147,12 @@ struct InventoryView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 16)
+
+            if !npmGlobals.isEmpty {
+                NpmGlobalsList(packages: npmGlobals)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+            }
         }
         .task { await scan() }
     }
@@ -194,8 +202,45 @@ struct InventoryView: View {
         }
 
         apps = sorted
+        npmGlobals = (try? await model.npmService.installedGlobals()) ?? []
 
         onWegaState?(WegaState(pose: .happy, line: "Obchód skończony — \(apps.count) aplikacji pod opieką."))
+    }
+}
+
+private struct NpmGlobalsList: View {
+    let packages: [NpmGlobalPackage]
+
+    var body: some View {
+        WegaCard(padded: false) {
+            HStack(spacing: 8) {
+                Image(systemName: "shippingbox").foregroundStyle(Color.wegaInfo)
+                Text("npm globalne").font(.system(size: 13, weight: .semibold))
+                Text("\(packages.count)").font(.system(size: 12, design: .monospaced)).foregroundStyle(.tertiary)
+                Text("instalacje przez `npm i -g`").font(.system(size: 11)).foregroundStyle(.tertiary)
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+
+            ForEach(packages, id: \.name) { pkg in
+                HStack(spacing: 12) {
+                    Image(systemName: "terminal").foregroundStyle(.secondary).frame(width: 22)
+                    Text(pkg.name)
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(pkg.installedVersion)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                if pkg.name != packages.last?.name {
+                    Divider().opacity(0.3).padding(.leading, 46)
+                }
+            }
+        }
     }
 }
 

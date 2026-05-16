@@ -1,0 +1,78 @@
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Codex</title>
+        <item>
+            <title>26.513.31313</title>
+            <pubDate>Fri, 15 May 2026 16:52:54 -0700</pubDate>
+            <sparkle:version>2867</sparkle:version>
+            <sparkle:shortVersionString>26.513.31313</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>12.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex-darwin-arm64-26.513.31313.zip" length="346687018" type="application/octet-stream" sparkle:edSignature="x+fCg7o5qGHeoZJ2DDevOCh+skDuODjK2Pf7QVdmQSsRG5tsBf8VvnS6ibqgS0c5DUlH3LMTg/FlaGM1TVnmAw==" />
+            <sparkle:deltas>
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2867-2816-arm64.delta" sparkle:deltaFrom="2816" length="10852446" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="tNxnEyO1aAKcziaD9rH9fXIjvqMDzOu0wAHXmwGewugMCTrKvisGkQc0gj/gVscrmvqqglSKppW2IZVNjwIMCw==" />
+            </sparkle:deltas>
+        </item>
+        <item>
+            <title>26.513.20950</title>
+            <pubDate>Thu, 14 May 2026 12:10:49 -0700</pubDate>
+            <sparkle:version>2816</sparkle:version>
+            <sparkle:shortVersionString>26.513.20950</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>12.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex-darwin-arm64-26.513.20950.zip" length="346479191" type="application/octet-stream" sparkle:edSignature="4m2HbGg6CXeDsCch4mIOh1yDF5oP2FakbGHZPVl0H3NTKWAOUs0ccRasea7mYFXxBFBDkFLbEUV2Fhye4JlADg==" />
+            <sparkle:deltas>
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2816-2620-arm64.delta" sparkle:deltaFrom="2620" length="66299250" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="oP0t1RSN2U95rBvvuraCQ2IfkXcS3Qqguw/2j5an0od5vG0CZBDvqhkpi68jOWng9kuUZfdAf+tNYl61RSWvDg==" />
+            </sparkle:deltas>
+        </item>
+        <item>
+            <title>26.506.31421</title>
+            <pubDate>Fri, 08 May 2026 22:49:55 +0000</pubDate>
+            <sparkle:version>2620</sparkle:version>
+            <sparkle:shortVersionString>26.506.31421</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>12.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex-darwin-arm64-26.506.31421.zip" length="321830867" type="application/octet-stream" />
+            <sparkle:deltas>
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2620-2604-arm64.delta" sparkle:deltaFrom="2604" length="11329814" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="1pBcwQqW03ocHdiytR3SVyJH2Dk+J7iGK2YIId3TG3u4372pp763dtQomNzAt+QRy+VWxu94yI8TyWMDphuTBQ==" />
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2620-2575-arm64.delta" sparkle:deltaFrom="2575" length="11608850" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="VdlE+Jp7gN12fdvG8o4fnW7Asxpx9Rkr8NlSEKTa+8+u8HYDbam//m1PAVGJZ546oDLx8OhW+ZNqkfFPnYhZBQ==" />
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2620-2565-arm64.delta" sparkle:deltaFrom="2565" length="11610086" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="SBCR8QVUsQm9C6nXB3qbazyXHUCiGxbxU4ngMXHen7DG2TglcwBtHhsZgxxRZ1tQMfI7Ta4+i2lsrXK5QzJtAA==" />
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2620-2429-arm64.delta" sparkle:deltaFrom="2429" length="28915774" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="w9XXFtvBxjJDaUm66VSyOJCC7I+T0JZZdm1VKhrSlrtFcZL5hBvHNiwK007ujt/xoS1xxa5DiajcIUew3m42DA==" />
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2620-2345-arm64.delta" sparkle:deltaFrom="2345" length="28931338" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="BUSYLRVMsL2L/sgvoaqMhKb7m3KD76Gq48+TVcFqpw9xMvxanAE3jILCpi/Y3KcUgZgCYAK2RVJhUOR3AmLZBg==" />
+            </sparkle:deltas>
+        </item>
+        <item>
+            <title>26.506.31004</title>
+            <pubDate>Fri, 08 May 2026 18:29:40 +0000</pubDate>
+            <sparkle:version>2604</sparkle:version>
+            <sparkle:shortVersionString>26.506.31004</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>12.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex-darwin-arm64-26.506.31004.zip" length="321562572" type="application/octet-stream" />
+            <sparkle:deltas>
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2604-2575-arm64.delta" sparkle:deltaFrom="2575" length="432338" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="j0LDcW6V10RJ7txAJ5yeZH+9/G6XsPevBq7HRUt621yXD7Fjupl79XPkaIepKuPbpar4Jw96tWa7FsoewV7rCg==" />
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2604-2565-arm64.delta" sparkle:deltaFrom="2565" length="434138" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="GQ+aADB8EoTSofc0/Bdrn6rKK+2U3GNYQcDnOrVxuxnY6kG1vEOV0oGjW+SkYY8dydC+7uqS8DwqPrZbmwu0Dg==" />
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2604-2429-arm64.delta" sparkle:deltaFrom="2429" length="28034474" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="ON5AwYMO5q1AM69WTBncpkMg9vonGhPq6gjFFVY3jt0sH3JljLFVuQzJsVQ67Tcf4u9+lAvaB0alZgBCKdBSCA==" />
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2604-2345-arm64.delta" sparkle:deltaFrom="2345" length="28031514" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="aiwwS/TuZMIXXzgXWx/dubpD/z0TePXDbm0qFG2i9JLDWKS9AJBzzZREX5wqm2B0+g1VMkKGhs0tT5sDGvRIAw==" />
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2604-2312-arm64.delta" sparkle:deltaFrom="2312" length="34511850" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="f/T7gARUbxdhxrEiyUPAaBhsxL9pVsud7RrFzA93UIjfR1qm+K+ZMy33DiUGnYhmRuTAgGD7bD7ckJHYDsMYBQ==" />
+            </sparkle:deltas>
+        </item>
+        <item>
+            <title>26.506.21252</title>
+            <pubDate>Thu, 07 May 2026 21:12:47 +0000</pubDate>
+            <sparkle:version>2575</sparkle:version>
+            <sparkle:shortVersionString>26.506.21252</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>12.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex-darwin-arm64-26.506.21252.zip" length="321547314" type="application/octet-stream" />
+            <sparkle:deltas>
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2575-2565-arm64.delta" sparkle:deltaFrom="2565" length="161138" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="Fp/uPUdcmfbVcBw/0kvVsXCKfAuGx3ErE+byvGAeEDrl6E6lgYPsVyl1bYTGqRqYAF5CsrvQ/pVQu2CpNAaeAg==" />
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2575-2429-arm64.delta" sparkle:deltaFrom="2429" length="28011690" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="NqYqS9TH7jpvFDEuTcRxGuUWNYnQ5FExqTW+zNul4GAt23Pq2sMmcGzl0TdgFe+fHXBmxwixw5J8U+mZcI1qBA==" />
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2575-2345-arm64.delta" sparkle:deltaFrom="2345" length="28015206" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="xadlZDxbaFMttmdLS9SgZd/dMdugt2vsDhfSsJoS9eVh6TMTn788yl7y8A8dLoZKaZOLaVM2mzpmE+TE6tjRCQ==" />
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2575-2312-arm64.delta" sparkle:deltaFrom="2312" length="34488694" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="iRlVupFKKvHpDG2vQY61Ny+jPtBKA5CGPoxoL1209Ck7aS6dSyLFN8U/rm21u1OzkecyBFhMeDsI0NlwL49iBA==" />
+                <enclosure url="https://persistent.oaistatic.com/codex-app-prod/Codex2575-2210-arm64.delta" sparkle:deltaFrom="2210" length="41632098" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="977808" sparkle:deltaFromSparkleLocales="de,ar,el,ja,fa,uk,zh_CN" sparkle:edSignature="xXhK4uT45A9MHLPUp8BxQPpacg2ZcVvXHgV0T/QxBvOC2xz28B+Eg8PpIJLB0OnlPAxQvyC045Y99U/elC5SBQ==" />
+            </sparkle:deltas>
+        </item>
+    </channel>
+</rss>

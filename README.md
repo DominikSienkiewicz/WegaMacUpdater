@@ -27,7 +27,7 @@ npm globals (npm ls -g + npm view) ───────────────
 ```
 
 1. **Scan** — `ApplicationScanner` walks `/Applications`, `~/Applications`, and every immediate non-.app subdirectory (e.g. `/Applications/JetBrains/`). It reads `Contents/Info.plist` directly via `PropertyListSerialization` — never `Bundle(url:)` — so freshly updated apps are always seen with their real version, not a stale cached one.
-2. **Classify** — each app is tagged: `isManagedByBrew` (token found in `brew list --cask`), `isManagedByMas` (receipt at `Contents/_MASReceipt/receipt`), or manual.
+2. **Classify** — each app is tagged: `isManagedByBrew` (token found in `brew list --cask`, **filtered to casks that actually install an `.app` artifact** — guards against a CLI cask like `codex` claiming an unrelated `Codex.app`), `isManagedByMas` (receipt at `Contents/_MASReceipt/receipt`), or manual.
 3. **Check** — four parallel checkers run per app. Results are deduplicated by path, keeping the highest-priority source:
 
 | Priority | Source | When it fires |
@@ -35,7 +35,7 @@ npm globals (npm ls -g + npm view) ───────────────
 | 4 | JetBrains Data Services | IntelliJ IDEA, PyCharm, WebStorm, GoLand, CLion, Rider, DataGrip, RubyMine, PHPStorm, DataSpell, Aqua, RustRover (14 IDEs) |
 | 3 | GitHub Releases API | VS Code, Obsidian, Rectangle, AltTab, Stats, Maccy, MonitorControl, LinearMouse, IINA, HandBrake, Keka, GitHub Desktop |
 | 2 | Homebrew Cask | Any cask where `brew info` reports a newer version; uses `brew list --cask --versions` as authoritative installed reference |
-| 1 | Sparkle | Any non-brew app that exposes `SUFeedURL` in its `Info.plist` |
+| 1 | Sparkle | Any non-brew app that exposes `SUFeedURL` in its `Info.plist`, plus a curated override map for Electron-based apps (e.g. Codex) that ship Sparkle but set the feed URL programmatically |
 
 4. **Version normalisation** — a shared `VersionComparison` module handles every version format seen in the wild: `7.0.0 (77593)` vs `7.0.0.77593` (Zoom), `125.0` vs `125.0.0` (Google Drive), `5.3.1,50301` Homebrew comma-format, `0.4.13+1` semver build metadata, and `v1.12.7` / `release-3.5.8` / `v1.4.2-build164` GitHub tag prefixes. `isUpgrade` uses `lexicographicallyPrecedes` so a locally-ahead app (e.g. Logi Options 10.9.0 when brew tracks 10.7.0) is never reported as outdated.
 5. **Act** — each update source drives its own action: brew casks run `brew install --cask` with a live log panel; JetBrains apps open Toolbox; GitHub apps open the Releases page; Sparkle apps prompt inside the app itself; npm globals are bumped with `npm install -g <pkg>@latest`.
@@ -80,7 +80,8 @@ MacUpdaterCore (library target — no SwiftUI dependency)
 ├── MasService           — mas outdated, list, search, upgrade
 ├── JetBrainsUpdateChecker — data.services.jetbrains.com, 14 IDE mappings
 ├── GitHubReleasesChecker  — api.github.com/releases/latest, 12 app mappings
-├── SparkleUpdateChecker   — SUFeedURL fetch + version parse
+├── SparkleUpdateChecker   — Info.plist (PropertyListSerialization, never Bundle(url:)) + CFPreferencesCopyAppValue fallback + `SparkleFeedOverrides` map for apps that set the feed URL at runtime
+├── NpmBrewDuplicateDetector — finds CLIs installed via both `npm -g` and Homebrew (surfaced in Migration)
 ├── NpmGlobalChecker       — `npm ls -g` + `npm view <pkg> version`; NpmLocator scans brew/Volta/fnm/nvm + login-shell fallback
 ├── VersionComparison    — versionsEqual, isUpgrade, normalizeGitTag (public, tested)
 ├── CaskDatabaseClient   — full cask database fetch + disk cache

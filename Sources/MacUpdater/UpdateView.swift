@@ -269,11 +269,20 @@ struct UpdateView: View {
         // for brew-managed apps instead of bundle version to avoid versioning scheme mismatches.
         let brewCaskVersions = (try? await model.brewService.caskVersions()) ?? [:]
 
+        // Drop CLI-only casks (e.g. `codex`) from the set we feed to CaskMatcher.
+        // Otherwise an unrelated /Applications/Codex.app gets misclassified as brew-managed.
+        let installInfo = (try? await model.brewService.caskInstallationInfo(tokens: Array(installedCasks))) ?? []
+        let appProducingTokens: Set<String> = {
+            let producers = Set(installInfo.filter { !$0.appArtifacts.isEmpty }.map(\.token))
+            // If brew info failed for everything (offline?), don't accidentally hide all matches.
+            return producers.isEmpty ? installedCasks : producers
+        }()
+
         let scanner = ApplicationScanner()
         var seen = Set<String>()
         var appsToCheck: [ApplicationInfo] = []
         for dir in buildScanDirs() {
-            let found = (try? scanner.scanApplications(in: dir, installedCasks: installedCasks, availableCasks: casks)) ?? []
+            let found = (try? scanner.scanApplications(in: dir, installedCasks: appProducingTokens, availableCasks: casks)) ?? []
             for app in found where !app.isManagedByMas {
                 if let token = app.caskToken, brewOutdatedCasks.contains(token) { continue }
                 let key = app.bundleIdentifier ?? app.path.path
@@ -306,9 +315,11 @@ struct UpdateView: View {
                 }
                 group.addTask { await jetbrainsChecker.check(app: app) }
                 group.addTask { await githubChecker.check(app: app) }
-                if !app.isManagedByBrew {
-                    group.addTask { await sparkleChecker.check(app: app) }
-                }
+                // Always run Sparkle: even when an app is matched to an installed cask
+                // (e.g. Codex.app vs. cask `codex` which is actually a CLI binary), the
+                // app itself may have its own appcast. Priority dedup in `byPath`
+                // ensures cask (2) wins over sparkle (1) when both report the same path.
+                group.addTask { await sparkleChecker.check(app: app) }
             }
             for await item in group {
                 guard let item else { continue }
@@ -398,7 +409,7 @@ struct UpdateView: View {
 
         // npm global upgrade — one package at a time (npm semantics).
         for pkg in npmNames {
-            await runNpmUpgrade(name: pkg)
+            outcomes.append(await runNpmUpgrade(name: pkg))
         }
 
         // MAS upgrade
@@ -465,8 +476,9 @@ struct UpdateView: View {
         return BrewUpgradeOutcome.analyze(exitCode: exitCode, output: captured)
     }
 
-    private func runNpmUpgrade(name: String) async {
+    private func runNpmUpgrade(name: String) async -> BrewUpgradeOutcome {
         brewLog.append("$ npm install -g \(name)@latest")
+        var exitCode: Int32 = 0
         do {
             let stream = try model.npmService.upgradeEvents(name: name)
             for try await event in stream {
@@ -475,13 +487,19 @@ struct UpdateView: View {
                     let lines = chunk.components(separatedBy: "\n").filter { !$0.isEmpty }
                     brewLog.append(contentsOf: lines)
                     if brewLog.count > 500 { brewLog.removeFirst(brewLog.count - 500) }
-                case .finished:
-                    break
+                case .finished(let result):
+                    exitCode = result.exitCode
                 }
             }
         } catch {
             brewLog.append("error: \(error.localizedDescription)")
+            return BrewUpgradeOutcome(exitCode: -1, failedTokens: [name], errorLines: [error.localizedDescription])
         }
+        return BrewUpgradeOutcome(
+            exitCode: exitCode,
+            failedTokens: exitCode == 0 ? [] : [name],
+            errorLines: []
+        )
     }
 
     private func isProcessRunning(_ name: String) async -> Bool {
@@ -634,9 +652,17 @@ private struct ManualUpdateSection: View {
         case .sparkle:
             HStack(spacing: 8) {
                 WegaBadge(label: "Sparkle", variant: .manual)
-                Text("zaktualizuj w aplikacji")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+                Button {
+                    // Sparkle apps own the update flow. Opening the app brings it to the
+                    // foreground and (for apps with SUEnableAutomaticChecks=1, e.g. Codex)
+                    // triggers the appcast check on launch — the user then accepts in the
+                    // app's own update prompt. We can't drive that prompt from outside
+                    // without an AppleScript that depends on each app's menu wording.
+                    NSWorkspace.shared.open(item.path)
+                } label: {
+                    Label("Otwórz i zaktualizuj", systemImage: "arrow.up.forward.app")
+                }
+                .controlSize(.small)
             }
         case .cask(let token):
             HStack(spacing: 8) {

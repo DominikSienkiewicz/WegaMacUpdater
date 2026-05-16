@@ -20,6 +20,7 @@ struct MigrationView: View {
     @State private var cleanupApp:      ApplicationInfo?  = nil
     @State private var libraryLeftovers: [URL]            = []
     @State private var masCandidates: [(app: ApplicationInfo, masID: String)] = []
+    @State private var npmBrewDuplicates: [NpmBrewDuplicate] = []
 
     private var matchable: [ApplicationInfo] {
         candidates.filter { app in
@@ -140,6 +141,47 @@ struct MigrationView: View {
                     MigrationLogView(logLines: logLines, migrating: migrating)
                 }
 
+                // npm ↔ brew duplicates section
+                if !npmBrewDuplicates.isEmpty {
+                    WegaCard(padded: false) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.arrow.triangle.2.circlepath").foregroundStyle(Color.wegaDanger)
+                            Text("Te same narzędzia w npm i brew")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("\(npmBrewDuplicates.count)")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundStyle(.tertiary)
+                            Text("ryzyko rozjazdu wersji w PATH").font(.system(size: 11)).foregroundStyle(.tertiary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+
+                        ForEach(npmBrewDuplicates, id: \.npmPackage) { dup in
+                            HStack(spacing: 12) {
+                                Image(systemName: "shippingbox").foregroundStyle(.secondary).frame(width: 22)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 8) {
+                                        Text(dup.npmPackage).font(.system(size: 12, weight: .medium))
+                                        Image(systemName: "arrow.left.arrow.right").font(.system(size: 10)).foregroundStyle(.tertiary)
+                                        Text(dup.brewToken).font(.system(size: 12, weight: .medium))
+                                    }
+                                    Text("Zostaw jedną — usuń duplikat poleceniem `npm uninstall -g \(dup.npmPackage)` albo `brew uninstall \(dup.brewToken)`.")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.tertiary)
+                                }
+                                Spacer()
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            if dup.npmPackage != npmBrewDuplicates.last?.npmPackage {
+                                Divider().opacity(0.4).padding(.leading, 46)
+                            }
+                        }
+                    }
+                }
+
                 // App Store candidates section
                 if !masCandidates.isEmpty {
                     WegaCard(padded: false) {
@@ -224,7 +266,7 @@ struct MigrationView: View {
 
     private func scan() async {
         guard status != .scanning else { return }
-        status = .scanning; errorMessage = nil; masCandidates = []
+        status = .scanning; errorMessage = nil; masCandidates = []; npmBrewDuplicates = []
         onWegaState?(WegaState(pose: .sniff, line: "Tropię intruzów w /Applications i ~/Applications…"))
 
         do {
@@ -232,6 +274,13 @@ struct MigrationView: View {
                 .appendingPathComponent("Library/Caches/\(AppMetadata.bundleIdentifier)/casks.json")
             let casks    = try await CaskDatabaseClient(cache: CaskDatabaseCache(fileURL: cacheURL)).fetchCasks()
             let installed = try await model.brewService.installedCasks()
+
+            // npm ↔ brew duplicate detection (independent of /Applications scan).
+            let npmInstalled = (try? await model.npmService.installedGlobals()) ?? []
+            npmBrewDuplicates = NpmBrewDuplicateDetector().detect(
+                npmPackages: npmInstalled,
+                brewTokens: installed
+            )
             let scanner = ApplicationScanner()
             var seen = Set<String>()
             var all:  [ApplicationInfo] = []
