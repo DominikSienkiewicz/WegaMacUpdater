@@ -188,6 +188,24 @@ public final class NpmGlobalService: @unchecked Sendable {
         )
     }
 
+    public func uninstallEvents(name: String) throws -> AsyncThrowingStream<ProcessOutputEvent, Error> {
+        guard let npmURL = locator.locate() else {
+            throw NpmServiceError.npmNotFound
+        }
+        return runner.events(
+            for: ProcessRequest(
+                executableURL: npmURL,
+                arguments: Self.uninstallArguments(for: name),
+                environment: environment(for: npmURL),
+                timeout: nil
+            )
+        )
+    }
+
+    public static func uninstallArguments(for name: String) -> [String] {
+        ["uninstall", "-g", name]
+    }
+
     private func runNpm(_ arguments: [String]) async throws -> ProcessResult {
         guard let npmURL = locator.locate() else {
             throw NpmServiceError.npmNotFound

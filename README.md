@@ -56,7 +56,7 @@ Checks Homebrew formulae + casks (greedy), Mac App Store, npm globals, and all f
 Scans every app on the system regardless of origin. Brew casks are removed with `brew uninstall --cask --zap`; App Store and manually installed apps are moved to Trash. Confirmation dialog shows exact counts — how many casks will be zapped, how many go to Trash.
 
 ### Migration
-Finds manually-installed apps that have a Homebrew Cask equivalent and offers to migrate them with `brew install --cask`. Runs `mas search` in parallel for apps without a cask match to find App Store equivalents. After successful brew migration, scans `~/Library` for leftover preference files and offers to clean them with a checkbox sheet.
+Finds manually-installed apps that have a Homebrew Cask equivalent and offers to migrate them with `brew install --cask`. Runs `mas search` in parallel for apps without a cask match to find App Store equivalents. After successful brew migration, scans `~/Library` for leftover preference files and offers to clean them with a checkbox sheet. **npm ↔ brew duplicate row** — for CLIs installed via both `npm -g` and Homebrew (e.g. `@openai/codex` + `codex` cask), inline "Usuń z npm" / "Usuń z brew" buttons run the corresponding uninstall (`npm uninstall -g <pkg>` via `NpmGlobalService.uninstallEvents`, or `brew uninstall <token>`) after a confirmation alert; the duplicate disappears from the list on exit 0.
 
 ### Inventory
 Full list of every `.app` on the system with source badge (Brew / App Store / Manual), version, bundle ID, and last-modified date. Filterable by source, sortable by any column, searchable by name or bundle ID. Four stat cards at the top show counts per category — tap any card to filter.

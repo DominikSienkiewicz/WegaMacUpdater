@@ -21,6 +21,8 @@ struct MigrationView: View {
     @State private var libraryLeftovers: [URL]            = []
     @State private var masCandidates: [(app: ApplicationInfo, masID: String)] = []
     @State private var npmBrewDuplicates: [NpmBrewDuplicate] = []
+    @State private var dupConfirm: DuplicateRemoval? = nil
+    @State private var dupBusy: String? = nil
 
     private var matchable: [ApplicationInfo] {
         candidates.filter { app in
@@ -167,11 +169,36 @@ struct MigrationView: View {
                                         Image(systemName: "arrow.left.arrow.right").font(.system(size: 10)).foregroundStyle(.tertiary)
                                         Text(dup.brewToken).font(.system(size: 12, weight: .medium))
                                     }
-                                    Text("Zostaw jedną — usuń duplikat poleceniem `npm uninstall -g \(dup.npmPackage)` albo `brew uninstall \(dup.brewToken)`.")
+                                    Text("Zostaw jedną — usuń duplikat z npm albo z brew.")
                                         .font(.system(size: 11))
                                         .foregroundStyle(.tertiary)
                                 }
                                 Spacer()
+                                HStack(spacing: 6) {
+                                    Button {
+                                        dupConfirm = .init(dup: dup, side: .npm)
+                                    } label: {
+                                        if dupBusy == "npm:\(dup.npmPackage)" {
+                                            ProgressView().controlSize(.small)
+                                        } else {
+                                            Label("Usuń z npm", systemImage: "trash")
+                                        }
+                                    }
+                                    .controlSize(.small)
+                                    .disabled(dupBusy != nil)
+
+                                    Button {
+                                        dupConfirm = .init(dup: dup, side: .brew)
+                                    } label: {
+                                        if dupBusy == "brew:\(dup.brewToken)" {
+                                            ProgressView().controlSize(.small)
+                                        } else {
+                                            Label("Usuń z brew", systemImage: "trash")
+                                        }
+                                    }
+                                    .controlSize(.small)
+                                    .disabled(dupBusy != nil)
+                                }
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
@@ -261,6 +288,16 @@ struct MigrationView: View {
                     onDismiss: { dismissCleanup(app: app) }
                 )
             }
+        }
+        .alert(item: $dupConfirm) { removal in
+            Alert(
+                title: Text("Usunąć duplikat?"),
+                message: Text("Wega uruchomi:\n\n\(removal.commandPreview)\n\nDrugiej kopii (z \(removal.side == .npm ? "brew" : "npm")) to nie ruszy."),
+                primaryButton: .destructive(Text("Usuń")) {
+                    Task { await removeDuplicate(removal) }
+                },
+                secondaryButton: .cancel(Text("Anuluj"))
+            )
         }
     }
 
@@ -443,6 +480,88 @@ struct MigrationView: View {
             }
         }
         try? await Task.sleep(for: .milliseconds(500))
+    }
+
+    @MainActor
+    private func removeDuplicate(_ removal: DuplicateRemoval) async {
+        let key = removal.busyKey
+        guard dupBusy == nil else { return }
+        dupBusy = key
+        logLines = []
+
+        let title: String
+        let stream: AsyncThrowingStream<ProcessOutputEvent, Error>
+        do {
+            switch removal.side {
+            case .npm:
+                title = "$ npm uninstall -g \(removal.dup.npmPackage)"
+                stream = try model.npmService.uninstallEvents(name: removal.dup.npmPackage)
+            case .brew:
+                title = "$ brew uninstall \(removal.dup.brewToken)"
+                stream = try model.brewService.events(arguments: ["uninstall", removal.dup.brewToken])
+            }
+        } catch {
+            banner = BannerData(variant: .danger, title: "Nie udało się uruchomić", message: error.localizedDescription)
+            dupBusy = nil
+            return
+        }
+        logLines.append(title)
+
+        var exitCode: Int32 = 0
+        do {
+            for try await event in stream {
+                switch event {
+                case .stdout(let chunk), .stderr(let chunk):
+                    for line in chunk.components(separatedBy: "\n") {
+                        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmed.isEmpty { logLines.append(trimmed) }
+                    }
+                    if logLines.count > 200 { logLines.removeFirst(logLines.count - 200) }
+                case .finished(let result):
+                    exitCode = result.exitCode
+                }
+            }
+        } catch {
+            logLines.append("error: \(error.localizedDescription)")
+            exitCode = -1
+        }
+
+        if exitCode == 0 {
+            npmBrewDuplicates.removeAll { $0.npmPackage == removal.dup.npmPackage }
+            let label = removal.side == .npm ? "npm" : "brew"
+            banner = BannerData(
+                variant: .success,
+                title: "Usunięto z \(label)",
+                message: removal.side == .npm ? removal.dup.npmPackage : removal.dup.brewToken
+            )
+            onWegaState?(WegaState(pose: .happy, line: "Duplikat zniknął. PATH ma już tylko jedną wersję."))
+        } else {
+            banner = BannerData(
+                variant: .danger,
+                title: "Nie udało się usunąć duplikatu",
+                message: "Szczegóły w logu poniżej."
+            )
+        }
+        dupBusy = nil
+    }
+}
+
+struct DuplicateRemoval: Identifiable, Equatable {
+    enum Side: Equatable { case npm, brew }
+    let dup: NpmBrewDuplicate
+    let side: Side
+    var id: String { busyKey }
+    var busyKey: String {
+        switch side {
+        case .npm:  return "npm:\(dup.npmPackage)"
+        case .brew: return "brew:\(dup.brewToken)"
+        }
+    }
+    var commandPreview: String {
+        switch side {
+        case .npm:  return "npm uninstall -g \(dup.npmPackage)"
+        case .brew: return "brew uninstall \(dup.brewToken)"
+        }
     }
 }
 
