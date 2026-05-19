@@ -5,12 +5,16 @@ struct InfoView: View {
     var onWegaState: ((WegaState) -> Void)?
 
     @State private var diagnostics: DiagnosticsResult? = nil
+    @State private var touchIDState: TouchIDSudoConfigurator.State = .notSupported
+    @State private var enablingTouchID = false
+    @State private var touchIDError: String? = nil
 
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
                 appCard
                 diagnosticsCard
+                touchIDCard
                 licensesCard
                 environmentCard
             }
@@ -20,6 +24,124 @@ struct InfoView: View {
             onWegaState?(WegaState(pose: .idle, line: "Oto co o sobie wiem."))
             if diagnostics == nil {
                 Task { await loadDiagnostics() }
+            }
+            touchIDState = TouchIDSudoConfigurator.currentState()
+        }
+    }
+
+    // MARK: - Touch ID for sudo
+
+    @ViewBuilder
+    private var touchIDCard: some View {
+        if touchIDState != .notSupported {
+            WegaCard {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "touchid").foregroundStyle(Color.wegaHoney)
+                        Text("Touch ID dla Homebrew")
+                            .font(.system(size: 13, weight: .semibold))
+                        Spacer()
+                        statusBadge
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(touchIDDescription)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if let err = touchIDError {
+                            Text(err)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.red)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        if touchIDState == .available {
+                            Button {
+                                Task { await enableTouchID() }
+                            } label: {
+                                if enablingTouchID {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Label("Włącz Touch ID dla sudo", systemImage: "touchid")
+                                }
+                            }
+                            .disabled(enablingTouchID)
+                            .controlSize(.small)
+                        }
+                    }
+                    .padding(14)
+                }
+            }
+        }
+    }
+
+    private var statusBadge: some View {
+        Group {
+            switch touchIDState {
+            case .enabled:
+                WegaBadge(label: "Aktywne", variant: .info)
+            case .available:
+                WegaBadge(label: "Dostępne", variant: .manual)
+            case .notSupported:
+                EmptyView()
+            }
+        }
+    }
+
+    private var touchIDDescription: String {
+        switch touchIDState {
+        case .enabled:
+            return "Sudo używa Touch ID. Aktualizacje casków z sudo (Zoom, sterowniki, launchd) potwierdzisz odciskiem zamiast hasła."
+        case .available:
+            return "Po włączeniu, brew nie zapyta o hasło w okienku — pojawi się natywny sheet Touch ID. Wymaga jednorazowo uprawnień administratora do zapisu /etc/pam.d/sudo_local."
+        case .notSupported:
+            return ""
+        }
+    }
+
+    private func enableTouchID() async {
+        enablingTouchID = true
+        touchIDError = nil
+        defer { enablingTouchID = false }
+
+        let cmd = TouchIDSudoConfigurator.enableShellCommand
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        let script = "do shell script \"\(cmd)\" with administrator privileges"
+
+        let result: (status: Int32, stderr: String) = await withCheckedContinuation { cont in
+            DispatchQueue.global().async {
+                let task = Process()
+                task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+                task.arguments = ["-e", script]
+                let stderr = Pipe()
+                task.standardError = stderr
+                task.standardOutput = Pipe()
+                do {
+                    try task.run()
+                    task.waitUntilExit()
+                    let data = stderr.fileHandleForReading.readDataToEndOfFile()
+                    let text = String(data: data, encoding: .utf8) ?? ""
+                    cont.resume(returning: (task.terminationStatus, text))
+                } catch {
+                    cont.resume(returning: (-1, error.localizedDescription))
+                }
+            }
+        }
+
+        if result.status == 0 {
+            touchIDState = TouchIDSudoConfigurator.currentState()
+            onWegaState?(WegaState(pose: .happy, line: "Touch ID podpięty pod sudo."))
+        } else {
+            // User cancelled the auth dialog → osascript exits with -128 / "User canceled".
+            // Don't surface that as an error; just stay in `available`.
+            if !result.stderr.localizedCaseInsensitiveContains("cancel") {
+                touchIDError = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
             }
         }
     }

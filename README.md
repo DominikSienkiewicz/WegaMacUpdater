@@ -62,7 +62,7 @@ Finds manually-installed apps that have a Homebrew Cask equivalent and offers to
 Full list of every `.app` on the system with source badge (Brew / App Store / Manual), version, bundle ID, and last-modified date. Filterable by source, sortable by any column, searchable by name or bundle ID. Four stat cards at the top show counts per category — tap any card to filter.
 
 ### Info
-Real-time diagnostics: Homebrew version, mas-cli version, Privileged Helper status, macOS version, CPU architecture. App version, build, links. License block for bundled open-source tools.
+Real-time diagnostics: Homebrew version, mas-cli version, Privileged Helper status, macOS version, CPU architecture. App version, build, links. License block for bundled open-source tools. **Touch ID for sudo card** — on Macs with biometry hardware, shows whether `pam_tid.so` is wired into `/etc/pam.d/sudo_local` and offers a one-click enable.
 
 ## Architecture
 
@@ -92,13 +92,19 @@ MacUpdaterCore (library target — no SwiftUI dependency)
 ├── StaleCaskDetector    — detects casks where installed .app is gone
 ├── BinaryLocator        — resolves brew + mas executable paths
 ├── AskpassHelper        — writes ~/Library/Application Support/WegaMacUpdater/askpass.sh (0700) wrapping `osascript`; HomebrewEnvironment exports SUDO_ASKPASS so brew's cask hooks can `sudo` without a controlling terminal
+├── TouchIDSudoConfigurator — pure state parser for /etc/pam.d/sudo_local + LocalAuthentication biometry check; renders an idempotent shell command to atomically (mktemp + mv) install `auth sufficient pam_tid.so`, invoked via osascript with administrator privileges from InfoView
 └── Models               — ApplicationInfo, ManualOutdatedApp, UpdateSource…
 
 MacUpdaterTests
 └── VersionComparisonTests, ApplicationScannerMasTests, BrewInfoParserTests…
 ```
 
-No stored passwords. Homebrew runs as the logged-in user. Some casks (Zoom, kernel-extension installers, anything that registers launchd services or calls `pkgutil --forget`) invoke `sudo` internally during install/uninstall hooks — Wega writes a tiny `askpass.sh` helper to `~/Library/Application Support/WegaMacUpdater/` on first launch and exports `SUDO_ASKPASS` to brew so sudo opens a native `osascript` password dialog instead of failing with `sudo: a terminal is required` (the Zoom symptom). The helper is owner-only `0700` and contains no logic beyond delegating to AppleScript. Privileged operations beyond that (future) go through a signed XPC helper with typed, allowlisted requests — never a shell-string API.
+No stored passwords. Homebrew runs as the logged-in user. Some casks (Zoom, kernel-extension installers, anything that registers launchd services or calls `pkgutil --forget`) invoke `sudo` internally during install/uninstall hooks — Wega has two layered fallbacks:
+
+1. **Touch ID (preferred)** — Info tab detects whether `/usr/lib/pam/pam_tid.so.2` exists, biometry is available (`LAContext.canEvaluatePolicy`), and `/etc/pam.d/sudo_local` already contains an active `auth sufficient pam_tid.so` line. If not, a one-click "Włącz Touch ID dla sudo" button runs `osascript … with administrator privileges` to append the directive (writes to `sudo_local`, never to `sudo` itself, because the latter is overwritten on every macOS update). After that, brew's internal `sudo` calls trigger the native macOS biometric sheet.
+2. **Askpass (fallback)** — on first launch Wega writes `askpass.sh` (mode `0700`) to `~/Library/Application Support/WegaMacUpdater/` and exports `SUDO_ASKPASS` to brew. When sudo runs without a controlling terminal and biometry fails or is unavailable, it invokes the script, which delegates to `osascript` for a hidden-answer dialog. This is what catches the Zoom symptom (`sudo: a terminal is required` → `Error: zoom: Broken pipe`) on machines without Touch ID.
+
+Privileged operations beyond that (future) go through a signed XPC helper with typed, allowlisted requests — never a shell-string API.
 
 ## Requirements
 
