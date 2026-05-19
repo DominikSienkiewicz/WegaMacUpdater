@@ -56,4 +56,39 @@ final class BrewUpgradeOutcomeTests: XCTestCase {
         XCTAssertEqual(outcome.failedTokens, ["firefox"])
         XCTAssertEqual(outcome.errorLines.count, 2)
     }
+
+    // Real-world Zoom upgrade output: brew calls `sudo launchctl ...` and
+    // `sudo pkgutil --forget` during the cask's uninstall hook. Without a
+    // configured SUDO_ASKPASS helper (Wega runs from GUI, no terminal), every
+    // sudo invocation fails, the cask still gets reinstalled, and the parser
+    // must surface this as `requiresSudoPassword` so the UI can prompt the user
+    // to configure the askpass helper instead of treating it as a hard failure.
+    func testDetectsSudoPasswordRequiredFromZoomOutput() {
+        let combined = """
+        ==> Removing launchctl service us.zoom.updater.login.check
+        sudo: a terminal is required to read the password; either use the -S option to read from standard input or configure an askpass helper
+        sudo: a password is required
+        ==> Removing launchctl service us.zoom.ZoomDaemon
+        sudo: a password is required
+        ==> Uninstalling packages with `sudo` (which may request your password)...
+        us.zoom.pkg.videomeeting
+        Error: zoom: Broken pipe
+        ==> Purging files for version 7.0.5.81138 of Cask zoom
+        ==> Upgraded 1 outdated package
+        zoom 7.0.0.77593 -> 7.0.5.81138
+        """
+
+        let outcome = BrewUpgradeOutcome.analyze(exitCode: 0, output: combined)
+
+        XCTAssertTrue(outcome.requiresSudoPassword)
+        XCTAssertEqual(outcome.failedTokens, ["zoom"])
+    }
+
+    func testNoSudoFlagWhenNoPasswordPromptInOutput() {
+        let outcome = BrewUpgradeOutcome.analyze(
+            exitCode: 0,
+            output: "==> Upgraded 1 outdated package\nzoom 1.0 -> 2.0\n"
+        )
+        XCTAssertFalse(outcome.requiresSudoPassword)
+    }
 }

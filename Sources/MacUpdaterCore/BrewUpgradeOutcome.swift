@@ -8,15 +8,21 @@ public struct BrewUpgradeOutcome: Equatable, Sendable {
     public let exitCode: Int32
     public let failedTokens: [String]
     public let errorLines: [String]
+    /// True when brew's cask uninstall hooks invoked `sudo` and got
+    /// "a password is required" — i.e. SUDO_ASKPASS is not configured and
+    /// Wega runs without a controlling terminal. UI should surface this as
+    /// an actionable hint (configure askpass), not a generic failure.
+    public let requiresSudoPassword: Bool
 
     public var isSuccessful: Bool {
         exitCode == 0 && errorLines.isEmpty
     }
 
-    public init(exitCode: Int32, failedTokens: [String], errorLines: [String]) {
+    public init(exitCode: Int32, failedTokens: [String], errorLines: [String], requiresSudoPassword: Bool = false) {
         self.exitCode = exitCode
         self.failedTokens = failedTokens
         self.errorLines = errorLines
+        self.requiresSudoPassword = requiresSudoPassword
     }
 
     /// Parses merged stdout+stderr output for "Error:" lines and extracts the
@@ -25,9 +31,17 @@ public struct BrewUpgradeOutcome: Equatable, Sendable {
         var errors: [String] = []
         var tokens: [String] = []
         var seen = Set<String>()
+        var sudoPasswordRequired = false
 
         for rawLine in output.split(whereSeparator: \.isNewline) {
             let line = String(rawLine).trimmingCharacters(in: .whitespaces)
+
+            if line.contains("sudo: a password is required") ||
+               line.contains("sudo: a terminal is required to read the password") {
+                sudoPasswordRequired = true
+                continue
+            }
+
             guard line.hasPrefix("Error:") else { continue }
             errors.append(line)
 
@@ -40,7 +54,12 @@ public struct BrewUpgradeOutcome: Equatable, Sendable {
             }
         }
 
-        return BrewUpgradeOutcome(exitCode: exitCode, failedTokens: tokens, errorLines: errors)
+        return BrewUpgradeOutcome(
+            exitCode: exitCode,
+            failedTokens: tokens,
+            errorLines: errors,
+            requiresSudoPassword: sudoPasswordRequired
+        )
     }
 
     private static func isLikelyCaskToken(_ s: String) -> Bool {

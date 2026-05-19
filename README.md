@@ -21,6 +21,7 @@ Homebrew formulae ────────────────────�
 Mac App Store (mas-cli) ────────────────────────────────────────────────────────────── ┤
 JetBrains Data Services API ────────────────────────────────────────────────────────── ┤─► Version comparison
 GitHub Releases API ────────────────────────────────────────────────────────────────── ┤   (priority dedup)  ──► Update list
+Synology Release Notes API ─────────────────────────────────────────────────────────── ┤
 Sparkle (SUFeedURL from Info.plist) ────────────────────────────────────────────────── ┤
 npm globals (npm ls -g + npm view) ────────────────────────────────────────────────── ┤
 /Applications + ~/Applications scan ───────────────────────────────────────────────────┘
@@ -28,12 +29,13 @@ npm globals (npm ls -g + npm view) ───────────────
 
 1. **Scan** — `ApplicationScanner` walks `/Applications`, `~/Applications`, and every immediate non-.app subdirectory (e.g. `/Applications/JetBrains/`). It reads `Contents/Info.plist` directly via `PropertyListSerialization` — never `Bundle(url:)` — so freshly updated apps are always seen with their real version, not a stale cached one.
 2. **Classify** — each app is tagged: `isManagedByBrew` (token found in `brew list --cask`, **filtered to casks that actually install an `.app` artifact** — guards against a CLI cask like `codex` claiming an unrelated `Codex.app`), `isManagedByMas` (receipt at `Contents/_MASReceipt/receipt`), or manual.
-3. **Check** — four parallel checkers run per app. Results are deduplicated by path, keeping the highest-priority source:
+3. **Check** — five parallel checkers run per app. Results are deduplicated by path, keeping the highest-priority source:
 
 | Priority | Source | When it fires |
 |----------|--------|---------------|
 | 4 | JetBrains Data Services | IntelliJ IDEA, PyCharm, WebStorm, GoLand, CLion, Rider, DataGrip, RubyMine, PHPStorm, DataSpell, Aqua, RustRover (14 IDEs) |
 | 3 | GitHub Releases API | VS Code, Obsidian, Rectangle, AltTab, Stats, Maccy, MonitorControl, LinearMouse, IINA, HandBrake, Keka, GitHub Desktop |
+| 3 | Synology Release Notes API | Synology Drive Client (`/api/releaseNote/findChangeLog?identify=…`); compares the build number after the dash (e.g. `4.0.3-17892`) against `CFBundleVersion` because Synology's CFBundleShortVersionString and installer version use unrelated numbering schemes |
 | 2 | Homebrew Cask | Any cask where `brew info` reports a newer version; uses `brew list --cask --versions` as authoritative installed reference |
 | 1 | Sparkle | Any non-brew app that exposes `SUFeedURL` in its `Info.plist`, plus a curated override map for Electron-based apps (e.g. Codex) that ship Sparkle but set the feed URL programmatically |
 
@@ -80,6 +82,7 @@ MacUpdaterCore (library target — no SwiftUI dependency)
 ├── MasService           — mas outdated, list, search, upgrade
 ├── JetBrainsUpdateChecker — data.services.jetbrains.com, 14 IDE mappings
 ├── GitHubReleasesChecker  — api.github.com/releases/latest, 12 app mappings
+├── SynologyUpdateChecker  — synology.com/api/releaseNote/findChangeLog, compares build number from versionString (`4.0.3-17892` → `17892`) against CFBundleVersion
 ├── SparkleUpdateChecker   — Info.plist (PropertyListSerialization, never Bundle(url:)) + CFPreferencesCopyAppValue fallback + `SparkleFeedOverrides` map for apps that set the feed URL at runtime
 ├── NpmBrewDuplicateDetector — finds CLIs installed via both `npm -g` and Homebrew (surfaced in Migration)
 ├── NpmGlobalChecker       — `npm ls -g` + `npm view <pkg> version`; NpmLocator scans brew/Volta/fnm/nvm + login-shell fallback
@@ -88,13 +91,14 @@ MacUpdaterCore (library target — no SwiftUI dependency)
 ├── CaskMatcher          — bundle-id / name → cask token matching
 ├── StaleCaskDetector    — detects casks where installed .app is gone
 ├── BinaryLocator        — resolves brew + mas executable paths
+├── AskpassHelper        — writes ~/Library/Application Support/WegaMacUpdater/askpass.sh (0700) wrapping `osascript`; HomebrewEnvironment exports SUDO_ASKPASS so brew's cask hooks can `sudo` without a controlling terminal
 └── Models               — ApplicationInfo, ManualOutdatedApp, UpdateSource…
 
 MacUpdaterTests
 └── VersionComparisonTests, ApplicationScannerMasTests, BrewInfoParserTests…
 ```
 
-No `sudo`. No stored passwords. Homebrew runs as the logged-in user. Privileged operations (future) go through a signed XPC helper with typed, allowlisted requests — never a shell-string API.
+No stored passwords. Homebrew runs as the logged-in user. Some casks (Zoom, kernel-extension installers, anything that registers launchd services or calls `pkgutil --forget`) invoke `sudo` internally during install/uninstall hooks — Wega writes a tiny `askpass.sh` helper to `~/Library/Application Support/WegaMacUpdater/` on first launch and exports `SUDO_ASKPASS` to brew so sudo opens a native `osascript` password dialog instead of failing with `sudo: a terminal is required` (the Zoom symptom). The helper is owner-only `0700` and contains no logic beyond delegating to AppleScript. Privileged operations beyond that (future) go through a signed XPC helper with typed, allowlisted requests — never a shell-string API.
 
 ## Requirements
 

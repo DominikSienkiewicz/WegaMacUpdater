@@ -133,11 +133,13 @@ public struct ManualOutdatedApp: Equatable, Sendable {
         case mas(appStoreID: String)
         case jetbrains(caskToken: String)
         case github(repo: String)
+        case synology(downloadPage: String)
 
         public var priority: Int {
             switch self {
             case .jetbrains: return 4
             case .github:    return 3
+            case .synology:  return 3
             case .cask:      return 2
             case .sparkle:   return 1
             case .mas:       return 0

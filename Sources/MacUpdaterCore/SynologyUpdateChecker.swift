@@ -1,0 +1,107 @@
+import Foundation
+
+public struct SynologyRelease: Equatable, Sendable {
+    public let version: String
+    public let build: Int
+    public let publishDate: String?
+}
+
+public enum SynologyApiParser {
+    private struct Response: Decodable {
+        let info: Info?
+        struct Info: Decodable {
+            let versions: [String: [String: [Entry]]]?
+        }
+        struct Entry: Decodable {
+            let version: String
+            let publish_date: String?
+        }
+    }
+
+    public static func latestRelease(from data: Data) -> SynologyRelease? {
+        guard let decoded = try? JSONDecoder().decode(Response.self, from: data),
+              let versions = decoded.info?.versions else { return nil }
+
+        let allEntries = versions.values.flatMap { $0.values.flatMap { $0 } }
+        let candidate = allEntries
+            .compactMap { entry -> SynologyRelease? in
+                guard let build = buildNumber(fromVersionString: entry.version) else { return nil }
+                return SynologyRelease(version: entry.version, build: build, publishDate: entry.publish_date)
+            }
+            .max(by: { $0.build < $1.build })
+
+        return candidate
+    }
+
+    public static func buildNumber(fromVersionString string: String) -> Int? {
+        guard let dashIndex = string.lastIndex(of: "-") else { return nil }
+        let buildPart = string[string.index(after: dashIndex)...]
+        return Int(buildPart)
+    }
+}
+
+public struct SynologyUpdateChecker: Sendable {
+    public struct Mapping: Sendable {
+        public let identify: String
+        public let downloadPage: String
+        public init(identify: String, downloadPage: String) {
+            self.identify = identify
+            self.downloadPage = downloadPage
+        }
+    }
+
+    public static let mappings: [String: Mapping] = [
+        "com.synology.CloudStation": Mapping(
+            identify: "SynologyDriveClient",
+            downloadPage: "https://www.synology.com/en-global/releaseNote/SynologyDriveClient"
+        ),
+    ]
+
+    private let session: URLSession
+
+    public init(session: URLSession = .shared) {
+        self.session = session
+    }
+
+    public func check(app: ApplicationInfo) async -> ManualOutdatedApp? {
+        guard let bundleId = app.bundleIdentifier,
+              let mapping = Self.mappings[bundleId] else { return nil }
+
+        guard let installedBuild = installedBuildNumber(for: app) else { return nil }
+
+        let urlString = "https://www.synology.com/api/releaseNote/findChangeLog?identify=\(mapping.identify)&lang=enu"
+        guard let url = URL(string: urlString) else { return nil }
+
+        var request = URLRequest(url: url)
+        request.setValue("WegaMacUpdater/1.0", forHTTPHeaderField: "User-Agent")
+        request.cachePolicy = .reloadRevalidatingCacheData
+
+        guard let (data, response) = try? await session.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let latest = SynologyApiParser.latestRelease(from: data),
+              latest.build > installedBuild else { return nil }
+
+        return ManualOutdatedApp(
+            name: app.name,
+            path: app.path,
+            installedVersion: app.version,
+            availableVersion: latest.version,
+            source: .synology(downloadPage: mapping.downloadPage)
+        )
+    }
+
+    private func installedBuildNumber(for app: ApplicationInfo) -> Int? {
+        let infoPlistURL = app.path.appendingPathComponent("Contents/Info.plist")
+        guard let data = try? Data(contentsOf: infoPlistURL),
+              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] else {
+            return nil
+        }
+        if let raw = plist["CFBundleVersion"] as? String, let n = Int(raw) {
+            return n
+        }
+        if let raw = plist["CFBundleVersion"] as? Int {
+            return raw
+        }
+        return nil
+    }
+}

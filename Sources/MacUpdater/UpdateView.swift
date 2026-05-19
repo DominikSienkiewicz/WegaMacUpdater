@@ -293,6 +293,7 @@ struct UpdateView: View {
         let sparkleChecker = SparkleUpdateChecker()
         let jetbrainsChecker = JetBrainsUpdateChecker()
         let githubChecker = GitHubReleasesChecker()
+        let synologyChecker = SynologyUpdateChecker()
         var byPath: [String: ManualOutdatedApp] = [:]
 
         await withTaskGroup(of: ManualOutdatedApp?.self) { group in
@@ -315,6 +316,7 @@ struct UpdateView: View {
                 }
                 group.addTask { await jetbrainsChecker.check(app: app) }
                 group.addTask { await githubChecker.check(app: app) }
+                group.addTask { await synologyChecker.check(app: app) }
                 // Always run Sparkle: even when an app is matched to an installed cask
                 // (e.g. Codex.app vs. cask `codex` which is actually a CLI binary), the
                 // app itself may have its own appcast. Priority dedup in `byPath`
@@ -437,10 +439,14 @@ struct UpdateView: View {
 
         let failedTokens = outcomes.flatMap(\.failedTokens)
         let anyFailure = outcomes.contains { !$0.isSuccessful }
+        let needsSudoPassword = outcomes.contains { $0.requiresSudoPassword }
         if anyFailure {
-            let detail = failedTokens.isEmpty
+            let baseDetail = failedTokens.isEmpty
                 ? "Brew zgłosił błąd — sprawdź log poniżej."
                 : "Nie udało się: \(failedTokens.joined(separator: ", ")). Szczegóły w logu."
+            let detail = needsSudoPassword
+                ? "\(baseDetail) Cask wymaga hasła administratora — uruchom Wega ponownie, helper askpass zapyta o nie w okienku."
+                : baseDetail
             banner = BannerData(variant: .danger, title: "Aktualizacja niekompletna", message: detail)
             onWegaState?(WegaState(pose: .alert, line: "Część pakietów się nie zaktualizowała."))
         } else {
@@ -712,6 +718,18 @@ private struct ManualUpdateSection: View {
                     }
                 } label: {
                     Label("Otwórz Toolbox", systemImage: "arrow.down.circle")
+                }
+                .controlSize(.small)
+            }
+        case .synology(let downloadPage):
+            HStack(spacing: 8) {
+                WegaBadge(label: "Synology", variant: .info)
+                Button {
+                    if let url = URL(string: downloadPage) {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    Label("Pobierz ze strony Synology", systemImage: "arrow.up.right.square")
                 }
                 .controlSize(.small)
             }

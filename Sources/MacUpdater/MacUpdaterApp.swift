@@ -1,8 +1,13 @@
 import SwiftUI
+import MacUpdaterCore
 
 @main
 struct WegaMacUpdaterApp: App {
     @StateObject private var model = AppViewModel()
+
+    init() {
+        HomebrewEnvironment.bootstrapAskpass()
+    }
 
     var body: some Scene {
         WindowGroup {
