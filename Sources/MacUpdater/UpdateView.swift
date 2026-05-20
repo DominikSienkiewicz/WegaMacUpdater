@@ -294,6 +294,7 @@ struct UpdateView: View {
         let jetbrainsChecker = JetBrainsUpdateChecker()
         let githubChecker = GitHubReleasesChecker()
         let synologyChecker = SynologyUpdateChecker()
+        let antigravityChecker = AntigravityUpdateChecker()
         var byPath: [String: ManualOutdatedApp] = [:]
 
         await withTaskGroup(of: ManualOutdatedApp?.self) { group in
@@ -317,6 +318,7 @@ struct UpdateView: View {
                 group.addTask { await jetbrainsChecker.check(app: app) }
                 group.addTask { await githubChecker.check(app: app) }
                 group.addTask { await synologyChecker.check(app: app) }
+                group.addTask { await antigravityChecker.check(app: app) }
                 // Always run Sparkle: even when an app is matched to an installed cask
                 // (e.g. Codex.app vs. cask `codex` which is actually a CLI binary), the
                 // app itself may have its own appcast. Priority dedup in `byPath`
@@ -730,6 +732,20 @@ private struct ManualUpdateSection: View {
                     }
                 } label: {
                     Label("Pobierz ze strony Synology", systemImage: "arrow.up.right.square")
+                }
+                .controlSize(.small)
+            }
+        case .antigravity:
+            HStack(spacing: 8) {
+                WegaBadge(label: "Antigravity", variant: .info)
+                Button {
+                    // Antigravity owns its own update flow (supportsFastUpdate).
+                    // Launching it triggers the in-app updater — we must never
+                    // route this through `brew install`, because the Homebrew
+                    // cask is frozen at an older version and would downgrade it.
+                    NSWorkspace.shared.open(item.path)
+                } label: {
+                    Label("Otwórz i zaktualizuj", systemImage: "arrow.up.forward.app")
                 }
                 .controlSize(.small)
             }

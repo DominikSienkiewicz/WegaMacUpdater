@@ -134,15 +134,19 @@ public struct ManualOutdatedApp: Equatable, Sendable {
         case jetbrains(caskToken: String)
         case github(repo: String)
         case synology(downloadPage: String)
+        /// Antigravity IDE — self-updating app whose Homebrew cask is stale;
+        /// detected via Google's own update endpoint.
+        case antigravity
 
         public var priority: Int {
             switch self {
-            case .jetbrains: return 4
-            case .github:    return 3
-            case .synology:  return 3
-            case .cask:      return 2
-            case .sparkle:   return 1
-            case .mas:       return 0
+            case .antigravity: return 5
+            case .jetbrains:   return 4
+            case .github:      return 3
+            case .synology:    return 3
+            case .cask:        return 2
+            case .sparkle:     return 1
+            case .mas:         return 0
             }
         }
     }

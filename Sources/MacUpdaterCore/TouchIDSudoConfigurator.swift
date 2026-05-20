@@ -1,5 +1,6 @@
 import Foundation
 import LocalAuthentication
+import IOKit
 
 /// Detects whether Touch ID is wired into `sudo` (via `pam_tid.so` in
 /// `/etc/pam.d/sudo_local`) and exposes a one-shot command to enable it.
@@ -62,19 +63,63 @@ public enum TouchIDSudoConfigurator {
         )
     }
 
-    private static func hasBiometryHardware() -> Bool {
-        let context = LAContext()
-        var error: NSError?
-        let canEvaluate = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+    /// Pure decision: combine the outcome of an `LAContext` biometry probe
+    /// with an IOKit hardware-presence fallback.
+    ///
+    /// `LAContext.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics)`
+    /// answers "can THIS process biometrically authenticate the user *right
+    /// now*". On a perfectly Touch-ID-capable Mac that answer goes negative
+    /// when the lid is shut (clamshell mode), shortly after boot, or during
+    /// the screen-lock grace window — reporting `biometryNotAvailable`, or no
+    /// error at all. That transient answer must not hide the sudo+Touch ID
+    /// feature, so when `LAContext` is negative *and inconclusive about the
+    /// hardware* we fall back to the physical sensor: if it exists, Touch ID
+    /// for sudo is genuinely supported and the user must be able to enable it.
+    static func biometryAvailable(
+        canEvaluate: Bool,
+        laErrorCode: Int?,
+        sensorPresent: @autoclosure () -> Bool
+    ) -> Bool {
         if canEvaluate { return true }
-        // `biometryNotEnrolled` still means the hardware is present —
-        // the user just hasn't registered a finger. We treat that the
-        // same as "available", because enabling sudo+TouchID makes sense
-        // even before enrolment (it'll work the moment a finger is added).
-        if let code = error?.code,
+        // `biometryNotEnrolled` / `biometryLockout` already prove the
+        // hardware is present — the user just hasn't registered a finger,
+        // or is temporarily locked out.
+        if let code = laErrorCode,
            code == LAError.biometryNotEnrolled.rawValue ||
            code == LAError.biometryLockout.rawValue {
             return true
+        }
+        // Any other negative answer (`biometryNotAvailable`, or no error at
+        // all) is inconclusive about the *hardware* — consult IOKit directly.
+        return sensorPresent()
+    }
+
+    private static func hasBiometryHardware() -> Bool {
+        let context = LAContext()
+        var error: NSError?
+        let canEvaluate = context.canEvaluatePolicy(
+            .deviceOwnerAuthenticationWithBiometrics, error: &error)
+        return biometryAvailable(
+            canEvaluate: canEvaluate,
+            laErrorCode: error?.code,
+            sensorPresent: touchIDSensorPresent()
+        )
+    }
+
+    /// Stable hardware probe: is a physical Touch ID sensor present in the
+    /// IORegistry? Unlike `LAContext`, this does not depend on the calling
+    /// process, its code signature, the lid state, or how recently the Mac
+    /// booted — so it is a reliable answer to "does this Mac have Touch ID".
+    private static func touchIDSensorPresent() -> Bool {
+        for serviceName in ["AppleBiometricSensor", "AppleMesaSEPDriver"] {
+            let service = IOServiceGetMatchingService(
+                kIOMainPortDefault,
+                IOServiceMatching(serviceName)
+            )
+            if service != 0 {
+                IOObjectRelease(service)
+                return true
+            }
         }
         return false
     }

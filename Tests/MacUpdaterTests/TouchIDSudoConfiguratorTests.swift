@@ -1,4 +1,5 @@
 import XCTest
+import LocalAuthentication
 @testable import MacUpdaterCore
 
 final class TouchIDSudoConfiguratorTests: XCTestCase {
@@ -92,5 +93,67 @@ final class TouchIDSudoConfiguratorTests: XCTestCase {
         // Must NOT touch /etc/pam.d/sudo directly (that file gets overwritten by macOS updates).
         XCTAssertFalse(cmd.contains("/etc/pam.d/sudo "), "Command must not modify /etc/pam.d/sudo directly")
         XCTAssertFalse(cmd.hasSuffix("/etc/pam.d/sudo"), "Command must not modify /etc/pam.d/sudo directly")
+    }
+
+    // MARK: - Biometry availability
+
+    func testBiometryAvailableWhenLAContextCanEvaluate() {
+        XCTAssertTrue(TouchIDSudoConfigurator.biometryAvailable(
+            canEvaluate: true,
+            laErrorCode: nil,
+            sensorPresent: false
+        ))
+    }
+
+    func testBiometryAvailableWhenBiometryNotEnrolled() {
+        // Hardware is present, the user just hasn't registered a finger.
+        XCTAssertTrue(TouchIDSudoConfigurator.biometryAvailable(
+            canEvaluate: false,
+            laErrorCode: LAError.biometryNotEnrolled.rawValue,
+            sensorPresent: false
+        ))
+    }
+
+    func testBiometryAvailableWhenBiometryLockout() {
+        XCTAssertTrue(TouchIDSudoConfigurator.biometryAvailable(
+            canEvaluate: false,
+            laErrorCode: LAError.biometryLockout.rawValue,
+            sensorPresent: false
+        ))
+    }
+
+    // Regression test: on a Touch-ID-capable Mac, `LAContext` reports
+    // `biometryNotAvailable` whenever biometrics are only *transiently*
+    // unusable for the calling process — lid shut (clamshell), just after
+    // boot, screen-lock grace window. The previous implementation treated
+    // that as "no Touch ID" and hid the entire sudo+Touch ID card, leaving
+    // the user no way to enable it. The physical sensor is still there, so
+    // the feature must remain available.
+    func testBiometryAvailableFallsBackToSensorWhenLAContextReportsNotAvailable() {
+        XCTAssertTrue(TouchIDSudoConfigurator.biometryAvailable(
+            canEvaluate: false,
+            laErrorCode: LAError.biometryNotAvailable.rawValue,
+            sensorPresent: true
+        ))
+    }
+
+    // Same inconclusive `LAContext` answer, but no sensor in IOKit → the Mac
+    // genuinely has no Touch ID, so the feature stays hidden.
+    func testBiometryUnavailableWhenLAContextNotAvailableAndNoSensor() {
+        XCTAssertFalse(TouchIDSudoConfigurator.biometryAvailable(
+            canEvaluate: false,
+            laErrorCode: LAError.biometryNotAvailable.rawValue,
+            sensorPresent: false
+        ))
+    }
+
+    // `canEvaluatePolicy` can return false with no error at all — still
+    // inconclusive about the hardware, so the sensor probe must decide.
+    func testBiometryAvailableFallsBackToSensorWhenLAContextErrorIsNil() {
+        XCTAssertTrue(TouchIDSudoConfigurator.biometryAvailable(
+            canEvaluate: false,
+            laErrorCode: nil,
+            sensorPresent: true
+        ))
     }
 }
