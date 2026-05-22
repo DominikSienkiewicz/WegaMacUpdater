@@ -55,4 +55,15 @@ final class AntigravityUpdateCheckerTests: XCTestCase {
         XCTAssertNotNil(latest)
         XCTAssertTrue(isUpgrade(installed: "2.0.0", latest: latest ?? ""))
     }
+
+    // Google now ships TWO separate products with distinct bundle identifiers:
+    //   • "Antigravity"     → com.google.antigravity      (e.g. 2.0.1)
+    //   • "Antigravity IDE" → com.google.antigravity-ide  (e.g. 2.0.3)
+    // The update endpoint queried here serves the *IDE* (`ideVersion` is
+    // "Antigravity IDE"), so the checker must match the IDE's bundle id.
+    // Matching plain `com.google.antigravity` flags that distinct app with the
+    // IDE's version — the reported false-positive (2.0.1 → 2.0.3).
+    func testCheckerTargetsAntigravityIDEBundleIdentifier() {
+        XCTAssertEqual(AntigravityUpdateChecker.bundleIdentifier, "com.google.antigravity-ide")
+    }
 }

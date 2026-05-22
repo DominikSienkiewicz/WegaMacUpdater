@@ -39,8 +39,13 @@ public enum AntigravityUpdateParser {
 /// to update itself — and compares the latest product version against the
 /// installed bundle's `CFBundleShortVersionString`.
 public struct AntigravityUpdateChecker: Sendable {
-    /// Bundle identifier of `/Applications/Antigravity.app`.
-    public static let bundleIdentifier = "com.google.antigravity"
+    /// Bundle identifier of `/Applications/Antigravity IDE.app`.
+    ///
+    /// Google ships two distinct products: "Antigravity" (`com.google.antigravity`)
+    /// and "Antigravity IDE" (`com.google.antigravity-ide`). The update endpoint
+    /// below serves the *IDE* — matching the plain `com.google.antigravity` app
+    /// would flag it with the IDE's (unrelated) version.
+    public static let bundleIdentifier = "com.google.antigravity-ide"
 
     private static let updateAPIBase =
         "https://antigravity-ide-auto-updater-974169037036.us-central1.run.app/api/update"

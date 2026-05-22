@@ -34,7 +34,7 @@ npm globals (npm ls -g + npm view) ───────────────
 
 | Priority | Source | When it fires |
 |----------|--------|---------------|
-| 5 | Antigravity update API | Google's Antigravity IDE (`com.google.antigravity`). Its Homebrew cask is frozen at an old version while the app self-updates, so brew/cask comparison never fires; the product version is read from Google's own update endpoint (the `X.Y.Z` segment of the download URL, since the JSON's `name`/`productVersion` carry the VS Code base version instead) |
+| 5 | Antigravity update API | Google's Antigravity IDE (`com.google.antigravity-ide`, a distinct product from plain "Antigravity" `com.google.antigravity`). Its Homebrew cask is frozen at an old version while the app self-updates, so brew/cask comparison never fires; the product version is read from Google's own update endpoint (the `X.Y.Z` segment of the download URL, since the JSON's `name`/`productVersion` carry the VS Code base version instead) |
 | 4 | JetBrains Data Services | IntelliJ IDEA, PyCharm, WebStorm, GoLand, CLion, Rider, DataGrip, RubyMine, PHPStorm, DataSpell, Aqua, RustRover (14 IDEs) |
 | 3 | GitHub Releases API | VS Code, Obsidian, Rectangle, AltTab, Stats, Maccy, MonitorControl, LinearMouse, IINA, HandBrake, Keka, GitHub Desktop |
 | 3 | Synology Release Notes API | Synology Drive Client (`/api/releaseNote/findChangeLog?identify=…`); compares the build number after the dash (e.g. `4.0.3-17892`) against `CFBundleVersion` because Synology's CFBundleShortVersionString and installer version use unrelated numbering schemes |
