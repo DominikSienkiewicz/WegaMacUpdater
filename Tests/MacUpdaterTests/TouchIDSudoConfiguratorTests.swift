@@ -95,6 +95,90 @@ final class TouchIDSudoConfiguratorTests: XCTestCase {
         XCTAssertFalse(cmd.hasSuffix("/etc/pam.d/sudo"), "Command must not modify /etc/pam.d/sudo directly")
     }
 
+    // Regression: on macOS Sequoia, `osascript ... with administrator
+    // privileges` running `/bin/mv /var/folders/.../tmp.XXXX
+    // /etc/pam.d/sudo_local` fails with "Operation not permitted" even as
+    // root — the kernel/TCC blocks rename(2) into /etc/pam.d/ from a temp
+    // file on /var/folders. open(2)+write(2) via tee is on a different
+    // policy path and succeeds. So the enable command must NOT use `mv` to
+    // land the final file at /etc/pam.d/sudo_local; it must write in place
+    // (tee or `>` redirection to the destination).
+    func testEnableCommandDoesNotRenameAcrossIntoPamDirectory() {
+        let cmd = TouchIDSudoConfigurator.enableShellCommand
+        XCTAssertFalse(
+            cmd.range(of: #"mv[^']*/etc/pam\.d/sudo_local"#, options: .regularExpression) != nil,
+            "Command must not use `mv` to land the file at /etc/pam.d/sudo_local — rename(2) from /var/folders is blocked on Sequoia. Use tee or `>` redirection instead. Got: \(cmd)"
+        )
+    }
+
+    func testEnableCommandWritesFinalFileViaTee() {
+        let cmd = TouchIDSudoConfigurator.enableShellCommand
+        // tee with /etc/pam.d/sudo_local as the destination — accepts any
+        // intervening flags/whitespace, but requires the path follows tee.
+        let hasTee = cmd.range(
+            of: #"/usr/bin/tee[^|<]*?/etc/pam\.d/sudo_local"#,
+            options: .regularExpression
+        ) != nil
+        XCTAssertTrue(hasTee,
+                      "Command must invoke `/usr/bin/tee /etc/pam.d/sudo_local` to write the file in place: \(cmd)")
+    }
+
+    // MARK: - Manual enable fallback (TCC blocks GUI-elevated writes to /etc/pam.d/)
+
+    // Even with `tee` (write-in-place, no rename), macOS Sequoia returns
+    // "Operation not permitted" when an osascript-elevated child of an
+    // unentitled GUI app writes to /etc/pam.d/sudo_local — the restriction
+    // is at the TCC layer, not POSIX. The UI must recognise this and
+    // surface a Terminal-friendly one-liner the user can paste themselves
+    // (Terminal.app is its own TCC principal and gets prompted/granted on
+    // first use), rather than show a raw cryptic stderr.
+    func testClassifyOperationNotPermittedAsPermissionDenied() {
+        let stderr = "0:638: execution error: tee: /etc/pam.d/sudo_local: Operation not permitted (1)"
+        let outcome = TouchIDSudoEnableOutcome.classify(exitCode: 1, stderr: stderr)
+        XCTAssertEqual(outcome, .permissionDenied)
+    }
+
+    func testClassifyUserCancelledAsCancelled() {
+        // osascript exits with -128 / "User canceled." when the auth dialog
+        // is dismissed; not a real failure, no error UI.
+        let outcome = TouchIDSudoEnableOutcome.classify(
+            exitCode: 1,
+            stderr: "User canceled."
+        )
+        XCTAssertEqual(outcome, .cancelledByUser)
+    }
+
+    func testClassifySuccessOnExitZero() {
+        XCTAssertEqual(
+            TouchIDSudoEnableOutcome.classify(exitCode: 0, stderr: ""),
+            .success
+        )
+    }
+
+    func testClassifyUnknownErrorPreservesStderr() {
+        let outcome = TouchIDSudoEnableOutcome.classify(
+            exitCode: 1,
+            stderr: "  unexpected: disk full  \n"
+        )
+        XCTAssertEqual(outcome, .otherError("unexpected: disk full"))
+    }
+
+    func testManualEnableTerminalCommandIsCopyPasteableOneLiner() {
+        let cmd = TouchIDSudoConfigurator.manualEnableTerminalCommand
+        XCTAssertFalse(cmd.contains("\n"),
+                       "Must be a single line so it pastes cleanly into Terminal. Got: \(cmd)")
+        XCTAssertTrue(cmd.contains("sudo"),
+                      "Must request elevation explicitly: \(cmd)")
+        XCTAssertTrue(cmd.contains("pam_tid.so"),
+                      "Must install the pam_tid directive: \(cmd)")
+        XCTAssertTrue(cmd.contains("/etc/pam.d/sudo_local"),
+                      "Must target sudo_local, not sudo: \(cmd)")
+        // Idempotency: re-running the manual command must not double-append
+        // the pam_tid line. The simplest way is `grep -q … || echo … | sudo tee -a`.
+        XCTAssertTrue(cmd.contains("grep"),
+                      "Manual command must be idempotent (grep-guard before append): \(cmd)")
+    }
+
     // MARK: - Biometry availability
 
     func testBiometryAvailableWhenLAContextCanEvaluate() {

@@ -44,9 +44,49 @@ public final class MasService: @unchecked Sendable {
 
     public func upgrade() async throws -> ProcessResult {
         let arguments = ["upgrade"]
-        let result = try await runMas(arguments)
-        try ensureSuccess(result, arguments: arguments)
-        return result
+        let first = try await runMas(arguments)
+        if first.exitCode == 0 {
+            return first
+        }
+        // `mas upgrade` shells out to `sudo softwareupdate …` for Safari
+        // extensions and similar MAS items, using `/usr/bin/sudo` directly —
+        // which bypasses our PATH shim and fails on a missing TTY. Recover
+        // by priming the no-tty sudo timestamp via `sudo -A -v` (askpass
+        // renders the password dialog) and retrying once.
+        guard Self.outputIndicatesMissingSudoTTY(first) else {
+            try ensureSuccess(first, arguments: arguments)
+            return first
+        }
+        try await prewarmSudoTimestamp()
+        let retry = try await runMas(arguments)
+        try ensureSuccess(retry, arguments: arguments)
+        return retry
+    }
+
+    /// True when mas's stderr contains the canonical sudo "no terminal /
+    /// password required" signature. Matched on raw substrings rather than
+    /// regex to stay robust against minor wording shifts between sudo
+    /// versions on different macOS releases.
+    static func outputIndicatesMissingSudoTTY(_ result: ProcessResult) -> Bool {
+        let blob = result.stderr + "\n" + result.stdout
+        return blob.contains("sudo: a terminal is required to read the password")
+            || blob.contains("sudo: a password is required")
+    }
+
+    private func prewarmSudoTimestamp() async throws {
+        // Use the absolute path on purpose: this is exactly the `sudo` that
+        // mas will invoke internally, so the timestamp it caches is the one
+        // mas will look up. Going through the PATH shim here would cache a
+        // different ticket (the shim re-execs sudo as a child process).
+        let sudoURL = URL(fileURLWithPath: "/usr/bin/sudo")
+        _ = try await runner.run(
+            ProcessRequest(
+                executableURL: sudoURL,
+                arguments: ["-A", "-v"],
+                environment: HomebrewEnvironment.environment,
+                timeout: 120
+            )
+        )
     }
 
     public func list() async throws -> [MasInstalledApp] {

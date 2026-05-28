@@ -8,6 +8,11 @@ struct InfoView: View {
     @State private var touchIDState: TouchIDSudoConfigurator.State = .notSupported
     @State private var enablingTouchID = false
     @State private var touchIDError: String? = nil
+    /// Set when the in-app enable path is blocked by TCC ("Operation not
+    /// permitted"). Triggers the manual-fallback section with the
+    /// copy-pasteable Terminal command — the only path that reliably works
+    /// on Sequoia for unentitled GUI apps.
+    @State private var touchIDPermissionDenied: Bool = false
 
     var body: some View {
         ScrollView {
@@ -60,7 +65,9 @@ struct InfoView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
 
-                        if touchIDState == .available {
+                        if touchIDPermissionDenied {
+                            manualEnableFallback
+                        } else if touchIDState == .available {
                             Button {
                                 Task { await enableTouchID() }
                             } label: {
@@ -104,9 +111,76 @@ struct InfoView: View {
         }
     }
 
+    /// Manual fallback shown when macOS TCC blocks the in-app write.
+    /// Renders the exact one-liner the user should paste into Terminal,
+    /// plus buttons to copy it and to open Terminal.app pre-armed with it.
+    @ViewBuilder
+    private var manualEnableFallback: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("macOS zablokował zapis do /etc/pam.d/sudo_local z poziomu Wegi (TCC). Uruchom poniższą komendę w Terminalu — wystarczy raz:")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(TouchIDSudoConfigurator.manualEnableTerminalCommand)
+                .font(.system(size: 11, design: .monospaced))
+                .textSelection(.enabled)
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 6))
+
+            HStack(spacing: 8) {
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(
+                        TouchIDSudoConfigurator.manualEnableTerminalCommand,
+                        forType: .string
+                    )
+                } label: {
+                    Label("Skopiuj komendę", systemImage: "doc.on.doc")
+                }
+                .controlSize(.small)
+
+                Button {
+                    openInTerminal(TouchIDSudoConfigurator.manualEnableTerminalCommand)
+                } label: {
+                    Label("Otwórz w Terminalu", systemImage: "terminal")
+                }
+                .controlSize(.small)
+
+                Spacer()
+
+                Button("Sprawdź ponownie") {
+                    touchIDPermissionDenied = false
+                    touchIDError = nil
+                    touchIDState = TouchIDSudoConfigurator.currentState()
+                }
+                .controlSize(.small)
+            }
+        }
+    }
+
+    /// Tells Terminal.app to open a new window and `do script` the command
+    /// in it. Terminal is its own TCC principal — on first `sudo tee
+    /// /etc/pam.d/sudo_local` it prompts the user normally and the write
+    /// succeeds, unlike the same chain initiated from Wega's process tree.
+    private func openInTerminal(_ command: String) {
+        let escaped = command
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        let script = "tell application \"Terminal\" to do script \"\(escaped)\"\n"
+            + "tell application \"Terminal\" to activate"
+
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        task.arguments = ["-e", script]
+        try? task.run()
+    }
+
     private func enableTouchID() async {
         enablingTouchID = true
         touchIDError = nil
+        touchIDPermissionDenied = false
         defer { enablingTouchID = false }
 
         let cmd = TouchIDSudoConfigurator.enableShellCommand
@@ -134,15 +208,19 @@ struct InfoView: View {
             }
         }
 
-        if result.status == 0 {
+        switch TouchIDSudoEnableOutcome.classify(exitCode: result.status, stderr: result.stderr) {
+        case .success:
             touchIDState = TouchIDSudoConfigurator.currentState()
             onWegaState?(WegaState(pose: .happy, line: "Touch ID podpięty pod sudo."))
-        } else {
-            // User cancelled the auth dialog → osascript exits with -128 / "User canceled".
-            // Don't surface that as an error; just stay in `available`.
-            if !result.stderr.localizedCaseInsensitiveContains("cancel") {
-                touchIDError = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
+        case .cancelledByUser:
+            // Stay in `.available`, no error UI.
+            break
+        case .permissionDenied:
+            // TCC blocked the write — switch to the manual Terminal path.
+            touchIDPermissionDenied = true
+            onWegaState?(WegaState(pose: .alert, line: "macOS zablokował zapis — wklej komendę do Terminala."))
+        case .otherError(let message):
+            touchIDError = message
         }
     }
 
