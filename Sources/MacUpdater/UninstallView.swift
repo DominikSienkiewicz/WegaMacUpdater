@@ -102,7 +102,24 @@ struct UninstallView: View {
                 // List
                 if isLoading {
                     Spacer()
-                    ProgressView("Skanowanie…").padding()
+                    SniffingScene(
+                        caption: "Skanowanie aplikacji…",
+                        thoughts: [
+                            "Co tu można wynieść?",
+                            "Sniff sniff… kandydat",
+                            "Łapię zapach Library/Caches",
+                            "Mhm, czy używasz tego jeszcze?",
+                            "Bundle ID… znajomy",
+                            "Kto zostawił tę apkę?",
+                            "Czy brew o tym wie?",
+                            "Mhm… stare receipty",
+                            "Pachnie zajętym miejscem",
+                            "Aport albo zostaw?"
+                        ],
+                        wegaSize: 110,
+                        height: 150
+                    )
+                    .padding(.vertical, 12)
                     Spacer()
                 } else if apps.isEmpty {
                     EmptyHero(

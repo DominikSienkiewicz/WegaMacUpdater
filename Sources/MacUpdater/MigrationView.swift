@@ -72,12 +72,22 @@ struct MigrationView: View {
                 }
             }
 
-            VStack(spacing: 10) {
-                WegaFull(pose: .sniff, size: 130)
-                Text("Trop! Wega wącha każdy folder w /Applications…")
-                    .font(.system(size: 13).italic())
-                    .foregroundStyle(.secondary)
-            }
+            SniffingScene(
+                caption: "Trop! Wega wącha każdy folder w /Applications…",
+                thoughts: [
+                    "Czy ta apka żyje poza brew?",
+                    "Sniff sniff… kandydat na migrację",
+                    "Hmm, kto cię tu postawił?",
+                    "Pachnie ręczną instalacją",
+                    "Czy znajdę cię w bazie casków?",
+                    "Bundle ID… znajomy",
+                    "Trop prowadzi do /Applications",
+                    "Mhm… brak _MASReceipt",
+                    "Może by tak pod brew?",
+                    "Łapię zapach Sparkle"
+                ],
+                wegaSize: 130
+            )
         }
         .padding(24)
     }

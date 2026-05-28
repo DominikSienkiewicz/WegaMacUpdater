@@ -130,7 +130,24 @@ struct InventoryView: View {
                 if isScanning {
                     HStack {
                         Spacer()
-                        ProgressView().padding(32)
+                        SniffingScene(
+                            caption: "Obchód wszystkich kątów…",
+                            thoughts: [
+                                "Sniff sniff… ile tego",
+                                "Bundle ID… mhm",
+                                "Kto tu zarządza?",
+                                "Brew, MAS czy ręcznie?",
+                                "Łapię zapach Info.plist",
+                                "Czy widzę ten cask w bazie?",
+                                "Globalne npm pachną odwiecznością",
+                                "0x4A 0x65 0x6C 0x6C 0x79",
+                                "Mhm, jeszcze ten folder",
+                                "Przeczesuję /Applications…"
+                            ],
+                            wegaSize: 110,
+                            height: 150
+                        )
+                        .padding(.vertical, 12)
                         Spacer()
                     }
                 } else {

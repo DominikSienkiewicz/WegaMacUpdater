@@ -93,6 +93,7 @@ MacUpdaterCore (library target — no SwiftUI dependency)
 ├── CaskDatabaseClient   — full cask database fetch + disk cache
 ├── CaskMatcher          — bundle-id / name → cask token matching
 ├── StaleCaskDetector    — detects casks where installed .app is gone
+├── BrewCaskDriftFilter  — hides casks whose on-disk `CFBundleShortVersionString` already matches `current_version`; covers self-updating apps like Google Chrome that bump their bundle outside Homebrew, leaving brew's `installed_versions` metadata stale
 ├── BinaryLocator        — resolves brew + mas executable paths
 ├── AskpassHelper        — writes ~/Library/Application Support/WegaMacUpdater/askpass.sh (0700) wrapping `osascript`; HomebrewEnvironment exports SUDO_ASKPASS so brew's cask hooks can `sudo` without a controlling terminal
 ├── SudoShim             — writes ~/Library/Application Support/WegaMacUpdater/sudo-shim/sudo (0700) that re-execs `/usr/bin/sudo -A "$@"`; HomebrewEnvironment prepends this dir to PATH so `mas upgrade` (which shells out to `sudo softwareupdate` for Safari extensions without passing `-A`) still triggers the askpass dialog

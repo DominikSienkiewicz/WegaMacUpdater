@@ -71,14 +71,21 @@ struct UpdateView: View {
             ForEach(Array(["brew update", "brew outdated", "brew outdated --cask --greedy", "mas outdated", "sparkle · cask check"].enumerated()), id: \.offset) { idx, cmd in
                 CheckingBar(command: cmd, delay: Double(idx) * 0.2)
             }
-            HStack(spacing: 16) {
-                Spacer()
-                WegaFull(pose: .sniff, size: 120)
-                Text("Wega węszy po Homebrew…")
-                    .font(.system(size: 13).italic())
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
+            SniffingScene(
+                caption: "Wega węszy po Homebrew…",
+                thoughts: [
+                    "Czy ten cask jest świeży?",
+                    "Coś tu pachnie aktualizacją",
+                    "Sniff sniff… brew outdated",
+                    "Hmm, znajomy zapach Sparkle",
+                    "SHA256 się zgadza?",
+                    "Łapię trop wersji",
+                    "0x4A 0x65 0x6C 0x6C 0x79",
+                    "Mhm… nowa wersja?",
+                    "Info.plist… mhm",
+                    "Ten cask wymaga odświeżenia"
+                ]
+            )
             .padding(.top, 16)
         }
         .padding(24)
@@ -229,12 +236,21 @@ struct UpdateView: View {
         let brewOutdatedCasks = Set(brewOutdated?.casks.map(\.name) ?? [])
         manualOutdated = await scanManualUpdates(brewOutdatedCasks: brewOutdatedCasks)
 
-        // Resolve icon paths for outdated casks
+        // Resolve icon paths for outdated casks, and drop entries whose real
+        // bundle version already matches `current_version` (self-updating apps
+        // like Chrome bump their bundle behind brew's back).
         if let casks = brewOutdated?.casks, !casks.isEmpty {
             let infos = (try? await model.brewService.caskInstallationInfo(tokens: casks.map(\.name))) ?? []
+
+            let drifted = BrewCaskDriftFilter().driftedTokens(outdated: casks, installationInfo: infos)
+            if !drifted.isEmpty, var updated = brewOutdated {
+                updated.casks.removeAll { drifted.contains($0.name) }
+                brewOutdated = updated
+            }
+
             let home = FileManager.default.homeDirectoryForCurrentUser
             var paths: [String: URL] = [:]
-            for info in infos {
+            for info in infos where !drifted.contains(info.token) {
                 for artifact in info.appArtifacts {
                     let system = URL(fileURLWithPath: "/Applications/\(artifact)")
                     let user   = home.appendingPathComponent("Applications/\(artifact)")
