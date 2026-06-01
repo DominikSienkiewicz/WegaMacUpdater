@@ -1,0 +1,103 @@
+import Foundation
+
+/// Parses ChatGPT desktop's public Sparkle appcast. OpenAI ships
+/// `Sparkle.framework` but sets the feed URL programmatically at runtime —
+/// `SUFeedURL` is absent from both `Info.plist` and the `com.openai.chat`
+/// preferences domain — so the generic `SparkleUpdateChecker` can't discover
+/// it. The feed lives under the app's internal codename "sidekick".
+///
+/// The feed items are NOT reliably ordered: older builds can carry a more
+/// recent `pubDate` than the newest version (Homebrew's `chatgpt` cask warns
+/// about this too). So we take the max `sparkle:shortVersionString` across
+/// every `<item>`, never just the first.
+public enum ChatGPTUpdateParser {
+
+    /// Returns the highest `sparkle:shortVersionString` across all `<item>`
+    /// elements, or nil when the feed has no parseable item.
+    public static func latestVersion(fromAppcast data: Data) -> String? {
+        let delegate = AppcastParser()
+        let parser = XMLParser(data: data)
+        parser.delegate = delegate
+        parser.parse()
+        // max(by:) wants an ascending predicate: $0 precedes $1 when $1 is the
+        // newer version, i.e. $0 → $1 is an upgrade.
+        return delegate.versions.max { isUpgrade(installed: $0, latest: $1) }
+    }
+
+    private final class AppcastParser: NSObject, XMLParserDelegate {
+        var versions: [String] = []
+        private var current = ""
+        private var capturing = false
+
+        func parser(_ p: XMLParser,
+                    didStartElement element: String,
+                    namespaceURI: String?,
+                    qualifiedName: String?,
+                    attributes: [String: String]) {
+            // Match both namespace-qualified and bare element names.
+            let local = element.components(separatedBy: ":").last ?? element
+            capturing = (local == "shortVersionString")
+            current = ""
+        }
+
+        func parser(_ p: XMLParser, foundCharacters string: String) {
+            if capturing { current += string }
+        }
+
+        func parser(_ p: XMLParser,
+                    didEndElement element: String,
+                    namespaceURI: String?,
+                    qualifiedName: String?) {
+            let local = element.components(separatedBy: ":").last ?? element
+            if local == "shortVersionString" {
+                let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { versions.append(trimmed) }
+            }
+            capturing = false
+            current = ""
+        }
+    }
+}
+
+/// Detects updates for the ChatGPT desktop app, whose Homebrew cask `chatgpt`
+/// is marked `auto_updates` and whose metadata lags OpenAI's public release
+/// channel by days. The app self-updates via Sparkle from a runtime-resolved
+/// feed, so neither brew nor the generic Sparkle path surfaces the newer build.
+/// Queries OpenAI's public appcast directly and compares the short version.
+public struct ChatGPTUpdateChecker: Sendable {
+    /// Bundle identifier of `/Applications/ChatGPT.app`.
+    public static let bundleIdentifier = "com.openai.chat"
+
+    /// Public Sparkle appcast OpenAI ships for the desktop app (codename
+    /// "sidekick"). Same feed Homebrew's `chatgpt` cask uses for livecheck.
+    public static let appcastURL = URL(string:
+        "https://persistent.oaistatic.com/sidekick/public/sparkle_public_appcast.xml")!
+
+    private let session: URLSession
+
+    public init(session: URLSession = .shared) {
+        self.session = session
+    }
+
+    public func check(app: ApplicationInfo) async -> ManualOutdatedApp? {
+        guard app.bundleIdentifier == Self.bundleIdentifier,
+              let installed = app.version, !installed.isEmpty else { return nil }
+
+        var request = URLRequest(url: Self.appcastURL)
+        request.setValue("WegaMacUpdater/1.0", forHTTPHeaderField: "User-Agent")
+        request.cachePolicy = .reloadRevalidatingCacheData
+
+        guard let (data, response) = try? await session.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let latest = ChatGPTUpdateParser.latestVersion(fromAppcast: data),
+              isUpgrade(installed: installed, latest: latest) else { return nil }
+
+        return ManualOutdatedApp(
+            name: app.name,
+            path: app.path,
+            installedVersion: installed,
+            availableVersion: latest,
+            source: .chatgpt
+        )
+    }
+}

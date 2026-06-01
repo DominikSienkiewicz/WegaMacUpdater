@@ -51,7 +51,15 @@ final class SudoShimTests: XCTestCase {
     func testShimDirectoryIsPrependedToHomebrewPath() throws {
         let dir = try SudoShim.install(in: tempDir)
         HomebrewEnvironment.sudoShimDirectory = dir.path
-        defer { HomebrewEnvironment.sudoShimDirectory = nil }
+        // Pin the Touch ID state for this test: the host running CI may have
+        // it enabled, which by design causes `environment` to drop the shim
+        // (so pam_tid can prompt biometrically). Here we're verifying the
+        // *no-Touch-ID* leg of the branch — the askpass fallback.
+        HomebrewEnvironment.touchIDStateOverride = .available
+        defer {
+            HomebrewEnvironment.sudoShimDirectory = nil
+            HomebrewEnvironment.touchIDStateOverride = nil
+        }
 
         let env = HomebrewEnvironment.environment
         let path = env["PATH"] ?? ""

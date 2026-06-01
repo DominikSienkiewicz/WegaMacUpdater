@@ -78,11 +78,20 @@ public final class MasService: @unchecked Sendable {
         // mas will invoke internally, so the timestamp it caches is the one
         // mas will look up. Going through the PATH shim here would cache a
         // different ticket (the shim re-execs sudo as a child process).
+        //
+        // `-A` vs no `-A`: with Touch ID wired into sudo_local, `-A` would
+        // make sudo skip pam_tid.so entirely and pop the askpass *password*
+        // dialog instead of the biometric sheet. Dropping `-A` lets PAM run
+        // normally — pam_tid shows the Touch ID prompt, succeeds, timestamp
+        // cached. Without Touch ID, askpass remains the only viable path.
         let sudoURL = URL(fileURLWithPath: "/usr/bin/sudo")
+        let touchIDEnabled = (HomebrewEnvironment.touchIDStateOverride
+                              ?? TouchIDSudoConfigurator.currentState()) == .enabled
+        let args = touchIDEnabled ? ["-v"] : ["-A", "-v"]
         _ = try await runner.run(
             ProcessRequest(
                 executableURL: sudoURL,
-                arguments: ["-A", "-v"],
+                arguments: args,
                 environment: HomebrewEnvironment.environment,
                 timeout: 120
             )

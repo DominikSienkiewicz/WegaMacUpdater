@@ -18,6 +18,39 @@ final class MasServiceUpgradeSudoTests: XCTestCase {
     private let masURL = URL(fileURLWithPath: "/usr/bin/true")
     private var locator: BinaryLocator { BinaryLocator(masCandidates: [masURL]) }
 
+    override func setUp() {
+        // Pin this suite to the "no Touch ID" leg — these tests verify the
+        // askpass prewarm path; the Touch-ID leg has its own assertions in
+        // testUpgradePrewarmsSudoWithoutDashAWhenTouchIDEnabled.
+        HomebrewEnvironment.touchIDStateOverride = .available
+    }
+
+    override func tearDown() {
+        HomebrewEnvironment.touchIDStateOverride = nil
+    }
+
+    // When the user has wired Touch ID into sudo_local, the prewarm must not
+    // pass `-A` — that flag makes sudo skip pam_tid.so and go straight to
+    // askpass. Without `-A`, sudo runs PAM normally; pam_tid pops the Touch
+    // ID sheet, succeeds, and the timestamp is cached for mas's subsequent
+    // internal sudo call.
+    func testUpgradePrewarmsSudoWithoutDashAWhenTouchIDEnabled() async throws {
+        HomebrewEnvironment.touchIDStateOverride = .enabled
+
+        let runner = QueuingProcessRunner(responses: [
+            ProcessResult(exitCode: 1, stdout: "",
+                          stderr: "sudo: a terminal is required to read the password\n"),
+            ProcessResult(exitCode: 0, stdout: "", stderr: ""),
+            ProcessResult(exitCode: 0, stdout: "", stderr: "")
+        ])
+        let service = MasService(locator: locator, runner: runner)
+        _ = try await service.upgrade()
+
+        XCTAssertEqual(runner.requests[1].executableURL.path, "/usr/bin/sudo")
+        XCTAssertEqual(runner.requests[1].arguments, ["-v"],
+                       "With Touch ID enabled the prewarm must omit -A so pam_tid prompts biometrically.")
+    }
+
     func testUpgradePrewarmsSudoAndRetriesOnTerminalRequiredError() async throws {
         let runner = QueuingProcessRunner(responses: [
             // 1. mas upgrade — fails with the canonical sudo-tty error

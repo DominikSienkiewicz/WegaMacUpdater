@@ -137,10 +137,24 @@ public struct ManualOutdatedApp: Equatable, Sendable {
         /// Antigravity IDE — self-updating app whose Homebrew cask is stale;
         /// detected via Google's own update endpoint.
         case antigravity
+        /// Parallels Desktop — self-updating; Homebrew cask `parallels` lags
+        /// upstream by days/weeks. Detected via `update.parallels.com` XML.
+        case parallels
+        /// Google Drive for desktop — self-updating via GoogleSoftwareUpdate.
+        /// Brew cask `google-drive` lags upstream. Detected via Google's
+        /// public release-notes page.
+        case googleDrive
+        /// ChatGPT desktop — self-updating via Sparkle from a runtime-resolved
+        /// feed. Brew cask `chatgpt` is `auto_updates` and its metadata lags.
+        /// Detected via OpenAI's public appcast.
+        case chatgpt
 
         public var priority: Int {
             switch self {
             case .antigravity: return 5
+            case .parallels:   return 5
+            case .googleDrive: return 5
+            case .chatgpt:     return 5
             case .jetbrains:   return 4
             case .github:      return 3
             case .synology:    return 3

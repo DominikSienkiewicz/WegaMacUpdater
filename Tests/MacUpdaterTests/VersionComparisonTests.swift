@@ -26,6 +26,26 @@ struct VersionComparisonTests {
         #expect(versionComponents("7.0.0") == [7, 0, 0])
     }
 
+    // Real-world repro for the BrewCaskDriftFilter false positive that hid
+    // Parallels Desktop. Homebrew's `current_version` for the `parallels` cask
+    // is `26.3.3-57507` (Parallels-style "X.Y.Z-build"); the on-disk bundle
+    // reads `CFBundleShortVersionString = 26.3.2`. Without this fix,
+    // `versionComponents("26.3.3-57507")` returns just `[26, 3]` (because
+    // `Int("3-57507")` is nil), which the drift filter then misreads as
+    // *older* than `26.3.2`, drops parallels from the outdated list, and the
+    // user sees "Wszystko aktualne" while an upgrade is sitting in brew.
+    @Test func componentsDashBuildSuffix() {
+        #expect(versionComponents("26.3.3-57507") == [26, 3, 3, 57507])
+    }
+
+    @Test func driftFilterDoesNotHideParallelsWithDashBuildCurrent() {
+        // installed bundle = 26.3.2, brew current = 26.3.3-57507. The drift
+        // filter must say "not drifted" (i.e. the cask stays in the outdated
+        // list), because the on-disk version is genuinely older than current.
+        #expect(versionsEqual("26.3.2", "26.3.3-57507") == false)
+        #expect(isUpgrade(installed: "26.3.3-57507", latest: "26.3.2") == false)
+    }
+
     @Test func componentsBuildInParens() {
         #expect(versionComponents("7.0.0 (77593)") == [7, 0, 0, 77593])
     }

@@ -15,13 +15,31 @@ public enum HomebrewEnvironment {
     /// askpass dialog instead of failing on a missing TTY.
     public nonisolated(unsafe) static var sudoShimDirectory: String?
 
+    /// Test seam — when non-nil, `environment` uses this instead of probing
+    /// the real `/etc/pam.d/sudo_local` + biometry hardware. Production code
+    /// must leave this nil so the live state is consulted on every read
+    /// (state can flip mid-session when the user enables Touch ID from
+    /// InfoView, and the next brew call must immediately respect that).
+    public nonisolated(unsafe) static var touchIDStateOverride: TouchIDSudoConfigurator.State?
+
+    /// Why this is dynamic, not bootstrap-time: the sudo shim doesn't merely
+    /// "force -A so SUDO_ASKPASS works" — it actively *prevents* `pam_tid.so`
+    /// from prompting biometrically. So when Touch ID is wired into
+    /// `sudo_local`, gating the shim off lets sudo go through PAM naturally:
+    /// pam_tid pops the Touch ID sheet, succeeds, sudo accepts, no askpass
+    /// password dialog. When Touch ID is NOT enabled, the shim + SUDO_ASKPASS
+    /// remain the only way brew's cask hooks (Zoom, Parallels, kext
+    /// installers) can authenticate without a controlling terminal.
     public static var environment: [String: String] {
+        let state = touchIDStateOverride ?? TouchIDSudoConfigurator.currentState()
+        let useAskpassFallback = (state != .enabled)
+
         var path = processPath
-        if let shim = sudoShimDirectory {
+        if useAskpassFallback, let shim = sudoShimDirectory {
             path = "\(shim):\(path)"
         }
         var env = ["PATH": path]
-        if let askpass = askpassPath {
+        if useAskpassFallback, let askpass = askpassPath {
             env["SUDO_ASKPASS"] = askpass
         }
         return env

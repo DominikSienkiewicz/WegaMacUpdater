@@ -311,6 +311,9 @@ struct UpdateView: View {
         let githubChecker = GitHubReleasesChecker()
         let synologyChecker = SynologyUpdateChecker()
         let antigravityChecker = AntigravityUpdateChecker()
+        let parallelsChecker = ParallelsUpdateChecker()
+        let googleDriveChecker = GoogleDriveUpdateChecker()
+        let chatGPTChecker = ChatGPTUpdateChecker()
         var byPath: [String: ManualOutdatedApp] = [:]
 
         await withTaskGroup(of: ManualOutdatedApp?.self) { group in
@@ -335,6 +338,9 @@ struct UpdateView: View {
                 group.addTask { await githubChecker.check(app: app) }
                 group.addTask { await synologyChecker.check(app: app) }
                 group.addTask { await antigravityChecker.check(app: app) }
+                group.addTask { await parallelsChecker.check(app: app) }
+                group.addTask { await googleDriveChecker.check(app: app) }
+                group.addTask { await chatGPTChecker.check(app: app) }
                 // Always run Sparkle: even when an app is matched to an installed cask
                 // (e.g. Codex.app vs. cask `codex` which is actually a CLI binary), the
                 // app itself may have its own appcast. Priority dedup in `byPath`
@@ -759,6 +765,45 @@ private struct ManualUpdateSection: View {
                     // Launching it triggers the in-app updater — we must never
                     // route this through `brew install`, because the Homebrew
                     // cask is frozen at an older version and would downgrade it.
+                    NSWorkspace.shared.open(item.path)
+                } label: {
+                    Label("Otwórz i zaktualizuj", systemImage: "arrow.up.forward.app")
+                }
+                .controlSize(.small)
+            }
+        case .parallels:
+            HStack(spacing: 8) {
+                WegaBadge(label: "Parallels", variant: .info)
+                Button {
+                    // Parallels self-updates via its bundled updater; brew cask
+                    // `parallels` lags upstream and would route through a stale
+                    // installer.
+                    NSWorkspace.shared.open(item.path)
+                } label: {
+                    Label("Otwórz i zaktualizuj", systemImage: "arrow.up.forward.app")
+                }
+                .controlSize(.small)
+            }
+        case .googleDrive:
+            HStack(spacing: 8) {
+                WegaBadge(label: "Google Drive", variant: .info)
+                Button {
+                    if let url = URL(string: "https://www.google.com/drive/download/") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    Label("Pobierz najnowszą wersję", systemImage: "arrow.up.right.square")
+                }
+                .controlSize(.small)
+            }
+        case .chatgpt:
+            HStack(spacing: 8) {
+                WegaBadge(label: "ChatGPT", variant: .info)
+                Button {
+                    // ChatGPT self-updates via Sparkle from a runtime-resolved
+                    // feed; the brew cask `chatgpt` is `auto_updates` and lags.
+                    // Launching the app triggers its own update flow — never
+                    // route through brew, which would reinstall a stale build.
                     NSWorkspace.shared.open(item.path)
                 } label: {
                     Label("Otwórz i zaktualizuj", systemImage: "arrow.up.forward.app")

@@ -6,9 +6,16 @@ public func versionVariants(_ v: String) -> [String] {
     v.replacingOccurrences(of: "+", with: ",").split(separator: ",").map(String.init)
 }
 
-/// Returns numeric components from a single version segment, handling "X (Y)" → "X.Y".
+/// Returns numeric components from a single version segment. Handles:
+/// - "X (Y)" → "X.Y" (Zoom-style)
+/// - "X.Y.Z-build" → "X.Y.Z.build" (Parallels-style; the `-NNNNN` suffix is
+///   the build number, not a pre-release tag — without this, `26.3.3-57507`
+///   parsed only as `[26, 3]` and the drift filter wrongly hid Parallels
+///   from the outdated list).
 public func versionComponents(_ v: String) -> [Int] {
-    v.replacingOccurrences(of: " (", with: ".").replacingOccurrences(of: ")", with: "")
+    v.replacingOccurrences(of: " (", with: ".")
+     .replacingOccurrences(of: ")", with: "")
+     .replacingOccurrences(of: "-", with: ".")
      .split(separator: ".").compactMap { Int($0) }
 }
 
