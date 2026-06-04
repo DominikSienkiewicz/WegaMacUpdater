@@ -87,13 +87,14 @@ MacUpdaterCore (library target — no SwiftUI dependency)
 ├── ApplicationScanner   — filesystem scan, Info.plist parsing, brew/mas tagging
 ├── BrewService          — brew outdated (greedy), install, uninstall, cask versions
 ├── MasService           — mas outdated, list, search, upgrade
-├── JetBrainsUpdateChecker — data.services.jetbrains.com, 14 IDE mappings
-├── GitHubReleasesChecker  — api.github.com/releases/latest, 12 app mappings
+├── AppCatalog           — single source of truth for every per-app mapping (GitHub repos, JetBrains IDE codes, Synology identifiers, Sparkle feed overrides); decoded from the bundled `Resources/app-catalog.json` and overlaid (if present) by a user-writable `~/Library/Application Support/WegaMacUpdater/app-catalog.json`, so the catalog can be refreshed out-of-band without a new app build
+├── JetBrainsUpdateChecker — data.services.jetbrains.com, 14 IDE mappings (from AppCatalog)
+├── GitHubReleasesChecker  — api.github.com/releases/latest, 12 app mappings (from AppCatalog)
 ├── SynologyUpdateChecker  — synology.com/api/releaseNote/findChangeLog, compares build number from versionString (`4.0.3-17892` → `17892`) against CFBundleVersion
 ├── AntigravityUpdateChecker — Google Antigravity IDE update endpoint; reads the product version from the download URL path (cask is stale, app self-updates)
 ├── ParallelsUpdateChecker  — `update.parallels.com/desktop/v<major>/parallels/parallels_updates.xml`; major derived from installed bundle, `<Major>.<Minor>.<SubMinor>` read from the feed (cask `parallels` lags, app self-updates)
 ├── GoogleDriveUpdateChecker — POSTs an Omaha v3 update-check to `tools.google.com/service/update2` with `appid="com.google.drivefs" ap="canary"` and parses `<manifest version="X.Y.Z.W"/>`; canary cohort reveals the patches (e.g. `126.0.5.0`) that Stable / 50-percent never advertise. Compares against `CFBundleVersion` (not `CFBundleShortVersionString`, which is only `126.0`)
-├── SparkleUpdateChecker   — Info.plist (PropertyListSerialization, never Bundle(url:)) + CFPreferencesCopyAppValue fallback + `SparkleFeedOverrides` map for apps that set the feed URL at runtime
+├── SparkleUpdateChecker   — Info.plist (PropertyListSerialization, never Bundle(url:)) + CFPreferencesCopyAppValue fallback + `SparkleFeedOverrides` map (backed by AppCatalog) for apps that set the feed URL at runtime
 ├── NpmBrewDuplicateDetector — finds CLIs installed via both `npm -g` and Homebrew (surfaced in Migration)
 ├── NpmGlobalChecker       — `npm ls -g` + `npm view <pkg> version`; NpmLocator scans brew/Volta/fnm/nvm + login-shell fallback
 ├── VersionComparison    — versionsEqual, isUpgrade, normalizeGitTag (public, tested)

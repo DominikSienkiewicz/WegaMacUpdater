@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "github": [
+    { "bundleId": "com.microsoft.VSCode",         "repo": "microsoft/vscode",             "caskToken": "visual-studio-code" },
+    { "bundleId": "md.obsidian",                  "repo": "obsidianmd/obsidian-releases", "caskToken": "obsidian" },
+    { "bundleId": "com.knollsoft.Rectangle",      "repo": "rxhanson/Rectangle",           "caskToken": "rectangle" },
+    { "bundleId": "com.lwouis.alt-tab-macos",     "repo": "lwouis/alt-tab-macos",         "caskToken": "alt-tab" },
+    { "bundleId": "eu.exelban.Stats",             "repo": "exelban/Stats",                "caskToken": "stats" },
+    { "bundleId": "org.p0deje.Maccy",             "repo": "p0deje/Maccy",                 "caskToken": "maccy" },
+    { "bundleId": "me.guillaumeb.MonitorControl", "repo": "MonitorControl/MonitorControl", "caskToken": "monitorcontrol" },
+    { "bundleId": "com.linearmouse.linearmouse",  "repo": "linearmouse/linearmouse",      "caskToken": "linearmouse" },
+    { "bundleId": "com.colliderli.iina",          "repo": "iina/iina",                    "caskToken": "iina" },
+    { "bundleId": "fr.handbrake.HandBrake",       "repo": "HandBrake/HandBrake",          "caskToken": "handbrake" },
+    { "bundleId": "com.aone.keka",                "repo": "aonez/Keka",                   "caskToken": "keka" },
+    { "bundleId": "com.github.GitHubClient",      "repo": "desktop/desktop",              "caskToken": "github" }
+  ],
+  "jetbrains": [
+    { "bundleId": "com.jetbrains.intellij",    "code": "IIU", "caskToken": "intellij-idea" },
+    { "bundleId": "com.jetbrains.intellij.ce", "code": "IIC", "caskToken": "intellij-idea-ce" },
+    { "bundleId": "com.jetbrains.pycharm",     "code": "PCP", "caskToken": "pycharm" },
+    { "bundleId": "com.jetbrains.pycharm.ce",  "code": "PCC", "caskToken": "pycharm-ce" },
+    { "bundleId": "com.jetbrains.webstorm",    "code": "WS",  "caskToken": "webstorm" },
+    { "bundleId": "com.jetbrains.goland",      "code": "GO",  "caskToken": "goland" },
+    { "bundleId": "com.jetbrains.clion",       "code": "CL",  "caskToken": "clion" },
+    { "bundleId": "com.jetbrains.rider",       "code": "RD",  "caskToken": "rider" },
+    { "bundleId": "com.jetbrains.datagrip",    "code": "DG",  "caskToken": "datagrip" },
+    { "bundleId": "com.jetbrains.rubymine",    "code": "RM",  "caskToken": "rubymine" },
+    { "bundleId": "com.jetbrains.phpstorm",    "code": "PS",  "caskToken": "phpstorm" },
+    { "bundleId": "com.jetbrains.dataspell",   "code": "DS",  "caskToken": "dataspell" },
+    { "bundleId": "com.jetbrains.aqua",        "code": "QA",  "caskToken": "aqua" },
+    { "bundleId": "com.jetbrains.rustrover",   "code": "RR",  "caskToken": "rustrover" }
+  ],
+  "synology": [
+    {
+      "bundleId": "com.synology.CloudStation",
+      "identify": "SynologyDriveClient",
+      "downloadPage": "https://www.synology.com/en-global/releaseNote/SynologyDriveClient"
+    }
+  ],
+  "sparkleFeedOverrides": [
+    { "bundleId": "com.openai.codex", "feedURL": "https://persistent.oaistatic.com/codex-app-prod/appcast.xml" }
+  ]
+}

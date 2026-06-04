@@ -2,31 +2,19 @@ import Foundation
 
 public struct JetBrainsUpdateChecker: Sendable {
     private let session: URLSession
+    private let products: [String: JetBrainsCatalogEntry]
 
-    private static let products: [String: (code: String, caskToken: String)] = [
-        "com.jetbrains.intellij":    (code: "IIU", caskToken: "intellij-idea"),
-        "com.jetbrains.intellij.ce": (code: "IIC", caskToken: "intellij-idea-ce"),
-        "com.jetbrains.pycharm":     (code: "PCP", caskToken: "pycharm"),
-        "com.jetbrains.pycharm.ce":  (code: "PCC", caskToken: "pycharm-ce"),
-        "com.jetbrains.webstorm":    (code: "WS",  caskToken: "webstorm"),
-        "com.jetbrains.goland":      (code: "GO",  caskToken: "goland"),
-        "com.jetbrains.clion":       (code: "CL",  caskToken: "clion"),
-        "com.jetbrains.rider":       (code: "RD",  caskToken: "rider"),
-        "com.jetbrains.datagrip":    (code: "DG",  caskToken: "datagrip"),
-        "com.jetbrains.rubymine":    (code: "RM",  caskToken: "rubymine"),
-        "com.jetbrains.phpstorm":    (code: "PS",  caskToken: "phpstorm"),
-        "com.jetbrains.dataspell":   (code: "DS",  caskToken: "dataspell"),
-        "com.jetbrains.aqua":        (code: "QA",  caskToken: "aqua"),
-        "com.jetbrains.rustrover":   (code: "RR",  caskToken: "rustrover"),
-    ]
-
-    public init(session: URLSession = .shared) {
+    public init(
+        session: URLSession = .shared,
+        products: [String: JetBrainsCatalogEntry] = AppCatalog.shared.jetbrainsProducts
+    ) {
         self.session = session
+        self.products = products
     }
 
     public func check(app: ApplicationInfo) async -> ManualOutdatedApp? {
         guard let bundleId = app.bundleIdentifier,
-              let product = Self.products[bundleId] else { return nil }
+              let product = products[bundleId] else { return nil }
 
         let urlString = "https://data.services.jetbrains.com/products/releases?code=\(product.code)&latest=true&type=release"
         guard let url = URL(string: urlString) else { return nil }

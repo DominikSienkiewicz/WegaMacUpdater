@@ -69,10 +69,11 @@ public struct SparkleUpdateChecker: Sendable {
 /// Hard-coded Sparkle feed URLs for apps that don't expose `SUFeedURL` via Info.plist.
 /// Add new entries here when you discover an app that ships Sparkle but configures the feed at runtime.
 public enum SparkleFeedOverrides {
-    public static let defaults: [String: String] = [
-        // OpenAI Codex desktop app (Electron + Sparkle, feed URL set in JS at runtime).
-        "com.openai.codex": "https://persistent.oaistatic.com/codex-app-prod/appcast.xml"
-    ]
+    /// Hard-coded feed URLs for apps that hide `SUFeedURL` (e.g. Electron-based Codex,
+    /// which sets it in JS at runtime). Sourced from the shared `AppCatalog`.
+    public static var defaults: [String: String] {
+        AppCatalog.shared.sparkleFeedOverridesByBundleID
+    }
 }
 
 // MARK: - Appcast XML parser

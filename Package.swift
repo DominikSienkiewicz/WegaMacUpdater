@@ -14,7 +14,10 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "MacUpdaterCore"
+            name: "MacUpdaterCore",
+            resources: [
+                .process("Resources")
+            ]
         ),
         .executableTarget(
             name: "WegaMacUpdater",

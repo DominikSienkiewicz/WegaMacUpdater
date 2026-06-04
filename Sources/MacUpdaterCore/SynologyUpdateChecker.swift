@@ -41,31 +41,20 @@ public enum SynologyApiParser {
 }
 
 public struct SynologyUpdateChecker: Sendable {
-    public struct Mapping: Sendable {
-        public let identify: String
-        public let downloadPage: String
-        public init(identify: String, downloadPage: String) {
-            self.identify = identify
-            self.downloadPage = downloadPage
-        }
-    }
-
-    public static let mappings: [String: Mapping] = [
-        "com.synology.CloudStation": Mapping(
-            identify: "SynologyDriveClient",
-            downloadPage: "https://www.synology.com/en-global/releaseNote/SynologyDriveClient"
-        ),
-    ]
-
     private let session: URLSession
+    private let mappings: [String: SynologyCatalogEntry]
 
-    public init(session: URLSession = .shared) {
+    public init(
+        session: URLSession = .shared,
+        mappings: [String: SynologyCatalogEntry] = AppCatalog.shared.synologyMappings
+    ) {
         self.session = session
+        self.mappings = mappings
     }
 
     public func check(app: ApplicationInfo) async -> ManualOutdatedApp? {
         guard let bundleId = app.bundleIdentifier,
-              let mapping = Self.mappings[bundleId] else { return nil }
+              let mapping = mappings[bundleId] else { return nil }
 
         guard let installedBuild = installedBuildNumber(for: app) else { return nil }
 
