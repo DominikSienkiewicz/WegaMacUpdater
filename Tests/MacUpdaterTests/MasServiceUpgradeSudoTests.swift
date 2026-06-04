@@ -143,12 +143,13 @@ private final class QueuingProcessRunner: ProcessRunning, @unchecked Sendable {
     init(responses: [ProcessResult]) { self.responses = responses }
 
     func run(_ request: ProcessRequest) async throws -> ProcessResult {
-        lock.lock(); defer { lock.unlock() }
-        requests.append(request)
-        guard !responses.isEmpty else {
-            return ProcessResult(exitCode: 0, stdout: "", stderr: "")
+        lock.withLock {
+            requests.append(request)
+            guard !responses.isEmpty else {
+                return ProcessResult(exitCode: 0, stdout: "", stderr: "")
+            }
+            return responses.removeFirst()
         }
-        return responses.removeFirst()
     }
 
     func events(for request: ProcessRequest) -> AsyncThrowingStream<ProcessOutputEvent, Error> {

@@ -51,12 +51,12 @@ public enum ProcessRunnerError: Error, Equatable, LocalizedError {
     }
 }
 
-public protocol ProcessRunning {
+public protocol ProcessRunning: Sendable {
     func run(_ request: ProcessRequest) async throws -> ProcessResult
     func events(for request: ProcessRequest) -> AsyncThrowingStream<ProcessOutputEvent, Error>
 }
 
-public final class ProcessRunner: ProcessRunning {
+public final class ProcessRunner: ProcessRunning, Sendable {
     public init() {}
 
     public func run(_ request: ProcessRequest) async throws -> ProcessResult {
@@ -67,9 +67,10 @@ public final class ProcessRunner: ProcessRunning {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let result = try await self.run(request) { event in
+                    let onOutput: @Sendable (ProcessOutputEvent) -> Void = { event in
                         continuation.yield(event)
                     }
+                    let result = try await self.run(request, onOutput: onOutput)
                     continuation.yield(.finished(result))
                     continuation.finish()
                 } catch {
@@ -85,18 +86,19 @@ public final class ProcessRunner: ProcessRunning {
 
     public func run(
         _ request: ProcessRequest,
-        onOutput: ((ProcessOutputEvent) -> Void)?
+        onOutput: (@Sendable (ProcessOutputEvent) -> Void)?
     ) async throws -> ProcessResult {
         try Task.checkCancellation()
 
-        return try await Task.detached(priority: .userInitiated) {
+        let operation: @Sendable () throws -> ProcessResult = {
             try Self.runSynchronously(request, onOutput: onOutput)
-        }.value
+        }
+        return try await Task.detached(priority: .userInitiated, operation: operation).value
     }
 
     private static func runSynchronously(
         _ request: ProcessRequest,
-        onOutput: ((ProcessOutputEvent) -> Void)?
+        onOutput: (@Sendable (ProcessOutputEvent) -> Void)?
     ) throws -> ProcessResult {
         let process = Process()
         process.executableURL = request.executableURL
@@ -173,7 +175,7 @@ public final class ProcessRunner: ProcessRunning {
     }
 }
 
-private final class LockedData {
+private final class LockedData: @unchecked Sendable {
     private let lock = NSLock()
     private var storage = Data()
 

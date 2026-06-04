@@ -16,7 +16,13 @@ cd "$SCRIPT_DIR/.."
 
 BUNDLE_ID="com.wega.WegaMacUpdater"
 APP_NAME="WegaMacUpdater"
-VERSION="0.0.1"
+# Wersja ma jedno źródło prawdy: AppMetadata.version (czytane też w runtime przez aplikację).
+VERSION="$(sed -n 's/.*static let version = "\(.*\)".*/\1/p' Sources/MacUpdaterCore/AppMetadata.swift)"
+if [[ -z "$VERSION" ]]; then
+  echo "❌ Nie udało się odczytać wersji z Sources/MacUpdaterCore/AppMetadata.swift"
+  exit 1
+fi
+echo "→ Wersja (z AppMetadata.version): $VERSION"
 MIN_MACOS="13.0"
 ARCH="arm64"           # zmień na "x86_64" lub "arm64-apple-macosx" jeśli potrzeba
 

@@ -8,6 +8,7 @@ Native macOS app that keeps every application on your Mac up to date — Homebre
 ![Version](https://img.shields.io/badge/Version-0.0.1-lightgrey?style=for-the-badge)
 ![Homebrew](https://img.shields.io/badge/Homebrew-required-FBB040?style=for-the-badge&logo=homebrew&logoColor=white)
 ![Architecture](https://img.shields.io/badge/Architecture-SPM_Modules-purple?style=for-the-badge)
+[![CI](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml/badge.svg)](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml)
 
 ## The Vision: one window, zero terminals
 
@@ -134,7 +135,13 @@ swift test                # run all tests
 swift run WegaMacUpdater  # launch app
 ```
 
+The package targets the **Swift 6 language mode** (`swift-tools-version: 6.0`), so the whole codebase compiles under strict concurrency checking. Every push and pull request to `main` is built and tested by GitHub Actions (`.github/workflows/ci.yml`) on a `macos-15` runner with the latest stable Xcode.
+
 Open `Package.swift` directly in Xcode for the full IDE experience. A signed `.app` bundle requires a separate Xcode project or `xcodebuild` invocation with a provisioning profile.
+
+### Version — single source of truth
+
+The app version lives in exactly one place: `AppMetadata.version` (`Sources/MacUpdaterCore/AppMetadata.swift`). The running app reads it (falling back to it when no bundle `Info.plist` is present, e.g. under `swift run`), and `scripts/build-pkg.sh` extracts it from there when stamping the generated `Info.plist` and the `.pkg` — so bumping the version is a one-line edit.
 
 ## Distribution
 

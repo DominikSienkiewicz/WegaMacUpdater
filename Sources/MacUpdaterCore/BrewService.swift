@@ -14,7 +14,7 @@ public enum BrewServiceError: Error, Equatable, LocalizedError {
     }
 }
 
-public final class BrewService {
+public final class BrewService: @unchecked Sendable {
     private let locator: BinaryLocator
     private let runner: ProcessRunning
     private let outdatedParser: BrewOutdatedParser
