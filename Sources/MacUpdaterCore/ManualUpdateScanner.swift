@@ -11,15 +11,18 @@ public struct ManualUpdateScanner: Sendable {
     private let brewService: BrewService
     private let scanDirectories: [URL]
     private let caskCacheURL: URL
+    private let maxConcurrentChecks: Int
 
     public init(
         brewService: BrewService = BrewService(),
         scanDirectories: [URL] = AppScanDirectories.all(),
-        caskCacheURL: URL = AppScanDirectories.caskDatabaseCacheURL
+        caskCacheURL: URL = AppScanDirectories.caskDatabaseCacheURL,
+        maxConcurrentChecks: Int = 12
     ) {
         self.brewService = brewService
         self.scanDirectories = scanDirectories
         self.caskCacheURL = caskCacheURL
+        self.maxConcurrentChecks = maxConcurrentChecks
     }
 
     public func scan(brewOutdatedCasks: Set<String> = []) async -> (apps: [ManualOutdatedApp], failedChecks: Int) {
@@ -58,46 +61,50 @@ public struct ManualUpdateScanner: Sendable {
         let googleDriveChecker = GoogleDriveUpdateChecker()
         let chatGPTChecker = ChatGPTUpdateChecker()
         let brew = brewService
+
+        // Build every per-app check as an independent unit of work, then run them with a
+        // bounded concurrency cap. An unbounded group would open one connection per
+        // (app × checker) — hundreds at once on a large /Applications — and hammer the
+        // remote update APIs; the cap keeps the fan-out polite without serialising it.
+        var work: [@Sendable () async -> ManualCheckResult] = []
+        for app in appsToCheck {
+            if let token = app.caskToken {
+                let brewTracked = brewCaskVersions[token]
+                work.append {
+                    guard let latest = await brew.caskLatestVersion(token: token) else { return .upToDate }
+                    let reference = brewTracked ?? app.version
+                    guard let installed = reference,
+                          !versionsEqual(latest, installed),
+                          isUpgrade(installed: installed, latest: latest) else { return .upToDate }
+                    return .outdated(ManualOutdatedApp(
+                        name: app.name, path: app.path,
+                        installedVersion: app.version ?? installed,
+                        availableVersion: versionVariants(latest).first ?? latest,
+                        source: .cask(token: token)
+                    ))
+                }
+            }
+            work.append { await jetbrainsChecker.check(app: app) }
+            work.append { await githubChecker.check(app: app) }
+            work.append { await synologyChecker.check(app: app) }
+            work.append { await antigravityChecker.check(app: app) }
+            work.append { await parallelsChecker.check(app: app) }
+            work.append { await googleDriveChecker.check(app: app) }
+            work.append { await chatGPTChecker.check(app: app) }
+            // Always run Sparkle: even when an app is matched to an installed cask
+            // (e.g. Codex.app vs. cask `codex` which is actually a CLI binary), the
+            // app itself may have its own appcast. Priority dedup ensures cask (2)
+            // wins over sparkle (1) when both report the same path.
+            work.append { await sparkleChecker.check(app: app) }
+        }
+
         var collected: [ManualOutdatedApp] = []
         var failedChecks = 0
-
-        await withTaskGroup(of: ManualCheckResult.self) { group in
-            for app in appsToCheck {
-                if let token = app.caskToken {
-                    let brewTracked = brewCaskVersions[token]
-                    group.addTask {
-                        guard let latest = await brew.caskLatestVersion(token: token) else { return .upToDate }
-                        let reference = brewTracked ?? app.version
-                        guard let installed = reference,
-                              !versionsEqual(latest, installed),
-                              isUpgrade(installed: installed, latest: latest) else { return .upToDate }
-                        return .outdated(ManualOutdatedApp(
-                            name: app.name, path: app.path,
-                            installedVersion: app.version ?? installed,
-                            availableVersion: versionVariants(latest).first ?? latest,
-                            source: .cask(token: token)
-                        ))
-                    }
-                }
-                group.addTask { await jetbrainsChecker.check(app: app) }
-                group.addTask { await githubChecker.check(app: app) }
-                group.addTask { await synologyChecker.check(app: app) }
-                group.addTask { await antigravityChecker.check(app: app) }
-                group.addTask { await parallelsChecker.check(app: app) }
-                group.addTask { await googleDriveChecker.check(app: app) }
-                group.addTask { await chatGPTChecker.check(app: app) }
-                // Always run Sparkle: even when an app is matched to an installed cask
-                // (e.g. Codex.app vs. cask `codex` which is actually a CLI binary), the
-                // app itself may have its own appcast. Priority dedup ensures cask (2)
-                // wins over sparkle (1) when both report the same path.
-                group.addTask { await sparkleChecker.check(app: app) }
-            }
-            for await result in group {
-                switch result {
-                case .outdated(let item): collected.append(item)
-                case .failed:             failedChecks += 1
-                case .upToDate, .notApplicable: break
-                }
+        for result in await runBounded(limit: maxConcurrentChecks, work) {
+            switch result {
+            case .outdated(let item): collected.append(item)
+            case .failed:             failedChecks += 1
+            case .upToDate, .notApplicable: break
             }
         }
         return (UpdatePlanner.dedupedByPriority(collected), failedChecks)

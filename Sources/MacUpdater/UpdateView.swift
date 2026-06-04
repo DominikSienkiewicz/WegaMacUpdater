@@ -29,6 +29,8 @@ struct UpdateView: View {
     @State private var restartBusy:        String?
     @State private var caskIconPaths:      [String: URL]     = [:]
 
+    private let processes = RunningProcessService()
+
     // Keys carry a source tag ("f:", "c:", "a:", "n:"); see UpdatePlanner.
     // Items the user has ignored or pinned below the available version are filtered out.
     private var allItems: [OutdatedItem] {
@@ -513,41 +515,14 @@ struct UpdateView: View {
     }
 
     private func isProcessRunning(_ name: String) async -> Bool {
-        await withCheckedContinuation { cont in
-            DispatchQueue.global().async {
-                let p = Process()
-                p.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
-                p.arguments = ["-x", name]
-                try? p.run()
-                p.waitUntilExit()
-                cont.resume(returning: p.terminationStatus == 0)
-            }
-        }
+        await processes.isRunning(name)
     }
 
     private func restartApp(_ info: RestartInfo) async {
         restartBusy = info.processName
-        await withCheckedContinuation { cont in
-            DispatchQueue.global().async {
-                let p = Process()
-                p.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
-                p.arguments = [info.processName]
-                try? p.run()
-                p.waitUntilExit()
-                cont.resume(returning: ())
-            }
-        }
+        await processes.kill(info.processName)
         try? await Task.sleep(for: .milliseconds(800))
-        await withCheckedContinuation { cont in
-            DispatchQueue.global().async {
-                let p = Process()
-                p.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-                p.arguments = ["-a", info.appName]
-                try? p.run()
-                p.waitUntilExit()
-                cont.resume(returning: ())
-            }
-        }
+        await processes.launch(appName: info.appName)
         restartCandidates.removeAll { $0.processName == info.processName }
         restartBusy = nil
     }

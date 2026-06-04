@@ -1,0 +1,52 @@
+# SwiftLint configuration for WegaMacUpdater.
+#
+# The codebase has a deliberate house style: colons aligned in multiline literals
+# (UpdatePlanner.plan), trailing commas in multiline collections, short local
+# binding names (to, ok, en, tr, id), and long descriptive doc-comment lines.
+# Reformatting ~800 sites to satisfy SwiftLint's cosmetic defaults would fight that
+# style and bury real changes in noise. Instead this config keeps the high-signal
+# correctness rules and the metric guardrails (at thresholds the current code
+# already clears), and disables the purely-cosmetic rules — so `swiftlint --strict`
+# is a regression gate that stays green today and catches genuine blow-ups later.
+
+excluded:
+  - .build
+  - .swiftpm
+  - scripts        # standalone Swift scripts (make-icon.swift) — not app code
+
+disabled_rules:
+  - colon                              # author aligns colons in multiline literals
+  - comma
+  - trailing_comma                     # trailing commas in multiline literals are intentional
+  - identifier_name                    # short local names (to, ok, en, tr, id) are idiomatic
+  - opening_brace
+  - statement_position
+  - return_arrow_whitespace
+  - vertical_whitespace
+  - for_where
+  - redundant_string_enum_value
+  - implicit_optional_initialization
+  - optional_data_string_conversion    # String(decoding:as:) is intentional and non-failable
+
+# Metric rules kept as guardrails at thresholds the current tree clears.
+line_length:
+  warning: 360
+  error: 500
+  ignores_urls: true
+  ignores_comments: true
+file_length:
+  warning: 1200
+  error: 2000
+type_body_length:
+  warning: 800
+  error: 1200
+function_body_length:
+  warning: 260
+  error: 400
+cyclomatic_complexity:
+  warning: 30
+  error: 45
+nesting:
+  type_level: 3
+
+reporter: "github-actions-logging"

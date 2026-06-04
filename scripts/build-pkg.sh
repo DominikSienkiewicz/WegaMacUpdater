@@ -24,7 +24,9 @@ if [[ -z "$VERSION" ]]; then
 fi
 echo "→ Wersja (z AppMetadata.version): $VERSION"
 MIN_MACOS="13.0"
-ARCH="arm64"           # zmień na "x86_64" lub "arm64-apple-macosx" jeśli potrzeba
+# Universal binary domyślnie (Apple Silicon + Intel). Nadpisz listą arch przez env:
+#   ARCHS="arm64" ./scripts/build-pkg.sh        # tylko Apple Silicon
+read -r -a ARCHS <<< "${ARCHS:-arm64 x86_64}"
 
 SIGN_IDENTITY="${1:-}"   # pierwszy argument = Developer ID (opcjonalnie)
 
@@ -39,20 +41,34 @@ mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources"
 mkdir -p "$(dirname "$OUTPUT_PKG")"
 
 # ---------------------------------------------------------------------------
-echo "→ Buduję release binary..."
-swift build -c release --arch "$ARCH"
+echo "→ Buduję release binary (arch: ${ARCHS[*]})..."
+ARCH_FLAGS=()
+for a in "${ARCHS[@]}"; do ARCH_FLAGS+=(--arch "$a"); done
+swift build -c release "${ARCH_FLAGS[@]}"
 
-BINARY=".build/$ARCH-apple-macosx/release/$APP_NAME"
+# Robustne ustalenie katalogu wyjściowego (działa dla single- i multi-arch).
+BIN_DIR="$(swift build -c release "${ARCH_FLAGS[@]}" --show-bin-path)"
+BINARY="$BIN_DIR/$APP_NAME"
 if [[ ! -f "$BINARY" ]]; then
-  BINARY=".build/release/$APP_NAME"
-fi
-
-if [[ ! -f "$BINARY" ]]; then
-  echo "❌ Nie znaleziono binary. Sprawdź wynik swift build."
+  echo "❌ Nie znaleziono binary w $BIN_DIR. Sprawdź wynik swift build."
   exit 1
 fi
 
 cp "$BINARY" "$CONTENTS/MacOS/$APP_NAME"
+
+# Bundle zasobów SPM (app-catalog.json). Bez tego Bundle.module w spakowanej aplikacji
+# nie znajdzie katalogu → AppCatalog.loadBundled() rzuca → wszystkie checkery oparte
+# o katalog (GitHub, JetBrains, Synology, override'y Sparkle) tracą swoje mapowania.
+RES_BUNDLE="$BIN_DIR/${APP_NAME}_MacUpdaterCore.bundle"
+if [[ -d "$RES_BUNDLE" ]]; then
+  cp -R "$RES_BUNDLE" "$CONTENTS/Resources/"
+  echo "   ✓ Skopiowano bundle zasobów: $(basename "$RES_BUNDLE")"
+else
+  echo "❌ Nie znaleziono bundla zasobów $RES_BUNDLE — app-catalog.json nie trafiłby do .app"
+  exit 1
+fi
+
+echo "   ✓ Architektury binarki: $(lipo -archs "$CONTENTS/MacOS/$APP_NAME")"
 
 # ---------------------------------------------------------------------------
 echo "→ Generuję ikonę aplikacji..."

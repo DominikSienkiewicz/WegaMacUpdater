@@ -31,3 +31,57 @@ jobs:
 
       - name: Test
         run: swift test --skip-build
+
+  lint:
+    name: SwiftLint
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: SwiftLint version
+        run: swiftlint version
+
+      # --strict promotes warnings to errors: any new violation fails the job.
+      - name: Lint
+        run: swiftlint lint --strict
+
+  package:
+    name: Package (.pkg, universal)
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select latest stable Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      # Ad-hoc signed, universal (arm64 + x86_64) — verifies the whole packaging path
+      # composes on every change, not just `swift build`.
+      - name: Build .pkg
+        run: ./scripts/build-pkg.sh
+
+      - name: Verify universal binary (arm64 + x86_64)
+        run: |
+          BIN=".build/pkg-staging/WegaMacUpdater.app/Contents/MacOS/WegaMacUpdater"
+          ARCHS="$(lipo -archs "$BIN")"
+          echo "archs: $ARCHS"
+          echo "$ARCHS" | grep -qw arm64
+          echo "$ARCHS" | grep -qw x86_64
+
+      - name: Verify app-catalog.json is bundled
+        run: |
+          BUNDLE=".build/pkg-staging/WegaMacUpdater.app/Contents/Resources/WegaMacUpdater_MacUpdaterCore.bundle"
+          test -n "$(find "$BUNDLE" -name app-catalog.json)"
+
+      - name: Upload .pkg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WegaMacUpdater-pkg
+          path: build/WegaMacUpdater.pkg
+          if-no-files-found: error

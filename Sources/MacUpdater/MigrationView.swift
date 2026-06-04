@@ -24,6 +24,8 @@ struct MigrationView: View {
     @State private var dupConfirm: DuplicateRemoval? = nil
     @State private var dupBusy: String? = nil
 
+    private let processes = RunningProcessService()
+
     private var matchable: [ApplicationInfo] {
         MigrationPlanner.matchable(candidates: candidates, migrated: migrated)
     }
@@ -458,29 +460,11 @@ struct MigrationView: View {
     }
 
     private func isProcessRunning(_ name: String) async -> Bool {
-        await withCheckedContinuation { cont in
-            DispatchQueue.global().async {
-                let p = Process()
-                p.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
-                p.arguments = ["-x", name]
-                try? p.run()
-                p.waitUntilExit()
-                cont.resume(returning: p.terminationStatus == 0)
-            }
-        }
+        await processes.isRunning(name)
     }
 
     private func killProcess(_ name: String) async {
-        await withCheckedContinuation { cont in
-            DispatchQueue.global().async {
-                let p = Process()
-                p.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
-                p.arguments = [name]
-                try? p.run()
-                p.waitUntilExit()
-                cont.resume(returning: ())
-            }
-        }
+        await processes.kill(name)
         try? await Task.sleep(for: .milliseconds(500))
     }
 

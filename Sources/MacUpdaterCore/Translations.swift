@@ -8,8 +8,8 @@ import Foundation
 ///
 /// Format strings (used via `trf`) keep their `%@` / `%d` placeholders in both
 /// languages so argument order is preserved.
-enum Translations {
-    static let en: [String: String] = [
+public enum Translations {
+    public static let en: [String: String] = [
         "Sprawdźmy, co się zestarzało": "Let's check what's gotten old",
         "Wega zajrzy do Homebrew oraz Mac App Store i powie, co warto odświeżyć.": "Wega will look into Homebrew and the Mac App Store and tell you what's worth refreshing.",
         "Sprawdź aktualizacje": "Check for updates",
@@ -215,6 +215,10 @@ enum Translations {
         "wczoraj": "yesterday",
         "%@ dni temu": "%@ days ago",
         "Wszystkie": "All",
+        // SourceFilter raw values reach tr(...) dynamically; brand names are identical in
+        // English but must be present so the completeness check passes (no silent fallback).
+        "Brew": "Brew",
+        "App Store": "App Store",
         "Aktualizacje": "Update",
         "Migracja": "Migration",
         "Spis aplikacji": "Inventory",

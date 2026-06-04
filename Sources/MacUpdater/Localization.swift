@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import MacUpdaterCore
 
 /// UI languages Wega ships. Polish is the base (the literal strings in the views),
 /// English is provided by the translation table in `Translations.swift`.
