@@ -42,11 +42,11 @@ struct MigrationView: View {
     private var readyView: some View {
         EmptyHero(
             pose: .idle,
-            title: "Zwęszyć aplikacje poza Homebrew?",
-            message: "Wega zajrzy do /Applications i poszuka programów zainstalowanych ręcznie, które dałoby się przepiąć pod Brew.",
+            title: tr("Zwęszyć aplikacje poza Homebrew?"),
+            message: tr("Wega zajrzy do /Applications i poszuka programów zainstalowanych ręcznie, które dałoby się przepiąć pod Brew."),
             action: AnyView(
                 Button { Task { await scan() } } label: {
-                    Label("Skanuj /Applications", systemImage: "sparkle.magnifyingglass")
+                    Label(tr("Skanuj /Applications"), systemImage: "sparkle.magnifyingglass")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.wegaHoney)
@@ -61,7 +61,7 @@ struct MigrationView: View {
             WegaCard {
                 HStack(spacing: 12) {
                     ProgressView().controlSize(.small).tint(Color.wegaHoney)
-                    Text("Skanowanie /Applications")
+                    Text(tr("Skanowanie /Applications"))
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -69,18 +69,18 @@ struct MigrationView: View {
             }
 
             SniffingScene(
-                caption: "Trop! Wega wącha każdy folder w /Applications…",
+                caption: tr("Trop! Wega wącha każdy folder w /Applications…"),
                 thoughts: [
-                    "Czy ta apka żyje poza brew?",
-                    "Sniff sniff… kandydat na migrację",
-                    "Hmm, kto cię tu postawił?",
-                    "Pachnie ręczną instalacją",
-                    "Czy znajdę cię w bazie casków?",
-                    "Bundle ID… znajomy",
-                    "Trop prowadzi do /Applications",
-                    "Mhm… brak _MASReceipt",
-                    "Może by tak pod brew?",
-                    "Łapię zapach Sparkle"
+                    tr("Czy ta apka żyje poza brew?"),
+                    tr("Sniff sniff… kandydat na migrację"),
+                    tr("Hmm, kto cię tu postawił?"),
+                    tr("Pachnie ręczną instalacją"),
+                    tr("Czy znajdę cię w bazie casków?"),
+                    tr("Bundle ID… znajomy"),
+                    tr("Trop prowadzi do /Applications"),
+                    tr("Mhm… brak _MASReceipt"),
+                    tr("Może by tak pod brew?"),
+                    tr("Łapię zapach Sparkle")
                 ],
                 wegaSize: 130
             )
@@ -94,15 +94,15 @@ struct MigrationView: View {
                 // Header
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Kandydaci do migracji")
+                        Text(tr("Kandydaci do migracji"))
                             .font(.system(size: 18, weight: .semibold))
-                        Text("Zeskanowano /Applications · znalazłam \(matchable.count + migrated.count + masCandidates.count + unmatched.count) aplikacji poza zarządzaniem")
+                        Text(trf("Zeskanowano /Applications · znalazłam %@ aplikacji poza zarządzaniem", "\(matchable.count + migrated.count + masCandidates.count + unmatched.count)"))
                             .font(.system(size: 11))
                             .foregroundStyle(.tertiary)
                     }
                     Spacer()
                     Button { Task { await scan() } } label: {
-                        Label("Skanuj ponownie", systemImage: "arrow.clockwise")
+                        Label(tr("Skanuj ponownie"), systemImage: "arrow.clockwise")
                     }
                 }
 
@@ -113,7 +113,7 @@ struct MigrationView: View {
                 WegaCard(padded: false) {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.wegaSuccess)
-                        Text("Można przepiąć pod Homebrew")
+                        Text(tr("Można przepiąć pod Homebrew"))
                             .font(.system(size: 13, weight: .semibold))
                         Text("\(matchable.count)")
                             .font(.system(size: 12, design: .monospaced))
@@ -125,7 +125,7 @@ struct MigrationView: View {
                     .overlay(alignment: .bottom) { Divider().opacity(0.5) }
 
                     if matchable.isEmpty {
-                        Text("Wszystko już przygarnięte. Dobra robota.")
+                        Text(tr("Wszystko już przygarnięte. Dobra robota."))
                             .font(.system(size: 13))
                             .foregroundStyle(.tertiary)
                             .padding(28)
@@ -154,12 +154,12 @@ struct MigrationView: View {
                     WegaCard(padded: false) {
                         HStack(spacing: 8) {
                             Image(systemName: "exclamationmark.arrow.triangle.2.circlepath").foregroundStyle(Color.wegaDanger)
-                            Text("Te same narzędzia w npm i brew")
+                            Text(tr("Te same narzędzia w npm i brew"))
                                 .font(.system(size: 13, weight: .semibold))
                             Text("\(npmBrewDuplicates.count)")
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundStyle(.tertiary)
-                            Text("ryzyko rozjazdu wersji w PATH").font(.system(size: 11)).foregroundStyle(.tertiary)
+                            Text(tr("ryzyko rozjazdu wersji w PATH")).font(.system(size: 11)).foregroundStyle(.tertiary)
                             Spacer()
                         }
                         .padding(.horizontal, 14)
@@ -175,7 +175,7 @@ struct MigrationView: View {
                                         Image(systemName: "arrow.left.arrow.right").font(.system(size: 10)).foregroundStyle(.tertiary)
                                         Text(dup.brewToken).font(.system(size: 12, weight: .medium))
                                     }
-                                    Text("Zostaw jedną — usuń duplikat z npm albo z brew.")
+                                    Text(tr("Zostaw jedną — usuń duplikat z npm albo z brew."))
                                         .font(.system(size: 11))
                                         .foregroundStyle(.tertiary)
                                 }
@@ -187,7 +187,7 @@ struct MigrationView: View {
                                         if dupBusy == "npm:\(dup.npmPackage)" {
                                             ProgressView().controlSize(.small)
                                         } else {
-                                            Label("Usuń z npm", systemImage: "trash")
+                                            Label(tr("Usuń z npm"), systemImage: "trash")
                                         }
                                     }
                                     .controlSize(.small)
@@ -199,7 +199,7 @@ struct MigrationView: View {
                                         if dupBusy == "brew:\(dup.brewToken)" {
                                             ProgressView().controlSize(.small)
                                         } else {
-                                            Label("Usuń z brew", systemImage: "trash")
+                                            Label(tr("Usuń z brew"), systemImage: "trash")
                                         }
                                     }
                                     .controlSize(.small)
@@ -220,7 +220,7 @@ struct MigrationView: View {
                     WegaCard(padded: false) {
                         HStack(spacing: 8) {
                             Image(systemName: "basket.fill").foregroundStyle(Color.wegaInfo)
-                            Text("Można przenieść do App Store")
+                            Text(tr("Można przenieść do App Store"))
                                 .font(.system(size: 13, weight: .semibold))
                             Text("\(masCandidates.count)")
                                 .font(.system(size: 12, design: .monospaced))
@@ -245,12 +245,12 @@ struct MigrationView: View {
                     WegaCard(padded: false) {
                         HStack(spacing: 8) {
                             Image(systemName: "exclamationmark.triangle").foregroundStyle(.tertiary)
-                            Text("Bez odpowiednika w Homebrew")
+                            Text(tr("Bez odpowiednika w Homebrew"))
                                 .font(.system(size: 13, weight: .semibold))
                             Text("\(unmatched.count)")
                                 .font(.system(size: 12, design: .monospaced))
                                 .foregroundStyle(.tertiary)
-                            Text("zostaną zarządzane ręcznie").font(.system(size: 11)).foregroundStyle(.tertiary)
+                            Text(tr("zostaną zarządzane ręcznie")).font(.system(size: 11)).foregroundStyle(.tertiary)
                             Spacer()
                         }
                         .padding(.horizontal, 14)
@@ -268,7 +268,7 @@ struct MigrationView: View {
                                         .lineLimit(1).truncationMode(.middle)
                                 }
                                 Spacer()
-                                WegaBadge(label: "brak w cask repo", variant: .manual)
+                                WegaBadge(label: tr("brak w cask repo"), variant: .manual)
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 10)
@@ -297,12 +297,12 @@ struct MigrationView: View {
         }
         .alert(item: $dupConfirm) { removal in
             Alert(
-                title: Text("Usunąć duplikat?"),
-                message: Text("Wega uruchomi:\n\n\(removal.commandPreview)\n\nDrugiej kopii (z \(removal.side == .npm ? "brew" : "npm")) to nie ruszy."),
-                primaryButton: .destructive(Text("Usuń")) {
+                title: Text(tr("Usunąć duplikat?")),
+                message: Text(trf("Wega uruchomi:\n\n%@\n\nDrugiej kopii (z %@) to nie ruszy.", "\(removal.commandPreview)", "\(removal.side == .npm ? "brew" : "npm")")),
+                primaryButton: .destructive(Text(tr("Usuń"))) {
                     Task { await removeDuplicate(removal) }
                 },
-                secondaryButton: .cancel(Text("Anuluj"))
+                secondaryButton: .cancel(Text(tr("Anuluj")))
             )
         }
     }
@@ -310,7 +310,7 @@ struct MigrationView: View {
     private func scan() async {
         guard status != .scanning else { return }
         status = .scanning; errorMessage = nil; masCandidates = []; npmBrewDuplicates = []
-        onWegaState?(WegaState(pose: .sniff, line: "Tropię intruzów w /Applications i ~/Applications…"))
+        onWegaState?(WegaState(pose: .sniff, line: tr("Tropię intruzów w /Applications i ~/Applications…")))
 
         do {
             let cacheURL = FileManager.default.homeDirectoryForCurrentUser
@@ -367,8 +367,8 @@ struct MigrationView: View {
         onWegaState?(WegaState(
             pose: total > 0 ? .alert : .happy,
             line: total > 0
-                ? "Zwęszyłam \(total) aplikacji do przepięcia."
-                : "Wszystko porządku. Wega nie znalazła uciekinierów."
+                ? trf("Zwęszyłam %@ aplikacji do przepięcia.", "\(total)")
+                : tr("Wszystko porządku. Wega nie znalazła uciekinierów.")
         ))
     }
 
@@ -378,12 +378,12 @@ struct MigrationView: View {
         migrating = token
         errorMessage = nil
         logLines = []
-        onWegaState?(WegaState(pose: .sniff, line: "Instaluję \(app.name) przez Homebrew…"))
+        onWegaState?(WegaState(pose: .sniff, line: trf("Instaluję %@ przez Homebrew…", "\(app.name)")))
 
         do {
             // Kill app if running before brew install
             if let info = MacUpdaterConstants.restartMap[token], await isProcessRunning(info.processName) {
-                logLines.append("⚠ \(info.appName) jest uruchomiony — zamykam przed instalacją…")
+                logLines.append(trf("⚠ %@ jest uruchomiony — zamykam przed instalacją…", "\(info.appName)"))
                 await killProcess(info.processName)
             }
 
@@ -411,22 +411,22 @@ struct MigrationView: View {
                         libraryLeftovers = found
                         cleanupApp = app
                         showLibraryCleanup = true
-                        onWegaState?(WegaState(pose: .happy, line: "\(app.name) przejęty! Znalazłam resztki — zajrzyjmy."))
+                        onWegaState?(WegaState(pose: .happy, line: trf("%@ przejęty! Znalazłam resztki — zajrzyjmy.", "\(app.name)")))
                         migrating = nil
                         return
                     }
                 }
                 banner = BannerData(variant: .success,
-                                    title: "\(app.name) pod Homebrew",
-                                    message: "Token: \(token)")
-                onWegaState?(WegaState(pose: .happy, line: "\(app.name) przejęty! Idziemy dalej."))
+                                    title: trf("%@ pod Homebrew", "\(app.name)"),
+                                    message: trf("Token: %@", "\(token)"))
+                onWegaState?(WegaState(pose: .happy, line: trf("%@ przejęty! Idziemy dalej.", "\(app.name)")))
             } else {
-                errorMessage = "Instalacja \(token) zakończyła się błędem (kod \(exitCode)). Sprawdź log poniżej."
-                onWegaState?(WegaState(pose: .sad, line: "Ups. Brew zgłosił problem z \(app.name)."))
+                errorMessage = trf("Instalacja %@ zakończyła się błędem (kod %@). Sprawdź log poniżej.", "\(token)", "\(exitCode)")
+                onWegaState?(WegaState(pose: .sad, line: trf("Ups. Brew zgłosił problem z %@.", "\(app.name)")))
             }
         } catch {
             errorMessage = error.localizedDescription
-            onWegaState?(WegaState(pose: .sad, line: "Błąd podczas migracji \(app.name)."))
+            onWegaState?(WegaState(pose: .sad, line: trf("Błąd podczas migracji %@.", "\(app.name)")))
         }
         migrating = nil
     }
@@ -444,17 +444,17 @@ struct MigrationView: View {
         showLibraryCleanup = false
         cleanupApp = nil
         libraryLeftovers = []
-        let msg = urls.count == 1 ? "Usunięto 1 plik/folder." : "Usunięto \(urls.count) pliki/foldery."
-        banner = BannerData(variant: .success, title: "\(app.name) pod Homebrew", message: msg)
-        onWegaState?(WegaState(pose: .happy, line: "\(app.name) przejęty i posprzątane!"))
+        let msg = urls.count == 1 ? tr("Usunięto 1 plik/folder.") : trf("Usunięto %@ pliki/foldery.", "\(urls.count)")
+        banner = BannerData(variant: .success, title: trf("%@ pod Homebrew", "\(app.name)"), message: msg)
+        onWegaState?(WegaState(pose: .happy, line: trf("%@ przejęty i posprzątane!", "\(app.name)")))
     }
 
     private func dismissCleanup(app: ApplicationInfo) {
         showLibraryCleanup = false
         cleanupApp = nil
         libraryLeftovers = []
-        banner = BannerData(variant: .success, title: "\(app.name) pod Homebrew", message: "Token: \(app.caskToken ?? "—")")
-        onWegaState?(WegaState(pose: .happy, line: "\(app.name) przejęty! Idziemy dalej."))
+        banner = BannerData(variant: .success, title: trf("%@ pod Homebrew", "\(app.name)"), message: trf("Token: %@", "\(app.caskToken ?? "—")"))
+        onWegaState?(WegaState(pose: .happy, line: trf("%@ przejęty! Idziemy dalej.", "\(app.name)")))
     }
 
     private func isProcessRunning(_ name: String) async -> Bool {
@@ -503,7 +503,7 @@ struct MigrationView: View {
                 stream = try model.brewService.events(arguments: ["uninstall", removal.dup.brewToken])
             }
         } catch {
-            banner = BannerData(variant: .danger, title: "Nie udało się uruchomić", message: error.localizedDescription)
+            banner = BannerData(variant: .danger, title: tr("Nie udało się uruchomić"), message: error.localizedDescription)
             dupBusy = nil
             return
         }
@@ -533,15 +533,15 @@ struct MigrationView: View {
             let label = removal.side == .npm ? "npm" : "brew"
             banner = BannerData(
                 variant: .success,
-                title: "Usunięto z \(label)",
+                title: trf("Usunięto z %@", "\(label)"),
                 message: removal.side == .npm ? removal.dup.npmPackage : removal.dup.brewToken
             )
-            onWegaState?(WegaState(pose: .happy, line: "Duplikat zniknął. PATH ma już tylko jedną wersję."))
+            onWegaState?(WegaState(pose: .happy, line: tr("Duplikat zniknął. PATH ma już tylko jedną wersję.")))
         } else {
             banner = BannerData(
                 variant: .danger,
-                title: "Nie udało się usunąć duplikatu",
-                message: "Szczegóły w logu poniżej."
+                title: tr("Nie udało się usunąć duplikatu"),
+                message: tr("Szczegóły w logu poniżej.")
             )
         }
         dupBusy = nil
@@ -584,7 +584,7 @@ private struct MigrationRow: View {
                 onMigrate()
             } label: {
                 if isBusy { ProgressView().controlSize(.small) }
-                else { Label("Przepnij", systemImage: "arrow.right.doc.on.clipboard") }
+                else { Label(tr("Przepnij"), systemImage: "arrow.right.doc.on.clipboard") }
             }
             .controlSize(.small)
             .disabled(isBusy)
@@ -622,7 +622,7 @@ private struct AppStoreMigrationRow: View {
                     NSWorkspace.shared.open(url)
                 }
             } label: {
-                Label("Otwórz w App Store", systemImage: "basket")
+                Label(tr("Otwórz w App Store"), systemImage: "basket")
             }
             .controlSize(.small)
         }
@@ -642,7 +642,7 @@ private struct MigrationConfirmSheet: View {
             HStack(spacing: 12) {
                 AppIcon(path: app.path, size: 40)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Migracja do Homebrew")
+                    Text(tr("Migracja do Homebrew"))
                         .font(.system(size: 16, weight: .bold))
                     Text(app.name)
                         .font(.system(size: 13))
@@ -652,7 +652,7 @@ private struct MigrationConfirmSheet: View {
 
             if let token = app.caskToken {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Polecenie:")
+                    Text(tr("Polecenie:"))
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.tertiary)
                     Text("brew install --cask --force \(token)")
@@ -663,15 +663,15 @@ private struct MigrationConfirmSheet: View {
                 }
             }
 
-            Text("Homebrew pobierze najnowszą wersję i zastąpi aktualną instalację w /Applications. Zamknij aplikację przed kontynuowaniem.")
+            Text(tr("Homebrew pobierze najnowszą wersję i zastąpi aktualną instalację w /Applications. Zamknij aplikację przed kontynuowaniem."))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
 
             HStack {
                 Spacer()
-                Button("Anuluj") { dismiss() }
+                Button(tr("Anuluj")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button("Migruj") {
+                Button(tr("Migruj")) {
                     onConfirm()
                     dismiss()
                 }
@@ -693,7 +693,7 @@ private struct MigrationLogView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Text("Log migracji")
+                Text(tr("Log migracji"))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
                 if migrating != nil {
@@ -764,9 +764,9 @@ private struct LibraryCleanupSheet: View {
                         .font(.system(size: 20))
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Resztki po starej instalacji")
+                    Text(tr("Resztki po starej instalacji"))
                         .font(.system(size: 15, weight: .semibold))
-                    Text("Znalezione pliki \(appName) z poprzedniej instalacji")
+                    Text(trf("Znalezione pliki %@ z poprzedniej instalacji", "\(appName)"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
@@ -810,8 +810,8 @@ private struct LibraryCleanupSheet: View {
 
             HStack(spacing: 8) {
                 Spacer()
-                Button("Zostaw", action: onDismiss)
-                Button("Wyczyść zaznaczone") {
+                Button(tr("Zostaw"), action: onDismiss)
+                Button(tr("Wyczyść zaznaczone")) {
                     onClean(leftovers.filter { selected.contains($0.path) })
                 }
                 .buttonStyle(.borderedProminent)

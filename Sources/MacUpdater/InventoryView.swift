@@ -66,11 +66,11 @@ struct InventoryView: View {
         VStack(spacing: 0) {
             // Stat cards
             HStack(spacing: 10) {
-                InventoryStatCard(label: "Homebrew",  value: brewCount,        sublabel: "cask + formula", color: .wegaHoney,  active: filter == .brew)      { setFilter(.brew) }
-                InventoryStatCard(label: "App Store", value: masCount,         sublabel: "ze sklepu",      color: .wegaInfo,   active: filter == .appStore)   { setFilter(.appStore) }
-                InventoryStatCard(label: "Ręcznie",   value: manualCount,      sublabel: "poza brew/mas",  color: .wegaDanger, active: filter == .manual)     { setFilter(.manual) }
+                InventoryStatCard(label: "Homebrew",  value: brewCount,        sublabel: tr("cask + formula"), color: .wegaHoney,  active: filter == .brew)      { setFilter(.brew) }
+                InventoryStatCard(label: "App Store", value: masCount,         sublabel: tr("ze sklepu"),      color: .wegaInfo,   active: filter == .appStore)   { setFilter(.appStore) }
+                InventoryStatCard(label: tr("Ręcznie"),   value: manualCount,      sublabel: tr("poza brew/mas"),  color: .wegaDanger, active: filter == .manual)     { setFilter(.manual) }
                 InventoryStatCard(label: "npm -g",    value: npmGlobals.count, sublabel: "CLI",            color: .wegaInfo,   active: false)                 { }
-                InventoryStatCard(label: "Razem",     value: apps.count,       sublabel: "wszystkie",      color: .primary,    active: filter == .all)        { setFilter(.all) }
+                InventoryStatCard(label: tr("Razem"),     value: apps.count,       sublabel: tr("wszystkie"),      color: .primary,    active: filter == .all)        { setFilter(.all) }
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)
@@ -80,7 +80,7 @@ struct InventoryView: View {
             HStack(spacing: 10) {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary).font(.system(size: 13))
-                    TextField("Szukaj po nazwie lub bundle ID…", text: $search)
+                    TextField(tr("Szukaj po nazwie lub bundle ID…"), text: $search)
                         .textFieldStyle(.plain)
                         .font(.system(size: 12))
                         .focused($searchFocused)
@@ -95,12 +95,12 @@ struct InventoryView: View {
 
                 Spacer()
 
-                Text("\(filtered.count) z \(apps.count)")
+                Text(trf("%@ z %@", "\(filtered.count)", "\(apps.count)"))
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
 
                 Button { Task { await scan() } } label: {
-                    Label("Odśwież", systemImage: "arrow.clockwise")
+                    Label(tr("Odśwież"), systemImage: "arrow.clockwise")
                 }
                 .controlSize(.small)
                 .disabled(isScanning)
@@ -115,11 +115,11 @@ struct InventoryView: View {
             // Table header
             WegaCard(padded: false) {
                 HStack(spacing: 12) {
-                    SortHeaderCell(label: "Aplikacja",   key: .name,       sortKey: $sortKey, sortAsc: $sortAsc, flex: 1.6)
-                    SortHeaderCell(label: "Wersja",      key: .version,    sortKey: $sortKey, sortAsc: $sortAsc, flex: 0.6)
+                    SortHeaderCell(label: tr("Aplikacja"),   key: .name,       sortKey: $sortKey, sortAsc: $sortAsc, flex: 1.6)
+                    SortHeaderCell(label: tr("Wersja"),      key: .version,    sortKey: $sortKey, sortAsc: $sortAsc, flex: 0.6)
                     SortHeaderCell(label: "Bundle ID",   key: .bundleId,   sortKey: $sortKey, sortAsc: $sortAsc, flex: 1.2)
-                    SortHeaderCell(label: "Źródło",      key: .source,     sortKey: $sortKey, sortAsc: $sortAsc, flex: 0.8)
-                    SortHeaderCell(label: "Aktualizacja",key: .updateDate, sortKey: $sortKey, sortAsc: $sortAsc, flex: 1.2)
+                    SortHeaderCell(label: tr("Źródło"),      key: .source,     sortKey: $sortKey, sortAsc: $sortAsc, flex: 0.8)
+                    SortHeaderCell(label: tr("Aktualizacja"),key: .updateDate, sortKey: $sortKey, sortAsc: $sortAsc, flex: 1.2)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
@@ -131,18 +131,18 @@ struct InventoryView: View {
                     HStack {
                         Spacer()
                         SniffingScene(
-                            caption: "Obchód wszystkich kątów…",
+                            caption: tr("Obchód wszystkich kątów…"),
                             thoughts: [
-                                "Sniff sniff… ile tego",
-                                "Bundle ID… mhm",
-                                "Kto tu zarządza?",
-                                "Brew, MAS czy ręcznie?",
-                                "Łapię zapach Info.plist",
-                                "Czy widzę ten cask w bazie?",
-                                "Globalne npm pachną odwiecznością",
+                                tr("Sniff sniff… ile tego"),
+                                tr("Bundle ID… mhm"),
+                                tr("Kto tu zarządza?"),
+                                tr("Brew, MAS czy ręcznie?"),
+                                tr("Łapię zapach Info.plist"),
+                                tr("Czy widzę ten cask w bazie?"),
+                                tr("Globalne npm pachną odwiecznością"),
                                 "0x4A 0x65 0x6C 0x6C 0x79",
-                                "Mhm, jeszcze ten folder",
-                                "Przeczesuję /Applications…"
+                                tr("Mhm, jeszcze ten folder"),
+                                tr("Przeczesuję /Applications…")
                             ],
                             wegaSize: 110,
                             height: 150
@@ -179,7 +179,7 @@ struct InventoryView: View {
     private func scan() async {
         isScanning = true; errorMessage = nil
         defer { isScanning = false }
-        onWegaState?(WegaState(pose: .sniff, line: "Obchód wszystkich kątów…"))
+        onWegaState?(WegaState(pose: .sniff, line: tr("Obchód wszystkich kątów…")))
 
         let installedCasks: Set<String>
         do { installedCasks = try await model.brewService.installedCasks() }
@@ -221,7 +221,7 @@ struct InventoryView: View {
         apps = sorted
         npmGlobals = (try? await model.npmService.installedGlobals()) ?? []
 
-        onWegaState?(WegaState(pose: .happy, line: "Obchód skończony — \(apps.count) aplikacji pod opieką."))
+        onWegaState?(WegaState(pose: .happy, line: trf("Obchód skończony — %@ aplikacji pod opieką.", "\(apps.count)")))
     }
 }
 
@@ -232,9 +232,9 @@ private struct NpmGlobalsList: View {
         WegaCard(padded: false) {
             HStack(spacing: 8) {
                 Image(systemName: "shippingbox").foregroundStyle(Color.wegaInfo)
-                Text("npm globalne").font(.system(size: 13, weight: .semibold))
+                Text(tr("npm globalne")).font(.system(size: 13, weight: .semibold))
                 Text("\(packages.count)").font(.system(size: 12, design: .monospaced)).foregroundStyle(.tertiary)
-                Text("instalacje przez `npm i -g`").font(.system(size: 11)).foregroundStyle(.tertiary)
+                Text(tr("instalacje przez `npm i -g`")).font(.system(size: 11)).foregroundStyle(.tertiary)
                 Spacer()
             }
             .padding(.horizontal, 14)
@@ -273,9 +273,9 @@ private struct UpdateDateCell: View {
     private func label(for date: Date) -> String {
         let days = Calendar.current.dateComponents([.day], from: date, to: .now).day ?? 0
         switch days {
-        case 0:  return "dzisiaj"
-        case 1:  return "wczoraj"
-        default: return "\(days) dni temu"
+        case 0:  return tr("dzisiaj")
+        case 1:  return tr("wczoraj")
+        default: return trf("%@ dni temu", "\(days)")
         }
     }
 
@@ -357,7 +357,7 @@ private struct FilterPills: View {
             ForEach(SourceFilter.allCases, id: \.self) { opt in
                 let active = selection == opt
                 Button { selection = opt } label: {
-                    Text(opt.rawValue)
+                    Text(tr(opt.rawValue))
                         .font(.system(size: 11.5, weight: active ? .semibold : .regular))
                         .foregroundStyle(active ? .primary : .secondary)
                         .padding(.horizontal, 9)
@@ -455,7 +455,7 @@ private struct InventoryRow: View {
                             .lineLimit(1)
                     }
                 } else {
-                    WegaBadge(label: "Ręcznie", variant: .manual)
+                    WegaBadge(label: tr("Ręcznie"), variant: .manual)
                 }
             }
             .frame(maxWidth: .infinity * 0.8, alignment: .leading)

@@ -30,15 +30,15 @@ struct UninstallView: View {
                 // Header
                 HStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Odinstaluj aplikacje").font(.system(size: 18, weight: .semibold))
-                        Text("Brew casks → brew uninstall  ·  pozostałe → Kosz")
+                        Text(tr("Odinstaluj aplikacje")).font(.system(size: 18, weight: .semibold))
+                        Text(tr("Brew casks → brew uninstall  ·  pozostałe → Kosz"))
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(.tertiary)
                     }
                     Spacer()
                     HStack(spacing: 6) {
                         Image(systemName: "magnifyingglass").foregroundStyle(.secondary).font(.system(size: 13))
-                        TextField("Szukaj…", text: $search)
+                        TextField(tr("Szukaj…"), text: $search)
                             .textFieldStyle(.plain)
                             .font(.system(size: 12))
                             .frame(width: 180)
@@ -51,7 +51,7 @@ struct UninstallView: View {
                     .onTapGesture { searchFocused = true }
 
                     Button { Task { await scan() } } label: {
-                        Label("Reload", systemImage: "arrow.clockwise")
+                        Label(tr("Reload"), systemImage: "arrow.clockwise")
                     }
                     .disabled(isLoading)
 
@@ -60,7 +60,7 @@ struct UninstallView: View {
                         showDialog = true
                     } label: {
                         if isUninstalling { ProgressView().controlSize(.small) }
-                        else { Label(selected.isEmpty ? "Odinstaluj" : "Odinstaluj (\(selected.count))", systemImage: "trash") }
+                        else { Label(selected.isEmpty ? tr("Odinstaluj") : trf("Odinstaluj (%@)", "\(selected.count)"), systemImage: "trash") }
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.wegaDanger)
@@ -84,12 +84,12 @@ struct UninstallView: View {
                             .font(.system(size: 16))
                             .onTapGesture { toggleAll() }
                         Text(selected.isEmpty
-                             ? "\(filtered.count) aplikacji"
-                             : "\(selected.count) zaznaczonych z \(filtered.count)")
+                             ? trf("%@ aplikacji", "\(filtered.count)")
+                             : trf("%@ zaznaczonych z %@", "\(selected.count)", "\(filtered.count)"))
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Text("NAZWA · WERSJA · ŹRÓDŁO")
+                        Text(tr("NAZWA · WERSJA · ŹRÓDŁO"))
                             .font(.system(size: 10.5, design: .monospaced))
                             .foregroundStyle(.tertiary)
                     }
@@ -103,18 +103,18 @@ struct UninstallView: View {
                 if isLoading {
                     Spacer()
                     SniffingScene(
-                        caption: "Skanowanie aplikacji…",
+                        caption: tr("Skanowanie aplikacji…"),
                         thoughts: [
-                            "Co tu można wynieść?",
-                            "Sniff sniff… kandydat",
-                            "Łapię zapach Library/Caches",
-                            "Mhm, czy używasz tego jeszcze?",
-                            "Bundle ID… znajomy",
-                            "Kto zostawił tę apkę?",
-                            "Czy brew o tym wie?",
-                            "Mhm… stare receipty",
-                            "Pachnie zajętym miejscem",
-                            "Aport albo zostaw?"
+                            tr("Co tu można wynieść?"),
+                            tr("Sniff sniff… kandydat"),
+                            tr("Łapię zapach Library/Caches"),
+                            tr("Mhm, czy używasz tego jeszcze?"),
+                            tr("Bundle ID… znajomy"),
+                            tr("Kto zostawił tę apkę?"),
+                            tr("Czy brew o tym wie?"),
+                            tr("Mhm… stare receipty"),
+                            tr("Pachnie zajętym miejscem"),
+                            tr("Aport albo zostaw?")
                         ],
                         wegaSize: 110,
                         height: 150
@@ -124,8 +124,8 @@ struct UninstallView: View {
                 } else if apps.isEmpty {
                     EmptyHero(
                         pose: .idle,
-                        title: "Brak aplikacji",
-                        message: "Nie znaleziono żadnych zainstalowanych aplikacji."
+                        title: tr("Brak aplikacji"),
+                        message: tr("Nie znaleziono żadnych zainstalowanych aplikacji.")
                     )
                 } else {
                     ScrollView {
@@ -228,7 +228,7 @@ struct UninstallView: View {
     private func uninstall(zap: Bool) async {
         isUninstalling = true; errorMessage = nil; banner = nil
         defer { isUninstalling = false }
-        onWegaState?(WegaState(pose: .sniff, line: "Aport! Zabieram to z dysku…"))
+        onWegaState?(WegaState(pose: .sniff, line: tr("Aport! Zabieram to z dysku…")))
 
         let targets = filtered.filter { selected.contains($0.id) }
         var succeeded: [String] = []
@@ -259,16 +259,16 @@ struct UninstallView: View {
         let brewSucceeded = targets.filter { succeeded.contains($0.id) && $0.isManagedByBrew }.count
         let trashSucceeded = targets.filter { succeeded.contains($0.id) && !$0.isManagedByBrew }.count
         var parts: [String] = []
-        if brewSucceeded > 0 { parts.append("\(brewSucceeded) przez brew") }
-        if trashSucceeded > 0 { parts.append("\(trashSucceeded) do Kosza") }
+        if brewSucceeded > 0 { parts.append(trf("%@ przez brew", "\(brewSucceeded)")) }
+        if trashSucceeded > 0 { parts.append(trf("%@ do Kosza", "\(trashSucceeded)")) }
         let msg = parts.joined(separator: ", ")
 
         if !succeeded.isEmpty {
-            banner = BannerData(variant: .success, title: "Odinstalowano \(succeeded.count) aplikacji", message: msg)
-            onWegaState?(WegaState(pose: .happy, line: "Załatwione — \(succeeded.count) mniej na dysku."))
+            banner = BannerData(variant: .success, title: trf("Odinstalowano %@ aplikacji", "\(succeeded.count)"), message: msg)
+            onWegaState?(WegaState(pose: .happy, line: trf("Załatwione — %@ mniej na dysku.", "\(succeeded.count)")))
         }
         if !failed.isEmpty {
-            errorMessage = "Nie udało się: \(failed.joined(separator: ", "))"
+            errorMessage = trf("Nie udało się: %@", "\(failed.joined(separator: ", "))")
         }
     }
 }
@@ -303,18 +303,18 @@ private struct UninstallDialog: View {
                                 .font(.system(size: 18))
                         }
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Odinstalować \(totalCount) \(totalCount == 1 ? "aplikację" : "aplikacji")?")
+                            Text(trf("Odinstalować %@ %@?", "\(totalCount)", totalCount == 1 ? tr("aplikację") : tr("aplikacji")))
                                 .font(.system(size: 15, weight: .semibold))
                             if hasMixed {
-                                Text("\(brewCount) przez brew · \(trashCount) do Kosza")
+                                Text(trf("%@ przez brew · %@ do Kosza", "\(brewCount)", "\(trashCount)"))
                                     .font(.system(size: 12))
                                     .foregroundStyle(.secondary)
                             } else if hasNonBrew {
-                                Text("Aplikacje trafią do Kosza")
+                                Text(tr("Aplikacje trafią do Kosza"))
                                     .font(.system(size: 12))
                                     .foregroundStyle(.secondary)
                             } else {
-                                Text("Wybierz, co zostawić")
+                                Text(tr("Wybierz, co zostawić"))
                                     .font(.system(size: 12))
                                     .foregroundStyle(.secondary)
                             }
@@ -328,16 +328,16 @@ private struct UninstallDialog: View {
                     if brewCount > 0 {
                         VStack(spacing: 8) {
                             UninstallOption(
-                                title:       "Tylko aplikacja",
-                                subtitle:    "Usuwa plik .app. Preferencje i cache zostają w ~/Library.",
+                                title:       tr("Tylko aplikacja"),
+                                subtitle:    tr("Usuwa plik .app. Preferencje i cache zostają w ~/Library."),
                                 command:     "brew uninstall",
                                 recommended: false,
                                 isSelected:  !zapMode,
                                 onSelect:    { zapMode = false }
                             )
                             UninstallOption(
-                                title:       "Aplikacja + resztki",
-                                subtitle:    "Zabiera też pliki w ~/Library/Preferences, Caches i Application Support.",
+                                title:       tr("Aplikacja + resztki"),
+                                subtitle:    tr("Zabiera też pliki w ~/Library/Preferences, Caches i Application Support."),
                                 command:     "brew uninstall --zap",
                                 recommended: true,
                                 isSelected:  zapMode,
@@ -352,7 +352,7 @@ private struct UninstallDialog: View {
                             Image(systemName: "info.circle")
                                 .foregroundStyle(Color.wegaInfo)
                                 .font(.system(size: 13))
-                            Text("\(trashCount) \(trashCount == 1 ? "aplikacja nie jest zarządzana" : "aplikacji nie jest zarządzanych") przez brew — trafi do Kosza.")
+                            Text(trf("%@ %@ przez brew — trafi do Kosza.", "\(trashCount)", trashCount == 1 ? tr("aplikacja nie jest zarządzana") : tr("aplikacji nie jest zarządzanych")))
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
                             Spacer()
@@ -364,7 +364,7 @@ private struct UninstallDialog: View {
                     // Footer buttons
                     HStack(spacing: 8) {
                         Spacer()
-                        Button("Anuluj", action: onCancel)
+                        Button(tr("Anuluj"), action: onCancel)
                         Button(confirmLabel) { onConfirm(zapMode) }
                             .buttonStyle(.borderedProminent)
                             .tint(Color.wegaDanger)
@@ -384,9 +384,9 @@ private struct UninstallDialog: View {
 
     private var confirmLabel: String {
         if brewCount > 0 {
-            return zapMode ? "Usuń razem z resztkami" : "Usuń tylko aplikację"
+            return zapMode ? tr("Usuń razem z resztkami") : tr("Usuń tylko aplikację")
         }
-        return "Przenieś do Kosza"
+        return tr("Przenieś do Kosza")
     }
 }
 
@@ -416,7 +416,7 @@ private struct UninstallOption: View {
                     HStack(spacing: 6) {
                         Text(title).font(.system(size: 13, weight: .semibold))
                         if recommended {
-                            Text("zalecane")
+                            Text(tr("zalecane"))
                                 .font(.system(size: 10.5, weight: .medium, design: .monospaced))
                                 .foregroundStyle(Color.wegaHoney)
                                 .padding(.horizontal, 6).padding(.vertical, 1)

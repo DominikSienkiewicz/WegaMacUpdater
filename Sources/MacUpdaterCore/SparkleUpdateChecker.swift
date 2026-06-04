@@ -9,26 +9,26 @@ public struct SparkleUpdateChecker: Sendable {
         self.feedOverrides = feedOverrides
     }
 
-    /// Returns a ManualOutdatedApp if the app has a Sparkle feed with a newer version.
-    public func check(app: ApplicationInfo) async -> ManualOutdatedApp? {
+    /// Returns the update status for an app that exposes a Sparkle feed.
+    public func check(app: ApplicationInfo) async -> ManualCheckResult {
         let feedURL = resolveFeedURL(for: app)
-        guard let feedURL else { return nil }
+        guard let feedURL else { return .notApplicable }
 
-        guard let response = try? await client.get(feedURL, enableETag: true),
-              response.statusCode == 200 else { return nil }
-
-        guard let latest = AppcastParser.parse(data: response.data) else { return nil }
+        guard let response = try? await client.get(feedURL, enableETag: true) else { return .failed }
+        guard response.statusCode == 200 else { return .failed }
+        guard let latest = AppcastParser.parse(data: response.data) else { return .failed }
 
         let installed = app.version ?? ""
-        guard !installed.isEmpty, latest != installed else { return nil }
+        guard !installed.isEmpty else { return .notApplicable }
+        guard latest != installed else { return .upToDate }
 
-        return ManualOutdatedApp(
+        return .outdated(ManualOutdatedApp(
             name: app.name,
             path: app.path,
             installedVersion: app.version,
             availableVersion: latest,
             source: .sparkle
-        )
+        ))
     }
 
     /// Lookup order, first hit wins:

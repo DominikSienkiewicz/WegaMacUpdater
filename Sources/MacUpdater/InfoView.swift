@@ -4,6 +4,7 @@ import MacUpdaterCore
 struct InfoView: View {
     var onWegaState: ((WegaState) -> Void)?
 
+    @EnvironmentObject private var localization: LocalizationManager
     @State private var diagnostics: DiagnosticsResult? = nil
     @State private var touchIDState: TouchIDSudoConfigurator.State = .notSupported
     @State private var enablingTouchID = false
@@ -18,6 +19,7 @@ struct InfoView: View {
         ScrollView {
             VStack(spacing: 14) {
                 appCard
+                languageCard
                 diagnosticsCard
                 touchIDCard
                 licensesCard
@@ -26,11 +28,39 @@ struct InfoView: View {
             .padding(16)
         }
         .onAppear {
-            onWegaState?(WegaState(pose: .idle, line: "Oto co o sobie wiem."))
+            onWegaState?(WegaState(pose: .idle, line: tr("Oto co o sobie wiem.")))
             if diagnostics == nil {
                 Task { await loadDiagnostics() }
             }
             touchIDState = TouchIDSudoConfigurator.currentState()
+        }
+    }
+
+    // MARK: - Language
+
+    private var languageCard: some View {
+        WegaCard {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) {
+                    Image(systemName: "globe").foregroundStyle(Color.wegaHoney)
+                    Text(tr("Język interfejsu"))
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+
+                Picker("", selection: $localization.language) {
+                    ForEach(AppLanguage.allCases) { lang in
+                        Text("\(lang.flag)  \(lang.displayName)").tag(lang)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
         }
     }
 
@@ -43,7 +73,7 @@ struct InfoView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 8) {
                         Image(systemName: "touchid").foregroundStyle(Color.wegaHoney)
-                        Text("Touch ID dla Homebrew")
+                        Text(tr("Touch ID dla Homebrew"))
                             .font(.system(size: 13, weight: .semibold))
                         Spacer()
                         statusBadge
@@ -74,7 +104,7 @@ struct InfoView: View {
                                 if enablingTouchID {
                                     ProgressView().controlSize(.small)
                                 } else {
-                                    Label("Włącz Touch ID dla sudo", systemImage: "touchid")
+                                    Label(tr("Włącz Touch ID dla sudo"), systemImage: "touchid")
                                 }
                             }
                             .disabled(enablingTouchID)
@@ -91,9 +121,9 @@ struct InfoView: View {
         Group {
             switch touchIDState {
             case .enabled:
-                WegaBadge(label: "Aktywne", variant: .info)
+                WegaBadge(label: tr("Aktywne"), variant: .info)
             case .available:
-                WegaBadge(label: "Dostępne", variant: .manual)
+                WegaBadge(label: tr("Dostępne"), variant: .manual)
             case .notSupported:
                 EmptyView()
             }
@@ -103,9 +133,9 @@ struct InfoView: View {
     private var touchIDDescription: String {
         switch touchIDState {
         case .enabled:
-            return "Sudo używa Touch ID. Aktualizacje casków z sudo (Zoom, sterowniki, launchd) potwierdzisz odciskiem zamiast hasła."
+            return tr("Sudo używa Touch ID. Aktualizacje casków z sudo (Zoom, sterowniki, launchd) potwierdzisz odciskiem zamiast hasła.")
         case .available:
-            return "Po włączeniu, brew nie zapyta o hasło w okienku — pojawi się natywny sheet Touch ID. Wymaga jednorazowo uprawnień administratora do zapisu /etc/pam.d/sudo_local."
+            return tr("Po włączeniu, brew nie zapyta o hasło w okienku — pojawi się natywny sheet Touch ID. Wymaga jednorazowo uprawnień administratora do zapisu /etc/pam.d/sudo_local.")
         case .notSupported:
             return ""
         }
@@ -117,7 +147,7 @@ struct InfoView: View {
     @ViewBuilder
     private var manualEnableFallback: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("macOS zablokował zapis do /etc/pam.d/sudo_local z poziomu Wegi (TCC). Uruchom poniższą komendę w Terminalu — wystarczy raz:")
+            Text(tr("macOS zablokował zapis do /etc/pam.d/sudo_local z poziomu Wegi (TCC). Uruchom poniższą komendę w Terminalu — wystarczy raz:"))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -137,20 +167,20 @@ struct InfoView: View {
                         forType: .string
                     )
                 } label: {
-                    Label("Skopiuj komendę", systemImage: "doc.on.doc")
+                    Label(tr("Skopiuj komendę"), systemImage: "doc.on.doc")
                 }
                 .controlSize(.small)
 
                 Button {
                     openInTerminal(TouchIDSudoConfigurator.manualEnableTerminalCommand)
                 } label: {
-                    Label("Otwórz w Terminalu", systemImage: "terminal")
+                    Label(tr("Otwórz w Terminalu"), systemImage: "terminal")
                 }
                 .controlSize(.small)
 
                 Spacer()
 
-                Button("Sprawdź ponownie") {
+                Button(tr("Sprawdź ponownie")) {
                     touchIDPermissionDenied = false
                     touchIDError = nil
                     touchIDState = TouchIDSudoConfigurator.currentState()
@@ -211,14 +241,14 @@ struct InfoView: View {
         switch TouchIDSudoEnableOutcome.classify(exitCode: result.status, stderr: result.stderr) {
         case .success:
             touchIDState = TouchIDSudoConfigurator.currentState()
-            onWegaState?(WegaState(pose: .happy, line: "Touch ID podpięty pod sudo."))
+            onWegaState?(WegaState(pose: .happy, line: tr("Touch ID podpięty pod sudo.")))
         case .cancelledByUser:
             // Stay in `.available`, no error UI.
             break
         case .permissionDenied:
             // TCC blocked the write — switch to the manual Terminal path.
             touchIDPermissionDenied = true
-            onWegaState?(WegaState(pose: .alert, line: "macOS zablokował zapis — wklej komendę do Terminala."))
+            onWegaState?(WegaState(pose: .alert, line: tr("macOS zablokował zapis — wklej komendę do Terminala.")))
         case .otherError(let message):
             touchIDError = message
         }
@@ -235,8 +265,8 @@ struct InfoView: View {
                         Text("WegaMacUpdater")
                             .font(.system(size: 20, weight: .bold))
                         HStack(spacing: 16) {
-                            LabeledValue(label: "Wersja", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? AppMetadata.version)
-                            LabeledValue(label: "Build", value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—")
+                            LabeledValue(label: tr("Wersja"), value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? AppMetadata.version)
+                            LabeledValue(label: tr("Build"), value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—")
                         }
                     }
                     Spacer()
@@ -246,7 +276,7 @@ struct InfoView: View {
                 Divider().opacity(0.5)
 
                 HStack(spacing: 8) {
-                    Text("Architected & Developed by")
+                    Text(tr("Architected & Developed by"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                     Link("Dominik Sienkiewicz", destination: URL(string: "https://www.linkedin.com/in/dominik-sienkiewicz/")!)
@@ -268,7 +298,7 @@ struct InfoView: View {
                 HStack(spacing: 16) {
                     Link("GitHub", destination: URL(string: "https://github.com/DominikSienkiewicz/WegaMacUpdater")!)
                         .font(.system(size: 13))
-                    Link("Zgłoś błąd", destination: URL(string: "https://github.com/DominikSienkiewicz/WegaMacUpdater/issues")!)
+                    Link(tr("Zgłoś błąd"), destination: URL(string: "https://github.com/DominikSienkiewicz/WegaMacUpdater/issues")!)
                         .font(.system(size: 13))
                 }
                 .padding(.horizontal, 14)
@@ -284,7 +314,7 @@ struct InfoView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 8) {
                     Image(systemName: "stethoscope").foregroundStyle(Color.wegaHoney)
-                    Text("Diagnostyka systemu")
+                    Text(tr("Diagnostyka systemu"))
                         .font(.system(size: 13, weight: .semibold))
                     Spacer()
                 }
@@ -318,7 +348,7 @@ struct InfoView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 8) {
                     Image(systemName: "doc.text").foregroundStyle(Color.wegaHoney)
-                    Text("Zewnętrzne narzędzia")
+                    Text(tr("Zewnętrzne narzędzia"))
                         .font(.system(size: 13, weight: .semibold))
                     Spacer()
                 }
@@ -344,7 +374,7 @@ struct InfoView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 8) {
                     Image(systemName: "cpu").foregroundStyle(Color.wegaHoney)
-                    Text("Środowisko")
+                    Text(tr("Środowisko"))
                         .font(.system(size: 13, weight: .semibold))
                     Spacer()
                 }
@@ -449,8 +479,8 @@ private struct DiagRow: View {
 
     private var statusText: String {
         if let v = value { return v }
-        if let a = active { return a ? "aktywny" : "nieaktywny" }
-        return required ? "nie znaleziono" : "niedostępny"
+        if let a = active { return a ? tr("aktywny") : tr("nieaktywny") }
+        return required ? tr("nie znaleziono") : tr("niedostępny")
     }
 
     var body: some View {

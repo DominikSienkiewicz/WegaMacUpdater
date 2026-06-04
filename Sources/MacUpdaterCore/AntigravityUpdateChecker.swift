@@ -56,9 +56,9 @@ public struct AntigravityUpdateChecker: Sendable {
         self.client = client
     }
 
-    public func check(app: ApplicationInfo) async -> ManualOutdatedApp? {
+    public func check(app: ApplicationInfo) async -> ManualCheckResult {
         guard app.bundleIdentifier == Self.bundleIdentifier,
-              let installed = app.version, !installed.isEmpty else { return nil }
+              let installed = app.version, !installed.isEmpty else { return .notApplicable }
 
         let platform: String
         #if arch(arm64)
@@ -67,19 +67,20 @@ public struct AntigravityUpdateChecker: Sendable {
         platform = "darwin-x64"
         #endif
 
-        guard let url = URL(string: "\(Self.updateAPIBase)/\(platform)/stable/latest") else { return nil }
+        guard let url = URL(string: "\(Self.updateAPIBase)/\(platform)/stable/latest") else { return .notApplicable }
 
-        guard let response = try? await client.get(url, enableETag: true),
-              response.statusCode == 200,
-              let latest = AntigravityUpdateParser.productVersion(fromUpdateJSON: response.data),
-              isUpgrade(installed: installed, latest: latest) else { return nil }
+        guard let response = try? await client.get(url, enableETag: true) else { return .failed }
+        guard response.statusCode == 200,
+              let latest = AntigravityUpdateParser.productVersion(fromUpdateJSON: response.data) else { return .failed }
 
-        return ManualOutdatedApp(
+        guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
+
+        return .outdated(ManualOutdatedApp(
             name: app.name,
             path: app.path,
             installedVersion: app.version,
             availableVersion: latest,
             source: .antigravity
-        )
+        ))
     }
 }

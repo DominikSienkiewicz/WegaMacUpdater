@@ -44,11 +44,11 @@ struct UpdateView: View {
     private var readyView: some View {
         EmptyHero(
             pose: .idle,
-            title: "Sprawdźmy, co się zestarzało",
-            message: "Wega zajrzy do Homebrew oraz Mac App Store i powie, co warto odświeżyć.",
+            title: tr("Sprawdźmy, co się zestarzało"),
+            message: tr("Wega zajrzy do Homebrew oraz Mac App Store i powie, co warto odświeżyć."),
             action: AnyView(
                 Button { Task { await runCheck() } } label: {
-                    Label("Sprawdź aktualizacje", systemImage: "arrow.triangle.2.circlepath")
+                    Label(tr("Sprawdź aktualizacje"), systemImage: "arrow.triangle.2.circlepath")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.wegaHoney)
@@ -65,18 +65,18 @@ struct UpdateView: View {
                 CheckingBar(command: cmd, delay: Double(idx) * 0.2)
             }
             SniffingScene(
-                caption: "Wega węszy po Homebrew…",
+                caption: tr("Wega węszy po Homebrew…"),
                 thoughts: [
-                    "Czy ten cask jest świeży?",
-                    "Coś tu pachnie aktualizacją",
-                    "Sniff sniff… brew outdated",
-                    "Hmm, znajomy zapach Sparkle",
-                    "SHA256 się zgadza?",
-                    "Łapię trop wersji",
+                    tr("Czy ten cask jest świeży?"),
+                    tr("Coś tu pachnie aktualizacją"),
+                    tr("Sniff sniff… brew outdated"),
+                    tr("Hmm, znajomy zapach Sparkle"),
+                    tr("SHA256 się zgadza?"),
+                    tr("Łapię trop wersji"),
                     "0x4A 0x65 0x6C 0x6C 0x79",
-                    "Mhm… nowa wersja?",
-                    "Info.plist… mhm",
-                    "Ten cask wymaga odświeżenia"
+                    tr("Mhm… nowa wersja?"),
+                    tr("Info.plist… mhm"),
+                    tr("Ten cask wymaga odświeżenia")
                 ]
             )
             .padding(.top, 16)
@@ -90,11 +90,11 @@ struct UpdateView: View {
             // Top bar
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(allItems.isEmpty ? "Wszystko aktualne" : "\(allItems.count) aktualizacji do zainstalowania")
+                    Text(allItems.isEmpty ? tr("Wszystko aktualne") : trf("%@ aktualizacji do zainstalowania", "\(allItems.count)"))
                         .font(.system(size: 18, weight: .semibold))
                     if let d = lastCheck {
                         HStack(spacing: 4) {
-                            Text("Sprawdzono \(d.formatted(date: .omitted, time: .shortened))")
+                            Text(trf("Sprawdzono %@", "\(d.formatted(date: .omitted, time: .shortened))"))
                             Text("·")
                             Text("brew + mas").font(.system(size: 11, design: .monospaced))
                         }
@@ -104,7 +104,7 @@ struct UpdateView: View {
                 }
                 Spacer()
                 Button { Task { await runCheck() } } label: {
-                    Label("Sprawdź ponownie", systemImage: "arrow.triangle.2.circlepath")
+                    Label(tr("Sprawdź ponownie"), systemImage: "arrow.triangle.2.circlepath")
                 }
                 .disabled(updating || status == .checking)
 
@@ -113,9 +113,9 @@ struct UpdateView: View {
                         if updating {
                             ProgressView().controlSize(.small)
                         } else if selected.isEmpty {
-                            Label("Zaktualizuj wszystkie (\(allItems.count))", systemImage: "arrow.down.circle.fill")
+                            Label(trf("Zaktualizuj wszystkie (%@)", "\(allItems.count)"), systemImage: "arrow.down.circle.fill")
                         } else {
-                            Label("Zaktualizuj wybrane (\(selected.count))", systemImage: "arrow.down.circle.fill")
+                            Label(trf("Zaktualizuj wybrane (%@)", "\(selected.count)"), systemImage: "arrow.down.circle.fill")
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -134,7 +134,7 @@ struct UpdateView: View {
             }
 
             if allItems.isEmpty && manualOutdated.isEmpty && restartCandidates.isEmpty {
-                EmptyHero(pose: .sleep, title: "Wszystko aktualne", message: "Wega się zdrzemnie. Zajrzymy znowu za jakiś czas.", compact: true)
+                EmptyHero(pose: .sleep, title: tr("Wszystko aktualne"), message: tr("Wega się zdrzemnie. Zajrzymy znowu za jakiś czas."), compact: true)
             } else {
                 // Select-all row
                 HStack(spacing: 10) {
@@ -142,7 +142,7 @@ struct UpdateView: View {
                         .foregroundStyle(selected.isEmpty ? .secondary : Color.wegaHoney)
                         .font(.system(size: 16))
                         .onTapGesture { toggleAll() }
-                    Text(selected.isEmpty ? "Zaznacz wszystko" : "\(selected.count) z \(allItems.count) zaznaczonych")
+                    Text(selected.isEmpty ? tr("Zaznacz wszystko") : trf("%@ z %@ zaznaczonych", "\(selected.count)", "\(allItems.count)"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
@@ -155,10 +155,10 @@ struct UpdateView: View {
                         let casks    = allItems.filter { $0.kind == .cask }
                         let store    = allItems.filter { $0.kind == .appStore }
                         let npmPkgs  = allItems.filter { $0.kind == .npm }
-                        if !formulae.isEmpty { UpdateSection(title: "Homebrew Formulae", subtitle: "narzędzia CLI",  icon: "terminal",  items: formulae, selected: $selected) }
-                        if !casks.isEmpty    { UpdateSection(title: "Homebrew Casks",    subtitle: "aplikacje .app", icon: "app.gift", items: casks,    iconPaths: caskIconPaths, selected: $selected) }
-                        if !store.isEmpty    { UpdateSection(title: "Mac App Store",     subtitle: "via mas-cli",      icon: "bag",      items: store,    selected: $selected) }
-                        if !npmPkgs.isEmpty  { UpdateSection(title: "npm globalne",      subtitle: "pakiety -g",       icon: "shippingbox", items: npmPkgs, selected: $selected) }
+                        if !formulae.isEmpty { UpdateSection(title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"),  icon: "terminal",  items: formulae, selected: $selected) }
+                        if !casks.isEmpty    { UpdateSection(title: tr("Homebrew Casks"),    subtitle: tr("aplikacje .app"), icon: "app.gift", items: casks,    iconPaths: caskIconPaths, selected: $selected) }
+                        if !store.isEmpty    { UpdateSection(title: tr("Mac App Store"),     subtitle: tr("via mas-cli"),      icon: "bag",      items: store,    selected: $selected) }
+                        if !npmPkgs.isEmpty  { UpdateSection(title: tr("npm globalne"),      subtitle: tr("pakiety -g"),       icon: "shippingbox", items: npmPkgs, selected: $selected) }
                         if !manualOutdated.isEmpty {
                             ManualUpdateSection(
                                 items: manualOutdated,
@@ -199,7 +199,7 @@ struct UpdateView: View {
     private func runCheck() async {
         status = .checking
         errorMessage = nil
-        onWegaState?(WegaState(pose: .sniff, line: "Węszę po Homebrew…"))
+        onWegaState?(WegaState(pose: .sniff, line: tr("Węszę po Homebrew…")))
 
         // Refresh brew metadata before asking what is outdated — otherwise a
         // newly-released cask/formula version that hasn't landed locally yet
@@ -216,19 +216,26 @@ struct UpdateView: View {
             }
         }
 
+        // Count sources whose check genuinely failed (vs. a tool that's simply not
+        // installed, which is "not applicable", not a failure). Drives the
+        // "couldn't check" vs "up to date" distinction below.
+        var failedSources = 0
+
         do { brewOutdated = try await model.brewService.outdatedGreedy() }
-        catch { errorMessage = error.localizedDescription; brewOutdated = nil }
+        catch { errorMessage = error.localizedDescription; brewOutdated = nil; failedSources += 1 }
 
         do { masOutdated = try await model.masService.outdated() }
         catch MasServiceError.masNotFound { masOutdated = [] }
-        catch { masOutdated = [] }
+        catch { masOutdated = []; failedSources += 1 }
 
         do { npmOutdated = try await model.npmService.outdated() }
         catch NpmServiceError.npmNotFound { npmOutdated = [] }
-        catch { npmOutdated = [] }
+        catch { npmOutdated = []; failedSources += 1 }
 
         let brewOutdatedCasks = Set(brewOutdated?.casks.map(\.name) ?? [])
-        manualOutdated = await scanManualUpdates(brewOutdatedCasks: brewOutdatedCasks)
+        let scan = await scanManualUpdates(brewOutdatedCasks: brewOutdatedCasks)
+        manualOutdated = scan.apps
+        failedSources += scan.failedChecks
 
         // Resolve icon paths for outdated casks, and drop entries whose real
         // bundle version already matches `current_version` (self-updating apps
@@ -260,17 +267,34 @@ struct UpdateView: View {
 
         lastCheck = Date()
         status    = .results
-        if let msg = errorMessage {
-            banner = BannerData(variant: .danger, title: "Błąd Homebrew", message: msg)
-        }
+
         let total = allItems.count + manualOutdated.count
-        onWegaState?(total == 0
-            ? WegaState(pose: .happy, line: "Wszystko aktualne. Idę się zdrzemnąć.")
-            : WegaState(pose: .alert, line: "Znalazłam \(total) rzeczy do uporządkowania."))
+        switch UpdatePlanner.scanState(updateCount: total, failedChecks: failedSources) {
+        case .upToDate:
+            if let msg = errorMessage {
+                banner = BannerData(variant: .danger, title: tr("Błąd Homebrew"), message: msg)
+            }
+            onWegaState?(WegaState(pose: .happy, line: tr("Wszystko aktualne. Idę się zdrzemnąć.")))
+        case .outdated(let n):
+            if let msg = errorMessage {
+                banner = BannerData(variant: .danger, title: tr("Błąd Homebrew"), message: msg)
+            }
+            onWegaState?(WegaState(pose: .alert, line: trf("Znalazłam %@ rzeczy do uporządkowania.", "\(n)")))
+        case .checkFailed:
+            banner = BannerData(variant: .danger,
+                                title: tr("Nie udało się sprawdzić aktualizacji"),
+                                message: errorMessage ?? tr("Część źródeł nie odpowiedziała — sprawdź połączenie z internetem i spróbuj ponownie."))
+            onWegaState?(WegaState(pose: .sad, line: tr("Nie dowęszyłam się — chyba nie ma internetu.")))
+        case .partialFailure(let updates, let failed):
+            banner = BannerData(variant: .danger,
+                                title: tr("Lista może być niepełna"),
+                                message: trf("Znalazłam %@ aktualizacji, ale %@ źródeł nie odpowiedziało — sprawdź połączenie i odśwież.", "\(updates)", "\(failed)"))
+            onWegaState?(WegaState(pose: .alert, line: trf("Znalazłam %@, ale część źródeł milczy.", "\(updates)")))
+        }
         onBadgeChange?(allItems.count)
     }
 
-    private func scanManualUpdates(brewOutdatedCasks: Set<String> = []) async -> [ManualOutdatedApp] {
+    private func scanManualUpdates(brewOutdatedCasks: Set<String> = []) async -> (apps: [ManualOutdatedApp], failedChecks: Int) {
         let cacheURL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Caches/\(AppMetadata.bundleIdentifier)/casks.json")
         let casks = (try? await CaskDatabaseClient(cache: CaskDatabaseCache(fileURL: cacheURL)).fetchCasks()) ?? []
@@ -309,23 +333,24 @@ struct UpdateView: View {
         let googleDriveChecker = GoogleDriveUpdateChecker()
         let chatGPTChecker = ChatGPTUpdateChecker()
         var collected: [ManualOutdatedApp] = []
+        var failedChecks = 0
 
-        await withTaskGroup(of: ManualOutdatedApp?.self) { group in
+        await withTaskGroup(of: ManualCheckResult.self) { group in
             for app in appsToCheck {
                 if let token = app.caskToken {
                     let brewTracked = brewCaskVersions[token]
                     group.addTask {
-                        guard let latest = await self.model.brewService.caskLatestVersion(token: token) else { return nil }
+                        guard let latest = await self.model.brewService.caskLatestVersion(token: token) else { return .upToDate }
                         let reference = brewTracked ?? app.version
                         guard let installed = reference,
                               !versionsEqual(latest, installed),
-                              isUpgrade(installed: installed, latest: latest) else { return nil }
-                        return ManualOutdatedApp(
+                              isUpgrade(installed: installed, latest: latest) else { return .upToDate }
+                        return .outdated(ManualOutdatedApp(
                             name: app.name, path: app.path,
                             installedVersion: app.version ?? installed,
                             availableVersion: versionVariants(latest).first ?? latest,
                             source: .cask(token: token)
-                        )
+                        ))
                     }
                 }
                 group.addTask { await jetbrainsChecker.check(app: app) }
@@ -337,16 +362,19 @@ struct UpdateView: View {
                 group.addTask { await chatGPTChecker.check(app: app) }
                 // Always run Sparkle: even when an app is matched to an installed cask
                 // (e.g. Codex.app vs. cask `codex` which is actually a CLI binary), the
-                // app itself may have its own appcast. Priority dedup in `byPath`
-                // ensures cask (2) wins over sparkle (1) when both report the same path.
+                // app itself may have its own appcast. Priority dedup ensures cask (2)
+                // wins over sparkle (1) when both report the same path.
                 group.addTask { await sparkleChecker.check(app: app) }
             }
-            for await item in group {
-                guard let item else { continue }
-                collected.append(item)
+            for await result in group {
+                switch result {
+                case .outdated(let item): collected.append(item)
+                case .failed:             failedChecks += 1
+                case .upToDate, .notApplicable: break
+                }
             }
         }
-        return UpdatePlanner.dedupedByPriority(collected)
+        return (UpdatePlanner.dedupedByPriority(collected), failedChecks)
     }
 
     private func installManual(token: String) async {
@@ -354,7 +382,7 @@ struct UpdateView: View {
         manualBusy = token
         brewLog = ["$ brew install --cask \(token)"]
         showLog = true
-        onWegaState?(WegaState(pose: .sniff, line: "Instaluję \(token) przez Brew…"))
+        onWegaState?(WegaState(pose: .sniff, line: trf("Instaluję %@ przez Brew…", "\(token)")))
 
         do {
             let stream = try model.brewService.events(arguments: ["install", "--cask", token])
@@ -373,16 +401,16 @@ struct UpdateView: View {
                     if case .cask(let t) = $0.source { return t == token }
                     return false
                 }
-                banner = BannerData(variant: .success, title: "Zaktualizowano \(token)", message: "Teraz zarządzany przez Homebrew.")
-                onWegaState?(WegaState(pose: .happy, line: "\(token) zaktualizowany i pod opieką Brew."))
+                banner = BannerData(variant: .success, title: trf("Zaktualizowano %@", "\(token)"), message: tr("Teraz zarządzany przez Homebrew."))
+                onWegaState?(WegaState(pose: .happy, line: trf("%@ zaktualizowany i pod opieką Brew.", "\(token)")))
             } else {
-                banner = BannerData(variant: .danger, title: "Błąd instalacji \(token)", message: "Sprawdź logi poniżej.")
-                onWegaState?(WegaState(pose: .idle, line: "Coś poszło nie tak z \(token)."))
+                banner = BannerData(variant: .danger, title: trf("Błąd instalacji %@", "\(token)"), message: tr("Sprawdź logi poniżej."))
+                onWegaState?(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
             }
         } catch {
             brewLog.append("error: \(error.localizedDescription)")
-            banner = BannerData(variant: .danger, title: "Błąd instalacji", message: error.localizedDescription)
-            onWegaState?(WegaState(pose: .idle, line: "Coś poszło nie tak z \(token)."))
+            banner = BannerData(variant: .danger, title: tr("Błąd instalacji"), message: error.localizedDescription)
+            onWegaState?(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
         }
         manualBusy = nil
     }
@@ -391,7 +419,7 @@ struct UpdateView: View {
         updating = true
         brewLog = []
         showLog = true
-        onWegaState?(WegaState(pose: .sniff, line: "Aktualizuję, chwila…"))
+        onWegaState?(WegaState(pose: .sniff, line: tr("Aktualizuję, chwila…")))
 
         let plan          = UpdatePlanner.plan(selectedKeys: selected, allKeys: allItems.map(\.key))
         let formulaNames  = plan.formulaNames
@@ -455,16 +483,16 @@ struct UpdateView: View {
         let needsSudoPassword = summary.needsSudoPassword
         if summary.anyFailure {
             let baseDetail = failedTokens.isEmpty
-                ? "Brew zgłosił błąd — sprawdź log poniżej."
-                : "Nie udało się: \(failedTokens.joined(separator: ", ")). Szczegóły w logu."
+                ? tr("Brew zgłosił błąd — sprawdź log poniżej.")
+                : trf("Nie udało się: %@. Szczegóły w logu.", "\(failedTokens.joined(separator: ", "))")
             let detail = needsSudoPassword
-                ? "\(baseDetail) Cask wymaga hasła administratora — uruchom Wega ponownie, helper askpass zapyta o nie w okienku."
+                ? trf("%@ Cask wymaga hasła administratora — uruchom Wega ponownie, helper askpass zapyta o nie w okienku.", "\(baseDetail)")
                 : baseDetail
-            banner = BannerData(variant: .danger, title: "Aktualizacja niekompletna", message: detail)
-            onWegaState?(WegaState(pose: .alert, line: "Część pakietów się nie zaktualizowała."))
+            banner = BannerData(variant: .danger, title: tr("Aktualizacja niekompletna"), message: detail)
+            onWegaState?(WegaState(pose: .alert, line: tr("Część pakietów się nie zaktualizowała.")))
         } else {
-            banner = BannerData(variant: .success, title: "Zaktualizowano \(n) pakietów", message: "Wszystko gotowe.")
-            onWegaState?(WegaState(pose: .happy, line: "Gotowe! \(n) pakietów odświeżonych."))
+            banner = BannerData(variant: .success, title: trf("Zaktualizowano %@ pakietów", "\(n)"), message: tr("Wszystko gotowe."))
+            onWegaState?(WegaState(pose: .happy, line: trf("Gotowe! %@ pakietów odświeżonych.", "\(n)")))
         }
     }
 
@@ -615,7 +643,7 @@ private struct ManualUpdateSection: View {
         WegaCard {
             HStack(spacing: 8) {
                 Image(systemName: "sparkle").foregroundStyle(Color.wegaHoney)
-                Text("Ręcznie zainstalowane")
+                Text(tr("Ręcznie zainstalowane"))
                     .font(.system(size: 13, weight: .semibold))
                 Text("\(items.count)")
                     .font(.system(size: 12, design: .monospaced))
@@ -669,7 +697,7 @@ private struct ManualUpdateSection: View {
                     // without an AppleScript that depends on each app's menu wording.
                     NSWorkspace.shared.open(item.path)
                 } label: {
-                    Label("Otwórz i zaktualizuj", systemImage: "arrow.up.forward.app")
+                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
                 }
                 .controlSize(.small)
             }
@@ -682,7 +710,7 @@ private struct ManualUpdateSection: View {
                     if busyToken == token {
                         ProgressView().controlSize(.small)
                     } else {
-                        Label("Zainstaluj przez Brew", systemImage: "arrow.down.circle")
+                        Label(tr("Zainstaluj przez Brew"), systemImage: "arrow.down.circle")
                     }
                 }
                 .controlSize(.small)
@@ -691,7 +719,7 @@ private struct ManualUpdateSection: View {
         case .mas(let appStoreID):
             HStack(spacing: 8) {
                 WegaBadge(label: appStoreID, variant: .appStore)
-                Text("zaktualizuj w App Store")
+                Text(tr("zaktualizuj w App Store"))
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
             }
@@ -703,7 +731,7 @@ private struct ManualUpdateSection: View {
                         NSWorkspace.shared.open(url)
                     }
                 } label: {
-                    Label("GitHub Releases", systemImage: "arrow.up.right.square")
+                    Label(tr("GitHub Releases"), systemImage: "arrow.up.right.square")
                 }
                 .controlSize(.small)
             }
@@ -720,7 +748,7 @@ private struct ManualUpdateSection: View {
                         NSWorkspace.shared.open(URL(fileURLWithPath: path))
                     }
                 } label: {
-                    Label("Otwórz Toolbox", systemImage: "arrow.down.circle")
+                    Label(tr("Otwórz Toolbox"), systemImage: "arrow.down.circle")
                 }
                 .controlSize(.small)
             }
@@ -732,7 +760,7 @@ private struct ManualUpdateSection: View {
                         NSWorkspace.shared.open(url)
                     }
                 } label: {
-                    Label("Pobierz ze strony Synology", systemImage: "arrow.up.right.square")
+                    Label(tr("Pobierz ze strony Synology"), systemImage: "arrow.up.right.square")
                 }
                 .controlSize(.small)
             }
@@ -746,7 +774,7 @@ private struct ManualUpdateSection: View {
                     // cask is frozen at an older version and would downgrade it.
                     NSWorkspace.shared.open(item.path)
                 } label: {
-                    Label("Otwórz i zaktualizuj", systemImage: "arrow.up.forward.app")
+                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
                 }
                 .controlSize(.small)
             }
@@ -759,7 +787,7 @@ private struct ManualUpdateSection: View {
                     // installer.
                     NSWorkspace.shared.open(item.path)
                 } label: {
-                    Label("Otwórz i zaktualizuj", systemImage: "arrow.up.forward.app")
+                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
                 }
                 .controlSize(.small)
             }
@@ -771,7 +799,7 @@ private struct ManualUpdateSection: View {
                         NSWorkspace.shared.open(url)
                     }
                 } label: {
-                    Label("Pobierz najnowszą wersję", systemImage: "arrow.up.right.square")
+                    Label(tr("Pobierz najnowszą wersję"), systemImage: "arrow.up.right.square")
                 }
                 .controlSize(.small)
             }
@@ -785,7 +813,7 @@ private struct ManualUpdateSection: View {
                     // route through brew, which would reinstall a stale build.
                     NSWorkspace.shared.open(item.path)
                 } label: {
-                    Label("Otwórz i zaktualizuj", systemImage: "arrow.up.forward.app")
+                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
                 }
                 .controlSize(.small)
             }
@@ -802,9 +830,9 @@ private struct RestartSection: View {
         WegaCard {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.clockwise.circle").foregroundStyle(Color.wegaHoney)
-                Text("Do restartu").font(.system(size: 13, weight: .semibold))
+                Text(tr("Do restartu")).font(.system(size: 13, weight: .semibold))
                 Text("\(candidates.count)").font(.system(size: 12, design: .monospaced)).foregroundStyle(.tertiary)
-                Text("były otwarte podczas aktualizacji").font(.system(size: 11)).foregroundStyle(.tertiary)
+                Text(tr("były otwarte podczas aktualizacji")).font(.system(size: 11)).foregroundStyle(.tertiary)
                 Spacer()
             }
             .padding(.horizontal, 14)
@@ -820,7 +848,7 @@ private struct RestartSection: View {
                         if busyProcess == info.processName {
                             ProgressView().controlSize(.small)
                         } else {
-                            Label("Uruchom ponownie", systemImage: "arrow.clockwise")
+                            Label(tr("Uruchom ponownie"), systemImage: "arrow.clockwise")
                         }
                     }
                     .controlSize(.small)

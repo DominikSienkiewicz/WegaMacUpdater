@@ -79,21 +79,22 @@ public struct ChatGPTUpdateChecker: Sendable {
         self.client = client
     }
 
-    public func check(app: ApplicationInfo) async -> ManualOutdatedApp? {
+    public func check(app: ApplicationInfo) async -> ManualCheckResult {
         guard app.bundleIdentifier == Self.bundleIdentifier,
-              let installed = app.version, !installed.isEmpty else { return nil }
+              let installed = app.version, !installed.isEmpty else { return .notApplicable }
 
-        guard let response = try? await client.get(Self.appcastURL, enableETag: true),
-              response.statusCode == 200,
-              let latest = ChatGPTUpdateParser.latestVersion(fromAppcast: response.data),
-              isUpgrade(installed: installed, latest: latest) else { return nil }
+        guard let response = try? await client.get(Self.appcastURL, enableETag: true) else { return .failed }
+        guard response.statusCode == 200,
+              let latest = ChatGPTUpdateParser.latestVersion(fromAppcast: response.data) else { return .failed }
 
-        return ManualOutdatedApp(
+        guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
+
+        return .outdated(ManualOutdatedApp(
             name: app.name,
             path: app.path,
             installedVersion: installed,
             availableVersion: latest,
             source: .chatgpt
-        )
+        ))
     }
 }

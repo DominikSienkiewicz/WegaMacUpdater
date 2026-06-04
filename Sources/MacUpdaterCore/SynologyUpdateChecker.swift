@@ -52,27 +52,28 @@ public struct SynologyUpdateChecker: Sendable {
         self.mappings = mappings
     }
 
-    public func check(app: ApplicationInfo) async -> ManualOutdatedApp? {
+    public func check(app: ApplicationInfo) async -> ManualCheckResult {
         guard let bundleId = app.bundleIdentifier,
-              let mapping = mappings[bundleId] else { return nil }
+              let mapping = mappings[bundleId] else { return .notApplicable }
 
-        guard let installedBuild = installedBuildNumber(for: app) else { return nil }
+        guard let installedBuild = installedBuildNumber(for: app) else { return .notApplicable }
 
         let urlString = "https://www.synology.com/api/releaseNote/findChangeLog?identify=\(mapping.identify)&lang=enu"
-        guard let url = URL(string: urlString) else { return nil }
+        guard let url = URL(string: urlString) else { return .notApplicable }
 
-        guard let response = try? await client.get(url, enableETag: true),
-              response.statusCode == 200,
-              let latest = SynologyApiParser.latestRelease(from: response.data),
-              latest.build > installedBuild else { return nil }
+        guard let response = try? await client.get(url, enableETag: true) else { return .failed }
+        guard response.statusCode == 200,
+              let latest = SynologyApiParser.latestRelease(from: response.data) else { return .failed }
 
-        return ManualOutdatedApp(
+        guard latest.build > installedBuild else { return .upToDate }
+
+        return .outdated(ManualOutdatedApp(
             name: app.name,
             path: app.path,
             installedVersion: app.version,
             availableVersion: latest.version,
             source: .synology(downloadPage: mapping.downloadPage)
-        )
+        ))
     }
 
     private func installedBuildNumber(for app: ApplicationInfo) -> Int? {

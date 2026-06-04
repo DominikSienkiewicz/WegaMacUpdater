@@ -14,11 +14,11 @@ enum SidebarTab: String, Identifiable {
 
     var label: String {
         switch self {
-        case .update:    return "Update"
-        case .uninstall: return "Uninstall"
-        case .migration: return "Migration"
-        case .inventory: return "Inventory"
-        case .info:      return "Info"
+        case .update:    return tr("Aktualizacje")
+        case .uninstall: return tr("Odinstaluj aplikacje")
+        case .migration: return tr("Migracja")
+        case .inventory: return tr("Spis aplikacji")
+        case .info:      return tr("Info")
         }
     }
     var systemImage: String {
@@ -32,11 +32,11 @@ enum SidebarTab: String, Identifiable {
     }
     var hint: String {
         switch self {
-        case .update:    return "Co do odświeżenia"
-        case .uninstall: return "Usuń aplikacje"
-        case .migration: return "Przepnij pod Brew"
-        case .inventory: return "Pełny obchód"
-        case .info:      return "O aplikacji"
+        case .update:    return tr("Co do odświeżenia")
+        case .uninstall: return tr("Usuń aplikacje")
+        case .migration: return tr("Przepnij pod Brew")
+        case .inventory: return tr("Pełny obchód")
+        case .info:      return tr("O aplikacji")
         }
     }
 
@@ -46,7 +46,9 @@ enum SidebarTab: String, Identifiable {
 // MARK: - Root view
 
 struct ContentView: View {
-    @State private var activeTab:    SidebarTab = .update
+    // Persisted so a language switch (which re-keys the view tree) doesn't bounce
+    // the user off their current tab — and the last tab is restored on next launch.
+    @AppStorage("wega.activeTab") private var activeTab: SidebarTab = .update
     @State private var wegaState:    WegaState  = .forTab(.update)
     @State private var updateBadge:  Int        = 0
     @State private var brewInstalled: Bool
@@ -97,7 +99,7 @@ private struct SidebarView: View {
                         .font(.system(size: 14, weight: .bold))
                     HStack(spacing: 5) {
                         Circle().fill(Color.wegaSuccess).frame(width: 5, height: 5)
-                        Text("brew · helper aktywny")
+                        Text(tr("brew · helper aktywny"))
                             .font(.system(size: 10.5))
                             .foregroundStyle(.tertiary)
                     }
@@ -111,7 +113,7 @@ private struct SidebarView: View {
 
             // Tab list
             VStack(alignment: .leading, spacing: 1) {
-                Text("Narzędzia")
+                Text(tr("Narzędzia"))
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.tertiary)
                     .textCase(.uppercase)
@@ -227,7 +229,7 @@ private struct WegaStatusPanel: View {
                 )
                 .animation(.spring(response: 0.35, dampingFraction: 0.8), value: state.pose)
 
-            Text("\u{201E}\(state.line)\u{201D}")
+            Text(trf("\u{201E}%@\u{201D}", "\(state.line)"))
                 .font(.system(size: 11.5).italic())
                 .foregroundStyle(.primary)
                 .lineLimit(3)
@@ -265,9 +267,9 @@ private struct BrewRequiredView: View {
                 WegaFull(pose: .sad, size: 160)
 
                 VStack(spacing: 8) {
-                    Text("Homebrew nie jest zainstalowany")
+                    Text(tr("Homebrew nie jest zainstalowany"))
                         .font(.system(size: 22, weight: .semibold))
-                    Text("Wega potrzebuje Homebrew, żeby sprawdzać aktualizacje\ni zarządzać aplikacjami. Zainstaluj go i kliknij Sprawdź ponownie.")
+                    Text(tr("Wega potrzebuje Homebrew, żeby sprawdzać aktualizacje\ni zarządzać aplikacjami. Zainstaluj go i kliknij Sprawdź ponownie."))
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -276,7 +278,7 @@ private struct BrewRequiredView: View {
 
                 // Install command block
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Polecenie instalacji (wklej w Terminal):")
+                    Text(tr("Polecenie instalacji (wklej w Terminal):"))
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.tertiary)
 
@@ -318,13 +320,13 @@ private struct BrewRequiredView: View {
                     Button {
                         NSWorkspace.shared.open(URL(string: "https://brew.sh")!)
                     } label: {
-                        Label("Otwórz brew.sh", systemImage: "arrow.up.right.square")
+                        Label(tr("Otwórz brew.sh"), systemImage: "arrow.up.right.square")
                     }
 
                     Button {
                         onRecheck()
                     } label: {
-                        Label("Sprawdź ponownie", systemImage: "arrow.clockwise")
+                        Label(tr("Sprawdź ponownie"), systemImage: "arrow.clockwise")
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.wegaHoney)
@@ -375,16 +377,16 @@ private struct ContentArea: View {
     @State private var quip: String? = nil
 
     private let quips: [String] = [
-        "Wszystko pod kontrolą!",
-        "Kiedy ostatnio robiłeś backup?",
-        "Brew to mój najlepszy przyjaciel.",
-        "Wącham coś ciekawego…",
-        "Dobra robota dzisiaj!",
-        "Czy macOS jest aktualny?",
-        "Mam oko na ten dysk.",
-        "Hau! Nowe paczki?",
-        "Zostań chwilę, sprawdzam…",
-        "Stary cask to zły cask.",
+        tr("Wszystko pod kontrolą!"),
+        tr("Kiedy ostatnio robiłeś backup?"),
+        tr("Brew to mój najlepszy przyjaciel."),
+        tr("Wącham coś ciekawego…"),
+        tr("Dobra robota dzisiaj!"),
+        tr("Czy macOS jest aktualny?"),
+        tr("Mam oko na ten dysk."),
+        tr("Hau! Nowe paczki?"),
+        tr("Zostań chwilę, sprawdzam…"),
+        tr("Stary cask to zły cask."),
     ]
 
     var body: some View {
@@ -395,7 +397,7 @@ private struct ContentArea: View {
                     .foregroundStyle(Color.wegaHoney)
                 Text(activeTab.label)
                     .font(.system(size: 13, weight: .semibold))
-                Text("· \(activeTab.hint)")
+                Text(trf("· %@", "\(activeTab.hint)"))
                     .font(.system(size: 13))
                     .foregroundStyle(.tertiary)
                 Spacer()

@@ -49,6 +49,17 @@ public struct UpdatePlan: Equatable, Sendable {
 /// Tri-state of the "select all" control.
 public enum SelectAllState: Equatable, Sendable { case none, all, partial }
 
+/// What the Update screen should communicate after a check, separating a clean
+/// "everything is current" from a check that couldn't complete (e.g. offline).
+public enum ScanState: Equatable, Sendable {
+    case upToDate
+    case outdated(Int)
+    /// Nothing found, but at least one source failed — we can't claim "up to date".
+    case checkFailed
+    /// Updates found, but some sources also failed — the list may be incomplete.
+    case partialFailure(updates: Int, failed: Int)
+}
+
 /// Aggregated verdict over a batch of brew/npm upgrades, used to pick the result banner.
 public struct UpdateOutcomeSummary: Equatable, Sendable {
     public var anyFailure: Bool
@@ -142,6 +153,18 @@ public enum UpdatePlanner {
         }
         return byPath.values.sorted {
             $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    /// Decides what the screen reports given how many updates were found and how many
+    /// source checks failed. A failed check with zero finds must read as "couldn't
+    /// check", never "up to date".
+    public static func scanState(updateCount: Int, failedChecks: Int) -> ScanState {
+        switch (updateCount, failedChecks) {
+        case (0, 0):            return .upToDate
+        case (0, _):            return .checkFailed
+        case (let n, 0):        return .outdated(n)
+        case (let n, let f):    return .partialFailure(updates: n, failed: f)
         }
     }
 

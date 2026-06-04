@@ -63,29 +63,34 @@ public struct GoogleDriveUpdateChecker: Sendable {
         self.client = client
     }
 
-    public func check(app: ApplicationInfo) async -> ManualOutdatedApp? {
-        guard app.bundleIdentifier == Self.bundleIdentifier else { return nil }
+    public func check(app: ApplicationInfo) async -> ManualCheckResult {
+        guard app.bundleIdentifier == Self.bundleIdentifier else { return .notApplicable }
         // Prefer CFBundleVersion when available (Drive's 4-segment build
         // number, e.g. 126.0.4.0); fall back to CFBundleShortVersionString
         // (`126.0`). Omaha compares lexicographically so the short form
         // would always read as "older" and produce a false positive when
         // Drive is genuinely up to date.
         let installed = bundleVersion(at: app.path) ?? app.version ?? ""
-        guard !installed.isEmpty else { return nil }
+        guard !installed.isEmpty else { return .notApplicable }
 
         let body = Data(GoogleDriveUpdateParser.omahaRequestBody(installedVersion: installed).utf8)
-        guard let response = try? await client.post(GoogleDriveUpdateParser.omahaEndpoint, body: body, contentType: "application/xml"),
-              response.statusCode == 200,
-              let latest = GoogleDriveUpdateParser.latestVersion(fromOmahaResponse: response.data),
-              isUpgrade(installed: installed, latest: latest) else { return nil }
+        guard let response = try? await client.post(GoogleDriveUpdateParser.omahaEndpoint, body: body, contentType: "application/xml") else {
+            return .failed
+        }
+        guard response.statusCode == 200 else { return .failed }
 
-        return ManualOutdatedApp(
+        // Omaha omits <manifest> when there's no update (status="noupdate"), so a
+        // missing version here means "current", not a failure.
+        guard let latest = GoogleDriveUpdateParser.latestVersion(fromOmahaResponse: response.data),
+              isUpgrade(installed: installed, latest: latest) else { return .upToDate }
+
+        return .outdated(ManualOutdatedApp(
             name: app.name,
             path: app.path,
             installedVersion: app.version ?? installed,
             availableVersion: latest,
             source: .googleDrive
-        )
+        ))
     }
 
     private func bundleVersion(at appURL: URL) -> String? {

@@ -37,15 +37,15 @@ struct WegaState: Equatable {
     var pose: WegaPose
     var line: String
 
-    static let `default` = WegaState(pose: .idle, line: "Cześć! Co dziś robimy?")
+    static let `default` = WegaState(pose: .idle, line: tr("Cześć! Co dziś robimy?"))
 
     static func forTab(_ tab: SidebarTab) -> WegaState {
         switch tab {
-        case .update:    return WegaState(pose: .idle,  line: "Sprawdzimy, co się zestarzało?")
-        case .uninstall: return WegaState(pose: .alert, line: "Aport! Zaznacz, co mam zabrać.")
-        case .migration: return WegaState(pose: .idle,  line: "Pójdę zwęszyć /Applications.")
-        case .inventory: return WegaState(pose: .idle,  line: "Obejdę wszystkie kąty.")
-        case .info:      return WegaState(pose: .idle, line: "Oto co o sobie wiem.")
+        case .update:    return WegaState(pose: .idle,  line: tr("Sprawdzimy, co się zestarzało?"))
+        case .uninstall: return WegaState(pose: .alert, line: tr("Aport! Zaznacz, co mam zabrać."))
+        case .migration: return WegaState(pose: .idle,  line: tr("Pójdę zwęszyć /Applications."))
+        case .inventory: return WegaState(pose: .idle,  line: tr("Obejdę wszystkie kąty."))
+        case .info:      return WegaState(pose: .idle, line: tr("Oto co o sobie wiem."))
         }
     }
 }

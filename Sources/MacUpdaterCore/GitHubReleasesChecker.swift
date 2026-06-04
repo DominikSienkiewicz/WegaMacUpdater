@@ -12,31 +12,38 @@ public struct GitHubReleasesChecker: Sendable {
         self.repos = repos
     }
 
-    public func check(app: ApplicationInfo) async -> ManualOutdatedApp? {
+    public func check(app: ApplicationInfo) async -> ManualCheckResult {
         guard let bundleId = app.bundleIdentifier,
-              let mapping = repos[bundleId] else { return nil }
+              let mapping = repos[bundleId] else { return .notApplicable }
 
         let urlString = "https://api.github.com/repos/\(mapping.repo)/releases/latest"
-        guard let url = URL(string: urlString) else { return nil }
+        guard let url = URL(string: urlString) else { return .notApplicable }
 
         // ETag-conditional: a 304 reuses the cached body and does not count against
         // GitHub's unauthenticated 60-req/h rate limit.
-        guard let response = try? await client.get(url, headers: ["Accept": "application/vnd.github+json"], enableETag: true),
-              response.statusCode == 200,
-              let release = try? JSONDecoder().decode(GitHubRelease.self, from: response.data),
-              !release.draft, !release.prerelease else { return nil }
+        guard let response = try? await client.get(url, headers: ["Accept": "application/vnd.github+json"], enableETag: true) else {
+            return .failed
+        }
+        guard response.statusCode == 200,
+              let release = try? JSONDecoder().decode(GitHubRelease.self, from: response.data) else {
+            return .failed
+        }
 
-        let latest = normalizeGitTag(release.tagName)
+        // A draft/prerelease "latest" gives no stable newer build → treat as current.
+        guard !release.draft, !release.prerelease else { return .upToDate }
+
         let installed = app.version ?? ""
-        guard !installed.isEmpty, isUpgrade(installed: installed, latest: latest) else { return nil }
+        guard !installed.isEmpty else { return .notApplicable }
+        let latest = normalizeGitTag(release.tagName)
+        guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
 
-        return ManualOutdatedApp(
+        return .outdated(ManualOutdatedApp(
             name: app.name,
             path: app.path,
             installedVersion: app.version,
             availableVersion: latest,
             source: .github(repo: mapping.repo)
-        )
+        ))
     }
 }
 

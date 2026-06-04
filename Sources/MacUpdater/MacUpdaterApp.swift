@@ -4,6 +4,7 @@ import MacUpdaterCore
 @main
 struct WegaMacUpdaterApp: App {
     @StateObject private var model = AppViewModel()
+    @StateObject private var localization = LocalizationManager.shared
 
     init() {
         HomebrewEnvironment.bootstrapAskpass()
@@ -13,6 +14,9 @@ struct WegaMacUpdaterApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(model)
+                .environmentObject(localization)
+                // Re-key the whole tree on language change so every tr(...) re-evaluates.
+                .id(localization.language)
                 .task {
                     await model.refreshSystemStatus()
                 }

@@ -108,6 +108,24 @@ final class UpdatePlannerTests: XCTestCase {
         XCTAssertTrue(summary.needsSudoPassword)
     }
 
+    // MARK: scanState — "up to date" vs "couldn't check"
+
+    func testScanStateUpToDateOnlyWhenNothingFoundAndNothingFailed() {
+        XCTAssertEqual(UpdatePlanner.scanState(updateCount: 0, failedChecks: 0), .upToDate)
+    }
+
+    func testScanStateCheckFailedWhenNothingFoundButSomethingFailed() {
+        XCTAssertEqual(UpdatePlanner.scanState(updateCount: 0, failedChecks: 3), .checkFailed)
+    }
+
+    func testScanStateOutdatedWhenFoundAndNoFailures() {
+        XCTAssertEqual(UpdatePlanner.scanState(updateCount: 5, failedChecks: 0), .outdated(5))
+    }
+
+    func testScanStatePartialFailureWhenFoundAndFailed() {
+        XCTAssertEqual(UpdatePlanner.scanState(updateCount: 2, failedChecks: 1), .partialFailure(updates: 2, failed: 1))
+    }
+
     func testSummarizeAllSuccess() {
         let summary = UpdatePlanner.summarize(outcomes: [BrewUpgradeOutcome(exitCode: 0, failedTokens: [], errorLines: [])])
         XCTAssertFalse(summary.anyFailure)

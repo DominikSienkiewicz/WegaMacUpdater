@@ -96,22 +96,23 @@ public struct ParallelsUpdateChecker: Sendable {
         self.client = client
     }
 
-    public func check(app: ApplicationInfo) async -> ManualOutdatedApp? {
+    public func check(app: ApplicationInfo) async -> ManualCheckResult {
         guard app.bundleIdentifier == Self.bundleIdentifier,
               let installed = app.version, !installed.isEmpty,
-              let url = Self.updateURL(forShortVersion: installed) else { return nil }
+              let url = Self.updateURL(forShortVersion: installed) else { return .notApplicable }
 
-        guard let response = try? await client.get(url, enableETag: true),
-              response.statusCode == 200,
-              let latest = ParallelsUpdateParser.latest(fromUpdatesXML: response.data),
-              isUpgrade(installed: installed, latest: latest.shortVersion) else { return nil }
+        guard let response = try? await client.get(url, enableETag: true) else { return .failed }
+        guard response.statusCode == 200,
+              let latest = ParallelsUpdateParser.latest(fromUpdatesXML: response.data) else { return .failed }
 
-        return ManualOutdatedApp(
+        guard isUpgrade(installed: installed, latest: latest.shortVersion) else { return .upToDate }
+
+        return .outdated(ManualOutdatedApp(
             name: app.name,
             path: app.path,
             installedVersion: installed,
             availableVersion: latest.shortVersion,
             source: .parallels
-        )
+        ))
     }
 }

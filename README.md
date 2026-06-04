@@ -69,7 +69,7 @@ Finds manually-installed apps that have a Homebrew Cask equivalent and offers to
 Full list of every `.app` on the system with source badge (Brew / App Store / Manual), version, bundle ID, and last-modified date. Filterable by source, sortable by any column, searchable by name or bundle ID. Four stat cards at the top show counts per category — tap any card to filter.
 
 ### Info
-Real-time diagnostics: Homebrew version, mas-cli version, Privileged Helper status, macOS version, CPU architecture. App version, build, links. License block for bundled open-source tools. **Touch ID for sudo card** — on Macs with biometry hardware, shows whether `pam_tid.so` is wired into `/etc/pam.d/sudo_local` and offers a one-click enable.
+Real-time diagnostics: Homebrew version, mas-cli version, Privileged Helper status, macOS version, CPU architecture. App version, build, links. License block for bundled open-source tools. **Language card** — switch the interface between **Polski** (default) and **English**; the choice is persisted and applies live. **Touch ID for sudo card** — on Macs with biometry hardware, shows whether `pam_tid.so` is wired into `/etc/pam.d/sudo_local` and offers a one-click enable.
 
 ## Architecture
 
@@ -81,14 +81,16 @@ WegaMacUpdater (SwiftUI app target)
 ├── MigrationView        — manual→brew/mas migration wizard
 ├── InventoryView        — full app catalogue
 ├── InfoView             — diagnostics + about
-└── SharedViews          — buildScanDirs(), WegaBadge, WegaCard, PackageRow, EmptyHero…
+├── SharedViews          — buildScanDirs(), WegaBadge, WegaCard, PackageRow, EmptyHero…
+└── Localization         — `tr()` / `trf()` route every UI string through `LocalizationManager` (default **Polski**, switchable to **English** from the Info tab, persisted in UserDefaults). Polish is the base text in the views; `Translations.swift` is the single language file holding the English counterparts, with a Polish fallback for any missing key
 
 MacUpdaterCore (library target — no SwiftUI dependency)
 ├── ApplicationScanner   — filesystem scan, Info.plist parsing, brew/mas tagging
 ├── BrewService          — brew outdated (greedy), install, uninstall, cask versions
 ├── MasService           — mas outdated, list, search, upgrade
 ├── HTTPClient           — one shared HTTP client behind all nine checkers + CaskDatabaseClient: uniform 15s/30s timeouts, a single `User-Agent` (`WegaMacUpdater/<version>`), transient-failure retry with exponential backoff (429 + 5xx + network errors), and ETag conditional requests. The GitHub checker enables ETag so a `304 Not Modified` reuses the cached body **and does not count against GitHub's unauthenticated 60-req/h rate limit**. The transport is a protocol seam (`HTTPTransport`) so the retry/ETag logic is unit-tested with a fake, no network
-├── UpdatePlanner        — pure orchestration logic lifted out of UpdateView: builds the selectable outdated list (with load-bearing source-tagged keys), routes a selection back to per-manager upgrade commands, dedupes manual results by source priority, and summarises upgrade outcomes — all unit-tested without SwiftUI
+├── ManualCheckResult    — every manual checker returns `.notApplicable` / `.upToDate` / `.outdated` / `.failed` instead of a bare `Optional`, so a network failure is no longer indistinguishable from "current". `UpdatePlanner.scanState` folds the totals into `upToDate` / `outdated` / `checkFailed` / `partialFailure`, and the Update screen shows "couldn't check — check your connection" instead of a false "everything up to date" when offline
+├── UpdatePlanner        — pure orchestration logic lifted out of UpdateView: builds the selectable outdated list (with load-bearing source-tagged keys), routes a selection back to per-manager upgrade commands, dedupes manual results by source priority, summarises upgrade outcomes, and derives the post-scan `ScanState` — all unit-tested without SwiftUI
 ├── MigrationPlanner     — pure orchestration logic lifted out of MigrationView: partitions scanned apps into matchable / App-Store / unmatched, filters the migration pool, builds `~/Library` leftover paths, and owns `DuplicateRemoval` (npm↔brew command preview) — unit-tested without SwiftUI
 ├── AppCatalog           — single source of truth for every per-app mapping (GitHub repos, JetBrains IDE codes, Synology identifiers, Sparkle feed overrides); decoded from the bundled `Resources/app-catalog.json` and overlaid (if present) by a user-writable `~/Library/Application Support/WegaMacUpdater/app-catalog.json`, so the catalog can be refreshed out-of-band without a new app build
 ├── JetBrainsUpdateChecker — data.services.jetbrains.com, 14 IDE mappings (from AppCatalog)
