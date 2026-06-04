@@ -5,6 +5,7 @@ struct InfoView: View {
     var onWegaState: ((WegaState) -> Void)?
 
     @EnvironmentObject private var localization: LocalizationManager
+    @EnvironmentObject private var policies: UpdatePolicyStore
     @State private var diagnostics: DiagnosticsResult? = nil
     @State private var touchIDState: TouchIDSudoConfigurator.State = .notSupported
     @State private var enablingTouchID = false
@@ -20,6 +21,7 @@ struct InfoView: View {
             VStack(spacing: 14) {
                 appCard
                 languageCard
+                policiesCard
                 diagnosticsCard
                 touchIDCard
                 licensesCard
@@ -61,6 +63,76 @@ struct InfoView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
             }
+        }
+    }
+
+    // MARK: - Ignored / pinned updates
+
+    private var policiesCard: some View {
+        WegaCard {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) {
+                    Image(systemName: "hand.raised").foregroundStyle(Color.wegaHoney)
+                    Text(tr("Ignorowane i przypięte"))
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                    if !policies.isEmpty {
+                        Text("\(policies.sortedEntries.count)")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+
+                if policies.isEmpty {
+                    Text(tr("Brak reguł. Kliknij aktualizację prawym przyciskiem, aby ją zignorować lub przypiąć wersję."))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                } else {
+                    ForEach(policies.sortedEntries) { entry in
+                        HStack(spacing: 10) {
+                            Image(systemName: policyIcon(entry.policy))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 18)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(entry.displayName).font(.system(size: 13, weight: .medium))
+                                Text(policyDescription(entry.policy))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            Spacer()
+                            Button { policies.remove(key: entry.key) } label: {
+                                Image(systemName: "trash").font(.system(size: 12))
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.secondary)
+                            .help(tr("Usuń regułę"))
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        if entry.id != policies.sortedEntries.last?.id {
+                            Divider().opacity(0.4).padding(.leading, 42)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func policyIcon(_ policy: UpdatePolicy) -> String {
+        if case .ignored = policy { return "bell.slash" }
+        return "pin"
+    }
+
+    private func policyDescription(_ policy: UpdatePolicy) -> String {
+        switch policy {
+        case .ignored:            return tr("Ignorowane")
+        case .pinned(let version): return trf("Przypięte do %@", version)
         }
     }
 

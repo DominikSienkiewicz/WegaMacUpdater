@@ -9,7 +9,9 @@ struct UpdateView: View {
     var onBadgeChange: ((Int) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
+    @EnvironmentObject private var policies: UpdatePolicyStore
 
+    @State private var pinTarget:      PinRequest?       = nil
     @State private var status:         UpdateStatus      = .ready
     @State private var brewOutdated:   BrewOutdated?
     @State private var masOutdated:    [MasOutdatedApp]  = []
@@ -28,11 +30,30 @@ struct UpdateView: View {
     @State private var caskIconPaths:      [String: URL]     = [:]
 
     // Keys carry a source tag ("f:", "c:", "a:", "n:"); see UpdatePlanner.
+    // Items the user has ignored or pinned below the available version are filtered out.
     private var allItems: [OutdatedItem] {
-        UpdatePlanner.outdatedItems(brew: brewOutdated, mas: masOutdated, npm: npmOutdated)
+        UpdatePlanner.applyPolicies(
+            UpdatePlanner.outdatedItems(brew: brewOutdated, mas: masOutdated, npm: npmOutdated),
+            policies: policies.policiesMap
+        )
+    }
+
+    /// Manual updates with ignore/pin rules applied.
+    private var visibleManual: [ManualOutdatedApp] {
+        UpdatePlanner.applyPolicies(manualOutdated, policies: policies.policiesMap)
     }
 
     var body: some View {
+        content
+            .sheet(item: $pinTarget) { req in
+                PinVersionSheet(request: req) { version in
+                    policies.pin(key: req.key, name: req.name, version: version)
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch status {
         case .ready:    readyView
         case .checking: checkingView
@@ -133,7 +154,7 @@ struct UpdateView: View {
                     .padding(.bottom, 8)
             }
 
-            if allItems.isEmpty && manualOutdated.isEmpty && restartCandidates.isEmpty {
+            if allItems.isEmpty && visibleManual.isEmpty && restartCandidates.isEmpty {
                 EmptyHero(pose: .sleep, title: tr("Wszystko aktualne"), message: tr("Wega się zdrzemnie. Zajrzymy znowu za jakiś czas."), compact: true)
             } else {
                 // Select-all row
@@ -155,15 +176,17 @@ struct UpdateView: View {
                         let casks    = allItems.filter { $0.kind == .cask }
                         let store    = allItems.filter { $0.kind == .appStore }
                         let npmPkgs  = allItems.filter { $0.kind == .npm }
-                        if !formulae.isEmpty { UpdateSection(title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"),  icon: "terminal",  items: formulae, selected: $selected) }
-                        if !casks.isEmpty    { UpdateSection(title: tr("Homebrew Casks"),    subtitle: tr("aplikacje .app"), icon: "app.gift", items: casks,    iconPaths: caskIconPaths, selected: $selected) }
-                        if !store.isEmpty    { UpdateSection(title: tr("Mac App Store"),     subtitle: tr("via mas-cli"),      icon: "bag",      items: store,    selected: $selected) }
-                        if !npmPkgs.isEmpty  { UpdateSection(title: tr("npm globalne"),      subtitle: tr("pakiety -g"),       icon: "shippingbox", items: npmPkgs, selected: $selected) }
-                        if !manualOutdated.isEmpty {
+                        if !formulae.isEmpty { UpdateSection(title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"),  icon: "terminal",  items: formulae, selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
+                        if !casks.isEmpty    { UpdateSection(title: tr("Homebrew Casks"),    subtitle: tr("aplikacje .app"), icon: "app.gift", items: casks,    iconPaths: caskIconPaths, selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
+                        if !store.isEmpty    { UpdateSection(title: tr("Mac App Store"),     subtitle: tr("via mas-cli"),      icon: "bag",      items: store,    selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
+                        if !npmPkgs.isEmpty  { UpdateSection(title: tr("npm globalne"),      subtitle: tr("pakiety -g"),       icon: "shippingbox", items: npmPkgs, selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
+                        if !visibleManual.isEmpty {
                             ManualUpdateSection(
-                                items: manualOutdated,
+                                items: visibleManual,
                                 busyToken: manualBusy,
-                                onInstall: { token in Task { await installManual(token: token) } }
+                                onInstall: { token in Task { await installManual(token: token) } },
+                                onIgnore: ignoreManual,
+                                onPin: requestPinManual
                             )
                         }
                         if !restartCandidates.isEmpty {
@@ -193,6 +216,25 @@ struct UpdateView: View {
 
     private func toggleAll() {
         selected = UpdatePlanner.toggledAll(selected: selected, allKeys: allItems.map(\.key))
+    }
+
+    // MARK: Ignore / pin
+
+    private func ignoreItem(_ item: OutdatedItem) {
+        policies.ignore(key: item.policyKey, name: item.name)
+        selected.remove(item.key)
+    }
+
+    private func requestPin(_ item: OutdatedItem) {
+        pinTarget = PinRequest(key: item.policyKey, name: item.name, suggestedVersion: item.from ?? item.to ?? "")
+    }
+
+    private func ignoreManual(_ app: ManualOutdatedApp) {
+        policies.ignore(key: app.policyKey, name: app.name)
+    }
+
+    private func requestPinManual(_ app: ManualOutdatedApp) {
+        pinTarget = PinRequest(key: app.policyKey, name: app.name, suggestedVersion: app.installedVersion ?? app.availableVersion ?? "")
     }
 
     // MARK: Async actions
@@ -268,7 +310,7 @@ struct UpdateView: View {
         lastCheck = Date()
         status    = .results
 
-        let total = allItems.count + manualOutdated.count
+        let total = allItems.count + visibleManual.count
         switch UpdatePlanner.scanState(updateCount: total, failedChecks: failedSources) {
         case .upToDate:
             if let msg = errorMessage {
@@ -599,6 +641,8 @@ private struct UpdateSection: View {
     let items:     [OutdatedItem]
     var iconPaths: [String: URL]  = [:]
     @Binding var selected: Set<String>
+    var onIgnore: (OutdatedItem) -> Void = { _ in }
+    var onPin:    (OutdatedItem) -> Void = { _ in }
 
     var body: some View {
         WegaCard {
@@ -622,6 +666,9 @@ private struct UpdateSection: View {
                     isSelected:     selected.contains(item.key),
                     onToggle:       { toggle(item.key) }
                 )
+                .contextMenu {
+                    UpdatePolicyMenu(onIgnore: { onIgnore(item) }, onPin: { onPin(item) })
+                }
                 .overlay(alignment: .bottom) {
                     if item.id != items.last?.id { Divider().opacity(0.4).padding(.leading, 54) }
                 }
@@ -634,10 +681,83 @@ private struct UpdateSection: View {
     }
 }
 
+/// Shared context-menu content for ignoring or pinning an update.
+private struct UpdatePolicyMenu: View {
+    let onIgnore: () -> Void
+    let onPin:    () -> Void
+
+    var body: some View {
+        Button(action: onIgnore) {
+            Label(tr("Nie aktualizuj"), systemImage: "bell.slash")
+        }
+        Button(action: onPin) {
+            Label(tr("Przypnij wersję…"), systemImage: "pin")
+        }
+    }
+}
+
+struct PinRequest: Identifiable {
+    let key:              String
+    let name:             String
+    let suggestedVersion: String
+    var id: String { key }
+}
+
+private struct PinVersionSheet: View {
+    let request:   PinRequest
+    let onConfirm: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var version: String
+
+    init(request: PinRequest, onConfirm: @escaping (String) -> Void) {
+        self.request = request
+        self.onConfirm = onConfirm
+        _version = State(initialValue: request.suggestedVersion)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(tr("Przypnij wersję")).font(.system(size: 16, weight: .bold))
+                Text(request.name).font(.system(size: 13)).foregroundStyle(.secondary)
+            }
+
+            Text(tr("Wega nie pokaże aktualizacji nowszych niż podana wersja. Zostaw bieżącą, żeby zatrzymać aplikację tu, gdzie jest."))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            TextField(tr("Wersja"), text: $version)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 13, design: .monospaced))
+
+            HStack {
+                Spacer()
+                Button(tr("Anuluj")) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button(tr("Przypnij")) {
+                    onConfirm(version)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .tint(Color.wegaHoney)
+                .foregroundStyle(Color(red: 0.16, green: 0.11, blue: 0.07))
+                .disabled(version.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 380)
+    }
+}
+
 private struct ManualUpdateSection: View {
     let items:     [ManualOutdatedApp]
     let busyToken: String?
     let onInstall: (String) -> Void
+    var onIgnore:  (ManualOutdatedApp) -> Void = { _ in }
+    var onPin:     (ManualOutdatedApp) -> Void = { _ in }
 
     var body: some View {
         WegaCard {
@@ -676,6 +796,10 @@ private struct ManualUpdateSection: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
+                .contentShape(Rectangle())
+                .contextMenu {
+                    UpdatePolicyMenu(onIgnore: { onIgnore(item) }, onPin: { onPin(item) })
+                }
                 .overlay(alignment: .bottom) {
                     if item.path != items.last?.path { Divider().opacity(0.4).padding(.leading, 54) }
                 }

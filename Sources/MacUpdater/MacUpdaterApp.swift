@@ -5,6 +5,7 @@ import MacUpdaterCore
 struct WegaMacUpdaterApp: App {
     @StateObject private var model = AppViewModel()
     @StateObject private var localization = LocalizationManager.shared
+    @StateObject private var policies = UpdatePolicyStore.shared
 
     init() {
         HomebrewEnvironment.bootstrapAskpass()
@@ -15,6 +16,7 @@ struct WegaMacUpdaterApp: App {
             ContentView()
                 .environmentObject(model)
                 .environmentObject(localization)
+                .environmentObject(policies)
                 // Re-key the whole tree on language change so every tr(...) re-evaluates.
                 .id(localization.language)
                 .task {
