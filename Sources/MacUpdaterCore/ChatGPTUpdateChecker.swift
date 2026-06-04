@@ -73,23 +73,19 @@ public struct ChatGPTUpdateChecker: Sendable {
     public static let appcastURL = URL(string:
         "https://persistent.oaistatic.com/sidekick/public/sparkle_public_appcast.xml")!
 
-    private let session: URLSession
+    private let client: HTTPClient
 
-    public init(session: URLSession = .shared) {
-        self.session = session
+    public init(client: HTTPClient = .shared) {
+        self.client = client
     }
 
     public func check(app: ApplicationInfo) async -> ManualOutdatedApp? {
         guard app.bundleIdentifier == Self.bundleIdentifier,
               let installed = app.version, !installed.isEmpty else { return nil }
 
-        var request = URLRequest(url: Self.appcastURL)
-        request.setValue("WegaMacUpdater/1.0", forHTTPHeaderField: "User-Agent")
-        request.cachePolicy = .reloadRevalidatingCacheData
-
-        guard let (data, response) = try? await session.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let latest = ChatGPTUpdateParser.latestVersion(fromAppcast: data),
+        guard let response = try? await client.get(Self.appcastURL, enableETag: true),
+              response.statusCode == 200,
+              let latest = ChatGPTUpdateParser.latestVersion(fromAppcast: response.data),
               isUpgrade(installed: installed, latest: latest) else { return nil }
 
         return ManualOutdatedApp(

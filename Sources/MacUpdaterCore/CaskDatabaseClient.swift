@@ -39,16 +39,16 @@ public final class CaskDatabaseClient: @unchecked Sendable {
 
     private let sourceURL: URL
     private let cache: CaskDatabaseCache?
-    private let session: URLSession
+    private let client: HTTPClient
 
     public init(
         sourceURL: URL = CaskDatabaseClient.defaultURL,
         cache: CaskDatabaseCache? = nil,
-        session: URLSession = .shared
+        client: HTTPClient = .shared
     ) {
         self.sourceURL = sourceURL
         self.cache = cache
-        self.session = session
+        self.client = client
     }
 
     public func fetchCasks() async throws -> [BrewCask] {
@@ -56,13 +56,14 @@ public final class CaskDatabaseClient: @unchecked Sendable {
             return cached
         }
 
-        let (data, response) = try await session.data(from: sourceURL)
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200..<300).contains(httpResponse.statusCode) else {
+        // Disk freshness is handled by `cache`; the client provides uniform
+        // timeout / User-Agent / retry.
+        let response = try await client.get(sourceURL)
+        guard response.isOK else {
             throw CaskDatabaseError.downloadFailed
         }
 
-        let casks = try JSONDecoder().decode([BrewCask].self, from: data)
+        let casks = try JSONDecoder().decode([BrewCask].self, from: response.data)
         try cache?.save(casks)
         return casks
     }

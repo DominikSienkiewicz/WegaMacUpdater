@@ -50,10 +50,10 @@ public struct AntigravityUpdateChecker: Sendable {
     private static let updateAPIBase =
         "https://antigravity-ide-auto-updater-974169037036.us-central1.run.app/api/update"
 
-    private let session: URLSession
+    private let client: HTTPClient
 
-    public init(session: URLSession = .shared) {
-        self.session = session
+    public init(client: HTTPClient = .shared) {
+        self.client = client
     }
 
     public func check(app: ApplicationInfo) async -> ManualOutdatedApp? {
@@ -69,13 +69,9 @@ public struct AntigravityUpdateChecker: Sendable {
 
         guard let url = URL(string: "\(Self.updateAPIBase)/\(platform)/stable/latest") else { return nil }
 
-        var request = URLRequest(url: url)
-        request.setValue("WegaMacUpdater/1.0", forHTTPHeaderField: "User-Agent")
-        request.cachePolicy = .reloadRevalidatingCacheData
-
-        guard let (data, response) = try? await session.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let latest = AntigravityUpdateParser.productVersion(fromUpdateJSON: data),
+        guard let response = try? await client.get(url, enableETag: true),
+              response.statusCode == 200,
+              let latest = AntigravityUpdateParser.productVersion(fromUpdateJSON: response.data),
               isUpgrade(installed: installed, latest: latest) else { return nil }
 
         return ManualOutdatedApp(

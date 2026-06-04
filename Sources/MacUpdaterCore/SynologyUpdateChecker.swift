@@ -41,14 +41,14 @@ public enum SynologyApiParser {
 }
 
 public struct SynologyUpdateChecker: Sendable {
-    private let session: URLSession
+    private let client: HTTPClient
     private let mappings: [String: SynologyCatalogEntry]
 
     public init(
-        session: URLSession = .shared,
+        client: HTTPClient = .shared,
         mappings: [String: SynologyCatalogEntry] = AppCatalog.shared.synologyMappings
     ) {
-        self.session = session
+        self.client = client
         self.mappings = mappings
     }
 
@@ -61,13 +61,9 @@ public struct SynologyUpdateChecker: Sendable {
         let urlString = "https://www.synology.com/api/releaseNote/findChangeLog?identify=\(mapping.identify)&lang=enu"
         guard let url = URL(string: urlString) else { return nil }
 
-        var request = URLRequest(url: url)
-        request.setValue("WegaMacUpdater/1.0", forHTTPHeaderField: "User-Agent")
-        request.cachePolicy = .reloadRevalidatingCacheData
-
-        guard let (data, response) = try? await session.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let latest = SynologyApiParser.latestRelease(from: data),
+        guard let response = try? await client.get(url, enableETag: true),
+              response.statusCode == 200,
+              let latest = SynologyApiParser.latestRelease(from: response.data),
               latest.build > installedBuild else { return nil }
 
         return ManualOutdatedApp(

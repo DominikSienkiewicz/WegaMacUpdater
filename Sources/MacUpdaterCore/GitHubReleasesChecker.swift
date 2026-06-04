@@ -1,14 +1,14 @@
 import Foundation
 
 public struct GitHubReleasesChecker: Sendable {
-    private let session: URLSession
+    private let client: HTTPClient
     private let repos: [String: GitHubCatalogEntry]
 
     public init(
-        session: URLSession = .shared,
+        client: HTTPClient = .shared,
         repos: [String: GitHubCatalogEntry] = AppCatalog.shared.githubRepos
     ) {
-        self.session = session
+        self.client = client
         self.repos = repos
     }
 
@@ -19,14 +19,11 @@ public struct GitHubReleasesChecker: Sendable {
         let urlString = "https://api.github.com/repos/\(mapping.repo)/releases/latest"
         guard let url = URL(string: urlString) else { return nil }
 
-        var request = URLRequest(url: url)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("WegaMacUpdater/1.0", forHTTPHeaderField: "User-Agent")
-        request.cachePolicy = .reloadRevalidatingCacheData
-
-        guard let (data, response) = try? await session.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let release = try? JSONDecoder().decode(GitHubRelease.self, from: data),
+        // ETag-conditional: a 304 reuses the cached body and does not count against
+        // GitHub's unauthenticated 60-req/h rate limit.
+        guard let response = try? await client.get(url, headers: ["Accept": "application/vnd.github+json"], enableETag: true),
+              response.statusCode == 200,
+              let release = try? JSONDecoder().decode(GitHubRelease.self, from: response.data),
               !release.draft, !release.prerelease else { return nil }
 
         let latest = normalizeGitTag(release.tagName)

@@ -90,10 +90,10 @@ public struct ParallelsUpdateChecker: Sendable {
         return URL(string: "https://update.parallels.com/desktop/v\(major)/parallels/parallels_updates.xml")
     }
 
-    private let session: URLSession
+    private let client: HTTPClient
 
-    public init(session: URLSession = .shared) {
-        self.session = session
+    public init(client: HTTPClient = .shared) {
+        self.client = client
     }
 
     public func check(app: ApplicationInfo) async -> ManualOutdatedApp? {
@@ -101,13 +101,9 @@ public struct ParallelsUpdateChecker: Sendable {
               let installed = app.version, !installed.isEmpty,
               let url = Self.updateURL(forShortVersion: installed) else { return nil }
 
-        var request = URLRequest(url: url)
-        request.setValue("WegaMacUpdater/1.0", forHTTPHeaderField: "User-Agent")
-        request.cachePolicy = .reloadRevalidatingCacheData
-
-        guard let (data, response) = try? await session.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let latest = ParallelsUpdateParser.latest(fromUpdatesXML: data),
+        guard let response = try? await client.get(url, enableETag: true),
+              response.statusCode == 200,
+              let latest = ParallelsUpdateParser.latest(fromUpdatesXML: response.data),
               isUpgrade(installed: installed, latest: latest.shortVersion) else { return nil }
 
         return ManualOutdatedApp(

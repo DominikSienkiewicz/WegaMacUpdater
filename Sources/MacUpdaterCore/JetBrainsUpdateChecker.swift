@@ -1,14 +1,14 @@
 import Foundation
 
 public struct JetBrainsUpdateChecker: Sendable {
-    private let session: URLSession
+    private let client: HTTPClient
     private let products: [String: JetBrainsCatalogEntry]
 
     public init(
-        session: URLSession = .shared,
+        client: HTTPClient = .shared,
         products: [String: JetBrainsCatalogEntry] = AppCatalog.shared.jetbrainsProducts
     ) {
-        self.session = session
+        self.client = client
         self.products = products
     }
 
@@ -19,12 +19,9 @@ public struct JetBrainsUpdateChecker: Sendable {
         let urlString = "https://data.services.jetbrains.com/products/releases?code=\(product.code)&latest=true&type=release"
         guard let url = URL(string: urlString) else { return nil }
 
-        var request = URLRequest(url: url)
-        request.cachePolicy = .reloadRevalidatingCacheData
-
-        guard let (data, response) = try? await session.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let releases = try? JSONDecoder().decode([String: [JetBrainsRelease]].self, from: data),
+        guard let response = try? await client.get(url, enableETag: true),
+              response.statusCode == 200,
+              let releases = try? JSONDecoder().decode([String: [JetBrainsRelease]].self, from: response.data),
               let latest = releases[product.code]?.first?.version else { return nil }
 
         let installed = app.version ?? ""

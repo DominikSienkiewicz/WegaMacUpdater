@@ -1,11 +1,11 @@
 import Foundation
 
 public struct SparkleUpdateChecker: Sendable {
-    private let session: URLSession
+    private let client: HTTPClient
     private let feedOverrides: [String: String]
 
-    public init(session: URLSession = .shared, feedOverrides: [String: String] = SparkleFeedOverrides.defaults) {
-        self.session = session
+    public init(client: HTTPClient = .shared, feedOverrides: [String: String] = SparkleFeedOverrides.defaults) {
+        self.client = client
         self.feedOverrides = feedOverrides
     }
 
@@ -14,10 +14,10 @@ public struct SparkleUpdateChecker: Sendable {
         let feedURL = resolveFeedURL(for: app)
         guard let feedURL else { return nil }
 
-        guard let (data, response) = try? await session.data(from: feedURL),
-              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        guard let response = try? await client.get(feedURL, enableETag: true),
+              response.statusCode == 200 else { return nil }
 
-        guard let latest = AppcastParser.parse(data: data) else { return nil }
+        guard let latest = AppcastParser.parse(data: response.data) else { return nil }
 
         let installed = app.version ?? ""
         guard !installed.isEmpty, latest != installed else { return nil }

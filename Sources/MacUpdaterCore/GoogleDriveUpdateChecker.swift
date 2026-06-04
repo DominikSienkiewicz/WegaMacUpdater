@@ -57,10 +57,10 @@ public enum GoogleDriveUpdateParser {
 public struct GoogleDriveUpdateChecker: Sendable {
     public static let bundleIdentifier = "com.google.drivefs"
 
-    private let session: URLSession
+    private let client: HTTPClient
 
-    public init(session: URLSession = .shared) {
-        self.session = session
+    public init(client: HTTPClient = .shared) {
+        self.client = client
     }
 
     public func check(app: ApplicationInfo) async -> ManualOutdatedApp? {
@@ -73,15 +73,10 @@ public struct GoogleDriveUpdateChecker: Sendable {
         let installed = bundleVersion(at: app.path) ?? app.version ?? ""
         guard !installed.isEmpty else { return nil }
 
-        var request = URLRequest(url: GoogleDriveUpdateParser.omahaEndpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/xml", forHTTPHeaderField: "Content-Type")
-        request.httpBody = Data(GoogleDriveUpdateParser.omahaRequestBody(installedVersion: installed).utf8)
-        request.cachePolicy = .reloadRevalidatingCacheData
-
-        guard let (data, response) = try? await session.data(for: request),
-              (response as? HTTPURLResponse)?.statusCode == 200,
-              let latest = GoogleDriveUpdateParser.latestVersion(fromOmahaResponse: data),
+        let body = Data(GoogleDriveUpdateParser.omahaRequestBody(installedVersion: installed).utf8)
+        guard let response = try? await client.post(GoogleDriveUpdateParser.omahaEndpoint, body: body, contentType: "application/xml"),
+              response.statusCode == 200,
+              let latest = GoogleDriveUpdateParser.latestVersion(fromOmahaResponse: response.data),
               isUpgrade(installed: installed, latest: latest) else { return nil }
 
         return ManualOutdatedApp(
