@@ -119,53 +119,84 @@ public final class ProcessRunner: ProcessRunning, Sendable {
 
         let stdoutBuffer = LockedData()
         let stderrBuffer = LockedData()
+        let stdoutHandle = stdoutPipe.fileHandleForReading
+        let stderrHandle = stderrPipe.fileHandleForReading
 
-        stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+        // Each pipe is drained exclusively by its readability handler, all the way to
+        // EOF (an empty `availableData`). The descriptor is never read from a second
+        // place (no `readDataToEndOfFile` after the loop), so there is no window where
+        // two readers race over the same bytes. `ioGroup` tracks the two EOFs so the
+        // success path can wait until every byte has been delivered.
+        let ioGroup = DispatchGroup()
+        ioGroup.enter()
+        ioGroup.enter()
+
+        stdoutHandle.readabilityHandler = { handle in
             let data = handle.availableData
-            guard !data.isEmpty else { return }
+            guard !data.isEmpty else {
+                handle.readabilityHandler = nil
+                ioGroup.leave()
+                return
+            }
             stdoutBuffer.append(data)
             if let chunk = String(data: data, encoding: .utf8) {
                 onOutput?(.stdout(chunk))
             }
         }
 
-        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+        stderrHandle.readabilityHandler = { handle in
             let data = handle.availableData
-            guard !data.isEmpty else { return }
+            guard !data.isEmpty else {
+                handle.readabilityHandler = nil
+                ioGroup.leave()
+                return
+            }
             stderrBuffer.append(data)
             if let chunk = String(data: data, encoding: .utf8) {
                 onOutput?(.stderr(chunk))
             }
         }
 
-        defer {
-            stdoutPipe.fileHandleForReading.readabilityHandler = nil
-            stderrPipe.fileHandleForReading.readabilityHandler = nil
+        // Wake instantly when the process exits instead of polling `isRunning` on a
+        // sleep loop.
+        let exitSemaphore = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in
+            exitSemaphore.signal()
         }
 
         try process.run()
 
-        let startedAt = Date()
-        while process.isRunning {
-            if Task.isCancelled {
-                process.terminate()
-                process.waitUntilExit()
-                throw ProcessRunnerError.cancelled
-            }
-
-            if let timeout = request.timeout, Date().timeIntervalSince(startedAt) >= timeout {
-                process.terminate()
-                process.waitUntilExit()
-                throw ProcessRunnerError.timedOut(seconds: timeout)
-            }
-
-            Thread.sleep(forTimeInterval: 0.05)
+        let detachHandlers: () -> Void = {
+            stdoutHandle.readabilityHandler = nil
+            stderrHandle.readabilityHandler = nil
         }
 
-        let stdoutRemainder = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        let stderrRemainder = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-        stdoutBuffer.append(stdoutRemainder)
-        stderrBuffer.append(stderrRemainder)
+        // Abandon a still-running process: terminate, let it die, drop the handlers,
+        // discard partial output, and surface `error`. We don't wait on `ioGroup`
+        // here — a leaked grandchild could hold the pipe open and EOF would never come.
+        let abort: (ProcessRunnerError) throws -> Never = { error in
+            process.terminate()
+            exitSemaphore.wait()
+            detachHandlers()
+            throw error
+        }
+
+        let startedAt = Date()
+        // Block on the exit semaphore in short slices so cancellation and timeout are
+        // still observed; the slice is a watchdog interval, not a busy-wait — a normal
+        // exit unblocks immediately via `terminationHandler`.
+        while exitSemaphore.wait(timeout: .now() + 0.1) == .timedOut {
+            if Task.isCancelled {
+                try abort(.cancelled)
+            }
+            if let timeout = request.timeout, Date().timeIntervalSince(startedAt) >= timeout {
+                try abort(.timedOut(seconds: timeout))
+            }
+        }
+
+        // Process has exited; wait for both handlers to observe EOF so every buffered
+        // byte is captured before we read the buffers.
+        ioGroup.wait()
 
         return ProcessResult(
             exitCode: process.terminationStatus,
