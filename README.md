@@ -87,6 +87,8 @@ MacUpdaterCore (library target — no SwiftUI dependency)
 ├── ApplicationScanner   — filesystem scan, Info.plist parsing, brew/mas tagging
 ├── BrewService          — brew outdated (greedy), install, uninstall, cask versions
 ├── MasService           — mas outdated, list, search, upgrade
+├── UpdatePlanner        — pure orchestration logic lifted out of UpdateView: builds the selectable outdated list (with load-bearing source-tagged keys), routes a selection back to per-manager upgrade commands, dedupes manual results by source priority, and summarises upgrade outcomes — all unit-tested without SwiftUI
+├── MigrationPlanner     — pure orchestration logic lifted out of MigrationView: partitions scanned apps into matchable / App-Store / unmatched, filters the migration pool, builds `~/Library` leftover paths, and owns `DuplicateRemoval` (npm↔brew command preview) — unit-tested without SwiftUI
 ├── AppCatalog           — single source of truth for every per-app mapping (GitHub repos, JetBrains IDE codes, Synology identifiers, Sparkle feed overrides); decoded from the bundled `Resources/app-catalog.json` and overlaid (if present) by a user-writable `~/Library/Application Support/WegaMacUpdater/app-catalog.json`, so the catalog can be refreshed out-of-band without a new app build
 ├── JetBrainsUpdateChecker — data.services.jetbrains.com, 14 IDE mappings (from AppCatalog)
 ├── GitHubReleasesChecker  — api.github.com/releases/latest, 12 app mappings (from AppCatalog)

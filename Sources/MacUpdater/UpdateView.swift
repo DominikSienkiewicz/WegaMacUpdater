@@ -27,16 +27,9 @@ struct UpdateView: View {
     @State private var restartBusy:        String?
     @State private var caskIconPaths:      [String: URL]     = [:]
 
-    // Unique keys: "f:<name>", "c:<name>", "a:<id>", "n:<name>"
+    // Keys carry a source tag ("f:", "c:", "a:", "n:"); see UpdatePlanner.
     private var allItems: [OutdatedItem] {
-        var items: [OutdatedItem] = []
-        if let b = brewOutdated {
-            items += b.formulae.map { OutdatedItem(key: "f:\($0.name)", name: $0.name, from: $0.installedVersions.first, to: $0.currentVersion, kind: .formula) }
-            items += b.casks.map    { OutdatedItem(key: "c:\($0.name)", name: $0.name, from: $0.installedVersions.first, to: $0.currentVersion, kind: .cask)    }
-        }
-        items += masOutdated.map { OutdatedItem(key: "a:\($0.appStoreID)", name: $0.name, from: $0.installedVersion, to: $0.currentVersion, kind: .appStore) }
-        items += npmOutdated.map { OutdatedItem(key: "n:\($0.name)", name: $0.name, from: $0.installedVersion, to: $0.latestVersion, kind: .npm) }
-        return items
+        UpdatePlanner.outdatedItems(brew: brewOutdated, mas: masOutdated, npm: npmOutdated)
     }
 
     var body: some View {
@@ -191,14 +184,15 @@ struct UpdateView: View {
     }
 
     private var selectAllSymbol: String {
-        if selected.isEmpty { return "square" }
-        if selected.count == allItems.count { return "checkmark.square.fill" }
-        return "minus.square.fill"
+        switch UpdatePlanner.selectAllState(selectedCount: selected.count, totalCount: allItems.count) {
+        case .none:    return "square"
+        case .all:     return "checkmark.square.fill"
+        case .partial: return "minus.square.fill"
+        }
     }
 
     private func toggleAll() {
-        if selected.count == allItems.count { selected.removeAll() }
-        else { selected = Set(allItems.map(\.key)) }
+        selected = UpdatePlanner.toggledAll(selected: selected, allKeys: allItems.map(\.key))
     }
 
     // MARK: Async actions
@@ -314,7 +308,7 @@ struct UpdateView: View {
         let parallelsChecker = ParallelsUpdateChecker()
         let googleDriveChecker = GoogleDriveUpdateChecker()
         let chatGPTChecker = ChatGPTUpdateChecker()
-        var byPath: [String: ManualOutdatedApp] = [:]
+        var collected: [ManualOutdatedApp] = []
 
         await withTaskGroup(of: ManualOutdatedApp?.self) { group in
             for app in appsToCheck {
@@ -349,15 +343,10 @@ struct UpdateView: View {
             }
             for await item in group {
                 guard let item else { continue }
-                let key = item.path.path
-                if let existing = byPath[key] {
-                    if item.source.priority > existing.source.priority { byPath[key] = item }
-                } else {
-                    byPath[key] = item
-                }
+                collected.append(item)
             }
         }
-        return byPath.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        return UpdatePlanner.dedupedByPriority(collected)
     }
 
     private func installManual(token: String) async {
@@ -404,12 +393,12 @@ struct UpdateView: View {
         showLog = true
         onWegaState?(WegaState(pose: .sniff, line: "Aktualizuję, chwila…"))
 
-        let itemsToUpdate = selected.isEmpty ? Set(allItems.map(\.key)) : selected
-        let formulaNames  = itemsToUpdate.compactMap { $0.hasPrefix("f:") ? String($0.dropFirst(2)) : nil }
-        let caskNames     = itemsToUpdate.compactMap { $0.hasPrefix("c:") ? String($0.dropFirst(2)) : nil }
-        let npmNames      = itemsToUpdate.compactMap { $0.hasPrefix("n:") ? String($0.dropFirst(2)) : nil }
-        let hasMasItems   = itemsToUpdate.contains { $0.hasPrefix("a:") }
-        let n             = itemsToUpdate.count
+        let plan          = UpdatePlanner.plan(selectedKeys: selected, allKeys: allItems.map(\.key))
+        let formulaNames  = plan.formulaNames
+        let caskNames     = plan.caskNames
+        let npmNames      = plan.npmNames
+        let hasMasItems   = plan.includesMas
+        let n             = plan.count
 
         // Pre-capture which casks being updated are currently running
         var candidates: [RestartInfo] = []
@@ -461,10 +450,10 @@ struct UpdateView: View {
 
         updating = false
 
-        let failedTokens = outcomes.flatMap(\.failedTokens)
-        let anyFailure = outcomes.contains { !$0.isSuccessful }
-        let needsSudoPassword = outcomes.contains { $0.requiresSudoPassword }
-        if anyFailure {
+        let summary = UpdatePlanner.summarize(outcomes: outcomes)
+        let failedTokens = summary.failedTokens
+        let needsSudoPassword = summary.needsSudoPassword
+        if summary.anyFailure {
             let baseDetail = failedTokens.isEmpty
                 ? "Brew zgłosił błąd — sprawdź log poniżej."
                 : "Nie udało się: \(failedTokens.joined(separator: ", ")). Szczegóły w logu."
@@ -574,16 +563,6 @@ struct UpdateView: View {
 }
 
 // MARK: - Supporting types
-
-private struct OutdatedItem: Identifiable {
-    enum Kind { case formula, cask, appStore, npm }
-    let key:  String
-    var id:   String { key }
-    let name: String
-    let from: String?
-    let to:   String?
-    let kind: Kind
-}
 
 private struct UpdateSection: View {
     let title:     String

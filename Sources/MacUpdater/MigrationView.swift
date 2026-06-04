@@ -25,14 +25,10 @@ struct MigrationView: View {
     @State private var dupBusy: String? = nil
 
     private var matchable: [ApplicationInfo] {
-        candidates.filter { app in
-            guard let token = app.caskToken else { return false }
-            return !migrated.contains(token)
-        }
+        MigrationPlanner.matchable(candidates: candidates, migrated: migrated)
     }
     private var unmatched: [ApplicationInfo] {
-        let masIDs = Set(masCandidates.map { $0.app.id })
-        return candidates.filter { $0.caskToken == nil && !masIDs.contains($0.id) }
+        MigrationPlanner.unmatched(candidates: candidates, masAppIDs: Set(masCandidates.map { $0.app.id }))
     }
 
     var body: some View {
@@ -339,7 +335,7 @@ struct MigrationView: View {
                 }
             }
             // Exclude brew-managed apps AND apps already in the App Store
-            let migrationPool = all.filter { !$0.isManagedByBrew && !$0.isManagedByMas }
+            let migrationPool = MigrationPlanner.migrationPool(all)
             candidates = migrationPool
 
             // Parallel App Store search for apps with no Homebrew match
@@ -436,14 +432,10 @@ struct MigrationView: View {
     }
 
     private func scanLibraryLeftovers(bundleId: String) -> [URL] {
-        let lib = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library")
-        let candidates: [URL] = [
-            lib.appendingPathComponent("Application Support/\(bundleId)"),
-            lib.appendingPathComponent("Preferences/\(bundleId).plist"),
-            lib.appendingPathComponent("Caches/\(bundleId)"),
-            lib.appendingPathComponent("Saved Application State/\(bundleId).savedState"),
-            lib.appendingPathComponent("Containers/\(bundleId)"),
-        ]
+        let candidates = MigrationPlanner.libraryLeftoverCandidates(
+            bundleId: bundleId,
+            home: FileManager.default.homeDirectoryForCurrentUser
+        )
         return candidates.filter { FileManager.default.fileExists(atPath: $0.path) }
     }
 
@@ -553,25 +545,6 @@ struct MigrationView: View {
             )
         }
         dupBusy = nil
-    }
-}
-
-struct DuplicateRemoval: Identifiable, Equatable {
-    enum Side: Equatable { case npm, brew }
-    let dup: NpmBrewDuplicate
-    let side: Side
-    var id: String { busyKey }
-    var busyKey: String {
-        switch side {
-        case .npm:  return "npm:\(dup.npmPackage)"
-        case .brew: return "brew:\(dup.brewToken)"
-        }
-    }
-    var commandPreview: String {
-        switch side {
-        case .npm:  return "npm uninstall -g \(dup.npmPackage)"
-        case .brew: return "brew uninstall \(dup.brewToken)"
-        }
     }
 }
 
