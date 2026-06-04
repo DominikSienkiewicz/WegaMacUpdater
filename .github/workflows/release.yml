@@ -24,6 +24,11 @@ jobs:
   release:
     name: Build & publish release
     runs-on: macos-15
+    # The `secrets` context can't be used in step `if:` conditions, so map presence to
+    # job-level booleans here (job `env` may read `secrets`) and gate steps on `env`.
+    env:
+      HAS_DEVELOPER_ID: ${{ secrets.DEVELOPER_ID_CERT_P12 != '' }}
+      HAS_NOTARY_KEY: ${{ secrets.AC_API_KEY_P8 != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,7 +54,7 @@ jobs:
         run: swift test
 
       - name: Import Developer ID certificate
-        if: ${{ secrets.DEVELOPER_ID_CERT_P12 != '' }}
+        if: ${{ env.HAS_DEVELOPER_ID == 'true' }}
         env:
           CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
           CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
@@ -76,7 +81,7 @@ jobs:
           fi
 
       - name: Notarize & staple
-        if: ${{ secrets.AC_API_KEY_P8 != '' }}
+        if: ${{ env.HAS_NOTARY_KEY == 'true' }}
         env:
           AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
           AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
