@@ -219,6 +219,11 @@ public enum Translations {
         // English but must be present so the completeness check passes (no silent fallback).
         "Brew": "Brew",
         "App Store": "App Store",
+        "Sprawdź aktualizacje Wegi": "Check for Wega updates",
+        "Masz najnowszą wersję Wegi": "You have the latest version of Wega",
+        "Dostępna wersja %@": "Version %@ available",
+        "Pobierz i zainstaluj": "Download and install",
+        "Zobacz wydanie": "View release",
         "Aktualizacje": "Update",
         "Migracja": "Migration",
         "Spis aplikacji": "Inventory",

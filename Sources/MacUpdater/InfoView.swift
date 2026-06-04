@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import MacUpdaterCore
 
 struct InfoView: View {
@@ -7,6 +8,9 @@ struct InfoView: View {
     @EnvironmentObject private var localization: LocalizationManager
     @EnvironmentObject private var policies: UpdatePolicyStore
     @State private var diagnostics: DiagnosticsResult? = nil
+    @State private var selfUpdate: WegaSelfUpdateChecker.Result? = nil
+    @State private var checkingSelfUpdate = false
+    @State private var downloadingUpdate = false
     @State private var touchIDState: TouchIDSudoConfigurator.State = .notSupported
     @State private var enablingTouchID = false
     @State private var touchIDError: String? = nil
@@ -33,6 +37,11 @@ struct InfoView: View {
             onWegaState?(WegaState(pose: .idle, line: tr("Oto co o sobie wiem.")))
             if diagnostics == nil {
                 Task { await loadDiagnostics() }
+            }
+            // Auto-check for a Wega update once per appearance; the ETag-conditional request
+            // makes repeat visits cheap (a 304 doesn't count against GitHub's rate limit).
+            if selfUpdate == nil && !checkingSelfUpdate {
+                Task { await checkSelfUpdate() }
             }
             touchIDState = TouchIDSudoConfigurator.currentState()
         }
@@ -279,6 +288,74 @@ struct InfoView: View {
         try? task.run()
     }
 
+    // MARK: - Self-update (Wega dogfooding its own GitHub releases)
+
+    @ViewBuilder
+    private var selfUpdateRow: some View {
+        HStack(spacing: 10) {
+            switch selfUpdate {
+            case .updateAvailable(let version, let assetURL, let releaseURL):
+                Image(systemName: "arrow.down.circle.fill").foregroundStyle(Color.wegaHoney)
+                Text(trf("Dostępna wersja %@", version)).font(.system(size: 12, weight: .semibold))
+                Spacer()
+                Link(tr("Zobacz wydanie"), destination: releaseURL).font(.system(size: 12))
+                Button {
+                    Task { await downloadAndOpen(assetURL) }
+                } label: {
+                    if downloadingUpdate { ProgressView().controlSize(.small) }
+                    else { Text(tr("Pobierz i zainstaluj")) }
+                }
+                .disabled(downloadingUpdate)
+            case .upToDate:
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Text(tr("Masz najnowszą wersję Wegi")).font(.system(size: 12)).foregroundStyle(.secondary)
+                Spacer()
+                selfUpdateCheckButton
+            case .failed:
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                Text(tr("Nie udało się sprawdzić aktualizacji")).font(.system(size: 12)).foregroundStyle(.secondary)
+                Spacer()
+                selfUpdateCheckButton
+            case nil:
+                Spacer()
+                selfUpdateCheckButton
+            }
+        }
+    }
+
+    private var selfUpdateCheckButton: some View {
+        Button {
+            Task { await checkSelfUpdate() }
+        } label: {
+            if checkingSelfUpdate { ProgressView().controlSize(.small) }
+            else { Text(tr("Sprawdź aktualizacje Wegi")) }
+        }
+        .disabled(checkingSelfUpdate)
+    }
+
+    private func checkSelfUpdate() async {
+        checkingSelfUpdate = true
+        defer { checkingSelfUpdate = false }
+        selfUpdate = await WegaSelfUpdateChecker().check()
+    }
+
+    /// Download the release asset to a temp file and hand it to the system (Installer for
+    /// `.pkg`, DiskImageMounter for `.dmg`). On any failure, fall back to opening the asset
+    /// URL in the browser so the user can still grab it.
+    private func downloadAndOpen(_ url: URL) async {
+        downloadingUpdate = true
+        defer { downloadingUpdate = false }
+        do {
+            let (tmp, _) = try await URLSession.shared.download(from: url)
+            let dest = FileManager.default.temporaryDirectory.appendingPathComponent(url.lastPathComponent)
+            try? FileManager.default.removeItem(at: dest)
+            try FileManager.default.moveItem(at: tmp, to: dest)
+            NSWorkspace.shared.open(dest)
+        } catch {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     private func enableTouchID() async {
         enablingTouchID = true
         touchIDError = nil
@@ -344,6 +421,12 @@ struct InfoView: View {
                     Spacer()
                 }
                 .padding(14)
+
+                Divider().opacity(0.5)
+
+                selfUpdateRow
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
 
                 Divider().opacity(0.5)
 

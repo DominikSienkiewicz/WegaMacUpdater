@@ -104,6 +104,7 @@ MacUpdaterCore (library target — no SwiftUI dependency)
 ├── CatalogRefresher     — fetches the overlay catalog from a remote JSON source over the shared `HTTPClient` (ETag-conditional), **validates it by decoding before writing**, then writes it atomically to `AppCatalog.overlayURL` — so a malformed or hostile body can never clobber a good overlay. The source URL is injected; wiring a canonical endpoint + trigger is a deliberate next step, not a hard-coded default
 ├── JetBrainsUpdateChecker — data.services.jetbrains.com, 14 IDE mappings (from AppCatalog)
 ├── GitHubReleasesChecker  — api.github.com/releases/latest, 12 app mappings (from AppCatalog)
+├── WegaSelfUpdateChecker  — Wega's own update check: latest GitHub Release tag vs `AppMetadata.version`, resolves the published `.dmg`/`.pkg` asset (surfaced in the Info tab). Pure, HTTPClient-injectable, unit-tested
 ├── SynologyUpdateChecker  — synology.com/api/releaseNote/findChangeLog, compares build number from versionString (`4.0.3-17892` → `17892`) against CFBundleVersion
 ├── AntigravityUpdateChecker — Google Antigravity IDE update endpoint; reads the product version from the download URL path (cask is stale, app self-updates)
 ├── ParallelsUpdateChecker  — `update.parallels.com/desktop/v<major>/parallels/parallels_updates.xml`; major derived from installed bundle, `<Major>.<Minor>.<SubMinor>` read from the feed (cask `parallels` lags, app self-updates)
@@ -163,7 +164,7 @@ Open `Package.swift` directly in Xcode for the full IDE experience. A signed `.a
 
 ### Version — single source of truth
 
-The app version lives in exactly one place: `AppMetadata.version` (`Sources/MacUpdaterCore/AppMetadata.swift`). The running app reads it (falling back to it when no bundle `Info.plist` is present, e.g. under `swift run`), and `scripts/build-pkg.sh` extracts it from there when stamping the generated `Info.plist` and the `.pkg` — so bumping the version is a one-line edit.
+The app version lives in exactly one place: `AppMetadata.version` (`Sources/MacUpdaterCore/AppMetadata.swift`). The running app reads it (falling back to it when no bundle `Info.plist` is present, e.g. under `swift run`), and `scripts/build-pkg.sh` extracts it from there when stamping the generated `Info.plist` and the `.pkg` — so bumping the version is a one-line edit. The release workflow **enforces** this: a tag `vX.Y.Z` whose version doesn't equal `AppMetadata.version` fails the build before anything is published.
 
 ## Distribution
 
@@ -173,6 +174,21 @@ Intended channel: Developer ID, outside the Mac App Store.
 - Hardened Runtime
 - Notarization
 - DMG placing `Wega Mac Updater.app` in `/Applications`
+
+### Cutting a release
+
+`scripts/build-pkg.sh` builds a universal, ad-hoc-or-signed `.pkg` **and** a drag-to-Applications `.dmg`. Pushing a version tag drives the rest:
+
+```bash
+# bump AppMetadata.version first, then:
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+`.github/workflows/release.yml` (on `push: tags: v*`) verifies tag == `AppMetadata.version`, runs the tests, builds the artifacts, and publishes a GitHub Release with the `.pkg` + `.dmg`. **Signing and notarization are optional and activate automatically once the secrets exist** — until then the job still publishes *unsigned* artifacts so the pipeline is verifiable end-to-end without an Apple Developer account. Secrets (all optional): `DEVELOPER_ID_IDENTITY`, `DEVELOPER_ID_CERT_P12`, `DEVELOPER_ID_CERT_PASSWORD`, `KEYCHAIN_PASSWORD`, and `AC_API_KEY_ID` / `AC_API_ISSUER_ID` / `AC_API_KEY_P8` for `notarytool`.
+
+### Self-update
+
+Wega updates **itself** by dogfooding the same machinery it uses for everyone else. `WegaSelfUpdateChecker` (MacUpdaterCore) asks the GitHub Releases API for the latest tag, compares it against `AppMetadata.version` with the shared `VersionComparison` logic, and resolves the published installer asset (preferring the `.dmg`, falling back to the `.pkg`). The **Info tab** surfaces it: it auto-checks once when the tab opens (ETag-conditional, so revisits are free) and offers a manual re-check; when a newer release exists, it shows the version and a "Download and install" button (downloads the asset and hands it to Installer / DiskImageMounter, falling back to opening the asset in the browser) plus a link to the release notes. No embedded framework, no appcast to host. (Sparkle-style silent background updates remain a possible later upgrade; the runtime cost — embedding the framework in the hand-rolled bundle, EdDSA-signed appcast hosting — isn't worth it for a tool you open deliberately.)
 
 The future privileged helper lives inside the bundle at `Contents/Library/LaunchDaemons` and registers via `SMAppService.daemon(plistName:)`.
 

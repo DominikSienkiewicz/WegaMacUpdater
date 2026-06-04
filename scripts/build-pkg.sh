@@ -34,6 +34,7 @@ BUILD_DIR="$(pwd)/.build/pkg-staging"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"
 OUTPUT_PKG="$(pwd)/build/$APP_NAME.pkg"
+OUTPUT_DMG="$(pwd)/build/$APP_NAME.dmg"
 
 echo "→ Czyszczę staging..."
 rm -rf "$BUILD_DIR"
@@ -137,8 +138,28 @@ pkgbuild \
     --version "$VERSION" \
     "$OUTPUT_PKG"
 
+# ---------------------------------------------------------------------------
+echo "→ Tworzę DMG (drag-to-Applications)..."
+DMG_STAGING="$BUILD_DIR/dmg"
+rm -rf "$DMG_STAGING"
+mkdir -p "$DMG_STAGING"
+cp -R "$APP_BUNDLE" "$DMG_STAGING/"
+ln -s /Applications "$DMG_STAGING/Applications"
+rm -f "$OUTPUT_DMG"
+hdiutil create \
+    -volname "$APP_NAME" \
+    -srcfolder "$DMG_STAGING" \
+    -fs HFS+ \
+    -format UDZO \
+    -ov \
+    "$OUTPUT_DMG" >/dev/null
+if [[ -n "$SIGN_IDENTITY" ]]; then
+    codesign --force --sign "$SIGN_IDENTITY" "$OUTPUT_DMG"
+fi
+
 echo ""
 echo "✅ Gotowe: $OUTPUT_PKG"
+echo "✅ Gotowe: $OUTPUT_DMG"
 if [[ -z "$SIGN_IDENTITY" ]]; then
     echo ""
     echo "⚠️  PKG jest niepodpisany (ad-hoc). Żeby go dystrybuować:"

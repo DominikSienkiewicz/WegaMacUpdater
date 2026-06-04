@@ -1,0 +1,110 @@
+name: Release
+
+# Cuts a GitHub Release when a version tag is pushed (e.g. `git tag v0.1.0 && git push --tags`).
+#
+# Signing + notarization are OPTIONAL and activate automatically once the relevant repo
+# secrets exist. Until then the job still builds and publishes UNSIGNED (ad-hoc) artifacts so
+# the whole pipeline is verifiable end-to-end without an Apple Developer account.
+#
+# Secrets (all optional):
+#   DEVELOPER_ID_IDENTITY        — e.g. "Developer ID Application: Name (TEAMID)"
+#   DEVELOPER_ID_CERT_P12        — base64 of the exported .p12
+#   DEVELOPER_ID_CERT_PASSWORD   — password for the .p12
+#   KEYCHAIN_PASSWORD            — any throwaway password for the temp keychain
+#   AC_API_KEY_ID / AC_API_ISSUER_ID / AC_API_KEY_P8 — App Store Connect API key for notarytool
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write   # required to create the release and upload assets
+
+jobs:
+  release:
+    name: Build & publish release
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select latest stable Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      # Single source of truth: the tag must equal AppMetadata.version (same extraction
+      # build-pkg.sh uses). A mismatch fails fast before anything is built or published.
+      - name: Verify tag matches AppMetadata.version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VERSION="$(sed -n 's/.*static let version = "\(.*\)".*/\1/p' Sources/MacUpdaterCore/AppMetadata.swift)"
+          echo "tag=$TAG appVersion=$VERSION"
+          if [[ "$TAG" != "$VERSION" ]]; then
+            echo "::error::Tag v$TAG does not match AppMetadata.version $VERSION. Bump the version or fix the tag."
+            exit 1
+          fi
+
+      - name: Build & test
+        run: swift test
+
+      - name: Import Developer ID certificate
+        if: ${{ secrets.DEVELOPER_ID_CERT_P12 != '' }}
+        env:
+          CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+
+      - name: Build artifacts (.pkg + .dmg)
+        env:
+          SIGN_IDENTITY: ${{ secrets.DEVELOPER_ID_IDENTITY }}
+        run: |
+          if [[ -n "$SIGN_IDENTITY" ]]; then
+            ./scripts/build-pkg.sh "$SIGN_IDENTITY"
+          else
+            echo "::warning::No DEVELOPER_ID_IDENTITY secret — building UNSIGNED ad-hoc artifacts (not distributable to other Macs)."
+            ./scripts/build-pkg.sh
+          fi
+
+      - name: Notarize & staple
+        if: ${{ secrets.AC_API_KEY_P8 != '' }}
+        env:
+          AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
+          AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
+          AC_API_KEY_P8: ${{ secrets.AC_API_KEY_P8 }}
+        run: |
+          echo "$AC_API_KEY_P8" > "$RUNNER_TEMP/ac_api.p8"
+          for artifact in build/WegaMacUpdater.pkg build/WegaMacUpdater.dmg; do
+            echo "→ Notarizing $artifact"
+            xcrun notarytool submit "$artifact" \
+              --key "$RUNNER_TEMP/ac_api.p8" \
+              --key-id "$AC_API_KEY_ID" \
+              --issuer "$AC_API_ISSUER_ID" \
+              --wait
+            xcrun stapler staple "$artifact"
+          done
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SIGNED: ${{ secrets.DEVELOPER_ID_IDENTITY != '' }}
+        run: |
+          NOTES="Automated release for ${GITHUB_REF_NAME}."
+          if [[ "$SIGNED" != "true" ]]; then
+            NOTES="$NOTES"$'\n\n'"⚠️ These artifacts are **unsigned** (no Developer ID configured yet). macOS Gatekeeper will warn; for local use only."
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            build/WegaMacUpdater.pkg \
+            build/WegaMacUpdater.dmg \
+            --title "Wega Mac Updater ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --notes "$NOTES"
