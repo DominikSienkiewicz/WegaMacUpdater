@@ -1,28 +1,13 @@
 import SwiftUI
+import MacUpdaterCore
 
 // MARK: - Shared scan-directory helper
 
-/// Returns /Applications, ~/Applications, and their immediate non-.app subdirectories
-/// (vendor folders like /Applications/Bitdefender/ or ~/Applications/JetBrains Toolbox/).
+/// /Applications, ~/Applications, and their immediate non-.app subdirectories.
+/// Implementation lives in `MacUpdaterCore.AppScanDirectories` so the menu-bar agent
+/// shares it.
 func buildScanDirs() -> [URL] {
-    let roots: [URL] = [
-        URL(fileURLWithPath: "/Applications"),
-        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications"),
-    ]
-    var dirs: [URL] = []
-    for root in roots {
-        guard (try? root.checkResourceIsReachable()) == true else { continue }
-        dirs.append(root)
-        let children = (try? FileManager.default.contentsOfDirectory(
-            at: root, includingPropertiesForKeys: [.isDirectoryKey], options: .skipsHiddenFiles
-        )) ?? []
-        for child in children where child.pathExtension != "app" {
-            if (try? child.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
-                dirs.append(child)
-            }
-        }
-    }
-    return dirs
+    AppScanDirectories.all()
 }
 
 struct SectionHeader: View {

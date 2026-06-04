@@ -71,6 +71,9 @@ Full list of every `.app` on the system with source badge (Brew / App Store / Ma
 ### Info
 Real-time diagnostics: Homebrew version, mas-cli version, Privileged Helper status, macOS version, CPU architecture. App version, build, links. License block for bundled open-source tools. **Language card** — switch the interface between **Polski** (default) and **English**; the choice is persisted and applies live. **Ignored & pinned card** — lists every ignore / version-pin rule with a one-click remove. **Touch ID for sudo card** — on Macs with biometry hardware, shows whether `pam_tid.so` is wired into `/etc/pam.d/sudo_local` and offers a one-click enable.
 
+### Menu-bar agent
+A box icon lives in the menu bar, **badged with the number of available updates**. On a configurable schedule (off / hourly / every 6 hours / daily, default every 6 hours) it runs a **read-only** background check — never `brew update`, never a mutation — and posts a notification when new updates appear. The dropdown shows the current status, last-check time, **Check now**, **Open Wega**, the interval picker, and **Quit**. Closing the window keeps the agent running (`applicationShouldTerminateAfterLastWindowClosed → false`); ignore/pin rules are honoured by the background count too. Notifications are gated on a real app bundle, so `swift run` degrades gracefully.
+
 ## Architecture
 
 ```
@@ -82,6 +85,7 @@ WegaMacUpdater (SwiftUI app target)
 ├── InventoryView        — full app catalogue
 ├── InfoView             — diagnostics + about
 ├── SharedViews          — buildScanDirs(), WegaBadge, WegaCard, PackageRow, EmptyHero…
+├── MenuBarAgent / MenuBarScene — menu-bar `MenuBarExtra` (badge + dropdown) driven by `MenuBarAgent` (timer loop, notifications, persisted interval); `AppDelegate` keeps the process alive after the window closes
 └── Localization         — `tr()` / `trf()` route every UI string through `LocalizationManager` (default **Polski**, switchable to **English** from the Info tab, persisted in UserDefaults). Polish is the base text in the views; `Translations.swift` is the single language file holding the English counterparts, with a Polish fallback for any missing key
 
 MacUpdaterCore (library target — no SwiftUI dependency)
@@ -91,6 +95,9 @@ MacUpdaterCore (library target — no SwiftUI dependency)
 ├── HTTPClient           — one shared HTTP client behind all nine checkers + CaskDatabaseClient: uniform 15s/30s timeouts, a single `User-Agent` (`WegaMacUpdater/<version>`), transient-failure retry with exponential backoff (429 + 5xx + network errors), and ETag conditional requests. The GitHub checker enables ETag so a `304 Not Modified` reuses the cached body **and does not count against GitHub's unauthenticated 60-req/h rate limit**. The transport is a protocol seam (`HTTPTransport`) so the retry/ETag logic is unit-tested with a fake, no network
 ├── ManualCheckResult    — every manual checker returns `.notApplicable` / `.upToDate` / `.outdated` / `.failed` instead of a bare `Optional`, so a network failure is no longer indistinguishable from "current". `UpdatePlanner.scanState` folds the totals into `upToDate` / `outdated` / `checkFailed` / `partialFailure`, and the Update screen shows "couldn't check — check your connection" instead of a false "everything up to date" when offline
 ├── UpdatePlanner        — pure orchestration logic lifted out of UpdateView: builds the selectable outdated list (with load-bearing source-tagged keys), routes a selection back to per-manager upgrade commands, dedupes manual results by source priority, summarises upgrade outcomes, and derives the post-scan `ScanState` — all unit-tested without SwiftUI
+├── ManualUpdateScanner  — runs all eight manual checkers + the brew-cask version check over every installed app and dedupes by source priority; shared by the Update screen and the menu-bar agent (one implementation, no divergence). `AppScanDirectories` provides the scan roots
+├── MenuBarUpdateChecker  — read-only count of available updates (brew/mas/npm + ManualUpdateScanner, with policies applied) for the menu-bar badge and notifications; never mutates the system
+├── UpdateSchedule       — pure scheduling decisions (`shouldCheck` / `secondsUntilNextCheck`) + `CheckInterval` (off / hourly / 6h / daily), unit-tested without timers
 ├── UpdatePolicy         — per-app ignore / version-pin rules ("don't update Zoom", "pin Parallels to 18"). `UpdatePlanner.applyPolicies` filters both the brew/mas/npm list and the manual list: `.ignored` hides an item outright, `.pinned(version:)` hides only updates *beyond* the pinned ceiling (via `isUpgrade`). Identity is the source-tagged key for tracked items and `manual:<name>` for manual apps. Pure and unit-tested; persisted app-side by `UpdatePolicyStore` (UserDefaults JSON)
 ├── MigrationPlanner     — pure orchestration logic lifted out of MigrationView: partitions scanned apps into matchable / App-Store / unmatched, filters the migration pool, builds `~/Library` leftover paths, and owns `DuplicateRemoval` (npm↔brew command preview) — unit-tested without SwiftUI
 ├── AppCatalog           — single source of truth for every per-app mapping (GitHub repos, JetBrains IDE codes, Synology identifiers, Sparkle feed overrides); decoded from the bundled `Resources/app-catalog.json` and overlaid (if present) by a user-writable `~/Library/Application Support/WegaMacUpdater/app-catalog.json`, so the catalog can be refreshed out-of-band without a new app build
