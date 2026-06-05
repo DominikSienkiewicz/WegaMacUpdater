@@ -31,6 +31,7 @@ public enum Translations {
         "Zaktualizuj wybrane (%@)": "Update selected (%@)",
         "Wega się zdrzemnie. Zajrzymy znowu za jakiś czas.": "Wega will take a nap. We'll check again in a while.",
         "Zaznacz wszystko": "Select all",
+        "Zamknij": "Close",
         "%@ z %@ zaznaczonych": "%@ of %@ selected",
         "Homebrew Formulae": "Homebrew Formulae",
         "narzędzia CLI": "CLI tools",
@@ -296,6 +297,16 @@ public enum Translations {
         "Architected & Developed by": "Architected & Developed by",
         "Zgłoś błąd": "Report a bug",
         "Diagnostyka systemu": "System diagnostics",
+        "Katalog aplikacji": "Application catalog",
+        "Wega pobiera mapowania aplikacji (repozytoria GitHub, kody IDE JetBrains, feedy Sparkle) z sieci, "
+            + "więc nowe aplikacje są obsługiwane bez aktualizacji Wegi. Zmiany zastosują się po ponownym uruchomieniu.":
+            "Wega fetches its app mappings (GitHub repos, JetBrains IDE codes, Sparkle feeds) from the network, "
+            + "so new apps are supported without updating Wega itself. Changes take effect after a restart.",
+        "Odśwież katalog": "Refresh catalog",
+        "Zaktualizowano — zrestartuj Wegę, aby zastosować.": "Updated — restart Wega to apply.",
+        "Katalog jest aktualny.": "The catalog is up to date.",
+        "Pobrany katalog był nieprawidłowy — pominięto.": "The downloaded catalog was invalid — skipped.",
+        "Nie udało się pobrać katalogu — sprawdź połączenie.": "Couldn't fetch the catalog — check your connection.",
         "Zewnętrzne narzędzia": "External tools",
         "Środowisko": "Environment",
         "aktywny": "active",

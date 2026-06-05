@@ -266,6 +266,7 @@ struct BannerView: View {
             Button { onClose() } label: { Image(systemName: "xmark") }
                 .buttonStyle(.plain)
                 .foregroundStyle(.tertiary)
+                .accessibilityLabel(tr("Zamknij"))
         }
         .padding(14)
         .background(

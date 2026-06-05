@@ -28,24 +28,28 @@ disabled_rules:
   - implicit_optional_initialization
   - optional_data_string_conversion    # String(decoding:as:) is intentional and non-failable
 
-# Metric rules kept as guardrails at thresholds the current tree clears.
+# Metric rules as real guardrails: thresholds sit just above the current tree's
+# measured maxima (file 962, type body 503, function body 115, complexity 19), so
+# they catch genuine growth early instead of only catastrophic blow-ups. Leave
+# enough headroom that ordinary edits don't trip the gate; tighten again after a
+# large view is decomposed.
 line_length:
   warning: 360
   error: 500
   ignores_urls: true
   ignores_comments: true
 file_length:
-  warning: 1200
-  error: 2000
+  warning: 1050
+  error: 1400
 type_body_length:
-  warning: 800
-  error: 1200
+  warning: 600
+  error: 900
 function_body_length:
-  warning: 260
-  error: 400
+  warning: 160
+  error: 300
 cyclomatic_complexity:
-  warning: 30
-  error: 45
+  warning: 25
+  error: 40
 nesting:
   type_level: 3
 

@@ -161,6 +161,7 @@ public final class HTTPClient: @unchecked Sendable {
 
     private func performWithRetry(_ request: URLRequest) async throws -> (Data, URLResponse) {
         var attempt = 0
+        let target = request.url?.absoluteString ?? "<no url>"
         while true {
             do {
                 let (data, response) = try await transport.data(for: request)
@@ -168,6 +169,9 @@ public final class HTTPClient: @unchecked Sendable {
                    shouldRetry(status: http.statusCode),
                    attempt < maxRetries {
                     attempt += 1
+                    AppLogger.network.notice(
+                        "HTTP \(http.statusCode, privacy: .public) from \(target, privacy: .public) — retry \(attempt, privacy: .public)/\(self.maxRetries, privacy: .public)"
+                    )
                     try await backoff(attempt)
                     continue
                 }
@@ -175,8 +179,18 @@ public final class HTTPClient: @unchecked Sendable {
             } catch {
                 if attempt < maxRetries, isRetryable(error) {
                     attempt += 1
+                    AppLogger.network.notice(
+                        "transport error for \(target, privacy: .public) — retry \(attempt, privacy: .public)/\(self.maxRetries, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                    )
                     try await backoff(attempt)
                     continue
+                }
+                // A user-driven cancellation isn't a failure worth flagging — only log
+                // genuine give-ups so Console shows real connectivity/endpoint problems.
+                if !(error is CancellationError), (error as? URLError)?.code != .cancelled {
+                    AppLogger.network.error(
+                        "HTTP request to \(target, privacy: .public) failed (\(attempt, privacy: .public) retries used): \(error.localizedDescription, privacy: .public)"
+                    )
                 }
                 throw error
             }

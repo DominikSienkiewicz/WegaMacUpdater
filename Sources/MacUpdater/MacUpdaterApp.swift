@@ -46,9 +46,21 @@ struct WegaMacUpdaterApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_: Notification) {
         MenuBarAgent.shared.start()
+        refreshAppCatalog()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
         false
+    }
+
+    /// Fire-and-forget refresh of the `AppCatalog` overlay from its canonical source.
+    /// ETag-conditional, so repeat launches are cheap; any failure is logged, never
+    /// fatal. The fetched overlay is applied on the next launch (the catalog loads
+    /// once per process), keeping per-app mappings current without shipping a build.
+    private func refreshAppCatalog() {
+        Task.detached(priority: .background) {
+            let outcome = await CatalogRefresher(source: AppEndpoints.shared.appCatalogURL).refresh()
+            AppLogger.app.debug("app-catalog refresh: \(String(describing: outcome), privacy: .public)")
+        }
     }
 }

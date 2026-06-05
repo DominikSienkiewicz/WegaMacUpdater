@@ -165,6 +165,8 @@ struct UpdateView: View {
                         .foregroundStyle(selected.isEmpty ? .secondary : Color.wegaHoney)
                         .font(.system(size: 16))
                         .onTapGesture { toggleAll() }
+                        .accessibilityLabel(tr("Zaznacz wszystko"))
+                        .accessibilityAddTraits(.isButton)
                     Text(selected.isEmpty ? tr("Zaznacz wszystko") : trf("%@ z %@ zaznaczonych", "\(selected.count)", "\(allItems.count)"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
@@ -902,6 +904,7 @@ private struct BrewLogPanel: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(tr("Zamknij"))
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)

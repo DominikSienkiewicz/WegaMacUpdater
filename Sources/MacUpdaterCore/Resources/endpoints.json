@@ -3,6 +3,7 @@
   "chatgptAppcast": "https://persistent.oaistatic.com/sidekick/public/sparkle_public_appcast.xml",
   "googleDriveOmaha": "https://tools.google.com/service/update2",
   "caskDatabase": "https://formulae.brew.sh/api/cask.json",
+  "appCatalog": "https://raw.githubusercontent.com/DominikSienkiewicz/WegaMacUpdater/main/Sources/MacUpdaterCore/Resources/app-catalog.json",
   "githubLatestRelease": "https://api.github.com/repos/{repo}/releases/latest",
   "synologyChangeLog": "https://www.synology.com/api/releaseNote/findChangeLog?identify={identify}&lang=enu",
   "antigravityUpdate": "https://antigravity-ide-auto-updater-974169037036.us-central1.run.app/api/update/{platform}/stable/latest",

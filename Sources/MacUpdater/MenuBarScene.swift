@@ -8,11 +8,16 @@ struct MenuBarLabel: View {
     let isChecking: Bool
 
     var body: some View {
-        if count > 0 {
-            Label("\(count)", systemImage: "shippingbox.fill")
-        } else {
-            Image(systemName: "shippingbox")
+        Group {
+            if count > 0 {
+                Label("\(count)", systemImage: "shippingbox.fill")
+            } else {
+                Image(systemName: "shippingbox")
+            }
         }
+        .accessibilityLabel(count > 0
+            ? trf("%@ aktualizacji dostępnych", "\(count)")
+            : tr("Wszystko aktualne"))
     }
 }
 

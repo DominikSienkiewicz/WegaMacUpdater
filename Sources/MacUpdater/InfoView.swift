@@ -19,6 +19,8 @@ struct InfoView: View {
     /// copy-pasteable Terminal command — the only path that reliably works
     /// on Sequoia for unentitled GUI apps.
     @State private var touchIDPermissionDenied: Bool = false
+    @State private var catalogRefreshing = false
+    @State private var catalogOutcome: CatalogRefresher.Outcome? = nil
 
     var body: some View {
         ScrollView {
@@ -27,6 +29,7 @@ struct InfoView: View {
                 languageCard
                 policiesCard
                 diagnosticsCard
+                catalogCard
                 touchIDCard
                 licensesCard
                 environmentCard
@@ -494,6 +497,84 @@ struct InfoView: View {
                 }
             }
         }
+    }
+
+    // MARK: - App catalog
+
+    /// Lets the user pull the latest `AppCatalog` overlay on demand (the app also
+    /// refreshes it on launch). The catalog loads once per process, so a fetched
+    /// update takes effect on the next launch — the status text says so.
+    private var catalogCard: some View {
+        WegaCard {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) {
+                    Image(systemName: "books.vertical").foregroundStyle(Color.wegaHoney)
+                    Text(tr("Katalog aplikacji"))
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(tr("Wega pobiera mapowania aplikacji (repozytoria GitHub, kody IDE JetBrains, feedy Sparkle) z sieci, więc nowe aplikacje są obsługiwane bez aktualizacji Wegi. Zmiany zastosują się po ponownym uruchomieniu."))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 10) {
+                        Button {
+                            Task { await refreshCatalog() }
+                        } label: {
+                            if catalogRefreshing {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Label(tr("Odśwież katalog"), systemImage: "arrow.triangle.2.circlepath")
+                            }
+                        }
+                        .disabled(catalogRefreshing)
+                        .controlSize(.small)
+
+                        if let outcome = catalogOutcome, !catalogRefreshing {
+                            catalogStatus(outcome)
+                        }
+                    }
+                }
+                .padding(14)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func catalogStatus(_ outcome: CatalogRefresher.Outcome) -> some View {
+        switch outcome {
+        case .updated:
+            catalogStatusLabel(tr("Zaktualizowano — zrestartuj Wegę, aby zastosować."),
+                               icon: "checkmark.circle.fill", color: .green)
+        case .notModified:
+            catalogStatusLabel(tr("Katalog jest aktualny."),
+                               icon: "checkmark.circle", color: .secondary)
+        case .invalid:
+            catalogStatusLabel(tr("Pobrany katalog był nieprawidłowy — pominięto."),
+                               icon: "exclamationmark.triangle.fill", color: .orange)
+        case .failed:
+            catalogStatusLabel(tr("Nie udało się pobrać katalogu — sprawdź połączenie."),
+                               icon: "exclamationmark.triangle.fill", color: .orange)
+        }
+    }
+
+    private func catalogStatusLabel(_ text: String, icon: String, color: Color) -> some View {
+        Label(text, systemImage: icon)
+            .font(.system(size: 11))
+            .foregroundStyle(color)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func refreshCatalog() async {
+        catalogRefreshing = true
+        defer { catalogRefreshing = false }
+        catalogOutcome = await CatalogRefresher(source: AppEndpoints.shared.appCatalogURL).refresh()
     }
 
     // MARK: - Licenses card

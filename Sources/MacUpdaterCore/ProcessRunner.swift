@@ -181,6 +181,9 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             process.terminate()
             exitSemaphore.wait()
             detachHandlers()
+            AppLogger.process.error(
+                "\(request.executableURL.lastPathComponent, privacy: .public) aborted: \(error.localizedDescription, privacy: .public)"
+            )
             throw error
         }
 
@@ -201,11 +204,19 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         // byte is captured before we read the buffers.
         ioGroup.wait()
 
-        return ProcessResult(
+        let result = ProcessResult(
             exitCode: process.terminationStatus,
             stdout: String(decoding: stdoutBuffer.data, as: UTF8.self),
             stderr: String(decoding: stderrBuffer.data, as: UTF8.self)
         )
+        // Non-zero is often domain-meaningful (handled by callers), so keep it at
+        // debug — visible when diagnosing, silent in normal Console output.
+        if result.exitCode != 0 {
+            AppLogger.process.debug(
+                "\(request.executableURL.lastPathComponent, privacy: .public) exited \(result.exitCode, privacy: .public)"
+            )
+        }
+        return result
     }
 }
 

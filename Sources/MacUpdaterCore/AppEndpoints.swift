@@ -18,6 +18,8 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public let chatgptAppcast: String
     public let googleDriveOmaha: String
     public let caskDatabase: String
+    /// Canonical remote source for the `AppCatalog` overlay (`CatalogRefresher`).
+    public let appCatalog: String
     public let githubLatestRelease: String
     public let synologyChangeLog: String
     public let antigravityUpdate: String
@@ -68,6 +70,7 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public var chatgptAppcastURL: URL { URL(string: chatgptAppcast)! }
     public var googleDriveOmahaURL: URL { URL(string: googleDriveOmaha)! }
     public var caskDatabaseURL: URL { URL(string: caskDatabase)! }
+    public var appCatalogURL: URL { URL(string: appCatalog)! }
     public var homebrewWebsiteURL: URL { URL(string: homebrewWebsite)! }
     public var googleDriveDownloadURL: URL { URL(string: googleDriveDownload)! }
     public var projectRepositoryURL: URL { URL(string: projectRepository)! }
@@ -131,6 +134,7 @@ extension AppEndpoints {
             chatgptAppcast: other.chatgptAppcast ?? chatgptAppcast,
             googleDriveOmaha: other.googleDriveOmaha ?? googleDriveOmaha,
             caskDatabase: other.caskDatabase ?? caskDatabase,
+            appCatalog: other.appCatalog ?? appCatalog,
             githubLatestRelease: other.githubLatestRelease ?? githubLatestRelease,
             synologyChangeLog: other.synologyChangeLog ?? synologyChangeLog,
             antigravityUpdate: other.antigravityUpdate ?? antigravityUpdate,
@@ -159,6 +163,7 @@ public struct AppEndpointsOverlay: Decodable, Sendable, Equatable {
     public let chatgptAppcast: String?
     public let googleDriveOmaha: String?
     public let caskDatabase: String?
+    public let appCatalog: String?
     public let githubLatestRelease: String?
     public let synologyChangeLog: String?
     public let antigravityUpdate: String?

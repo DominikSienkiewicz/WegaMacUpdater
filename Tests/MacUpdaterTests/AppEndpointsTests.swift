@@ -16,6 +16,15 @@ final class AppEndpointsTests: XCTestCase {
         XCTAssertNotNil(AppEndpoints.shared.googleDriveOmahaURL.scheme)
     }
 
+    // The CatalogRefresher source endpoint must be present in the bundled config
+    // (the launch-time refresh + the Info "Odśwież katalog" button both read it).
+    func testAppCatalogEndpointIsConfigured() throws {
+        let e = try AppEndpoints.loadBundled()
+        XCTAssertEqual(e.appCatalogURL.scheme, "https")
+        XCTAssertTrue(e.appCatalog.hasSuffix("app-catalog.json"),
+                      "catalog source should point at an app-catalog.json document")
+    }
+
     // MARK: Fixed endpoints keep the exact URLs the checkers used to hard-code
 
     func testFixedEndpointsMatchLegacyValues() throws {
@@ -67,6 +76,7 @@ final class AppEndpointsTests: XCTestCase {
             chatgptAppcast: nil,
             googleDriveOmaha: "https://example.test/omaha",
             caskDatabase: nil,
+            appCatalog: nil,
             githubLatestRelease: nil,
             synologyChangeLog: nil,
             antigravityUpdate: nil,
