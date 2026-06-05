@@ -10,7 +10,7 @@ public struct ApplicationScanner {
     }
 
     public func scanApplications(
-        in applicationsDirectory: URL = URL(fileURLWithPath: "/Applications", isDirectory: true),
+        in applicationsDirectory: URL = SystemPaths.applicationsDirectory,
         installedCasks: Set<String> = [],
         availableCasks: [BrewCask] = []
     ) throws -> [ApplicationInfo] {

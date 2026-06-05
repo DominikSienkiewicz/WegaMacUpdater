@@ -11,7 +11,7 @@ public struct BrewCaskDriftFilter {
     private let readBundleVersion: (URL) -> String?
 
     public init(
-        applicationsDir: URL = URL(fileURLWithPath: "/Applications", isDirectory: true),
+        applicationsDir: URL = SystemPaths.applicationsDirectory,
         userApplicationsDir: URL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Applications", isDirectory: true),
         readBundleVersion: @escaping (URL) -> String? = BrewCaskDriftFilter.readBundleShortVersionString

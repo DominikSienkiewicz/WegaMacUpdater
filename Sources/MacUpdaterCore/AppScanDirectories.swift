@@ -5,7 +5,7 @@ import Foundation
 public enum AppScanDirectories {
     public static func all(fileManager: FileManager = .default) -> [URL] {
         let roots: [URL] = [
-            URL(fileURLWithPath: "/Applications"),
+            SystemPaths.applicationsDirectory,
             fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Applications"),
         ]
         var dirs: [URL] = []

@@ -283,7 +283,7 @@ struct InfoView: View {
             + "tell application \"Terminal\" to activate"
 
         let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        task.executableURL = SystemPaths.osascript
         task.arguments = ["-e", script]
         try? task.run()
     }
@@ -370,7 +370,7 @@ struct InfoView: View {
         let result: (status: Int32, stderr: String) = await withCheckedContinuation { cont in
             DispatchQueue.global().async {
                 let task = Process()
-                task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+                task.executableURL = SystemPaths.osascript
                 task.arguments = ["-e", script]
                 let stderr = Pipe()
                 task.standardError = stderr
@@ -434,7 +434,7 @@ struct InfoView: View {
                     Text(tr("Architected & Developed by"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
-                    Link("Dominik Sienkiewicz", destination: URL(string: "https://www.linkedin.com/in/dominik-sienkiewicz/")!)
+                    Link("Dominik Sienkiewicz", destination: AppEndpoints.shared.authorLinkedInURL)
                         .font(.system(size: 12, weight: .semibold))
                     Spacer()
                 }
@@ -451,9 +451,9 @@ struct InfoView: View {
                 Divider().opacity(0.5)
 
                 HStack(spacing: 16) {
-                    Link("GitHub", destination: URL(string: "https://github.com/DominikSienkiewicz/WegaMacUpdater")!)
+                    Link("GitHub", destination: AppEndpoints.shared.projectRepositoryURL)
                         .font(.system(size: 13))
-                    Link(tr("Zgłoś błąd"), destination: URL(string: "https://github.com/DominikSienkiewicz/WegaMacUpdater/issues")!)
+                    Link(tr("Zgłoś błąd"), destination: AppEndpoints.shared.projectIssuesURL)
                         .font(.system(size: 13))
                 }
                 .padding(.horizontal, 14)
@@ -512,9 +512,9 @@ struct InfoView: View {
                 .overlay(alignment: .bottom) { Divider().opacity(0.5) }
 
                 VStack(alignment: .leading, spacing: 0) {
-                    LicenseRow(name: "Homebrew", license: "BSD 2-Clause", url: URL(string: "https://brew.sh")!)
+                    LicenseRow(name: "Homebrew", license: "BSD 2-Clause", url: AppEndpoints.shared.homebrewWebsiteURL)
                     Divider().opacity(0.3)
-                    LicenseRow(name: "mas-cli", license: "MIT", url: URL(string: "https://github.com/mas-cli/mas")!)
+                    LicenseRow(name: "mas-cli", license: "MIT", url: AppEndpoints.shared.masRepositoryURL)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)

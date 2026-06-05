@@ -297,7 +297,7 @@ struct UpdateView: View {
             var paths: [String: URL] = [:]
             for info in infos where !drifted.contains(info.token) {
                 for artifact in info.appArtifacts {
-                    let system = URL(fileURLWithPath: "/Applications/\(artifact)")
+                    let system = SystemPaths.applicationsDirectory.appendingPathComponent(artifact)
                     let user   = home.appendingPathComponent("Applications/\(artifact)")
                     if FileManager.default.fileExists(atPath: system.path) {
                         paths[info.token] = system; break
@@ -747,7 +747,7 @@ private struct ManualUpdateSection: View {
             HStack(spacing: 8) {
                 WegaBadge(label: "GitHub", variant: .info)
                 Button {
-                    if let url = URL(string: "https://github.com/\(repo)/releases/latest") {
+                    if let url = AppEndpoints.shared.githubReleasesPageURL(repo: repo) {
                         NSWorkspace.shared.open(url)
                     }
                 } label: {
@@ -760,7 +760,7 @@ private struct ManualUpdateSection: View {
                 WegaBadge(label: caskToken, variant: .brew)
                 Button {
                     let toolboxPaths = [
-                        "/Applications/JetBrains Toolbox.app",
+                        SystemPaths.applicationsDirectory.appendingPathComponent("JetBrains Toolbox.app").path,
                         FileManager.default.homeDirectoryForCurrentUser
                             .appendingPathComponent("Applications/JetBrains Toolbox.app").path
                     ]
@@ -815,9 +815,7 @@ private struct ManualUpdateSection: View {
             HStack(spacing: 8) {
                 WegaBadge(label: "Google Drive", variant: .info)
                 Button {
-                    if let url = URL(string: "https://www.google.com/drive/download/") {
-                        NSWorkspace.shared.open(url)
-                    }
+                    NSWorkspace.shared.open(AppEndpoints.shared.googleDriveDownloadURL)
                 } label: {
                     Label(tr("Pobierz najnowszą wersję"), systemImage: "arrow.up.right.square")
                 }

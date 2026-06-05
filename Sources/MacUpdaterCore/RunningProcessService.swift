@@ -16,9 +16,9 @@ public struct RunningProcessService: Sendable {
 
     public init(
         runner: ProcessRunning = ProcessRunner(),
-        pgrepURL: URL = URL(fileURLWithPath: "/usr/bin/pgrep"),
-        killallURL: URL = URL(fileURLWithPath: "/usr/bin/killall"),
-        openURL: URL = URL(fileURLWithPath: "/usr/bin/open")
+        pgrepURL: URL = SystemPaths.pgrep,
+        killallURL: URL = SystemPaths.killall,
+        openURL: URL = SystemPaths.open
     ) {
         self.runner = runner
         self.pgrepURL = pgrepURL

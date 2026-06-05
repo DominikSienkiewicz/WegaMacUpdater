@@ -42,13 +42,10 @@ public struct AntigravityUpdateChecker: Sendable {
     /// Bundle identifier of `/Applications/Antigravity IDE.app`.
     ///
     /// Google ships two distinct products: "Antigravity" (`com.google.antigravity`)
-    /// and "Antigravity IDE" (`com.google.antigravity-ide`). The update endpoint
-    /// below serves the *IDE* — matching the plain `com.google.antigravity` app
-    /// would flag it with the IDE's (unrelated) version.
+    /// and "Antigravity IDE" (`com.google.antigravity-ide`). The `antigravityUpdate`
+    /// endpoint (in `endpoints.json`) serves the *IDE* — matching the plain
+    /// `com.google.antigravity` app would flag it with the IDE's (unrelated) version.
     public static let bundleIdentifier = "com.google.antigravity-ide"
-
-    private static let updateAPIBase =
-        "https://antigravity-ide-auto-updater-974169037036.us-central1.run.app/api/update"
 
     private let client: HTTPClient
 
@@ -67,7 +64,7 @@ public struct AntigravityUpdateChecker: Sendable {
         platform = "darwin-x64"
         #endif
 
-        guard let url = URL(string: "\(Self.updateAPIBase)/\(platform)/stable/latest") else { return .notApplicable }
+        guard let url = AppEndpoints.shared.antigravityUpdateURL(platform: platform) else { return .notApplicable }
 
         guard let response = try? await client.get(url, enableETag: true) else { return .failed }
         guard response.statusCode == 200,

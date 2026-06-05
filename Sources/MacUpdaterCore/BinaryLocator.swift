@@ -11,15 +11,9 @@ public struct ToolchainLocations: Equatable, Sendable {
 }
 
 public struct BinaryLocator {
-    public static let defaultBrewCandidates = [
-        URL(fileURLWithPath: "/opt/homebrew/bin/brew"),
-        URL(fileURLWithPath: "/usr/local/bin/brew")
-    ]
+    public static let defaultBrewCandidates = SystemPaths.brewCandidates
 
-    public static let defaultMasCandidates = [
-        URL(fileURLWithPath: "/opt/homebrew/bin/mas"),
-        URL(fileURLWithPath: "/usr/local/bin/mas")
-    ]
+    public static let defaultMasCandidates = SystemPaths.masCandidates
 
     private let fileManager: FileManager
     private let brewCandidates: [URL]

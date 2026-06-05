@@ -84,7 +84,7 @@ public final class MasService: @unchecked Sendable {
         // dialog instead of the biometric sheet. Dropping `-A` lets PAM run
         // normally — pam_tid shows the Touch ID prompt, succeeds, timestamp
         // cached. Without Touch ID, askpass remains the only viable path.
-        let sudoURL = URL(fileURLWithPath: "/usr/bin/sudo")
+        let sudoURL = SystemPaths.sudo
         let touchIDEnabled = (HomebrewEnvironment.touchIDStateOverride
                               ?? TouchIDSudoConfigurator.currentState()) == .enabled
         let args = touchIDEnabled ? ["-v"] : ["-A", "-v"]

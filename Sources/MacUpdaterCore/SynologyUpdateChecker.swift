@@ -58,8 +58,7 @@ public struct SynologyUpdateChecker: Sendable {
 
         guard let installedBuild = installedBuildNumber(for: app) else { return .notApplicable }
 
-        let urlString = "https://www.synology.com/api/releaseNote/findChangeLog?identify=\(mapping.identify)&lang=enu"
-        guard let url = URL(string: urlString) else { return .notApplicable }
+        guard let url = AppEndpoints.shared.synologyChangeLogURL(identify: mapping.identify) else { return .notApplicable }
 
         guard let response = try? await client.get(url, enableETag: true) else { return .failed }
         guard response.statusCode == 200,

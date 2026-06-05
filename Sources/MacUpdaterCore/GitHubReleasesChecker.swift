@@ -16,8 +16,7 @@ public struct GitHubReleasesChecker: Sendable {
         guard let bundleId = app.bundleIdentifier,
               let mapping = repos[bundleId] else { return .notApplicable }
 
-        let urlString = "https://api.github.com/repos/\(mapping.repo)/releases/latest"
-        guard let url = URL(string: urlString) else { return .notApplicable }
+        guard let url = AppEndpoints.shared.githubLatestReleaseURL(repo: mapping.repo) else { return .notApplicable }
 
         // ETag-conditional: a 304 reuses the cached body and does not count against
         // GitHub's unauthenticated 60-req/h rate limit.

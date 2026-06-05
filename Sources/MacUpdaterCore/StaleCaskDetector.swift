@@ -6,7 +6,7 @@ public struct StaleCaskDetector {
     private let fileExists: (URL) -> Bool
 
     public init(
-        applicationsDirectory: URL = URL(fileURLWithPath: "/Applications", isDirectory: true),
+        applicationsDirectory: URL = SystemPaths.applicationsDirectory,
         userApplicationsDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Applications", isDirectory: true),
         fileExists: @escaping (URL) -> Bool = { FileManager.default.fileExists(atPath: $0.path) }

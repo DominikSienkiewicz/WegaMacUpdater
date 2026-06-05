@@ -95,25 +95,24 @@ final class AppcastParser: NSObject, XMLParserDelegate {
     func parser(
         _ p: XMLParser,
         didStartElement el: String,
-        namespaceURI: String?,
+        namespaceURI _: String?,
         qualifiedName _: String?,
         attributes attrs: [String: String]
     ) {
         if el == "item" { inItem = true }
-        if inItem && !seenItem && el == "enclosure" {
-            if let v = attrs["sparkle:shortVersionString"] ?? attrs["sparkle:version"] {
-                found = v; seenItem = true; p.abortParsing()
-            }
+        if inItem, !seenItem, el == "enclosure",
+           let v = attrs["sparkle:shortVersionString"] ?? attrs["sparkle:version"] {
+            found = v; seenItem = true; p.abortParsing()
         }
         currentChars = ""
     }
 
-    func parser(_ p: XMLParser, foundCharacters s: String) { currentChars += s }
+    func parser(_: XMLParser, foundCharacters s: String) { currentChars += s }
 
     func parser(
         _ p: XMLParser,
         didEndElement el: String,
-        namespaceURI: String?,
+        namespaceURI _: String?,
         qualifiedName _: String?
     ) {
         let trimmed = currentChars.trimmingCharacters(in: .whitespacesAndNewlines)

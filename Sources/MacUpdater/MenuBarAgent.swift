@@ -44,8 +44,8 @@ final class MenuBarAgent: ObservableObject {
         guard loop == nil else { return }
         loop = Task { [weak self] in
             while !Task.isCancelled {
-                if let self {
-                    if self.isDue() { await self.performCheck(userInitiated: false) }
+                if let self, self.isDue() {
+                    await self.performCheck()
                 }
                 try? await Task.sleep(for: .seconds(300))
             }
@@ -59,10 +59,10 @@ final class MenuBarAgent: ObservableObject {
 
     /// Manual "check now" from the menu.
     func checkNow() async {
-        await performCheck(userInitiated: true)
+        await performCheck()
     }
 
-    private func performCheck(userInitiated: Bool) async {
+    private func performCheck() async {
         guard !isChecking else { return }
         isChecking = true
         defer { isChecking = false }

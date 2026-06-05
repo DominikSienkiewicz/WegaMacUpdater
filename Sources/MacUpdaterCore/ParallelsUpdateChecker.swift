@@ -33,23 +33,23 @@ public enum ParallelsUpdateParser {
         private var subMinor: String?
         private var subSubMinor: String?
 
-        func parser(_ p: XMLParser,
+        func parser(_: XMLParser,
                     didStartElement element: String,
-                    namespaceURI: String?,
-                    qualifiedName: String?,
-                    attributes: [String: String]) {
+                    namespaceURI _: String?,
+                    qualifiedName _: String?,
+                    attributes _: [String: String]) {
             if element == "Version" { insideVersion = true }
             current = ""
         }
 
-        func parser(_ p: XMLParser, foundCharacters string: String) {
+        func parser(_: XMLParser, foundCharacters string: String) {
             current += string
         }
 
         func parser(_ p: XMLParser,
                     didEndElement element: String,
-                    namespaceURI: String?,
-                    qualifiedName: String?) {
+                    namespaceURI _: String?,
+                    qualifiedName _: String?) {
             let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
             if insideVersion {
                 switch element {
@@ -87,7 +87,7 @@ public struct ParallelsUpdateChecker: Sendable {
     public static func updateURL(forShortVersion version: String) -> URL? {
         let head = version.split(separator: ".").first.map(String.init) ?? ""
         guard let major = Int(head), major > 0 else { return nil }
-        return URL(string: "https://update.parallels.com/desktop/v\(major)/parallels/parallels_updates.xml")
+        return AppEndpoints.shared.parallelsUpdatesURL(major: major)
     }
 
     private let client: HTTPClient

@@ -16,8 +16,7 @@ public struct JetBrainsUpdateChecker: Sendable {
         guard let bundleId = app.bundleIdentifier,
               let product = products[bundleId] else { return .notApplicable }
 
-        let urlString = "https://data.services.jetbrains.com/products/releases?code=\(product.code)&latest=true&type=release"
-        guard let url = URL(string: urlString) else { return .notApplicable }
+        guard let url = AppEndpoints.shared.jetbrainsReleasesURL(code: product.code) else { return .notApplicable }
 
         guard let response = try? await client.get(url, enableETag: true) else { return .failed }
         guard response.statusCode == 200,

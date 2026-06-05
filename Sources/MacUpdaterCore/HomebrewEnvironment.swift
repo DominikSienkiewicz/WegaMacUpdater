@@ -1,7 +1,7 @@
 import Foundation
 
 public enum HomebrewEnvironment {
-    public static let processPath = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    public static let processPath = SystemPaths.homebrewProcessPath
 
     /// Path to the SUDO_ASKPASS helper, if it has been installed. Set once at
     /// app startup via `bootstrapAskpass()`; sudo will then run this script
@@ -51,16 +51,14 @@ public enum HomebrewEnvironment {
     /// the sudo-requiring path degrades to the pre-existing "Aktualizacja
     /// niekompletna" surface, which is no worse than the status quo.
     public static func bootstrapAskpass() {
-        if askpassPath == nil || !FileManager.default.fileExists(atPath: askpassPath ?? "") {
-            if let url = try? AskpassHelper.installInApplicationSupport() {
-                askpassPath = url.path
-            }
+        if askpassPath == nil || !FileManager.default.fileExists(atPath: askpassPath ?? ""),
+           let url = try? AskpassHelper.installInApplicationSupport() {
+            askpassPath = url.path
         }
         if sudoShimDirectory == nil
-            || !FileManager.default.fileExists(atPath: (sudoShimDirectory ?? "") + "/" + SudoShim.scriptName) {
-            if let dir = try? SudoShim.installInApplicationSupport() {
-                sudoShimDirectory = dir.path
-            }
+            || !FileManager.default.fileExists(atPath: (sudoShimDirectory ?? "") + "/" + SudoShim.scriptName),
+           let dir = try? SudoShim.installInApplicationSupport() {
+            sudoShimDirectory = dir.path
         }
     }
 }

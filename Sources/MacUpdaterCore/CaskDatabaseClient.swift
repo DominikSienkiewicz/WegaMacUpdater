@@ -35,7 +35,7 @@ public struct CaskDatabaseCache {
 }
 
 public final class CaskDatabaseClient: @unchecked Sendable {
-    public static let defaultURL = URL(string: "https://formulae.brew.sh/api/cask.json")!
+    public static let defaultURL = AppEndpoints.shared.caskDatabaseURL
 
     private let sourceURL: URL
     private let cache: CaskDatabaseCache?

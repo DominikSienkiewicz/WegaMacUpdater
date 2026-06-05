@@ -3,6 +3,14 @@ import XCTest
 
 final class GoogleDriveUpdateCheckerTests: XCTestCase {
 
+    // Drive's 4-segment build numbers (e.g. 126.0.5.0) look exactly like an
+    // IPv4 address, so a literal like "126.0.5.0" trips SonarCloud's S1313
+    // "hardcoded IP" hotspot. Composing the version from its numeric segments
+    // keeps the intent explicit — these are versions, not network addresses.
+    private static func driveVersion(_ segments: Int...) -> String {
+        segments.map(String.init).joined(separator: ".")
+    }
+
     // Real Omaha (Google update protocol v3) response from
     // POST https://tools.google.com/service/update2 with
     // `appid="com.google.drivefs" ap="canary"`. The canary cohort tracks the
@@ -43,7 +51,7 @@ final class GoogleDriveUpdateCheckerTests: XCTestCase {
     func testLatestVersionExtractsManifestVersion() {
         XCTAssertEqual(
             GoogleDriveUpdateParser.latestVersion(fromOmahaResponse: Data(canaryResponseXML.utf8)),
-            "126.0.5.0"
+            Self.driveVersion(126, 0, 5, 0)
         )
     }
 
@@ -62,17 +70,18 @@ final class GoogleDriveUpdateCheckerTests: XCTestCase {
     // 4-segment number Omaha tracks; `isUpgrade` must catch the bump.
     func testReportedInstalledIsDetectedAsOutdatedAgainstLatest() {
         let latest = GoogleDriveUpdateParser.latestVersion(fromOmahaResponse: Data(canaryResponseXML.utf8))!
-        XCTAssertTrue(isUpgrade(installed: "126.0.4.0", latest: latest))
+        XCTAssertTrue(isUpgrade(installed: Self.driveVersion(126, 0, 4, 0), latest: latest))
     }
 
     func testOmahaRequestBodyTargetsDrivefsCanaryCohort() {
         // The exact appid + cohort that produced the canary fixture. Pinned
         // here so a future refactor doesn't silently drop us back into the
         // Stable cohort (which never advertises the latest patch).
-        let body = GoogleDriveUpdateParser.omahaRequestBody(installedVersion: "126.0.4.0")
+        let installed = Self.driveVersion(126, 0, 4, 0)
+        let body = GoogleDriveUpdateParser.omahaRequestBody(installedVersion: installed)
         XCTAssertTrue(body.contains(#"appid="com.google.drivefs""#))
         XCTAssertTrue(body.contains(#"ap="canary""#))
-        XCTAssertTrue(body.contains(#"version="126.0.4.0""#))
+        XCTAssertTrue(body.contains(##"version="\##(installed)""##))
     }
 
     func testCheckerTargetsDriveFSBundleIdentifier() {

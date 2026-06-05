@@ -16,10 +16,10 @@ jobs:
     runs-on: macos-15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Select latest stable Xcode
-        uses: maxim-lobanov/setup-xcode@v1
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: latest-stable
 
@@ -37,7 +37,7 @@ jobs:
     runs-on: macos-15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Install SwiftLint
         run: brew install swiftlint
@@ -54,10 +54,10 @@ jobs:
     runs-on: macos-15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Select latest stable Xcode
-        uses: maxim-lobanov/setup-xcode@v1
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: latest-stable
 
@@ -74,14 +74,40 @@ jobs:
           echo "$ARCHS" | grep -qw arm64
           echo "$ARCHS" | grep -qw x86_64
 
-      - name: Verify app-catalog.json is bundled
+      - name: Verify bundled resources are present
         run: |
           BUNDLE=".build/pkg-staging/WegaMacUpdater.app/Contents/Resources/WegaMacUpdater_MacUpdaterCore.bundle"
+          # AppEndpoints.shared fatal-errors at launch without endpoints.json, so a
+          # missing resource must fail the build here, not crash the shipped app.
           test -n "$(find "$BUNDLE" -name app-catalog.json)"
+          test -n "$(find "$BUNDLE" -name endpoints.json)"
 
       - name: Upload .pkg artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: WegaMacUpdater-pkg
           path: build/WegaMacUpdater.pkg
           if-no-files-found: error
+
+  sonarcloud:
+    name: SonarCloud
+    runs-on: ubuntu-latest
+    # Reads sonar-project.properties (keys, sources/tests split, S1075 exclusions).
+    # Prerequisites, one-time:
+    #   1. Add a SONAR_TOKEN repository secret (SonarCloud → My Account → Security).
+    #   2. Verify sonar.projectKey / sonar.organization in sonar-project.properties.
+    #   3. Disable "Automatic Analysis" in SonarCloud (Administration → Analysis
+    #      Method) — CI-based and automatic analysis cannot both run on one project.
+    # The scan is skipped until SONAR_TOKEN exists, so this job never blocks CI
+    # before it's configured.
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0  # full history → accurate new-code & blame attribution
+
+      - name: SonarCloud Scan
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: SonarSource/sonarqube-scan-action@2f77a1ec69fb1d595b06f35ab27e97605bdef703 # v5

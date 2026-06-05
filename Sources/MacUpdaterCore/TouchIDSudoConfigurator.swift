@@ -21,8 +21,8 @@ public enum TouchIDSudoConfigurator {
         case enabled
     }
 
-    public static let pamModulePath = "/usr/lib/pam/pam_tid.so.2"
-    public static let sudoLocalPath = "/etc/pam.d/sudo_local"
+    public static let pamModulePath = SystemPaths.pamModule
+    public static let sudoLocalPath = SystemPaths.sudoLocal
 
     /// The line we write to `sudo_local`. `sufficient` means: if Touch ID
     /// succeeds, no further auth modules are consulted; if it fails or is

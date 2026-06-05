@@ -9,7 +9,7 @@ import Foundation
 /// `126.0.4 → 126.0.5` that the public release-notes page never lists.
 public enum GoogleDriveUpdateParser {
 
-    public static let omahaEndpoint = URL(string: "https://tools.google.com/service/update2")!
+    public static let omahaEndpoint = AppEndpoints.shared.googleDriveOmahaURL
 
     /// Build the Omaha v3 request body. The `version` attribute is what
     /// Omaha compares against the cohort head to decide ok vs noupdate.
@@ -40,8 +40,8 @@ public enum GoogleDriveUpdateParser {
         var found: String?
         func parser(_ p: XMLParser,
                     didStartElement element: String,
-                    namespaceURI: String?,
-                    qualifiedName: String?,
+                    namespaceURI _: String?,
+                    qualifiedName _: String?,
                     attributes: [String: String]) {
             if element == "manifest", let v = attributes["version"], !v.isEmpty {
                 found = v

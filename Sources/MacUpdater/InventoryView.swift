@@ -52,7 +52,8 @@ struct InventoryView: View {
                 case .bundleId: cmp = (a.bundleIdentifier ?? "") < (b.bundleIdentifier ?? "")
                 case .source:
                     func rank(_ x: ApplicationInfo) -> Int {
-                        x.isManagedByBrew ? 0 : (x.isManagedByMas ? 1 : 2)
+                        if x.isManagedByBrew { return 0 }
+                        return x.isManagedByMas ? 1 : 2
                     }
                     cmp = rank(a) < rank(b)
                 case .updateDate:
@@ -410,6 +411,12 @@ private struct InventoryRow: View {
 
     @State private var hovered = false
 
+    /// Row background: hover wins, otherwise alternating rows get a faint tint.
+    private var rowBackground: Color {
+        if hovered { return Color.wegaHoney.opacity(0.04) }
+        return isAlt ? Color.white.opacity(0.012) : Color.clear
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // Name (flex 1.6)
@@ -466,7 +473,7 @@ private struct InventoryRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(hovered ? Color.wegaHoney.opacity(0.04) : (isAlt ? Color.white.opacity(0.012) : Color.clear))
+        .background(rowBackground)
         .onHover { hovered = $0 }
     }
 }

@@ -255,7 +255,7 @@ private struct WegaStatusPanel: View {
 private struct BrewRequiredView: View {
     let onRecheck: () -> Void
 
-    private let installCommand = #"/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)""#
+    private let installCommand = AppEndpoints.shared.homebrewInstallCommand
 
     @State private var copied = false
 
@@ -318,7 +318,7 @@ private struct BrewRequiredView: View {
 
                 HStack(spacing: 10) {
                     Button {
-                        NSWorkspace.shared.open(URL(string: "https://brew.sh")!)
+                        NSWorkspace.shared.open(AppEndpoints.shared.homebrewWebsiteURL)
                     } label: {
                         Label(tr("Otwórz brew.sh"), systemImage: "arrow.up.right.square")
                     }

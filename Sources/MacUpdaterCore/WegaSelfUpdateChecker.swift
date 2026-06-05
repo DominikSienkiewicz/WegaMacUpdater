@@ -30,7 +30,7 @@ public struct WegaSelfUpdateChecker: Sendable {
     }
 
     public func check() async -> Result {
-        guard let url = URL(string: "https://api.github.com/repos/\(repo)/releases/latest") else {
+        guard let url = AppEndpoints.shared.githubLatestReleaseURL(repo: repo) else {
             return .failed
         }
 

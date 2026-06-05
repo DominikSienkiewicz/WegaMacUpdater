@@ -78,9 +78,7 @@ public final class NpmLocator: @unchecked Sendable {
 
     private func candidates() -> [URL] {
         let home = fileManager.homeDirectoryForCurrentUser
-        var urls: [URL] = [
-            URL(fileURLWithPath: "/opt/homebrew/bin/npm"),
-            URL(fileURLWithPath: "/usr/local/bin/npm"),
+        var urls: [URL] = SystemPaths.npmCandidates + [
             home.appendingPathComponent(".volta/bin/npm")
         ]
         urls.append(contentsOf: extraCandidates)
@@ -99,7 +97,7 @@ public final class NpmLocator: @unchecked Sendable {
     }
 
     private func resolveFromLoginShell() -> URL? {
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? SystemPaths.defaultLoginShell
         let process = Process()
         process.executableURL = URL(fileURLWithPath: shell)
         process.arguments = ["-lc", "command -v npm"]

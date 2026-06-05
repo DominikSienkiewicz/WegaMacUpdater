@@ -29,25 +29,25 @@ public enum ChatGPTUpdateParser {
         private var current = ""
         private var capturing = false
 
-        func parser(_ p: XMLParser,
+        func parser(_: XMLParser,
                     didStartElement element: String,
-                    namespaceURI: String?,
-                    qualifiedName: String?,
-                    attributes: [String: String]) {
+                    namespaceURI _: String?,
+                    qualifiedName _: String?,
+                    attributes _: [String: String]) {
             // Match both namespace-qualified and bare element names.
             let local = element.components(separatedBy: ":").last ?? element
             capturing = (local == "shortVersionString")
             current = ""
         }
 
-        func parser(_ p: XMLParser, foundCharacters string: String) {
+        func parser(_: XMLParser, foundCharacters string: String) {
             if capturing { current += string }
         }
 
-        func parser(_ p: XMLParser,
+        func parser(_: XMLParser,
                     didEndElement element: String,
-                    namespaceURI: String?,
-                    qualifiedName: String?) {
+                    namespaceURI _: String?,
+                    qualifiedName _: String?) {
             let local = element.components(separatedBy: ":").last ?? element
             if local == "shortVersionString" {
                 let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -70,8 +70,7 @@ public struct ChatGPTUpdateChecker: Sendable {
 
     /// Public Sparkle appcast OpenAI ships for the desktop app (codename
     /// "sidekick"). Same feed Homebrew's `chatgpt` cask uses for livecheck.
-    public static let appcastURL = URL(string:
-        "https://persistent.oaistatic.com/sidekick/public/sparkle_public_appcast.xml")!
+    public static let appcastURL = AppEndpoints.shared.chatgptAppcastURL
 
     private let client: HTTPClient
 
