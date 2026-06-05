@@ -1,0 +1,18 @@
+{
+  "jetbrainsReleases": "https://data.services.jetbrains.com/products/releases?code={code}&latest=true&type=release",
+  "chatgptAppcast": "https://persistent.oaistatic.com/sidekick/public/sparkle_public_appcast.xml",
+  "googleDriveOmaha": "https://tools.google.com/service/update2",
+  "caskDatabase": "https://formulae.brew.sh/api/cask.json",
+  "githubLatestRelease": "https://api.github.com/repos/{repo}/releases/latest",
+  "synologyChangeLog": "https://www.synology.com/api/releaseNote/findChangeLog?identify={identify}&lang=enu",
+  "antigravityUpdate": "https://antigravity-ide-auto-updater-974169037036.us-central1.run.app/api/update/{platform}/stable/latest",
+  "parallelsUpdates": "https://update.parallels.com/desktop/v{major}/parallels/parallels_updates.xml",
+  "homebrewWebsite": "https://brew.sh",
+  "homebrewInstallCommand": "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"",
+  "githubReleasesPage": "https://github.com/{repo}/releases/latest",
+  "googleDriveDownload": "https://www.google.com/drive/download/",
+  "projectRepository": "https://github.com/DominikSienkiewicz/WegaMacUpdater",
+  "projectIssues": "https://github.com/DominikSienkiewicz/WegaMacUpdater/issues",
+  "authorLinkedIn": "https://www.linkedin.com/in/dominik-sienkiewicz/",
+  "masRepository": "https://github.com/mas-cli/mas"
+}
