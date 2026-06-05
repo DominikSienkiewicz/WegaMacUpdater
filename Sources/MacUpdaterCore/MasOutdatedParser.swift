@@ -1,7 +1,7 @@
 import Foundation
 
 public struct MasOutdatedParser {
-    public init() {}
+    public init() { /* stateless; explicit so the initializer is public across the module boundary */ }
 
     public func parse(_ output: String) -> [MasOutdatedApp] {
         output

@@ -39,12 +39,12 @@ public struct MenuBarUpdateChecker: Sendable {
 
         var mas: [MasOutdatedApp] = []
         do { mas = try await masService.outdated() }
-        catch MasServiceError.masNotFound {}
+        catch MasServiceError.masNotFound { /* mas not installed — no App Store updates to report, not a failure */ }
         catch { failed += 1 }
 
         var npm: [NpmGlobalOutdated] = []
         do { npm = try await npmService.outdated() }
-        catch NpmServiceError.npmNotFound {}
+        catch NpmServiceError.npmNotFound { /* npm not installed — no global packages to report, not a failure */ }
         catch { failed += 1 }
 
         let items = UpdatePlanner.applyPolicies(

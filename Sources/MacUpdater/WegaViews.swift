@@ -388,7 +388,7 @@ struct WegaFull: View {
         }
     }
 
-    static func drawBody(ctx: GraphicsContext, s: CGFloat, pose: WegaPose) {
+    static func drawBody(ctx: GraphicsContext, s: CGFloat, pose _: WegaPose) {
         func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x*s, y: y*s) }
         func ellipse(_ cx: CGFloat, _ cy: CGFloat, _ rx: CGFloat, _ ry: CGFloat) -> Path {
             Path(ellipseIn: CGRect(x: (cx-rx)*s, y: (cy-ry)*s, width: rx*2*s, height: ry*2*s))

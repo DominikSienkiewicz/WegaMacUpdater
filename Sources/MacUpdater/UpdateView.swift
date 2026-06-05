@@ -537,8 +537,8 @@ private struct UpdateSection: View {
     let items:     [OutdatedItem]
     var iconPaths: [String: URL]  = [:]
     @Binding var selected: Set<String>
-    var onIgnore: (OutdatedItem) -> Void = { _ in }
-    var onPin:    (OutdatedItem) -> Void = { _ in }
+    var onIgnore: (OutdatedItem) -> Void = { _ in /* no-op default; the parent view injects the real handler */ }
+    var onPin:    (OutdatedItem) -> Void = { _ in /* no-op default; the parent view injects the real handler */ }
 
     var body: some View {
         WegaCard {
@@ -652,8 +652,8 @@ private struct ManualUpdateSection: View {
     let items:     [ManualOutdatedApp]
     let busyToken: String?
     let onInstall: (String) -> Void
-    var onIgnore:  (ManualOutdatedApp) -> Void = { _ in }
-    var onPin:     (ManualOutdatedApp) -> Void = { _ in }
+    var onIgnore:  (ManualOutdatedApp) -> Void = { _ in /* no-op default; the parent view injects the real handler */ }
+    var onPin:     (ManualOutdatedApp) -> Void = { _ in /* no-op default; the parent view injects the real handler */ }
 
     var body: some View {
         WegaCard {

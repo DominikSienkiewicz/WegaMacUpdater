@@ -20,7 +20,7 @@ public struct NpmBrewDuplicate: Equatable, Sendable {
 /// so flagging is correct) — false negatives (different naming conventions) are
 /// acceptable; user can investigate the surfaced cases and act.
 public struct NpmBrewDuplicateDetector {
-    public init() {}
+    public init() { /* stateless; explicit so the initializer is public across the module boundary */ }
 
     public func detect(npmPackages: [NpmGlobalPackage], brewTokens: Set<String>) -> [NpmBrewDuplicate] {
         let normalizedTokens = Dictionary(uniqueKeysWithValues: brewTokens.map { (Self.normalize($0), $0) })

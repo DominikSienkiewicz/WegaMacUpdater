@@ -57,7 +57,7 @@ public protocol ProcessRunning: Sendable {
 }
 
 public final class ProcessRunner: ProcessRunning, Sendable {
-    public init() {}
+    public init() { /* stateless; explicit so the initializer is public across the module boundary */ }
 
     public func run(_ request: ProcessRequest) async throws -> ProcessResult {
         try await run(request, onOutput: nil)
@@ -65,22 +65,25 @@ public final class ProcessRunner: ProcessRunning, Sendable {
 
     public func events(for request: ProcessRequest) -> AsyncThrowingStream<ProcessOutputEvent, Error> {
         AsyncThrowingStream { continuation in
-            let task = Task {
-                do {
-                    let onOutput: @Sendable (ProcessOutputEvent) -> Void = { event in
-                        continuation.yield(event)
-                    }
-                    let result = try await self.run(request, onOutput: onOutput)
-                    continuation.yield(.finished(result))
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
+            let task = Task { await self.pump(request, into: continuation) }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
 
-            continuation.onTermination = { _ in
-                task.cancel()
-            }
+    /// Runs `request`, forwarding each output event into `continuation` and finishing
+    /// the stream when the process exits (or throwing on failure). Extracted from
+    /// `events(for:)` so the streaming logic isn't nested three closures deep.
+    private func pump(
+        _ request: ProcessRequest,
+        into continuation: AsyncThrowingStream<ProcessOutputEvent, Error>.Continuation
+    ) async {
+        do {
+            let onOutput: @Sendable (ProcessOutputEvent) -> Void = { continuation.yield($0) }
+            let result = try await run(request, onOutput: onOutput)
+            continuation.yield(.finished(result))
+            continuation.finish()
+        } catch {
+            continuation.finish(throwing: error)
         }
     }
 

@@ -70,7 +70,7 @@ struct InventoryView: View {
                 InventoryStatCard(label: "Homebrew",  value: brewCount,        sublabel: tr("cask + formula"), color: .wegaHoney,  active: filter == .brew)      { setFilter(.brew) }
                 InventoryStatCard(label: "App Store", value: masCount,         sublabel: tr("ze sklepu"),      color: .wegaInfo,   active: filter == .appStore)   { setFilter(.appStore) }
                 InventoryStatCard(label: tr("Ręcznie"),   value: manualCount,      sublabel: tr("poza brew/mas"),  color: .wegaDanger, active: filter == .manual)     { setFilter(.manual) }
-                InventoryStatCard(label: "npm -g",    value: npmGlobals.count, sublabel: "CLI",            color: .wegaInfo,   active: false)                 { }
+                InventoryStatCard(label: "npm -g",    value: npmGlobals.count, sublabel: "CLI",            color: .wegaInfo,   active: false)                 { /* npm globals are informational only — not a filter target, so tapping is a deliberate no-op */ }
                 InventoryStatCard(label: tr("Razem"),     value: apps.count,       sublabel: tr("wszystkie"),      color: .primary,    active: filter == .all)        { setFilter(.all) }
             }
             .padding(.horizontal, 16)
