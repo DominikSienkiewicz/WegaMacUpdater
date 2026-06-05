@@ -37,7 +37,7 @@ struct WegaState: Equatable {
     var pose: WegaPose
     var line: String
 
-    static let `default` = WegaState(pose: .idle, line: tr("Cześć! Co dziś robimy?"))
+    static let initial = WegaState(pose: .idle, line: tr("Cześć! Co dziś robimy?"))
 
     static func forTab(_ tab: SidebarTab) -> WegaState {
         switch tab {

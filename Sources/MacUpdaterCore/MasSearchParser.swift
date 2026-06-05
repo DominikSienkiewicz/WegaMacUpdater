@@ -14,7 +14,7 @@ public struct MasSearchResult: Equatable, Sendable {
 public struct MasSearchParser {
     private static let lineRegex = try? NSRegularExpression(pattern: #"^(\d+)\s+(.+?)\s{2,}\S.*$"#)
 
-    public init() {}
+    public init() { /* stateless; explicit so the initializer is public across the module boundary */ }
 
     public func parse(_ output: String) -> [MasSearchResult] {
         output

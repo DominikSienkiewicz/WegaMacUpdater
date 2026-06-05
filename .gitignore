@@ -63,6 +63,7 @@ fastlane/screenshots/**/*.png
 fastlane/test_output
 
 # Local
+sonarqube-generic-coverage.xml
 .DS_Store
 DerivedData/
 *.xcuserstate

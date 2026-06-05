@@ -37,7 +37,7 @@ public enum NpmServiceError: Error, LocalizedError {
 }
 
 public struct NpmListParser {
-    public init() {}
+    public init() { /* stateless; explicit so the initializer is public across the module boundary */ }
 
     public func parse(_ data: Data) throws -> [NpmGlobalPackage] {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],

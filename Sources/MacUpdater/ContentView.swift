@@ -169,6 +169,12 @@ private struct SidebarTabRow: View {
 
     @State private var isHovered = false
 
+    /// Row fill: active wins, otherwise a faint tint on hover.
+    private var backgroundFill: Color {
+        if isActive { return Color.wegaHoney.opacity(0.15) }
+        return isHovered ? Color.wegaHoney.opacity(0.05) : Color.clear
+    }
+
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 10) {
@@ -196,9 +202,7 @@ private struct SidebarTabRow: View {
             .frame(height: 32)
             .background(
                 RoundedRectangle(cornerRadius: 7)
-                    .fill(isActive
-                        ? Color.wegaHoney.opacity(0.15)
-                        : (isHovered ? Color.wegaHoney.opacity(0.05) : Color.clear))
+                    .fill(backgroundFill)
                     .overlay(
                         RoundedRectangle(cornerRadius: 7)
                             .stroke(isActive ? Color.wegaHoney.opacity(0.20) : Color.clear, lineWidth: 1)

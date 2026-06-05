@@ -84,4 +84,30 @@ final class AppEndpointsTests: XCTestCase {
         XCTAssertEqual(merged.googleDriveOmaha, "https://example.test/omaha", "overlay key must win")
         XCTAssertEqual(merged.caskDatabase, base.caskDatabase, "untouched keys keep the baseline")
     }
+
+    // MARK: Overlay decoded from a file on disk (the user-writable redirect file)
+
+    func testDecodeOverlayFromFileReadsOnlyProvidedKeys() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("wega-overlay-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        try #"{"googleDriveOmaha":"https://example.test/omaha"}"#
+            .write(to: tmp, atomically: true, encoding: .utf8)
+
+        let overlay = try AppEndpoints.decodeOverlay(contentsOf: tmp)
+        XCTAssertEqual(overlay.googleDriveOmaha, "https://example.test/omaha")
+        XCTAssertNil(overlay.caskDatabase, "keys absent from the file decode to nil so the baseline shows through")
+
+        // End-to-end: an on-disk overlay redirects exactly one endpoint.
+        let merged = try AppEndpoints.loadBundled().overlaying(overlay)
+        XCTAssertEqual(merged.googleDriveOmaha, "https://example.test/omaha")
+    }
+
+    func testDecodeOverlayRejectsMalformedFile() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("wega-overlay-bad-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        try "not valid json".write(to: tmp, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(try AppEndpoints.decodeOverlay(contentsOf: tmp))
+    }
 }

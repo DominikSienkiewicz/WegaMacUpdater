@@ -537,8 +537,8 @@ private struct UpdateSection: View {
     let items:     [OutdatedItem]
     var iconPaths: [String: URL]  = [:]
     @Binding var selected: Set<String>
-    var onIgnore: (OutdatedItem) -> Void = { _ in }
-    var onPin:    (OutdatedItem) -> Void = { _ in }
+    var onIgnore: ((OutdatedItem) -> Void)?
+    var onPin:    ((OutdatedItem) -> Void)?
 
     var body: some View {
         WegaCard {
@@ -563,7 +563,7 @@ private struct UpdateSection: View {
                     onToggle:       { toggle(item.key) }
                 )
                 .contextMenu {
-                    UpdatePolicyMenu(onIgnore: { onIgnore(item) }, onPin: { onPin(item) })
+                    UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) })
                 }
                 .overlay(alignment: .bottom) {
                     if item.id != items.last?.id { Divider().opacity(0.4).padding(.leading, 54) }
@@ -652,8 +652,8 @@ private struct ManualUpdateSection: View {
     let items:     [ManualOutdatedApp]
     let busyToken: String?
     let onInstall: (String) -> Void
-    var onIgnore:  (ManualOutdatedApp) -> Void = { _ in }
-    var onPin:     (ManualOutdatedApp) -> Void = { _ in }
+    var onIgnore:  ((ManualOutdatedApp) -> Void)?
+    var onPin:     ((ManualOutdatedApp) -> Void)?
 
     var body: some View {
         WegaCard {
@@ -694,7 +694,7 @@ private struct ManualUpdateSection: View {
                 .padding(.vertical, 10)
                 .contentShape(Rectangle())
                 .contextMenu {
-                    UpdatePolicyMenu(onIgnore: { onIgnore(item) }, onPin: { onPin(item) })
+                    UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) })
                 }
                 .overlay(alignment: .bottom) {
                     if item.path != items.last?.path { Divider().opacity(0.4).padding(.leading, 54) }

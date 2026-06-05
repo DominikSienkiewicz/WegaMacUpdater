@@ -14,7 +14,12 @@ public enum SynologyApiParser {
         }
         struct Entry: Decodable {
             let version: String
-            let publish_date: String?
+            let publishDate: String?
+
+            enum CodingKeys: String, CodingKey {
+                case version
+                case publishDate = "publish_date"
+            }
         }
     }
 
@@ -26,7 +31,7 @@ public enum SynologyApiParser {
         let candidate = allEntries
             .compactMap { entry -> SynologyRelease? in
                 guard let build = buildNumber(fromVersionString: entry.version) else { return nil }
-                return SynologyRelease(version: entry.version, build: build, publishDate: entry.publish_date)
+                return SynologyRelease(version: entry.version, build: build, publishDate: entry.publishDate)
             }
             .max(by: { $0.build < $1.build })
 

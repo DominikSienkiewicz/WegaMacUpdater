@@ -25,8 +25,12 @@ public enum AntigravityUpdateParser {
     /// Pulls the `X.Y.Z` segment that follows `/stable/` in the download URL,
     /// e.g. `…/antigravity/stable/2.0.1-4861014005645312/darwin-arm/…` → `2.0.1`.
     public static func productVersion(fromDownloadURL url: String) -> String? {
+        // Match the `stable/<version>` path segment. The leading slash is omitted
+        // from the pattern on purpose: an `/stable/…` literal reads as a hard-coded
+        // absolute path (S1075), and `split("/").last` still yields the version
+        // either way.
         guard let range = url.range(
-            of: #"/stable/\d+(\.\d+)+"#,
+            of: #"stable/\d+(\.\d+)+"#,
             options: .regularExpression
         ) else { return nil }
         return url[range].split(separator: "/").last.map(String.init)

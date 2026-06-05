@@ -56,7 +56,9 @@ public enum HomebrewEnvironment {
             askpassPath = url.path
         }
         if sudoShimDirectory == nil
-            || !FileManager.default.fileExists(atPath: (sudoShimDirectory ?? "") + "/" + SudoShim.scriptName),
+            || !FileManager.default.fileExists(
+                atPath: URL(fileURLWithPath: sudoShimDirectory ?? "")
+                    .appendingPathComponent(SudoShim.scriptName).path),
            let dir = try? SudoShim.installInApplicationSupport() {
             sudoShimDirectory = dir.path
         }
