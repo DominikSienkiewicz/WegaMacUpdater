@@ -52,6 +52,33 @@ public func isUpgrade(installed: String, latest: String) -> Bool {
     return pi.lexicographicallyPrecedes(pl)
 }
 
+/// Returns true if `candidate` is at least as new as `baseline`, treating the
+/// build-metadata segment (after "+" or ",") as significant **only when both
+/// versions carry one**. Used for Homebrew cask drift detection.
+///
+/// This distinguishes the on-disk `0.4.16+1` from the cask's `0.4.16,2` — both
+/// carry a build segment, so `1 < 2` means the app is genuinely behind and must
+/// not be hidden as drift — while still treating a bare on-disk `5.3.1` as equal
+/// to Homebrew's `5.3.1,50301` (only one side has a build segment, so it is
+/// encoding noise rather than a real difference). `versionsEqual` cannot make
+/// this distinction because it matches any variant against any variant, so the
+/// primary `0.4.16` always collides regardless of the build segment.
+public func versionAtLeast(_ candidate: String, _ baseline: String) -> Bool {
+    let cv = versionVariants(candidate)
+    let bv = versionVariants(baseline)
+    let (cPrimary, bPrimary) = paddedComponents(
+        versionComponents(cv.first ?? candidate),
+        versionComponents(bv.first ?? baseline)
+    )
+    if cPrimary != bPrimary {
+        return bPrimary.lexicographicallyPrecedes(cPrimary)
+    }
+    // Primaries equal — the build segment decides, but only when both sides have one.
+    guard cv.count > 1, bv.count > 1 else { return true }
+    let (cBuild, bBuild) = paddedComponents(versionComponents(cv[1]), versionComponents(bv[1]))
+    return !cBuild.lexicographicallyPrecedes(bBuild)
+}
+
 /// Strips common tag prefixes/suffixes to get a clean version string.
 /// "v1.12.7" → "1.12.7", "release-3.5.8" → "3.5.8", "v1.4.2-build164" → "1.4.2"
 public func normalizeGitTag(_ tag: String) -> String {

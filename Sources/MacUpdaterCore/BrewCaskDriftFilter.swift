@@ -42,7 +42,7 @@ public struct BrewCaskDriftFilter {
                 ]
                 guard let realVersion = candidates.lazy.compactMap(readBundleVersion).first else { continue }
 
-                if versionsEqual(realVersion, current) || isUpgrade(installed: current, latest: realVersion) {
+                if versionAtLeast(realVersion, current) {
                     drifted.insert(item.name)
                     break
                 }
