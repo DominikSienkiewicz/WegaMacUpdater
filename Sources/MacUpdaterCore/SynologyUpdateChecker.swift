@@ -65,9 +65,9 @@ public struct SynologyUpdateChecker: Sendable {
 
         guard let url = AppEndpoints.shared.synologyChangeLogURL(identify: mapping.identify) else { return .notApplicable }
 
-        guard let response = try? await client.get(url, enableETag: true) else { return .failed }
-        guard response.statusCode == 200,
-              let latest = SynologyApiParser.latestRelease(from: response.data) else { return .failed }
+        guard let response = try? await client.get(url, enableETag: true) else { return .unavailable }
+        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
+        guard let latest = SynologyApiParser.latestRelease(from: response.data) else { return .failed }
 
         guard latest.build > installedBuild else { return .upToDate }
 

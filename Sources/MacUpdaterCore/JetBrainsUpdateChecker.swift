@@ -18,9 +18,9 @@ public struct JetBrainsUpdateChecker: Sendable {
 
         guard let url = AppEndpoints.shared.jetbrainsReleasesURL(code: product.code) else { return .notApplicable }
 
-        guard let response = try? await client.get(url, enableETag: true) else { return .failed }
-        guard response.statusCode == 200,
-              let releases = try? JSONDecoder().decode([String: [JetBrainsRelease]].self, from: response.data),
+        guard let response = try? await client.get(url, enableETag: true) else { return .unavailable }
+        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
+        guard let releases = try? JSONDecoder().decode([String: [JetBrainsRelease]].self, from: response.data),
               let latest = releases[product.code]?.first?.version else { return .failed }
 
         let installed = app.version ?? ""

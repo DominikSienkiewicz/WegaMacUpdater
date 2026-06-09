@@ -82,9 +82,9 @@ public struct ChatGPTUpdateChecker: Sendable {
         guard app.bundleIdentifier == Self.bundleIdentifier,
               let installed = app.version, !installed.isEmpty else { return .notApplicable }
 
-        guard let response = try? await client.get(Self.appcastURL, enableETag: true) else { return .failed }
-        guard response.statusCode == 200,
-              let latest = ChatGPTUpdateParser.latestVersion(fromAppcast: response.data) else { return .failed }
+        guard let response = try? await client.get(Self.appcastURL, enableETag: true) else { return .unavailable }
+        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
+        guard let latest = ChatGPTUpdateParser.latestVersion(fromAppcast: response.data) else { return .failed }
 
         guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
 

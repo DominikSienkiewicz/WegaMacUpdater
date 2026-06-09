@@ -14,8 +14,8 @@ public struct SparkleUpdateChecker: Sendable {
         let feedURL = resolveFeedURL(for: app)
         guard let feedURL else { return .notApplicable }
 
-        guard let response = try? await client.get(feedURL, enableETag: true) else { return .failed }
-        guard response.statusCode == 200 else { return .failed }
+        guard let response = try? await client.get(feedURL, enableETag: true) else { return .unavailable }
+        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
         guard let latest = AppcastParser.parse(data: response.data) else { return .failed }
 
         let installed = app.version ?? ""

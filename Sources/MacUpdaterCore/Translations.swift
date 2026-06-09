@@ -225,6 +225,7 @@ public enum Translations {
         "Dostępna wersja %@": "Version %@ available",
         "Pobierz i zainstaluj": "Download and install",
         "Zobacz wydanie": "View release",
+        "Zobacz w logach": "View in logs",
         "Aktualizacje": "Update",
         "Migracja": "Migration",
         "Spis aplikacji": "Inventory",
@@ -326,5 +327,20 @@ public enum Translations {
         "Mhm… kolejna wersja": "Mhm… another version",
         "Cześć! Co dziś robimy?": "Hi! What are we doing today?",
         "\u{201E}%@\u{201D}": "\u{201C}%@\u{201D}",
+
+        // Logi
+        "Logi": "Logs",
+        "Co się działo": "What happened",
+        "Co się ostatnio działo?": "What happened recently?",
+        "Skan rozpoczęty": "Scan started",
+        "Zaglądam do notatek…": "Checking my notes…",
+        "Ostrzeżenia+": "Warnings+",
+        "Tylko błędy": "Errors only",
+        "Szukaj w logach…": "Search logs…",
+        "Pokaż w Finderze": "Show in Finder",
+        "Kopiuj": "Copy",
+        "Wyczyść": "Clear",
+        "Wyczyścić logi?": "Clear the logs?",
+        "Cicho jak makiem zasiał — żadnych zdarzeń.": "All quiet — no events.",
     ]
 }

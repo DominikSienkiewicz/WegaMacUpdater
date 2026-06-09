@@ -42,13 +42,23 @@ final class CheckFailureDistinctionTests: XCTestCase {
         Data(#"{"tag_name":"\#(tag)","draft":false,"prerelease":false}"#.utf8)
     }
 
-    func testNetworkErrorReportsFailedNotUpToDate() async {
+    func testNetworkErrorReportsUnavailable() async {
         let result = await checker(.failure(URLError(.notConnectedToInternet))).check(app: app(version: "1.0.0"))
+        XCTAssertEqual(result, .unavailable)
+    }
+
+    func testServerErrorReportsUnavailable() async {
+        let result = await checker(.success((Data(), 500))).check(app: app(version: "1.0.0"))
+        XCTAssertEqual(result, .unavailable)
+    }
+
+    func testClientErrorReportsFailed() async {
+        let result = await checker(.success((Data(), 404))).check(app: app(version: "1.0.0"))
         XCTAssertEqual(result, .failed)
     }
 
-    func testServerErrorReportsFailed() async {
-        let result = await checker(.success((Data(), 500))).check(app: app(version: "1.0.0"))
+    func testUnparseableBodyReportsFailed() async {
+        let result = await checker(.success((Data("garbage".utf8), 200))).check(app: app(version: "1.0.0"))
         XCTAssertEqual(result, .failed)
     }
 

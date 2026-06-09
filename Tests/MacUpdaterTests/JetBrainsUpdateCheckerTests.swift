@@ -70,12 +70,12 @@ struct JetBrainsUpdateCheckerTests {
         #expect(result == .notApplicable)
     }
 
-    // A network/HTTP failure must be .failed (genuinely unknown), not a silent
-    // "up to date" — the distinction the whole ManualCheckResult type exists for.
-    @Test func failedWhenServerErrors() async {
+    // A 5xx server error means the source is temporarily silent — .unavailable
+    // (transient upstream outage), not .failed. Not a silent "up to date" either.
+    @Test func unavailableWhenServerErrors() async {
         let result = await checker(FakeHTTP.client(status: 503))
             .check(app: app(bundleID: bundleID, version: "2026.1.1"))
-        #expect(result == .failed)
+        #expect(result == .unavailable)
     }
 
     @Test func failedOnMalformedJSON() async {

@@ -25,6 +25,31 @@ public struct ManualUpdateScanner: Sendable {
         self.maxConcurrentChecks = maxConcurrentChecks
     }
 
+    /// Opakowuje check tak, by zalogować, które źródło dla której aplikacji
+    /// zamilkło: `.failed` na poziomie ERROR (prawdziwy błąd), `.unavailable` na
+    /// poziomie WARNING (chwilowa niedostępność źródła — nie nasz problem).
+    /// `runBounded` nie zachowuje kolejności wyników, więc logujemy tutaj,
+    /// w domknięciu, gdzie etykieta jest w zasięgu.
+    static func logged(
+        _ source: String,
+        _ app: ApplicationInfo,
+        _ run: @escaping @Sendable () async -> ManualCheckResult
+    ) -> @Sendable () async -> ManualCheckResult {
+        let appName = app.name
+        return {
+            let result = await run()
+            switch result {
+            case .failed:
+                WegaLog.error(.network, "\(source) · \(appName): błąd odpowiedzi lub parsowania")
+            case .unavailable:
+                WegaLog.warning(.network, "\(source) · \(appName): źródło chwilowo niedostępne")
+            default:
+                break
+            }
+            return result
+        }
+    }
+
     public func scan(brewOutdatedCasks: Set<String> = []) async -> (apps: [ManualOutdatedApp], failedChecks: Int) {
         let casks = (try? await CaskDatabaseClient(cache: CaskDatabaseCache(fileURL: caskCacheURL)).fetchCasks()) ?? []
         let installedCasks = (try? await brewService.installedCasks()) ?? []
@@ -70,7 +95,7 @@ public struct ManualUpdateScanner: Sendable {
         for app in appsToCheck {
             if let token = app.caskToken {
                 let brewTracked = brewCaskVersions[token]
-                work.append {
+                work.append(Self.logged("Cask", app) {
                     guard let latest = await brew.caskLatestVersion(token: token) else { return .upToDate }
                     let reference = brewTracked ?? app.version
                     guard let installed = reference,
@@ -82,20 +107,20 @@ public struct ManualUpdateScanner: Sendable {
                         availableVersion: versionVariants(latest).first ?? latest,
                         source: .cask(token: token)
                     ))
-                }
+                })
             }
-            work.append { await jetbrainsChecker.check(app: app) }
-            work.append { await githubChecker.check(app: app) }
-            work.append { await synologyChecker.check(app: app) }
-            work.append { await antigravityChecker.check(app: app) }
-            work.append { await parallelsChecker.check(app: app) }
-            work.append { await googleDriveChecker.check(app: app) }
-            work.append { await chatGPTChecker.check(app: app) }
+            work.append(Self.logged("JetBrains", app) { await jetbrainsChecker.check(app: app) })
+            work.append(Self.logged("GitHub", app) { await githubChecker.check(app: app) })
+            work.append(Self.logged("Synology", app) { await synologyChecker.check(app: app) })
+            work.append(Self.logged("Antigravity", app) { await antigravityChecker.check(app: app) })
+            work.append(Self.logged("Parallels", app) { await parallelsChecker.check(app: app) })
+            work.append(Self.logged("Google Drive", app) { await googleDriveChecker.check(app: app) })
+            work.append(Self.logged("ChatGPT", app) { await chatGPTChecker.check(app: app) })
             // Always run Sparkle: even when an app is matched to an installed cask
             // (e.g. Codex.app vs. cask `codex` which is actually a CLI binary), the
             // app itself may have its own appcast. Priority dedup ensures cask (2)
             // wins over sparkle (1) when both report the same path.
-            work.append { await sparkleChecker.check(app: app) }
+            work.append(Self.logged("Sparkle", app) { await sparkleChecker.check(app: app) })
         }
 
         var collected: [ManualOutdatedApp] = []
@@ -104,6 +129,7 @@ public struct ManualUpdateScanner: Sendable {
             switch result {
             case .outdated(let item): collected.append(item)
             case .failed:             failedChecks += 1
+            case .unavailable:        break
             case .upToDate, .notApplicable: break
             }
         }

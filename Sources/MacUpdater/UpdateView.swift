@@ -7,6 +7,8 @@ private enum UpdateStatus { case ready, checking, results }
 struct UpdateView: View {
     var onWegaState:   ((WegaState) -> Void)?
     var onBadgeChange: ((Int) -> Void)?
+    var onNavigate:    ((SidebarTab) -> Void)?
+    var onErrorCount:  ((Int) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
     @EnvironmentObject private var policies: UpdatePolicyStore
@@ -151,7 +153,11 @@ struct UpdateView: View {
             .padding(.vertical, 12)
 
             if let b = banner {
-                BannerView(data: b) { banner = nil }
+                BannerView(data: b, onAction: { action in
+                    switch action {
+                    case .openLogs: onNavigate?(.logs)
+                    }
+                }) { banner = nil }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
             }
@@ -245,6 +251,7 @@ struct UpdateView: View {
     private func runCheck() async {
         status = .checking
         errorMessage = nil
+        WegaLog.info(.scanner, tr("Skan rozpoczęty"))
         onWegaState?(WegaState(pose: .sniff, line: tr("Węszę po Homebrew…")))
 
         // Refresh brew metadata before asking what is outdated — otherwise a
@@ -268,15 +275,18 @@ struct UpdateView: View {
         var failedSources = 0
 
         do { brewOutdated = try await model.brewService.outdatedGreedy() }
-        catch { errorMessage = error.localizedDescription; brewOutdated = nil; failedSources += 1 }
+        catch { errorMessage = error.localizedDescription; brewOutdated = nil; failedSources += 1
+                WegaLog.error(.homebrew, "brew outdated: \(error.localizedDescription)") }
 
         do { masOutdated = try await model.masService.outdated() }
         catch MasServiceError.masNotFound { masOutdated = [] }
-        catch { masOutdated = []; failedSources += 1 }
+        catch { masOutdated = []; failedSources += 1
+                WegaLog.error(.app, "mas outdated: \(error.localizedDescription)") }
 
         do { npmOutdated = try await model.npmService.outdated() }
         catch NpmServiceError.npmNotFound { npmOutdated = [] }
-        catch { npmOutdated = []; failedSources += 1 }
+        catch { npmOutdated = []; failedSources += 1
+                WegaLog.error(.network, "npm outdated: \(error.localizedDescription)") }
 
         let brewOutdatedCasks = Set(brewOutdated?.casks.map(\.name) ?? [])
         let scan = await scanManualUpdates(brewOutdatedCasks: brewOutdatedCasks)
@@ -315,29 +325,33 @@ struct UpdateView: View {
         status    = .results
 
         let total = allItems.count + visibleManual.count
+        WegaLog.info(.scanner, "Skan zakończony: \(total) aktualizacji, \(failedSources) źródeł nie odpowiedziało")
         switch UpdatePlanner.scanState(updateCount: total, failedChecks: failedSources) {
         case .upToDate:
             if let msg = errorMessage {
-                banner = BannerData(variant: .danger, title: tr("Błąd Homebrew"), message: msg)
+                banner = BannerData(variant: .danger, title: tr("Błąd Homebrew"), message: msg, action: .openLogs)
             }
             onWegaState?(WegaState(pose: .happy, line: tr("Wszystko aktualne. Idę się zdrzemnąć.")))
         case .outdated(let n):
             if let msg = errorMessage {
-                banner = BannerData(variant: .danger, title: tr("Błąd Homebrew"), message: msg)
+                banner = BannerData(variant: .danger, title: tr("Błąd Homebrew"), message: msg, action: .openLogs)
             }
             onWegaState?(WegaState(pose: .alert, line: trf("Znalazłam %@ rzeczy do uporządkowania.", "\(n)")))
         case .checkFailed:
             banner = BannerData(variant: .danger,
                                 title: tr("Nie udało się sprawdzić aktualizacji"),
-                                message: errorMessage ?? tr("Część źródeł nie odpowiedziała — sprawdź połączenie z internetem i spróbuj ponownie."))
+                                message: errorMessage ?? tr("Część źródeł nie odpowiedziała — sprawdź połączenie z internetem i spróbuj ponownie."),
+                                action: .openLogs)
             onWegaState?(WegaState(pose: .sad, line: tr("Nie dowęszyłam się — chyba nie ma internetu.")))
         case .partialFailure(let updates, let failed):
             banner = BannerData(variant: .danger,
                                 title: tr("Lista może być niepełna"),
-                                message: trf("Znalazłam %@ aktualizacji, ale %@ źródeł nie odpowiedziało — sprawdź połączenie i odśwież.", "\(updates)", "\(failed)"))
+                                message: trf("Znalazłam %@ aktualizacji, ale %@ źródeł nie odpowiedziało — sprawdź połączenie i odśwież.", "\(updates)", "\(failed)"),
+                                action: .openLogs)
             onWegaState?(WegaState(pose: .alert, line: trf("Znalazłam %@, ale część źródeł milczy.", "\(updates)")))
         }
         onBadgeChange?(allItems.count)
+        onErrorCount?(failedSources)
     }
 
     private func scanManualUpdates(brewOutdatedCasks: Set<String> = []) async -> (apps: [ManualOutdatedApp], failedChecks: Int) {
@@ -370,14 +384,17 @@ struct UpdateView: View {
                 }
                 banner = BannerData(variant: .success, title: trf("Zaktualizowano %@", "\(token)"), message: tr("Teraz zarządzany przez Homebrew."))
                 onWegaState?(WegaState(pose: .happy, line: trf("%@ zaktualizowany i pod opieką Brew.", "\(token)")))
+                WegaLog.info(.homebrew, "Zainstalowano \(token) (brew cask)")
             } else {
                 banner = BannerData(variant: .danger, title: trf("Błąd instalacji %@", "\(token)"), message: tr("Sprawdź logi poniżej."))
                 onWegaState?(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
+                WegaLog.error(.homebrew, "Instalacja \(token) nieudana (kod \(exitCode))")
             }
         } catch {
             brewLog.append("error: \(error.localizedDescription)")
             banner = BannerData(variant: .danger, title: tr("Błąd instalacji"), message: error.localizedDescription)
             onWegaState?(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
+            WegaLog.error(.homebrew, "Instalacja \(token): \(error.localizedDescription)")
         }
         manualBusy = nil
     }
@@ -431,6 +448,7 @@ struct UpdateView: View {
                 brewLog.append(contentsOf: lines)
             } catch {
                 brewLog.append("error: \(error.localizedDescription)")
+                WegaLog.error(.app, "mas upgrade: \(error.localizedDescription)")
             }
         }
 
@@ -457,9 +475,11 @@ struct UpdateView: View {
                 : baseDetail
             banner = BannerData(variant: .danger, title: tr("Aktualizacja niekompletna"), message: detail)
             onWegaState?(WegaState(pose: .alert, line: tr("Część pakietów się nie zaktualizowała.")))
+            WegaLog.error(.homebrew, "Aktualizacja niekompletna: \(failedTokens.isEmpty ? "Brew zgłosił błąd" : failedTokens.joined(separator: ", "))")
         } else {
             banner = BannerData(variant: .success, title: trf("Zaktualizowano %@ pakietów", "\(n)"), message: tr("Wszystko gotowe."))
             onWegaState?(WegaState(pose: .happy, line: trf("Gotowe! %@ pakietów odświeżonych.", "\(n)")))
+            WegaLog.info(.homebrew, "Zaktualizowano \(n) pakietów")
         }
     }
 

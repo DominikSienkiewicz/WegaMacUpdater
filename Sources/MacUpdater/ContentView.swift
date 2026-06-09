@@ -8,6 +8,7 @@ enum SidebarTab: String, Identifiable {
     case uninstall = "uninstall"
     case migration = "migration"
     case inventory = "inventory"
+    case logs      = "logs"
     case info      = "info"
 
     var id: String { rawValue }
@@ -18,6 +19,7 @@ enum SidebarTab: String, Identifiable {
         case .uninstall: return tr("Odinstaluj aplikacje")
         case .migration: return tr("Migracja")
         case .inventory: return tr("Spis aplikacji")
+        case .logs:      return tr("Logi")
         case .info:      return tr("Info")
         }
     }
@@ -27,6 +29,7 @@ enum SidebarTab: String, Identifiable {
         case .uninstall: return "trash"
         case .migration: return "arrow.right.doc.on.clipboard"
         case .inventory: return "tablecells"
+        case .logs:      return "doc.text.magnifyingglass"
         case .info:      return "info.circle"
         }
     }
@@ -36,11 +39,12 @@ enum SidebarTab: String, Identifiable {
         case .uninstall: return tr("Usuń aplikacje")
         case .migration: return tr("Przepnij pod Brew")
         case .inventory: return tr("Pełny obchód")
+        case .logs:      return tr("Co się działo")
         case .info:      return tr("O aplikacji")
         }
     }
 
-    static var toolTabs: [SidebarTab] { [.update, .uninstall, .migration, .inventory] }
+    static var toolTabs: [SidebarTab] { [.update, .uninstall, .migration, .inventory, .logs] }
 }
 
 // MARK: - Root view
@@ -51,6 +55,8 @@ struct ContentView: View {
     @AppStorage("wega.activeTab") private var activeTab: SidebarTab = .update
     @State private var wegaState:    WegaState  = .forTab(.update)
     @State private var updateBadge:  Int        = 0
+    @State private var logsInitialFilter: LogLevelFilter = .all
+    @State private var logsErrorBadge: Int = 0
     @State private var brewInstalled: Bool
 
     init() {
@@ -64,13 +70,17 @@ struct ContentView: View {
                     SidebarView(
                         activeTab:   $activeTab,
                         wegaState:   $wegaState,
-                        updateBadge: updateBadge
+                        updateBadge: updateBadge,
+                        logsInitialFilter: $logsInitialFilter,
+                        logsErrorBadge: $logsErrorBadge
                     )
                     Divider()
                     ContentArea(
                         activeTab:   $activeTab,
                         wegaState:   $wegaState,
-                        updateBadge: $updateBadge
+                        updateBadge: $updateBadge,
+                        logsInitialFilter: $logsInitialFilter,
+                        logsErrorBadge: $logsErrorBadge
                     )
                 }
             } else {
@@ -88,6 +98,16 @@ private struct SidebarView: View {
     @Binding var activeTab:   SidebarTab
     @Binding var wegaState:   WegaState
     let updateBadge: Int
+    @Binding var logsInitialFilter: LogLevelFilter
+    @Binding var logsErrorBadge: Int
+
+    private func badgeValue(for tab: SidebarTab) -> Int? {
+        switch tab {
+        case .update: return updateBadge > 0 ? updateBadge : nil
+        case .logs:   return logsErrorBadge > 0 ? logsErrorBadge : nil
+        default:      return nil
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -124,10 +144,12 @@ private struct SidebarView: View {
 
                 ForEach(SidebarTab.toolTabs) { tab in
                     SidebarTabRow(
-                        tab:      tab,
-                        isActive: activeTab == tab,
-                        badge:    tab == .update && updateBadge > 0 ? updateBadge : nil,
+                        tab:          tab,
+                        isActive:     activeTab == tab,
+                        badge:        badgeValue(for: tab),
+                        badgeIsDanger: tab == .logs,
                         onSelect: {
+                            if tab == .logs { logsInitialFilter = .all; logsErrorBadge = 0 }
                             activeTab = tab
                             wegaState = .forTab(tab)
                         }
@@ -162,10 +184,11 @@ private struct SidebarView: View {
 }
 
 private struct SidebarTabRow: View {
-    let tab:      SidebarTab
-    let isActive: Bool
-    let badge:    Int?
-    let onSelect: () -> Void
+    let tab:          SidebarTab
+    let isActive:     Bool
+    let badge:        Int?
+    var badgeIsDanger: Bool = false
+    let onSelect:     () -> Void
 
     @State private var isHovered = false
 
@@ -185,17 +208,18 @@ private struct SidebarTabRow: View {
                     .font(.system(size: 13, weight: isActive ? .semibold : .regular))
                 Spacer()
                 if let b = badge {
+                    let fg: Color = badgeIsDanger
+                        ? .white
+                        : (isActive ? Color(red: 0.16, green: 0.11, blue: 0.07) : Color.wegaHoney)
+                    let bg: Color = badgeIsDanger
+                        ? Color.wegaDanger
+                        : (isActive ? Color.wegaHoney : Color.wegaHoney.opacity(0.18))
                     Text("\(b)")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(isActive
-                            ? Color(red: 0.16, green: 0.11, blue: 0.07)
-                            : Color.wegaHoney)
+                        .foregroundStyle(fg)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1)
-                        .background(
-                            isActive ? Color.wegaHoney : Color.wegaHoney.opacity(0.18),
-                            in: Capsule()
-                        )
+                        .background(bg, in: Capsule())
                 }
             }
             .padding(.horizontal, 10)
@@ -377,6 +401,8 @@ private struct ContentArea: View {
     @Binding var activeTab:   SidebarTab
     @Binding var wegaState:   WegaState
     @Binding var updateBadge: Int
+    @Binding var logsInitialFilter: LogLevelFilter
+    @Binding var logsErrorBadge: Int
 
     @State private var quip: String? = nil
 
@@ -424,7 +450,13 @@ private struct ContentArea: View {
                 case .update:
                     UpdateView(
                         onWegaState:   { wegaState = $0 },
-                        onBadgeChange: { updateBadge = $0 }
+                        onBadgeChange: { updateBadge = $0 },
+                        onNavigate:    { tab in
+                            if tab == .logs { logsInitialFilter = .errorsOnly; logsErrorBadge = 0 }
+                            activeTab = tab
+                            wegaState = .forTab(tab)
+                        },
+                        onErrorCount:  { logsErrorBadge = $0 }
                     )
                 case .uninstall:
                     UninstallView(onWegaState: { wegaState = $0 })
@@ -432,6 +464,9 @@ private struct ContentArea: View {
                     MigrationView(onWegaState: { wegaState = $0 })
                 case .inventory:
                     InventoryView(onWegaState: { wegaState = $0 })
+                case .logs:
+                    LogsView(onWegaState: { wegaState = $0 }, initialFilter: logsInitialFilter)
+                        .id(logsInitialFilter)
                 case .info:
                     InfoView(onWegaState: { wegaState = $0 })
                 }

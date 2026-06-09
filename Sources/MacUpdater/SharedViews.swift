@@ -243,15 +243,19 @@ struct EmptyHero: View {
 
 // MARK: - BannerData + BannerView
 
+enum BannerAction: Equatable { case openLogs }
+
 struct BannerData: Equatable {
     enum Variant { case success, danger }
     let variant: Variant
     let title: String
     let message: String
+    var action: BannerAction? = nil
 }
 
 struct BannerView: View {
     let data: BannerData
+    var onAction: ((BannerAction) -> Void)? = nil
     let onClose: () -> Void
 
     var body: some View {
@@ -263,6 +267,15 @@ struct BannerView: View {
                 Text(data.message).font(.system(size: 12)).foregroundStyle(.secondary)
             }
             Spacer()
+            if let action = data.action {
+                Button { onAction?(action) } label: {
+                    Label(tr("Zobacz w logach"), systemImage: "info.circle")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.wegaHoney)
+                .accessibilityLabel(tr("Zobacz w logach"))
+            }
             Button { onClose() } label: { Image(systemName: "xmark") }
                 .buttonStyle(.plain)
                 .foregroundStyle(.tertiary)

@@ -21,10 +21,10 @@ public struct GitHubReleasesChecker: Sendable {
         // ETag-conditional: a 304 reuses the cached body and does not count against
         // GitHub's unauthenticated 60-req/h rate limit.
         guard let response = try? await client.get(url, headers: ["Accept": "application/vnd.github+json"], enableETag: true) else {
-            return .failed
+            return .unavailable
         }
-        guard response.statusCode == 200,
-              let release = try? JSONDecoder().decode(GitHubRelease.self, from: response.data) else {
+        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
+        guard let release = try? JSONDecoder().decode(GitHubRelease.self, from: response.data) else {
             return .failed
         }
 

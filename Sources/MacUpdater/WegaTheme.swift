@@ -45,6 +45,7 @@ struct WegaState: Equatable {
         case .uninstall: return WegaState(pose: .alert, line: tr("Aport! Zaznacz, co mam zabrać."))
         case .migration: return WegaState(pose: .idle,  line: tr("Pójdę zwęszyć /Applications."))
         case .inventory: return WegaState(pose: .idle,  line: tr("Obejdę wszystkie kąty."))
+        case .logs:      return WegaState(pose: .sniff, line: tr("Co się ostatnio działo?"))
         case .info:      return WegaState(pose: .idle, line: tr("Oto co o sobie wiem."))
         }
     }

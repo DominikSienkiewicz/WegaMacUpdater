@@ -113,10 +113,10 @@ struct SparkleUpdateCheckerTests {
         #expect(result == .notApplicable)
     }
 
-    @Test func failedWhenServerErrors() async {
+    @Test func unavailableWhenServerErrors() async {
         let result = await checker(FakeHTTP.client(status: 500))
             .check(app: app(bundleID: overrideBundleID, version: "1.0.0"))
-        #expect(result == .failed)
+        #expect(result == .unavailable)
     }
 
     @Test func failedWhenAppcastUnparseable() async {

@@ -75,9 +75,9 @@ public struct GoogleDriveUpdateChecker: Sendable {
 
         let body = Data(GoogleDriveUpdateParser.omahaRequestBody(installedVersion: installed).utf8)
         guard let response = try? await client.post(GoogleDriveUpdateParser.omahaEndpoint, body: body, contentType: "application/xml") else {
-            return .failed
+            return .unavailable
         }
-        guard response.statusCode == 200 else { return .failed }
+        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
 
         // Omaha omits <manifest> when there's no update (status="noupdate"), so a
         // missing version here means "current", not a failure.

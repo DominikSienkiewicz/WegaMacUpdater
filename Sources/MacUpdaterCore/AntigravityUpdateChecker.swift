@@ -70,9 +70,9 @@ public struct AntigravityUpdateChecker: Sendable {
 
         guard let url = AppEndpoints.shared.antigravityUpdateURL(platform: platform) else { return .notApplicable }
 
-        guard let response = try? await client.get(url, enableETag: true) else { return .failed }
-        guard response.statusCode == 200,
-              let latest = AntigravityUpdateParser.productVersion(fromUpdateJSON: response.data) else { return .failed }
+        guard let response = try? await client.get(url, enableETag: true) else { return .unavailable }
+        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
+        guard let latest = AntigravityUpdateParser.productVersion(fromUpdateJSON: response.data) else { return .failed }
 
         guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
 

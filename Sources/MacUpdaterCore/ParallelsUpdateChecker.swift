@@ -101,9 +101,9 @@ public struct ParallelsUpdateChecker: Sendable {
               let installed = app.version, !installed.isEmpty,
               let url = Self.updateURL(forShortVersion: installed) else { return .notApplicable }
 
-        guard let response = try? await client.get(url, enableETag: true) else { return .failed }
-        guard response.statusCode == 200,
-              let latest = ParallelsUpdateParser.latest(fromUpdatesXML: response.data) else { return .failed }
+        guard let response = try? await client.get(url, enableETag: true) else { return .unavailable }
+        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
+        guard let latest = ParallelsUpdateParser.latest(fromUpdatesXML: response.data) else { return .failed }
 
         guard isUpgrade(installed: installed, latest: latest.shortVersion) else { return .upToDate }
 
