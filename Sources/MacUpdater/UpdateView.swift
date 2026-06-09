@@ -153,11 +153,15 @@ struct UpdateView: View {
             .padding(.vertical, 12)
 
             if let b = banner {
-                BannerView(data: b, onAction: { action in
-                    switch action {
-                    case .openLogs: onNavigate?(.logs)
-                    }
-                }) { banner = nil }
+                BannerView(
+                    data: b,
+                    onAction: { action in
+                        switch action {
+                        case .openLogs: onNavigate?(.logs)
+                        }
+                    },
+                    onClose: { banner = nil }
+                )
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
             }
