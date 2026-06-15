@@ -93,35 +93,50 @@ public struct ManualUpdateScanner: Sendable {
         // bounded concurrency cap. An unbounded group would open one connection per
         // (app × checker) — hundreds at once on a large /Applications — and hammer the
         // remote update APIs; the cap keeps the fan-out polite without serialising it.
+        // Brew decides for brew-managed apps: `brew outdated` is their single source of
+        // truth, so we DON'T run the cask-version check or the cask-lag special checkers
+        // on them. Managed status uses the FULL installed-cask set (matched by name or
+        // resolved token), so pkg-artifact casks like `google-drive` count too.
+        let normalizedInstalledCasks = Set(installedCasks.map { StringNormalizer.normalize($0) })
+        func isBrewManaged(_ app: ApplicationInfo) -> Bool {
+            if app.isManagedByBrew { return true }
+            if let token = app.caskToken,
+               normalizedInstalledCasks.contains(StringNormalizer.normalize(token)) { return true }
+            return false
+        }
+
         var work: [@Sendable () async -> ManualCheckResult] = []
         for app in appsToCheck {
-            if let token = app.caskToken {
-                let brewTracked = brewCaskVersions[token]
-                work.append(Self.logged("Cask", app) {
-                    guard let latest = await brew.caskLatestVersion(token: token) else { return .upToDate }
-                    let reference = brewTracked ?? app.version
-                    guard let installed = reference,
-                          !versionsEqual(latest, installed),
-                          isUpgrade(installed: installed, latest: latest) else { return .upToDate }
-                    return .outdated(ManualOutdatedApp(
-                        name: app.name, path: app.path,
-                        installedVersion: app.version ?? installed,
-                        availableVersion: versionVariants(latest).first ?? latest,
-                        source: .cask(token: token)
-                    ))
-                })
+            if !isBrewManaged(app) {
+                // Non-brew apps only: cask-version check (adoption candidates) plus the
+                // cask-lag special checkers.
+                if let token = app.caskToken {
+                    let brewTracked = brewCaskVersions[token]
+                    work.append(Self.logged("Cask", app) {
+                        guard let latest = await brew.caskLatestVersion(token: token) else { return .upToDate }
+                        let reference = brewTracked ?? app.version
+                        guard let installed = reference,
+                              !versionsEqual(latest, installed),
+                              isUpgrade(installed: installed, latest: latest) else { return .upToDate }
+                        return .outdated(ManualOutdatedApp(
+                            name: app.name, path: app.path,
+                            installedVersion: app.version ?? installed,
+                            availableVersion: versionVariants(latest).first ?? latest,
+                            source: .cask(token: token)
+                        ))
+                    })
+                }
+                work.append(Self.logged("JetBrains", app) { await jetbrainsChecker.check(app: app) })
+                work.append(Self.logged("GitHub", app) { await githubChecker.check(app: app) })
+                work.append(Self.logged("Synology", app) { await synologyChecker.check(app: app) })
+                work.append(Self.logged("Antigravity", app) { await antigravityChecker.check(app: app) })
+                work.append(Self.logged("Parallels", app) { await parallelsChecker.check(app: app) })
+                work.append(Self.logged("Google Drive", app) { await googleDriveChecker.check(app: app) })
+                work.append(Self.logged("ChatGPT", app) { await chatGPTChecker.check(app: app) })
             }
-            work.append(Self.logged("JetBrains", app) { await jetbrainsChecker.check(app: app) })
-            work.append(Self.logged("GitHub", app) { await githubChecker.check(app: app) })
-            work.append(Self.logged("Synology", app) { await synologyChecker.check(app: app) })
-            work.append(Self.logged("Antigravity", app) { await antigravityChecker.check(app: app) })
-            work.append(Self.logged("Parallels", app) { await parallelsChecker.check(app: app) })
-            work.append(Self.logged("Google Drive", app) { await googleDriveChecker.check(app: app) })
-            work.append(Self.logged("ChatGPT", app) { await chatGPTChecker.check(app: app) })
-            // Always run Sparkle: even when an app is matched to an installed cask
-            // (e.g. Codex.app vs. cask `codex` which is actually a CLI binary), the
-            // app itself may have its own appcast. Priority dedup ensures cask (2)
-            // wins over sparkle (1) when both report the same path.
+            // Sparkle ALWAYS — it's the app's own appcast, independent of Homebrew. Also
+            // keeps working for an app that merely shares a name with a CLI-only cask
+            // (e.g. Codex.app vs. the `codex` binary cask), which isn't really brew's app.
             work.append(Self.logged("Sparkle", app) { await sparkleChecker.check(app: app) })
         }
 

@@ -48,6 +48,7 @@ struct UpdateView: View {
         UpdatePlanner.applyPolicies(manualOutdated, policies: policies.policiesMap)
     }
 
+
     var body: some View {
         content
             .sheet(item: $pinTarget) { req in
@@ -203,6 +204,8 @@ struct UpdateView: View {
                                 items: visibleManual,
                                 busyToken: manualBusy,
                                 onInstall: { token in Task { await installManual(token: token) } },
+                                title: tr("Ręcznie zainstalowane"),
+                                icon: "sparkle",
                                 onIgnore: ignoreManual,
                                 onPin: requestPinManual
                             )
@@ -779,18 +782,24 @@ private struct ManualUpdateSection: View {
     let items:     [ManualOutdatedApp]
     let busyToken: String?
     let onInstall: (String) -> Void
+    let title:     String
+    let icon:      String
+    var subtitle:  String? = nil
     var onIgnore:  ((ManualOutdatedApp) -> Void)?
     var onPin:     ((ManualOutdatedApp) -> Void)?
 
     var body: some View {
         WegaCard {
             HStack(spacing: 8) {
-                Image(systemName: "sparkle").foregroundStyle(Color.wegaHoney)
-                Text(tr("Ręcznie zainstalowane"))
+                Image(systemName: icon).foregroundStyle(Color.wegaHoney)
+                Text(title)
                     .font(.system(size: 13, weight: .semibold))
                 Text("\(items.count)")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(.tertiary)
+                if let subtitle {
+                    Text(subtitle).font(.system(size: 11)).foregroundStyle(.tertiary)
+                }
                 Spacer()
             }
             .padding(.horizontal, 14)
