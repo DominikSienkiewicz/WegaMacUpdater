@@ -10,6 +10,21 @@ import Foundation
 /// languages so argument order is preserved.
 public enum Translations {
     public static let en: [String: String] = [
+        // FEAT-01 / SEC-03 — privileged helper + self-update verification.
+        "Aktualizacja nie przeszła weryfikacji podpisu — otwieram stronę wydania.": "The update failed signature verification — opening the release page.",
+        "Komponent uprzywilejowany": "Privileged component",
+        "Pozwala instalować zweryfikowane aktualizacje i konfigurować Touch ID bez wpisywania hasła — przez podpisany helper (XPC) z białą listą operacji.": "Installs verified updates and configures Touch ID without typing a password — via a signed helper (XPC) with a whitelist of operations.",
+        "Aktywny": "Active",
+        "Wymaga zgody": "Needs approval",
+        "Niezarejestrowany": "Not registered",
+        "Nie znaleziono": "Not found",
+        "Usuń komponent": "Remove component",
+        "Otwórz Ustawienia → Elementy logowania": "Open Settings → Login Items",
+        "Zainstaluj komponent": "Install component",
+        "Brak skonfigurowanego Team ID — helper zadziała dopiero w podpisanym buildzie.": "No Team ID configured — the helper works only in a signed build.",
+        "Zatwierdź komponent w Ustawieniach → Elementy logowania.": "Approve the component in Settings → Login Items.",
+        "Komponent uprzywilejowany gotowy.": "Privileged component ready.",
+        "Aktualizacja zainstalowana przez komponent uprzywilejowany.": "Update installed via the privileged component.",
         "Sprawdźmy, co się zestarzało": "Let's check what's gotten old",
         "Wega zajrzy do Homebrew oraz Mac App Store i powie, co warto odświeżyć.": "Wega will look into Homebrew and the Mac App Store and tell you what's worth refreshing.",
         "Sprawdź aktualizacje": "Check for updates",

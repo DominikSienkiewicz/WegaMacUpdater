@@ -63,6 +63,44 @@ public enum TouchIDSudoConfigurator {
         )
     }
 
+    // MARK: - Root-side writer (privileged helper — FEAT-01)
+
+    /// Pure, idempotent: given the current `sudo_local` (or template, or nil),
+    /// return contents that contain the `pam_tid` directive exactly once. No I/O,
+    /// so it is unit-tested directly.
+    public static func contentsEnablingTouchID(current: String?) -> String {
+        var base = current ?? ""
+        for rawLine in base.split(whereSeparator: \.isNewline) {
+            let line = String(rawLine).trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("#") { continue }
+            if line.contains("pam_tid.so"), line.contains("sufficient"), line.contains("auth") {
+                return base // already enabled — idempotent
+            }
+        }
+        if !base.isEmpty, !base.hasSuffix("\n") { base += "\n" }
+        base += pamDirective + "\n"
+        return base
+    }
+
+    /// Writes `sudo_local` enabling Touch ID, as **root** (called only from the
+    /// privileged helper). Uses a non-atomic write (`open+write`, not temp+rename)
+    /// on purpose: on Sequoia the kernel/TCC policy rejects `rename(2)` into
+    /// `/etc/pam.d/` even for elevated processes, while a direct write is allowed
+    /// — the same reason the shell path used `tee`. Then locks down 0644 root:wheel.
+    public static func writeSudoLocalEnablingTouchID() throws {
+        let current = (try? String(contentsOfFile: sudoLocalPath, encoding: .utf8))
+            ?? (try? String(contentsOfFile: SystemPaths.sudoLocalTemplate, encoding: .utf8))
+        let contents = contentsEnablingTouchID(current: current)
+        let url = URL(fileURLWithPath: sudoLocalPath)
+        try Data(contents.utf8).write(to: url, options: []) // non-atomic on purpose
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o644),
+             .ownerAccountID: NSNumber(value: 0),   // root
+             .groupAccountID: NSNumber(value: 0)],  // wheel
+            ofItemAtPath: sudoLocalPath
+        )
+    }
+
     /// Pure decision: combine the outcome of an `LAContext` biometry probe
     /// with an IOKit hardware-presence fallback.
     ///

@@ -25,6 +25,15 @@ let package = Package(
             path: "Sources/MacUpdater",
             exclude: ["Info.plist"]
         ),
+        // FEAT-01: privileged daemon, embedded in the app bundle and registered
+        // via SMAppService. The launchd plist is excluded from SPM resource
+        // handling (build-pkg.sh copies it into Contents/Library/LaunchDaemons/).
+        .executableTarget(
+            name: "WegaPrivilegedHelper",
+            dependencies: ["MacUpdaterCore"],
+            path: "Sources/WegaPrivilegedHelper",
+            exclude: ["com.wega.WegaMacUpdater.helper.plist"]
+        ),
         .testTarget(
             name: "MacUpdaterTests",
             dependencies: ["MacUpdaterCore"],

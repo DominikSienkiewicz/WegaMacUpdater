@@ -60,4 +60,8 @@ public enum SystemPaths {
 
     /// The drop-in PAM file whose edits survive macOS updates.
     public static let sudoLocal = "/etc/pam.d/sudo_local"
+
+    /// Apple-shipped template for `sudo_local` (Sonoma+); seed content when the
+    /// drop-in file doesn't exist yet.
+    public static let sudoLocalTemplate = "/etc/pam.d/sudo_local.template"
 }

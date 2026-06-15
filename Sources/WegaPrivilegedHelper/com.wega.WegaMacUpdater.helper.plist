@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- launchd label; must match WegaHelper.machServiceName. -->
+    <key>Label</key>
+    <string>com.wega.WegaMacUpdater.helper</string>
+
+    <!-- Path to the helper executable, RELATIVE to the main app bundle.
+         build-pkg.sh copies the binary to Contents/MacOS/WegaPrivilegedHelper. -->
+    <key>BundleProgram</key>
+    <string>Contents/MacOS/WegaPrivilegedHelper</string>
+
+    <!-- On-demand Mach service the app connects to over XPC. -->
+    <key>MachServices</key>
+    <dict>
+        <key>com.wega.WegaMacUpdater.helper</key>
+        <true/>
+    </dict>
+
+    <!-- Ties the daemon to the app so it appears under the app in Login Items. -->
+    <key>AssociatedBundleIdentifiers</key>
+    <array>
+        <string>com.wega.WegaMacUpdater</string>
+    </array>
+</dict>
+</plist>

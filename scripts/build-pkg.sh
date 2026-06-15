@@ -57,6 +57,20 @@ fi
 
 cp "$BINARY" "$CONTENTS/MacOS/$APP_NAME"
 
+# ---------------------------------------------------------------------------
+# FEAT-01: osadź privileged helper + jego launchd plist w bundlu.
+echo "→ Osadzam privileged helper (FEAT-01)..."
+HELPER_BIN="$BIN_DIR/WegaPrivilegedHelper"
+if [[ ! -f "$HELPER_BIN" ]]; then
+  echo "❌ Nie znaleziono helpera w $BIN_DIR (target WegaPrivilegedHelper). Sprawdź swift build."
+  exit 1
+fi
+cp "$HELPER_BIN" "$CONTENTS/MacOS/WegaPrivilegedHelper"
+mkdir -p "$CONTENTS/Library/LaunchDaemons"
+cp "Sources/WegaPrivilegedHelper/com.wega.WegaMacUpdater.helper.plist" \
+   "$CONTENTS/Library/LaunchDaemons/com.wega.WegaMacUpdater.helper.plist"
+echo "   ✓ Helper + launchd plist osadzone"
+
 # Bundle zasobów SPM (app-catalog.json). Bez tego Bundle.module w spakowanej aplikacji
 # nie znajdzie katalogu → AppCatalog.loadBundled() rzuca → wszystkie checkery oparte
 # o katalog (GitHub, JetBrains, Synology, override'y Sparkle) tracą swoje mapowania.
@@ -118,15 +132,23 @@ cat > "$CONTENTS/Info.plist" << PLIST
 PLIST
 
 # ---------------------------------------------------------------------------
-echo "→ Podpisuję..."
+# Podpis INSIDE-OUT (DEBT-01): najpierw zagnieżdżony helper, potem kontener.
+# Apple odradza --deep do podpisywania — psuje notaryzację przy zagnieżdżonym kodzie.
+echo "→ Podpisuję (inside-out: helper → app)..."
+HELPER_SIGN_ID="com.wega.WegaMacUpdater.helper"
 if [[ -n "$SIGN_IDENTITY" ]]; then
-    codesign --force --deep --options runtime \
+    codesign --force --options runtime --timestamp \
+        -i "$HELPER_SIGN_ID" \
+        --sign "$SIGN_IDENTITY" \
+        "$CONTENTS/MacOS/WegaPrivilegedHelper"
+    codesign --force --options runtime --timestamp \
         --sign "$SIGN_IDENTITY" \
         "$APP_BUNDLE"
-    echo "   ✓ Podpisano: $SIGN_IDENTITY"
+    echo "   ✓ Podpisano (Developer ID + hardened runtime): $SIGN_IDENTITY"
 else
-    codesign --force --deep --sign - "$APP_BUNDLE"
-    echo "   ✓ Ad-hoc (bez Developer ID — tylko lokalnie)"
+    codesign --force -i "$HELPER_SIGN_ID" --sign - "$CONTENTS/MacOS/WegaPrivilegedHelper"
+    codesign --force --sign - "$APP_BUNDLE"
+    echo "   ⚠️ Ad-hoc (bez Developer ID). UWAGA: SMAppService helper NIE zarejestruje się bez podpisu Developer ID."
 fi
 
 # ---------------------------------------------------------------------------

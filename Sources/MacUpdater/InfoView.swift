@@ -21,6 +21,10 @@ struct InfoView: View {
     @State private var touchIDPermissionDenied: Bool = false
     @State private var catalogRefreshing = false
     @State private var catalogOutcome: CatalogRefresher.Outcome? = nil
+    // FEAT-01: privileged helper (SMAppService + XPC).
+    @State private var helperStatus: PrivilegedHelperClient.Status = .notRegistered
+    @State private var helperBusy = false
+    @State private var helperError: String? = nil
 
     var body: some View {
         ScrollView {
@@ -31,6 +35,7 @@ struct InfoView: View {
                 diagnosticsCard
                 catalogCard
                 touchIDCard
+                privilegedHelperCard
                 licensesCard
                 environmentCard
             }
@@ -47,6 +52,7 @@ struct InfoView: View {
                 Task { await checkSelfUpdate() }
             }
             touchIDState = TouchIDSudoConfigurator.currentState()
+            helperStatus = PrivilegedHelperClient.shared.status
         }
     }
 
@@ -201,6 +207,117 @@ struct InfoView: View {
         }
     }
 
+    // MARK: - Privileged helper (FEAT-01)
+
+    @ViewBuilder
+    private var privilegedHelperCard: some View {
+        WegaCard {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.shield").foregroundStyle(Color.wegaHoney)
+                    Text(tr("Komponent uprzywilejowany"))
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                    helperStatusBadge
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(tr("Pozwala instalować zweryfikowane aktualizacje i konfigurować Touch ID bez wpisywania hasła — przez podpisany helper (XPC) z białą listą operacji."))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if let err = helperError {
+                        Text(err)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    helperActions
+                }
+                .padding(14)
+            }
+        }
+    }
+
+    private var helperStatusBadge: some View {
+        Group {
+            switch helperStatus {
+            case .enabled:          WegaBadge(label: tr("Aktywny"), variant: .info)
+            case .requiresApproval: WegaBadge(label: tr("Wymaga zgody"), variant: .manual)
+            case .notRegistered:    WegaBadge(label: tr("Niezarejestrowany"), variant: .manual)
+            case .notFound:         WegaBadge(label: tr("Nie znaleziono"), variant: .manual)
+            case .unknown:          EmptyView()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var helperActions: some View {
+        HStack(spacing: 8) {
+            switch helperStatus {
+            case .enabled:
+                Button(role: .destructive) {
+                    Task { await removeHelper() }
+                } label: { Label(tr("Usuń komponent"), systemImage: "trash") }
+                    .controlSize(.small)
+                    .disabled(helperBusy)
+            case .requiresApproval:
+                Button {
+                    PrivilegedHelperClient.shared.openLoginItemsSettings()
+                } label: { Label(tr("Otwórz Ustawienia → Elementy logowania"), systemImage: "gearshape") }
+                    .controlSize(.small)
+                Button(tr("Sprawdź ponownie")) { helperStatus = PrivilegedHelperClient.shared.status }
+                    .controlSize(.small)
+            default:
+                Button {
+                    Task { await installHelper() }
+                } label: {
+                    if helperBusy { ProgressView().controlSize(.small) }
+                    else { Label(tr("Zainstaluj komponent"), systemImage: "lock.shield") }
+                }
+                .controlSize(.small)
+                .disabled(helperBusy)
+            }
+            Spacer()
+        }
+    }
+
+    private func installHelper() async {
+        helperBusy = true; helperError = nil
+        defer { helperBusy = false }
+        guard WegaHelper.isTeamIDConfigured else {
+            helperError = tr("Brak skonfigurowanego Team ID — helper zadziała dopiero w podpisanym buildzie.")
+            return
+        }
+        do {
+            try PrivilegedHelperClient.shared.register()
+        } catch {
+            helperError = error.localizedDescription
+        }
+        helperStatus = PrivilegedHelperClient.shared.status
+        if helperStatus == .requiresApproval {
+            onWegaState?(WegaState(pose: .alert, line: tr("Zatwierdź komponent w Ustawieniach → Elementy logowania.")))
+        } else if helperStatus == .enabled {
+            onWegaState?(WegaState(pose: .happy, line: tr("Komponent uprzywilejowany gotowy.")))
+        }
+    }
+
+    private func removeHelper() async {
+        helperBusy = true; helperError = nil
+        defer { helperBusy = false }
+        do {
+            try await PrivilegedHelperClient.shared.unregister()
+        } catch {
+            helperError = error.localizedDescription
+        }
+        helperStatus = PrivilegedHelperClient.shared.status
+    }
+
     private var statusBadge: some View {
         Group {
             switch touchIDState {
@@ -353,10 +470,51 @@ struct InfoView: View {
             let dest = FileManager.default.temporaryDirectory.appendingPathComponent(url.lastPathComponent)
             try? FileManager.default.removeItem(at: dest)
             try FileManager.default.moveItem(at: tmp, to: dest)
-            NSWorkspace.shared.open(dest)
+
+            // SEC-03 (A1): zanim oddamy cokolwiek systemowi, przypnij podpis +
+            // notaryzację + Team ID. Fail-closed — przy niepowodzeniu NIE otwieramy
+            // pobranego pliku, tylko kierujemy użytkownika na stronę wydania.
+            do {
+                try CodeSignatureVerifier.verify(
+                    installerAt: dest,
+                    expectedTeamID: WegaHelper.teamIdentifier,
+                    bundleID: AppMetadata.bundleIdentifier
+                )
+            } catch {
+                AppLogger.app.error(
+                    "Self-update odrzucony przez weryfikację podpisu: \(error.localizedDescription, privacy: .public)"
+                )
+                try? FileManager.default.removeItem(at: dest)
+                onWegaState?(WegaState(pose: .alert,
+                    line: tr("Aktualizacja nie przeszła weryfikacji podpisu — otwieram stronę wydania.")))
+                NSWorkspace.shared.open(AppEndpoints.shared.projectRepositoryURL)
+                return
+            }
+            await openOrInstall(dest)
         } catch {
-            NSWorkspace.shared.open(url)
+            // Błąd pobrania/przeniesienia — bezpieczny fallback do strony projektu,
+            // a nie „ślepe" otwieranie nierozstrzygniętego URL-a.
+            NSWorkspace.shared.open(AppEndpoints.shared.projectRepositoryURL)
         }
+    }
+
+    /// Po weryfikacji podpisu: jeśli helper jest aktywny i artefakt to `.pkg` —
+    /// instaluje go root-daemon (bez hasła, z ponowną weryfikacją po stronie
+    /// roota). W innym wypadku oddaje plik systemowemu Installerowi/Mounterowi.
+    private func openOrInstall(_ dest: URL) async {
+        if PrivilegedHelperClient.shared.isEnabled, dest.pathExtension.lowercased() == "pkg" {
+            do {
+                try await PrivilegedHelperClient.shared.installVerifiedPackage(at: dest.path)
+                onWegaState?(WegaState(pose: .happy,
+                    line: tr("Aktualizacja zainstalowana przez komponent uprzywilejowany.")))
+                return
+            } catch {
+                AppLogger.app.error(
+                    "Instalacja przez helper nie powiodła się: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+        }
+        NSWorkspace.shared.open(dest)
     }
 
     private func enableTouchID() async {
@@ -364,6 +522,21 @@ struct InfoView: View {
         touchIDError = nil
         touchIDPermissionDenied = false
         defer { enablingTouchID = false }
+
+        // FEAT-01: gdy helper jest aktywny, zapis /etc/pam.d/sudo_local wykonuje
+        // root-daemon — bez hasła, bez osascript/TCC. Fallback do osascript niżej.
+        if PrivilegedHelperClient.shared.isEnabled {
+            do {
+                try await PrivilegedHelperClient.shared.enableTouchIDForSudo()
+                touchIDState = TouchIDSudoConfigurator.currentState()
+                onWegaState?(WegaState(pose: .happy, line: tr("Touch ID podpięty pod sudo.")))
+                return
+            } catch {
+                AppLogger.app.error(
+                    "Helper enableTouchIDForSudo nie powiódł się: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+        }
 
         let cmd = TouchIDSudoConfigurator.enableShellCommand
             .replacingOccurrences(of: "\\", with: "\\\\")

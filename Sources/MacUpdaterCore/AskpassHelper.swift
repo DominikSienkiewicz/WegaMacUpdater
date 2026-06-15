@@ -18,13 +18,16 @@ public enum AskpassHelper {
     /// operation is being authorised.
     private static let scriptBody = #"""
     #!/bin/bash
-    # Wega Mac Updater — sudo askpass helper.
-    # Invoked by sudo when running brew under a GUI session.
+    # Wega Mac Updater — sudo askpass helper (fallback ostatniej szansy).
+    # PREFEROWANĄ ścieżką jest Touch ID (pam_tid w /etc/pam.d/sudo_local) — patrz
+    # TouchIDSudoConfigurator. Ten dialog pojawia się TYLKO gdy Touch ID jest
+    # wyłączony, a brew (bez TTY) wywołuje wewnętrznie sudo (SEC-01).
+    # Świadomie NIE używamy `tell application "System Events"`: `display dialog`
+    # ze StandardAdditions nie wymaga uprawnień Automation/TCC pod Hardened
+    # Runtime (SEC-07 / D3).
     osascript <<'APPLESCRIPT'
-    tell application "System Events"
-        activate
-        text returned of (display dialog "Homebrew prosi o hasło administratora, żeby dokończyć aktualizację (np. zarejestrować/odpiąć usługi launchctl albo pkgutil)." with title "Wega Mac Updater" default answer "" with hidden answer with icon caution buttons {"Anuluj", "OK"} default button "OK")
-    end tell
+    display dialog "Homebrew prosi o hasło administratora, żeby dokończyć aktualizację (np. zarejestrować/odpiąć usługi launchctl albo pkgutil)." with title "Wega Mac Updater" default answer "" with hidden answer with icon caution buttons {"Anuluj", "OK"} default button "OK"
+    return text returned of result
     APPLESCRIPT
     """#
 
