@@ -141,9 +141,18 @@ extension AppEndpoints {
     func overlaying(_ other: AppEndpointsOverlay) -> AppEndpoints {
         // DBT-5: stałe (nie-szablonowe) endpointy są force-unwrapowane w akcesorach
         // `…URL`, więc nadpisanie ich musi być POPRAWNYM URL-em — inaczej trzymamy
-        // baseline (brak DoS przez crash z niepoprawnego overlaya).
+        // baseline (brak DoS przez crash / śmieciowy endpoint z niepoprawnego overlaya).
+        //
+        // ⚠️ macOS 14+ ma luźny `URL(string:)` (akceptuje m.in. spacje i stringi
+        // bez schematu), więc samo `!= nil` NIE odsiewa śmieci. Walidujemy twardo
+        // przez `URLComponents` (parser ścisły): wymóg absolutnego URL-a ze
+        // schematem http(s) i niepustym hostem — wszystkie pola tu to https://…
         func validURL(_ override: String?, _ base: String) -> String {
-            guard let override, URL(string: override) != nil else { return base }
+            guard let override,
+                  let comps = URLComponents(string: override),
+                  let scheme = comps.scheme?.lowercased(), scheme == "http" || scheme == "https",
+                  let host = comps.host, !host.isEmpty
+            else { return base }
             return override
         }
         // Szablonowe ({placeholder}) / komenda — akcesory zwracają Optional lub to
