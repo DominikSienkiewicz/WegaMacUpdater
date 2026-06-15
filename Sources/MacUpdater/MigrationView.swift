@@ -537,6 +537,33 @@ private struct MigrationRow: View {
     let isBusy:    Bool
     let onMigrate: () -> Void
 
+    /// FEAT-02: jak pewne jest dopasowanie .app → cask (czysta heurystyka po
+    /// nazwie/tokenie; bez I/O). Słabe dopasowania dostają wyraźny sygnał, bo
+    /// `brew install --cask --force` nadpisuje aplikację.
+    private var confidence: CaskMatchConfidence {
+        guard let token = app.caskToken else { return .low }
+        return CaskMatchScorer.score(
+            applicationName: app.name,
+            caskToken: token,
+            caskNames: [],
+            viaCustomMapping: false
+        )
+    }
+
+    @ViewBuilder private var confidenceBadge: some View {
+        switch confidence {
+        case .high:
+            Label(tr("pewne"), systemImage: "checkmark.seal.fill")
+                .font(.system(size: 10, weight: .medium)).foregroundStyle(Color.wegaSuccess)
+        case .medium:
+            Label(tr("sprawdź"), systemImage: "questionmark.circle")
+                .font(.system(size: 10, weight: .medium)).foregroundStyle(Color.wegaHoney)
+        case .low:
+            Label(tr("niepewne"), systemImage: "exclamationmark.triangle.fill")
+                .font(.system(size: 10, weight: .medium)).foregroundStyle(Color.wegaDanger)
+        }
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             AppIcon(path: app.path, size: 32)
@@ -554,6 +581,7 @@ private struct MigrationRow: View {
             }
             Spacer()
             HStack(spacing: 10) {
+                confidenceBadge
                 if let token = app.caskToken {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.right").font(.system(size: 10))

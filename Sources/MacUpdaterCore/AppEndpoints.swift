@@ -117,6 +117,16 @@ extension AppEndpoints {
     static func loadOverlay() -> AppEndpointsOverlay? {
         let url = overlayURL
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        // SEC-04: gdy publisher key jest skonfigurowany, overlay endpointów musi
+        // mieć ważny odłączony podpis Ed25519 obok pliku (endpoints.json.sig) —
+        // inaczej ignorujemy go (fail-closed). Bez klucza: zachowanie jak dotąd.
+        if CatalogSignature.isConfigured {
+            guard let data = try? Data(contentsOf: url),
+                  let signature = try? String(contentsOf: url.appendingPathExtension("sig"), encoding: .utf8),
+                  CatalogSignature.verify(data: data, signatureBase64: signature) else {
+                return nil
+            }
+        }
         return try? decodeOverlay(contentsOf: url)
     }
 
@@ -129,24 +139,35 @@ extension AppEndpoints {
     /// The overlay is decoded leniently (every field optional) so it may carry
     /// just the one endpoint a user wants to redirect.
     func overlaying(_ other: AppEndpointsOverlay) -> AppEndpoints {
-        AppEndpoints(
-            jetbrainsReleases: other.jetbrainsReleases ?? jetbrainsReleases,
-            chatgptAppcast: other.chatgptAppcast ?? chatgptAppcast,
-            googleDriveOmaha: other.googleDriveOmaha ?? googleDriveOmaha,
-            caskDatabase: other.caskDatabase ?? caskDatabase,
-            appCatalog: other.appCatalog ?? appCatalog,
-            githubLatestRelease: other.githubLatestRelease ?? githubLatestRelease,
-            synologyChangeLog: other.synologyChangeLog ?? synologyChangeLog,
-            antigravityUpdate: other.antigravityUpdate ?? antigravityUpdate,
-            parallelsUpdates: other.parallelsUpdates ?? parallelsUpdates,
-            homebrewWebsite: other.homebrewWebsite ?? homebrewWebsite,
-            homebrewInstallCommand: other.homebrewInstallCommand ?? homebrewInstallCommand,
-            githubReleasesPage: other.githubReleasesPage ?? githubReleasesPage,
-            googleDriveDownload: other.googleDriveDownload ?? googleDriveDownload,
-            projectRepository: other.projectRepository ?? projectRepository,
-            projectIssues: other.projectIssues ?? projectIssues,
-            authorLinkedIn: other.authorLinkedIn ?? authorLinkedIn,
-            masRepository: other.masRepository ?? masRepository
+        // DBT-5: stałe (nie-szablonowe) endpointy są force-unwrapowane w akcesorach
+        // `…URL`, więc nadpisanie ich musi być POPRAWNYM URL-em — inaczej trzymamy
+        // baseline (brak DoS przez crash z niepoprawnego overlaya).
+        func validURL(_ override: String?, _ base: String) -> String {
+            guard let override, URL(string: override) != nil else { return base }
+            return override
+        }
+        // Szablonowe ({placeholder}) / komenda — akcesory zwracają Optional lub to
+        // nie-URL, więc nie walidujemy jako URL (inaczej odrzucalibyśmy poprawne szablony).
+        func raw(_ override: String?, _ base: String) -> String { override ?? base }
+
+        return AppEndpoints(
+            jetbrainsReleases: raw(other.jetbrainsReleases, jetbrainsReleases),
+            chatgptAppcast: validURL(other.chatgptAppcast, chatgptAppcast),
+            googleDriveOmaha: validURL(other.googleDriveOmaha, googleDriveOmaha),
+            caskDatabase: validURL(other.caskDatabase, caskDatabase),
+            appCatalog: validURL(other.appCatalog, appCatalog),
+            githubLatestRelease: raw(other.githubLatestRelease, githubLatestRelease),
+            synologyChangeLog: raw(other.synologyChangeLog, synologyChangeLog),
+            antigravityUpdate: raw(other.antigravityUpdate, antigravityUpdate),
+            parallelsUpdates: raw(other.parallelsUpdates, parallelsUpdates),
+            homebrewWebsite: validURL(other.homebrewWebsite, homebrewWebsite),
+            homebrewInstallCommand: raw(other.homebrewInstallCommand, homebrewInstallCommand),
+            githubReleasesPage: raw(other.githubReleasesPage, githubReleasesPage),
+            googleDriveDownload: validURL(other.googleDriveDownload, googleDriveDownload),
+            projectRepository: validURL(other.projectRepository, projectRepository),
+            projectIssues: validURL(other.projectIssues, projectIssues),
+            authorLinkedIn: validURL(other.authorLinkedIn, authorLinkedIn),
+            masRepository: validURL(other.masRepository, masRepository)
         )
     }
 

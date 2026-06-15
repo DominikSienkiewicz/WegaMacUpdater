@@ -189,3 +189,29 @@ public struct BrewCaskInstallationInfo: Equatable, Sendable {
         self.appArtifacts = appArtifacts
     }
 }
+
+/// Pre-install download transparency for a cask (**FEAT-03 / I-2**): where the
+/// artifact comes from and whether Homebrew will verify its checksum.
+/// `sha256 == "no_check"` means the cask installs WITHOUT checksum verification
+/// (common for auto-updating apps) — a power-user safety signal worth surfacing.
+public struct CaskDownloadInfo: Equatable, Sendable {
+    public var token: String
+    public var url: String?
+    public var sha256: String?
+
+    public init(token: String, url: String?, sha256: String?) {
+        self.token = token
+        self.url = url
+        self.sha256 = sha256
+    }
+
+    /// Homebrew verifies the download only when a concrete sha256 is present.
+    public var hasChecksum: Bool {
+        guard let sha256 else { return false }
+        let value = sha256.lowercased()
+        return value != "no_check" && !value.isEmpty
+    }
+
+    /// Download host — the "where does this actually come from?" signal.
+    public var host: String? { url.flatMap { URL(string: $0)?.host } }
+}

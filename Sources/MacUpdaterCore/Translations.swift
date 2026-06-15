@@ -10,6 +10,10 @@ import Foundation
 /// languages so argument order is preserved.
 public enum Translations {
     public static let en: [String: String] = [
+        // FEAT-02 — confidence dopasowania migracji.
+        "pewne": "confident",
+        "sprawdź": "review",
+        "niepewne": "uncertain",
         // FEAT-01 / SEC-03 — privileged helper + self-update verification.
         "Aktualizacja nie przeszła weryfikacji podpisu — otwieram stronę wydania.": "The update failed signature verification — opening the release page.",
         "Komponent uprzywilejowany": "Privileged component",

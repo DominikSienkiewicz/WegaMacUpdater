@@ -166,13 +166,14 @@ public final class HTTPClient: @unchecked Sendable {
             do {
                 let (data, response) = try await transport.data(for: request)
                 if let http = response as? HTTPURLResponse,
-                   shouldRetry(status: http.statusCode),
+                   shouldRetry(http),
                    attempt < maxRetries {
                     attempt += 1
+                    let delay = retryDelay(http: http, attempt: attempt)
                     AppLogger.network.notice(
-                        "HTTP \(http.statusCode, privacy: .public) from \(target, privacy: .public) — retry \(attempt, privacy: .public)/\(self.maxRetries, privacy: .public)"
+                        "HTTP \(http.statusCode, privacy: .public) from \(target, privacy: .public) — retry \(attempt, privacy: .public)/\(self.maxRetries, privacy: .public) za \(delay, privacy: .public)s"
                     )
-                    try await backoff(attempt)
+                    try await sleepFor(delay)
                     continue
                 }
                 return (data, response)
@@ -182,7 +183,7 @@ public final class HTTPClient: @unchecked Sendable {
                     AppLogger.network.notice(
                         "transport error for \(target, privacy: .public) — retry \(attempt, privacy: .public)/\(self.maxRetries, privacy: .public): \(error.localizedDescription, privacy: .public)"
                     )
-                    try await backoff(attempt)
+                    try await sleepFor(retryDelay(http: nil, attempt: attempt))
                     continue
                 }
                 // A user-driven cancellation isn't a failure worth flagging — only log
@@ -197,9 +198,14 @@ public final class HTTPClient: @unchecked Sendable {
         }
     }
 
-    /// 429 (rate-limited) and 5xx are transient; everything else is a definitive answer.
-    private func shouldRetry(status: Int) -> Bool {
-        status == 429 || (500..<600).contains(status)
+    /// 429 i 5xx są przejściowe. Dodatkowo (SEC-05): GitHub primary rate-limit
+    /// potrafi wrócić `403` z `X-RateLimit-Remaining: 0` — to też jest rate-limit,
+    /// nie definitywny błąd, więc retry'ujemy (z poszanowaniem Retry-After/Reset).
+    private func shouldRetry(_ http: HTTPURLResponse) -> Bool {
+        let status = http.statusCode
+        if status == 429 || (500..<600).contains(status) { return true }
+        if status == 403, http.value(forHTTPHeaderField: "X-RateLimit-Remaining") == "0" { return true }
+        return false
     }
 
     private func isRetryable(_ error: Error) -> Bool {
@@ -210,9 +216,27 @@ public final class HTTPClient: @unchecked Sendable {
         return true
     }
 
-    private func backoff(_ attempt: Int) async throws {
-        guard retryBaseDelay > 0 else { return }
-        let delay = retryBaseDelay * pow(2.0, Double(attempt - 1))
-        try await Task.sleep(for: .seconds(delay))
+    /// Honoruj sygnały serwera najpierw: `Retry-After` (sekundy), potem
+    /// `X-RateLimit-Reset` (epoch). W przeciwnym razie exponential backoff z
+    /// pełnym jitterem. Wszystko zacapowane do 60 s, by uniknąć absurdalnych czekań.
+    private func retryDelay(http: HTTPURLResponse?, attempt: Int) -> TimeInterval {
+        let cap: TimeInterval = 60
+        if let http {
+            if let raw = http.value(forHTTPHeaderField: "Retry-After"), let seconds = TimeInterval(raw) {
+                return min(max(0, seconds), cap)
+            }
+            if let raw = http.value(forHTTPHeaderField: "X-RateLimit-Reset"), let reset = TimeInterval(raw) {
+                let wait = reset - Date().timeIntervalSince1970
+                if wait > 0 { return min(wait, cap) }
+            }
+        }
+        guard retryBaseDelay > 0 else { return 0 }   // utrzymuje testy (retryBaseDelay: 0) natychmiastowe
+        let base = retryBaseDelay * pow(2.0, Double(max(0, attempt - 1)))
+        return min(base + Double.random(in: 0...base), cap)   // full jitter
+    }
+
+    private func sleepFor(_ seconds: TimeInterval) async throws {
+        guard seconds > 0 else { return }
+        try await Task.sleep(for: .seconds(seconds))
     }
 }

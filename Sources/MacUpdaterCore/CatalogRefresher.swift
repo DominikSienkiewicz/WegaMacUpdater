@@ -48,6 +48,16 @@ public struct CatalogRefresher: Sendable {
             return .invalid
         }
 
+        // SEC-04: gdy publisher key jest skonfigurowany, wymagaj poprawnego
+        // odłączonego podpisu Ed25519 (<source>.sig) nad dokładnymi bajtami ciała.
+        // Bez konfiguracji klucza pomijamy (zachowanie jak dotąd — decode-only).
+        if CatalogSignature.isConfigured {
+            guard let signatureBase64 = try? await fetchSignature(),
+                  CatalogSignature.verify(data: response.data, signatureBase64: signatureBase64) else {
+                return .invalid
+            }
+        }
+
         do {
             try FileManager.default.createDirectory(
                 at: destination.deletingLastPathComponent(),
@@ -58,5 +68,18 @@ public struct CatalogRefresher: Sendable {
         } catch {
             return .failed
         }
+    }
+
+    /// Sibling detached-signature URL: `…/app-catalog.json` → `…/app-catalog.json.sig`.
+    private var signatureURL: URL { source.appendingPathExtension("sig") }
+
+    /// Fetches the detached base64 signature; throws if missing/unreadable so the
+    /// caller treats it as `.invalid` (fail-closed when signing is required).
+    private func fetchSignature() async throws -> String {
+        let response = try await client.get(signatureURL)
+        guard response.isOK, let signature = String(data: response.data, encoding: .utf8) else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        return signature
     }
 }

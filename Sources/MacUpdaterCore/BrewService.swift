@@ -66,6 +66,15 @@ public final class BrewService: @unchecked Sendable {
         return try infoParser.parseCaskInstallations(result.stdout)
     }
 
+    /// FEAT-03: pre-install download transparency (host + checksum status) for casks.
+    public func caskDownloadInfo(tokens: [String]) async throws -> [CaskDownloadInfo] {
+        guard !tokens.isEmpty else { return [] }
+        let arguments = ["info", "--cask", "--json=v2"] + tokens
+        let result = try await runBrew(arguments)
+        try ensureSuccess(result, arguments: arguments)
+        return try infoParser.parseDownloadInfo(result.stdout)
+    }
+
     public func upgradeCask(token: String, force: Bool = false) async throws -> ProcessResult {
         var arguments = ["upgrade", "--cask", "--greedy", "--greedy-auto-updates"]
         if force {
