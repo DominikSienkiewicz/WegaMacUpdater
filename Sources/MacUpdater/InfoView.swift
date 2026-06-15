@@ -29,7 +29,12 @@ struct InfoView: View {
     @State private var githubTokenInput: String = ""
     @State private var githubTokenStored: Bool = false
     @State private var githubTokenStatus: String? = nil
+}
 
+// Body, cards and actions live in an extension so the `InfoView` type body stays
+// within SwiftLint's type_body_length budget (same file → private members still
+// reachable).
+extension InfoView {
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {

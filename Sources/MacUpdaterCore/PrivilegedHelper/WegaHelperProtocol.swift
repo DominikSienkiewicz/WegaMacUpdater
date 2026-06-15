@@ -54,7 +54,7 @@ public enum WegaHelper {
     /// Helper protocol version (bump on breaking interface changes).
     public static let version = "2"
 
-    // TODO(Dominik): wstaw swój Apple Developer Team ID (10 znaków, np. "AB12CD34EF").
+    // KONFIGURACJA (Dominik): wstaw swój Apple Developer Team ID (10 znaków, np. "AB12CD34EF").
     // Bez tego XPC-pinning i weryfikacja self-update odrzucą wszystko (fail-closed).
     public static let teamIdentifier = "REPLACE_TEAMID"
 

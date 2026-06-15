@@ -15,7 +15,7 @@ import CryptoKit
 /// opt-in and never bricks an unsigned dev setup. Once a key is set, every
 /// override must be signed (fail-closed).
 public enum CatalogSignature {
-    // TODO(Dominik): wstaw base64 SUROWEGO klucza publicznego Ed25519 (32 bajty).
+    // KONFIGURACJA (Dominik): wstaw base64 SUROWEGO klucza publicznego Ed25519 (32 bajty).
     //   let key = Curve25519.Signing.PrivateKey()
     //   key.publicKey.rawRepresentation.base64EncodedString()   // ← tutaj
     // Podpisy generuj kluczem prywatnym nad bajtami pliku → base64 → <plik>.sig
