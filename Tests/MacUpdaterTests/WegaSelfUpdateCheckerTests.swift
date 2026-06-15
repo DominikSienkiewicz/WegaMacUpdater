@@ -43,7 +43,8 @@ struct WegaSelfUpdateCheckerTests {
         #expect(result == .updateAvailable(
             version: "0.2.0",
             assetURL: URL(string: "https://example.com/Wega.dmg")!,
-            releaseURL: URL(string: "https://github.com/owner/repo/releases/tag/v0.2.0")!
+            releaseURL: URL(string: "https://github.com/owner/repo/releases/tag/v0.2.0")!,
+            notes: ""
         ))
     }
 
@@ -65,7 +66,8 @@ struct WegaSelfUpdateCheckerTests {
         #expect(result == .updateAvailable(
             version: "0.2.0",
             assetURL: URL(string: "https://example.com/Wega.pkg")!,
-            releaseURL: URL(string: "https://github.com/owner/repo/releases/tag/v0.2.0")!
+            releaseURL: URL(string: "https://github.com/owner/repo/releases/tag/v0.2.0")!,
+            notes: ""
         ))
     }
 

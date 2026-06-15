@@ -11,7 +11,8 @@ import Foundation
 public struct WegaSelfUpdateChecker: Sendable {
     public enum Result: Equatable, Sendable {
         case upToDate
-        case updateAvailable(version: String, assetURL: URL, releaseURL: URL)
+        /// `notes` = release body, for advisory triage (FEAT-06).
+        case updateAvailable(version: String, assetURL: URL, releaseURL: URL, notes: String)
         case failed
     }
 
@@ -58,7 +59,7 @@ public struct WegaSelfUpdateChecker: Sendable {
             return .failed
         }
 
-        return .updateAvailable(version: latest, assetURL: assetURL, releaseURL: releaseURL)
+        return .updateAvailable(version: latest, assetURL: assetURL, releaseURL: releaseURL, notes: release.body ?? "")
     }
 
     private struct Release: Decodable {
@@ -67,6 +68,7 @@ public struct WegaSelfUpdateChecker: Sendable {
         let prerelease: Bool
         let htmlURL: String
         let assets: [Asset]
+        let body: String?
 
         struct Asset: Decodable {
             let name: String
@@ -83,6 +85,7 @@ public struct WegaSelfUpdateChecker: Sendable {
             case prerelease
             case htmlURL = "html_url"
             case assets
+            case body
         }
     }
 }

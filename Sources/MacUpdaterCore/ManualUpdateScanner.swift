@@ -55,7 +55,9 @@ public struct ManualUpdateScanner: Sendable {
         let installedCasks = (try? await brewService.installedCasks()) ?? []
         // brew-tracked versions (from `brew list --cask --versions`); used as ground truth
         // for brew-managed apps instead of bundle version to avoid versioning scheme mismatches.
-        let brewCaskVersions = (try? await brewService.caskVersions()) ?? [:]
+        // DEBT-05: robust JSON installed-versions (token→version) zamiast kruchego
+        // parsowania tekstu `brew list --cask --versions`.
+        let brewCaskVersions = (try? await brewService.caskInstalledVersions()) ?? [:]
 
         // Drop CLI-only casks (e.g. `codex`) from the set we feed to CaskMatcher.
         let installInfo = (try? await brewService.caskInstallationInfo(tokens: Array(installedCasks))) ?? []

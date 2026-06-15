@@ -27,6 +27,20 @@ public enum Translations {
         "Zmienił się wydawca aplikacji — sprawdź.": "The app's publisher changed — review.",
         // UX-01 — ujawnienie zakresu Touch ID dla sudo.
         "Działa dla całego sudo w systemie, nie tylko dla Wegi.": "Applies to all sudo on the system, not just Wega.",
+        // FEAT-03 — transparentność pobrania (UpdateView).
+        "Bez weryfikacji sumy kontrolnej": "Without checksum verification",
+        "Homebrew zainstaluje bez sprawdzenia sumy: %@": "Homebrew will install without checking the checksum: %@",
+        // FEAT-07 — gating pobrań.
+        "Niekorzystne warunki pobierania (%@) — kontynuuję na żądanie.": "Unfavorable download conditions (%@) — continuing at your request.",
+        "Uwaga: kosztowne łącze lub throttling — pobieram mimo to.": "Note: metered link or throttling — downloading anyway.",
+        // FEAT-05 — rollback casków.
+        "%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.": "%@: the new version failed the check — restored the previous one.",
+        "Cofnęłam %@ — nowa wersja nie przeszła kontroli.": "Rolled back %@ — the new version failed the check.",
+        // FEAT-04 — watchdog (upgrade).
+        "Zmiana wydawcy": "Publisher changed",
+        "%@: Team ID zmienił się (%@ → %@). Zweryfikuj.": "%@: Team ID changed (%@ → %@). Verify.",
+        // FEAT-06 — AI triage (self-update).
+        "możliwa poprawka bezpieczeństwa": "possible security fix",
         // FEAT-01 / SEC-03 — privileged helper + self-update verification.
         "Aktualizacja nie przeszła weryfikacji podpisu — otwieram stronę wydania.": "The update failed signature verification — opening the release page.",
         // ICE-01 — in-app biometric gate.

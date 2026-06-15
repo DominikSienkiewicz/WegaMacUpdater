@@ -490,9 +490,15 @@ struct InfoView: View {
     private var selfUpdateRow: some View {
         HStack(spacing: 10) {
             switch selfUpdate {
-            case .updateAvailable(let version, let assetURL, let releaseURL):
+            case .updateAvailable(let version, let assetURL, let releaseURL, let notes):
                 Image(systemName: "arrow.down.circle.fill").foregroundStyle(Color.wegaHoney)
                 Text(trf("Dostępna wersja %@", version)).font(.system(size: 12, weight: .semibold))
+                // FEAT-06: doradczy badge, jeśli notatki wydania wyglądają na poprawkę bezpieczeństwa.
+                if ReleaseNotesTriage.heuristic(notes).isLikelySecurityFix {
+                    Label(tr("możliwa poprawka bezpieczeństwa"), systemImage: "shield.lefthalf.filled")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Color.wegaDanger)
+                }
                 Spacer()
                 Link(tr("Zobacz wydanie"), destination: releaseURL).font(.system(size: 12))
                 Button {

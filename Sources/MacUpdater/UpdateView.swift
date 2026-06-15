@@ -30,6 +30,7 @@ struct UpdateView: View {
     @State private var restartCandidates:  [RestartInfo]     = []
     @State private var restartBusy:        String?
     @State private var caskIconPaths:      [String: URL]     = [:]
+    @State private var caskDownloads:      [String: CaskDownloadInfo] = [:]   // FEAT-03
 
     private let processes = RunningProcessService()
 
@@ -191,7 +192,10 @@ struct UpdateView: View {
                         let store    = allItems.filter { $0.kind == .appStore }
                         let npmPkgs  = allItems.filter { $0.kind == .npm }
                         if !formulae.isEmpty { UpdateSection(title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"),  icon: "terminal",  items: formulae, selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
-                        if !casks.isEmpty    { UpdateSection(title: tr("Homebrew Casks"),    subtitle: tr("aplikacje .app"), icon: "app.gift", items: casks,    iconPaths: caskIconPaths, selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
+                        if !casks.isEmpty {
+                            UpdateSection(title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), icon: "app.gift", items: casks, iconPaths: caskIconPaths, selected: $selected, onIgnore: ignoreItem, onPin: requestPin)
+                            caskTransparencyNote(casks: casks)
+                        }
                         if !store.isEmpty    { UpdateSection(title: tr("Mac App Store"),     subtitle: tr("via mas-cli"),      icon: "bag",      items: store,    selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
                         if !npmPkgs.isEmpty  { UpdateSection(title: tr("npm globalne"),      subtitle: tr("pakiety -g"),       icon: "shippingbox", items: npmPkgs, selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
                         if !visibleManual.isEmpty {
@@ -249,6 +253,28 @@ struct UpdateView: View {
 
     private func requestPinManual(_ app: ManualOutdatedApp) {
         pinTarget = PinRequest(key: app.policyKey, name: app.name, suggestedVersion: app.installedVersion ?? app.availableVersion ?? "")
+    }
+
+    // MARK: FEAT-03 — transparentność pobrania
+    @ViewBuilder
+    private func caskTransparencyNote(casks: [OutdatedItem]) -> some View {
+        let noCheck = casks.filter { caskDownloads[$0.name]?.hasChecksum == false }
+        if !noCheck.isEmpty {
+            WegaCard {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.shield").foregroundStyle(Color.wegaDanger)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(tr("Bez weryfikacji sumy kontrolnej"))
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(trf("Homebrew zainstaluje bez sprawdzenia sumy: %@", "\(noCheck.map(\.name).joined(separator: ", "))"))
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                }
+                .padding(12)
+            }
+        }
     }
 
     // MARK: Async actions
@@ -323,6 +349,14 @@ struct UpdateView: View {
                 }
             }
             caskIconPaths = paths
+        }
+
+        // FEAT-03: transparentność pobrania (host + checksum) dla outdated casków.
+        if let casks = brewOutdated?.casks, !casks.isEmpty {
+            let infos = (try? await model.brewService.caskDownloadInfo(tokens: casks.map(\.name))) ?? []
+            caskDownloads = Dictionary(infos.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first })
+        } else {
+            caskDownloads = [:]
         }
 
         lastCheck = Date()
@@ -424,6 +458,17 @@ struct UpdateView: View {
             }
         }
 
+        // FEAT-07: dla casków (duże pobrania) doradczo ostrzeż przy złych warunkach
+        // (łącze taryfowe / throttling). Akcja jest user-initiated → kontynuujemy.
+        if !caskNames.isEmpty {
+            let (net, pow) = await LiveConditions.snapshot()
+            if case let .postpone(reason) = DownloadGate.decide(
+                sizeBytes: 200 * 1024 * 1024 + 1, network: net, power: pow) {
+                brewLog.append("⚠️ " + trf("Niekorzystne warunki pobierania (%@) — kontynuuję na żądanie.", "\(reason)"))
+                onWegaState?(WegaState(pose: .alert, line: tr("Uwaga: kosztowne łącze lub throttling — pobieram mimo to.")))
+            }
+        }
+
         var outcomes: [BrewUpgradeOutcome] = []
 
         // Brew upgrade — formulae
@@ -432,10 +477,12 @@ struct UpdateView: View {
             outcomes.append(await runBrewUpgrade(arguments: args))
         }
 
-        // Brew upgrade — casks
+        // Brew upgrade — casks (FEAT-05 snapshot przed, canary/rollback + FEAT-04 ledger po)
         if !caskNames.isEmpty {
+            let snapshots = snapshotCasks(caskNames)
             let args = ["upgrade", "--cask"] + caskNames
             outcomes.append(await runBrewUpgrade(arguments: args))
+            await postCaskUpgrade(caskNames, snapshots: snapshots)
         }
 
         // npm global upgrade — one package at a time (npm semantics).
@@ -538,6 +585,42 @@ struct UpdateView: View {
             failedTokens: exitCode == 0 ? [] : [name],
             errorLines: []
         )
+    }
+
+    // MARK: FEAT-05 (rollback) + FEAT-04 (watchdog Team ID)
+
+    /// FEAT-05: instant COW clone (clonefile) of each cask's app before upgrade,
+    /// so a bad upgrade can be rolled back. Returns token→snapshot URL.
+    private func snapshotCasks(_ tokens: [String]) -> [String: URL] {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("wega-rollback", isDirectory: true)
+        var snapshots: [String: URL] = [:]
+        for token in tokens {
+            guard let appURL = caskIconPaths[token] else { continue }
+            let dest = base.appendingPathComponent("\(token).app")
+            if (try? BundleSnapshot.clone(appURL, to: dest)) != nil { snapshots[token] = dest }
+        }
+        return snapshots
+    }
+
+    /// FEAT-05 canary (Gatekeeper) — on failure restore the clone (auto-rollback).
+    /// FEAT-04 — on success record the publisher Team ID; alert if it changed.
+    private func postCaskUpgrade(_ tokens: [String], snapshots: [String: URL]) async {
+        for token in tokens {
+            guard let appURL = caskIconPaths[token] else { continue }
+            let healthy = await Task.detached { CanaryCheck.passesGatekeeper(appAt: appURL) }.value
+            if !healthy, let snapshot = snapshots[token] {
+                try? BundleSnapshot.restore(snapshot: snapshot, to: appURL)
+                brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.", "\(token)"))
+                onWegaState?(WegaState(pose: .alert, line: trf("Cofnęłam %@ — nowa wersja nie przeszła kontroli.", "\(token)")))
+            } else {
+                let teamID = await Task.detached { CodeSignatureVerifier.teamID(ofAppAt: appURL) }.value
+                if case let .changed(old, new) = TeamIDLedger.shared.record(bundleID: "cask:\(token)", teamID: teamID) {
+                    banner = BannerData(variant: .danger, title: tr("Zmiana wydawcy"),
+                                        message: trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.", "\(token)", "\(old)", "\(new ?? "—")"))
+                }
+            }
+            if let snapshot = snapshots[token] { try? FileManager.default.removeItem(at: snapshot) }
+        }
     }
 
     private func isProcessRunning(_ name: String) async -> Bool {
