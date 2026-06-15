@@ -131,6 +131,12 @@ public enum CodeSignatureVerifier {
         throw VerifyError.gatekeeperRejected(message)
     }
 
+    /// Convenience: does Gatekeeper approve launching the app at `url`? Used by the
+    /// post-upgrade canary (FEAT-05) so callers don't import Security directly.
+    public static func passesGatekeeperForExecution(at url: URL) -> Bool {
+        (try? assessGatekeeper(at: url, operation: kSecAssessmentOperationTypeExecute)) != nil
+    }
+
     // MARK: - pkg Team ID (best effort)
 
     /// Parses the leaf Team ID out of `pkgutil --check-signature`. Best-effort:

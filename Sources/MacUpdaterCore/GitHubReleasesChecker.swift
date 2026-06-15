@@ -18,9 +18,10 @@ public struct GitHubReleasesChecker: Sendable {
 
         guard let url = AppEndpoints.shared.githubLatestReleaseURL(repo: mapping.repo) else { return .notApplicable }
 
-        // ETag-conditional: a 304 reuses the cached body and does not count against
-        // GitHub's unauthenticated 60-req/h rate limit.
-        guard let response = try? await client.get(url, headers: ["Accept": "application/vnd.github+json"], enableETag: true) else {
+        // ETag-conditional + opcjonalny token (SEC-08). UWAGA: GitHub zwalnia 304
+        // z primary rate-limit TYLKO dla żądań autoryzowanych (Bearer). Bez tokenu
+        // 304 oszczędza transfer, nie kwotę 60/h — token podnosi limit do 5000/h.
+        guard let response = try? await client.get(url, headers: GitHubAuth.headers(), enableETag: true) else {
             return .unavailable
         }
         guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }

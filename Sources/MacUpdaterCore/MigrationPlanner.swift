@@ -52,9 +52,21 @@ public enum MigrationPlanner {
         apps.filter { !$0.isManagedByBrew && !$0.isManagedByMas }
     }
 
+    /// SEC-06: a bundle identifier is interpolated into `removeItem` paths, so a
+    /// crafted `CFBundleIdentifier` like `../../tmp/x` could escape `~/Library`.
+    /// Accept only the conventional bundle-id charset; reject `/` and `..`.
+    static func isSafeBundleID(_ id: String) -> Bool {
+        guard !id.isEmpty, !id.contains("..") else { return false }
+        let allowed = CharacterSet(charactersIn:
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-")
+        return id.unicodeScalars.allSatisfy(allowed.contains)
+    }
+
     /// The `~/Library` locations a freshly-migrated app may have left behind. Pure path
     /// construction; the caller filters these by existence on disk.
     public static func libraryLeftoverCandidates(bundleId: String, home: URL) -> [URL] {
+        // SEC-06: refuse to build deletion paths from an unsafe bundle id.
+        guard isSafeBundleID(bundleId) else { return [] }
         let lib = home.appendingPathComponent("Library")
         return [
             lib.appendingPathComponent("Application Support/\(bundleId)"),

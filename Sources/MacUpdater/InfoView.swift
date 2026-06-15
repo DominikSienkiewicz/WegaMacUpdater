@@ -25,6 +25,10 @@ struct InfoView: View {
     @State private var helperStatus: PrivilegedHelperClient.Status = .notRegistered
     @State private var helperBusy = false
     @State private var helperError: String? = nil
+    // SEC-08: opcjonalny token GitHub (Keychain).
+    @State private var githubTokenInput: String = ""
+    @State private var githubTokenStored: Bool = false
+    @State private var githubTokenStatus: String? = nil
 
     var body: some View {
         ScrollView {
@@ -34,6 +38,7 @@ struct InfoView: View {
                 policiesCard
                 diagnosticsCard
                 catalogCard
+                githubTokenCard
                 touchIDCard
                 privilegedHelperCard
                 licensesCard
@@ -53,6 +58,7 @@ struct InfoView: View {
             }
             touchIDState = TouchIDSudoConfigurator.currentState()
             helperStatus = PrivilegedHelperClient.shared.status
+            githubTokenStored = GitHubCredentialStore.hasToken
         }
     }
 
@@ -203,6 +209,60 @@ struct InfoView: View {
                     }
                     .padding(14)
                 }
+            }
+        }
+    }
+
+    // MARK: - GitHub token (SEC-08)
+
+    @ViewBuilder
+    private var githubTokenCard: some View {
+        WegaCard {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) {
+                    Image(systemName: "key.horizontal").foregroundStyle(Color.wegaHoney)
+                    Text(tr("Token GitHub (opcjonalny)")).font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                    if githubTokenStored { WegaBadge(label: tr("Zapisany"), variant: .info) }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(tr("Podnosi limit GitHub z 60 do 5000 zapytań/h i włącza zwolnienie 304. Trzymany w Keychain."))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 8) {
+                        SecureField("ghp_…", text: $githubTokenInput)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 12, design: .monospaced))
+                        Button(tr("Zapisz token")) {
+                            let ok = GitHubCredentialStore.setToken(githubTokenInput)
+                            githubTokenStored = GitHubCredentialStore.hasToken
+                            githubTokenInput = ""
+                            githubTokenStatus = ok ? tr("Token zapisany w Keychain") : tr("Nie udało się zapisać tokenu")
+                        }
+                        .controlSize(.small)
+                        .disabled(githubTokenInput.trimmingCharacters(in: .whitespaces).isEmpty)
+
+                        if githubTokenStored {
+                            Button(role: .destructive) {
+                                GitHubCredentialStore.clear()
+                                githubTokenStored = false
+                                githubTokenStatus = tr("Token usunięty")
+                            } label: { Text(tr("Wyczyść")) }
+                                .controlSize(.small)
+                        }
+                    }
+
+                    if let status = githubTokenStatus {
+                        Text(status).font(.system(size: 11)).foregroundStyle(.tertiary)
+                    }
+                }
+                .padding(14)
             }
         }
     }

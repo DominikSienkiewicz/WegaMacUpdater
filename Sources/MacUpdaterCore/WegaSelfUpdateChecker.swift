@@ -36,7 +36,7 @@ public struct WegaSelfUpdateChecker: Sendable {
 
         guard let response = try? await client.get(
             url,
-            headers: ["Accept": "application/vnd.github+json"],
+            headers: GitHubAuth.headers(),   // SEC-08: dokłada Bearer, jeśli token w Keychain
             enableETag: true
         ), response.statusCode == 200,
             let release = try? JSONDecoder().decode(Release.self, from: response.data) else {

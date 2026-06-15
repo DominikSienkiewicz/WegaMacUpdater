@@ -406,6 +406,7 @@ struct MigrationView: View {
             if exitCode == 0 {
                 migrated.insert(token)
                 logLines = []
+                await recordPublisher(for: app)   // FEAT-04: ledger Team ID + alert na zmianę wydawcy
                 // Scan for Library leftovers from old installation
                 if let bundleId = app.bundleIdentifier {
                     let found = scanLibraryLeftovers(bundleId: bundleId)
@@ -431,6 +432,18 @@ struct MigrationView: View {
             onWegaState?(WegaState(pose: .sad, line: trf("Błąd podczas migracji %@.", "\(app.name)")))
         }
         migrating = nil
+    }
+
+    /// FEAT-04: record the freshly-installed app's signing Team ID. On `.changed`
+    /// (publisher silently swapped) raise a caution. Team ID read off-main.
+    private func recordPublisher(for app: ApplicationInfo) async {
+        guard let bundleId = app.bundleIdentifier else { return }
+        let path = app.path
+        let newTeamID = await Task.detached { CodeSignatureVerifier.teamID(ofAppAt: path) }.value
+        if case let .changed(old, new) = TeamIDLedger.shared.record(bundleID: bundleId, teamID: newTeamID) {
+            errorMessage = trf("Uwaga: wydawca %@ zmienił Team ID (%@ → %@). Zweryfikuj, zanim zaufasz.", "\(app.name)", "\(old)", "\(new ?? "—")")
+            onWegaState?(WegaState(pose: .alert, line: tr("Zmienił się wydawca aplikacji — sprawdź.")))
+        }
     }
 
     private func scanLibraryLeftovers(bundleId: String) -> [URL] {

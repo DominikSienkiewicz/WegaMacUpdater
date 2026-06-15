@@ -8,8 +8,9 @@ public struct HTTPRequest: Sendable {
     public var headers: [String: String]
     public var body: Data?
     /// When true, the client sends `If-None-Match` from its ETag store and, on a
-    /// `304 Not Modified`, returns the cached body. For GitHub this also means the
-    /// request does **not** count against the 60-req/h unauthenticated rate limit.
+    /// `304 Not Modified`, returns the cached body (saves bandwidth + parsing).
+    /// Note (SEC-08): GitHub exempts a 304 from the *primary* rate limit only for
+    /// **authorized** requests; unauthenticated 304s still count against 60/h.
     public var enableETag: Bool
 
     public init(

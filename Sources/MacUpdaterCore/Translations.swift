@@ -14,6 +14,17 @@ public enum Translations {
         "pewne": "confident",
         "sprawdź": "review",
         "niepewne": "uncertain",
+        // SEC-08 — token GitHub (Keychain).
+        "Token GitHub (opcjonalny)": "GitHub token (optional)",
+        "Zapisany": "Saved",
+        "Podnosi limit GitHub z 60 do 5000 zapytań/h i włącza zwolnienie 304. Trzymany w Keychain.": "Raises the GitHub limit from 60 to 5000 requests/h and enables the 304 exemption. Stored in the Keychain.",
+        "Zapisz token": "Save token",
+        "Token zapisany w Keychain": "Token saved in the Keychain",
+        "Nie udało się zapisać tokenu": "Failed to save the token",
+        "Token usunięty": "Token removed",
+        // FEAT-04 — watchdog ciągłości Team ID.
+        "Uwaga: wydawca %@ zmienił Team ID (%@ → %@). Zweryfikuj, zanim zaufasz.": "Warning: %@'s publisher changed Team ID (%@ → %@). Verify before trusting.",
+        "Zmienił się wydawca aplikacji — sprawdź.": "The app's publisher changed — review.",
         // FEAT-01 / SEC-03 — privileged helper + self-update verification.
         "Aktualizacja nie przeszła weryfikacji podpisu — otwieram stronę wydania.": "The update failed signature verification — opening the release page.",
         "Komponent uprzywilejowany": "Privileged component",
