@@ -66,6 +66,16 @@ public final class BrewService: @unchecked Sendable {
         return try infoParser.parseCaskInstallations(result.stdout)
     }
 
+    /// DEBT-05: robust installed-cask versions via JSON (alternative to the
+    /// text-parsed `caskVersions()`). Heavier (`--installed` enumerates everything),
+    /// so the scanner keeps the fast text path by default; swap here if drift appears.
+    public func caskInstalledVersions() async throws -> [String: String] {
+        let arguments = ["info", "--installed", "--json=v2"]
+        let result = try await runBrew(arguments)
+        try ensureSuccess(result, arguments: arguments)
+        return try infoParser.parseInstalledVersions(result.stdout)
+    }
+
     /// FEAT-03: pre-install download transparency (host + checksum status) for casks.
     public func caskDownloadInfo(tokens: [String]) async throws -> [CaskDownloadInfo] {
         guard !tokens.isEmpty else { return [] }

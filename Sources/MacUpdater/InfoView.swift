@@ -184,6 +184,12 @@ struct InfoView: View {
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
 
+                        // UX-01: jawne ujawnienie zakresu zmiany.
+                        Text(tr("Działa dla całego sudo w systemie, nie tylko dla Wegi."))
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+
                         if let err = touchIDError {
                             Text(err)
                                 .font(.system(size: 11))
@@ -598,6 +604,10 @@ struct InfoView: View {
             }
         }
 
+        // DEBT-06 ⚠️ BEZPIECZEŃSTWO: `cmd` MUSI pozostać stałą kompilacji
+        // (TouchIDSudoConfigurator.enableShellCommand). NIGDY nie interpoluj tu
+        // danych użytkownika/sieci — `do shell script` wykonuje to z uprawnieniami
+        // administratora, więc dynamiczne wejście = iniekcja komend jako root.
         let cmd = TouchIDSudoConfigurator.enableShellCommand
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")

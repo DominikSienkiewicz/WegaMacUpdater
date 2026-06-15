@@ -56,9 +56,13 @@ public enum TouchIDSudoConfigurator {
     /// Reads the real filesystem + biometry capability to determine state.
     public static func currentState() -> State {
         let contents = try? String(contentsOfFile: sudoLocalPath, encoding: .utf8)
+        // DEBT-03: accept any known pam_tid filename, not just the versioned one.
+        let pamPresent = SystemPaths.pamModuleCandidates.contains {
+            FileManager.default.fileExists(atPath: $0)
+        }
         return state(
             sudoLocalContents: contents,
-            pamModuleExists: FileManager.default.fileExists(atPath: pamModulePath),
+            pamModuleExists: pamPresent,
             biometryAvailable: hasBiometryHardware()
         )
     }

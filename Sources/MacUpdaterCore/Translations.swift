@@ -25,6 +25,8 @@ public enum Translations {
         // FEAT-04 — watchdog ciągłości Team ID.
         "Uwaga: wydawca %@ zmienił Team ID (%@ → %@). Zweryfikuj, zanim zaufasz.": "Warning: %@'s publisher changed Team ID (%@ → %@). Verify before trusting.",
         "Zmienił się wydawca aplikacji — sprawdź.": "The app's publisher changed — review.",
+        // UX-01 — ujawnienie zakresu Touch ID dla sudo.
+        "Działa dla całego sudo w systemie, nie tylko dla Wegi.": "Applies to all sudo on the system, not just Wega.",
         // FEAT-01 / SEC-03 — privileged helper + self-update verification.
         "Aktualizacja nie przeszła weryfikacji podpisu — otwieram stronę wydania.": "The update failed signature verification — opening the release page.",
         "Komponent uprzywilejowany": "Privileged component",

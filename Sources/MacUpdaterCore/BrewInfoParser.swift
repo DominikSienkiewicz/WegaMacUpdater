@@ -29,6 +29,35 @@ public struct BrewInfoParser {
     public func parseDownloadInfo(_ json: String) throws -> [CaskDownloadInfo] {
         try parseDownloadInfo(Data(json.utf8))
     }
+
+    // MARK: - Installed versions (DEBT-05, robust JSON alternative)
+
+    /// Token→installed-version map from `brew info --installed --json=v2` — a
+    /// structured replacement for parsing `brew list --cask --versions` text.
+    public func parseInstalledVersions(_ data: Data) throws -> [String: String] {
+        let response = try decoder.decode(BrewInstalledResponse.self, from: data)
+        return response.casks.reduce(into: [:]) { dict, cask in
+            if let version = cask.installed, !version.isEmpty { dict[cask.token] = version }
+        }
+    }
+
+    public func parseInstalledVersions(_ json: String) throws -> [String: String] {
+        try parseInstalledVersions(Data(json.utf8))
+    }
+}
+
+private struct BrewInstalledResponse: Decodable {
+    var casks: [BrewInstalledCask]
+    private enum CodingKeys: String, CodingKey { case casks }
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        casks = try container.decodeIfPresent([BrewInstalledCask].self, forKey: .casks) ?? []
+    }
+}
+
+private struct BrewInstalledCask: Decodable {
+    var token: String
+    var installed: String?
 }
 
 private struct BrewDownloadResponse: Decodable {

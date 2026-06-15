@@ -14,6 +14,10 @@ public struct SparkleUpdateChecker: Sendable {
         let feedURL = resolveFeedURL(for: app)
         guard let feedURL else { return .notApplicable }
 
+        // SEC-09: a version check over plain HTTP is MITM-able (spoofed "outdated"
+        // → user nudged to a malicious download page). Trust HTTPS feeds only.
+        guard feedURL.scheme?.lowercased() == "https" else { return .notApplicable }
+
         guard let response = try? await client.get(feedURL, enableETag: true) else { return .unavailable }
         guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
         guard let latest = AppcastParser.parse(data: response.data) else { return .failed }

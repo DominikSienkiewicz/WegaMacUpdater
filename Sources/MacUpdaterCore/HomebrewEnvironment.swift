@@ -3,24 +3,44 @@ import Foundation
 public enum HomebrewEnvironment {
     public static let processPath = SystemPaths.homebrewProcessPath
 
+    /// DEBT-04: shared process-wide state lives behind a lock instead of
+    /// `nonisolated(unsafe)` (which silenced Swift 6 concurrency checking). The
+    /// public surface is unchanged — `static var` get/set forwards to the holder.
+    private final class Storage: @unchecked Sendable {
+        let lock = NSLock()
+        var askpassPath: String?
+        var sudoShimDirectory: String?
+        var touchIDStateOverride: TouchIDSudoConfigurator.State?
+    }
+    private static let storage = Storage()
+
     /// Path to the SUDO_ASKPASS helper, if it has been installed. Set once at
     /// app startup via `bootstrapAskpass()`; sudo will then run this script
     /// instead of failing when brew's cask hooks invoke `sudo` from a
     /// terminal-less GUI process.
-    public nonisolated(unsafe) static var askpassPath: String?
+    public static var askpassPath: String? {
+        get { storage.lock.withLock { storage.askpassPath } }
+        set { storage.lock.withLock { storage.askpassPath = newValue } }
+    }
 
     /// Directory containing the `sudo` PATH-shim that injects `-A`. Set once
     /// via `bootstrapAskpass()` and prepended to `PATH` so wrapped CLIs that
     /// don't pass `-A` themselves (notably `mas upgrade`) still trigger the
     /// askpass dialog instead of failing on a missing TTY.
-    public nonisolated(unsafe) static var sudoShimDirectory: String?
+    public static var sudoShimDirectory: String? {
+        get { storage.lock.withLock { storage.sudoShimDirectory } }
+        set { storage.lock.withLock { storage.sudoShimDirectory = newValue } }
+    }
 
     /// Test seam — when non-nil, `environment` uses this instead of probing
     /// the real `/etc/pam.d/sudo_local` + biometry hardware. Production code
     /// must leave this nil so the live state is consulted on every read
     /// (state can flip mid-session when the user enables Touch ID from
     /// InfoView, and the next brew call must immediately respect that).
-    public nonisolated(unsafe) static var touchIDStateOverride: TouchIDSudoConfigurator.State?
+    public static var touchIDStateOverride: TouchIDSudoConfigurator.State? {
+        get { storage.lock.withLock { storage.touchIDStateOverride } }
+        set { storage.lock.withLock { storage.touchIDStateOverride = newValue } }
+    }
 
     /// Why this is dynamic, not bootstrap-time: the sudo shim doesn't merely
     /// "force -A so SUDO_ASKPASS works" — it actively *prevents* `pam_tid.so`

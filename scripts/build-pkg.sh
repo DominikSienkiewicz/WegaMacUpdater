@@ -153,12 +153,23 @@ fi
 
 # ---------------------------------------------------------------------------
 echo "→ Tworzę PKG..."
-pkgbuild \
-    --component "$APP_BUNDLE" \
-    --install-location /Applications \
-    --identifier "$BUNDLE_ID" \
-    --version "$VERSION" \
-    "$OUTPUT_PKG"
+# DEBT-02: podpisz sam pakiet (nie tylko .app w środku) gdy mamy Developer ID.
+if [[ -n "$SIGN_IDENTITY" ]]; then
+    pkgbuild \
+        --component "$APP_BUNDLE" \
+        --install-location /Applications \
+        --identifier "$BUNDLE_ID" \
+        --version "$VERSION" \
+        --sign "$SIGN_IDENTITY" \
+        "$OUTPUT_PKG"
+else
+    pkgbuild \
+        --component "$APP_BUNDLE" \
+        --install-location /Applications \
+        --identifier "$BUNDLE_ID" \
+        --version "$VERSION" \
+        "$OUTPUT_PKG"
+fi
 
 # ---------------------------------------------------------------------------
 echo "→ Tworzę DMG (drag-to-Applications)..."

@@ -58,6 +58,14 @@ public enum SystemPaths {
     /// The `pam_tid.so` module shipped by recent macOS.
     public static let pamModule = "/usr/lib/pam/pam_tid.so.2"
 
+    /// DEBT-03: candidate module filenames across macOS versions. The versioned
+    /// `.so.2` is current; the unversioned name is a fallback so capability
+    /// detection doesn't yield a false "notSupported" if Apple renames it.
+    public static let pamModuleCandidates = [
+        "/usr/lib/pam/pam_tid.so.2",
+        "/usr/lib/pam/pam_tid.so",
+    ]
+
     /// The drop-in PAM file whose edits survive macOS updates.
     public static let sudoLocal = "/etc/pam.d/sudo_local"
 
