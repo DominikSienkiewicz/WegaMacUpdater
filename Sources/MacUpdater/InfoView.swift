@@ -374,6 +374,16 @@ struct InfoView: View {
     }
 
     private func removeHelper() async {
+        // ICE-01: bramka biometryczna przed usunięciem komponentu root. `.unavailable`
+        // (brak biometrii) NIE blokuje — nie zamykamy właściciela poza własną apką.
+        switch await BiometricGate.shared.authenticate(
+            reason: tr("Potwierdź usunięcie komponentu uprzywilejowanego")
+        ) {
+        case .success, .unavailable: break
+        case .cancelled: return
+        case .failed(let message): helperError = message; return
+        }
+
         helperBusy = true; helperError = nil
         defer { helperBusy = false }
         do {

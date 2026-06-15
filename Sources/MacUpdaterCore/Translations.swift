@@ -29,6 +29,8 @@ public enum Translations {
         "Działa dla całego sudo w systemie, nie tylko dla Wegi.": "Applies to all sudo on the system, not just Wega.",
         // FEAT-01 / SEC-03 — privileged helper + self-update verification.
         "Aktualizacja nie przeszła weryfikacji podpisu — otwieram stronę wydania.": "The update failed signature verification — opening the release page.",
+        // ICE-01 — in-app biometric gate.
+        "Potwierdź usunięcie komponentu uprzywilejowanego": "Confirm removing the privileged component",
         "Komponent uprzywilejowany": "Privileged component",
         "Pozwala instalować zweryfikowane aktualizacje i konfigurować Touch ID bez wpisywania hasła — przez podpisany helper (XPC) z białą listą operacji.": "Installs verified updates and configures Touch ID without typing a password — via a signed helper (XPC) with a whitelist of operations.",
         "Aktywny": "Active",
