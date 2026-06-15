@@ -74,13 +74,13 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
     // MARK: - Whitelisted operations (XPC)
 
     public func helperVersion() async throws -> String {
-        try await call { (proxy, done: @escaping @Sendable (Result<String, Error>) -> Void) in
+        try await call { (proxy, done: @escaping @Sendable (sending Result<String, Error>) -> Void) in
             proxy.helperVersion { version in done(.success(version)) }
         }
     }
 
     public func enableTouchIDForSudo() async throws {
-        _ = try await call { (proxy, done: @escaping @Sendable (Result<Bool, Error>) -> Void) in
+        _ = try await call { (proxy, done: @escaping @Sendable (sending Result<Bool, Error>) -> Void) in
             proxy.enableTouchIDForSudo { ok, message in
                 done(ok ? .success(true) : .failure(HelperError.operationFailed(message ?? "enableTouchIDForSudo failed")))
             }
@@ -88,9 +88,18 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
     }
 
     public func installVerifiedPackage(at path: String) async throws {
-        _ = try await call { (proxy, done: @escaping @Sendable (Result<Bool, Error>) -> Void) in
+        _ = try await call { (proxy, done: @escaping @Sendable (sending Result<Bool, Error>) -> Void) in
             proxy.installVerifiedPackage(atPath: path) { ok, message in
                 done(ok ? .success(true) : .failure(HelperError.operationFailed(message ?? "installVerifiedPackage failed")))
+            }
+        }
+    }
+
+    /// FEAT-05: atomic bundle rollback as root (protected locations).
+    public func replaceBundle(at targetPath: String, withSnapshotAt snapshotPath: String) async throws {
+        _ = try await call { (proxy, done: @escaping @Sendable (sending Result<Bool, Error>) -> Void) in
+            proxy.replaceBundle(atPath: targetPath, withSnapshotAtPath: snapshotPath) { ok, message in
+                done(ok ? .success(true) : .failure(HelperError.operationFailed(message ?? "replaceBundle failed")))
             }
         }
     }
@@ -102,7 +111,7 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
     /// `Once` box guarantees the continuation can't be resumed twice (which would
     /// crash) even if both the error handler and the reply fire.
     private func call<T: Sendable>(
-        _ body: @escaping @Sendable (_ proxy: WegaPrivilegedOps, _ done: @escaping @Sendable (Result<T, Error>) -> Void) -> Void
+        _ body: @escaping @Sendable (_ proxy: WegaPrivilegedOps, _ done: @escaping @Sendable (sending Result<T, Error>) -> Void) -> Void
     ) async throws -> T {
         guard isEnabled else { throw HelperError.notEnabled }
 
@@ -153,7 +162,7 @@ private final class Once<T>: @unchecked Sendable {
 
     init(_ continuation: CheckedContinuation<T, Error>) { self.continuation = continuation }
 
-    func resume(_ result: Result<T, Error>) {
+    func resume(_ result: sending Result<T, Error>) {
         lock.lock(); defer { lock.unlock() }
         guard !done else { return }
         done = true

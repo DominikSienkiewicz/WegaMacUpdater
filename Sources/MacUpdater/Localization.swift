@@ -29,7 +29,18 @@ public enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
 /// manager's current language so string lookup needs no actor hop. Written only on
 /// the main thread (from the manager), read on the main thread (view bodies).
 enum LocalizedStrings {
-    nonisolated(unsafe) static var current: AppLanguage = .pl
+    // DEBT-04: język trzymany za zamkiem zamiast `nonisolated(unsafe)` — bezpieczny
+    // odczyt/zapis z dowolnego kontekstu (uncontended NSLock ~ns, bez wpływu na tr()).
+    private final class Storage: @unchecked Sendable {
+        let lock = NSLock()
+        var current: AppLanguage = .pl
+    }
+    private static let storage = Storage()
+
+    static var current: AppLanguage {
+        get { storage.lock.withLock { storage.current } }
+        set { storage.lock.withLock { storage.current = newValue } }
+    }
 
     static func translate(_ base: String) -> String {
         switch current {

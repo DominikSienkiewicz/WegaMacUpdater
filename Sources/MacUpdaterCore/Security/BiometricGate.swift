@@ -84,7 +84,9 @@ public final class BiometricGate: @unchecked Sendable {
     /// degrades to plain reuse behaviour.
     private func currentEnrollmentHash(_ context: LAContext) -> Data? {
         if #available(macOS 15.0, *) {
-            return context.domainState?.biometry.stateHash
+            // macOS 15+: `domainState` is non-optional; `stateHash` identifies the
+            // current biometric enrollment (replaces deprecated evaluatedPolicyDomainState).
+            return context.domainState.biometry.stateHash
         }
         return nil
     }

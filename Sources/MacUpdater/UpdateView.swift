@@ -609,9 +609,27 @@ struct UpdateView: View {
             guard let appURL = caskIconPaths[token] else { continue }
             let healthy = await Task.detached { CanaryCheck.passesGatekeeper(appAt: appURL) }.value
             if !healthy, let snapshot = snapshots[token] {
-                try? BundleSnapshot.restore(snapshot: snapshot, to: appURL)
-                brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.", "\(token)"))
-                onWegaState?(WegaState(pose: .alert, line: trf("Cofnęłam %@ — nowa wersja nie przeszła kontroli.", "\(token)")))
+                var restored = false
+                do {
+                    try BundleSnapshot.restore(snapshot: snapshot, to: appURL)
+                    restored = true
+                } catch {
+                    // FEAT-05: lokalizacja chroniona (brak prawa zapisu) → przez root-helpera.
+                    if PrivilegedHelperClient.shared.isEnabled {
+                        do {
+                            try await PrivilegedHelperClient.shared.replaceBundle(at: appURL.path, withSnapshotAt: snapshot.path)
+                            restored = true
+                        } catch {
+                            AppLogger.app.error("Rollback przez helper nie powiódł się: \(error.localizedDescription, privacy: .public)")
+                        }
+                    }
+                }
+                if restored {
+                    brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.", "\(token)"))
+                    onWegaState?(WegaState(pose: .alert, line: trf("Cofnęłam %@ — nowa wersja nie przeszła kontroli.", "\(token)")))
+                } else {
+                    brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli, ale rollback się nie powiódł.", "\(token)"))
+                }
             } else {
                 let teamID = await Task.detached { CodeSignatureVerifier.teamID(ofAppAt: appURL) }.value
                 if case let .changed(old, new) = TeamIDLedger.shared.record(bundleID: "cask:\(token)", teamID: teamID) {
@@ -794,6 +812,12 @@ private struct ManualUpdateSection: View {
                             Text(item.availableVersion ?? "—")
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundStyle(Color.wegaHoney)
+                        }
+                        // FEAT-06: doradczy badge z triage notatek wydania (np. GitHub).
+                        if let notes = item.releaseNotes, ReleaseNotesTriage.heuristic(notes).isLikelySecurityFix {
+                            Label(tr("możliwa poprawka bezpieczeństwa"), systemImage: "shield.lefthalf.filled")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(Color.wegaDanger)
                         }
                     }
                     Spacer()

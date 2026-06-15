@@ -36,6 +36,7 @@ public enum Translations {
         // FEAT-05 — rollback casków.
         "%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.": "%@: the new version failed the check — restored the previous one.",
         "Cofnęłam %@ — nowa wersja nie przeszła kontroli.": "Rolled back %@ — the new version failed the check.",
+        "%@: nowa wersja nie przeszła kontroli, ale rollback się nie powiódł.": "%@: the new version failed the check, but rollback did not succeed.",
         // FEAT-04 — watchdog (upgrade).
         "Zmiana wydawcy": "Publisher changed",
         "%@: Team ID zmienił się (%@ → %@). Zweryfikuj.": "%@: Team ID changed (%@ → %@). Verify.",

@@ -78,13 +78,13 @@ public enum CodeSignatureVerifier {
         case .app:
             try verifyStaticCode(at: url, expectedTeamID: expectedTeamID, bundleID: bundleID)
         case .pkg:
-            try assessGatekeeper(at: url, operation: kSecAssessmentOperationTypeInstall)
+            try assessGatekeeper(at: url, type: "install")
             // Best-effort additional pin; only fails on a *mismatching* Team ID.
             if let found = pkgTeamID(at: url), found != expectedTeamID {
                 throw VerifyError.teamIDMismatch(found: found, expected: expectedTeamID)
             }
         case .dmg:
-            try assessGatekeeper(at: url, operation: kSecAssessmentOperationTypeOpenDocument)
+            try assessGatekeeper(at: url, type: "open", primarySignatureContext: true)
         case .other(let ext):
             throw VerifyError.unsupportedArtifact(ext)
         }
@@ -120,21 +120,33 @@ public enum CodeSignatureVerifier {
 
     // MARK: - SecAssessment (pkg / dmg → Gatekeeper)
 
-    /// Ask Gatekeeper whether it would allow `operation` on `url`. A non-nil
-    /// assessment means "approved"; a nil result carries the rejection reason.
-    public static func assessGatekeeper(at url: URL, operation: SecAssessmentOperationType) throws {
-        var unmanagedError: Unmanaged<CFError>?
-        let assessment = SecAssessmentCreate(url as CFURL, operation, SecAssessmentFlags(), &unmanagedError)
-        if assessment != nil { return } // approved
-        let message = (unmanagedError?.takeRetainedValue()).map { CFErrorCopyDescription($0) as String }
-            ?? "odrzucony przez politykę systemu"
-        throw VerifyError.gatekeeperRejected(message)
+    /// Gatekeeper assessment via `spctl --assess` (the SecAssessment C API is not
+    /// bridged into Swift on this SDK). `type` is the spctl policy type: "exec"
+    /// (apps), "install" (pkgs), "open" (documents/disk images). Throws on rejection.
+    public static func assessGatekeeper(at url: URL, type: String, primarySignatureContext: Bool = false) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/sbin/spctl")
+        var arguments = ["--assess", "--type", type]
+        if primarySignatureContext { arguments += ["--context", "context:primary-signature"] }
+        arguments.append(url.path)
+        process.arguments = arguments
+        let errorPipe = Pipe()
+        process.standardError = errorPipe
+        process.standardOutput = Pipe()
+        do { try process.run() } catch { throw VerifyError.gatekeeperRejected(error.localizedDescription) }
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            let data = errorPipe.fileHandleForReading.readDataToEndOfFile()
+            let message = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw VerifyError.gatekeeperRejected(
+                (message?.isEmpty == false) ? message! : "spctl odrzucił artefakt (kod \(process.terminationStatus))")
+        }
     }
 
     /// Convenience: does Gatekeeper approve launching the app at `url`? Used by the
-    /// post-upgrade canary (FEAT-05) so callers don't import Security directly.
+    /// post-upgrade canary (FEAT-05).
     public static func passesGatekeeperForExecution(at url: URL) -> Bool {
-        (try? assessGatekeeper(at: url, operation: kSecAssessmentOperationTypeExecute)) != nil
+        (try? assessGatekeeper(at: url, type: "exec")) != nil
     }
 
     // MARK: - pkg Team ID (best effort)

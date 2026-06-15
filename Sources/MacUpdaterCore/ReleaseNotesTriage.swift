@@ -44,9 +44,9 @@ import FoundationModels
 // NOTE: API surface per WWDC25 (Foundation Models framework). If the shipping SDK
 // renames anything, adjust here only — the heuristic tier above is unaffected.
 @available(macOS 26, *)
-public extension ReleaseNotesTriage {
+extension ReleaseNotesTriage {
     @Generable
-    struct Triage {
+    public struct Triage {
         @Guide(description: "true only if the notes describe a security fix or vulnerability patch")
         public var isSecurityFix: Bool
         @Guide(description: "one neutral sentence summarizing what changed")
@@ -55,7 +55,7 @@ public extension ReleaseNotesTriage {
 
     /// On-device, privacy-preserving triage with guided (typed) output. Falls back
     /// to the heuristic on any model error so a result is always returned.
-    static func onDevice(_ notes: String) async -> ReleaseTriageResult {
+    public static func onDevice(_ notes: String) async -> ReleaseTriageResult {
         do {
             let session = LanguageModelSession()
             let response = try await session.respond(to: notes, generating: Triage.self)

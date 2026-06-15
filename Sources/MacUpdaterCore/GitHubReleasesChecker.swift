@@ -42,7 +42,8 @@ public struct GitHubReleasesChecker: Sendable {
             path: app.path,
             installedVersion: app.version,
             availableVersion: latest,
-            source: .github(repo: mapping.repo)
+            source: .github(repo: mapping.repo),
+            releaseNotes: release.body   // FEAT-06: real notes for triage
         ))
     }
 }
@@ -51,10 +52,12 @@ private struct GitHubRelease: Decodable {
     let tagName: String
     let draft: Bool
     let prerelease: Bool
+    let body: String?
 
     enum CodingKeys: String, CodingKey {
         case tagName = "tag_name"
         case draft
         case prerelease
+        case body
     }
 }

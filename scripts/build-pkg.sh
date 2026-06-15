@@ -153,6 +153,10 @@ fi
 
 # ---------------------------------------------------------------------------
 echo "→ Tworzę PKG..."
+# Pliki kopiowane z .build (binarka helpera, bundle zasobów) bywają read-only —
+# pkgbuild zgłasza wtedy "write: Permission denied" przy analizie payloadu.
+# Nadanie prawa zapisu właścicielowi usuwa te ostrzeżenia (bez wpływu na wynik).
+chmod -R u+w "$APP_BUNDLE" 2>/dev/null || true
 # DEBT-02: podpisz sam pakiet (nie tylko .app w środku) gdy mamy Developer ID.
 if [[ -n "$SIGN_IDENTITY" ]]; then
     pkgbuild \

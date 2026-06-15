@@ -1,5 +1,8 @@
 import Foundation
 import Network
+#if canImport(IOKit)
+import IOKit.ps
+#endif
 
 /// Live system-condition probes feeding `DownloadGate` (**FEAT-07 / I-4**).
 ///
@@ -36,9 +39,35 @@ public enum LiveConditions {
         }
     }
 
-    /// Thermal-only power read (battery level is a documented TODO).
+    /// Power read: thermal (ProcessInfo) + battery state via IOKit `IOPowerSources`
+    /// (FEAT-07). Memory rules: `Copy*` → takeRetained, `Get*` → takeUnretained.
+    /// Any probe failure degrades gracefully (onBattery=false / fraction=nil).
     public static func power() -> PowerCondition {
-        PowerCondition(onBattery: false, batteryFraction: nil, thermalSerious: DownloadGate.currentThermalSerious())
+        let thermal = DownloadGate.currentThermalSerious()
+        #if canImport(IOKit)
+        guard let blob = IOPSCopyPowerSourcesInfo()?.takeRetainedValue() else {
+            return PowerCondition(onBattery: false, batteryFraction: nil, thermalSerious: thermal)
+        }
+        // Currently-providing source: "Battery Power" when running off the battery.
+        let providing = IOPSGetProvidingPowerSourceType(blob)?.takeUnretainedValue() as String?
+        let onBattery = (providing == kIOPSBatteryPowerValue)
+
+        var fraction: Double?
+        if let sources = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef] {
+            for source in sources {
+                guard let desc = IOPSGetPowerSourceDescription(blob, source)?.takeUnretainedValue() as? [String: Any]
+                else { continue }
+                if let current = desc[kIOPSCurrentCapacityKey] as? Int,
+                   let maximum = desc[kIOPSMaxCapacityKey] as? Int, maximum > 0 {
+                    fraction = Double(current) / Double(maximum)
+                    break
+                }
+            }
+        }
+        return PowerCondition(onBattery: onBattery, batteryFraction: fraction, thermalSerious: thermal)
+        #else
+        return PowerCondition(onBattery: false, batteryFraction: nil, thermalSerious: thermal)
+        #endif
     }
 
     /// Convenience: both conditions for a `DownloadGate.decide(...)` call.

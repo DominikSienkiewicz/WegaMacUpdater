@@ -99,8 +99,8 @@ public enum TouchIDSudoConfigurator {
         try Data(contents.utf8).write(to: url, options: []) // non-atomic on purpose
         try FileManager.default.setAttributes(
             [.posixPermissions: NSNumber(value: 0o644),
-             .ownerAccountID: NSNumber(value: 0),   // root
-             .groupAccountID: NSNumber(value: 0)],  // wheel
+             .ownerAccountID: NSNumber(value: 0),        // root
+             .groupOwnerAccountID: NSNumber(value: 0)],  // wheel
             ofItemAtPath: sudoLocalPath
         )
     }

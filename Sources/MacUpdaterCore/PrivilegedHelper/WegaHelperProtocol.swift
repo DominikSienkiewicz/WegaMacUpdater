@@ -28,6 +28,13 @@ import Foundation
     /// after the helper itself re-verifies the package signature/notarization +
     /// Team ID (defense in depth — never trust the client's path blindly).
     func installVerifiedPackage(atPath path: String, withReply reply: @escaping @Sendable (Bool, String?) -> Void)
+
+    /// FEAT-05 rollback for protected locations: atomically replaces the `.app`
+    /// at `targetPath` with the clone at `snapshotPath`, as root. The helper
+    /// validates both are `.app` bundles, the target sits under `/Applications`,
+    /// and the snapshot passes Gatekeeper — so this is NOT a generic "overwrite
+    /// any path as root" primitive.
+    func replaceBundle(atPath targetPath: String, withSnapshotAtPath snapshotPath: String, withReply reply: @escaping @Sendable (Bool, String?) -> Void)
 }
 
 /// Identity & code-requirement constants shared by client and helper.
@@ -45,7 +52,7 @@ public enum WegaHelper {
     /// Main app bundle identifier.
     public static let appBundleID = AppMetadata.bundleIdentifier
     /// Helper protocol version (bump on breaking interface changes).
-    public static let version = "1"
+    public static let version = "2"
 
     // TODO(Dominik): wstaw swój Apple Developer Team ID (10 znaków, np. "AB12CD34EF").
     // Bez tego XPC-pinning i weryfikacja self-update odrzucą wszystko (fail-closed).

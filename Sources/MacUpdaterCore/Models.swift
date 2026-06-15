@@ -170,13 +170,24 @@ public struct ManualOutdatedApp: Equatable, Sendable {
     public var installedVersion: String?
     public var availableVersion: String?
     public var source: UpdateSource
+    /// FEAT-06: release notes (when a source provides them, e.g. GitHub `body`) —
+    /// fed to `ReleaseNotesTriage` for the advisory "possible security fix" badge.
+    public var releaseNotes: String?
 
-    public init(name: String, path: URL, installedVersion: String?, availableVersion: String?, source: UpdateSource) {
+    public init(
+        name: String,
+        path: URL,
+        installedVersion: String?,
+        availableVersion: String?,
+        source: UpdateSource,
+        releaseNotes: String? = nil
+    ) {
         self.name = name
         self.path = path
         self.installedVersion = installedVersion
         self.availableVersion = availableVersion
         self.source = source
+        self.releaseNotes = releaseNotes
     }
 }
 

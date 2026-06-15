@@ -66,4 +66,32 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
             reply(false, error.localizedDescription)
         }
     }
+
+    func replaceBundle(atPath targetPath: String, withSnapshotAtPath snapshotPath: String, withReply reply: @escaping @Sendable (Bool, String?) -> Void) {
+        let fileManager = FileManager.default
+        let target = URL(fileURLWithPath: targetPath)
+        let snapshot = URL(fileURLWithPath: snapshotPath)
+
+        // Twarda walidacja — to NIE jest generyczne „nadpisz cokolwiek jako root".
+        guard targetPath.hasSuffix(".app"), snapshotPath.hasSuffix(".app") else {
+            reply(false, "Dozwolone tylko bundle .app."); return
+        }
+        guard targetPath.hasPrefix("/Applications/") else {
+            reply(false, "Cel poza /Applications — odrzucono."); return
+        }
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: snapshotPath, isDirectory: &isDirectory), isDirectory.boolValue else {
+            reply(false, "Brak prawidłowego snapshotu do przywrócenia."); return
+        }
+        // Defense in depth: przywracamy tylko prawidłowo podpisaną aplikację.
+        guard CodeSignatureVerifier.passesGatekeeperForExecution(at: snapshot) else {
+            reply(false, "Snapshot nie przeszedł oceny Gatekeeper."); return
+        }
+        do {
+            _ = try fileManager.replaceItemAt(target, withItemAt: snapshot)
+            reply(true, nil)
+        } catch {
+            reply(false, error.localizedDescription)
+        }
+    }
 }
