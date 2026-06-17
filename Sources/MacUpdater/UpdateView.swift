@@ -484,7 +484,21 @@ struct UpdateView: View {
         if !caskNames.isEmpty {
             let snapshots = snapshotCasks(caskNames)
             let args = ["upgrade", "--cask"] + caskNames
-            outcomes.append(await runBrewUpgrade(arguments: args))
+            var caskOutcome = await runBrewUpgrade(arguments: args)
+
+            // Auto-recover an interrupted upgrade: if a cask bailed because a stale
+            // staged app from a previous, cut-short upgrade is in the way ("already an
+            // App at …"), retry just those casks once with --force, which overwrites
+            // the leftover. Without this they fail on every attempt until cleaned by hand.
+            let retryTokens = caskOutcome.tokensRetryableWithForce
+            if !retryTokens.isEmpty {
+                brewLog.append("↻ " + trf("Przerwana aktualizacja (%@) — ponawiam z --force.", "\(retryTokens.joined(separator: ", "))"))
+                WegaLog.info(.homebrew, "Przerwana aktualizacja casku — ponawiam z --force: \(retryTokens.joined(separator: ", "))")
+                let retryOutcome = await runBrewUpgrade(arguments: ["upgrade", "--cask", "--force"] + retryTokens)
+                caskOutcome = BrewUpgradeOutcome.merging(original: caskOutcome, forcedRetry: retryOutcome, retriedTokens: retryTokens)
+            }
+
+            outcomes.append(caskOutcome)
             await postCaskUpgrade(caskNames, snapshots: snapshots)
         }
 
@@ -530,6 +544,11 @@ struct UpdateView: View {
             banner = BannerData(variant: .danger, title: tr("Aktualizacja niekompletna"), message: detail)
             onWegaState?(WegaState(pose: .alert, line: tr("Część pakietów się nie zaktualizowała.")))
             WegaLog.error(.homebrew, "Aktualizacja niekompletna: \(failedTokens.isEmpty ? "Brew zgłosił błąd" : failedTokens.joined(separator: ", "))")
+            // Surface *why* each upgrade failed — the brew error block, not just the
+            // token name — so the log explains the failure instead of only flagging it.
+            for detail in summary.failureDetails {
+                WegaLog.error(.homebrew, detail)
+            }
         } else {
             banner = BannerData(variant: .success, title: trf("Zaktualizowano %@ pakietów", "\(n)"), message: tr("Wszystko gotowe."))
             onWegaState?(WegaState(pose: .happy, line: trf("Gotowe! %@ pakietów odświeżonych.", "\(n)")))

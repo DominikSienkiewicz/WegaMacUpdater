@@ -97,12 +97,19 @@ public struct ManualUpdateScanner: Sendable {
         // truth, so we DON'T run the cask-version check or the cask-lag special checkers
         // on them. Managed status uses the FULL installed-cask set (matched by name or
         // resolved token), so pkg-artifact casks like `google-drive` count too.
-        let normalizedInstalledCasks = Set(installedCasks.map { StringNormalizer.normalize($0) })
+        // Brew is the source of truth for an app only when it actually tracks an
+        // installed version for the cask. A cask listed by `brew list --cask` but with
+        // no version in `brew info --installed` (empty Caskroom metadata — e.g. Claude,
+        // Postman, which self-updated out-of-band) is invisible to `brew outdated`, so
+        // route it to the cask-version check below instead of deferring to brew.
+        let brewTrackedTokens = Set(brewCaskVersions.keys)
         func isBrewManaged(_ app: ApplicationInfo) -> Bool {
-            if app.isManagedByBrew { return true }
-            if let token = app.caskToken,
-               normalizedInstalledCasks.contains(StringNormalizer.normalize(token)) { return true }
-            return false
+            BrewManagement.isAuthoritative(
+                caskToken: app.caskToken,
+                isManagedByBrew: app.isManagedByBrew,
+                installedCaskTokens: installedCasks,
+                brewTrackedTokens: brewTrackedTokens
+            )
         }
 
         var work: [@Sendable () async -> ManualCheckResult] = []

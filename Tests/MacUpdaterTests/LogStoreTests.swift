@@ -33,6 +33,29 @@ final class LogStoreTests: XCTestCase {
         XCTAssertNil(LogEntry.parse(""))
     }
 
+    // Regression: the test suite was writing into the user's REAL log file
+    // (~/Library/Logs/WegaMacUpdater/wega.log) because several tests exercise
+    // LogStore.shared (via WegaLog / the `logged` wrapper) and `.shared` defaulted
+    // to the real Logs directory. Under XCTest it must redirect to a temp location.
+    private var realUserLogDir: String {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Logs/WegaMacUpdater").path
+    }
+
+    func testDefaultDirectoryIsRedirectedUnderTests() {
+        XCTAssertNotEqual(LogStore.defaultDirectory.path, realUserLogDir)
+        XCTAssertTrue(LogStore.defaultDirectory.path.contains("WegaMacUpdaterTests"),
+                      "expected a temp test dir, got \(LogStore.defaultDirectory.path)")
+    }
+
+    @MainActor
+    func testSharedStoreDoesNotWriteToRealUserLogDuringTests() {
+        XCTAssertFalse(
+            LogStore.shared.logFileURL.path.hasPrefix(realUserLogDir),
+            "LogStore.shared must not touch the real user log during tests; got \(LogStore.shared.logFileURL.path)"
+        )
+    }
+
     @MainActor
     private func makeStore() -> (LogStore, URL) {
         let dir = FileManager.default.temporaryDirectory

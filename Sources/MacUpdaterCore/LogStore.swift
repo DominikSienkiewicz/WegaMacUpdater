@@ -86,9 +86,32 @@ public final class LogStore: ObservableObject {
     public var logFileURL: URL { directory.appendingPathComponent("wega.log") }
     private var backupURL: URL { directory.appendingPathComponent("wega.log.1") }
 
+    /// The real, production log location.
+    public nonisolated static let userLogDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Logs/WegaMacUpdater", isDirectory: true)
+
+    /// Where `LogStore.shared` (and any default-constructed store) writes. Under
+    /// XCTest this is redirected to a temp directory so the test suite can never
+    /// pollute the user's real app log; production always uses `userLogDirectory`.
+    public nonisolated static var defaultDirectory: URL {
+        isRunningUnderTests
+            ? FileManager.default.temporaryDirectory
+                .appendingPathComponent("WegaMacUpdaterTests/Logs", isDirectory: true)
+            : userLogDirectory
+    }
+
+    /// True when the process is hosting the XCTest framework (i.e. `swift test`).
+    /// The app bundle never loads XCTest, so this stays false in production.
+    nonisolated static var isRunningUnderTests: Bool {
+        let env = ProcessInfo.processInfo.environment
+        return env["XCTestConfigurationFilePath"] != nil
+            || env["XCTestBundlePath"] != nil
+            || env["XCTestSessionIdentifier"] != nil
+            || NSClassFromString("XCTestCase") != nil
+    }
+
     public init(
-        directory: URL = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Logs/WegaMacUpdater", isDirectory: true),
+        directory: URL = LogStore.defaultDirectory,
         memoryCap: Int = 2000,
         fileMaxBytes: Int = 5 * 1024 * 1024,
         loadTailLines: Int = 2000

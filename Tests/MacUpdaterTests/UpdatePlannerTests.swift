@@ -132,4 +132,33 @@ final class UpdatePlannerTests: XCTestCase {
         XCTAssertTrue(summary.failedTokens.isEmpty)
         XCTAssertFalse(summary.needsSudoPassword)
     }
+
+    // Regression: when an upgrade fails, the detailed brew error lines must reach
+    // the summary so they can be written to the persistent log. Previously only the
+    // failed *token name* was forwarded, so the log read "Aktualizacja niekompletna:
+    // discord" with no explanation of *why* it failed.
+    func testSummarizeForwardsFailureDetailLines() {
+        let failed = BrewUpgradeOutcome(
+            exitCode: 1,
+            failedTokens: ["discord"],
+            errorLines: ["Error: discord: It seems the App source '/Applications/Discord.app' is not there."]
+        )
+        let summary = UpdatePlanner.summarize(outcomes: [failed])
+        XCTAssertEqual(summary.failureDetails, ["Error: discord: It seems the App source '/Applications/Discord.app' is not there."])
+    }
+
+    // When brew fails without printing any "Error:" line (non-zero exit, empty
+    // errorLines), the summary must still carry *something* actionable — the exit
+    // code — instead of leaving the log with no detail at all.
+    func testSummarizeSynthesizesDetailWhenNoErrorLines() {
+        let failed = BrewUpgradeOutcome(exitCode: 1, failedTokens: [], errorLines: [])
+        let summary = UpdatePlanner.summarize(outcomes: [failed])
+        XCTAssertEqual(summary.failureDetails.count, 1)
+        XCTAssertTrue(summary.failureDetails[0].contains("1"))
+    }
+
+    func testSummarizeNoDetailsWhenEverythingSucceeds() {
+        let summary = UpdatePlanner.summarize(outcomes: [BrewUpgradeOutcome(exitCode: 0, failedTokens: [], errorLines: [])])
+        XCTAssertTrue(summary.failureDetails.isEmpty)
+    }
 }

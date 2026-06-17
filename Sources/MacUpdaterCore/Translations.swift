@@ -30,6 +30,8 @@ public enum Translations {
         // FEAT-03 — transparentność pobrania (UpdateView).
         "Bez weryfikacji sumy kontrolnej": "Without checksum verification",
         "Homebrew zainstaluje bez sprawdzenia sumy: %@": "Homebrew will install without checking the checksum: %@",
+        // Auto-recovery przerwanej aktualizacji casku (leftover w Caskroom → retry z --force).
+        "Przerwana aktualizacja (%@) — ponawiam z --force.": "Interrupted upgrade (%@) — retrying with --force.",
         // FEAT-07 — gating pobrań.
         "Niekorzystne warunki pobierania (%@) — kontynuuję na żądanie.": "Unfavorable download conditions (%@) — continuing at your request.",
         "Uwaga: kosztowne łącze lub throttling — pobieram mimo to.": "Note: metered link or throttling — downloading anyway.",

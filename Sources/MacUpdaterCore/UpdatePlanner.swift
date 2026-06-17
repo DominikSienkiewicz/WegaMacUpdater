@@ -65,11 +65,16 @@ public struct UpdateOutcomeSummary: Equatable, Sendable {
     public var anyFailure: Bool
     public var failedTokens: [String]
     public var needsSudoPassword: Bool
+    /// Human-readable detail lines explaining *why* the failed upgrades failed —
+    /// the brew "Error:" block (with its continuation lines), or a synthesized
+    /// exit-code note when brew produced no message. Written verbatim to the log.
+    public var failureDetails: [String]
 
-    public init(anyFailure: Bool, failedTokens: [String], needsSudoPassword: Bool) {
+    public init(anyFailure: Bool, failedTokens: [String], needsSudoPassword: Bool, failureDetails: [String] = []) {
         self.anyFailure = anyFailure
         self.failedTokens = failedTokens
         self.needsSudoPassword = needsSudoPassword
+        self.failureDetails = failureDetails
     }
 }
 
@@ -168,12 +173,22 @@ public enum UpdatePlanner {
         }
     }
 
-    /// Collapses a batch of upgrade outcomes into the booleans the result banner needs.
+    /// Collapses a batch of upgrade outcomes into the booleans the result banner needs,
+    /// plus the detail lines that explain each failure for the log.
     public static func summarize(outcomes: [BrewUpgradeOutcome]) -> UpdateOutcomeSummary {
-        UpdateOutcomeSummary(
+        var details: [String] = []
+        for outcome in outcomes where !outcome.isSuccessful {
+            if outcome.errorLines.isEmpty {
+                details.append("brew zakończył działanie z kodem \(outcome.exitCode) bez komunikatu „Error:”.")
+            } else {
+                details.append(contentsOf: outcome.errorLines)
+            }
+        }
+        return UpdateOutcomeSummary(
             anyFailure: outcomes.contains { !$0.isSuccessful },
             failedTokens: outcomes.flatMap(\.failedTokens),
-            needsSudoPassword: outcomes.contains { $0.requiresSudoPassword }
+            needsSudoPassword: outcomes.contains { $0.requiresSudoPassword },
+            failureDetails: details
         )
     }
 }

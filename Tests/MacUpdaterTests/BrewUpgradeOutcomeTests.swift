@@ -91,4 +91,104 @@ final class BrewUpgradeOutcomeTests: XCTestCase {
         )
         XCTAssertFalse(outcome.requiresSudoPassword)
     }
+
+    // Real-world Discord-style failure: the headline "Error:" line is generic and
+    // the actual cause is on the continuation lines that follow. We must keep those
+    // continuation lines so the log explains *why* the upgrade failed — not just
+    // that it did. Continuation stops at the next section header ("==>").
+    func testCapturesMultiLineErrorBlockForDetail() {
+        let combined = """
+        ==> Upgrading discord
+          0.0.392 -> 0.0.395
+        Error: Failure while executing; `/usr/bin/ditto ...` exited with 1. Here's the output:
+        ditto: /Applications/Discord.app: Operation not permitted
+        Some other context line from brew.
+        ==> Purging files for version 0.0.395 of Cask discord
+        """
+
+        let outcome = BrewUpgradeOutcome.analyze(exitCode: 1, output: combined)
+
+        XCTAssertFalse(outcome.isSuccessful)
+        XCTAssertTrue(outcome.errorLines.contains { $0.contains("Failure while executing") })
+        XCTAssertTrue(outcome.errorLines.contains { $0.contains("Operation not permitted") },
+                      "continuation line carrying the real cause must be captured")
+    }
+
+    // MARK: interrupted-upgrade leftover → force-retry detection
+
+    // Real-world Discord failure (captured live): a previous upgrade died mid-flight
+    // and left a staged app in the Caskroom, so brew refuses to proceed. A forced
+    // retry overwrites the leftover and completes — so this token is retryable.
+    func testDetectsInterruptedUpgradeLeftoverAsRetryable() {
+        let combined = """
+        ==> Upgrading discord
+          0.0.392 -> 0.0.395
+        Error: discord: It seems there is already an App at '/opt/homebrew/Caskroom/discord/0.0.392/Discord.app'.
+        ==> Purging files for version 0.0.395 of Cask discord
+        """
+
+        let outcome = BrewUpgradeOutcome.analyze(exitCode: 1, output: combined)
+
+        XCTAssertEqual(outcome.tokensRetryableWithForce, ["discord"])
+    }
+
+    // A missing *source* App ("is not there") is a different failure — --force can't
+    // conjure a missing app, so it must NOT be retried.
+    func testMissingAppSourceIsNotRetryable() {
+        let outcome = BrewUpgradeOutcome.analyze(
+            exitCode: 0,
+            output: "Error: intellij-idea: It seems the App source '/Applications/IntelliJ IDEA.app' is not there.\n"
+        )
+        XCTAssertTrue(outcome.tokensRetryableWithForce.isEmpty)
+    }
+
+    // MARK: merging a forced retry back into the batch outcome
+
+    func testMergingClearsFailureWhenForcedRetrySucceeds() {
+        let original = BrewUpgradeOutcome(
+            exitCode: 1, failedTokens: ["discord"],
+            errorLines: ["Error: discord: It seems there is already an App at '/opt/homebrew/Caskroom/discord/0.0.392/Discord.app'."]
+        )
+        let retry = BrewUpgradeOutcome(exitCode: 0, failedTokens: [], errorLines: [])
+
+        let merged = BrewUpgradeOutcome.merging(original: original, forcedRetry: retry, retriedTokens: ["discord"])
+
+        XCTAssertTrue(merged.isSuccessful)
+        XCTAssertTrue(merged.failedTokens.isEmpty)
+    }
+
+    func testMergingKeepsUnrelatedFailureFromTheBatch() {
+        // zoom failed for an unrelated (non-retryable) reason in the same batch.
+        let original = BrewUpgradeOutcome(
+            exitCode: 1, failedTokens: ["discord", "zoom"],
+            errorLines: [
+                "Error: discord: It seems there is already an App at '/opt/homebrew/Caskroom/discord/0.0.392/Discord.app'.",
+                "Error: zoom: Broken pipe"
+            ]
+        )
+        let retry = BrewUpgradeOutcome(exitCode: 0, failedTokens: [], errorLines: [])
+
+        let merged = BrewUpgradeOutcome.merging(original: original, forcedRetry: retry, retriedTokens: ["discord"])
+
+        XCTAssertFalse(merged.isSuccessful)
+        XCTAssertEqual(merged.failedTokens, ["zoom"])
+        XCTAssertTrue(merged.errorLines.contains { $0.contains("zoom") })
+        XCTAssertFalse(merged.errorLines.contains { $0.contains("discord") },
+                       "the retried token's original error must be dropped")
+    }
+
+    func testMergingReportsForcedRetryFailure() {
+        let original = BrewUpgradeOutcome(
+            exitCode: 1, failedTokens: ["discord"],
+            errorLines: ["Error: discord: It seems there is already an App at '/opt/homebrew/Caskroom/discord/0.0.392/Discord.app'."]
+        )
+        let retry = BrewUpgradeOutcome(exitCode: 1, failedTokens: ["discord"],
+                                       errorLines: ["Error: discord: still stuck after --force"])
+
+        let merged = BrewUpgradeOutcome.merging(original: original, forcedRetry: retry, retriedTokens: ["discord"])
+
+        XCTAssertFalse(merged.isSuccessful)
+        XCTAssertEqual(merged.failedTokens, ["discord"])
+        XCTAssertTrue(merged.errorLines.contains { $0.contains("still stuck after --force") })
+    }
 }
