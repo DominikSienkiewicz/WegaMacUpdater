@@ -65,6 +65,13 @@ bump and move its entries under the new version heading when cutting a release.
   (`/usr/sbin/installer`, the `/Applications/` boundary) are documented-suppressed in
   `sonar-project.properties` — like the existing `SystemPaths`/`SudoShim` entries, these
   run as root and making them configurable would be a privilege-escalation vector.
+- Extended `sonar.coverage.exclusions` to the structurally-untestable I/O infrastructure
+  (XPC helper target + `BrewService`/`MasService`/`NpmGlobalChecker`/`CaskDatabaseClient`
+  shells, `ManualUpdateScanner`/`MenuBarUpdateChecker` orchestration, `AppScanDirectories`/
+  `LiveConditions`, and the `BiometricGate`/`CodeSignatureVerifier` system-framework
+  wrappers). Their pure logic is already extracted into tested parsers/planners; the
+  remaining glue can't be reached by the XCTest bundle without a real system/root/network
+  — same rationale as the already-excluded SwiftUI app, documented inline.
 
 ### Fixed
 - The Updates and Inventory windows no longer contradict each other about an app's
