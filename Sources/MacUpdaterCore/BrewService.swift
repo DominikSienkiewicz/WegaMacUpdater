@@ -131,6 +131,18 @@ public final class BrewService: @unchecked Sendable {
         return result
     }
 
+    /// Arguments for the "Aktualizuj przez Brew" action — adopting/refreshing a
+    /// self-updating cask whose `.app` is already on disk while its Caskroom is empty
+    /// (Docker, etc.). A plain `install --cask` bails with "It seems there is already an
+    /// App at '/Applications/…'" and then PURGES the cask's Caskroom record, leaving brew
+    /// with no trace of an app that's still installed. `--force` overwrites the existing
+    /// app and re-records it, so the action both updates and re-adopts in one step (the
+    /// same `--force` the batch upgrade path falls back to on this exact error). Streamed
+    /// via `events(arguments:)`, so the args live here to stay testable.
+    public static func adoptCaskArguments(token: String) -> [String] {
+        ["install", "--cask", "--force", token]
+    }
+
     /// Returns the latest version string from the cask database for a given token, or nil on failure.
     public func caskLatestVersion(token: String) async -> String? {
         guard let result = try? await runBrew(["info", "--cask", "--json=v2", token]),

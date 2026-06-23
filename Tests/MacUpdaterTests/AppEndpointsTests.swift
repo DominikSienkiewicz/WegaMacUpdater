@@ -63,6 +63,8 @@ final class AppEndpointsTests: XCTestCase {
                        "https://antigravity-ide-auto-updater-974169037036.us-central1.run.app/api/update/darwin-arm64/stable/latest")
         XCTAssertEqual(e.parallelsUpdatesURL(major: 26)?.absoluteString,
                        "https://update.parallels.com/desktop/v26/parallels/parallels_updates.xml")
+        XCTAssertEqual(e.postmanUpdateURL(version: "12.15.6")?.absoluteString,
+                       "https://dl.pstmn.io/update/osx_64/12.15.6")
         XCTAssertEqual(e.githubReleasesPageURL(repo: "owner/app")?.absoluteString,
                        "https://github.com/owner/app/releases/latest")
     }
@@ -81,6 +83,7 @@ final class AppEndpointsTests: XCTestCase {
             synologyChangeLog: nil,
             antigravityUpdate: nil,
             parallelsUpdates: nil,
+            postmanUpdate: nil,
             homebrewWebsite: nil,
             homebrewInstallCommand: nil,
             githubReleasesPage: nil,

@@ -36,8 +36,16 @@ public struct ManualUpdateScanner: Sendable {
         _ run: @escaping @Sendable () async -> ManualCheckResult
     ) -> @Sendable () async -> ManualCheckResult {
         let appName = app.name
+        // One chokepoint for stamping install origin onto every outdated result, using
+        // the SAME classifier the Inventory window uses for its badge. Grouping the
+        // Updates window by this origin (rather than by update source) is what keeps a
+        // Homebrew cask like Docker/Postman labelled "Brew" in both windows instead of
+        // showing up under "Ręcznie zainstalowane" in one of them.
+        let origin = AppOrigin.of(app)
         return {
+            let start = Date()
             let result = await run()
+            let millis = Int(Date().timeIntervalSince(start) * 1000)
             switch result {
             case .failed:
                 WegaLog.error(.network, "\(source) · \(appName): błąd odpowiedzi lub parsowania")
@@ -45,6 +53,16 @@ public struct ManualUpdateScanner: Sendable {
                 WegaLog.warning(.network, "\(source) · \(appName): źródło chwilowo niedostępne")
             default:
                 break
+            }
+            // Per-checker diagnostics (DEBUG): only checks that actually engaged a source
+            // (up-to-date / outdated, with timing) — `.notApplicable` is silent, and
+            // failures are already logged at warning/error above.
+            if let dbg = ScanLog.checkerDebugLine(source: source, app: appName, result: result, millis: millis) {
+                WegaLog.debug(.scanner, dbg)
+            }
+            if case .outdated(var item) = result {
+                item.origin = origin
+                return .outdated(item)
             }
             return result
         }
@@ -87,6 +105,7 @@ public struct ManualUpdateScanner: Sendable {
         let parallelsChecker = ParallelsUpdateChecker()
         let googleDriveChecker = GoogleDriveUpdateChecker()
         let chatGPTChecker = ChatGPTUpdateChecker()
+        let postmanChecker = PostmanUpdateChecker()
         let brew = brewService
 
         // Build every per-app check as an independent unit of work, then run them with a
@@ -140,6 +159,7 @@ public struct ManualUpdateScanner: Sendable {
                 work.append(Self.logged("Parallels", app) { await parallelsChecker.check(app: app) })
                 work.append(Self.logged("Google Drive", app) { await googleDriveChecker.check(app: app) })
                 work.append(Self.logged("ChatGPT", app) { await chatGPTChecker.check(app: app) })
+                work.append(Self.logged("Postman", app) { await postmanChecker.check(app: app) })
             }
             // Sparkle ALWAYS — it's the app's own appcast, independent of Homebrew. Also
             // keeps working for an app that merely shares a name with a CLI-only cask

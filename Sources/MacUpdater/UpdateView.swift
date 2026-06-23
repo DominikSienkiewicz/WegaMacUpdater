@@ -9,6 +9,8 @@ struct UpdateView: View {
     var onBadgeChange: ((Int) -> Void)?
     var onNavigate:    ((SidebarTab) -> Void)?
     var onErrorCount:  ((Int) -> Void)?
+    /// Drives the sidebar tab icon: spins while busy, then green (ok) / red (error).
+    var onActivity:    ((UpdateActivity) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
     @EnvironmentObject private var policies: UpdatePolicyStore
@@ -199,9 +201,28 @@ struct UpdateView: View {
                         }
                         if !store.isEmpty    { UpdateSection(title: tr("Mac App Store"),     subtitle: tr("via mas-cli"),      icon: "bag",      items: store,    selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
                         if !npmPkgs.isEmpty  { UpdateSection(title: tr("npm globalne"),      subtitle: tr("pakiety -g"),       icon: "shippingbox", items: npmPkgs, selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
-                        if !visibleManual.isEmpty {
+                        // Group manual updates by INSTALL ORIGIN (same axis the Inventory
+                        // window labels), not by update source. A self-updating Homebrew
+                        // cask (Docker, Postman, ChatGPT…) stays under "Homebrew Casks" so
+                        // both windows agree it's Brew — only genuinely non-package-manager
+                        // apps land under "Ręcznie zainstalowane".
+                        let manualGroups = UpdatePlanner.groupManual(visibleManual)
+                        if !manualGroups.brew.isEmpty {
                             ManualUpdateSection(
-                                items: visibleManual,
+                                items: manualGroups.brew,
+                                busyToken: manualBusy,
+                                onInstall: { token in Task { await installManual(token: token) } },
+                                title: tr("Homebrew Casks"),
+                                icon: "app.gift",
+                                subtitle: tr("samoaktualizujące się"),
+                                caption: tr("Homebrew nie pilnuje wersji tych apek (auto_updates) — robią to same. Wega sprawdza je u źródła."),
+                                onIgnore: ignoreManual,
+                                onPin: requestPinManual
+                            )
+                        }
+                        if !manualGroups.manual.isEmpty {
+                            ManualUpdateSection(
+                                items: manualGroups.manual,
                                 busyToken: manualBusy,
                                 onInstall: { token in Task { await installManual(token: token) } },
                                 title: tr("Ręcznie zainstalowane"),
@@ -281,9 +302,10 @@ struct UpdateView: View {
     }
 
     // MARK: Async actions
-    private func runCheck() async {
+    private func runCheck(emitActivity: Bool = true) async {
         status = .checking
         errorMessage = nil
+        if emitActivity { onActivity?(.scanning) }
         WegaLog.info(.scanner, tr("Skan rozpoczęty"))
         onWegaState?(WegaState(pose: .sniff, line: tr("Węszę po Homebrew…")))
 
@@ -306,25 +328,32 @@ struct UpdateView: View {
         // installed, which is "not applicable", not a failure). Drives the
         // "couldn't check" vs "up to date" distinction below.
         var failedSources = 0
+        // Names of the top-level sources that genuinely went silent, for the scan-end
+        // log (each manual-checker failure is logged individually by ManualUpdateScanner).
+        var silentSources: [String] = []
 
         do { brewOutdated = try await model.brewService.outdatedGreedy() }
         catch { errorMessage = error.localizedDescription; brewOutdated = nil; failedSources += 1
+                silentSources.append("brew outdated")
                 WegaLog.error(.homebrew, "brew outdated: \(error.localizedDescription)") }
 
         do { masOutdated = try await model.masService.outdated() }
         catch MasServiceError.masNotFound { masOutdated = [] }
         catch { masOutdated = []; failedSources += 1
+                silentSources.append("Mac App Store")
                 WegaLog.error(.app, "mas outdated: \(error.localizedDescription)") }
 
         do { npmOutdated = try await model.npmService.outdated() }
         catch NpmServiceError.npmNotFound { npmOutdated = [] }
         catch { npmOutdated = []; failedSources += 1
+                silentSources.append("npm")
                 WegaLog.error(.network, "npm outdated: \(error.localizedDescription)") }
 
         let brewOutdatedCasks = Set(brewOutdated?.casks.map(\.name) ?? [])
         let scan = await scanManualUpdates(brewOutdatedCasks: brewOutdatedCasks)
         manualOutdated = scan.apps
         failedSources += scan.failedChecks
+        if scan.failedChecks > 0 { silentSources.append("ręczne checki (\(scan.failedChecks))") }
 
         // Resolve icon paths for outdated casks, and drop entries whose real
         // bundle version already matches `current_version` (self-updating apps
@@ -366,8 +395,25 @@ struct UpdateView: View {
         status    = .results
 
         let total = allItems.count + visibleManual.count
-        WegaLog.info(.scanner, "Skan zakończony: \(total) aktualizacji, \(failedSources) źródeł nie odpowiedziało")
-        switch UpdatePlanner.scanState(updateCount: total, failedChecks: failedSources) {
+        let breakdown = ScanLog.breakdown(items: allItems, manual: visibleManual)
+        let silent = silentSources.isEmpty
+            ? "wszystkie źródła odpowiedziały"
+            : "milczały: \(silentSources.joined(separator: ", "))"
+        WegaLog.info(.scanner, "Skan zakończony: \(total) aktualizacji (\(breakdown)) — \(silent)")
+        for line in ScanLog.foundLines(items: allItems, manual: visibleManual) {
+            WegaLog.info(.scanner, "• \(line)")
+        }
+        let scanState = UpdatePlanner.scanState(updateCount: total, failedChecks: failedSources)
+        // Tab-icon status: green when the scan completed, red when a source failed.
+        // Suppressed when called from `runUpdate` (emitActivity == false), which owns
+        // the icon for the whole upgrade flow and sets the final state itself.
+        if emitActivity {
+            switch scanState {
+            case .upToDate, .outdated:          onActivity?(.success)
+            case .checkFailed, .partialFailure: onActivity?(.error)
+            }
+        }
+        switch scanState {
         case .upToDate:
             if let msg = errorMessage {
                 banner = BannerData(variant: .danger, title: tr("Błąd Homebrew"), message: msg, action: .openLogs)
@@ -402,12 +448,15 @@ struct UpdateView: View {
     private func installManual(token: String) async {
         guard manualBusy == nil else { return }
         manualBusy = token
-        brewLog = ["$ brew install --cask \(token)"]
+        onActivity?(.scanning)
+        let installArgs = BrewService.adoptCaskArguments(token: token)
+        brewLog = ["$ brew " + installArgs.joined(separator: " ")]
         showLog = true
+        WegaLog.info(.homebrew, "Uruchamiam: brew \(installArgs.joined(separator: " "))")
         onWegaState?(WegaState(pose: .sniff, line: trf("Instaluję %@ przez Brew…", "\(token)")))
 
         do {
-            let stream = try model.brewService.events(arguments: ["install", "--cask", token])
+            let stream = try model.brewService.events(arguments: installArgs)
             var exitCode: Int32 = 0
             for try await event in stream {
                 switch event {
@@ -424,16 +473,20 @@ struct UpdateView: View {
                     return false
                 }
                 banner = BannerData(variant: .success, title: trf("Zaktualizowano %@", "\(token)"), message: tr("Teraz zarządzany przez Homebrew."))
+                onActivity?(.success)
                 onWegaState?(WegaState(pose: .happy, line: trf("%@ zaktualizowany i pod opieką Brew.", "\(token)")))
                 WegaLog.info(.homebrew, "Zainstalowano \(token) (brew cask)")
             } else {
                 banner = BannerData(variant: .danger, title: trf("Błąd instalacji %@", "\(token)"), message: tr("Sprawdź logi poniżej."))
+                onActivity?(.error)
                 onWegaState?(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
-                WegaLog.error(.homebrew, "Instalacja \(token) nieudana (kod \(exitCode))")
+                let reason = ScanLog.brewErrorReason(from: brewLog).map { ": \($0)" } ?? ""
+                WegaLog.error(.homebrew, "Instalacja \(token) nieudana (kod \(exitCode))\(reason)")
             }
         } catch {
             brewLog.append("error: \(error.localizedDescription)")
             banner = BannerData(variant: .danger, title: tr("Błąd instalacji"), message: error.localizedDescription)
+            onActivity?(.error)
             onWegaState?(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
             WegaLog.error(.homebrew, "Instalacja \(token): \(error.localizedDescription)")
         }
@@ -442,6 +495,7 @@ struct UpdateView: View {
 
     private func runUpdate() async {
         updating = true
+        onActivity?(.scanning)
         brewLog = []
         showLog = true
         onWegaState?(WegaState(pose: .sniff, line: tr("Aktualizuję, chwila…")))
@@ -527,7 +581,8 @@ struct UpdateView: View {
 
         // Re-query brew/mas so the list reflects reality, not optimistic clearing.
         // If a cask failed (e.g. "App source not there"), it will still appear here.
-        await runCheck()
+        // Suppress its icon signal — the upgrade outcome below sets the final state.
+        await runCheck(emitActivity: false)
 
         updating = false
 
@@ -542,6 +597,7 @@ struct UpdateView: View {
                 ? trf("%@ Cask wymaga hasła administratora — uruchom Wega ponownie, helper askpass zapyta o nie w okienku.", "\(baseDetail)")
                 : baseDetail
             banner = BannerData(variant: .danger, title: tr("Aktualizacja niekompletna"), message: detail)
+            onActivity?(.error)
             onWegaState?(WegaState(pose: .alert, line: tr("Część pakietów się nie zaktualizowała.")))
             WegaLog.error(.homebrew, "Aktualizacja niekompletna: \(failedTokens.isEmpty ? "Brew zgłosił błąd" : failedTokens.joined(separator: ", "))")
             // Surface *why* each upgrade failed — the brew error block, not just the
@@ -551,6 +607,7 @@ struct UpdateView: View {
             }
         } else {
             banner = BannerData(variant: .success, title: trf("Zaktualizowano %@ pakietów", "\(n)"), message: tr("Wszystko gotowe."))
+            onActivity?(.success)
             onWegaState?(WegaState(pose: .happy, line: trf("Gotowe! %@ pakietów odświeżonych.", "\(n)")))
             WegaLog.info(.homebrew, "Zaktualizowano \(n) pakietów")
         }
@@ -804,22 +861,34 @@ private struct ManualUpdateSection: View {
     let title:     String
     let icon:      String
     var subtitle:  String? = nil
+    /// Optional one-line explanation under the header — used to say *why* a brew-cask
+    /// group sits apart (Homebrew doesn't version-manage `auto_updates` casks), so the
+    /// section reads as intentional rather than an inconsistency.
+    var caption:   String? = nil
     var onIgnore:  ((ManualOutdatedApp) -> Void)?
     var onPin:     ((ManualOutdatedApp) -> Void)?
 
     var body: some View {
         WegaCard {
-            HStack(spacing: 8) {
-                Image(systemName: icon).foregroundStyle(Color.wegaHoney)
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                Text("\(items.count)")
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(.tertiary)
-                if let subtitle {
-                    Text(subtitle).font(.system(size: 11)).foregroundStyle(.tertiary)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Image(systemName: icon).foregroundStyle(Color.wegaHoney)
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("\(items.count)")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                    if let subtitle {
+                        Text(subtitle).font(.system(size: 11)).foregroundStyle(.tertiary)
+                    }
+                    Spacer()
                 }
-                Spacer()
+                if let caption {
+                    Text(caption)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -891,7 +960,7 @@ private struct ManualUpdateSection: View {
                     if busyToken == token {
                         ProgressView().controlSize(.small)
                     } else {
-                        Label(tr("Zainstaluj przez Brew"), systemImage: "arrow.down.circle")
+                        Label(tr("Aktualizuj przez Brew"), systemImage: "arrow.down.circle")
                     }
                 }
                 .controlSize(.small)
@@ -990,6 +1059,21 @@ private struct ManualUpdateSection: View {
                     // feed; the brew cask `chatgpt` is `auto_updates` and lags.
                     // Launching the app triggers its own update flow — never
                     // route through brew, which would reinstall a stale build.
+                    NSWorkspace.shared.open(item.path)
+                } label: {
+                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
+                }
+                .controlSize(.small)
+            }
+        case .postman:
+            HStack(spacing: 8) {
+                WegaBadge(label: "Postman", variant: .info)
+                Button {
+                    // Postman self-updates via Squirrel; the brew cask `postman`
+                    // is `auto_updates` and its version lags the real channel, so
+                    // `brew install --cask postman` would (re)install the STALE
+                    // build. Launch the app and let its own updater pull the build
+                    // the Squirrel feed reported.
                     NSWorkspace.shared.open(item.path)
                 } label: {
                     Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")

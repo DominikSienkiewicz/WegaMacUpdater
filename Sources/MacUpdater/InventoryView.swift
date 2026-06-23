@@ -443,9 +443,11 @@ private struct InventoryRow: View {
                 .truncationMode(.middle)
                 .frame(maxWidth: .infinity * 1.2, alignment: .leading)
 
-            // Source (flex 0.8)
+            // Source (flex 0.8) — classified by the SAME `AppOrigin` the Updates window
+            // groups by, so the two windows can never disagree about an app's origin.
             HStack(spacing: 6) {
-                if app.isManagedByBrew {
+                switch AppOrigin.of(app) {
+                case .brew:
                     WegaBadge(label: "Brew", variant: .brew)
                     if let token = app.caskToken {
                         Text(token)
@@ -453,7 +455,7 @@ private struct InventoryRow: View {
                             .foregroundStyle(.quaternary)
                             .lineLimit(1)
                     }
-                } else if app.isManagedByMas {
+                case .appStore:
                     WegaBadge(label: "App Store", variant: .appStore)
                     if let id = app.masAppID {
                         Text(id)
@@ -461,7 +463,7 @@ private struct InventoryRow: View {
                             .foregroundStyle(.quaternary)
                             .lineLimit(1)
                     }
-                } else {
+                case .npm, .manual:
                     WegaBadge(label: tr("Ręcznie"), variant: .manual)
                 }
             }

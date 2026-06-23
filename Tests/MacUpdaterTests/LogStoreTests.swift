@@ -173,8 +173,11 @@ final class LogStoreTests: XCTestCase {
         XCTAssertFalse(added.contains { $0.message.contains("Antigravity · TestApp") && $0.level == .error })
     }
 
+    // A successful check must never raise a false-alarm warning/error — but it now
+    // leaves a DEBUG diagnostic line (with timing) so the Logs view can show *which*
+    // checkers ran, not only the ones that failed.
     @MainActor
-    func testScannerLoggedWrapperSilentOnSuccess() async {
+    func testScannerLoggedWrapperDebugButNoAlarmOnSuccess() async {
         let before = LogStore.shared.entries.count
         let app = ApplicationInfo(
             path: URL(fileURLWithPath: "/Applications/TestApp.app"),
@@ -189,6 +192,13 @@ final class LogStoreTests: XCTestCase {
         _ = await wrapped()
         await Task.yield()
         let added = LogStore.shared.entries.suffix(from: before)
-        XCTAssertFalse(added.contains { $0.message.contains("GitHub · TestApp") })
+        XCTAssertFalse(
+            added.contains { $0.message.contains("GitHub · TestApp") && ($0.level == .warning || $0.level == .error) },
+            "a successful check must not surface as a warning/error"
+        )
+        XCTAssertTrue(
+            added.contains { $0.message.contains("GitHub · TestApp") && $0.message.contains("aktualna") && $0.level == .debug },
+            "a successful check leaves a debug diagnostic line"
+        )
     }
 }

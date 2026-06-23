@@ -148,6 +148,10 @@ public struct ManualOutdatedApp: Equatable, Sendable {
         /// feed. Brew cask `chatgpt` is `auto_updates` and its metadata lags.
         /// Detected via OpenAI's public appcast.
         case chatgpt
+        /// Postman — self-updating via Squirrel.Mac (no Sparkle feed). Brew cask
+        /// `postman` is `auto_updates` and its version lags the real channel.
+        /// Detected via Postman's own Squirrel feed (`dl.pstmn.io`).
+        case postman
 
         public var priority: Int {
             switch self {
@@ -155,6 +159,7 @@ public struct ManualOutdatedApp: Equatable, Sendable {
             case .parallels:   return 5
             case .googleDrive: return 5
             case .chatgpt:     return 5
+            case .postman:     return 5
             case .jetbrains:   return 4
             case .github:      return 3
             case .synology:    return 3
@@ -170,6 +175,12 @@ public struct ManualOutdatedApp: Equatable, Sendable {
     public var installedVersion: String?
     public var availableVersion: String?
     public var source: UpdateSource
+    /// Install provenance (Brew / App Store / manual), classified by ``AppOrigin/of(_:)``
+    /// — the SAME function the Inventory window uses for its "ŹRÓDŁO" badge. The Updates
+    /// window groups by this, not by `source`, so a Homebrew cask whose update is
+    /// surfaced by a vendor checker (Postman, ChatGPT…) is still presented as Brew in
+    /// both windows. Stamped by `ManualUpdateScanner`; defaults to `.manual`.
+    public var origin: AppOrigin
     /// FEAT-06: release notes (when a source provides them, e.g. GitHub `body`) —
     /// fed to `ReleaseNotesTriage` for the advisory "possible security fix" badge.
     public var releaseNotes: String?
@@ -180,6 +191,7 @@ public struct ManualOutdatedApp: Equatable, Sendable {
         installedVersion: String?,
         availableVersion: String?,
         source: UpdateSource,
+        origin: AppOrigin = .manual,
         releaseNotes: String? = nil
     ) {
         self.name = name
@@ -187,6 +199,7 @@ public struct ManualOutdatedApp: Equatable, Sendable {
         self.installedVersion = installedVersion
         self.availableVersion = availableVersion
         self.source = source
+        self.origin = origin
         self.releaseNotes = releaseNotes
     }
 }

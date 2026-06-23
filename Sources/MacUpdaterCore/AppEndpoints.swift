@@ -24,6 +24,7 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public let synologyChangeLog: String
     public let antigravityUpdate: String
     public let parallelsUpdates: String
+    public let postmanUpdate: String
     public let homebrewWebsite: String
     public let homebrewInstallCommand: String
     public let githubReleasesPage: String
@@ -59,6 +60,10 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
 
     public func parallelsUpdatesURL(major: Int) -> URL? {
         URL(string: Self.fill(parallelsUpdates, ["major": String(major)]))
+    }
+
+    public func postmanUpdateURL(version: String) -> URL? {
+        URL(string: Self.fill(postmanUpdate, ["version": version]))
     }
 
     public func githubReleasesPageURL(repo: String) -> URL? {
@@ -169,6 +174,7 @@ extension AppEndpoints {
             synologyChangeLog: raw(other.synologyChangeLog, synologyChangeLog),
             antigravityUpdate: raw(other.antigravityUpdate, antigravityUpdate),
             parallelsUpdates: raw(other.parallelsUpdates, parallelsUpdates),
+            postmanUpdate: raw(other.postmanUpdate, postmanUpdate),
             homebrewWebsite: validURL(other.homebrewWebsite, homebrewWebsite),
             homebrewInstallCommand: raw(other.homebrewInstallCommand, homebrewInstallCommand),
             githubReleasesPage: raw(other.githubReleasesPage, githubReleasesPage),
@@ -198,6 +204,7 @@ public struct AppEndpointsOverlay: Decodable, Sendable, Equatable {
     public let synologyChangeLog: String?
     public let antigravityUpdate: String?
     public let parallelsUpdates: String?
+    public let postmanUpdate: String?
     public let homebrewWebsite: String?
     public let homebrewInstallCommand: String?
     public let githubReleasesPage: String?

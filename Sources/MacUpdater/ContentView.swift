@@ -47,6 +47,12 @@ enum SidebarTab: String, Identifiable {
     static var toolTabs: [SidebarTab] { [.update, .uninstall, .migration, .inventory, .logs] }
 }
 
+/// Live state of the Updates tab, surfaced on its sidebar icon: the icon spins while a
+/// scan/upgrade runs, turns green when it finishes cleanly, red when a source failed.
+enum UpdateActivity: Equatable {
+    case idle, scanning, success, error
+}
+
 // MARK: - Root view
 
 struct ContentView: View {
@@ -57,6 +63,7 @@ struct ContentView: View {
     @State private var updateBadge:  Int        = 0
     @State private var logsInitialFilter: LogLevelFilter = .all
     @State private var logsErrorBadge: Int = 0
+    @State private var updateActivity: UpdateActivity = .idle
     @State private var brewInstalled: Bool
 
     init() {
@@ -71,6 +78,7 @@ struct ContentView: View {
                         activeTab:   $activeTab,
                         wegaState:   $wegaState,
                         updateBadge: updateBadge,
+                        updateActivity: updateActivity,
                         logsInitialFilter: $logsInitialFilter,
                         logsErrorBadge: $logsErrorBadge
                     )
@@ -79,6 +87,7 @@ struct ContentView: View {
                         activeTab:   $activeTab,
                         wegaState:   $wegaState,
                         updateBadge: $updateBadge,
+                        updateActivity: $updateActivity,
                         logsInitialFilter: $logsInitialFilter,
                         logsErrorBadge: $logsErrorBadge
                     )
@@ -98,6 +107,7 @@ private struct SidebarView: View {
     @Binding var activeTab:   SidebarTab
     @Binding var wegaState:   WegaState
     let updateBadge: Int
+    let updateActivity: UpdateActivity
     @Binding var logsInitialFilter: LogLevelFilter
     @Binding var logsErrorBadge: Int
 
@@ -148,6 +158,7 @@ private struct SidebarView: View {
                         isActive:     activeTab == tab,
                         badge:        badgeValue(for: tab),
                         badgeIsDanger: tab == .logs,
+                        activity:     tab == .update ? updateActivity : .idle,
                         onSelect: {
                             if tab == .logs { logsInitialFilter = .all; logsErrorBadge = 0 }
                             activeTab = tab
@@ -188,9 +199,11 @@ private struct SidebarTabRow: View {
     let isActive:     Bool
     let badge:        Int?
     var badgeIsDanger: Bool = false
+    var activity:     UpdateActivity = .idle
     let onSelect:     () -> Void
 
     @State private var isHovered = false
+    @State private var rotation: Double = 0
 
     /// Row fill: active wins, otherwise a faint tint on hover.
     private var backgroundFill: Color {
@@ -198,12 +211,37 @@ private struct SidebarTabRow: View {
         return isHovered ? Color.wegaHoney.opacity(0.05) : Color.clear
     }
 
+    /// Icon tint — scan activity (green ok / red error) overrides the active/idle colour.
+    private var iconColor: Color {
+        switch activity {
+        case .scanning: return Color.wegaHoney
+        case .success:  return Color.wegaSuccess
+        case .error:    return Color.wegaDanger
+        case .idle:     return isActive ? Color.wegaHoney : .secondary
+        }
+    }
+
+    /// Continuous spin while scanning; ease back to rest otherwise.
+    private func spin(for activity: UpdateActivity) {
+        if activity == .scanning {
+            withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+                rotation = 360
+            }
+        } else {
+            withAnimation(.easeOut(duration: 0.3)) { rotation = 0 }
+        }
+    }
+
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 10) {
                 Image(systemName: tab.systemImage)
-                    .foregroundStyle(isActive ? Color.wegaHoney : .secondary)
+                    .foregroundStyle(iconColor)
+                    .rotationEffect(.degrees(rotation))
                     .frame(width: 16)
+                    .animation(.easeInOut(duration: 0.25), value: iconColor)
+                    .onChange(of: activity) { _, new in spin(for: new) }
+                    .onAppear { spin(for: activity) }
                 Text(tab.label)
                     .font(.system(size: 13, weight: isActive ? .semibold : .regular))
                 Spacer()
@@ -401,6 +439,7 @@ private struct ContentArea: View {
     @Binding var activeTab:   SidebarTab
     @Binding var wegaState:   WegaState
     @Binding var updateBadge: Int
+    @Binding var updateActivity: UpdateActivity
     @Binding var logsInitialFilter: LogLevelFilter
     @Binding var logsErrorBadge: Int
 
@@ -444,31 +483,50 @@ private struct ContentArea: View {
 
             Divider().opacity(0.5)
 
-            // Tab body
-            Group {
-                switch activeTab {
-                case .update:
-                    UpdateView(
-                        onWegaState:   { wegaState = $0 },
-                        onBadgeChange: { updateBadge = $0 },
-                        onNavigate:    { tab in
-                            if tab == .logs { logsInitialFilter = .errorsOnly; logsErrorBadge = 0 }
-                            activeTab = tab
-                            wegaState = .forTab(tab)
-                        },
-                        onErrorCount:  { logsErrorBadge = $0 }
-                    )
-                case .uninstall:
-                    UninstallView(onWegaState: { wegaState = $0 })
-                case .migration:
-                    MigrationView(onWegaState: { wegaState = $0 })
-                case .inventory:
-                    InventoryView(onWegaState: { wegaState = $0 })
-                case .logs:
-                    LogsView(onWegaState: { wegaState = $0 }, initialFilter: logsInitialFilter)
-                        .id(logsInitialFilter)
-                case .info:
-                    InfoView(onWegaState: { wegaState = $0 })
+            // Tab body.
+            //
+            // UpdateView stays mounted for the whole session (just hidden when another
+            // tab is active) instead of being swapped in/out by the `switch`. A `switch`
+            // removes the inactive view from the tree, which tears down its `@State` and
+            // orphans any in-flight `Task` — so a running scan would vanish and its
+            // results reset on every tab change. Keeping it alive lets the user launch a
+            // check, jump to another tab while it keeps scanning in the background, and
+            // come back to the same (still-running or finished) results. The other tabs
+            // own no long-running work, so they stay mount-on-demand.
+            ZStack {
+                UpdateView(
+                    onWegaState:   { wegaState = $0 },
+                    onBadgeChange: { updateBadge = $0 },
+                    onNavigate:    { tab in
+                        if tab == .logs { logsInitialFilter = .errorsOnly; logsErrorBadge = 0 }
+                        activeTab = tab
+                        wegaState = .forTab(tab)
+                    },
+                    onErrorCount:  { logsErrorBadge = $0 },
+                    onActivity:    { updateActivity = $0 }
+                )
+                .opacity(activeTab == .update ? 1 : 0)
+                .allowsHitTesting(activeTab == .update)
+                .accessibilityHidden(activeTab != .update)
+
+                if activeTab != .update {
+                    Group {
+                        switch activeTab {
+                        case .update:
+                            EmptyView()   // shown by the always-mounted UpdateView above
+                        case .uninstall:
+                            UninstallView(onWegaState: { wegaState = $0 })
+                        case .migration:
+                            MigrationView(onWegaState: { wegaState = $0 })
+                        case .inventory:
+                            InventoryView(onWegaState: { wegaState = $0 })
+                        case .logs:
+                            LogsView(onWegaState: { wegaState = $0 }, initialFilter: logsInitialFilter)
+                                .id(logsInitialFilter)
+                        case .info:
+                            InfoView(onWegaState: { wegaState = $0 })
+                        }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

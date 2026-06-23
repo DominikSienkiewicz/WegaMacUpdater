@@ -161,6 +161,34 @@ public enum UpdatePlanner {
         }
     }
 
+    /// Manual updates split by install origin so the Updates window can present each
+    /// under an origin-consistent header — Brew casks under "Homebrew Casks", everything
+    /// genuinely outside a package manager under "Ręcznie zainstalowane". Grouping by
+    /// `origin` (not by `source`) is what keeps the window in step with the Inventory
+    /// badge: a self-updating Homebrew cask (Docker, Postman, ChatGPT…) stays in the
+    /// Brew group even when its update is delivered by the app itself rather than `brew`.
+    public struct ManualGroups: Equatable, Sendable {
+        public var brew: [ManualOutdatedApp]
+        public var appStore: [ManualOutdatedApp]
+        public var manual: [ManualOutdatedApp]
+
+        public init(brew: [ManualOutdatedApp], appStore: [ManualOutdatedApp], manual: [ManualOutdatedApp]) {
+            self.brew = brew
+            self.appStore = appStore
+            self.manual = manual
+        }
+    }
+
+    public static func groupManual(_ items: [ManualOutdatedApp]) -> ManualGroups {
+        ManualGroups(
+            brew:     items.filter { $0.origin == .brew },
+            appStore: items.filter { $0.origin == .appStore },
+            // `.npm` never reaches the manual path (npm globals aren't `.app` bundles),
+            // so it folds in with `.manual` for a total partition.
+            manual:   items.filter { $0.origin == .manual || $0.origin == .npm }
+        )
+    }
+
     /// Decides what the screen reports given how many updates were found and how many
     /// source checks failed. A failed check with zero finds must read as "couldn't
     /// check", never "up to date".

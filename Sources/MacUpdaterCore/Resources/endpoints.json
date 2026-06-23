@@ -8,6 +8,7 @@
   "synologyChangeLog": "https://www.synology.com/api/releaseNote/findChangeLog?identify={identify}&lang=enu",
   "antigravityUpdate": "https://antigravity-ide-auto-updater-974169037036.us-central1.run.app/api/update/{platform}/stable/latest",
   "parallelsUpdates": "https://update.parallels.com/desktop/v{major}/parallels/parallels_updates.xml",
+  "postmanUpdate": "https://dl.pstmn.io/update/osx_64/{version}",
   "homebrewWebsite": "https://brew.sh",
   "homebrewInstallCommand": "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"",
   "githubReleasesPage": "https://github.com/{repo}/releases/latest",
