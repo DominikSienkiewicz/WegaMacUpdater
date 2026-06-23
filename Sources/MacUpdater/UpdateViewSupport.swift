@@ -127,3 +127,351 @@ struct CheckingBar: View {
         }
     }
 }
+
+struct UpdateSection: View {
+    let title:     String
+    let subtitle:  String
+    let icon:      String
+    let items:     [OutdatedItem]
+    var iconPaths: [String: URL]  = [:]
+    @Binding var selected: Set<String>
+    var onIgnore: ((OutdatedItem) -> Void)?
+    var onPin:    ((OutdatedItem) -> Void)?
+
+    var body: some View {
+        WegaCard {
+            HStack(spacing: 8) {
+                Image(systemName: icon).foregroundStyle(Color.wegaHoney)
+                Text(title).font(.system(size: 13, weight: .semibold))
+                Text("\(items.count)").font(.system(size: 12, design: .monospaced)).foregroundStyle(.tertiary)
+                Text(subtitle).font(.system(size: 11)).foregroundStyle(.tertiary)
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+
+            ForEach(items) { item in
+                PackageRow(
+                    name:           item.name,
+                    iconPath:       iconPaths[item.name],
+                    currentVersion: item.from,
+                    latestVersion:  item.to,
+                    isSelected:     selected.contains(item.key),
+                    onToggle:       { toggle(item.key) }
+                )
+                .contextMenu {
+                    UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) })
+                }
+                .overlay(alignment: .bottom) {
+                    if item.id != items.last?.id { Divider().opacity(0.4).padding(.leading, 54) }
+                }
+            }
+        }
+    }
+
+    private func toggle(_ key: String) {
+        if selected.contains(key) { selected.remove(key) } else { selected.insert(key) }
+    }
+}
+
+/// Shared context-menu content for ignoring or pinning an update.
+private struct UpdatePolicyMenu: View {
+    let onIgnore: () -> Void
+    let onPin:    () -> Void
+
+    var body: some View {
+        Button(action: onIgnore) {
+            Label(tr("Nie aktualizuj"), systemImage: "bell.slash")
+        }
+        Button(action: onPin) {
+            Label(tr("Przypnij wersję…"), systemImage: "pin")
+        }
+    }
+}
+
+struct PinRequest: Identifiable {
+    let key:              String
+    let name:             String
+    let suggestedVersion: String
+    var id: String { key }
+}
+
+struct PinVersionSheet: View {
+    let request:   PinRequest
+    let onConfirm: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var version: String
+
+    init(request: PinRequest, onConfirm: @escaping (String) -> Void) {
+        self.request = request
+        self.onConfirm = onConfirm
+        _version = State(initialValue: request.suggestedVersion)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(tr("Przypnij wersję")).font(.system(size: 16, weight: .bold))
+                Text(request.name).font(.system(size: 13)).foregroundStyle(.secondary)
+            }
+
+            Text(tr("Wega nie pokaże aktualizacji nowszych niż podana wersja. Zostaw bieżącą, żeby zatrzymać aplikację tu, gdzie jest."))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            TextField(tr("Wersja"), text: $version)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 13, design: .monospaced))
+
+            HStack {
+                Spacer()
+                Button(tr("Anuluj")) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button(tr("Przypnij")) {
+                    onConfirm(version)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .tint(Color.wegaHoney)
+                .foregroundStyle(Color(red: 0.16, green: 0.11, blue: 0.07))
+                .disabled(version.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 380)
+    }
+}
+
+struct ManualUpdateSection: View {
+    let items:     [ManualOutdatedApp]
+    let busyToken: String?
+    let onInstall: (String) -> Void
+    let title:     String
+    let icon:      String
+    var subtitle:  String? = nil
+    /// Optional one-line explanation under the header — used to say *why* a brew-cask
+    /// group sits apart (Homebrew doesn't version-manage `auto_updates` casks), so the
+    /// section reads as intentional rather than an inconsistency.
+    var caption:   String? = nil
+    var onIgnore:  ((ManualOutdatedApp) -> Void)?
+    var onPin:     ((ManualOutdatedApp) -> Void)?
+
+    var body: some View {
+        WegaCard {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Image(systemName: icon).foregroundStyle(Color.wegaHoney)
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("\(items.count)")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                    if let subtitle {
+                        Text(subtitle).font(.system(size: 11)).foregroundStyle(.tertiary)
+                    }
+                    Spacer()
+                }
+                if let caption {
+                    Text(caption)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+
+            ForEach(items, id: \.path) { item in
+                HStack(spacing: 12) {
+                    AppIcon(path: item.path, size: 32)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.name).font(.system(size: 13, weight: .medium))
+                        HStack(spacing: 6) {
+                            Text(item.installedVersion ?? "—")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.tertiary)
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.tertiary)
+                            Text(item.availableVersion ?? "—")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(Color.wegaHoney)
+                        }
+                        // FEAT-06: doradczy badge z triage notatek wydania (np. GitHub).
+                        if let notes = item.releaseNotes, ReleaseNotesTriage.heuristic(notes).isLikelySecurityFix {
+                            Label(tr("możliwa poprawka bezpieczeństwa"), systemImage: "shield.lefthalf.filled")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(Color.wegaDanger)
+                        }
+                    }
+                    Spacer()
+                    manualAction(for: item)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
+                .contextMenu {
+                    UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) })
+                }
+                .overlay(alignment: .bottom) {
+                    if item.path != items.last?.path { Divider().opacity(0.4).padding(.leading, 54) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func manualAction(for item: ManualOutdatedApp) -> some View {
+        switch item.source {
+        case .sparkle:
+            HStack(spacing: 8) {
+                WegaBadge(label: "Sparkle", variant: .manual)
+                Button {
+                    // Sparkle apps own the update flow. Opening the app brings it to the
+                    // foreground and (for apps with SUEnableAutomaticChecks=1, e.g. Codex)
+                    // triggers the appcast check on launch — the user then accepts in the
+                    // app's own update prompt. We can't drive that prompt from outside
+                    // without an AppleScript that depends on each app's menu wording.
+                    NSWorkspace.shared.open(item.path)
+                } label: {
+                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
+                }
+                .controlSize(.small)
+            }
+        case .cask(let token):
+            HStack(spacing: 8) {
+                WegaBadge(label: token, variant: .brew)
+                Button {
+                    onInstall(token)
+                } label: {
+                    if busyToken == token {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label(tr("Aktualizuj przez Brew"), systemImage: "arrow.down.circle")
+                    }
+                }
+                .controlSize(.small)
+                .disabled(busyToken != nil)
+            }
+        case .mas(let appStoreID):
+            HStack(spacing: 8) {
+                WegaBadge(label: appStoreID, variant: .appStore)
+                Text(tr("zaktualizuj w App Store"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+        case .github(let repo):
+            HStack(spacing: 8) {
+                WegaBadge(label: "GitHub", variant: .info)
+                Button {
+                    if let url = AppEndpoints.shared.githubReleasesPageURL(repo: repo) {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    Label(tr("GitHub Releases"), systemImage: "arrow.up.right.square")
+                }
+                .controlSize(.small)
+            }
+        case .jetbrains(let caskToken):
+            HStack(spacing: 8) {
+                WegaBadge(label: caskToken, variant: .brew)
+                Button {
+                    let toolboxPaths = [
+                        SystemPaths.applicationsDirectory.appendingPathComponent("JetBrains Toolbox.app").path,
+                        FileManager.default.homeDirectoryForCurrentUser
+                            .appendingPathComponent("Applications/JetBrains Toolbox.app").path
+                    ]
+                    if let path = toolboxPaths.first(where: { FileManager.default.fileExists(atPath: $0) }) {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: path))
+                    }
+                } label: {
+                    Label(tr("Otwórz Toolbox"), systemImage: "arrow.down.circle")
+                }
+                .controlSize(.small)
+            }
+        case .synology(let downloadPage):
+            HStack(spacing: 8) {
+                WegaBadge(label: "Synology", variant: .info)
+                Button {
+                    if let url = URL(string: downloadPage) {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    Label(tr("Pobierz ze strony Synology"), systemImage: "arrow.up.right.square")
+                }
+                .controlSize(.small)
+            }
+        case .antigravity:
+            HStack(spacing: 8) {
+                WegaBadge(label: "Antigravity", variant: .info)
+                Button {
+                    // Antigravity owns its own update flow (supportsFastUpdate).
+                    // Launching it triggers the in-app updater — we must never
+                    // route this through `brew install`, because the Homebrew
+                    // cask is frozen at an older version and would downgrade it.
+                    NSWorkspace.shared.open(item.path)
+                } label: {
+                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
+                }
+                .controlSize(.small)
+            }
+        case .parallels:
+            HStack(spacing: 8) {
+                WegaBadge(label: "Parallels", variant: .info)
+                Button {
+                    // Parallels self-updates via its bundled updater; brew cask
+                    // `parallels` lags upstream and would route through a stale
+                    // installer.
+                    NSWorkspace.shared.open(item.path)
+                } label: {
+                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
+                }
+                .controlSize(.small)
+            }
+        case .googleDrive:
+            HStack(spacing: 8) {
+                WegaBadge(label: "Google Drive", variant: .info)
+                Button {
+                    NSWorkspace.shared.open(AppEndpoints.shared.googleDriveDownloadURL)
+                } label: {
+                    Label(tr("Pobierz najnowszą wersję"), systemImage: "arrow.up.right.square")
+                }
+                .controlSize(.small)
+            }
+        case .chatgpt:
+            HStack(spacing: 8) {
+                WegaBadge(label: "ChatGPT", variant: .info)
+                Button {
+                    // ChatGPT self-updates via Sparkle from a runtime-resolved
+                    // feed; the brew cask `chatgpt` is `auto_updates` and lags.
+                    // Launching the app triggers its own update flow — never
+                    // route through brew, which would reinstall a stale build.
+                    NSWorkspace.shared.open(item.path)
+                } label: {
+                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
+                }
+                .controlSize(.small)
+            }
+        case .postman:
+            HStack(spacing: 8) {
+                WegaBadge(label: "Postman", variant: .info)
+                Button {
+                    // Postman self-updates via Squirrel; the brew cask `postman`
+                    // is `auto_updates` and its version lags the real channel, so
+                    // `brew install --cask postman` would (re)install the STALE
+                    // build. Launch the app and let its own updater pull the build
+                    // the Squirrel feed reported.
+                    NSWorkspace.shared.open(item.path)
+                } label: {
+                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
+                }
+                .controlSize(.small)
+            }
+        }
+    }
+}
