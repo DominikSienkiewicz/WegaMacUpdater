@@ -77,6 +77,17 @@ bump and move its entries under the new version heading when cutting a release.
   the same `--force` the batch upgrade path already used as a fallback for this error.
 - README version badge now reflects the real version (`0.1.0`).
 
+### Security
+- Hardened the GitHub PAT keychain item (`GitHubCredentialStore`): accessibility moved
+  from `AfterFirstUnlock` to **`AfterFirstUnlockThisDeviceOnly`**, so the credential is
+  no longer eligible for iCloud Keychain sync or device backups (it can't leak to
+  another machine) while staying readable by the background menu-bar check. Resolves
+  SonarCloud **S6288** — its only remediation (a `SecAccessControl` requiring Touch ID /
+  passcode on every read) is incompatible with the automated/background reads
+  (`MenuBarUpdateChecker` → `GitHubReleasesChecker` / `WegaSelfUpdateChecker`), so the
+  rule is suppressed for that one file with a written rationale in
+  `sonar-project.properties`. Pinned by `GitHubCredentialStoreTests`.
+
 ## [0.1.0] — 2026-06-05
 
 First tagged release. One native SwiftUI window that updates every app on a Mac from a

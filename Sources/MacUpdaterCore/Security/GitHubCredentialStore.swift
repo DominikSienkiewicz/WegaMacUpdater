@@ -29,20 +29,38 @@ public enum GitHubCredentialStore {
 
     public static var hasToken: Bool { token() != nil }
 
+    /// Keychain `SecItemAdd` attributes for storing the PAT.
+    ///
+    /// Accessibility is `AfterFirstUnlockThisDeviceOnly`:
+    /// - *AfterFirstUnlock* (not `WhenUnlocked`) is required because the token is read
+    ///   by the **scheduled background menu-bar check** (`MenuBarUpdateChecker` →
+    ///   `GitHubReleasesChecker` / `WegaSelfUpdateChecker`) with no user present.
+    /// - *ThisDeviceOnly* keeps the credential off iCloud Keychain sync and device
+    ///   backups, so the PAT can't leak to another machine.
+    ///
+    /// Deliberately **no** `kSecAttrAccessControl` (Sonar S6288): the only thing that
+    /// rule accepts is a user-presence requirement (Touch ID / passcode) on every read,
+    /// which would pop an auth prompt during silent background scans — or fail the read
+    /// and drop the token entirely, defeating its sole purpose (lifting the read-only
+    /// GitHub rate limit 60→5000 req/h). Suppressed with this rationale in
+    /// `sonar-project.properties`.
+    static func writeAttributes(data: Data) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+    }
+
     /// Stores (replacing) the token. Empty input clears it. Returns success.
     @discardableResult
     public static func setToken(_ token: String) -> Bool {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
         clear()
         guard !trimmed.isEmpty, let data = trimmed.data(using: .utf8) else { return trimmed.isEmpty }
-        let attributes: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
-        ]
-        return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
+        return SecItemAdd(writeAttributes(data: data) as CFDictionary, nil) == errSecSuccess
     }
 
     @discardableResult
