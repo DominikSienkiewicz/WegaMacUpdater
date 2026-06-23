@@ -18,6 +18,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
+# Fail fast on a CommandLineTools-only toolchain: it lacks the FoundationModelsMacros
+# plugin (ReleaseNotesTriage's @Generable/@Guide won't expand) and a SourceKit that
+# SwiftLint can load — so build, test AND lint all break with confusing errors.
+DEV="$(xcode-select -p 2>/dev/null || true)"
+if [[ "$DEV" == *"CommandLineTools"* || -z "$DEV" ]]; then
+  echo "❌ Aktywny toolchain to '$DEV' — brak pełnego Xcode." >&2
+  echo "   Ten projekt wymaga Xcode (plugin FoundationModelsMacros + SourceKit dla SwiftLint)." >&2
+  echo "   → Zainstaluj Xcode i przełącz:  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer" >&2
+  echo "   → Albo weryfikuj w CI (GitHub Actions ma Xcode): zrób push i sprawdź workflow." >&2
+  exit 2
+fi
+
 echo "→ swift build"
 swift build
 

@@ -127,7 +127,10 @@ public final class LogStore: ObservableObject {
         entries.append(entry)
         if entries.count > memoryCap { entries.removeFirst(entries.count - memoryCap) }
         let line = entry.fileLine
-        let dir = directory, fileURL = logFileURL, backup = backupURL, maxBytes = fileMaxBytes
+        let dir = directory
+        let fileURL = logFileURL
+        let backup = backupURL
+        let maxBytes = fileMaxBytes
         fileQueue.async {
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             Self.rotateIfNeeded(fileURL: fileURL, backup: backup, maxBytes: maxBytes,
@@ -138,7 +141,8 @@ public final class LogStore: ObservableObject {
 
     public func clear() {
         entries.removeAll()
-        let fileURL = logFileURL, backup = backupURL
+        let fileURL = logFileURL
+        let backup = backupURL
         fileQueue.sync {
             try? FileManager.default.removeItem(at: fileURL)
             try? FileManager.default.removeItem(at: backup)
@@ -147,7 +151,7 @@ public final class LogStore: ObservableObject {
 
     /// Blokuje do opróżnienia kolejki zapisu — wyłącznie do testów.
     public func flushForTests() {
-        fileQueue.sync { }
+        fileQueue.sync { /* bariera: pusty blok celowo — czeka aż kolejka zapisu się opróżni */ }
     }
 
     public func loadFromFile() {

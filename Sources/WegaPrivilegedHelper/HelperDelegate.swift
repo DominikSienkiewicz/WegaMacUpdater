@@ -4,7 +4,7 @@ import MacUpdaterCore
 /// Accepts XPC connections only from the genuine, correctly-signed app, then
 /// vends the whitelisted operations object.
 final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
-    func listener(_ listener: NSXPCListener, shouldAcceptNewConnection newConnection: NSXPCConnection) -> Bool {
+    func listener(_: NSXPCListener, shouldAcceptNewConnection newConnection: NSXPCConnection) -> Bool {
         // Pin the client: Apple chain + app identifier + Team ID. The kernel
         // enforces this against the peer's audit token (not a forgeable PID).
         // macOS 13+. Refuse everything if the Team ID hasn't been configured.

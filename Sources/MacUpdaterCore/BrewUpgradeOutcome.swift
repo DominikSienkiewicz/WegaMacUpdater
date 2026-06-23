@@ -127,9 +127,14 @@ public struct BrewUpgradeOutcome: Equatable, Sendable {
         let errorLines = keptErrorLines + forcedRetry.errorLines
 
         let succeeded = failedTokens.isEmpty && errorLines.isEmpty && forcedRetry.isSuccessful
-        let exitCode: Int32 = succeeded
-            ? 0
-            : (forcedRetry.exitCode != 0 ? forcedRetry.exitCode : original.exitCode)
+        let exitCode: Int32
+        if succeeded {
+            exitCode = 0
+        } else if forcedRetry.exitCode != 0 {
+            exitCode = forcedRetry.exitCode
+        } else {
+            exitCode = original.exitCode
+        }
 
         return BrewUpgradeOutcome(
             exitCode: exitCode,

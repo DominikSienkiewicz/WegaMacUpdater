@@ -69,7 +69,7 @@ struct LogsView: View {
                 .buttonStyle(.plain).foregroundStyle(Color.wegaDanger)
                 .confirmationDialog(tr("Wyczyścić logi?"), isPresented: $confirmingClear) {
                     Button(tr("Wyczyść"), role: .destructive) { store.clear() }
-                    Button(tr("Anuluj"), role: .cancel) {}
+                    Button(tr("Anuluj"), role: .cancel) { /* tylko zamyka dialog */ }
                 }
         }
         .padding(.horizontal, 16)

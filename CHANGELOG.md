@@ -57,6 +57,14 @@ bump and move its entries under the new version heading when cutting a release.
   `@testable import`, so it's excluded from "lines to cover" by necessity (not as an
   architecture-preference penalty). Real coverage gains come from moving logic down
   into the tested Core planners — which the new checker tests above extend.
+- Cleared the open SonarCloud code smells: de-nested ternaries (`S3358` in
+  `BrewUpgradeOutcome`/`ContentView`), explained the intentionally-empty closures
+  (`S1186`), one-declaration-per-line (`S1659`), and named the unused XPC delegate
+  parameter `_` (`S1172`). The four `S1075` "hard-coded URI" hits in
+  `CodeSignatureVerifier` (`/usr/sbin/spctl`, `/usr/sbin/pkgutil`) and `HelperDelegate`
+  (`/usr/sbin/installer`, the `/Applications/` boundary) are documented-suppressed in
+  `sonar-project.properties` — like the existing `SystemPaths`/`SudoShim` entries, these
+  run as root and making them configurable would be a privilege-escalation vector.
 
 ### Fixed
 - The Updates and Inventory windows no longer contradict each other about an app's

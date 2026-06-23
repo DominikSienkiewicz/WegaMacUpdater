@@ -211,6 +211,18 @@ private struct SidebarTabRow: View {
         return isHovered ? Color.wegaHoney.opacity(0.05) : Color.clear
     }
 
+    /// Badge foreground/background — danger (logs) wins, then active vs. idle. Extracted
+    /// from the body so it isn't a nested ternary (Sonar S3358).
+    private func badgeColors() -> (fg: Color, bg: Color) {
+        if badgeIsDanger {
+            return (.white, Color.wegaDanger)
+        }
+        if isActive {
+            return (Color(red: 0.16, green: 0.11, blue: 0.07), Color.wegaHoney)
+        }
+        return (Color.wegaHoney, Color.wegaHoney.opacity(0.18))
+    }
+
     /// Icon tint — scan activity (green ok / red error) overrides the active/idle colour.
     private var iconColor: Color {
         switch activity {
@@ -246,18 +258,13 @@ private struct SidebarTabRow: View {
                     .font(.system(size: 13, weight: isActive ? .semibold : .regular))
                 Spacer()
                 if let b = badge {
-                    let fg: Color = badgeIsDanger
-                        ? .white
-                        : (isActive ? Color(red: 0.16, green: 0.11, blue: 0.07) : Color.wegaHoney)
-                    let bg: Color = badgeIsDanger
-                        ? Color.wegaDanger
-                        : (isActive ? Color.wegaHoney : Color.wegaHoney.opacity(0.18))
+                    let colors = badgeColors()
                     Text("\(b)")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(fg)
+                        .foregroundStyle(colors.fg)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1)
-                        .background(bg, in: Capsule())
+                        .background(colors.bg, in: Capsule())
                 }
             }
             .padding(.horizontal, 10)
