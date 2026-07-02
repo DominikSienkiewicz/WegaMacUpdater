@@ -93,6 +93,12 @@ bump and move its entries under the new version heading when cutting a release.
 - README version badge now reflects the real version (`0.1.0`).
 
 ### Security
+- Configured the real Apple Developer Team ID (`WegaHelper.teamIdentifier`, was the
+  `REPLACE_TEAMID` placeholder). This arms every fail-closed path that was dormant:
+  XPC peer pinning in both directions (app ↔ privileged helper), helper registration
+  via `SMAppService`, and Team-ID verification of self-update installers. Pinned by
+  a new `PrivilegedHelperSecurityTests` case that fails CI on any regression to a
+  non-Team-ID-shaped value.
 - Hardened the GitHub PAT keychain item (`GitHubCredentialStore`): accessibility moved
   from `AfterFirstUnlock` to **`AfterFirstUnlockThisDeviceOnly`**, so the credential is
   no longer eligible for iCloud Keychain sync or device backups (it can't leak to
