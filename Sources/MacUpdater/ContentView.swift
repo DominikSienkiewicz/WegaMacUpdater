@@ -39,8 +39,6 @@ enum SidebarTab: String, Identifiable {
         case .logs:      return tr("Co się działo")
         }
     }
-
-    static var toolTabs: [SidebarTab] { [.update, .uninstall, .migration, .inventory, .logs] }
 }
 
 /// Live state of the Updates tab, surfaced on its sidebar icon: the icon spins while a
@@ -61,6 +59,11 @@ struct ContentView: View {
     @State private var logsErrorBadge: Int = 0
     @State private var updateActivity: UpdateActivity = .idle
     @State private var brewInstalled: Bool
+    @State private var lastCheck: Date? = nil
+    @State private var securityBadge: Int = 0
+    @State private var updateFilter: UpdateFilter = .all
+    @State private var appsBadge: Int = 0
+    @State private var cliBadge: Int = 0
 
     init() {
         _brewInstalled = State(initialValue: BinaryLocator().locateBrew() != nil)
@@ -71,9 +74,12 @@ struct ContentView: View {
             if brewInstalled {
                 HStack(spacing: 0) {
                     SidebarView(
-                        activeTab:   $activeTab,
-                        wegaState:   $wegaState,
-                        updateBadge: updateBadge,
+                        activeTab:      $activeTab,
+                        wegaState:      $wegaState,
+                        updateFilter:   $updateFilter,
+                        appsBadge:      appsBadge,
+                        cliBadge:       cliBadge,
+                        securityBadge:  securityBadge,
                         updateActivity: updateActivity,
                         logsInitialFilter: $logsInitialFilter,
                         logsErrorBadge: $logsErrorBadge
@@ -85,7 +91,12 @@ struct ContentView: View {
                         updateBadge: $updateBadge,
                         updateActivity: $updateActivity,
                         logsInitialFilter: $logsInitialFilter,
-                        logsErrorBadge: $logsErrorBadge
+                        logsErrorBadge: $logsErrorBadge,
+                        lastCheck: $lastCheck,
+                        securityBadge: $securityBadge,
+                        updateFilter: $updateFilter,
+                        appsBadge: $appsBadge,
+                        cliBadge: $cliBadge
                     )
                 }
             } else {
@@ -110,17 +121,25 @@ struct ContentView: View {
 private struct SidebarView: View {
     @Binding var activeTab:   SidebarTab
     @Binding var wegaState:   WegaState
-    let updateBadge: Int
+    @Binding var updateFilter: UpdateFilter
+    let appsBadge: Int
+    let cliBadge: Int
+    let securityBadge: Int
     let updateActivity: UpdateActivity
     @Binding var logsInitialFilter: LogLevelFilter
     @Binding var logsErrorBadge: Int
 
-    private func badgeValue(for tab: SidebarTab) -> Int? {
-        switch tab {
-        case .update: return updateBadge > 0 ? updateBadge : nil
-        case .logs:   return logsErrorBadge > 0 ? logsErrorBadge : nil
-        default:      return nil
-        }
+    /// Uppercase section header — same styling the old single "Narzędzia" header used.
+    @ViewBuilder
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(.tertiary)
+            .textCase(.uppercase)
+            .tracking(1)
+            .padding(.horizontal, 10)
+            .padding(.top, 10)
+            .padding(.bottom, 4)
     }
 
     var body: some View {
@@ -145,31 +164,105 @@ private struct SidebarView: View {
 
             Divider().opacity(0.5)
 
-            // Tab list
+            // Tab list — three sections: what needs updating, what's installed, and tools.
             VStack(alignment: .leading, spacing: 1) {
-                Text(tr("Narzędzia"))
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-                    .textCase(.uppercase)
-                    .tracking(1)
-                    .padding(.horizontal, 10)
-                    .padding(.top, 10)
-                    .padding(.bottom, 4)
+                sectionHeader(tr("Do aktualizacji"))
 
-                ForEach(SidebarTab.toolTabs) { tab in
-                    SidebarTabRow(
-                        tab:          tab,
-                        isActive:     activeTab == tab,
-                        badge:        badgeValue(for: tab),
-                        badgeIsDanger: tab == .logs,
-                        activity:     tab == .update ? updateActivity : .idle,
-                        onSelect: {
-                            if tab == .logs { logsInitialFilter = .all; logsErrorBadge = 0 }
-                            activeTab = tab
-                            wegaState = .forTab(tab)
-                        }
-                    )
-                }
+                SidebarItemRow(
+                    label:        tr("Wszystkie"),
+                    systemImage:  "arrow.triangle.2.circlepath",
+                    isActive:     activeTab == .update && updateFilter == .all,
+                    badge:        (appsBadge + cliBadge) > 0 ? (appsBadge + cliBadge) : nil,
+                    activity:     updateActivity,
+                    onSelect: {
+                        activeTab = .update
+                        updateFilter = .all
+                        wegaState = .forTab(.update)
+                    }
+                )
+                SidebarItemRow(
+                    label:        tr("Aplikacje"),
+                    systemImage:  "square.grid.2x2",
+                    isActive:     activeTab == .update && updateFilter == .apps,
+                    badge:        appsBadge > 0 ? appsBadge : nil,
+                    onSelect: {
+                        activeTab = .update
+                        updateFilter = .apps
+                        wegaState = .forTab(.update)
+                    }
+                )
+                SidebarItemRow(
+                    label:        tr("Narzędzia CLI"),
+                    systemImage:  "terminal",
+                    isActive:     activeTab == .update && updateFilter == .cli,
+                    badge:        cliBadge > 0 ? cliBadge : nil,
+                    onSelect: {
+                        activeTab = .update
+                        updateFilter = .cli
+                        wegaState = .forTab(.update)
+                    }
+                )
+                SidebarItemRow(
+                    label:        tr("Poprawki bezp."),
+                    systemImage:  "shield.lefthalf.filled",
+                    isActive:     activeTab == .update && updateFilter == .security,
+                    badge:        securityBadge > 0 ? securityBadge : nil,
+                    badgeIsDanger: true,
+                    onSelect: {
+                        activeTab = .update
+                        updateFilter = .security
+                        wegaState = .forTab(.update)
+                    }
+                )
+
+                sectionHeader(tr("Zainstalowane"))
+
+                SidebarItemRow(
+                    label:        tr("Do przepięcia"),
+                    systemImage:  "arrow.right.doc.on.clipboard",
+                    isActive:     activeTab == .migration,
+                    badge:        nil,
+                    onSelect: {
+                        activeTab = .migration
+                        wegaState = .forTab(.migration)
+                    }
+                )
+                SidebarItemRow(
+                    label:        tr("Spis aplikacji"),
+                    systemImage:  "tablecells",
+                    isActive:     activeTab == .inventory,
+                    badge:        nil,
+                    onSelect: {
+                        activeTab = .inventory
+                        wegaState = .forTab(.inventory)
+                    }
+                )
+
+                sectionHeader(tr("Narzędzia"))
+
+                SidebarItemRow(
+                    label:        tr("Odinstaluj aplikacje"),
+                    systemImage:  "trash",
+                    isActive:     activeTab == .uninstall,
+                    badge:        nil,
+                    onSelect: {
+                        activeTab = .uninstall
+                        wegaState = .forTab(.uninstall)
+                    }
+                )
+                SidebarItemRow(
+                    label:        tr("Logi"),
+                    systemImage:  "doc.text.magnifyingglass",
+                    isActive:     activeTab == .logs,
+                    badge:        logsErrorBadge > 0 ? logsErrorBadge : nil,
+                    badgeIsDanger: true,
+                    onSelect: {
+                        logsInitialFilter = .all
+                        logsErrorBadge = 0
+                        activeTab = .logs
+                        wegaState = .forTab(.logs)
+                    }
+                )
             }
             .padding(.horizontal, 8)
             .padding(.top, 6)
@@ -186,8 +279,9 @@ private struct SidebarView: View {
     }
 }
 
-private struct SidebarTabRow: View {
-    let tab:          SidebarTab
+private struct SidebarItemRow: View {
+    let label:        String
+    let systemImage:  String
     let isActive:     Bool
     let badge:        Int?
     var badgeIsDanger: Bool = false
@@ -239,14 +333,14 @@ private struct SidebarTabRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 10) {
-                Image(systemName: tab.systemImage)
+                Image(systemName: systemImage)
                     .foregroundStyle(iconColor)
                     .rotationEffect(.degrees(rotation))
                     .frame(width: 16)
                     .animation(.easeInOut(duration: 0.25), value: iconColor)
                     .onChange(of: activity) { _, new in spin(for: new) }
                     .onAppear { spin(for: activity) }
-                Text(tab.label)
+                Text(label)
                     .font(.system(size: 13, weight: isActive ? .semibold : .regular))
                 Spacer()
                 if let b = badge {
@@ -441,6 +535,11 @@ private struct ContentArea: View {
     @Binding var updateActivity: UpdateActivity
     @Binding var logsInitialFilter: LogLevelFilter
     @Binding var logsErrorBadge: Int
+    @Binding var lastCheck: Date?
+    @Binding var securityBadge: Int
+    @Binding var updateFilter: UpdateFilter
+    @Binding var appsBadge: Int
+    @Binding var cliBadge: Int
 
     @State private var quip: String? = nil
 
@@ -502,7 +601,10 @@ private struct ContentArea: View {
                         wegaState = .forTab(tab)
                     },
                     onErrorCount:  { logsErrorBadge = $0 },
-                    onActivity:    { updateActivity = $0 }
+                    onActivity:    { updateActivity = $0 },
+                    onFooterInfo:  { lastCheck = $0; securityBadge = $1 },
+                    updateFilter:  updateFilter,
+                    onCategoryCounts: { appsBadge = $0; cliBadge = $1 }
                 )
                 .opacity(activeTab == .update ? 1 : 0)
                 .allowsHitTesting(activeTab == .update)
@@ -527,6 +629,8 @@ private struct ContentArea: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            StatusFooter(lastCheck: lastCheck, updateCount: updateBadge, securityCount: securityBadge)
         }
         .overlay(alignment: .bottom) {
             if let quip {
@@ -547,5 +651,47 @@ private struct ContentArea: View {
                 withAnimation { quip = nil }
             }
         }
+    }
+}
+
+// MARK: - Status footer
+
+/// Persistent, window-wide footer showing scan freshness and update/security counts.
+/// Visible on every tab (lives in `ContentArea`'s outer VStack, below the tab body).
+private struct StatusFooter: View {
+    let lastCheck:     Date?
+    let updateCount:   Int
+    let securityCount: Int
+
+    private var freshnessText: String {
+        if let lastCheck {
+            return trf("Sprawdzono %@", "\(lastCheck.formatted(date: .omitted, time: .shortened))")
+        }
+        return tr("Jeszcze nie sprawdzano")
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            PawPrint(size: 11, color: Color.wegaToffee)
+            Text(freshnessText)
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+
+            Spacer()
+
+            Text(trf("%@ do aktualizacji", "\(updateCount)"))
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+
+            if securityCount > 0 {
+                Label(trf("%@ poprawki bezp.", "\(securityCount)"), systemImage: "shield.lefthalf.filled")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.wegaDanger)
+            }
+        }
+        .frame(height: 28)
+        .padding(.horizontal, 16)
+        .background(Color.wegaHoney.opacity(0.02))
+        .overlay(alignment: .top) { Divider().opacity(0.5) }
     }
 }

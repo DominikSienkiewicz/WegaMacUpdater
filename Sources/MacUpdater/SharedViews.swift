@@ -83,15 +83,49 @@ enum WegaBadgeVariant {
 struct WegaBadge: View {
     let label: String
     var variant: WegaBadgeVariant = .brew
+    private var explicitColor: Color?
+
+    init(label: String, variant: WegaBadgeVariant = .brew) {
+        self.label = label
+        self.variant = variant
+        self.explicitColor = nil
+    }
+
+    /// Renders with an explicit colour instead of a `WegaBadgeVariant` — same
+    /// layout/metrics as the variant initializer, used for provenance-based
+    /// colour-coding where the colour isn't one of the fixed variants.
+    init(label: String, color: Color) {
+        self.label = label
+        self.variant = .brew
+        self.explicitColor = color
+    }
+
+    private var fg: Color { explicitColor ?? variant.fg }
+    private var bg: Color { explicitColor?.opacity(0.12) ?? variant.bg }
 
     var body: some View {
         Text(label)
             .font(.system(size: 11, weight: .medium, design: .monospaced))
-            .foregroundStyle(variant.fg)
+            .foregroundStyle(fg)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
-            .background(variant.bg, in: RoundedRectangle(cornerRadius: 5))
-            .overlay(RoundedRectangle(cornerRadius: 5).stroke(variant.fg.opacity(0.25), lineWidth: 1))
+            .background(bg, in: RoundedRectangle(cornerRadius: 5))
+            .overlay(RoundedRectangle(cornerRadius: 5).stroke(fg.opacity(0.25), lineWidth: 1))
+    }
+}
+
+extension Provenance {
+    /// Badge colour per provenance family, from Wega's existing palette.
+    var badgeColor: Color {
+        switch self {
+        case .homebrew:     return .wegaHoney
+        case .appStore:     return .wegaInfo
+        case .vendorDirect: return .wegaSuccess
+        case .github:       return .wegaLavender
+        case .jetbrains:    return .wegaCoral
+        case .sparkle:      return .wegaLavender
+        case .synology:     return .wegaInfo
+        }
     }
 }
 
@@ -263,7 +297,7 @@ struct EmptyHero: View {
 
 // MARK: - BannerData + BannerView
 
-enum BannerAction: Equatable { case openLogs }
+enum BannerAction: Equatable { case openLogs, openSettings }
 
 struct BannerData: Equatable {
     enum Variant { case success, danger }
@@ -288,13 +322,19 @@ struct BannerView: View {
             }
             Spacer()
             if let action = data.action {
+                let actionLabel: String = {
+                    switch action {
+                    case .openLogs:     return tr("Zobacz w logach")
+                    case .openSettings: return tr("Włącz Touch ID")
+                    }
+                }()
                 Button { onAction?(action) } label: {
-                    Label(tr("Zobacz w logach"), systemImage: "info.circle")
+                    Label(actionLabel, systemImage: "info.circle")
                         .font(.system(size: 12, weight: .medium))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.wegaHoney)
-                .accessibilityLabel(tr("Zobacz w logach"))
+                .accessibilityLabel(actionLabel)
             }
             Button { onClose() } label: { Image(systemName: "xmark") }
                 .buttonStyle(.plain)
