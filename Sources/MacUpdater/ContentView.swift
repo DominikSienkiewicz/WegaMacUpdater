@@ -61,6 +61,8 @@ struct ContentView: View {
     @State private var logsErrorBadge: Int = 0
     @State private var updateActivity: UpdateActivity = .idle
     @State private var brewInstalled: Bool
+    @State private var lastCheck: Date? = nil
+    @State private var securityBadge: Int = 0
 
     init() {
         _brewInstalled = State(initialValue: BinaryLocator().locateBrew() != nil)
@@ -85,7 +87,9 @@ struct ContentView: View {
                         updateBadge: $updateBadge,
                         updateActivity: $updateActivity,
                         logsInitialFilter: $logsInitialFilter,
-                        logsErrorBadge: $logsErrorBadge
+                        logsErrorBadge: $logsErrorBadge,
+                        lastCheck: $lastCheck,
+                        securityBadge: $securityBadge
                     )
                 }
             } else {
@@ -441,6 +445,8 @@ private struct ContentArea: View {
     @Binding var updateActivity: UpdateActivity
     @Binding var logsInitialFilter: LogLevelFilter
     @Binding var logsErrorBadge: Int
+    @Binding var lastCheck: Date?
+    @Binding var securityBadge: Int
 
     @State private var quip: String? = nil
 
@@ -502,7 +508,8 @@ private struct ContentArea: View {
                         wegaState = .forTab(tab)
                     },
                     onErrorCount:  { logsErrorBadge = $0 },
-                    onActivity:    { updateActivity = $0 }
+                    onActivity:    { updateActivity = $0 },
+                    onFooterInfo:  { lastCheck = $0; securityBadge = $1 }
                 )
                 .opacity(activeTab == .update ? 1 : 0)
                 .allowsHitTesting(activeTab == .update)
@@ -527,6 +534,8 @@ private struct ContentArea: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            StatusFooter(lastCheck: lastCheck, updateCount: updateBadge, securityCount: securityBadge)
         }
         .overlay(alignment: .bottom) {
             if let quip {
@@ -547,5 +556,47 @@ private struct ContentArea: View {
                 withAnimation { quip = nil }
             }
         }
+    }
+}
+
+// MARK: - Status footer
+
+/// Persistent, window-wide footer showing scan freshness and update/security counts.
+/// Visible on every tab (lives in `ContentArea`'s outer VStack, below the tab body).
+private struct StatusFooter: View {
+    let lastCheck:     Date?
+    let updateCount:   Int
+    let securityCount: Int
+
+    private var freshnessText: String {
+        if let lastCheck {
+            return trf("Sprawdzono %@", "\(lastCheck.formatted(date: .omitted, time: .shortened))")
+        }
+        return tr("Jeszcze nie sprawdzano")
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            PawPrint(size: 11, color: Color.wegaToffee)
+            Text(freshnessText)
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+
+            Spacer()
+
+            Text(trf("%@ do aktualizacji", "\(updateCount)"))
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+
+            if securityCount > 0 {
+                Label(trf("%@ poprawki bezp.", "\(securityCount)"), systemImage: "shield.lefthalf.filled")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.wegaDanger)
+            }
+        }
+        .frame(height: 28)
+        .padding(.horizontal, 16)
+        .background(Color.wegaHoney.opacity(0.02))
+        .overlay(alignment: .top) { Divider().opacity(0.5) }
     }
 }

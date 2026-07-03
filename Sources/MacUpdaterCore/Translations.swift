@@ -305,6 +305,8 @@ public enum Translations {
         "%@ aktualizacji dostępnych": "%@ updates available",
         "Nie udało się sprawdzić": "Check failed",
         "Jeszcze nie sprawdzano": "Not checked yet",
+        "%@ do aktualizacji": "%@ to update",
+        "%@ poprawki bezp.": "%@ security fixes",
         "Wyłączone": "Off",
         "Co godzinę": "Hourly",
         "Co 6 godzin": "Every 6 hours",

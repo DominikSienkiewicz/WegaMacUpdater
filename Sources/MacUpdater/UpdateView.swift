@@ -11,6 +11,9 @@ struct UpdateView: View {
     var onErrorCount:  ((Int) -> Void)?
     /// Drives the sidebar tab icon: spins while busy, then green (ok) / red (error).
     var onActivity:    ((UpdateActivity) -> Void)?
+    /// Drives the window's status footer: last scan time + count of manual updates
+    /// whose release notes look like a security fix.
+    var onFooterInfo:  ((Date?, Int) -> Void)? = nil
 
     @EnvironmentObject private var model: AppViewModel
     @EnvironmentObject private var policies: UpdatePolicyStore
@@ -452,6 +455,10 @@ extension UpdateView {
         }
         onBadgeChange?(allItems.count)
         onErrorCount?(failedSources)
+        let securityCount = manualOutdated.filter { app in
+            app.releaseNotes.map { ReleaseNotesTriage.heuristic($0).isLikelySecurityFix } ?? false
+        }.count
+        onFooterInfo?(lastCheck, securityCount)
     }
 
     private func scanManualUpdates(brewOutdatedCasks: Set<String> = []) async -> (apps: [ManualOutdatedApp], failedChecks: Int) {
