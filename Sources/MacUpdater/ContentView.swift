@@ -268,11 +268,6 @@ private struct SidebarView: View {
             .padding(.top, 6)
 
             Spacer()
-
-            Divider().opacity(0.5)
-
-            // Wega status panel
-            WegaStatusPanel(state: wegaState)
         }
         .frame(width: WegaLayout.sidebarWidth)
         .background(Color(NSColor.windowBackgroundColor).opacity(0.6))
@@ -366,46 +361,6 @@ private struct SidebarItemRow: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-    }
-}
-
-// MARK: - Wega status panel (friendly mode)
-
-private struct WegaStatusPanel: View {
-    let state: WegaState
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            WegaHead(pose: state.pose, size: 44)
-                .padding(2)
-                .background(
-                    Color(NSColor.controlBackgroundColor),
-                    in: RoundedRectangle(cornerRadius: 10)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                )
-                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: state.pose)
-
-            Text(trf("\u{201E}%@\u{201D}", "\(state.line)"))
-                .font(.system(size: 11.5).italic())
-                .foregroundStyle(.primary)
-                .lineLimit(3)
-                .multilineTextAlignment(.leading)
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    Color(NSColor.controlBackgroundColor),
-                    in: RoundedRectangle(cornerRadius: 10)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                )
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 14)
     }
 }
 
