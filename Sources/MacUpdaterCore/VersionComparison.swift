@@ -91,3 +91,26 @@ public func normalizeGitTag(_ tag: String) -> String {
     }
     return v
 }
+
+/// The semantic size of a version bump, from the first component that differs.
+public enum VersionChangeKind: Equatable {
+    case major, minor, patch, same, unknown
+}
+
+/// Classifies `installed` → `latest` as a major/minor/patch bump. Reuses the same
+/// tolerant parsing as `isUpgrade` (Zoom "X (Y)", Parallels "X-build", padding), so
+/// unparseable inputs (e.g. a git-hash "version") return `.unknown` rather than lying.
+public func versionChangeKind(from installed: String, to latest: String) -> VersionChangeKind {
+    let ic = versionComponents(versionVariants(installed).first ?? installed)
+    let lc = versionComponents(versionVariants(latest).first ?? latest)
+    guard !ic.isEmpty, !lc.isEmpty else { return .unknown }
+    let (pi, pl) = paddedComponents(ic, lc)
+    for i in pi.indices where pi[i] != pl[i] {
+        switch i {
+        case 0:  return .major
+        case 1:  return .minor
+        default: return .patch
+        }
+    }
+    return .same
+}
