@@ -45,6 +45,8 @@ final class AppEndpointsTests: XCTestCase {
         XCTAssertEqual(e.authorLinkedInURL.absoluteString,
                        "https://www.linkedin.com/in/dominik-sienkiewicz/")
         XCTAssertEqual(e.masRepositoryURL.absoluteString, "https://github.com/mas-cli/mas")
+        XCTAssertEqual(e.signalUpdateURL.absoluteString,
+                       "https://updates.signal.org/desktop/latest-mac.yml")
         XCTAssertEqual(e.homebrewInstallCommand,
                        #"/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)""#)
     }
@@ -65,6 +67,10 @@ final class AppEndpointsTests: XCTestCase {
                        "https://update.parallels.com/desktop/v26/parallels/parallels_updates.xml")
         XCTAssertEqual(e.postmanUpdateURL(version: "12.15.6")?.absoluteString,
                        "https://dl.pstmn.io/update/osx_64/12.15.6")
+        XCTAssertEqual(e.discordUpdateURL(channel: "canary", version: "0.0.966")?.absoluteString,
+                       "https://discord.com/api/updates/canary?platform=osx&version=0.0.966")
+        XCTAssertEqual(e.chromeVersionsURL(channel: "canary")?.absoluteString,
+                       "https://versionhistory.googleapis.com/v1/chrome/platforms/mac/channels/canary/versions")
         XCTAssertEqual(e.githubReleasesPageURL(repo: "owner/app")?.absoluteString,
                        "https://github.com/owner/app/releases/latest")
     }
@@ -84,6 +90,9 @@ final class AppEndpointsTests: XCTestCase {
             antigravityUpdate: nil,
             parallelsUpdates: nil,
             postmanUpdate: nil,
+            discordUpdate: nil,
+            signalUpdate: nil,
+            chromeVersions: nil,
             homebrewWebsite: nil,
             homebrewInstallCommand: nil,
             githubReleasesPage: nil,

@@ -30,6 +30,9 @@ public enum ScanLog {
         case .googleDrive: return "Google Drive"
         case .chatgpt:     return "ChatGPT"
         case .postman:     return "Postman (feed)"
+        case .discord:     return "Discord"
+        case .signal:      return "Signal"
+        case .chrome:      return "Google Chrome"
         }
     }
 

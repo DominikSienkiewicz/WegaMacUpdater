@@ -55,7 +55,8 @@ struct P1BackendsTests {
             jetbrainsReleases: nil, chatgptAppcast: nil, googleDriveOmaha: nil,
             caskDatabase: "ma spacje i nie jest url", appCatalog: nil,
             githubLatestRelease: "https://example.test/{repo}", synologyChangeLog: nil,
-            antigravityUpdate: nil, parallelsUpdates: nil, postmanUpdate: nil, homebrewWebsite: nil,
+            antigravityUpdate: nil, parallelsUpdates: nil, postmanUpdate: nil,
+            discordUpdate: nil, signalUpdate: nil, chromeVersions: nil, homebrewWebsite: nil,
             homebrewInstallCommand: nil, githubReleasesPage: nil, googleDriveDownload: nil,
             projectRepository: nil, projectIssues: nil, authorLinkedIn: nil, masRepository: nil
         )

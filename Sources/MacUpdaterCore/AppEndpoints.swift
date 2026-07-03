@@ -25,6 +25,9 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public let antigravityUpdate: String
     public let parallelsUpdates: String
     public let postmanUpdate: String
+    public let discordUpdate: String
+    public let signalUpdate: String
+    public let chromeVersions: String
     public let homebrewWebsite: String
     public let homebrewInstallCommand: String
     public let githubReleasesPage: String
@@ -70,9 +73,18 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
         URL(string: Self.fill(githubReleasesPage, ["repo": repo]))
     }
 
+    public func discordUpdateURL(channel: String, version: String) -> URL? {
+        URL(string: Self.fill(discordUpdate, ["channel": channel, "version": version]))
+    }
+
+    public func chromeVersionsURL(channel: String) -> URL? {
+        URL(string: Self.fill(chromeVersions, ["channel": channel]))
+    }
+
     // MARK: Fixed endpoints (force-unwrapped: the bundled config is validated at launch)
 
     public var chatgptAppcastURL: URL { URL(string: chatgptAppcast)! }
+    public var signalUpdateURL: URL { URL(string: signalUpdate)! }
     public var googleDriveOmahaURL: URL { URL(string: googleDriveOmaha)! }
     public var caskDatabaseURL: URL { URL(string: caskDatabase)! }
     public var appCatalogURL: URL { URL(string: appCatalog)! }
@@ -175,6 +187,9 @@ extension AppEndpoints {
             antigravityUpdate: raw(other.antigravityUpdate, antigravityUpdate),
             parallelsUpdates: raw(other.parallelsUpdates, parallelsUpdates),
             postmanUpdate: raw(other.postmanUpdate, postmanUpdate),
+            discordUpdate: raw(other.discordUpdate, discordUpdate),
+            signalUpdate: validURL(other.signalUpdate, signalUpdate),
+            chromeVersions: raw(other.chromeVersions, chromeVersions),
             homebrewWebsite: validURL(other.homebrewWebsite, homebrewWebsite),
             homebrewInstallCommand: raw(other.homebrewInstallCommand, homebrewInstallCommand),
             githubReleasesPage: raw(other.githubReleasesPage, githubReleasesPage),
@@ -205,6 +220,9 @@ public struct AppEndpointsOverlay: Decodable, Sendable, Equatable {
     public let antigravityUpdate: String?
     public let parallelsUpdates: String?
     public let postmanUpdate: String?
+    public let discordUpdate: String?
+    public let signalUpdate: String?
+    public let chromeVersions: String?
     public let homebrewWebsite: String?
     public let homebrewInstallCommand: String?
     public let githubReleasesPage: String?

@@ -472,6 +472,42 @@ struct ManualUpdateSection: View {
                 }
                 .controlSize(.small)
             }
+        case .discord:
+            HStack(spacing: 8) {
+                WegaBadge(label: "Discord", variant: .info)
+                Button {
+                    // Discord self-updates its host via Squirrel; the discord* casks are
+                    // auto_updates and lag, so brew would reinstall a stale build.
+                    NSWorkspace.shared.open(item.path)
+                } label: {
+                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
+                }
+                .controlSize(.small)
+            }
+        case .signal:
+            HStack(spacing: 8) {
+                WegaBadge(label: "Signal", variant: .info)
+                Button {
+                    // Signal self-updates via electron-updater; the signal cask is
+                    // auto_updates and lags. Launch it so its own updater applies.
+                    NSWorkspace.shared.open(item.path)
+                } label: {
+                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
+                }
+                .controlSize(.small)
+            }
+        case .chrome:
+            HStack(spacing: 8) {
+                WegaBadge(label: "Chrome", variant: .info)
+                Button {
+                    // Chrome self-updates via Keystone; the google-chrome* casks are
+                    // auto_updates and lag. Relaunch applies the staged update.
+                    NSWorkspace.shared.open(item.path)
+                } label: {
+                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
+                }
+                .controlSize(.small)
+            }
         }
     }
 }

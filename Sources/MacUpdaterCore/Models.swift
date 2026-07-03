@@ -152,6 +152,12 @@ public struct ManualOutdatedApp: Equatable, Sendable {
         /// `postman` is `auto_updates` and its version lags the real channel.
         /// Detected via Postman's own Squirrel feed (`dl.pstmn.io`).
         case postman
+        /// Discord (stable / PTB / Canary) — self-updating host via Squirrel.Mac.
+        case discord
+        /// Signal Desktop — self-updating via electron-updater.
+        case signal
+        /// Google Chrome (stable / beta / dev / canary) — self-updating via Keystone.
+        case chrome
 
         public var priority: Int {
             switch self {
@@ -160,6 +166,9 @@ public struct ManualOutdatedApp: Equatable, Sendable {
             case .googleDrive: return 5
             case .chatgpt:     return 5
             case .postman:     return 5
+            case .discord:     return 5
+            case .signal:      return 5
+            case .chrome:      return 5
             case .jetbrains:   return 4
             case .github:      return 3
             case .synology:    return 3

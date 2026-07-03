@@ -106,6 +106,9 @@ public struct ManualUpdateScanner: Sendable {
         let googleDriveChecker = GoogleDriveUpdateChecker()
         let chatGPTChecker = ChatGPTUpdateChecker()
         let postmanChecker = PostmanUpdateChecker()
+        let discordChecker = DiscordUpdateChecker()
+        let signalChecker = SignalUpdateChecker()
+        let chromeChecker = ChromeUpdateChecker()
         let brew = brewService
 
         // Build every per-app check as an independent unit of work, then run them with a
@@ -160,6 +163,9 @@ public struct ManualUpdateScanner: Sendable {
                 work.append(Self.logged("Google Drive", app) { await googleDriveChecker.check(app: app) })
                 work.append(Self.logged("ChatGPT", app) { await chatGPTChecker.check(app: app) })
                 work.append(Self.logged("Postman", app) { await postmanChecker.check(app: app) })
+                work.append(Self.logged("Discord", app) { await discordChecker.check(app: app) })
+                work.append(Self.logged("Signal", app) { await signalChecker.check(app: app) })
+                work.append(Self.logged("Chrome", app) { await chromeChecker.check(app: app) })
             }
             // Sparkle ALWAYS — it's the app's own appcast, independent of Homebrew. Also
             // keeps working for an app that merely shares a name with a CLI-only cask

@@ -30,6 +30,21 @@ final class ScanLogTests: XCTestCase {
         ])
     }
 
+    // 1b. Etykiety źródeł dla samoaktualizujących się aplikacji (Discord/Signal/Chrome)
+    func testFoundLinesLabelSelfUpdatingSources() {
+        let lines = ScanLog.foundLines(
+            items: [],
+            manual: [manual("Discord", "1.0.9200", "1.0.9201", .discord),
+                     manual("Signal", "7.60.0", "7.61.0", .signal),
+                     manual("Google Chrome", "138.0.7204.50", "138.0.7204.92", .chrome)]
+        )
+        XCTAssertEqual(lines, [
+            "Discord 1.0.9200 → 1.0.9201 · Discord",
+            "Signal 7.60.0 → 7.61.0 · Signal",
+            "Google Chrome 138.0.7204.50 → 138.0.7204.92 · Google Chrome"
+        ])
+    }
+
     // 2. Rozbicie skanu na źródła
     func testBreakdownCountsPerSource() {
         let bd = ScanLog.breakdown(
