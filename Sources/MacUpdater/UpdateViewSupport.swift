@@ -291,19 +291,18 @@ struct ManualUpdateSection: View {
                     AppIcon(path: item.path, size: 32)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.name).font(.system(size: 13, weight: .medium))
-                        HStack(spacing: 6) {
-                            Text(item.installedVersion ?? "—")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.tertiary)
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.tertiary)
-                            Text(item.availableVersion ?? "—")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(Color.wegaHoney)
-                        }
+                        let isSecurity = item.releaseNotes.map { ReleaseNotesTriage.heuristic($0).isLikelySecurityFix } ?? false
+                        VersionArrow(
+                            from: item.installedVersion ?? "—",
+                            to: item.availableVersion ?? "—",
+                            emphasis: versionEmphasis(
+                                changeKind: versionChangeKind(from: item.installedVersion ?? "", to: item.availableVersion ?? ""),
+                                isSecurityFix: isSecurity,
+                                requiresForce: false
+                            )
+                        )
                         // FEAT-06: doradczy badge z triage notatek wydania (np. GitHub).
-                        if let notes = item.releaseNotes, ReleaseNotesTriage.heuristic(notes).isLikelySecurityFix {
+                        if isSecurity {
                             Label(tr("możliwa poprawka bezpieczeństwa"), systemImage: "shield.lefthalf.filled")
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(Color.wegaDanger)
