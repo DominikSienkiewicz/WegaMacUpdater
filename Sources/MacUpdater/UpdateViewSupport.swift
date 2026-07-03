@@ -329,7 +329,7 @@ struct ManualUpdateSection: View {
         switch item.source {
         case .sparkle:
             HStack(spacing: 8) {
-                WegaBadge(label: "Sparkle", variant: .manual)
+                WegaBadge(label: "Sparkle", color: item.source.provenance.badgeColor)
                 Button {
                     // Sparkle apps own the update flow. Opening the app brings it to the
                     // foreground and (for apps with SUEnableAutomaticChecks=1, e.g. Codex)
@@ -344,7 +344,7 @@ struct ManualUpdateSection: View {
             }
         case .cask(let token):
             HStack(spacing: 8) {
-                WegaBadge(label: token, variant: .brew)
+                WegaBadge(label: token, color: item.source.provenance.badgeColor)
                 Button {
                     onInstall(token)
                 } label: {
@@ -359,14 +359,14 @@ struct ManualUpdateSection: View {
             }
         case .mas(let appStoreID):
             HStack(spacing: 8) {
-                WegaBadge(label: appStoreID, variant: .appStore)
+                WegaBadge(label: appStoreID, color: item.source.provenance.badgeColor)
                 Text(tr("zaktualizuj w App Store"))
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
             }
         case .github(let repo):
             HStack(spacing: 8) {
-                WegaBadge(label: "GitHub", variant: .info)
+                WegaBadge(label: "GitHub", color: item.source.provenance.badgeColor)
                 Button {
                     if let url = AppEndpoints.shared.githubReleasesPageURL(repo: repo) {
                         NSWorkspace.shared.open(url)
@@ -378,7 +378,7 @@ struct ManualUpdateSection: View {
             }
         case .jetbrains(let caskToken):
             HStack(spacing: 8) {
-                WegaBadge(label: caskToken, variant: .brew)
+                WegaBadge(label: caskToken, color: item.source.provenance.badgeColor)
                 Button {
                     let toolboxPaths = [
                         SystemPaths.applicationsDirectory.appendingPathComponent("JetBrains Toolbox.app").path,
@@ -395,7 +395,7 @@ struct ManualUpdateSection: View {
             }
         case .synology(let downloadPage):
             HStack(spacing: 8) {
-                WegaBadge(label: "Synology", variant: .info)
+                WegaBadge(label: "Synology", color: item.source.provenance.badgeColor)
                 Button {
                     if let url = URL(string: downloadPage) {
                         NSWorkspace.shared.open(url)
@@ -407,7 +407,7 @@ struct ManualUpdateSection: View {
             }
         case .antigravity:
             HStack(spacing: 8) {
-                WegaBadge(label: "Antigravity", variant: .info)
+                WegaBadge(label: "Antigravity", color: item.source.provenance.badgeColor)
                 Button {
                     // Antigravity owns its own update flow (supportsFastUpdate).
                     // Launching it triggers the in-app updater — we must never
@@ -421,7 +421,7 @@ struct ManualUpdateSection: View {
             }
         case .parallels:
             HStack(spacing: 8) {
-                WegaBadge(label: "Parallels", variant: .info)
+                WegaBadge(label: "Parallels", color: item.source.provenance.badgeColor)
                 Button {
                     // Parallels self-updates via its bundled updater; brew cask
                     // `parallels` lags upstream and would route through a stale
@@ -434,7 +434,7 @@ struct ManualUpdateSection: View {
             }
         case .googleDrive:
             HStack(spacing: 8) {
-                WegaBadge(label: "Google Drive", variant: .info)
+                WegaBadge(label: "Google Drive", color: item.source.provenance.badgeColor)
                 Button {
                     NSWorkspace.shared.open(AppEndpoints.shared.googleDriveDownloadURL)
                 } label: {
@@ -444,7 +444,7 @@ struct ManualUpdateSection: View {
             }
         case .chatgpt:
             HStack(spacing: 8) {
-                WegaBadge(label: "ChatGPT", variant: .info)
+                WegaBadge(label: "ChatGPT", color: item.source.provenance.badgeColor)
                 Button {
                     // ChatGPT self-updates via Sparkle from a runtime-resolved
                     // feed; the brew cask `chatgpt` is `auto_updates` and lags.
@@ -458,7 +458,7 @@ struct ManualUpdateSection: View {
             }
         case .postman:
             HStack(spacing: 8) {
-                WegaBadge(label: "Postman", variant: .info)
+                WegaBadge(label: "Postman", color: item.source.provenance.badgeColor)
                 Button {
                     // Postman self-updates via Squirrel; the brew cask `postman`
                     // is `auto_updates` and its version lags the real channel, so
@@ -473,7 +473,7 @@ struct ManualUpdateSection: View {
             }
         case .discord:
             HStack(spacing: 8) {
-                WegaBadge(label: "Discord", variant: .info)
+                WegaBadge(label: "Discord", color: item.source.provenance.badgeColor)
                 Button {
                     // Discord self-updates its host via Squirrel; the discord* casks are
                     // auto_updates and lag, so brew would reinstall a stale build.
@@ -485,7 +485,7 @@ struct ManualUpdateSection: View {
             }
         case .signal:
             HStack(spacing: 8) {
-                WegaBadge(label: "Signal", variant: .info)
+                WegaBadge(label: "Signal", color: item.source.provenance.badgeColor)
                 Button {
                     // Signal self-updates via electron-updater; the signal cask is
                     // auto_updates and lags. Launch it so its own updater applies.
@@ -497,7 +497,7 @@ struct ManualUpdateSection: View {
             }
         case .chrome:
             HStack(spacing: 8) {
-                WegaBadge(label: "Chrome", variant: .info)
+                WegaBadge(label: "Chrome", color: item.source.provenance.badgeColor)
                 Button {
                     // Chrome self-updates via Keystone; the google-chrome* casks are
                     // auto_updates and lag. Relaunch applies the staged update.
