@@ -270,7 +270,7 @@ struct InspectorPane: View {
             sectionHeading(tr("Akcje"))
             switch update {
             case .outdated:
-                Text(tr("Aktualizowane zbiorczo — zaznacz na liście i użyj „Zaktualizuj wybrane\"."))
+                Text(tr("Aktualizowane zbiorczo — zaznacz na liście i użyj „Zaktualizuj wybrane”."))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

@@ -426,7 +426,7 @@ public enum Translations {
         "Akcje": "Actions",
         "Brak informacji o zmianach": "No release notes available",
         "Informacje o zmianach niedostępne dla tego źródła": "Release notes aren't available for this source",
-        "Aktualizowane zbiorczo — zaznacz na liście i użyj „Zaktualizuj wybrane\".":
-            "Updated in a batch — select it in the list and use \u{201E}Update selected\".",
+        "Aktualizowane zbiorczo — zaznacz na liście i użyj „Zaktualizuj wybrane”.":
+            "Updated in a batch — select it in the list and use \u{201E}Update selected\u{201D}.",
     ]
 }
