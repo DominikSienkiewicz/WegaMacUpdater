@@ -13,9 +13,10 @@ import MacUpdaterCore
 ///
 /// Cask keying (**I-4**): the batch-cask watchdog records publisher history under the
 /// `"cask:<token>"` namespace, while a migrated app is keyed under its real bundle id. For a
-/// `.cask(token)` source the probe reconciles BOTH on read (`classifyCask`) so a cask whose
+/// `.cask(token)` source the probe reconciles BOTH on read (`classifyCaskOrNil`) so a cask whose
 /// publisher the watchdog has been tracking correlates as `.unchanged`/`.changed` instead of
-/// falsely reading `.firstSeen`.
+/// falsely reading `.firstSeen` — and withholds the rows entirely when neither the signature nor
+/// any history is known, rather than showing a hollow placeholder.
 ///
 /// Concurrency constraint: the probe shells out to `spctl` and reads the bundle from disk — both
 /// blocking. It runs inside `Task.detached`, driven by `.task(id: probeKey)` so SwiftUI cancels and
@@ -71,10 +72,11 @@ struct TrustPanel: View {
             let audit: TeamIDAudit?
             if let caskToken {
                 // A cask's publisher may be tracked under its real bundle id (a migration keys it
-                // there) OR the watchdog's "cask:<token>" namespace — reconcile both on read.
+                // there) OR the watchdog's "cask:<token>" namespace — reconcile both on read, and
+                // withhold the rows entirely when neither the signature nor any history is known.
                 let byBundle = bundleID.flatMap { TeamIDLedger.shared.teamID(forBundleID: $0) }
                 let byCask = TeamIDLedger.shared.teamID(forBundleID: "cask:\(caskToken)")
-                audit = TeamIDLedger.classifyCask(storedByBundleID: byBundle, storedByCaskKey: byCask, new: fresh)
+                audit = TeamIDLedger.classifyCaskOrNil(storedByBundleID: byBundle, storedByCaskKey: byCask, new: fresh)
             } else {
                 audit = bundleID.map {
                     TeamIDLedger.classify(stored: TeamIDLedger.shared.teamID(forBundleID: $0), new: fresh)

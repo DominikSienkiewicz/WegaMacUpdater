@@ -45,6 +45,16 @@ public final class TeamIDLedger: @unchecked Sendable {
         classify(stored: storedByBundleID ?? storedByCaskKey, new: new)
     }
 
+    /// `classifyCask`, but withholds a verdict (`nil`) when NOTHING about the publisher was
+    /// measured — no fresh Team ID and no history under either key. Lets the inspector hide the
+    /// Team ID rows for a cask whose signature couldn't be read and that has no baseline, rather
+    /// than render a hollow "—" / first-sighting placeholder (honesty: show a signal only when
+    /// something was actually measured).
+    public static func classifyCaskOrNil(storedByBundleID: String?, storedByCaskKey: String?, new: String?) -> TeamIDAudit? {
+        guard new != nil || storedByBundleID != nil || storedByCaskKey != nil else { return nil }
+        return classifyCask(storedByBundleID: storedByBundleID, storedByCaskKey: storedByCaskKey, new: new)
+    }
+
     /// Records `teamID` for `bundleID`, returning the audit vs. the previous value.
     /// Only concrete (non-nil) IDs are persisted, so an unreadable signature never
     /// erases a known-good baseline.

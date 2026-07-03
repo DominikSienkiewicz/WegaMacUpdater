@@ -80,6 +80,24 @@ struct P2BackendsTests {
             == .changed(old: "AAA", new: "CCC"))
     }
 
+    /// Empty-state suppression: the cask verdict is withheld (`nil`) ONLY when nothing about
+    /// the publisher was measured — no fresh Team ID and no history under either key — so the
+    /// inspector shows no Team ID rows instead of a hollow "—" / first-sighting placeholder.
+    /// Any measured signal (a fresh read, or stored history under either key) yields a verdict.
+    @Test func classifyCaskOrNilSuppressesOnlyEmptyState() {
+        // Nothing measured, no history under either key → no verdict at all.
+        #expect(TeamIDLedger.classifyCaskOrNil(storedByBundleID: nil, storedByCaskKey: nil, new: nil) == nil)
+        // A fresh Team ID alone is enough to report a first sighting.
+        #expect(TeamIDLedger.classifyCaskOrNil(storedByBundleID: nil, storedByCaskKey: nil, new: "AAA")
+            == .firstSeen(teamID: "AAA"))
+        // Watchdog history under the cask key alone still yields a verdict.
+        #expect(TeamIDLedger.classifyCaskOrNil(storedByBundleID: nil, storedByCaskKey: "AAA", new: "AAA")
+            == .unchanged(teamID: "AAA"))
+        // A real-bundle-id baseline still takes precedence and still flags a swap.
+        #expect(TeamIDLedger.classifyCaskOrNil(storedByBundleID: "AAA", storedByCaskKey: "ZZZ", new: "BBB")
+            == .changed(old: "AAA", new: "BBB"))
+    }
+
     // MARK: FEAT-05 — clonefile snapshot (Darwin/APFS)
 
     @Test func cloneAndRestoreRoundTrip() throws {
