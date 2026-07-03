@@ -10,6 +10,8 @@ import Foundation
 /// languages so argument order is preserved.
 public enum Translations {
     public static let en: [String: String] = [
+        // UI — natywna scena Settings (⌘,).
+        "Ustawienia": "Settings",
         // FEAT-02 — confidence dopasowania migracji.
         "pewne": "confident",
         "sprawdź": "review",

@@ -31,6 +31,14 @@ struct WegaMacUpdaterApp: App {
         .windowToolbarStyle(.unified)
         .windowStyle(.titleBar)
 
+        Settings {
+            SettingsView()
+                .environmentObject(model)
+                .environmentObject(localization)
+                .environmentObject(policies)
+                .id(localization.language)
+        }
+
         MenuBarExtra {
             MenuBarContent(agent: menuBar)
                 .environmentObject(localization)

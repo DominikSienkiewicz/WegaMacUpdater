@@ -9,7 +9,6 @@ enum SidebarTab: String, Identifiable {
     case migration = "migration"
     case inventory = "inventory"
     case logs      = "logs"
-    case info      = "info"
 
     var id: String { rawValue }
 
@@ -20,7 +19,6 @@ enum SidebarTab: String, Identifiable {
         case .migration: return tr("Migracja")
         case .inventory: return tr("Spis aplikacji")
         case .logs:      return tr("Logi")
-        case .info:      return tr("Info")
         }
     }
     var systemImage: String {
@@ -30,7 +28,6 @@ enum SidebarTab: String, Identifiable {
         case .migration: return "arrow.right.doc.on.clipboard"
         case .inventory: return "tablecells"
         case .logs:      return "doc.text.magnifyingglass"
-        case .info:      return "info.circle"
         }
     }
     var hint: String {
@@ -40,7 +37,6 @@ enum SidebarTab: String, Identifiable {
         case .migration: return tr("Przepnij pod Brew")
         case .inventory: return tr("Pełny obchód")
         case .logs:      return tr("Co się działo")
-        case .info:      return tr("O aplikacji")
         }
     }
 
@@ -98,6 +94,14 @@ struct ContentView: View {
         }
         .frame(minWidth: WegaLayout.windowMinWidth, minHeight: WegaLayout.windowMinHeight)
         .background(Color(NSColor.windowBackgroundColor))
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                SettingsLink {
+                    Image(systemName: "gearshape")
+                }
+                .help(tr("Ustawienia"))
+            }
+        }
     }
 }
 
@@ -166,18 +170,6 @@ private struct SidebarView: View {
                         }
                     )
                 }
-
-                Divider().opacity(0.4).padding(.vertical, 4)
-
-                SidebarTabRow(
-                    tab:      .info,
-                    isActive: activeTab == .info,
-                    badge:    nil,
-                    onSelect: {
-                        activeTab = .info
-                        wegaState = .forTab(.info)
-                    }
-                )
             }
             .padding(.horizontal, 8)
             .padding(.top, 6)
@@ -530,8 +522,6 @@ private struct ContentArea: View {
                         case .logs:
                             LogsView(onWegaState: { wegaState = $0 }, initialFilter: logsInitialFilter)
                                 .id(logsInitialFilter)
-                        case .info:
-                            InfoView(onWegaState: { wegaState = $0 })
                         }
                     }
                 }
