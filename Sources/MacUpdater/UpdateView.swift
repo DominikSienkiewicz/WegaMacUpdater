@@ -488,9 +488,7 @@ extension UpdateView {
         }
         onBadgeChange?(allItems.count)
         onErrorCount?(failedSources)
-        let securityCount = manualOutdated.filter { app in
-            app.releaseNotes.map { ReleaseNotesTriage.heuristic($0).isLikelySecurityFix } ?? false
-        }.count
+        let securityCount = visibleManual.filter(isSecurityApp).count
         onFooterInfo?(lastCheck, securityCount)
         let appsCount = allItems.filter { $0.kind.category == .apps }.count + visibleManual.count
         let cliCount  = allItems.filter { $0.kind.category == .cli }.count
