@@ -298,6 +298,7 @@ struct ManualUpdateSection: View {
                             emphasis: versionEmphasis(
                                 changeKind: versionChangeKind(from: item.installedVersion ?? "", to: item.availableVersion ?? ""),
                                 isSecurityFix: isSecurity,
+                                // Self-updating rows never go through brew's --force retry, so requiresForce is always false here.
                                 requiresForce: false
                             )
                         )

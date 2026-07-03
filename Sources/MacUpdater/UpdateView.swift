@@ -17,6 +17,7 @@ struct UpdateView: View {
 
     @EnvironmentObject private var model: AppViewModel
     @EnvironmentObject private var policies: UpdatePolicyStore
+    @Environment(\.openSettings) private var openSettings
 
     @State private var pinTarget:      PinRequest?       = nil
     @State private var status:         UpdateStatus      = .ready
@@ -166,7 +167,7 @@ struct UpdateView: View {
                         switch action {
                         case .openLogs: onNavigate?(.logs)
                         case .openSettings:
-                            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                            openSettings()
                         }
                     },
                     onClose: { banner = nil }
