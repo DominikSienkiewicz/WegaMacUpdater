@@ -161,4 +161,56 @@ final class UpdatePlannerTests: XCTestCase {
         let summary = UpdatePlanner.summarize(outcomes: [BrewUpgradeOutcome(exitCode: 0, failedTokens: [], errorLines: [])])
         XCTAssertTrue(summary.failureDetails.isEmpty)
     }
+
+    // MARK: casksWithoutChecksum — FEAT-03 download-transparency banner
+
+    /// The "no checksum" banner looks up download info by cask **token**. For a cask
+    /// `OutdatedItem` the token lives in `.name` (copied verbatim from `brew outdated`),
+    /// while `.key` carries the `"c:"` source-tag prefix and the download map is never
+    /// keyed by it. This pins that a no-checksum cask is detected via the token — and
+    /// documents that a `.key`-based lookup would silently miss every cask.
+    func testCasksWithoutChecksumDetectsNoCheckByToken() {
+        let brew = BrewOutdated(
+            formulae: [],
+            casks: [BrewOutdatedItem(name: "visual-studio-code", installedVersions: ["1.90.0"], currentVersion: "1.91.0")]
+        )
+        let vscode = UpdatePlanner.outdatedItems(brew: brew, mas: [], npm: [])[0]
+        // Premise: token (.name) and key diverge; the download map is keyed by the token.
+        XCTAssertEqual(vscode.name, "visual-studio-code")
+        XCTAssertEqual(vscode.key, "c:visual-studio-code")
+
+        let downloads = [
+            "visual-studio-code": CaskDownloadInfo(token: "visual-studio-code", url: "https://example.com/vscode.zip", sha256: "no_check")
+        ]
+        // A `.key` lookup can never hit the token-keyed map — that is the regression this guards.
+        XCTAssertNil(downloads[vscode.key])
+        XCTAssertNotNil(downloads[vscode.name])
+
+        let flagged = UpdatePlanner.casksWithoutChecksum([vscode], downloads: downloads)
+        XCTAssertEqual(flagged.map(\.name), ["visual-studio-code"])
+    }
+
+    /// A cask Homebrew *does* verify (concrete sha256) must not be flagged.
+    func testCasksWithChecksumAreNotFlagged() {
+        let brew = BrewOutdated(
+            formulae: [],
+            casks: [BrewOutdatedItem(name: "postman", installedVersions: ["11.0.0"], currentVersion: "11.1.0")]
+        )
+        let postman = UpdatePlanner.outdatedItems(brew: brew, mas: [], npm: [])[0]
+        let downloads = [
+            "postman": CaskDownloadInfo(token: "postman", url: "https://example.com/postman.zip", sha256: "abc123")
+        ]
+        XCTAssertTrue(UpdatePlanner.casksWithoutChecksum([postman], downloads: downloads).isEmpty)
+    }
+
+    /// A cask with no download info at all is not flagged — we warn about a *known*
+    /// missing checksum, never about the mere absence of information.
+    func testCasksWithoutDownloadInfoAreNotFlagged() {
+        let brew = BrewOutdated(
+            formulae: [],
+            casks: [BrewOutdatedItem(name: "firefox", installedVersions: ["120"], currentVersion: "121")]
+        )
+        let firefox = UpdatePlanner.outdatedItems(brew: brew, mas: [], npm: [])[0]
+        XCTAssertTrue(UpdatePlanner.casksWithoutChecksum([firefox], downloads: [:]).isEmpty)
+    }
 }
