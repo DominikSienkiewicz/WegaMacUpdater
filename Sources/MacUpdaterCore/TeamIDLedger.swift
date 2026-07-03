@@ -34,6 +34,27 @@ public final class TeamIDLedger: @unchecked Sendable {
         return stored == new ? .unchanged(teamID: new) : .changed(old: stored, new: new)
     }
 
+    /// Cask-aware classification (**I-4**). The cask watchdog keys publisher history under
+    /// `"cask:<token>"` (see `postCaskUpgrade`), while the inspector looks apps up by their
+    /// REAL bundle identifier — two namespaces that never intersect, so a tracked cask read
+    /// as `.firstSeen`. This reconciles both baselines on read: prefer the real-bundle-id
+    /// history (e.g. one a migration seeded under the real id), and fall back to the cask-key
+    /// history only when there is none — so existing watchdog history correlates with no
+    /// data migration.
+    public static func classifyCask(storedByBundleID: String?, storedByCaskKey: String?, new: String?) -> TeamIDAudit {
+        classify(stored: storedByBundleID ?? storedByCaskKey, new: new)
+    }
+
+    /// `classifyCask`, but withholds a verdict (`nil`) when NOTHING about the publisher was
+    /// measured — no fresh Team ID and no history under either key. Lets the inspector hide the
+    /// Team ID rows for a cask whose signature couldn't be read and that has no baseline, rather
+    /// than render a hollow "—" / first-sighting placeholder (honesty: show a signal only when
+    /// something was actually measured).
+    public static func classifyCaskOrNil(storedByBundleID: String?, storedByCaskKey: String?, new: String?) -> TeamIDAudit? {
+        guard new != nil || storedByBundleID != nil || storedByCaskKey != nil else { return nil }
+        return classifyCask(storedByBundleID: storedByBundleID, storedByCaskKey: storedByCaskKey, new: new)
+    }
+
     /// Records `teamID` for `bundleID`, returning the audit vs. the previous value.
     /// Only concrete (non-nil) IDs are persisted, so an unreadable signature never
     /// erases a known-good baseline.

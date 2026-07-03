@@ -37,6 +37,67 @@ struct P2BackendsTests {
         #expect(ledger.teamID(forBundleID: "com.x") == "BBB")
     }
 
+    /// I-4 regression: the cask watchdog records publisher history under the
+    /// `"cask:<token>"` namespace (see `postCaskUpgrade`), but the inspector's Trust
+    /// panel used to look apps up by their REAL bundle identifier only. The two keys
+    /// never intersect, so a cask whose publisher the watchdog HAD been tracking still
+    /// read as `.firstSeen` in the inspector instead of `.unchanged`. `classifyCask`
+    /// reconciles both namespaces on read, correlating existing history with no migration.
+    @Test func caskPublisherCorrelatesAcrossKeyNamespaces() throws {
+        let defaults = try #require(UserDefaults(suiteName: "wega-test-\(UUID().uuidString)"))
+        let ledger = TeamIDLedger(defaults: defaults)
+        // Watchdog records the freshly-upgraded cask's publisher under the cask key.
+        ledger.record(bundleID: "cask:firefox", teamID: "43AQ936H96")
+        // Inspector reads by the app's real bundle id (a different namespace) — it misses…
+        let byBundle = ledger.teamID(forBundleID: "org.mozilla.firefox")
+        let byCask = ledger.teamID(forBundleID: "cask:firefox")
+        #expect(byBundle == nil)
+        // …so the old bundle-id-only keying wrongly reports a first sighting (the bug):
+        #expect(TeamIDLedger.classify(stored: byBundle, new: "43AQ936H96") == .firstSeen(teamID: "43AQ936H96"))
+        // The cask-aware keying reconciles both namespaces and correlates the tracked publisher:
+        #expect(
+            TeamIDLedger.classifyCask(storedByBundleID: byBundle, storedByCaskKey: byCask, new: "43AQ936H96")
+                == .unchanged(teamID: "43AQ936H96"))
+    }
+
+    /// The cask keying rule: prefer the real-bundle-id baseline (e.g. one seeded by a
+    /// migration, which keys under the real id), fall back to the cask-key baseline only
+    /// when there is no real-bundle-id history.
+    @Test func classifyCaskKeyingRule() {
+        // No history under either key → first sighting.
+        #expect(TeamIDLedger.classifyCask(storedByBundleID: nil, storedByCaskKey: nil, new: "AAA")
+            == .firstSeen(teamID: "AAA"))
+        // Only the cask-key baseline exists → fall back to it.
+        #expect(TeamIDLedger.classifyCask(storedByBundleID: nil, storedByCaskKey: "AAA", new: "AAA")
+            == .unchanged(teamID: "AAA"))
+        // A publisher swap tracked under the cask key still fires loudly.
+        #expect(TeamIDLedger.classifyCask(storedByBundleID: nil, storedByCaskKey: "AAA", new: "BBB")
+            == .changed(old: "AAA", new: "BBB"))
+        // A real-bundle-id baseline takes precedence over the cask key.
+        #expect(TeamIDLedger.classifyCask(storedByBundleID: "AAA", storedByCaskKey: "ZZZ", new: "AAA")
+            == .unchanged(teamID: "AAA"))
+        #expect(TeamIDLedger.classifyCask(storedByBundleID: "AAA", storedByCaskKey: "ZZZ", new: "CCC")
+            == .changed(old: "AAA", new: "CCC"))
+    }
+
+    /// Empty-state suppression: the cask verdict is withheld (`nil`) ONLY when nothing about
+    /// the publisher was measured — no fresh Team ID and no history under either key — so the
+    /// inspector shows no Team ID rows instead of a hollow "—" / first-sighting placeholder.
+    /// Any measured signal (a fresh read, or stored history under either key) yields a verdict.
+    @Test func classifyCaskOrNilSuppressesOnlyEmptyState() {
+        // Nothing measured, no history under either key → no verdict at all.
+        #expect(TeamIDLedger.classifyCaskOrNil(storedByBundleID: nil, storedByCaskKey: nil, new: nil) == nil)
+        // A fresh Team ID alone is enough to report a first sighting.
+        #expect(TeamIDLedger.classifyCaskOrNil(storedByBundleID: nil, storedByCaskKey: nil, new: "AAA")
+            == .firstSeen(teamID: "AAA"))
+        // Watchdog history under the cask key alone still yields a verdict.
+        #expect(TeamIDLedger.classifyCaskOrNil(storedByBundleID: nil, storedByCaskKey: "AAA", new: "AAA")
+            == .unchanged(teamID: "AAA"))
+        // A real-bundle-id baseline still takes precedence and still flags a swap.
+        #expect(TeamIDLedger.classifyCaskOrNil(storedByBundleID: "AAA", storedByCaskKey: "ZZZ", new: "BBB")
+            == .changed(old: "AAA", new: "BBB"))
+    }
+
     // MARK: FEAT-05 — clonefile snapshot (Darwin/APFS)
 
     @Test func cloneAndRestoreRoundTrip() throws {

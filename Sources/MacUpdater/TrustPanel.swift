@@ -8,8 +8,15 @@ import MacUpdaterCore
 /// Honesty constraint (security surface): a signal is shown ONLY when it was actually measured.
 /// `path == nil` (an `OutdatedItem` — batch formula/cask/MAS/npm has no app bundle) always yields
 /// `.unavailable` — never a fabricated verdict. Inspecting is read-only: it calls
-/// `TeamIDLedger.classify` + `TeamIDLedger.shared.teamID(forBundleID:)`, never `record(...)`, so
-/// looking at an update can never poison the ledger's baseline.
+/// `TeamIDLedger.classify` / `classifyCask` + `TeamIDLedger.shared.teamID(forBundleID:)`, never
+/// `record(...)`, so looking at an update can never poison the ledger's baseline.
+///
+/// Cask keying (**I-4**): the batch-cask watchdog records publisher history under the
+/// `"cask:<token>"` namespace, while a migrated app is keyed under its real bundle id. For a
+/// `.cask(token)` source the probe reconciles BOTH on read (`classifyCaskOrNil`) so a cask whose
+/// publisher the watchdog has been tracking correlates as `.unchanged`/`.changed` instead of
+/// falsely reading `.firstSeen` — and withholds the rows entirely when neither the signature nor
+/// any history is known, rather than showing a hollow placeholder.
 ///
 /// Concurrency constraint: the probe shells out to `spctl` and reads the bundle from disk — both
 /// blocking. It runs inside `Task.detached`, driven by `.task(id: probeKey)` so SwiftUI cancels and
@@ -19,6 +26,9 @@ import MacUpdaterCore
 struct TrustPanel: View {
     let path: URL?
     let caskChecksum: Bool?
+    /// The plain cask token when the inspected item's source is `.cask(token)` — lets the probe
+    /// reconcile the watchdog's `"cask:<token>"` publisher history with the real bundle id (I-4).
+    let caskToken: String?
     let probeKey: String
 
     @State private var state: TrustProbeState = .loading
@@ -41,7 +51,7 @@ struct TrustPanel: View {
         }
         .task(id: probeKey) {
             state = .loading
-            let result = await Self.probe(path: path, caskChecksum: caskChecksum)
+            let result = await Self.probe(path: path, caskChecksum: caskChecksum, caskToken: caskToken)
             if !Task.isCancelled {
                 state = .loaded(result)
             }
@@ -50,7 +60,7 @@ struct TrustPanel: View {
 
     // MARK: Probe (no main-thread I/O)
 
-    static func probe(path: URL?, caskChecksum: Bool?) async -> TrustProbeResult {
+    static func probe(path: URL?, caskChecksum: Bool?, caskToken: String?) async -> TrustProbeResult {
         guard let path else {
             return TrustProbeResult(
                 verdict: trustLevel(audit: nil, signatureValid: nil, caskChecksumPresent: caskChecksum),
@@ -59,8 +69,18 @@ struct TrustPanel: View {
         return await Task.detached(priority: .userInitiated) {
             let fresh = CodeSignatureVerifier.teamID(ofAppAt: path)
             let bundleID = Bundle(url: path)?.bundleIdentifier
-            let audit = bundleID.map {
-                TeamIDLedger.classify(stored: TeamIDLedger.shared.teamID(forBundleID: $0), new: fresh)
+            let audit: TeamIDAudit?
+            if let caskToken {
+                // A cask's publisher may be tracked under its real bundle id (a migration keys it
+                // there) OR the watchdog's "cask:<token>" namespace — reconcile both on read, and
+                // withhold the rows entirely when neither the signature nor any history is known.
+                let byBundle = bundleID.flatMap { TeamIDLedger.shared.teamID(forBundleID: $0) }
+                let byCask = TeamIDLedger.shared.teamID(forBundleID: "cask:\(caskToken)")
+                audit = TeamIDLedger.classifyCaskOrNil(storedByBundleID: byBundle, storedByCaskKey: byCask, new: fresh)
+            } else {
+                audit = bundleID.map {
+                    TeamIDLedger.classify(stored: TeamIDLedger.shared.teamID(forBundleID: $0), new: fresh)
+                }
             }
             let sig = CodeSignatureVerifier.passesGatekeeperForExecution(at: path)
             return TrustProbeResult(
