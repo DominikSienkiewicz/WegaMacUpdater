@@ -48,6 +48,15 @@ struct PrivilegedHelperSecurityTests {
         #expect(WegaHelper.isTeamIDConfigured == (WegaHelper.teamIdentifier != "REPLACE_TEAMID"))
     }
 
+    @Test func teamIDIsARealAppleTeamID() {
+        // A regression back to the placeholder would silently kill XPC pinning and
+        // self-update verification (fail-closed) — pin the configured state and the
+        // Apple Team ID shape (exactly 10 alphanumerics) so CI catches it.
+        #expect(WegaHelper.isTeamIDConfigured)
+        #expect(WegaHelper.teamIdentifier.count == 10)
+        #expect(WegaHelper.teamIdentifier.allSatisfy { $0.isLetter || $0.isNumber })
+    }
+
     // MARK: - FEAT-01: root-side PAM writer (pure content)
 
     @Test func pamContentsAppendOnceAndAreIdempotent() {

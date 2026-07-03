@@ -74,6 +74,15 @@ bump and move its entries under the new version heading when cutting a release.
   — same rationale as the already-excluded SwiftUI app, documented inline.
 
 ### Fixed
+- `.pkg` signing in `scripts/build-pkg.sh` and the release workflow: the package was
+  signed with the same identity as the app, but `pkgbuild` only accepts a
+  **Developer ID Installer** certificate — a "Developer ID Application" identity would
+  have failed the first real signed release. The installer identity is now a separate
+  second argument (`DEVELOPER_ID_INSTALLER_IDENTITY` secret in CI); without it the
+  `.pkg` builds unsigned with a warning and is skipped by notarization (an unsigned
+  submission would come back "Invalid"), while the `.dmg` still notarizes. Notarization
+  is also gated on a Developer ID being configured at all — a notary key alone with
+  ad-hoc artifacts would fail every submission.
 - The Updates and Inventory windows no longer contradict each other about an app's
   origin. A self-updating Homebrew cask (e.g. **Docker**) showed "Brew" in the Inventory
   but landed under "Ręcznie zainstalowane" (Manually installed) in the Updates window,
@@ -93,6 +102,12 @@ bump and move its entries under the new version heading when cutting a release.
 - README version badge now reflects the real version (`0.1.0`).
 
 ### Security
+- Configured the real Apple Developer Team ID (`WegaHelper.teamIdentifier`, was the
+  `REPLACE_TEAMID` placeholder). This arms every fail-closed path that was dormant:
+  XPC peer pinning in both directions (app ↔ privileged helper), helper registration
+  via `SMAppService`, and Team-ID verification of self-update installers. Pinned by
+  a new `PrivilegedHelperSecurityTests` case that fails CI on any regression to a
+  non-Team-ID-shaped value.
 - Hardened the GitHub PAT keychain item (`GitHubCredentialStore`): accessibility moved
   from `AfterFirstUnlock` to **`AfterFirstUnlockThisDeviceOnly`**, so the credential is
   no longer eligible for iCloud Keychain sync or device backups (it can't leak to

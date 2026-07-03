@@ -170,7 +170,7 @@ The package targets the **Swift 6 language mode** (`swift-tools-version: 6.0`), 
 
 `scripts/build-pkg.sh` builds a universal binary by default (override with `ARCHS="arm64"`) and copies the SPM resource bundle (`app-catalog.json`) into the `.app`, so `Bundle.module` resolves at runtime.
 
-Open `Package.swift` directly in Xcode for the full IDE experience. A signed `.app` bundle requires a separate Xcode project or `xcodebuild` invocation with a provisioning profile.
+Open `Package.swift` directly in Xcode for the full IDE experience. No Xcode project or provisioning profile is needed for signing: `scripts/build-pkg.sh` signs the hand-rolled bundle with `codesign` (hardened runtime + timestamp, inside-out: helper first, then the app) when given Developer ID identities as arguments — see [Cutting a release](#cutting-a-release).
 
 ### Version — single source of truth
 
@@ -180,10 +180,15 @@ The app version lives in exactly one place: `AppMetadata.version` (`Sources/MacU
 
 Intended channel: Developer ID, outside the Mac App Store.
 
-- Developer ID Application signing
+- **Developer ID Application** signing for the `.app` (and nested privileged helper) + `.dmg`
+- **Developer ID Installer** signing for the `.pkg` — a distinct certificate type; `pkgbuild` refuses Application certs
 - Hardened Runtime
 - Notarization
 - DMG placing `Wega Mac Updater.app` in `/Applications`
+
+The Team ID is pinned in code (`WegaHelper.teamIdentifier`) — XPC peer pinning and
+self-update verification only trust binaries signed by that team, so release signing
+**must** use certificates from the same Apple Developer team.
 
 ### Cutting a release
 
@@ -196,7 +201,18 @@ git tag v0.1.0 && git push origin v0.1.0
 
 Move the `[Unreleased]` entries in [`CHANGELOG.md`](CHANGELOG.md) under the new version heading as part of the bump.
 
-`.github/workflows/release.yml` (on `push: tags: v*`) verifies tag == `AppMetadata.version`, runs the tests, builds the artifacts, and publishes a GitHub Release with the `.pkg` + `.dmg`. **Signing and notarization are optional and activate automatically once the secrets exist** — until then the job still publishes *unsigned* artifacts so the pipeline is verifiable end-to-end without an Apple Developer account. Secrets (all optional): `DEVELOPER_ID_IDENTITY`, `DEVELOPER_ID_CERT_P12`, `DEVELOPER_ID_CERT_PASSWORD`, `KEYCHAIN_PASSWORD`, and `AC_API_KEY_ID` / `AC_API_ISSUER_ID` / `AC_API_KEY_P8` for `notarytool`.
+`.github/workflows/release.yml` (on `push: tags: v*`) verifies tag == `AppMetadata.version`, runs the tests, builds the artifacts, and publishes a GitHub Release with the `.pkg` + `.dmg`. **Signing and notarization are optional and activate automatically once the secrets exist** — until then the job still publishes *unsigned* artifacts so the pipeline is verifiable end-to-end without an Apple Developer account.
+
+Secrets (all optional):
+
+| Secret | Purpose |
+| --- | --- |
+| `DEVELOPER_ID_IDENTITY` | `"Developer ID Application: Name (TEAMID)"` — signs `.app`, helper, `.dmg` |
+| `DEVELOPER_ID_INSTALLER_IDENTITY` | `"Developer ID Installer: Name (TEAMID)"` — signs the `.pkg` (distinct cert type; without it the `.pkg` ships unsigned and is skipped by notarization) |
+| `DEVELOPER_ID_CERT_P12` | base64 of a `.p12` exported from Keychain — export **both** identities (Application + Installer) into this one file |
+| `DEVELOPER_ID_CERT_PASSWORD` | password of the `.p12` |
+| `KEYCHAIN_PASSWORD` | any throwaway password for the CI temp keychain |
+| `AC_API_KEY_ID` / `AC_API_ISSUER_ID` / `AC_API_KEY_P8` | App Store Connect API key (role *Developer*) for `notarytool`; `AC_API_KEY_P8` is the full `.p8` file contents |
 
 ### Self-update
 

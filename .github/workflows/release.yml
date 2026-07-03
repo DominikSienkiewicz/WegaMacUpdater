@@ -7,10 +7,13 @@ name: Release
 # the whole pipeline is verifiable end-to-end without an Apple Developer account.
 #
 # Secrets (all optional):
-#   DEVELOPER_ID_IDENTITY        — e.g. "Developer ID Application: Name (TEAMID)"
-#   DEVELOPER_ID_CERT_P12        — base64 of the exported .p12
-#   DEVELOPER_ID_CERT_PASSWORD   — password for the .p12
-#   KEYCHAIN_PASSWORD            — any throwaway password for the temp keychain
+#   DEVELOPER_ID_IDENTITY           — e.g. "Developer ID Application: Name (TEAMID)"; signs .app/.dmg
+#   DEVELOPER_ID_INSTALLER_IDENTITY — e.g. "Developer ID Installer: Name (TEAMID)"; signs the .pkg
+#                                     (pkgbuild refuses "Application" certs — it's a distinct cert type)
+#   DEVELOPER_ID_CERT_P12           — base64 of the exported .p12; export BOTH identities
+#                                     (Application + Installer) from Keychain into this one file
+#   DEVELOPER_ID_CERT_PASSWORD      — password for the .p12
+#   KEYCHAIN_PASSWORD               — any throwaway password for the temp keychain
 #   AC_API_KEY_ID / AC_API_ISSUER_ID / AC_API_KEY_P8 — App Store Connect API key for notarytool
 
 on:
@@ -28,6 +31,7 @@ jobs:
     # job-level booleans here (job `env` may read `secrets`) and gate steps on `env`.
     env:
       HAS_DEVELOPER_ID: ${{ secrets.DEVELOPER_ID_CERT_P12 != '' }}
+      HAS_INSTALLER_ID: ${{ secrets.DEVELOPER_ID_INSTALLER_IDENTITY != '' }}
       HAS_NOTARY_KEY: ${{ secrets.AC_API_KEY_P8 != '' }}
     steps:
       - name: Checkout
@@ -72,23 +76,36 @@ jobs:
       - name: Build artifacts (.pkg + .dmg)
         env:
           SIGN_IDENTITY: ${{ secrets.DEVELOPER_ID_IDENTITY }}
+          INSTALLER_IDENTITY: ${{ secrets.DEVELOPER_ID_INSTALLER_IDENTITY }}
         run: |
           if [[ -n "$SIGN_IDENTITY" ]]; then
-            ./scripts/build-pkg.sh "$SIGN_IDENTITY"
+            if [[ -z "$INSTALLER_IDENTITY" ]]; then
+              echo "::warning::No DEVELOPER_ID_INSTALLER_IDENTITY secret — the .pkg will be UNSIGNED (pkgbuild needs a 'Developer ID Installer' cert; the Application cert can't sign packages)."
+            fi
+            ./scripts/build-pkg.sh "$SIGN_IDENTITY" "$INSTALLER_IDENTITY"
           else
             echo "::warning::No DEVELOPER_ID_IDENTITY secret — building UNSIGNED ad-hoc artifacts (not distributable to other Macs)."
             ./scripts/build-pkg.sh
           fi
 
       - name: Notarize & staple
-        if: ${{ env.HAS_NOTARY_KEY == 'true' }}
+        # Notarization requires Developer-ID-signed artifacts — with only a notary key
+        # and ad-hoc signatures every submission would come back "Invalid".
+        if: ${{ env.HAS_NOTARY_KEY == 'true' && env.HAS_DEVELOPER_ID == 'true' }}
         env:
           AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
           AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
           AC_API_KEY_P8: ${{ secrets.AC_API_KEY_P8 }}
         run: |
           echo "$AC_API_KEY_P8" > "$RUNNER_TEMP/ac_api.p8"
-          for artifact in build/WegaMacUpdater.pkg build/WegaMacUpdater.dmg; do
+          ARTIFACTS=(build/WegaMacUpdater.dmg)
+          # An unsigned .pkg (no Installer identity) would be rejected by the notary service.
+          if [[ "$HAS_INSTALLER_ID" == "true" ]]; then
+            ARTIFACTS+=(build/WegaMacUpdater.pkg)
+          else
+            echo "::warning::Skipping .pkg notarization — it is unsigned (no DEVELOPER_ID_INSTALLER_IDENTITY secret)."
+          fi
+          for artifact in "${ARTIFACTS[@]}"; do
             echo "→ Notarizing $artifact"
             xcrun notarytool submit "$artifact" \
               --key "$RUNNER_TEMP/ac_api.p8" \

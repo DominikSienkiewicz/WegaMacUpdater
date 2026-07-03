@@ -5,8 +5,10 @@ set -euo pipefail
 # build-pkg.sh — buduje WegaMacUpdater.pkg z czystego SPM
 #
 # Użycie:
-#   ./scripts/build-pkg.sh                  # ad-hoc (lokalnie, bez podpisu)
-#   ./scripts/build-pkg.sh "Developer ID"   # podpisany Developer ID
+#   ./scripts/build-pkg.sh                                      # ad-hoc (lokalnie, bez podpisu)
+#   ./scripts/build-pkg.sh "Developer ID Application: … (TEAM)" # podpisane .app + .dmg
+#   ./scripts/build-pkg.sh "Developer ID Application: … (TEAM)" "Developer ID Installer: … (TEAM)"
+#                                                               # jw. + podpisany .pkg
 #
 # Wymagania: Xcode Command Line Tools, swift, pkgbuild
 # ---------------------------------------------------------------------------
@@ -28,7 +30,8 @@ MIN_MACOS="13.0"
 #   ARCHS="arm64" ./scripts/build-pkg.sh        # tylko Apple Silicon
 read -r -a ARCHS <<< "${ARCHS:-arm64 x86_64}"
 
-SIGN_IDENTITY="${1:-}"   # pierwszy argument = Developer ID (opcjonalnie)
+SIGN_IDENTITY="${1:-}"        # "Developer ID Application: …" — podpis kodu (.app, helper, .dmg)
+INSTALLER_IDENTITY="${2:-}"   # "Developer ID Installer: …" — podpis instalatora (.pkg); to INNY certyfikat
 
 BUILD_DIR="$(pwd)/.build/pkg-staging"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
@@ -157,16 +160,22 @@ echo "→ Tworzę PKG..."
 # pkgbuild zgłasza wtedy "write: Permission denied" przy analizie payloadu.
 # Nadanie prawa zapisu właścicielowi usuwa te ostrzeżenia (bez wpływu na wynik).
 chmod -R u+w "$APP_BUNDLE" 2>/dev/null || true
-# DEBT-02: podpisz sam pakiet (nie tylko .app w środku) gdy mamy Developer ID.
-if [[ -n "$SIGN_IDENTITY" ]]; then
+# DEBT-02: podpisz sam pakiet (nie tylko .app w środku). pkgbuild akceptuje wyłącznie
+# certyfikat "Developer ID Installer" — tożsamość "Developer ID Application" (arg 1)
+# nie podpisze pakietu, dlatego .pkg ma własną, drugą tożsamość (arg 2).
+if [[ -n "$INSTALLER_IDENTITY" ]]; then
     pkgbuild \
         --component "$APP_BUNDLE" \
         --install-location /Applications \
         --identifier "$BUNDLE_ID" \
         --version "$VERSION" \
-        --sign "$SIGN_IDENTITY" \
+        --sign "$INSTALLER_IDENTITY" \
         "$OUTPUT_PKG"
+    echo "   ✓ PKG podpisany (Developer ID Installer): $INSTALLER_IDENTITY"
 else
+    if [[ -n "$SIGN_IDENTITY" ]]; then
+        echo "   ⚠️ Brak tożsamości 'Developer ID Installer' (drugi argument) — .pkg będzie NIEPODPISANY (notaryzacja .pkg nie przejdzie)."
+    fi
     pkgbuild \
         --component "$APP_BUNDLE" \
         --install-location /Applications \
@@ -197,10 +206,10 @@ fi
 echo ""
 echo "✅ Gotowe: $OUTPUT_PKG"
 echo "✅ Gotowe: $OUTPUT_DMG"
-if [[ -z "$SIGN_IDENTITY" ]]; then
+if [[ -z "$SIGN_IDENTITY" || -z "$INSTALLER_IDENTITY" ]]; then
     echo ""
-    echo "⚠️  PKG jest niepodpisany (ad-hoc). Żeby go dystrybuować:"
-    echo "   1. Miej Developer ID Application certificate w Keychain"
-    echo "   2. Uruchom: ./scripts/build-pkg.sh \"Developer ID Application: Twoje Imię (TEAMID)\""
-    echo "   3. Potem notaryzuj: xcrun notarytool submit $OUTPUT_PKG --wait"
+    echo "⚠️  Artefakty nie są w pełni podpisane. Pełna dystrybucja wymaga DWÓCH certyfikatów w Keychain:"
+    echo "   1. \"Developer ID Application\" (podpis .app/.dmg) + \"Developer ID Installer\" (podpis .pkg)"
+    echo "   2. Uruchom: ./scripts/build-pkg.sh \"Developer ID Application: Imię (TEAMID)\" \"Developer ID Installer: Imię (TEAMID)\""
+    echo "   3. Potem notaryzuj: xcrun notarytool submit $OUTPUT_PKG --wait (i to samo dla .dmg) + xcrun stapler staple"
 fi
