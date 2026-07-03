@@ -183,7 +183,7 @@ struct UpdateView: View {
 
             if allItems.isEmpty && visibleManual.isEmpty && restartCandidates.isEmpty {
                 EmptyHero(pose: .sleep, title: tr("Wszystko aktualne"), message: tr("Wega się zdrzemnie. Zajrzymy znowu za jakiś czas."), compact: true)
-            } else {
+            } else if filterHasContent(updateFilter) || !restartCandidates.isEmpty {
                 // Select-all row
                 HStack(spacing: 10) {
                     Image(systemName: selectAllSymbol)
@@ -257,6 +257,13 @@ struct UpdateView: View {
                     }
                     .padding(16)
                 }
+            } else {
+                EmptyHero(
+                    pose: .idle,
+                    title: tr("Nic w tej kategorii"),
+                    message: tr("W tej kategorii nie ma teraz aktualizacji. Przełącz kategorię w panelu bocznym."),
+                    compact: true
+                )
             }
         }
     }
@@ -296,6 +303,16 @@ struct UpdateView: View {
     /// narrow the manual sections when `updateFilter.isSecurityOnly`.
     private func isSecurityApp(_ app: ManualOutdatedApp) -> Bool {
         app.releaseNotes.map { ReleaseNotesTriage.heuristic($0).isLikelySecurityFix } ?? false
+    }
+
+    /// Whether the given filter would surface at least one update section.
+    private func filterHasContent(_ filter: UpdateFilter) -> Bool {
+        switch filter {
+        case .all:      return !allItems.isEmpty || !visibleManual.isEmpty
+        case .apps:     return allItems.contains { $0.kind.category == .apps } || !visibleManual.isEmpty
+        case .cli:      return allItems.contains { $0.kind.category == .cli }
+        case .security: return visibleManual.contains(where: isSecurityApp)
+        }
     }
 
     // MARK: FEAT-03 — transparentność pobrania

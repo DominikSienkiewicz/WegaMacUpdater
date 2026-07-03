@@ -83,6 +83,8 @@ public enum Translations {
         "Zaktualizuj wszystkie (%@)": "Update all (%@)",
         "Zaktualizuj wybrane (%@)": "Update selected (%@)",
         "Wega się zdrzemnie. Zajrzymy znowu za jakiś czas.": "Wega will take a nap. We'll check again in a while.",
+        "Nic w tej kategorii": "Nothing in this category",
+        "W tej kategorii nie ma teraz aktualizacji. Przełącz kategorię w panelu bocznym.": "There are no updates in this category right now. Switch category in the sidebar.",
         "Zaznacz wszystko": "Select all",
         "Zamknij": "Close",
         "%@ z %@ zaznaczonych": "%@ of %@ selected",
