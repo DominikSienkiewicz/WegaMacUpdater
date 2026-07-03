@@ -135,8 +135,10 @@ struct UpdateSection: View {
     let items:     [OutdatedItem]
     var iconPaths: [String: URL]  = [:]
     @Binding var selected: Set<String>
+    var inspectedKey: String? = nil
     var onIgnore: ((OutdatedItem) -> Void)?
     var onPin:    ((OutdatedItem) -> Void)?
+    var onInspect: ((OutdatedItem) -> Void)? = nil
 
     var body: some View {
         WegaCard {
@@ -158,7 +160,9 @@ struct UpdateSection: View {
                     currentVersion: item.from,
                     latestVersion:  item.to,
                     isSelected:     selected.contains(item.key),
-                    onToggle:       { toggle(item.key) }
+                    isInspected:    item.key == inspectedKey,
+                    onToggle:       { toggle(item.key) },
+                    onSelect:       { onInspect?(item) }
                 )
                 .contextMenu {
                     UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) })
@@ -257,8 +261,10 @@ struct ManualUpdateSection: View {
     /// group sits apart (Homebrew doesn't version-manage `auto_updates` casks), so the
     /// section reads as intentional rather than an inconsistency.
     var caption:   String? = nil
+    var inspectedKey: String? = nil
     var onIgnore:  ((ManualOutdatedApp) -> Void)?
     var onPin:     ((ManualOutdatedApp) -> Void)?
+    var onInspect: ((ManualOutdatedApp) -> Void)? = nil
 
     var body: some View {
         WegaCard {
@@ -287,6 +293,7 @@ struct ManualUpdateSection: View {
             .overlay(alignment: .bottom) { Divider().opacity(0.5) }
 
             ForEach(items, id: \.path) { item in
+                let isInspected = "m:" + item.path.path == inspectedKey
                 HStack(spacing: 12) {
                     AppIcon(path: item.path, size: 32)
                     VStack(alignment: .leading, spacing: 2) {
@@ -310,11 +317,18 @@ struct ManualUpdateSection: View {
                         }
                     }
                     Spacer()
-                    manualAction(for: item)
+                    ManualUpdateActionView(item: item, busyToken: busyToken, onInstall: onInstall)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
+                .background(isInspected ? Color.wegaHoney.opacity(0.14) : Color.clear)
+                .overlay(alignment: .leading) {
+                    if isInspected {
+                        Rectangle().fill(Color.wegaHoney).frame(width: 2)
+                    }
+                }
                 .contentShape(Rectangle())
+                .onTapGesture { onInspect?(item) }
                 .contextMenu {
                     UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) })
                 }
@@ -324,9 +338,18 @@ struct ManualUpdateSection: View {
             }
         }
     }
+}
 
-    @ViewBuilder
-    private func manualAction(for item: ManualOutdatedApp) -> some View {
+/// The per-source manual-update action control (badge + button/text), shared between
+/// the list row (`ManualUpdateSection`) and the inspector pane so both render the
+/// identical control for a given `ManualOutdatedApp.UpdateSource` — extracted verbatim
+/// from the former `ManualUpdateSection.manualAction(for:)` (I-3), no behavior change.
+struct ManualUpdateActionView: View {
+    let item:      ManualOutdatedApp
+    let busyToken: String?
+    let onInstall: (String) -> Void
+
+    var body: some View {
         switch item.source {
         case .sparkle:
             HStack(spacing: 8) {
