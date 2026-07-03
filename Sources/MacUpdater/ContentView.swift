@@ -39,8 +39,6 @@ enum SidebarTab: String, Identifiable {
         case .logs:      return tr("Co się działo")
         }
     }
-
-    static var toolTabs: [SidebarTab] { [.update, .uninstall, .migration, .inventory, .logs] }
 }
 
 /// Live state of the Updates tab, surfaced on its sidebar icon: the icon spins while a
