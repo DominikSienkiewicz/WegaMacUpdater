@@ -114,3 +114,20 @@ public func versionChangeKind(from installed: String, to latest: String) -> Vers
     }
     return .same
 }
+
+/// How a version target should be emphasised in the UI. UI-agnostic (no colour) so
+/// it stays in Core and is unit-tested; the view layer maps it to a colour.
+public enum VersionEmphasisKind: Equatable {
+    case normal, major, security, forced
+}
+
+/// Picks the emphasis for a version target. Security fixes win over a forced/`--force`
+/// update, which wins over a plain major bump; everything else is normal.
+public func versionEmphasis(changeKind: VersionChangeKind,
+                            isSecurityFix: Bool,
+                            requiresForce: Bool) -> VersionEmphasisKind {
+    if isSecurityFix { return .security }
+    if requiresForce { return .forced }
+    if changeKind == .major { return .major }
+    return .normal
+}

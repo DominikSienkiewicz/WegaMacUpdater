@@ -9,4 +9,17 @@ final class VersionChangeKindTests: XCTestCase {
     func testEqualIsSame() { XCTAssertEqual(versionChangeKind(from: "125.0", to: "125.0.0"), .same) }
     func testZoomBuildFormatMajor() { XCTAssertEqual(versionChangeKind(from: "7.0.0 (77593)", to: "8.0.0 (80000)"), .major) }
     func testUnparseableIsUnknown() { XCTAssertEqual(versionChangeKind(from: "89d3ad2bf", to: "14263"), .unknown) }
+
+    func testSecurityBeatsEverything() {
+        XCTAssertEqual(versionEmphasis(changeKind: .major, isSecurityFix: true, requiresForce: true), .security)
+    }
+    func testForcedBeatsMajor() {
+        XCTAssertEqual(versionEmphasis(changeKind: .major, isSecurityFix: false, requiresForce: true), .forced)
+    }
+    func testMajorWhenPlain() {
+        XCTAssertEqual(versionEmphasis(changeKind: .major, isSecurityFix: false, requiresForce: false), .major)
+    }
+    func testNormalForPatch() {
+        XCTAssertEqual(versionEmphasis(changeKind: .patch, isSecurityFix: false, requiresForce: false), .normal)
+    }
 }
