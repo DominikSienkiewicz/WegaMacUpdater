@@ -220,9 +220,11 @@ struct PackageRow: View {
     var currentVersion: String? = nil
     var latestVersion: String?  = nil
     var isSelected: Bool        = false
+    var isInspected: Bool       = false
     var securityFix: Bool       = false
     var requiresForce: Bool     = false
     var onToggle: (() -> Void)? = nil
+    var onSelect: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -261,8 +263,14 @@ struct PackageRow: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
         .background(isSelected ? Color.wegaHoney.opacity(0.05) : Color.clear)
+        .background(isInspected ? Color.wegaHoney.opacity(0.14) : Color.clear)
+        .overlay(alignment: .leading) {
+            if isInspected {
+                Rectangle().fill(Color.wegaHoney).frame(width: 2)
+            }
+        }
         .contentShape(Rectangle())
-        .onTapGesture { onToggle?() }
+        .onTapGesture { onSelect?() }
     }
 }
 

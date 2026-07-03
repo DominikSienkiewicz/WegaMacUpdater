@@ -410,5 +410,8 @@ public enum Translations {
         "Wyczyść": "Clear",
         "Wyczyścić logi?": "Clear the logs?",
         "Cicho jak makiem zasiał — żadnych zdarzeń.": "All quiet — no events.",
+
+        // I-2 — inspector pane (Update list).
+        "Wybierz aktualizację, aby zobaczyć szczegóły": "Select an update to see details",
     ]
 }

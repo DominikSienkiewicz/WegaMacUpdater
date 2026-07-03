@@ -3,6 +3,13 @@ import MacUpdaterCore
 
 private enum UpdateStatus { case ready, checking, results }
 
+/// The update currently shown in the inspector pane — either a package-manager-tracked
+/// item (brew/mas/npm) or a manually-checked app. Module-internal (not `private`) so
+/// `InspectorPane`, in its own file, can render it.
+enum InspectedUpdate: Equatable {
+    case outdated(OutdatedItem, iconPath: URL?)
+    case manual(ManualOutdatedApp)
+}
 
 struct UpdateView: View {
     var onWegaState:   ((WegaState) -> Void)?
@@ -42,6 +49,7 @@ struct UpdateView: View {
     @State private var restartBusy:        String?
     @State private var caskIconPaths:      [String: URL]     = [:]
     @State private var caskDownloads:      [String: CaskDownloadInfo] = [:]   // FEAT-03
+    @State private var inspectedKey:       String?           = nil
 
     private let processes = RunningProcessService()
 
@@ -57,6 +65,20 @@ struct UpdateView: View {
     /// Manual updates with ignore/pin rules applied.
     private var visibleManual: [ManualOutdatedApp] {
         UpdatePlanner.applyPolicies(manualOutdated, policies: policies.policiesMap)
+    }
+
+    /// The update currently shown in the inspector pane, resolved from `inspectedKey`
+    /// against the same lists the list column renders — so the inspector always
+    /// reflects live data (e.g. after a rescan) rather than a stale snapshot.
+    private var inspectedUpdate: InspectedUpdate? {
+        guard let key = inspectedKey else { return nil }
+        if let item = allItems.first(where: { $0.key == key }) {
+            return .outdated(item, iconPath: caskIconPaths[item.name])
+        }
+        if let app = visibleManual.first(where: { "m:" + $0.path.path == key }) {
+            return .manual(app)
+        }
+        return nil
     }
 
 
@@ -181,9 +203,23 @@ struct UpdateView: View {
                     .padding(.bottom, 8)
             }
 
-            if allItems.isEmpty && visibleManual.isEmpty && restartCandidates.isEmpty {
-                EmptyHero(pose: .sleep, title: tr("Wszystko aktualne"), message: tr("Wega się zdrzemnie. Zajrzymy znowu za jakiś czas."), compact: true)
-            } else if filterHasContent(updateFilter) || !restartCandidates.isEmpty {
+            HStack(spacing: 0) {
+                listColumn
+                    .frame(maxWidth: .infinity)
+                    .layoutPriority(1)
+                Divider()
+                InspectorPane(update: inspectedUpdate)
+                    .frame(width: 340)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var listColumn: some View {
+        if allItems.isEmpty && visibleManual.isEmpty && restartCandidates.isEmpty {
+            EmptyHero(pose: .sleep, title: tr("Wszystko aktualne"), message: tr("Wega się zdrzemnie. Zajrzymy znowu za jakiś czas."), compact: true)
+        } else if filterHasContent(updateFilter) || !restartCandidates.isEmpty {
+            VStack(spacing: 0) {
                 // Select-all row
                 HStack(spacing: 10) {
                     Image(systemName: selectAllSymbol)
@@ -205,13 +241,13 @@ struct UpdateView: View {
                         let casks    = allItems.filter { $0.kind == .cask }
                         let store    = allItems.filter { $0.kind == .appStore }
                         let npmPkgs  = allItems.filter { $0.kind == .npm }
-                        if !formulae.isEmpty && updateFilter.allowsCli { UpdateSection(title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"),  icon: "terminal",  items: formulae, selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
+                        if !formulae.isEmpty && updateFilter.allowsCli { UpdateSection(title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"),  icon: "terminal",  items: formulae, selected: $selected, inspectedKey: inspectedKey, onIgnore: ignoreItem, onPin: requestPin, onInspect: { inspectedKey = $0.key }) }
                         if !casks.isEmpty && updateFilter.allowsApps {
-                            UpdateSection(title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), icon: "app.gift", items: casks, iconPaths: caskIconPaths, selected: $selected, onIgnore: ignoreItem, onPin: requestPin)
+                            UpdateSection(title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), icon: "app.gift", items: casks, iconPaths: caskIconPaths, selected: $selected, inspectedKey: inspectedKey, onIgnore: ignoreItem, onPin: requestPin, onInspect: { inspectedKey = $0.key })
                             caskTransparencyNote(casks: casks)
                         }
-                        if !store.isEmpty && updateFilter.allowsApps    { UpdateSection(title: tr("Mac App Store"),     subtitle: tr("via mas-cli"),      icon: "bag",      items: store,    selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
-                        if !npmPkgs.isEmpty && updateFilter.allowsCli  { UpdateSection(title: tr("npm globalne"),      subtitle: tr("pakiety -g"),       icon: "shippingbox", items: npmPkgs, selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
+                        if !store.isEmpty && updateFilter.allowsApps    { UpdateSection(title: tr("Mac App Store"),     subtitle: tr("via mas-cli"),      icon: "bag",      items: store,    selected: $selected, inspectedKey: inspectedKey, onIgnore: ignoreItem, onPin: requestPin, onInspect: { inspectedKey = $0.key }) }
+                        if !npmPkgs.isEmpty && updateFilter.allowsCli  { UpdateSection(title: tr("npm globalne"),      subtitle: tr("pakiety -g"),       icon: "shippingbox", items: npmPkgs, selected: $selected, inspectedKey: inspectedKey, onIgnore: ignoreItem, onPin: requestPin, onInspect: { inspectedKey = $0.key }) }
                         // Group manual updates by INSTALL ORIGIN (same axis the Inventory
                         // window labels), not by update source. A self-updating Homebrew
                         // cask (Docker, Postman, ChatGPT…) stays under "Homebrew Casks" so
@@ -228,8 +264,10 @@ struct UpdateView: View {
                                 icon: "app.gift",
                                 subtitle: tr("samoaktualizujące się"),
                                 caption: tr("Homebrew nie pilnuje wersji tych apek (auto_updates) — robią to same. Wega sprawdza je u źródła."),
+                                inspectedKey: inspectedKey,
                                 onIgnore: ignoreManual,
-                                onPin: requestPinManual
+                                onPin: requestPinManual,
+                                onInspect: { inspectedKey = "m:" + $0.path.path }
                             )
                         }
                         let manualOnly = updateFilter.isSecurityOnly ? manualGroups.manual.filter(isSecurityApp) : manualGroups.manual
@@ -240,8 +278,10 @@ struct UpdateView: View {
                                 onInstall: { token in Task { await installManual(token: token) } },
                                 title: tr("Ręcznie zainstalowane"),
                                 icon: "sparkle",
+                                inspectedKey: inspectedKey,
                                 onIgnore: ignoreManual,
-                                onPin: requestPinManual
+                                onPin: requestPinManual,
+                                onInspect: { inspectedKey = "m:" + $0.path.path }
                             )
                         }
                         if !restartCandidates.isEmpty {
@@ -257,14 +297,14 @@ struct UpdateView: View {
                     }
                     .padding(16)
                 }
-            } else {
-                EmptyHero(
-                    pose: .idle,
-                    title: tr("Nic w tej kategorii"),
-                    message: tr("W tej kategorii nie ma teraz aktualizacji. Przełącz kategorię w panelu bocznym."),
-                    compact: true
-                )
             }
+        } else {
+            EmptyHero(
+                pose: .idle,
+                title: tr("Nic w tej kategorii"),
+                message: tr("W tej kategorii nie ma teraz aktualizacji. Przełącz kategorię w panelu bocznym."),
+                compact: true
+            )
         }
     }
 
