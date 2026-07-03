@@ -149,15 +149,29 @@ struct PackageLetterIcon: View {
 
 // MARK: - VersionArrow
 
+extension VersionEmphasisKind {
+    /// Maps semantic emphasis to a Wega palette colour. Normal = honey, major =
+    /// caramel, security = danger red, forced (brew --force) = toffee.
+    var versionColor: Color {
+        switch self {
+        case .normal:   return .wegaHoney
+        case .major:    return .wegaCaramel
+        case .security: return .wegaDanger
+        case .forced:   return .wegaToffee
+        }
+    }
+}
+
 struct VersionArrow: View {
     let from: String
     let to: String
+    var emphasis: VersionEmphasisKind = .normal
 
     var body: some View {
         HStack(spacing: 5) {
             Text(from).foregroundStyle(.secondary)
             Image(systemName: "arrow.right").foregroundStyle(.tertiary).font(.system(size: 9))
-            Text(to).foregroundStyle(Color.wegaHoney)
+            Text(to).foregroundStyle(emphasis.versionColor)
         }
         .font(.system(size: 11, design: .monospaced))
     }
@@ -172,6 +186,8 @@ struct PackageRow: View {
     var currentVersion: String? = nil
     var latestVersion: String?  = nil
     var isSelected: Bool        = false
+    var securityFix: Bool       = false
+    var requiresForce: Bool     = false
     var onToggle: (() -> Void)? = nil
 
     var body: some View {
@@ -197,7 +213,11 @@ struct PackageRow: View {
             }
             Spacer()
             if let from = currentVersion, let to = latestVersion {
-                VersionArrow(from: from, to: to)
+                let kind = versionChangeKind(from: from, to: to)
+                let emphasis = versionEmphasis(changeKind: kind,
+                                               isSecurityFix: securityFix,
+                                               requiresForce: requiresForce)
+                VersionArrow(from: from, to: to, emphasis: emphasis)
             } else if let v = currentVersion ?? latestVersion {
                 Text(v)
                     .font(.system(size: 11, design: .monospaced))
