@@ -211,7 +211,8 @@ struct UpdateView: View {
                 InspectorPane(
                     update: inspectedUpdate,
                     busyToken: manualBusy,
-                    onInstall: { token in Task { await installManual(token: token) } }
+                    onInstall: { token in Task { await installManual(token: token) } },
+                    caskDownloads: caskDownloads
                 )
                     .frame(width: 340)
             }

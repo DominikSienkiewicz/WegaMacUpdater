@@ -428,5 +428,22 @@ public enum Translations {
         "Informacje o zmianach niedostępne dla tego źródła": "Release notes aren't available for this source",
         "Aktualizowane zbiorczo — zaznacz na liście i użyj „Zaktualizuj wybrane”.":
             "Updated in a batch — select it in the list and use \u{201E}Update selected\u{201D}.",
+
+        // I-4 — inspector Trust panel.
+        "Zaufanie": "Trust",
+        "Weryfikowanie…": "Verifying…",
+        "Zweryfikowano": "Verified",
+        "Wykryto ostrzeżenie": "Warning detected",
+        "Weryfikacja niedostępna": "Verification unavailable",
+        "Wydawca (Team ID)": "Publisher (Team ID)",
+        "Wydawca się zmienił:": "Publisher changed:",
+        "pierwsze sprawdzenie wydawcy": "first publisher check",
+        "wydawca bez zmian": "publisher unchanged",
+        "Podpis": "Signature",
+        "ważny": "valid",
+        "nieważny": "invalid",
+        "Suma kontrolna": "Checksum",
+        "obecna": "present",
+        "brak": "missing",
     ]
 }

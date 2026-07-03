@@ -2,8 +2,9 @@ import SwiftUI
 import MacUpdaterCore
 
 /// Right-hand detail panel for the Update list: shows the header (**I-2**) plus
-/// details/What's-New/actions (**I-3**) for whichever update is currently selected
-/// via row-tap. The Trust panel (Team ID / signature / checksum) is **I-4**.
+/// trust/details/What's-New/actions (**I-3**, **I-4**) for whichever update is currently
+/// selected via row-tap. The Trust panel (Team ID / signature / checksum, `TrustPanel.swift`)
+/// is the FINAL inspector increment, **I-4**.
 struct InspectorPane: View {
     let update: InspectedUpdate?
     /// Cask token currently mid-install, forwarded from `UpdateView` so
@@ -12,6 +13,10 @@ struct InspectorPane: View {
     /// Kicks off a manual cask install, forwarded from `UpdateView`. Defaulted so the
     /// empty-state / preview paths don't need to supply one.
     var onInstall: (String) -> Void = { _ in }
+    /// Homebrew cask download metadata (token → info), forwarded from `UpdateView` so the
+    /// Trust panel's checksum signal can look up a manual cask's checksum presence.
+    /// Defaulted so previews / the empty-state path still compile.
+    var caskDownloads: [String: CaskDownloadInfo] = [:]
 
     var body: some View {
         Group {
@@ -20,6 +25,7 @@ struct InspectorPane: View {
                     VStack(alignment: .leading, spacing: 0) {
                         header(for: update)
                         VStack(alignment: .leading, spacing: 16) {
+                            trustSection(for: update)
                             detailsSection(for: update)
                             whatsNewSection(for: update)
                             actionsSection(for: update)
@@ -181,7 +187,26 @@ struct InspectorPane: View {
         }
     }
 
-    // MARK: 3a. Details
+    // MARK: 3a. Trust (I-4)
+
+    /// Resolves the Trust panel's inputs per case — only a manual app has a real `.app` path,
+    /// so only it gets real signals; an `OutdatedItem` always probes with `path: nil` and
+    /// therefore always renders `.unavailable` (see `TrustPanel.probe`'s honesty guard).
+    @ViewBuilder
+    private func trustSection(for update: InspectedUpdate) -> some View {
+        switch update {
+        case .outdated(let item, _):
+            TrustPanel(path: nil, caskChecksum: nil, probeKey: item.key)
+        case .manual(let app):
+            TrustPanel(
+                path: app.path,
+                caskChecksum: caskChecksumToken(of: app.source).flatMap { caskDownloads[$0]?.hasChecksum },
+                probeKey: "m:" + app.path.path
+            )
+        }
+    }
+
+    // MARK: 3b. Details
 
     @ViewBuilder
     private func detailsSection(for update: InspectedUpdate) -> some View {
@@ -223,7 +248,7 @@ struct InspectorPane: View {
         }
     }
 
-    // MARK: 3b. What's New
+    // MARK: 3c. What's New
 
     @ViewBuilder
     private func whatsNewSection(for update: InspectedUpdate) -> some View {
@@ -262,7 +287,7 @@ struct InspectorPane: View {
         }
     }
 
-    // MARK: 3c. Actions
+    // MARK: 3d. Actions
 
     @ViewBuilder
     private func actionsSection(for update: InspectedUpdate) -> some View {
