@@ -6,6 +6,8 @@ extension Color {
     static let wegaHoney   = Color(red: 0.910, green: 0.722, blue: 0.478) // #e8b87a
     static let wegaToffee  = Color(red: 0.831, green: 0.647, blue: 0.455) // #d4a574
     static let wegaCaramel = Color(red: 0.690, green: 0.459, blue: 0.251) // #b07540
+    static let wegaLavender = Color(red: 0.722, green: 0.663, blue: 0.902) // #b8a9e6
+    static let wegaCoral    = Color(red: 0.878, green: 0.600, blue: 0.482) // #e0997b
     // Semantic
     static let wegaSuccess = Color(red: 0.608, green: 0.769, blue: 0.478) // #9bc47a
     static let wegaDanger  = Color(red: 0.831, green: 0.459, blue: 0.420) // #d4756b

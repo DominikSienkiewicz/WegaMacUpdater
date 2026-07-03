@@ -121,10 +121,10 @@ extension Provenance {
         case .homebrew:     return .wegaHoney
         case .appStore:     return .wegaInfo
         case .vendorDirect: return .wegaSuccess
-        case .github:       return .wegaToffee
-        case .jetbrains:    return .wegaCaramel
-        case .sparkle:      return .wegaInfo
-        case .synology:     return .wegaToffee
+        case .github:       return .wegaLavender
+        case .jetbrains:    return .wegaCoral
+        case .sparkle:      return .wegaLavender
+        case .synology:     return .wegaInfo
         }
     }
 }
