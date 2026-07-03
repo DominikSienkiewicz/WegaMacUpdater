@@ -282,10 +282,16 @@ struct EmptyHero: View {
     var message: String
     var action: AnyView? = nil
     var compact: Bool    = false
+    /// When true, Wega idles and pulls random tricks instead of standing still.
+    var playful: Bool    = false
 
     var body: some View {
         VStack(spacing: 16) {
-            WegaFull(pose: pose, size: compact ? 130 : 170, showBall: pose == .idle)
+            if playful {
+                PlayfulWega(restPose: pose, size: compact ? 130 : 170)
+            } else {
+                WegaFull(pose: pose, size: compact ? 130 : 170, showBall: pose == .idle)
+            }
             VStack(spacing: 6) {
                 Text(title)
                     .font(.system(size: 20, weight: .semibold))

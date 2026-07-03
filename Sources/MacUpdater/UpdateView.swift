@@ -227,7 +227,7 @@ struct UpdateView: View {
     @ViewBuilder
     private var listColumn: some View {
         if allItems.isEmpty && visibleManual.isEmpty && restartCandidates.isEmpty {
-            EmptyHero(pose: .sleep, title: tr("Wszystko aktualne"), message: tr("Wega się zdrzemnie. Zajrzymy znowu za jakiś czas."), compact: true)
+            EmptyHero(pose: .sleep, title: tr("Wszystko aktualne"), message: tr("Wega się zdrzemnie. Zajrzymy znowu za jakiś czas."), compact: true, playful: true)
         } else if filterHasContent(updateFilter) || !restartCandidates.isEmpty {
             VStack(spacing: 0) {
                 // Select-all row
