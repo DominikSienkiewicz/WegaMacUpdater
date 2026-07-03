@@ -165,6 +165,8 @@ struct UpdateView: View {
                     onAction: { action in
                         switch action {
                         case .openLogs: onNavigate?(.logs)
+                        case .openSettings:
+                            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
                         }
                     },
                     onClose: { banner = nil }
@@ -614,9 +616,12 @@ extension UpdateView {
                 ? tr("Brew zgłosił błąd — sprawdź log poniżej.")
                 : trf("Nie udało się: %@. Szczegóły w logu.", "\(failedTokens.joined(separator: ", "))")
             let detail = needsSudoPassword
-                ? trf("%@ Cask wymaga hasła administratora — uruchom Wega ponownie, helper askpass zapyta o nie w okienku.", "\(baseDetail)")
+                ? trf("%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła.", "\(baseDetail)")
                 : baseDetail
-            banner = BannerData(variant: .danger, title: tr("Aktualizacja niekompletna"), message: detail)
+            banner = BannerData(variant: .danger,
+                                title: tr("Aktualizacja niekompletna"),
+                                message: detail,
+                                action: needsSudoPassword ? .openSettings : nil)
             onActivity?(.error)
             onWegaState?(WegaState(pose: .alert, line: tr("Część pakietów się nie zaktualizowała.")))
             WegaLog.error(.homebrew, "Aktualizacja niekompletna: \(failedTokens.isEmpty ? "Brew zgłosił błąd" : failedTokens.joined(separator: ", "))")

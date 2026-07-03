@@ -297,7 +297,7 @@ struct EmptyHero: View {
 
 // MARK: - BannerData + BannerView
 
-enum BannerAction: Equatable { case openLogs }
+enum BannerAction: Equatable { case openLogs, openSettings }
 
 struct BannerData: Equatable {
     enum Variant { case success, danger }
@@ -322,13 +322,19 @@ struct BannerView: View {
             }
             Spacer()
             if let action = data.action {
+                let actionLabel: String = {
+                    switch action {
+                    case .openLogs:     return tr("Zobacz w logach")
+                    case .openSettings: return tr("Włącz Touch ID")
+                    }
+                }()
                 Button { onAction?(action) } label: {
-                    Label(tr("Zobacz w logach"), systemImage: "info.circle")
+                    Label(actionLabel, systemImage: "info.circle")
                         .font(.system(size: 12, weight: .medium))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.wegaHoney)
-                .accessibilityLabel(tr("Zobacz w logach"))
+                .accessibilityLabel(actionLabel)
             }
             Button { onClose() } label: { Image(systemName: "xmark") }
                 .buttonStyle(.plain)
