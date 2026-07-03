@@ -14,6 +14,11 @@ struct UpdateView: View {
     /// Drives the window's status footer: last scan time + count of manual updates
     /// whose release notes look like a security fix.
     var onFooterInfo:  ((Date?, Int) -> Void)? = nil
+    /// Which category of updates to show, driven by the sidebar. Defaults to
+    /// showing everything until the sidebar selection wires this up.
+    var updateFilter:     UpdateFilter = .all
+    /// Reports (apps count, CLI count) after each scan, for sidebar badges.
+    var onCategoryCounts: ((Int, Int) -> Void)? = nil
 
     @EnvironmentObject private var model: AppViewModel
     @EnvironmentObject private var policies: UpdatePolicyStore
@@ -200,22 +205,23 @@ struct UpdateView: View {
                         let casks    = allItems.filter { $0.kind == .cask }
                         let store    = allItems.filter { $0.kind == .appStore }
                         let npmPkgs  = allItems.filter { $0.kind == .npm }
-                        if !formulae.isEmpty { UpdateSection(title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"),  icon: "terminal",  items: formulae, selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
-                        if !casks.isEmpty {
+                        if !formulae.isEmpty && updateFilter.allowsCli { UpdateSection(title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"),  icon: "terminal",  items: formulae, selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
+                        if !casks.isEmpty && updateFilter.allowsApps {
                             UpdateSection(title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), icon: "app.gift", items: casks, iconPaths: caskIconPaths, selected: $selected, onIgnore: ignoreItem, onPin: requestPin)
                             caskTransparencyNote(casks: casks)
                         }
-                        if !store.isEmpty    { UpdateSection(title: tr("Mac App Store"),     subtitle: tr("via mas-cli"),      icon: "bag",      items: store,    selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
-                        if !npmPkgs.isEmpty  { UpdateSection(title: tr("npm globalne"),      subtitle: tr("pakiety -g"),       icon: "shippingbox", items: npmPkgs, selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
+                        if !store.isEmpty && updateFilter.allowsApps    { UpdateSection(title: tr("Mac App Store"),     subtitle: tr("via mas-cli"),      icon: "bag",      items: store,    selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
+                        if !npmPkgs.isEmpty && updateFilter.allowsCli  { UpdateSection(title: tr("npm globalne"),      subtitle: tr("pakiety -g"),       icon: "shippingbox", items: npmPkgs, selected: $selected, onIgnore: ignoreItem, onPin: requestPin) }
                         // Group manual updates by INSTALL ORIGIN (same axis the Inventory
                         // window labels), not by update source. A self-updating Homebrew
                         // cask (Docker, Postman, ChatGPT…) stays under "Homebrew Casks" so
                         // both windows agree it's Brew — only genuinely non-package-manager
                         // apps land under "Ręcznie zainstalowane".
                         let manualGroups = UpdatePlanner.groupManual(visibleManual)
-                        if !manualGroups.brew.isEmpty {
+                        let brewManual = updateFilter.isSecurityOnly ? manualGroups.brew.filter(isSecurityApp) : manualGroups.brew
+                        if !brewManual.isEmpty && updateFilter != .cli {
                             ManualUpdateSection(
-                                items: manualGroups.brew,
+                                items: brewManual,
                                 busyToken: manualBusy,
                                 onInstall: { token in Task { await installManual(token: token) } },
                                 title: tr("Homebrew Casks"),
@@ -226,9 +232,10 @@ struct UpdateView: View {
                                 onPin: requestPinManual
                             )
                         }
-                        if !manualGroups.manual.isEmpty {
+                        let manualOnly = updateFilter.isSecurityOnly ? manualGroups.manual.filter(isSecurityApp) : manualGroups.manual
+                        if !manualOnly.isEmpty && updateFilter != .cli {
                             ManualUpdateSection(
-                                items: manualGroups.manual,
+                                items: manualOnly,
                                 busyToken: manualBusy,
                                 onInstall: { token in Task { await installManual(token: token) } },
                                 title: tr("Ręcznie zainstalowane"),
@@ -283,6 +290,12 @@ struct UpdateView: View {
 
     private func requestPinManual(_ app: ManualOutdatedApp) {
         pinTarget = PinRequest(key: app.policyKey, name: app.name, suggestedVersion: app.installedVersion ?? app.availableVersion ?? "")
+    }
+
+    /// True when a manual app's release notes look like a security fix — used to
+    /// narrow the manual sections when `updateFilter.isSecurityOnly`.
+    private func isSecurityApp(_ app: ManualOutdatedApp) -> Bool {
+        app.releaseNotes.map { ReleaseNotesTriage.heuristic($0).isLikelySecurityFix } ?? false
     }
 
     // MARK: FEAT-03 — transparentność pobrania
@@ -462,6 +475,9 @@ extension UpdateView {
             app.releaseNotes.map { ReleaseNotesTriage.heuristic($0).isLikelySecurityFix } ?? false
         }.count
         onFooterInfo?(lastCheck, securityCount)
+        let appsCount = allItems.filter { $0.kind.category == .apps }.count + visibleManual.count
+        let cliCount  = allItems.filter { $0.kind.category == .cli }.count
+        onCategoryCounts?(appsCount, cliCount)
     }
 
     private func scanManualUpdates(brewOutdatedCasks: Set<String> = []) async -> (apps: [ManualOutdatedApp], failedChecks: Int) {
