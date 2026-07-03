@@ -326,6 +326,13 @@ public enum Translations {
         "O aplikacji": "About the app",
         "brew · helper aktywny": "brew · helper active",
         "Narzędzia": "Tools",
+        // Sidebar taxonomy — update-category filter sections.
+        "Do aktualizacji": "To update",
+        "Zainstalowane": "Installed",
+        "Aplikacje": "Apps",
+        "Narzędzia CLI": "CLI tools",
+        "Poprawki bezp.": "Security fixes",
+        "Do przepięcia": "To reattach",
         "Homebrew nie jest zainstalowany": "Homebrew is not installed",
         "Wega potrzebuje Homebrew, żeby sprawdzać aktualizacje\ni zarządzać aplikacjami. Zainstaluj go i kliknij Sprawdź ponownie.": "Wega needs Homebrew to check for updates\nand manage apps. Install it and click Check again.",
         "Polecenie instalacji (wklej w Terminal):": "Installation command (paste into Terminal):",
