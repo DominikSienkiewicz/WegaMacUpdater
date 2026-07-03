@@ -196,11 +196,12 @@ struct InspectorPane: View {
     private func trustSection(for update: InspectedUpdate) -> some View {
         switch update {
         case .outdated(let item, _):
-            TrustPanel(path: nil, caskChecksum: nil, probeKey: item.key)
+            TrustPanel(path: nil, caskChecksum: nil, caskToken: nil, probeKey: item.key)
         case .manual(let app):
             TrustPanel(
                 path: app.path,
                 caskChecksum: caskChecksumToken(of: app.source).flatMap { caskDownloads[$0]?.hasChecksum },
+                caskToken: caskChecksumToken(of: app.source),
                 probeKey: "m:" + app.path.path
             )
         }
