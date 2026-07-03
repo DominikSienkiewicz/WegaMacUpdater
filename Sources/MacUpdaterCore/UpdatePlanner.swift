@@ -115,6 +115,21 @@ public enum UpdatePlanner {
         return items
     }
 
+    /// FEAT-03 download transparency: the subset of outdated casks Homebrew will install
+    /// **without** verifying a checksum (`sha256` absent or `"no_check"`), used to drive
+    /// the "no checksum" banner. Looked up by cask **token**: for a cask `OutdatedItem`
+    /// the token lives in `.name` (copied verbatim from `brew outdated`), which is exactly
+    /// how `downloads` is keyed (`CaskDownloadInfo.token`). Using `.key` here would carry
+    /// the `"c:"` source-tag prefix and never match, silently suppressing the warning for
+    /// every cask. Casks with no download info are not flagged — we warn only about a
+    /// *known* missing checksum, never about absent information.
+    public static func casksWithoutChecksum(
+        _ casks: [OutdatedItem],
+        downloads: [String: CaskDownloadInfo]
+    ) -> [OutdatedItem] {
+        casks.filter { downloads[$0.name]?.hasChecksum == false }
+    }
+
     /// Resolves which packages to upgrade. An empty selection means "all of them",
     /// matching the UI's "Update all" affordance. Returns the names split per manager.
     public static func plan(selectedKeys: Set<String>, allKeys: [String]) -> UpdatePlan {

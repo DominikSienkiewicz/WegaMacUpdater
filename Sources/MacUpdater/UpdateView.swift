@@ -368,7 +368,7 @@ struct UpdateView: View {
     // MARK: FEAT-03 — transparentność pobrania
     @ViewBuilder
     private func caskTransparencyNote(casks: [OutdatedItem]) -> some View {
-        let noCheck = casks.filter { caskDownloads[$0.name]?.hasChecksum == false }
+        let noCheck = UpdatePlanner.casksWithoutChecksum(casks, downloads: caskDownloads)
         if !noCheck.isEmpty {
             WegaCard {
                 HStack(alignment: .top, spacing: 8) {
