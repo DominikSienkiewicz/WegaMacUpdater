@@ -208,7 +208,11 @@ struct UpdateView: View {
                     .frame(maxWidth: .infinity)
                     .layoutPriority(1)
                 Divider()
-                InspectorPane(update: inspectedUpdate)
+                InspectorPane(
+                    update: inspectedUpdate,
+                    busyToken: manualBusy,
+                    onInstall: { token in Task { await installManual(token: token) } }
+                )
                     .frame(width: 340)
             }
         }

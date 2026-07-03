@@ -413,5 +413,20 @@ public enum Translations {
 
         // I-2 — inspector pane (Update list).
         "Wybierz aktualizację, aby zobaczyć szczegóły": "Select an update to see details",
+
+        // I-3 — inspector body.
+        "Szczegóły": "Details",
+        "Zainstalowana": "Installed",
+        "Dostępna": "Available",
+        "Pochodzenie": "Origin",
+        "Zainstalowane ręcznie": "Manually installed",
+        "Ścieżka": "Path",
+        "Typ": "Type",
+        "Co nowego": "What's new",
+        "Akcje": "Actions",
+        "Brak informacji o zmianach": "No release notes available",
+        "Informacje o zmianach niedostępne dla tego źródła": "Release notes aren't available for this source",
+        "Aktualizowane zbiorczo — zaznacz na liście i użyj „Zaktualizuj wybrane\".":
+            "Updated in a batch — select it in the list and use \u{201E}Update selected\".",
     ]
 }

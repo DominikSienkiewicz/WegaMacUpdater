@@ -317,7 +317,7 @@ struct ManualUpdateSection: View {
                         }
                     }
                     Spacer()
-                    manualAction(for: item)
+                    ManualUpdateActionView(item: item, busyToken: busyToken, onInstall: onInstall)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -338,9 +338,18 @@ struct ManualUpdateSection: View {
             }
         }
     }
+}
 
-    @ViewBuilder
-    private func manualAction(for item: ManualOutdatedApp) -> some View {
+/// The per-source manual-update action control (badge + button/text), shared between
+/// the list row (`ManualUpdateSection`) and the inspector pane so both render the
+/// identical control for a given `ManualOutdatedApp.UpdateSource` — extracted verbatim
+/// from the former `ManualUpdateSection.manualAction(for:)` (I-3), no behavior change.
+struct ManualUpdateActionView: View {
+    let item:      ManualOutdatedApp
+    let busyToken: String?
+    let onInstall: (String) -> Void
+
+    var body: some View {
         switch item.source {
         case .sparkle:
             HStack(spacing: 8) {

@@ -1,23 +1,40 @@
 import SwiftUI
 import MacUpdaterCore
 
-/// Right-hand detail panel for the Update list (**I-2**): shows the header for
-/// whichever update is currently selected via row-tap. Content/actions/Trust
-/// panel are later tasks (I-3/I-4) — this scaffold only renders the header and
-/// an empty state.
+/// Right-hand detail panel for the Update list: shows the header (**I-2**) plus
+/// details/What's-New/actions (**I-3**) for whichever update is currently selected
+/// via row-tap. The Trust panel (Team ID / signature / checksum) is **I-4**.
 struct InspectorPane: View {
     let update: InspectedUpdate?
+    /// Cask token currently mid-install, forwarded from `UpdateView` so
+    /// `ManualUpdateActionView` shows the same busy state as the list row.
+    var busyToken: String? = nil
+    /// Kicks off a manual cask install, forwarded from `UpdateView`. Defaulted so the
+    /// empty-state / preview paths don't need to supply one.
+    var onInstall: (String) -> Void = { _ in }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        Group {
             if let update {
-                header(for: update)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        header(for: update)
+                        VStack(alignment: .leading, spacing: 16) {
+                            detailsSection(for: update)
+                            whatsNewSection(for: update)
+                            actionsSection(for: update)
+                        }
+                        .padding(.top, 16)
+                    }
+                }
             } else {
-                emptyState
+                VStack(alignment: .leading, spacing: 0) {
+                    emptyState
+                    Spacer(minLength: 0)
+                }
+                .frame(maxHeight: .infinity, alignment: .top)
             }
-            Spacer(minLength: 0)
         }
-        .frame(maxHeight: .infinity, alignment: .top)
         .padding(16)
         .background(Color.wegaHoney.opacity(0.02))
     }
@@ -44,7 +61,6 @@ struct InspectorPane: View {
     /// view function stays under SwiftLint's parameter-count budget.
     private struct HeaderInfo {
         let iconPath: URL?
-        let fallbackName: String
         let name: String
         let from: String
         let to: String
@@ -58,7 +74,6 @@ struct InspectorPane: View {
         case .outdated(let item, let iconPath):
             headerContent(HeaderInfo(
                 iconPath: iconPath,
-                fallbackName: item.name,
                 name: item.name,
                 from: item.from ?? "—",
                 to: item.to ?? "—",
@@ -73,7 +88,6 @@ struct InspectorPane: View {
             let isSecurity = app.releaseNotes.map { ReleaseNotesTriage.heuristic($0).isLikelySecurityFix } ?? false
             headerContent(HeaderInfo(
                 iconPath: app.path,
-                fallbackName: app.name,
                 name: app.name,
                 from: app.installedVersion ?? "—",
                 to: app.availableVersion ?? "—",
@@ -93,7 +107,7 @@ struct InspectorPane: View {
             if let iconPath = info.iconPath {
                 AppIcon(path: iconPath, size: 40)
             } else {
-                PackageLetterIcon(name: info.fallbackName, size: 40)
+                PackageLetterIcon(name: info.name, size: 40)
             }
             Text(info.name)
                 .font(.system(size: 16, weight: .semibold))
@@ -142,6 +156,127 @@ struct InspectorPane: View {
         case .discord:            return "Discord"
         case .signal:             return "Signal"
         case .chrome:             return "Chrome"
+        }
+    }
+
+    // MARK: Section heading
+
+    /// Small consistent heading used by the three body sections below.
+    private func sectionHeading(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.secondary)
+    }
+
+    /// One label→value row for the "Szczegóły" section — label fixed-width so values align.
+    private func detailRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .frame(width: 92, alignment: .leading)
+            Text(value)
+                .font(.system(size: 12))
+                .foregroundStyle(.primary)
+        }
+    }
+
+    // MARK: 3a. Details
+
+    @ViewBuilder
+    private func detailsSection(for update: InspectedUpdate) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeading(tr("Szczegóły"))
+            switch update {
+            case .outdated(let item, _):
+                detailRow(tr("Zainstalowana"), item.from ?? "—")
+                detailRow(tr("Dostępna"), item.to ?? "—")
+                detailRow(tr("Typ"), kindLabel(item.kind))
+            case .manual(let app):
+                detailRow(tr("Zainstalowana"), app.installedVersion ?? "—")
+                detailRow(tr("Dostępna"), app.availableVersion ?? "—")
+                detailRow(tr("Pochodzenie"), originLabel(app.origin))
+                HStack(alignment: .top, spacing: 8) {
+                    Text(tr("Ścieżka"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 92, alignment: .leading)
+                    Text(app.path.path)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                        .help(app.path.path)
+                }
+            }
+        }
+    }
+
+    /// Readable label for an installed app's origin — used by the details section.
+    private func originLabel(_ origin: AppOrigin) -> String {
+        switch origin {
+        case .brew:     return "Homebrew"
+        case .appStore: return "App Store"
+        case .npm:      return "npm"
+        case .manual:   return tr("Zainstalowane ręcznie")
+        }
+    }
+
+    // MARK: 3b. What's New
+
+    @ViewBuilder
+    private func whatsNewSection(for update: InspectedUpdate) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeading(tr("Co nowego"))
+            switch update {
+            case .outdated:
+                Text(tr("Informacje o zmianach niedostępne dla tego źródła"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            case .manual(let app):
+                whatsNewContent(notes: app.releaseNotes)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func whatsNewContent(notes: String?) -> some View {
+        if let notes, !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                if ReleaseNotesTriage.heuristic(notes).isLikelySecurityFix {
+                    Label(tr("możliwa poprawka bezpieczeństwa"), systemImage: "shield.lefthalf.filled")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Color.wegaDanger)
+                }
+                Text(notes)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            Text(tr("Brak informacji o zmianach"))
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    // MARK: 3c. Actions
+
+    @ViewBuilder
+    private func actionsSection(for update: InspectedUpdate) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeading(tr("Akcje"))
+            switch update {
+            case .outdated:
+                Text(tr("Aktualizowane zbiorczo — zaznacz na liście i użyj „Zaktualizuj wybrane\"."))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            case .manual(let app):
+                ManualUpdateActionView(item: app, busyToken: busyToken, onInstall: onInstall)
+            }
         }
     }
 }
