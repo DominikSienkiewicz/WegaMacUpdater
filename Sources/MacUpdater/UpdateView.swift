@@ -89,6 +89,11 @@ struct UpdateView: View {
                     policies.pin(key: req.key, name: req.name, version: version)
                 }
             }
+            // Switching the sidebar category re-filters the list but not the inspector's
+            // resolver, so a selection made in one category would otherwise keep showing in
+            // the pane after switching away from it. Clear it so the detail pane never
+            // describes an item that's no longer in the visible list.
+            .onChange(of: updateFilter) { inspectedKey = nil }
     }
 
     @ViewBuilder
