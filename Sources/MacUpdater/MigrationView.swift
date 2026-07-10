@@ -281,6 +281,7 @@ struct MigrationView: View {
             }
             .padding(16)
         }
+        .scrollEdgeEffectStyle(.soft, for: .top)
         .sheet(item: $confirmingApp) { app in
             MigrationConfirmSheet(app: app) {
                 confirmingApp = nil

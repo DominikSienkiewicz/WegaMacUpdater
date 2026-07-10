@@ -85,7 +85,7 @@ private struct NotificationExplanationCard: View {
 // MARK: - Status footer
 
 /// Persistent, window-wide footer showing scan freshness and update/security counts.
-/// Visible on every tab (lives in `ContentArea`'s outer VStack, below the tab body).
+/// Visible on every tab (attached via `DetailColumn`'s `.safeAreaInset(edge: .bottom)`).
 private struct StatusFooter: View {
     let lastCheck:     Date?
     let updateCount:   Int
@@ -119,8 +119,7 @@ private struct StatusFooter: View {
         }
         .frame(height: 28)
         .padding(.horizontal, 16)
-        .background(Color.wegaHoney.opacity(0.02))
-        .overlay(alignment: .top) { Divider().opacity(0.5) }
+        .glassEffect()
     }
 }
 

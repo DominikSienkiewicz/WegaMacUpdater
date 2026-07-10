@@ -141,7 +141,6 @@ struct WegaCard<Content: View>: View {
         }
         .background(.background.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: WegaLayout.cardRadius))
-        .overlay(RoundedRectangle(cornerRadius: WegaLayout.cardRadius).stroke(Color.white.opacity(0.06), lineWidth: 1))
     }
 }
 

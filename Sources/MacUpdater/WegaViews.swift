@@ -322,15 +322,7 @@ struct WegaSpeechBubble: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color(NSColor.controlBackgroundColor))
-                .shadow(color: .black.opacity(0.30), radius: 8, y: 3)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
-        )
+        .glassEffect(in: .capsule)
     }
 }
 

@@ -295,6 +295,7 @@ struct UpdateView: View {
                     }
                     .padding(16)
                 }
+                .scrollEdgeEffectStyle(.soft, for: .top)
             }
         } else {
             EmptyHero(
