@@ -1,0 +1,36 @@
+{
+  "casks": [
+    {
+      "token": "visual-studio-code",
+      "homepage": "https://code.visualstudio.com/",
+      "artifacts": [
+        { "app": ["Visual Studio Code.app"] },
+        { "binary": [{ "target": "code" }] },
+        { "zap": [{ "trash": ["~/Library/Application Support/Code"] }] }
+      ]
+    },
+    {
+      "token": "docker-desktop",
+      "homepage": "https://www.docker.com/products/docker-desktop/",
+      "artifacts": [
+        { "pkg": ["Docker.pkg"] },
+        { "binary": ["docker"] }
+      ]
+    },
+    {
+      "token": "little-snitch",
+      "homepage": "https://www.obdev.at/products/littlesnitch/",
+      "artifacts": [
+        { "preflight": {} },
+        { "installer": [{ "manual": "Little Snitch Installer.app" }] },
+        { "app": ["Little Snitch.app"] }
+      ]
+    },
+    {
+      "token": "font-fira-code",
+      "artifacts": [
+        { "font": ["FiraCode-Regular.ttf"] }
+      ]
+    }
+  ]
+}

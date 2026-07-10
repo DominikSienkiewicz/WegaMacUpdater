@@ -223,8 +223,15 @@ struct PackageRow: View {
     var isInspected: Bool       = false
     var securityFix: Bool       = false
     var requiresForce: Bool     = false
+    /// M5 — whether snapshot → canary → auto-rollback covers this upgrade. `nil` where the
+    /// question does not apply (formulae, npm, App Store), so the row stays silent rather
+    /// than implying a verdict it does not have.
+    var rollback: RollbackProtection.Verdict? = nil
     var onToggle: (() -> Void)? = nil
     var onSelect: (() -> Void)? = nil
+    /// M5 — the ignore / pin actions, previously reachable only by right-click.
+    var onIgnore: (() -> Void)? = nil
+    var onPin:    (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -248,6 +255,7 @@ struct PackageRow: View {
                 }
             }
             Spacer()
+            if let rollback { RollbackBadge(verdict: rollback) }
             if let from = currentVersion, let to = latestVersion {
                 let kind = versionChangeKind(from: from, to: to)
                 let emphasis = versionEmphasis(changeKind: kind,
@@ -258,6 +266,24 @@ struct PackageRow: View {
                 Text(v)
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.secondary)
+            }
+            if onIgnore != nil || onPin != nil {
+                Menu {
+                    if let onIgnore {
+                        Button(action: onIgnore) { Label(tr("Nie aktualizuj"), systemImage: "bell.slash") }
+                    }
+                    if let onPin {
+                        Button(action: onPin) { Label(tr("Przypnij wersję…"), systemImage: "pin") }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .frame(width: 22)
+                .accessibilityLabel(tr("Więcej działań"))
             }
         }
         .padding(.horizontal, 14)
@@ -271,6 +297,35 @@ struct PackageRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { onSelect?() }
+    }
+}
+
+// MARK: - Rollback badge (M5)
+
+/// Surfaces the snapshot → canary → auto-rollback net that has always run and never showed.
+///
+/// It deliberately promises only what happens *during* this upgrade: if the new version
+/// fails its Gatekeeper check, the previous one comes back automatically. It does not offer
+/// a manual "Undo" — the snapshot lives only for the canary window and is deleted right
+/// after, so a button implying otherwise would be a lie.
+private struct RollbackBadge: View {
+    let verdict: RollbackProtection.Verdict
+
+    var body: some View {
+        switch verdict {
+        case .protected:
+            Image(systemName: "shield.lefthalf.filled")
+                .font(.system(size: 12))
+                .foregroundStyle(Color.wegaSuccess)
+                .help(tr("Przed aktualizacją robię kopię. Jeśli nowa wersja nie przejdzie testu, wracam do poprzedniej."))
+                .accessibilityLabel(tr("Chronione automatycznym cofnięciem"))
+        case .unprotected:
+            Image(systemName: "shield.slash")
+                .font(.system(size: 12))
+                .foregroundStyle(.tertiary)
+                .help(tr("Ten cask nie instaluje aplikacji, więc nie da się zrobić kopii ani cofnąć aktualizacji."))
+                .accessibilityLabel(tr("Bez ochrony cofnięciem"))
+        }
     }
 }
 

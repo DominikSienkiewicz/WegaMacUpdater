@@ -128,7 +128,7 @@ struct UpdateView: View {
             // Top bar
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(allItems.isEmpty ? tr("Wszystko aktualne") : trf("%@ aktualizacji do zainstalowania", "\(allItems.count)"))
+                    Text(headline)
                         .font(.system(size: 18, weight: .semibold))
                     if let d = scan.lastCheck {
                         HStack(spacing: 4) {
@@ -175,11 +175,13 @@ struct UpdateView: View {
                             openSettings()
                         }
                     },
-                    onClose: { scan.banner = nil }
+                    onClose: { scan.dismissBanner() }
                 )
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
             }
+
+            staleCaskCard
 
             HStack(spacing: 0) {
                 listColumn
@@ -226,7 +228,7 @@ struct UpdateView: View {
                         let npmPkgs  = allItems.filter { $0.kind == .npm }
                         if !formulae.isEmpty && updateFilter.allowsCli { UpdateSection(title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"),  icon: "terminal",  items: formulae, selected: $scan.selected, inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreItem, onPin: requestPin, onInspect: { scan.inspectedKey = $0.key }) }
                         if !casks.isEmpty && updateFilter.allowsApps {
-                            UpdateSection(title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), icon: "app.gift", items: casks, iconPaths: scan.caskIconPaths, selected: $scan.selected, inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreItem, onPin: requestPin, onInspect: { scan.inspectedKey = $0.key })
+                            UpdateSection(title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), icon: "app.gift", items: casks, iconPaths: scan.caskIconPaths, rollbackProtection: scan.caskProtection, selected: $scan.selected, inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreItem, onPin: requestPin, onInspect: { scan.inspectedKey = $0.key })
                             caskTransparencyNote(casks: casks)
                         }
                         if !store.isEmpty && updateFilter.allowsApps    { UpdateSection(title: tr("Mac App Store"),     subtitle: tr("via mas-cli"),      icon: "bag",      items: store,    selected: $scan.selected, inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreItem, onPin: requestPin, onInspect: { scan.inspectedKey = $0.key }) }
@@ -289,6 +291,49 @@ struct UpdateView: View {
                 compact: true
             )
         }
+    }
+
+    /// M3(b) — offers the cleanup that "check for updates" used to perform behind the
+    /// user's back. Names every cask it would remove; the scan already excluded them from
+    /// the list above, so nothing here is load-bearing for the count.
+    @ViewBuilder
+    private var staleCaskCard: some View {
+        if !scan.staleCasks.isEmpty {
+            WegaCard {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "trash").foregroundStyle(Color.wegaToffee)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(trf("%@ casków bez aplikacji", "\(scan.staleCasks.count)"))
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(trf("Homebrew wciąż śledzi: %@. Aplikacji nie ma na dysku — możesz je wyrejestrować.", "\(scan.staleCasks.joined(separator: ", "))"))
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Button(tr("Nie teraz")) { scan.dismissStaleCasks() }
+                        .disabled(scan.cleaningStaleCasks)
+                    Button(tr("Wyrejestruj")) { Task { await scan.cleanUpStaleCasks() } }
+                        .disabled(scan.cleaningStaleCasks)
+                }
+                .padding(12)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+        }
+    }
+
+    /// M4 — the header names both halves of the count, because they behave differently:
+    /// the installable ones are what the button below will actually upgrade.
+    private var headline: String {
+        let count = scan.updateCount
+        if count.isEmpty { return tr("Wszystko aktualne") }
+        if count.manual == 0 {
+            return trf("%@ aktualizacji do zainstalowania", "\(count.installable)")
+        }
+        if count.installable == 0 {
+            return trf("%@ do ręcznej aktualizacji", "\(count.manual)")
+        }
+        return trf("%@ do zainstalowania + %@ ręcznych", "\(count.installable)", "\(count.manual)")
     }
 
     private var selectAllSymbol: String {

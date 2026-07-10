@@ -38,12 +38,22 @@ final class ScanStore: ObservableObject {
     @Published var updating:          Bool                = false
     @Published var errorMessage:      String?
     @Published var lastCheck:         Date?
-    @Published var banner:            BannerData?
+    @Published private(set) var banners = BannerQueue<BannerData>()
     @Published var restartCandidates: [RestartInfo]       = []
     @Published var restartBusy:       String?
     @Published var caskIconPaths:     [String: URL]       = [:]
     @Published var caskDownloads:     [String: CaskDownloadInfo] = [:]   // FEAT-03
     @Published var inspectedKey:      String?
+    /// M3(b) — casks Homebrew still tracks but whose app bundle is gone. Detected during a
+    /// scan, removed only when the user says so.
+    @Published var staleCasks:        [String]            = []
+    @Published var cleaningStaleCasks = false
+    /// M5 — whether each outdated cask is covered by snapshot → canary → auto-rollback.
+    @Published var caskProtection:    [String: RollbackProtection.Verdict] = [:]
+    /// F4 — tools the user has not installed. An invitation to install them, not an error.
+    @Published var unavailableSources = 0
+    /// F4 — false when `brew` is absent. Drives the soft "install Homebrew" card.
+    @Published var brewAvailable      = true
 
     /// Rebound on every appearance of the view that owns the backing `@State` — see
     /// `bind(_:)`. Replayed from `replayLastScan()` so a rebuilt tree does not show an
@@ -126,6 +136,25 @@ final class ScanStore: ObservableObject {
         UpdatePolicyStore.shared.ignore(key: app.policyKey, name: app.name)
     }
 
+    /// The banner currently on screen, if any.
+    var banner: BannerData? { banners.current }
+
+    /// Ordinary notices — a scan result, an upgrade summary. The newest one wins.
+    private func showBanner(_ banner: BannerData) {
+        banners.enqueue(banner, sticky: false)
+    }
+
+    /// Notices the user must not miss: today, a cask whose publisher Team ID changed.
+    /// These queue ahead of anything transient and survive until dismissed by hand —
+    /// before M5 the upgrade summary overwrote the publisher alert on its way out.
+    private func showStickyBanner(_ banner: BannerData) {
+        banners.enqueue(banner, sticky: true)
+    }
+
+    func dismissBanner() {
+        banners.dismissCurrent()
+    }
+
     private func emitWegaState(_ state: WegaState) {
         lastWegaState = state
         sinks.wegaState?(state)
@@ -136,10 +165,16 @@ final class ScanStore: ObservableObject {
         sinks.activity?(activity)
     }
 
+    /// The single count every surface reports (M4): the window header, the sidebar badge,
+    /// the menu-bar badge and the notification all read it from here.
+    var updateCount: UnifiedUpdateCount {
+        UpdatePlanner.unifiedCount(installable: allItems.count, manual: visibleManual.count)
+    }
+
     /// Badge, error, footer and category counts — all derived from the current lists,
     /// so this is safe to call both at the end of a scan and after a view rebuild.
     private func emitCounts() {
-        sinks.badgeChange?(allItems.count)
+        sinks.badgeChange?(updateCount.badgeCount)
         sinks.errorCount?(failedSources)
         sinks.footerInfo?(lastCheck, visibleManual.filter(isSecurityApp).count)
         let appsCount = allItems.filter { $0.kind.category == .apps }.count + visibleManual.count
@@ -166,40 +201,58 @@ extension ScanStore {
         // would be missed even though `brew info` against the API shows it.
         _ = try? await model.brewService.update()
 
-        // Usuń stale casks zanim sprawdzimy co jest outdated
+        // M3(b) — detect stale casks; never uninstall them here. "Check for updates" is a
+        // read-only operation, and `brew uninstall --force` behind that button was the
+        // single most surprising thing Wega did. The user is offered the cleanup as a card
+        // in the results (see `staleCasks`) and the tokens are filtered out of the outdated
+        // list below, so deferring the removal cannot resurrect phantom outdated entries.
         let installedTokens = (try? await model.brewService.installedCasks()) ?? []
-        if !installedTokens.isEmpty {
+        if installedTokens.isEmpty {
+            staleCasks = []
+        } else {
             let installInfo = (try? await model.brewService.caskInstallationInfo(tokens: Array(installedTokens))) ?? []
-            let staleTokens = StaleCaskDetector().staleCasks(from: installInfo)
-            for token in staleTokens {
-                _ = try? await model.brewService.uninstallCask(token: token, force: true)
-            }
+            staleCasks = StaleCaskDetector().staleCasks(from: installInfo)
         }
 
-        // Count sources whose check genuinely failed (vs. a tool that's simply not
-        // installed, which is "not applicable", not a failure). Drives the
-        // "couldn't check" vs "up to date" distinction below.
-        var failed = 0
-        // Names of the top-level sources that genuinely went silent, for the scan-end
-        // log (each manual-checker failure is logged individually by ManualUpdateScanner).
-        var silentSources: [String] = []
+        // F4 — an absent tool is "not applicable", never a failure. `brewNotFound` used to
+        // land in the generic catch below, so a machine without Homebrew wore a permanent
+        // red "the list may be incomplete" banner over a list that was complete.
+        var outcomes: [SourceCheckOutcome] = []
+        let brewOutcome: SourceCheckOutcome
 
-        do { brewOutdated = try await model.brewService.outdatedGreedy() }
-        catch { errorMessage = error.localizedDescription; brewOutdated = nil; failed += 1
-                silentSources.append("brew outdated")
+        do {
+            // Stale casks are still reported outdated by brew even though their app is gone
+            // — drop them here so the count only ever offers upgrades the user can install.
+            brewOutdated = UpdatePlanner.excludingStaleCasks(
+                try await model.brewService.outdatedGreedy(),
+                staleTokens: staleCasks
+            )
+            brewOutcome = .succeeded
+        }
+        catch BrewServiceError.brewNotFound { brewOutdated = nil; brewOutcome = .notInstalled }
+        catch { errorMessage = error.localizedDescription; brewOutdated = nil
+                brewOutcome = .failed("brew outdated")
                 WegaLog.error(.homebrew, "brew outdated: \(error.localizedDescription)") }
+        outcomes.append(brewOutcome)
 
-        do { masOutdated = try await model.masService.outdated() }
-        catch MasServiceError.masNotFound { masOutdated = [] }
-        catch { masOutdated = []; failed += 1
-                silentSources.append("Mac App Store")
+        do { masOutdated = try await model.masService.outdated(); outcomes.append(.succeeded) }
+        catch MasServiceError.masNotFound { masOutdated = []; outcomes.append(.notInstalled) }
+        catch { masOutdated = []
+                outcomes.append(.failed("Mac App Store"))
                 WegaLog.error(.app, "mas outdated: \(error.localizedDescription)") }
 
-        do { npmOutdated = try await model.npmService.outdated() }
-        catch NpmServiceError.npmNotFound { npmOutdated = [] }
-        catch { npmOutdated = []; failed += 1
-                silentSources.append("npm")
+        do { npmOutdated = try await model.npmService.outdated(); outcomes.append(.succeeded) }
+        catch NpmServiceError.npmNotFound { npmOutdated = []; outcomes.append(.notInstalled) }
+        catch { npmOutdated = []
+                outcomes.append(.failed("npm"))
                 WegaLog.error(.network, "npm outdated: \(error.localizedDescription)") }
+
+        var failed = UpdatePlanner.failedSourceCount(outcomes)
+        // Names of the top-level sources that genuinely went silent, for the scan-end
+        // log (each manual-checker failure is logged individually by ManualUpdateScanner).
+        var silentSources = UpdatePlanner.failedSourceNames(outcomes)
+        unavailableSources = UpdatePlanner.unavailableSourceCount(outcomes)
+        brewAvailable = brewOutcome != .notInstalled
 
         let brewOutdatedCasks = Set(brewOutdated?.casks.map(\.name) ?? [])
         let scan = await scanManualUpdates(brewOutdatedCasks: brewOutdatedCasks)
@@ -243,6 +296,8 @@ extension ScanStore {
             caskDownloads = [:]
         }
 
+        await resolveRollbackProtection()
+
         lastCheck = Date()
         status    = .results
 
@@ -276,27 +331,31 @@ extension ScanStore {
         switch scanState {
         case .upToDate:
             if let msg = errorMessage {
-                banner = BannerData(variant: .danger, title: tr("Błąd Homebrew"), message: msg, action: .openLogs)
+                showBanner(BannerData(variant: .danger, title: tr("Błąd Homebrew"), message: msg, action: .openLogs))
             }
             emitWegaState(WegaState(pose: .happy, line: tr("Wszystko aktualne. Idę się zdrzemnąć.")))
         case .outdated(let n):
             if let msg = errorMessage {
-                banner = BannerData(variant: .danger, title: tr("Błąd Homebrew"), message: msg, action: .openLogs)
+                showBanner(BannerData(variant: .danger, title: tr("Błąd Homebrew"), message: msg, action: .openLogs))
             }
             emitWegaState(WegaState(pose: .alert, line: trf("Znalazłam %@ rzeczy do uporządkowania.", "\(n)")))
         case .checkFailed:
-            banner = BannerData(variant: .danger,
-                                title: tr("Nie udało się sprawdzić aktualizacji"),
-                                message: errorMessage ?? tr("Część źródeł nie odpowiedziała — sprawdź połączenie z internetem i spróbuj ponownie."),
-                                action: .openLogs)
+            showBanner(BannerData(variant: .danger,
+                                  title: tr("Nie udało się sprawdzić aktualizacji"),
+                                  message: errorMessage ?? tr("Część źródeł nie odpowiedziała — sprawdź połączenie z internetem i spróbuj ponownie."),
+                                  action: .openLogs))
             emitWegaState(WegaState(pose: .sad, line: tr("Nie dowęszyłam się — chyba nie ma internetu.")))
         case .partialFailure(let updates, let failed):
-            banner = BannerData(variant: .danger,
-                                title: tr("Lista może być niepełna"),
-                                message: trf("Znalazłam %@ aktualizacji, ale %@ źródeł nie odpowiedziało — sprawdź połączenie i odśwież.", "\(updates)", "\(failed)"),
-                                action: .openLogs)
+            showBanner(BannerData(variant: .danger,
+                                  title: tr("Lista może być niepełna"),
+                                  message: trf("Znalazłam %@ aktualizacji, ale %@ źródeł nie odpowiedziało — sprawdź połączenie i odśwież.", "\(updates)", "\(failed)"),
+                                  action: .openLogs))
             emitWegaState(WegaState(pose: .alert, line: trf("Znalazłam %@, ale część źródeł milczy.", "\(updates)")))
         }
+        // M4 — the dock badge has one owner (the agent); a window scan hands it the fresh
+        // number instead of leaving yesterday's. Only from here, never from `emitCounts()`,
+        // which also runs on a bare view rebuild and must not claim a scan just happened.
+        MenuBarAgent.shared.reportWindowScan(count: updateCount.badgeCount, failedChecks: sources)
         emitCounts()
     }
 
@@ -332,12 +391,12 @@ extension ScanStore {
                     if case .cask(let t) = $0.source { return t == token }
                     return false
                 }
-                banner = BannerData(variant: .success, title: trf("Zaktualizowano %@", "\(token)"), message: tr("Teraz zarządzany przez Homebrew."))
+                showBanner(BannerData(variant: .success, title: trf("Zaktualizowano %@", "\(token)"), message: tr("Teraz zarządzany przez Homebrew.")))
                 emitActivitySignal(.success)
                 emitWegaState(WegaState(pose: .happy, line: trf("%@ zaktualizowany i pod opieką Brew.", "\(token)")))
                 WegaLog.info(.homebrew, "Zainstalowano \(token) (brew cask)")
             } else {
-                banner = BannerData(variant: .danger, title: trf("Błąd instalacji %@", "\(token)"), message: tr("Sprawdź logi poniżej."))
+                showBanner(BannerData(variant: .danger, title: trf("Błąd instalacji %@", "\(token)"), message: tr("Sprawdź logi poniżej.")))
                 emitActivitySignal(.error)
                 emitWegaState(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
                 let reason = ScanLog.brewErrorReason(from: brewLog).map { ": \($0)" } ?? ""
@@ -345,7 +404,7 @@ extension ScanStore {
             }
         } catch {
             brewLog.append("error: \(error.localizedDescription)")
-            banner = BannerData(variant: .danger, title: tr("Błąd instalacji"), message: error.localizedDescription)
+            showBanner(BannerData(variant: .danger, title: tr("Błąd instalacji"), message: error.localizedDescription))
             emitActivitySignal(.error)
             emitWegaState(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
             WegaLog.error(.homebrew, "Instalacja \(token): \(error.localizedDescription)")
@@ -457,10 +516,10 @@ extension ScanStore {
             let detail = needsSudoPassword
                 ? trf("%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła.", "\(baseDetail)")
                 : baseDetail
-            banner = BannerData(variant: .danger,
-                                title: tr("Aktualizacja niekompletna"),
-                                message: detail,
-                                action: needsSudoPassword ? .openSettings : nil)
+            showBanner(BannerData(variant: .danger,
+                                  title: tr("Aktualizacja niekompletna"),
+                                  message: detail,
+                                  action: needsSudoPassword ? .openSettings : nil))
             emitActivitySignal(.error)
             emitWegaState(WegaState(pose: .alert, line: tr("Część pakietów się nie zaktualizowała.")))
             WegaLog.error(.homebrew, "Aktualizacja niekompletna: \(failedTokens.isEmpty ? "Brew zgłosił błąd" : failedTokens.joined(separator: ", "))")
@@ -470,7 +529,7 @@ extension ScanStore {
                 WegaLog.error(.homebrew, detail)
             }
         } else {
-            banner = BannerData(variant: .success, title: trf("Zaktualizowano %@ pakietów", "\(n)"), message: tr("Wszystko gotowe."))
+            showBanner(BannerData(variant: .success, title: trf("Zaktualizowano %@ pakietów", "\(n)"), message: tr("Wszystko gotowe.")))
             emitActivitySignal(.success)
             emitWegaState(WegaState(pose: .happy, line: trf("Gotowe! %@ pakietów odświeżonych.", "\(n)")))
             WegaLog.info(.homebrew, "Zaktualizowano \(n) pakietów")
@@ -578,8 +637,8 @@ extension ScanStore {
             } else {
                 let teamID = await Task.detached { CodeSignatureVerifier.teamID(ofAppAt: appURL) }.value
                 if case let .changed(old, new) = TeamIDLedger.shared.record(bundleID: "cask:\(token)", teamID: teamID) {
-                    banner = BannerData(variant: .danger, title: tr("Zmiana wydawcy"),
-                                        message: trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.", "\(token)", "\(old)", "\(new ?? "—")"))
+                    showStickyBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"),
+                                                message: trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.", "\(token)", "\(old)", "\(new ?? "—")")))
                 }
             }
             if let snapshot = snapshots[token] { try? FileManager.default.removeItem(at: snapshot) }
@@ -588,6 +647,56 @@ extension ScanStore {
 
     private func isProcessRunning(_ name: String) async -> Bool {
         await processes.isRunning(name)
+    }
+
+    /// M5 — works out which outdated casks the rollback net actually covers.
+    ///
+    /// A cask that installs no `.app` cannot be snapshotted, so `postCaskUpgrade` has always
+    /// skipped it — silently, with no log line and no hint in the UI. The hole cannot be
+    /// closed (there is nothing to clone), only disclosed: the row gets an honest "no
+    /// protection" badge, and the log says so before the upgrade runs, not after.
+    private func resolveRollbackProtection() async {
+        guard let model, let casks = brewOutdated?.casks, !casks.isEmpty else {
+            caskProtection = [:]
+            return
+        }
+        let profiles = (try? await model.brewService.caskArtifactProfiles(tokens: casks.map(\.name))) ?? []
+        var verdicts: [String: RollbackProtection.Verdict] = [:]
+        for profile in profiles {
+            let verdict = RollbackProtection.evaluate(profile: profile)
+            verdicts[profile.token] = verdict
+            if verdict.deservesWarning {
+                WegaLog.error(.homebrew,
+                              "\(profile.token): brak ochrony rollbackiem — cask nie instaluje aplikacji, nie da się zrobić snapshotu.")
+            }
+        }
+        caskProtection = verdicts
+    }
+
+    /// M3(b) — the cleanup the scan used to perform silently, now behind the user's consent.
+    func cleanUpStaleCasks() async {
+        guard let model, !cleaningStaleCasks, !staleCasks.isEmpty else { return }
+        cleaningStaleCasks = true
+        defer { cleaningStaleCasks = false }
+
+        var removed: [String] = []
+        for token in staleCasks {
+            if (try? await model.brewService.uninstallCask(token: token, force: true)) != nil {
+                removed.append(token)
+            } else {
+                WegaLog.error(.homebrew, "Nie udało się usunąć nieaktualnego casku: \(token)")
+            }
+        }
+        staleCasks.removeAll { removed.contains($0) }
+        WegaLog.info(.homebrew, "Usunięto nieaktualne caski: \(removed.joined(separator: ", "))")
+        showBanner(BannerData(variant: .success,
+                              title: trf("Usunięto %@ nieaktualnych casków", "\(removed.count)"),
+                              message: tr("Homebrew nie śledzi już aplikacji, których nie ma na dysku.")))
+    }
+
+    /// The user does not want to clean up now. Drop the card for this scan.
+    func dismissStaleCasks() {
+        staleCasks = []
     }
 
     func restartApp(_ info: RestartInfo) async {

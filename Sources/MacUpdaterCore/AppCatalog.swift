@@ -21,12 +21,79 @@ public struct SynologyCatalogEntry: Decodable, Sendable, Equatable {
     public let bundleId: String
     public let identify: String
     public let downloadPage: String
+
+    public init(bundleId: String, identify: String, downloadPage: String) {
+        self.bundleId = bundleId
+        self.identify = identify
+        self.downloadPage = downloadPage
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case bundleId, identify, downloadPage
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        bundleId = try container.decode(String.self, forKey: .bundleId)
+        identify = try container.decode(String.self, forKey: .identify)
+        let page = try container.decode(String.self, forKey: .downloadPage)
+        // `downloadPage` is handed straight to `NSWorkspace.open` — reject anything that
+        // is not an absolute https URL with a host while decoding, so a hostile catalog
+        // entry can never reach the open call.
+        guard isValidCatalogURL(page) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .downloadPage, in: container,
+                debugDescription: "downloadPage must be an absolute https URL with a host"
+            )
+        }
+        downloadPage = page
+    }
 }
 
 /// A Sparkle feed URL hard-mapped for an app that hides `SUFeedURL` at runtime.
 public struct SparkleFeedOverrideEntry: Decodable, Sendable, Equatable {
     public let bundleId: String
     public let feedURL: String
+
+    public init(bundleId: String, feedURL: String) {
+        self.bundleId = bundleId
+        self.feedURL = feedURL
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case bundleId, feedURL
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        bundleId = try container.decode(String.self, forKey: .bundleId)
+        let feed = try container.decode(String.self, forKey: .feedURL)
+        // Same contract for the Sparkle feed the checker fetches over the network.
+        guard isValidCatalogURL(feed) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .feedURL, in: container,
+                debugDescription: "feedURL must be an absolute https URL with a host"
+            )
+        }
+        feedURL = feed
+    }
+}
+
+/// Validates a catalog-sourced URL string before it can reach `NSWorkspace.open`
+/// (``SynologyCatalogEntry/downloadPage``) or the Sparkle fetch layer
+/// (``SparkleFeedOverrideEntry/feedURL``).
+///
+/// Mirrors the strict contract used for the endpoints overlay in
+/// `AppEndpoints.overlaying(_:)`: parse with the strict `URLComponents` parser (macOS 14+
+/// `URL(string:)` is too lenient — it accepts spaces and scheme-less strings), then require
+/// a non-empty host. The scheme is tightened to https-only here, because every catalog URL
+/// is https and these values are opened / fetched verbatim from a file that a PR can change.
+func isValidCatalogURL(_ string: String) -> Bool {
+    guard let comps = URLComponents(string: string),
+          let scheme = comps.scheme?.lowercased(), scheme == "https",
+          let host = comps.host, !host.isEmpty
+    else { return false }
+    return true
 }
 
 // MARK: - Catalog

@@ -134,6 +134,9 @@ struct UpdateSection: View {
     let icon:      String
     let items:     [OutdatedItem]
     var iconPaths: [String: URL]  = [:]
+    /// M5 — rollback coverage per cask token. Empty for sections where the question does
+    /// not apply (formulae, npm, App Store), which leaves the rows unbadged.
+    var rollbackProtection: [String: RollbackProtection.Verdict] = [:]
     @Binding var selected: Set<String>
     var inspectedKey: String? = nil
     var onIgnore: ((OutdatedItem) -> Void)?
@@ -161,8 +164,11 @@ struct UpdateSection: View {
                     latestVersion:  item.to,
                     isSelected:     selected.contains(item.key),
                     isInspected:    item.key == inspectedKey,
+                    rollback:       rollbackProtection[item.name],
                     onToggle:       { toggle(item.key) },
-                    onSelect:       { onInspect?(item) }
+                    onSelect:       { onInspect?(item) },
+                    onIgnore:       { onIgnore?(item) },
+                    onPin:          { onPin?(item) }
                 )
                 .contextMenu {
                     UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) })

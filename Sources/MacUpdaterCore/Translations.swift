@@ -78,6 +78,9 @@ public enum Translations {
         "Ten cask wymaga odświeżenia": "This cask needs refreshing",
         "Wszystko aktualne": "Everything up to date",
         "%@ aktualizacji do zainstalowania": "%@ updates to install",
+        // M4 — nagłówek nazywa obie połowy licznika; przycisk obiecuje tylko instalowalne.
+        "%@ do zainstalowania + %@ ręcznych": "%@ to install + %@ manual",
+        "%@ do ręcznej aktualizacji": "%@ to update manually",
         "Sprawdzono %@": "Checked %@",
         "Sprawdź ponownie": "Check again",
         "Zaktualizuj wszystkie (%@)": "Update all (%@)",
@@ -237,6 +240,8 @@ public enum Translations {
         "Usuwa plik .app. Preferencje i cache zostają w ~/Library.": "Removes the .app file. Preferences and cache stay in ~/Library.",
         "Aplikacja + resztki": "App + leftovers",
         "Zabiera też pliki w ~/Library/Preferences, Caches i Application Support.": "Also takes files in ~/Library/Preferences, Caches and Application Support.",
+        "Zabiera też pliki w ~/Library/Preferences, Caches i Application Support. Tego nie da się cofnąć.":
+            "Also takes files in ~/Library/Preferences, Caches and Application Support. This cannot be undone.",
         "%@ %@ przez brew — trafi do Kosza.": "%@ %@ by brew — will go to the Trash.",
         "aplikacja nie jest zarządzana": "app is not managed",
         "aplikacji nie jest zarządzanych": "apps are not managed",
@@ -327,6 +332,38 @@ public enum Translations {
         "Pełny obchód": "Full sweep",
         "O aplikacji": "About the app",
         "brew · helper aktywny": "brew · helper active",
+        // M3(a) — chip mówi, co naprawdę zwraca SMAppService, nie co byłoby miło zobaczyć.
+        "brew · helper wymaga zgody": "brew · helper needs approval",
+        "brew · helper nieaktywny": "brew · helper inactive",
+        // M3(d) — wyjaśniamy się zanim macOS pokaże swój jednorazowy dialog.
+        "Powiadamiać o nowych aktualizacjach?": "Notify you about new updates?",
+        "Wega sprawdza w tle i może dać znać, gdy pojawi się coś nowego. macOS zapyta o zgodę tylko raz.":
+            "Wega checks in the background and can let you know when something new shows up. macOS will ask for permission only once.",
+        "Nie teraz": "Not now",
+        "Powiadamiaj": "Notify me",
+        // M3(b) — „sprawdzenie” nie odinstalowuje niczego po cichu; użytkownik decyduje.
+        "%@ casków bez aplikacji": "%@ casks with no app",
+        "Homebrew wciąż śledzi: %@. Aplikacji nie ma na dysku — możesz je wyrejestrować.":
+            "Homebrew still tracks: %@. The apps are gone from disk — you can deregister them.",
+        "Wyrejestruj": "Deregister",
+        // M5 — siatka bezpieczeństwa staje się widoczna; badge nie obiecuje ręcznego „Cofnij”.
+        "Przed aktualizacją robię kopię. Jeśli nowa wersja nie przejdzie testu, wracam do poprzedniej.":
+            "I snapshot the app before updating. If the new version fails its check, I put the old one back.",
+        "Chronione automatycznym cofnięciem": "Protected by automatic rollback",
+        "Ten cask nie instaluje aplikacji, więc nie da się zrobić kopii ani cofnąć aktualizacji.":
+            "This cask installs no app, so it cannot be snapshotted or rolled back.",
+        "Bez ochrony cofnięciem": "No rollback protection",
+        "Więcej działań": "More actions",
+        // F4 — brak Homebrew to zaproszenie, nie mur.
+        "Zainstaluj Homebrew, żeby odblokować więcej aktualizacji":
+            "Install Homebrew to unlock more updates",
+        "Wega działa bez niego — sprawdza Mac App Store, Sparkle, feedy producentów i npm. Homebrew dokłada formuły i caski.":
+            "Wega works without it — it checks the Mac App Store, Sparkle, vendor feeds and npm. Homebrew adds formulae and casks.",
+        "Kopiuj polecenie": "Copy command",
+        "Skopiowano": "Copied",
+        "Usunięto %@ nieaktualnych casków": "Removed %@ stale casks",
+        "Homebrew nie śledzi już aplikacji, których nie ma na dysku.":
+            "Homebrew no longer tracks apps that are gone from disk.",
         "Narzędzia": "Tools",
         // Sidebar taxonomy — update-category filter sections.
         "Do aktualizacji": "To update",

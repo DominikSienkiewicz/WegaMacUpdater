@@ -12,9 +12,10 @@ struct WegaMacUpdaterApp: App {
     /// view tree without discarding scan results or a running upgrade.
     @StateObject private var scan = ScanStore()
 
-    init() {
-        HomebrewEnvironment.bootstrapAskpass()
-    }
+    // Deliberately no `init()`. The askpass helper and the sudo shim used to be written into
+    // Application Support here, on every launch, before the user had authorised anything.
+    // `HomebrewEnvironment.environment` now installs them lazily, on the way to the first
+    // brew invocation that actually needs them (M3c).
 
     var body: some Scene {
         WindowGroup(id: "main") {

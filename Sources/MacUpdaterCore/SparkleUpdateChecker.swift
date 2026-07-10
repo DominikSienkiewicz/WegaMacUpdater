@@ -82,36 +82,68 @@ public enum SparkleFeedOverrides {
 
 // MARK: - Appcast XML parser
 
+/// The first appcast `<item>` that carries a version, decomposed into the fields the
+/// release-notes UI needs. `descriptionHTML` is the raw `<description>` payload (often
+/// HTML, often CDATA) handed back untouched — sanitizing / AttributedString conversion
+/// is a UI concern, not the parser's. `releaseNotesLink` obeys SEC-09: HTTPS only.
+struct AppcastItem: Equatable {
+    var version: String?
+    var descriptionHTML: String?
+    var releaseNotesLink: URL?
+}
+
 final class AppcastParser: NSObject, XMLParserDelegate {
-    private var found: String?
+    private var version: String?
+    private var descriptionHTML: String?
+    private var releaseNotesLink: URL?
     private var inItem = false
-    private var seenItem = false
+    private var enclosureVersionFound = false
     private var currentChars = ""
 
+    /// Backward-compatible entry point: the latest version string only.
     static func parse(data: Data) -> String? {
+        parseItem(data: data)?.version
+    }
+
+    /// Full first-versioned-item extraction: version + release notes. `nil` when no
+    /// item carries a version — mirroring `parse`'s nil contract exactly.
+    static func parseItem(data: Data) -> AppcastItem? {
         let delegate = AppcastParser()
         let parser = XMLParser(data: data)
         parser.delegate = delegate
         parser.parse()
-        return delegate.found
+        guard let version = delegate.version else { return nil }
+        return AppcastItem(
+            version: version,
+            descriptionHTML: delegate.descriptionHTML,
+            releaseNotesLink: delegate.releaseNotesLink
+        )
     }
 
     func parser(
-        _ p: XMLParser,
+        _: XMLParser,
         didStartElement el: String,
         namespaceURI _: String?,
         qualifiedName _: String?,
         attributes attrs: [String: String]
     ) {
         if el == "item" { inItem = true }
-        if inItem, !seenItem, el == "enclosure",
+        // Handle both "sparkle:…" and plain (namespace-unaware) local names.
+        let local = el.components(separatedBy: ":").last ?? el
+        if inItem, !enclosureVersionFound, local == "enclosure",
            let v = attrs["sparkle:shortVersionString"] ?? attrs["sparkle:version"] {
-            found = v; seenItem = true; p.abortParsing()
+            version = v; enclosureVersionFound = true
         }
         currentChars = ""
     }
 
     func parser(_: XMLParser, foundCharacters s: String) { currentChars += s }
+
+    // `<description>` frequently wraps HTML in CDATA; XMLParser routes that here, not to
+    // foundCharacters. Append the raw bytes so the markup survives verbatim.
+    func parser(_: XMLParser, foundCDATA block: Data) {
+        currentChars += String(decoding: block, as: UTF8.self)
+    }
 
     func parser(
         _ p: XMLParser,
@@ -120,13 +152,34 @@ final class AppcastParser: NSObject, XMLParserDelegate {
         qualifiedName _: String?
     ) {
         let trimmed = currentChars.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Handle both "sparkle:shortVersionString" and plain "shortVersionString" (namespace-unaware parsers)
         let local = el.components(separatedBy: ":").last ?? el
-        if inItem && !seenItem && local == "shortVersionString" && !trimmed.isEmpty {
-            found = trimmed; seenItem = true
+        if inItem {
+            switch local {
+            case "shortVersionString":
+                if version == nil, !trimmed.isEmpty { version = trimmed }
+            case "description":
+                if descriptionHTML == nil, !trimmed.isEmpty { descriptionHTML = trimmed }
+            case "releaseNotesLink":
+                // SEC-09: a plain-HTTP notes link is MITM-able — trust HTTPS only.
+                if releaseNotesLink == nil, let url = URL(string: trimmed),
+                   url.scheme?.lowercased() == "https" {
+                    releaseNotesLink = url
+                }
+            default:
+                break
+            }
         }
         if el == "item" {
-            if seenItem { p.abortParsing() }
+            if version != nil {
+                // First versioned item wins; stop before later items overwrite it.
+                p.abortParsing()
+            } else {
+                // Version-less item: discard its notes and keep scanning (a later item
+                // may carry the version — preserving the original lookup contract).
+                descriptionHTML = nil
+                releaseNotesLink = nil
+                enclosureVersionFound = false
+            }
             inItem = false
         }
         currentChars = ""

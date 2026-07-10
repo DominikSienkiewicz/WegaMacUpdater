@@ -34,8 +34,12 @@ public struct MenuBarUpdateChecker: Sendable {
     public func availableUpdateCount(policies: [String: UpdatePolicy] = [:]) async -> UpdateCountResult {
         var failed = 0
 
-        let brew = try? await brewService.outdatedGreedy()
-        if brew == nil { failed += 1 }
+        // F4 — brew missing is "not applicable", exactly as for mas and npm below. Counting
+        // it as a failure made the background badge permanently red on machines without it.
+        var brew: BrewOutdated?
+        do { brew = try await brewService.outdatedGreedy() }
+        catch BrewServiceError.brewNotFound { /* Homebrew not installed — nothing to report, not a failure */ }
+        catch { failed += 1 }
 
         var mas: [MasOutdatedApp] = []
         do { mas = try await masService.outdated() }

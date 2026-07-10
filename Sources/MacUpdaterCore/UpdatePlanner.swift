@@ -51,6 +51,44 @@ public enum SelectAllState: Equatable, Sendable { case none, all, partial }
 
 /// What the Update screen should communicate after a check, separating a clean
 /// "everything is current" from a check that couldn't complete (e.g. offline).
+/// How many updates there are, in the two shapes the UI needs (M4).
+public struct UnifiedUpdateCount: Equatable, Sendable {
+    /// Upgrades Wega performs itself: Homebrew formulae + casks, Mac App Store, npm.
+    public let installable: Int
+    /// Updates Wega detected but cannot install — the app updates itself, or has no
+    /// package manager behind it.
+    public let manual: Int
+
+    public init(installable: Int, manual: Int) {
+        self.installable = installable
+        self.manual = manual
+    }
+
+    /// Everything that is out of date. The number a badge shows.
+    public var total: Int { installable + manual }
+
+    public var badgeCount: Int { total }
+
+    /// What "Update all (N)" may claim — never the manual half.
+    public var updateAllButtonCount: Int { installable }
+
+    public var isEmpty: Bool { total == 0 }
+}
+
+/// How one update source answered during a scan (F4).
+///
+/// The distinction that matters is between a tool that is *absent* and a tool that is
+/// *broken*. Homebrew not being installed says nothing about the health of the scan; brew
+/// being installed and timing out says everything. Collapsing the two — which is what a
+/// bare `catch` does — turns "Wega works fine without Homebrew" into a permanent red banner.
+public enum SourceCheckOutcome: Equatable, Sendable {
+    case succeeded
+    /// The tool is not installed. Not applicable — never a failure.
+    case notInstalled
+    /// The tool is there and did not answer. The `String` names it for the scan log.
+    case failed(String)
+}
+
 public enum ScanState: Equatable, Sendable {
     case upToDate
     case outdated(Int)
@@ -204,9 +242,54 @@ public enum UpdatePlanner {
         )
     }
 
+    /// Drops casks whose app bundle is gone (M3b). Homebrew still reports them as outdated
+    /// — that is the phantom-outdated bug the old silent `brew uninstall --force` inside
+    /// "check for updates" was hiding. Now the uninstall waits for the user's consent, so
+    /// the scan must filter the list itself or the counter would offer upgrades for apps
+    /// that are not installed. Only casks are matched: a formula may legitimately share a
+    /// stale cask's name.
+    public static func excludingStaleCasks(_ outdated: BrewOutdated?, staleTokens: [String]) -> BrewOutdated? {
+        guard let outdated, !staleTokens.isEmpty else { return outdated }
+        let stale = Set(staleTokens)
+        var filtered = outdated
+        filtered.casks.removeAll { stale.contains($0.name) }
+        return filtered
+    }
+
+    /// The one count every surface reports (M4), split into the two halves that behave
+    /// differently: `installable` is what Wega can upgrade for you (brew / mas / npm),
+    /// `manual` is what it found but can only point you at.
+    ///
+    /// Keeping them apart is what makes the header honest — "12 to install + 3 manual" —
+    /// while `updateAllButtonCount` stays at 12, because a button must never promise more
+    /// than it delivers. Badges have room for one number, so they show `total`.
+    public static func unifiedCount(installable: Int, manual: Int) -> UnifiedUpdateCount {
+        UnifiedUpdateCount(installable: installable, manual: manual)
+    }
+
     /// Decides what the screen reports given how many updates were found and how many
     /// source checks failed. A failed check with zero finds must read as "couldn't
     /// check", never "up to date".
+    ///
+    /// Sources that are present but went silent. An uninstalled tool never counts (F4).
+    public static func failedSourceCount(_ outcomes: [SourceCheckOutcome]) -> Int {
+        failedSourceNames(outcomes).count
+    }
+
+    /// Names of the silent sources, for the scan log. Absent tools have nothing to report.
+    public static func failedSourceNames(_ outcomes: [SourceCheckOutcome]) -> [String] {
+        outcomes.compactMap { outcome in
+            if case .failed(let name) = outcome { return name }
+            return nil
+        }
+    }
+
+    /// Tools the user has not installed. Drives the "install Homebrew to unlock more
+    /// updates" card — an invitation, never an error.
+    public static func unavailableSourceCount(_ outcomes: [SourceCheckOutcome]) -> Int {
+        outcomes.filter { $0 == .notInstalled }.count
+    }
+
     public static func scanState(updateCount: Int, failedChecks: Int) -> ScanState {
         switch (updateCount, failedChecks) {
         case (0, 0):            return .upToDate

@@ -281,7 +281,9 @@ private struct UninstallDialog: View {
     let onCancel:   () -> Void
     let onConfirm:  (Bool) -> Void
 
-    @State private var zapMode: Bool = true
+    /// M3(e) — the irreversible option is never the default. `--zap` also deletes
+    /// preferences, caches and Application Support; the user opts into that deliberately.
+    @State private var zapMode: Bool = false
 
     private var totalCount: Int { brewCount + trashCount }
     private var hasMixed: Bool { brewCount > 0 && trashCount > 0 }
@@ -331,15 +333,15 @@ private struct UninstallDialog: View {
                                 title:       tr("Tylko aplikacja"),
                                 subtitle:    tr("Usuwa plik .app. Preferencje i cache zostają w ~/Library."),
                                 command:     "brew uninstall",
-                                recommended: false,
+                                recommended: true,
                                 isSelected:  !zapMode,
                                 onSelect:    { zapMode = false }
                             )
                             UninstallOption(
                                 title:       tr("Aplikacja + resztki"),
-                                subtitle:    tr("Zabiera też pliki w ~/Library/Preferences, Caches i Application Support."),
+                                subtitle:    tr("Zabiera też pliki w ~/Library/Preferences, Caches i Application Support. Tego nie da się cofnąć."),
                                 command:     "brew uninstall --zap",
-                                recommended: true,
+                                recommended: false,
                                 isSelected:  zapMode,
                                 onSelect:    { zapMode = true }
                             )
