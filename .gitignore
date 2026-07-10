@@ -71,4 +71,8 @@ DerivedData/
 /build/
 /.idea/
 /.claude/
-/docs/
+# Contents of /docs/ are ignored, but the directory itself is not: git never
+# descends into an excluded directory, so a negation below would never match.
+/docs/*
+# Design specs are reviewed alongside the code they describe, so they are tracked.
+!/docs/superpowers/
