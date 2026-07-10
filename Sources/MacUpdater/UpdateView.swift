@@ -157,11 +157,6 @@ struct UpdateView: View {
                     }
                 }
                 Spacer()
-                Button { scan.startCheck() } label: {
-                    Label(tr("Sprawdź ponownie"), systemImage: "arrow.triangle.2.circlepath")
-                }
-                .disabled(scan.updating || scan.status == .checking)
-
                 if !allItems.isEmpty {
                     Button { Task { await scan.runUpdate() } } label: {
                         if scan.updating {
