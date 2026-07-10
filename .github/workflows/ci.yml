@@ -45,6 +45,34 @@ jobs:
           path: sonarqube-generic-coverage.xml
           if-no-files-found: error
 
+  # F5(d) — `app-catalog.json` and `app-catalog.json.sig` are served as two separate
+  # raw.githubusercontent cache entries, so a client can fetch a fresh catalog beside a stale
+  # signature. The only place their consistency can be enforced is the commit: this gate goes
+  # red whenever the catalog changes without the signature being regenerated.
+  #
+  # No secret and no write access: verification uses the public key already committed in
+  # `CatalogSignature.swift`. Ed25519 is deterministic, so verifying proves exactly what
+  # re-signing would, without ever handing CI the private key.
+  catalog-signature:
+    name: Catalog signature
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      # Exit 3 means signing is not configured yet (placeholder key) — not a failure.
+      - name: Verify app-catalog.json.sig matches app-catalog.json
+        run: |
+          set +e
+          ./scripts/verify-catalog.sh
+          status=$?
+          set -e
+          if [ "$status" -eq 3 ]; then
+            echo "::notice::Catalog signing is not configured (placeholder key) — skipping."
+            exit 0
+          fi
+          exit "$status"
+
   lint:
     name: SwiftLint
     runs-on: macos-15

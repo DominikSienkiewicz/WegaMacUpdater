@@ -822,6 +822,12 @@ extension InfoView {
         case .invalid:
             catalogStatusLabel(tr("Pobrany katalog był nieprawidłowy — pominięto."),
                                icon: "exclamationmark.triangle.fill", color: .orange)
+        case .signatureMismatch:
+            // F5(d) — the body is a catalog, but its signature does not match it. We cannot
+            // tell tampering from a CDN that paired a fresh JSON with a cached `.sig`, so the
+            // wording describes what happened, not who to blame, and the old catalog stays.
+            catalogStatusLabel(tr("Podpis nie pasuje do katalogu — zachowano poprzedni."),
+                               icon: "exclamationmark.shield.fill", color: .orange)
         case .failed:
             catalogStatusLabel(tr("Nie udało się pobrać katalogu — sprawdź połączenie."),
                                icon: "exclamationmark.triangle.fill", color: .orange)

@@ -13,7 +13,15 @@ public struct CatalogRefresher: Sendable {
     public enum Outcome: Equatable, Sendable {
         case updated        // a new, valid catalog was written to disk
         case notModified    // the server answered 304 (ETag) — disk already current
-        case invalid        // the body did not decode as an AppCatalog — disk left untouched
+        case invalid        // the body did not decode as an AppCatalog, or its signature was
+                            // missing when one is required — disk left untouched
+        /// The body is a well-formed catalog, but the detached signature does not verify
+        /// against it (F5d). Two causes, cryptographically indistinguishable: the catalog was
+        /// tampered with, or `raw.githubusercontent` served a fresh `app-catalog.json` beside
+        /// a cached `app-catalog.json.sig` — they are separate CDN entries. Either way the
+        /// disk is left untouched. Naming it "stale" would guess in the attacker's favour;
+        /// naming it a mismatch says exactly what is known.
+        case signatureMismatch
         case failed         // network or HTTP error — disk left untouched
     }
 
@@ -58,9 +66,9 @@ public struct CatalogRefresher: Sendable {
         // Bez konfiguracji klucza pomijamy (zachowanie jak dotąd — decode-only).
         var verifiedSignature: String?
         if signatureVerifier.isConfigured {
-            guard let signatureBase64 = try? await fetchSignature(),
-                  signatureVerifier.verify(data: response.data, signatureBase64: signatureBase64) else {
-                return .invalid
+            guard let signatureBase64 = try? await fetchSignature() else { return .invalid }
+            guard signatureVerifier.verify(data: response.data, signatureBase64: signatureBase64) else {
+                return .signatureMismatch
             }
             verifiedSignature = signatureBase64
         }

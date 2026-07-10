@@ -76,23 +76,44 @@ final class CatalogSignaturePersistenceTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
     }
 
-    /// A signature over different bytes — a tampered catalog, or a stale `.sig` on the CDN.
-    func testASignatureOverDifferentBytesIsRejected() async throws {
+    /// A signature over different bytes. Two causes, cryptographically indistinguishable: a
+    /// tampered catalog, or a CDN that paired a fresh `app-catalog.json` with a cached
+    /// `.sig` (the two are separate cache entries on raw.githubusercontent). The outcome
+    /// names what we actually know — the signature does not match the body — and the disk is
+    /// left alone either way. Calling it "stale" would be a guess in the attacker's favour.
+    func testASignatureOverDifferentBytesReportsAMismatch() async throws {
         let signature = try validSignature(over: "{\"synology\":[]}")
 
         let outcome = await refresher(signature: signature).refresh()
 
-        XCTAssertEqual(outcome, .invalid)
+        XCTAssertEqual(outcome, .signatureMismatch)
         XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
     }
 
-    func testASignatureFromAnotherKeyIsRejected() async throws {
+    func testASignatureFromAnotherKeyReportsAMismatch() async throws {
         let attacker = Curve25519.Signing.PrivateKey()
         let forged = try attacker.signature(for: Data(catalogJSON.utf8)).base64EncodedString()
 
         let outcome = await refresher(signature: forged).refresh()
 
+        XCTAssertEqual(outcome, .signatureMismatch)
+    }
+
+    /// A missing `.sig` is a different failure from a wrong one: nothing to compare against.
+    func testAMissingSignatureIsNotReportedAsAMismatch() async throws {
+        let outcome = await refresher(signature: nil).refresh()
         XCTAssertEqual(outcome, .invalid)
+    }
+
+    /// Whatever the reason, an overlay already on disk survives a rejected refresh.
+    func testAnExistingOverlaySurvivesARejectedRefresh() async throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try "previous-catalog".write(to: destination, atomically: true, encoding: .utf8)
+        let forged = try Curve25519.Signing.PrivateKey().signature(for: Data(catalogJSON.utf8)).base64EncodedString()
+
+        _ = await refresher(signature: forged).refresh()
+
+        XCTAssertEqual(try String(contentsOf: destination, encoding: .utf8), "previous-catalog")
     }
 
     /// Validation precedes signing: a 200 with a garbage body must not replace a good overlay.

@@ -431,6 +431,9 @@ public enum Translations {
         "Zaktualizowano — zrestartuj Wegę, aby zastosować.": "Updated — restart Wega to apply.",
         "Katalog jest aktualny.": "The catalog is up to date.",
         "Pobrany katalog był nieprawidłowy — pominięto.": "The downloaded catalog was invalid — skipped.",
+        // F5(d) — podpis nie pasuje do treści: nie wiemy, czy to podmiana czy nieświeży CDN.
+        "Podpis nie pasuje do katalogu — zachowano poprzedni.":
+            "The signature does not match the catalog — kept the previous one.",
         "Nie udało się pobrać katalogu — sprawdź połączenie.": "Couldn't fetch the catalog — check your connection.",
         "Zewnętrzne narzędzia": "External tools",
         "Środowisko": "Environment",
