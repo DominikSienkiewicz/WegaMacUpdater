@@ -202,7 +202,32 @@ extension AppCatalog {
     static func loadOverlay() -> AppCatalog? {
         let url = overlayURL
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+
+        // SEC-04 / F5(a): this overlay came off the network, from a repository that accepts
+        // pull requests. `CatalogRefresher` verifies its signature before writing — but that
+        // was the *only* check, leaving the window between "written" and "read on the next
+        // launch" unguarded, and asymmetric with `AppEndpoints`. Verify again here against
+        // the signature stored beside it; fall back to the bundled catalog when anything is off.
+        let signature = try? String(contentsOf: signatureURL(for: url), encoding: .utf8)
+        let isValid = signature.map { candidate in
+            (try? Data(contentsOf: url)).map { CatalogSignature.verify(data: $0, signatureBase64: candidate) } ?? false
+        } ?? false
+
+        guard ConfigOverlayTrust.forCatalog(
+            signingConfigured: CatalogSignature.isConfigured,
+            signature: signature,
+            isValid: isValid
+        ).appliesOverlay else {
+            AppLogger.app.error("app-catalog.json: brak ważnego podpisu — overlay zignorowany, używam katalogu z builda.")
+            return nil
+        }
         return try? decode(contentsOf: url)
+    }
+
+    /// Detached signature stored beside the overlay, mirroring the remote layout
+    /// (`app-catalog.json` → `app-catalog.json.sig`).
+    static func signatureURL(for overlay: URL) -> URL {
+        overlay.appendingPathExtension("sig")
     }
 
     static func decode(contentsOf url: URL) throws -> AppCatalog {

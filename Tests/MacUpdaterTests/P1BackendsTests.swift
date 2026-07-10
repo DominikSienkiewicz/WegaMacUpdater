@@ -44,9 +44,14 @@ struct P1BackendsTests {
 
     // MARK: SEC-04 — podpis fail-closed + DBT-5 guard
 
+    /// Was: `#expect(CatalogSignature.isConfigured == false) // placeholder w repo`, which
+    /// pinned a fact about the repository rather than about the code. Once a real publisher
+    /// key ships, that fact is false by design — so the unconfigured verifier is now built
+    /// explicitly, and the assertion says what it always meant: no key, no verification.
     @Test func catalogSignatureUnconfiguredFailsClosed() {
-        #expect(CatalogSignature.isConfigured == false) // placeholder w repo
-        #expect(CatalogSignature.verify(data: Data("x".utf8), signatureBase64: "AAAA") == false)
+        let unconfigured = CatalogSignature(publicKeyBase64: CatalogSignature.unconfiguredPlaceholder)
+        #expect(unconfigured.isConfigured == false)
+        #expect(unconfigured.verify(data: Data("x".utf8), signatureBase64: "AAAA") == false)
     }
 
     @Test func overlayKeepsBaselineOnInvalidFixedURLButAppliesTemplates() throws {

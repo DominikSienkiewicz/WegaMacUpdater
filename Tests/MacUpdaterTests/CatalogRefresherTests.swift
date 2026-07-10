@@ -44,7 +44,16 @@ struct CatalogRefresherTests {
         defer { try? FileManager.default.removeItem(at: dest.deletingLastPathComponent()) }
         let json = #"{"github":[{"bundleId":"com.x.app","repo":"owner/repo","caskToken":"x"}]}"#
 
-        let refresher = CatalogRefresher(source: source, destination: dest, client: client([ok(json)]))
+        // Predates signing: this pins "a valid body is decoded and written". Now that a
+        // publisher key is compiled in, the catalog is fail-closed and an unsigned body is
+        // correctly rejected — so the decode-only path is requested explicitly. The signed
+        // path has its own suite (`CatalogRefresherSignaturePersistenceTests`).
+        let refresher = CatalogRefresher(
+            source: source,
+            destination: dest,
+            client: client([ok(json)]),
+            signatureVerifier: CatalogSignature(publicKeyBase64: CatalogSignature.unconfiguredPlaceholder)
+        )
         let outcome = await refresher.refresh()
 
         #expect(outcome == .updated)
