@@ -141,20 +141,13 @@ struct DetailColumn: View {
     @Binding var brewInstalled:     Bool
     let onNavigate: (SidebarSelection) -> Void
 
-    @State private var quip: String? = nil
+    @EnvironmentObject private var scan: ScanStore
 
-    private let quips: [String] = [
-        tr("Wszystko pod kontrolą!"),
-        tr("Kiedy ostatnio robiłeś backup?"),
-        tr("Brew to mój najlepszy przyjaciel."),
-        tr("Wącham coś ciekawego…"),
-        tr("Dobra robota dzisiaj!"),
-        tr("Czy macOS jest aktualny?"),
-        tr("Mam oko na ten dysk."),
-        tr("Hau! Nowe paczki?"),
-        tr("Zostań chwilę, sprawdzam…"),
-        tr("Stary cask to zły cask.")
-    ]
+    @State private var quip: String? = nil
+    /// Cancelled and replaced (never left to race) whenever a new quip starts, so a scan
+    /// that finishes while the previous bubble is still showing cannot clear it early or
+    /// leave it stuck once the new sleep completes.
+    @State private var quipTask: Task<Void, Never>?
 
     var body: some View {
         tabBody
@@ -178,14 +171,27 @@ struct DetailColumn: View {
                 }
             }
             .animation(.spring(response: 0.38, dampingFraction: 0.72), value: quip != nil)
-            .task {
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .seconds(Double.random(in: 18...40)))
-                    withAnimation { quip = quips.randomElement() }
+            .onChange(of: scan.status) { old, new in
+                // A cancelled scan also lands on `.results` (ScanStore.bailIfCancelled), so the
+                // status transition alone is not enough — only a finished scan earns a comment.
+                guard old == .checking, new == .results, scan.progress == .finished else { return }
+                quipTask?.cancel()
+                withAnimation { quip = finishedQuip() }
+                quipTask = Task {
                     try? await Task.sleep(for: .seconds(4.5))
+                    guard !Task.isCancelled else { return }
                     withAnimation { quip = nil }
                 }
             }
+    }
+
+    /// Wega comments on the result, not on the clock. Security wins over the update count:
+    /// a pending security fix still gets flagged even when it happens to be the only item,
+    /// which would otherwise round `updateBadge` down to a false "all clear".
+    private func finishedQuip() -> String {
+        if securityBadge > 0 { return tr("Znalazłam coś pilnego.") }
+        if updateBadge == 0  { return tr("Wszystko pod kontrolą!") }
+        return tr("Hau! Nowe paczki?")
     }
 
     /// F4 — Homebrew's absence is an invitation, not a wall. The card sits above the working UI
