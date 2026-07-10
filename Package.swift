@@ -6,7 +6,7 @@ let package = Package(
     name: "WegaMacUpdater",
     defaultLocalization: "en",
     platforms: [
-        .macOS(.v14)
+        .macOS("26.0")
     ],
     products: [
         .executable(name: "WegaMacUpdater", targets: ["WegaMacUpdater"]),
