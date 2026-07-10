@@ -438,6 +438,8 @@ public enum Translations {
         "Co się działo": "What happened",
         "Co się ostatnio działo?": "What happened recently?",
         "Skan rozpoczęty": "Scan started",
+        // M2(c) — anulowanie skanu ma swój komunikat; skan nie udaje, że się skończył.
+        "Przerwałam skanowanie.": "I stopped scanning.",
         "Zaglądam do notatek…": "Checking my notes…",
         "Ostrzeżenia+": "Warnings+",
         "Tylko błędy": "Errors only",

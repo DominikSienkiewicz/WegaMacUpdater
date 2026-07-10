@@ -50,6 +50,8 @@ final class ScanStore: ObservableObject {
     @Published var cleaningStaleCasks = false
     /// M5 — whether each outdated cask is covered by snapshot → canary → auto-rollback.
     @Published var caskProtection:    [String: RollbackProtection.Verdict] = [:]
+    /// M2(c) — where the scan actually is. `nil` before the first one ever runs.
+    @Published var progress: ScanProgress?
     /// F4 — tools the user has not installed. An invitation to install them, not an error.
     @Published var unavailableSources = 0
     /// F4 — false when `brew` is absent. Drives the soft "install Homebrew" card.
@@ -68,6 +70,10 @@ final class ScanStore: ObservableObject {
 
     private var model: AppViewModel?
     private let processes = RunningProcessService()
+    /// M2(c) — the scan runs here, not in a view. A `Task` started from `UpdateView` died
+    /// with the view tree; this one outlives a language re-key and a tab switch, and gives
+    /// **Cancel** something to cancel.
+    private var scanTask: Task<Void, Never>?
 
     /// Services are owned by the app-level `AppViewModel`; hand them over on first appearance.
     func attach(model: AppViewModel) {
@@ -188,6 +194,36 @@ final class ScanStore: ObservableObject {
 // Split into an extension (same file, so `private` state stays accessible) to keep the
 // `ScanStore` body within SwiftLint's type_body_length budget.
 extension ScanStore {
+    /// Kicks off a scan owned by the store. Idempotent: a second press while one is running
+    /// is ignored rather than racing a second `brew update` against the first.
+    func startCheck() {
+        guard scanTask == nil else { return }
+        scanTask = Task { @MainActor [weak self] in
+            await self?.runCheck()
+            self?.scanTask = nil
+        }
+    }
+
+    /// M2(c) — cancellation is not new plumbing: `ProcessRunner` already honours
+    /// `Task.isCancelled` end to end and surfaces `.cancelled`. It just had no button.
+    func cancelScan() {
+        scanTask?.cancel()
+    }
+
+    /// Returns `true` when the caller must stop. Freezes progress at the phase we reached,
+    /// so the screen can say where it stopped instead of snapping to 0% or to "done".
+    private func bailIfCancelled(at phase: ScanPhase, emitActivity: Bool) async -> Bool {
+        guard Task.isCancelled else { return false }
+        progress = .cancelled(at: phase)
+        // Keep whatever the previous scan found rather than blanking the window: an empty
+        // list would read as "nothing is outdated", which we have not established.
+        status = lastCheck == nil ? .ready : .results
+        if emitActivity { emitActivitySignal(.idle) }
+        emitWegaState(WegaState(pose: .idle, line: tr("Przerwałam skanowanie.")))
+        WegaLog.info(.scanner, "Skan anulowany na etapie: \(phase.commandLabel)")
+        return true
+    }
+
     func runCheck(emitActivity: Bool = true) async {
         guard let model else { return }
         status = .checking
@@ -196,10 +232,13 @@ extension ScanStore {
         WegaLog.info(.scanner, tr("Skan rozpoczęty"))
         emitWegaState(WegaState(pose: .sniff, line: tr("Węszę po Homebrew…")))
 
+        progress = .running(.brew)
+
         // Refresh brew metadata before asking what is outdated — otherwise a
         // newly-released cask/formula version that hasn't landed locally yet
         // would be missed even though `brew info` against the API shows it.
         _ = try? await model.brewService.update()
+        if await bailIfCancelled(at: .brew, emitActivity: emitActivity) { return }
 
         // M3(b) — detect stale casks; never uninstall them here. "Check for updates" is a
         // read-only operation, and `brew uninstall --force` behind that button was the
@@ -234,13 +273,18 @@ extension ScanStore {
                 brewOutcome = .failed("brew outdated")
                 WegaLog.error(.homebrew, "brew outdated: \(error.localizedDescription)") }
         outcomes.append(brewOutcome)
+        if await bailIfCancelled(at: .brew, emitActivity: emitActivity) { return }
 
+        progress = .running(.mas)
         do { masOutdated = try await model.masService.outdated(); outcomes.append(.succeeded) }
         catch MasServiceError.masNotFound { masOutdated = []; outcomes.append(.notInstalled) }
         catch { masOutdated = []
                 outcomes.append(.failed("Mac App Store"))
                 WegaLog.error(.app, "mas outdated: \(error.localizedDescription)") }
 
+        if await bailIfCancelled(at: .mas, emitActivity: emitActivity) { return }
+
+        progress = .running(.npm)
         do { npmOutdated = try await model.npmService.outdated(); outcomes.append(.succeeded) }
         catch NpmServiceError.npmNotFound { npmOutdated = []; outcomes.append(.notInstalled) }
         catch { npmOutdated = []
@@ -254,6 +298,9 @@ extension ScanStore {
         unavailableSources = UpdatePlanner.unavailableSourceCount(outcomes)
         brewAvailable = brewOutcome != .notInstalled
 
+        if await bailIfCancelled(at: .npm, emitActivity: emitActivity) { return }
+
+        progress = .running(.manual)
         let brewOutdatedCasks = Set(brewOutdated?.casks.map(\.name) ?? [])
         let scan = await scanManualUpdates(brewOutdatedCasks: brewOutdatedCasks)
         manualOutdated = scan.apps
@@ -300,6 +347,7 @@ extension ScanStore {
 
         lastCheck = Date()
         status    = .results
+        progress  = .finished
 
         finishScan(emitActivity: emitActivity, silentSources: silentSources, failedSources: failed)
     }

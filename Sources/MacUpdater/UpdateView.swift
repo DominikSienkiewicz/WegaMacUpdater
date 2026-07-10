@@ -85,7 +85,7 @@ struct UpdateView: View {
             title: tr("Sprawdźmy, co się zestarzało"),
             message: tr("Wega zajrzy do Homebrew oraz Mac App Store i powie, co warto odświeżyć."),
             action: AnyView(
-                Button { Task { await scan.runCheck() } } label: {
+                Button { scan.startCheck() } label: {
                     Label(tr("Sprawdź aktualizacje"), systemImage: "arrow.triangle.2.circlepath")
                 }
                 .buttonStyle(.borderedProminent)
@@ -97,10 +97,25 @@ struct UpdateView: View {
     }
 
     // MARK: Checking
+    //
+    // M2(c) — this screen used to animate five invented command bars on a timer, regardless
+    // of what the scan was doing or how long it would take, with no way to stop it. The scan
+    // is strictly sequential, so the bar now reports the phase it is genuinely in.
     private var checkingView: some View {
         VStack(alignment: .leading, spacing: 14) {
-            ForEach(Array(["brew update", "brew outdated", "brew outdated --cask --greedy", "mas outdated", "sparkle · cask check"].enumerated()), id: \.offset) { idx, cmd in
-                CheckingBar(command: cmd, delay: Double(idx) * 0.2)
+            HStack(spacing: 10) {
+                ProgressView(value: scan.progress?.fractionCompleted ?? 0)
+                    .progressViewStyle(.linear)
+                    .tint(Color.wegaHoney)
+                if scan.progress?.isCancellable == true {
+                    Button(tr("Anuluj")) { scan.cancelScan() }
+                        .controlSize(.small)
+                }
+            }
+            if case .running(let phase) = scan.progress {
+                Text(phase.commandLabel)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.tertiary)
             }
             SniffingScene(
                 caption: tr("Wega węszy po Homebrew…"),
@@ -141,7 +156,7 @@ struct UpdateView: View {
                     }
                 }
                 Spacer()
-                Button { Task { await scan.runCheck() } } label: {
+                Button { scan.startCheck() } label: {
                     Label(tr("Sprawdź ponownie"), systemImage: "arrow.triangle.2.circlepath")
                 }
                 .disabled(scan.updating || scan.status == .checking)
