@@ -8,6 +8,9 @@ struct WegaMacUpdaterApp: App {
     @StateObject private var localization = LocalizationManager.shared
     @StateObject private var policies = UpdatePolicyStore.shared
     @StateObject private var menuBar = MenuBarAgent.shared
+    /// Held here, above `.id(localization.language)`, so a language switch re-keys the
+    /// view tree without discarding scan results or a running upgrade.
+    @StateObject private var scan = ScanStore()
 
     init() {
         HomebrewEnvironment.bootstrapAskpass()
@@ -19,6 +22,7 @@ struct WegaMacUpdaterApp: App {
                 .environmentObject(model)
                 .environmentObject(localization)
                 .environmentObject(policies)
+                .environmentObject(scan)
                 // Re-key the whole tree on language change so every tr(...) re-evaluates.
                 .id(localization.language)
                 .task {
