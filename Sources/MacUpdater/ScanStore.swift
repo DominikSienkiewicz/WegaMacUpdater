@@ -38,7 +38,7 @@ final class ScanStore: ObservableObject {
     @Published var updating:          Bool                = false
     @Published var errorMessage:      String?
     @Published var lastCheck:         Date?
-    @Published var banner:            BannerData?
+    @Published private(set) var banners = BannerQueue<BannerData>()
     @Published var restartCandidates: [RestartInfo]       = []
     @Published var restartBusy:       String?
     @Published var caskIconPaths:     [String: URL]       = [:]
@@ -124,6 +124,25 @@ final class ScanStore: ObservableObject {
 
     func ignoreManual(_ app: ManualOutdatedApp) {
         UpdatePolicyStore.shared.ignore(key: app.policyKey, name: app.name)
+    }
+
+    /// The banner currently on screen, if any.
+    var banner: BannerData? { banners.current }
+
+    /// Ordinary notices — a scan result, an upgrade summary. The newest one wins.
+    private func showBanner(_ banner: BannerData) {
+        banners.enqueue(banner, sticky: false)
+    }
+
+    /// Notices the user must not miss: today, a cask whose publisher Team ID changed.
+    /// These queue ahead of anything transient and survive until dismissed by hand —
+    /// before M5 the upgrade summary overwrote the publisher alert on its way out.
+    private func showStickyBanner(_ banner: BannerData) {
+        banners.enqueue(banner, sticky: true)
+    }
+
+    func dismissBanner() {
+        banners.dismissCurrent()
     }
 
     private func emitWegaState(_ state: WegaState) {
@@ -276,25 +295,25 @@ extension ScanStore {
         switch scanState {
         case .upToDate:
             if let msg = errorMessage {
-                banner = BannerData(variant: .danger, title: tr("Błąd Homebrew"), message: msg, action: .openLogs)
+                showBanner(BannerData(variant: .danger, title: tr("Błąd Homebrew"), message: msg, action: .openLogs))
             }
             emitWegaState(WegaState(pose: .happy, line: tr("Wszystko aktualne. Idę się zdrzemnąć.")))
         case .outdated(let n):
             if let msg = errorMessage {
-                banner = BannerData(variant: .danger, title: tr("Błąd Homebrew"), message: msg, action: .openLogs)
+                showBanner(BannerData(variant: .danger, title: tr("Błąd Homebrew"), message: msg, action: .openLogs))
             }
             emitWegaState(WegaState(pose: .alert, line: trf("Znalazłam %@ rzeczy do uporządkowania.", "\(n)")))
         case .checkFailed:
-            banner = BannerData(variant: .danger,
-                                title: tr("Nie udało się sprawdzić aktualizacji"),
-                                message: errorMessage ?? tr("Część źródeł nie odpowiedziała — sprawdź połączenie z internetem i spróbuj ponownie."),
-                                action: .openLogs)
+            showBanner(BannerData(variant: .danger,
+                                  title: tr("Nie udało się sprawdzić aktualizacji"),
+                                  message: errorMessage ?? tr("Część źródeł nie odpowiedziała — sprawdź połączenie z internetem i spróbuj ponownie."),
+                                  action: .openLogs))
             emitWegaState(WegaState(pose: .sad, line: tr("Nie dowęszyłam się — chyba nie ma internetu.")))
         case .partialFailure(let updates, let failed):
-            banner = BannerData(variant: .danger,
-                                title: tr("Lista może być niepełna"),
-                                message: trf("Znalazłam %@ aktualizacji, ale %@ źródeł nie odpowiedziało — sprawdź połączenie i odśwież.", "\(updates)", "\(failed)"),
-                                action: .openLogs)
+            showBanner(BannerData(variant: .danger,
+                                  title: tr("Lista może być niepełna"),
+                                  message: trf("Znalazłam %@ aktualizacji, ale %@ źródeł nie odpowiedziało — sprawdź połączenie i odśwież.", "\(updates)", "\(failed)"),
+                                  action: .openLogs))
             emitWegaState(WegaState(pose: .alert, line: trf("Znalazłam %@, ale część źródeł milczy.", "\(updates)")))
         }
         emitCounts()
@@ -332,12 +351,12 @@ extension ScanStore {
                     if case .cask(let t) = $0.source { return t == token }
                     return false
                 }
-                banner = BannerData(variant: .success, title: trf("Zaktualizowano %@", "\(token)"), message: tr("Teraz zarządzany przez Homebrew."))
+                showBanner(BannerData(variant: .success, title: trf("Zaktualizowano %@", "\(token)"), message: tr("Teraz zarządzany przez Homebrew.")))
                 emitActivitySignal(.success)
                 emitWegaState(WegaState(pose: .happy, line: trf("%@ zaktualizowany i pod opieką Brew.", "\(token)")))
                 WegaLog.info(.homebrew, "Zainstalowano \(token) (brew cask)")
             } else {
-                banner = BannerData(variant: .danger, title: trf("Błąd instalacji %@", "\(token)"), message: tr("Sprawdź logi poniżej."))
+                showBanner(BannerData(variant: .danger, title: trf("Błąd instalacji %@", "\(token)"), message: tr("Sprawdź logi poniżej.")))
                 emitActivitySignal(.error)
                 emitWegaState(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
                 let reason = ScanLog.brewErrorReason(from: brewLog).map { ": \($0)" } ?? ""
@@ -345,7 +364,7 @@ extension ScanStore {
             }
         } catch {
             brewLog.append("error: \(error.localizedDescription)")
-            banner = BannerData(variant: .danger, title: tr("Błąd instalacji"), message: error.localizedDescription)
+            showBanner(BannerData(variant: .danger, title: tr("Błąd instalacji"), message: error.localizedDescription))
             emitActivitySignal(.error)
             emitWegaState(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
             WegaLog.error(.homebrew, "Instalacja \(token): \(error.localizedDescription)")
@@ -457,10 +476,10 @@ extension ScanStore {
             let detail = needsSudoPassword
                 ? trf("%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła.", "\(baseDetail)")
                 : baseDetail
-            banner = BannerData(variant: .danger,
-                                title: tr("Aktualizacja niekompletna"),
-                                message: detail,
-                                action: needsSudoPassword ? .openSettings : nil)
+            showBanner(BannerData(variant: .danger,
+                                  title: tr("Aktualizacja niekompletna"),
+                                  message: detail,
+                                  action: needsSudoPassword ? .openSettings : nil))
             emitActivitySignal(.error)
             emitWegaState(WegaState(pose: .alert, line: tr("Część pakietów się nie zaktualizowała.")))
             WegaLog.error(.homebrew, "Aktualizacja niekompletna: \(failedTokens.isEmpty ? "Brew zgłosił błąd" : failedTokens.joined(separator: ", "))")
@@ -470,7 +489,7 @@ extension ScanStore {
                 WegaLog.error(.homebrew, detail)
             }
         } else {
-            banner = BannerData(variant: .success, title: trf("Zaktualizowano %@ pakietów", "\(n)"), message: tr("Wszystko gotowe."))
+            showBanner(BannerData(variant: .success, title: trf("Zaktualizowano %@ pakietów", "\(n)"), message: tr("Wszystko gotowe.")))
             emitActivitySignal(.success)
             emitWegaState(WegaState(pose: .happy, line: trf("Gotowe! %@ pakietów odświeżonych.", "\(n)")))
             WegaLog.info(.homebrew, "Zaktualizowano \(n) pakietów")
@@ -578,8 +597,8 @@ extension ScanStore {
             } else {
                 let teamID = await Task.detached { CodeSignatureVerifier.teamID(ofAppAt: appURL) }.value
                 if case let .changed(old, new) = TeamIDLedger.shared.record(bundleID: "cask:\(token)", teamID: teamID) {
-                    banner = BannerData(variant: .danger, title: tr("Zmiana wydawcy"),
-                                        message: trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.", "\(token)", "\(old)", "\(new ?? "—")"))
+                    showStickyBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"),
+                                                message: trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.", "\(token)", "\(old)", "\(new ?? "—")")))
                 }
             }
             if let snapshot = snapshots[token] { try? FileManager.default.removeItem(at: snapshot) }

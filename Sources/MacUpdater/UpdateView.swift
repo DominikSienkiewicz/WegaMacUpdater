@@ -175,7 +175,7 @@ struct UpdateView: View {
                             openSettings()
                         }
                     },
-                    onClose: { scan.banner = nil }
+                    onClose: { scan.dismissBanner() }
                 )
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
