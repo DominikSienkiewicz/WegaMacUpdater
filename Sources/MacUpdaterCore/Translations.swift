@@ -294,8 +294,6 @@ public enum Translations {
         "Zobacz w logach": "View in logs",
         "Włącz Touch ID": "Enable Touch ID",
         "%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła.": "%@ The cask requires an administrator password. Enable Touch ID to authorize updates with your fingerprint — no password prompt.",
-        "Aktualizacje": "Update",
-        "Migracja": "Migration",
         "Spis aplikacji": "Inventory",
         "Info": "Info",
         "Język interfejsu": "Interface language",

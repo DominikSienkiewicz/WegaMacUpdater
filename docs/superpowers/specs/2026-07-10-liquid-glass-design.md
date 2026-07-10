@@ -1,7 +1,7 @@
 # Wega Mac Updater — Liquid Glass redesign
 
 **Date:** 2026-07-10
-**Status:** approved design, not yet implemented
+**Status:** implemented on `feat/liquid-glass-impl`. Visual behaviour still unverified — no GUI run.
 **Base:** `main` @ `a598b92`
 **Scope:** restyle the existing interface onto macOS 26 Liquid Glass. No new product features.
 
