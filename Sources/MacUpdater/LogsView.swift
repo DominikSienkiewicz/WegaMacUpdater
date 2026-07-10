@@ -39,6 +39,7 @@ struct LogsView: View {
                     }
                     .padding(.vertical, 6)
                 }
+                .scrollEdgeEffectStyle(.soft, for: .top)
             }
         }
         .onAppear {

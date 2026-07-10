@@ -91,9 +91,7 @@ struct UpdateView: View {
                 Button { scan.startCheck() } label: {
                     Label(tr("Sprawdź aktualizacje"), systemImage: "arrow.triangle.2.circlepath")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.wegaHoney)
-                .foregroundStyle(Color(red: 0.16, green: 0.11, blue: 0.07))
+                .buttonStyle(.glass)
                 .controlSize(.large)
             )
         )
@@ -106,15 +104,9 @@ struct UpdateView: View {
     // is strictly sequential, so the bar now reports the phase it is genuinely in.
     private var checkingView: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                ProgressView(value: scan.progress?.fractionCompleted ?? 0)
-                    .progressViewStyle(.linear)
-                    .tint(Color.wegaHoney)
-                if scan.progress?.isCancellable == true {
-                    Button(tr("Anuluj")) { scan.cancelScan() }
-                        .controlSize(.small)
-                }
-            }
+            ProgressView(value: scan.progress?.fractionCompleted ?? 0)
+                .progressViewStyle(.linear)
+                .tint(Color.wegaHoney)
             if case .running(let phase) = scan.progress {
                 Text(phase.commandLabel)
                     .font(.system(size: 11, design: .monospaced))
@@ -165,11 +157,6 @@ struct UpdateView: View {
                     }
                 }
                 Spacer()
-                Button { scan.startCheck() } label: {
-                    Label(tr("Sprawdź ponownie"), systemImage: "arrow.triangle.2.circlepath")
-                }
-                .disabled(scan.updating || scan.status == .checking)
-
                 if !allItems.isEmpty {
                     Button { Task { await scan.runUpdate() } } label: {
                         if scan.updating {
@@ -182,7 +169,7 @@ struct UpdateView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.wegaHoney)
-                    .foregroundStyle(Color(red: 0.16, green: 0.11, blue: 0.07))
+                    .foregroundStyle(Color.wegaInk)
                     .disabled(scan.updating)
                 }
             }
@@ -209,19 +196,8 @@ struct UpdateView: View {
 
             staleCaskCard
 
-            HStack(spacing: 0) {
-                listColumn
-                    .frame(maxWidth: .infinity)
-                    .layoutPriority(1)
-                Divider()
-                InspectorPane(
-                    update: scan.inspectedUpdate,
-                    busyToken: scan.manualBusy,
-                    onInstall: { token in Task { await scan.installManual(token: token) } },
-                    caskDownloads: scan.caskDownloads
-                )
-                    .frame(width: 340)
-            }
+            listColumn
+                .frame(maxWidth: .infinity)
         }
     }
 
@@ -308,6 +284,7 @@ struct UpdateView: View {
                     }
                     .padding(16)
                 }
+                .scrollEdgeEffectStyle(.soft, for: .top)
             }
         } else {
             EmptyHero(

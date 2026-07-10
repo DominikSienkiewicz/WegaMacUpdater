@@ -4,7 +4,7 @@
 Native macOS app that keeps every application on your Mac up to date — Homebrew casks, Mac App Store, JetBrains IDEs, GitHub Releases, and Sparkle apps — from a single window, without ever opening a terminal.
 
 ![Swift](https://img.shields.io/badge/Swift-6.0-orange?style=for-the-badge&logo=swift&logoColor=white)
-![SwiftUI](https://img.shields.io/badge/SwiftUI-macOS_14%2B-blue?style=for-the-badge&logo=apple&logoColor=white)
+![SwiftUI](https://img.shields.io/badge/SwiftUI-macOS_26%2B-blue?style=for-the-badge&logo=apple&logoColor=white)
 ![Version](https://img.shields.io/badge/Version-0.1.0-lightgrey?style=for-the-badge)
 ![Homebrew](https://img.shields.io/badge/Homebrew-optional-FBB040?style=for-the-badge&logo=homebrew&logoColor=white)
 ![Architecture](https://img.shields.io/badge/Architecture-SPM_Modules-purple?style=for-the-badge)
@@ -152,7 +152,7 @@ Privileged operations beyond that (future) go through a signed XPC helper with t
 
 ## Requirements
 
-- macOS 14 or newer
+- macOS 26 (Tahoe) or newer
 - Xcode 26 or Swift 6.0 toolchain
 - Homebrew installed at `/opt/homebrew/bin/brew` or `/usr/local/bin/brew`
 - Optional: `mas` at `/opt/homebrew/bin/mas` or `/usr/local/bin/mas` (App Store features degrade gracefully without it)

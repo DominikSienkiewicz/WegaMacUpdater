@@ -90,7 +90,7 @@ struct ThoughtBubble: View {
             HStack(spacing: 0) {
                 Text(thoughts.isEmpty ? "" : thoughts[index % max(thoughts.count, 1)])
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundStyle(Color(red: 0.16, green: 0.11, blue: 0.07))
+                    .foregroundStyle(Color.wegaInk)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
             }

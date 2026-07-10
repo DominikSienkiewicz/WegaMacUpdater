@@ -161,6 +161,7 @@ struct InventoryView: View {
                             }
                         }
                     }
+                    .scrollEdgeEffectStyle(.soft, for: .top)
                 }
             }
             .padding(.horizontal, 16)

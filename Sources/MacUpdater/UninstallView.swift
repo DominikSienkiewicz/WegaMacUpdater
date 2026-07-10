@@ -408,7 +408,7 @@ private struct UninstallOption: View {
                         .fill(isSelected ? Color.wegaHoney : Color(NSColor.controlBackgroundColor))
                         .frame(width: 16, height: 16)
                     if isSelected {
-                        Circle().fill(Color(red: 0.16, green: 0.11, blue: 0.07)).frame(width: 6, height: 6)
+                        Circle().fill(Color.wegaInk).frame(width: 6, height: 6)
                     }
                 }
                 .overlay(Circle().stroke(isSelected ? Color.wegaHoney : Color.white.opacity(0.15), lineWidth: 1))

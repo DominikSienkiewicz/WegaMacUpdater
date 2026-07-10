@@ -12,6 +12,8 @@ public enum Translations {
     public static let en: [String: String] = [
         // UI — natywna scena Settings (⌘,).
         "Ustawienia": "Settings",
+        // UI — toolbar toggle for the .inspector() panel.
+        "Panel szczegółów": "Details panel",
         // FEAT-02 — confidence dopasowania migracji.
         "pewne": "confident",
         "sprawdź": "review",
@@ -292,8 +294,6 @@ public enum Translations {
         "Zobacz w logach": "View in logs",
         "Włącz Touch ID": "Enable Touch ID",
         "%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła.": "%@ The cask requires an administrator password. Enable Touch ID to authorize updates with your fingerprint — no password prompt.",
-        "Aktualizacje": "Update",
-        "Migracja": "Migration",
         "Spis aplikacji": "Inventory",
         "Info": "Info",
         "Język interfejsu": "Interface language",
@@ -397,6 +397,7 @@ public enum Translations {
         "Otwórz brew.sh": "Open brew.sh",
         "· %@": "· %@",
         "Wszystko pod kontrolą!": "Everything under control!",
+        "Znalazłam coś pilnego.": "I found something urgent.",
         "Kiedy ostatnio robiłeś backup?": "When did you last make a backup?",
         "Brew to mój najlepszy przyjaciel.": "Brew is my best friend.",
         "Wącham coś ciekawego…": "I smell something interesting…",

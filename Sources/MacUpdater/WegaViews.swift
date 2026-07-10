@@ -1,4 +1,5 @@
 import SwiftUI
+import MacUpdaterCore
 
 // MARK: - WegaHead (100×100 viewBox, animated ears)
 
@@ -305,6 +306,65 @@ struct WegaIcon: View {
             .padding(2)
         }
         .frame(width: size, height: size)
+    }
+}
+
+struct WegaSpeechBubble: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            PawPrint(size: 10, color: Color.wegaHoney)
+            Text(text)
+                .font(.system(size: 11.5).italic())
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .glassEffect(in: .capsule)
+    }
+}
+
+// MARK: - Helper chip
+
+/// M3(a) — reports the privileged helper's real `SMAppService` status instead of a
+/// hard-coded green dot. Re-reads the status when the app comes back to the front, since
+/// approval happens outside our process (System Settings → Login Items).
+struct HelperChip: View {
+    @State private var state = HelperChipState(status: PrivilegedHelperClient.shared.status)
+
+    private var color: Color {
+        switch state {
+        case .active:        return .wegaSuccess
+        case .needsApproval: return .wegaHoney
+        case .inactive:      return .secondary
+        }
+    }
+
+    private var label: String {
+        switch state {
+        case .active:        return tr("brew · helper aktywny")
+        case .needsApproval: return tr("brew · helper wymaga zgody")
+        case .inactive:      return tr("brew · helper nieaktywny")
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 5, height: 5)
+            Text(label)
+                .font(.system(size: 10.5))
+                .foregroundStyle(.tertiary)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if state.opensLoginItemsSettings { PrivilegedHelperClient.shared.openLoginItemsSettings() }
+        }
+        .accessibilityLabel(label)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            state = HelperChipState(status: PrivilegedHelperClient.shared.status)
+        }
     }
 }
 

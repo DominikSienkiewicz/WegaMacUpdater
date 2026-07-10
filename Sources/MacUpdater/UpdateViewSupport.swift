@@ -248,7 +248,7 @@ struct PinVersionSheet: View {
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
                 .tint(Color.wegaHoney)
-                .foregroundStyle(Color(red: 0.16, green: 0.11, blue: 0.07))
+                .foregroundStyle(Color.wegaInk)
                 .disabled(version.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }

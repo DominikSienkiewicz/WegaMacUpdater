@@ -42,7 +42,6 @@ struct InspectorPane: View {
             }
         }
         .padding(16)
-        .background(Color.wegaHoney.opacity(0.02))
     }
 
     // MARK: Empty state
