@@ -298,7 +298,7 @@ private struct SidebarItemRow: View {
             return (.white, Color.wegaDanger)
         }
         if isActive {
-            return (Color(red: 0.16, green: 0.11, blue: 0.07), Color.wegaHoney)
+            return (Color.wegaInk, Color.wegaHoney)
         }
         return (Color.wegaHoney, Color.wegaHoney.opacity(0.18))
     }
@@ -402,7 +402,7 @@ private struct BrewInviteCard: View {
             Button(tr("Sprawdź ponownie"), action: onRecheck)
                 .buttonStyle(.borderedProminent)
                 .tint(Color.wegaHoney)
-                .foregroundStyle(Color(red: 0.16, green: 0.11, blue: 0.07))
+                .foregroundStyle(Color.wegaInk)
         }
         .padding(12)
         .background(Color.wegaHoney.opacity(0.06))
@@ -503,7 +503,7 @@ private struct NotificationExplanationCard: View {
                 Button(tr("Powiadamiaj")) { Task { await agent.agreeToNotifications() } }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.wegaHoney)
-                    .foregroundStyle(Color(red: 0.16, green: 0.11, blue: 0.07))
+                    .foregroundStyle(Color.wegaInk)
             }
             .padding(12)
             .background(Color.wegaHoney.opacity(0.06))

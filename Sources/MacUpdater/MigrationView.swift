@@ -52,7 +52,7 @@ struct MigrationView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.wegaHoney)
-                .foregroundStyle(Color(red: 0.16, green: 0.11, blue: 0.07))
+                .foregroundStyle(Color.wegaInk)
                 .controlSize(.large)
             )
         )
@@ -703,7 +703,7 @@ private struct MigrationConfirmSheet: View {
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
                 .tint(Color.wegaHoney)
-                .foregroundStyle(Color(red: 0.16, green: 0.11, blue: 0.07))
+                .foregroundStyle(Color.wegaInk)
             }
         }
         .padding(24)
@@ -841,7 +841,7 @@ private struct LibraryCleanupSheet: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.wegaHoney)
-                .foregroundStyle(Color(red: 0.16, green: 0.11, blue: 0.07))
+                .foregroundStyle(Color.wegaInk)
                 .disabled(selected.isEmpty)
             }
             .padding(.horizontal, 20)
