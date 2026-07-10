@@ -62,4 +62,37 @@ final class AppCatalogTests: XCTestCase {
         XCTAssertEqual(repos["com.example.app"]?.repo, "new/repo", "overlay must win on collision")
         XCTAssertEqual(repos["com.example.fresh"]?.repo, "fresh/repo", "overlay may introduce new apps")
     }
+
+    // MARK: URL validation at decode time
+    //
+    // `synology.downloadPage` (and the Sparkle `feedURL`) are opened / fetched verbatim
+    // from a file a PR can change — the widest hole for a malicious catalog entry. A
+    // non-https or garbage URL must be rejected while decoding, not later at open time.
+
+    func testDecodingRejectsSynologyEntryWithNonHTTPSDownloadPage() {
+        let json = Data(#"{"synology":[{"bundleId":"com.x","identify":"X","downloadPage":"http://evil.example/x"}]}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(AppCatalog.self, from: json))
+    }
+
+    func testDecodingRejectsSynologyEntryWithGarbageDownloadPage() {
+        let json = Data(#"{"synology":[{"bundleId":"com.x","identify":"X","downloadPage":"javascript:alert(1)"}]}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(AppCatalog.self, from: json))
+    }
+
+    func testDecodingAcceptsSynologyEntryWithHTTPSDownloadPage() throws {
+        let json = Data(#"{"synology":[{"bundleId":"com.x","identify":"X","downloadPage":"https://ok.example/x"}]}"#.utf8)
+        let catalog = try JSONDecoder().decode(AppCatalog.self, from: json)
+        XCTAssertEqual(catalog.synology.first?.downloadPage, "https://ok.example/x")
+    }
+
+    func testDecodingRejectsSparkleFeedOverrideWithNonHTTPSFeedURL() {
+        let json = Data(#"{"sparkleFeedOverrides":[{"bundleId":"com.x","feedURL":"ftp://evil.example/a.xml"}]}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(AppCatalog.self, from: json))
+    }
+
+    func testDecodingAcceptsSparkleFeedOverrideWithHTTPSFeedURL() throws {
+        let json = Data(#"{"sparkleFeedOverrides":[{"bundleId":"com.x","feedURL":"https://ok.example/a.xml"}]}"#.utf8)
+        let catalog = try JSONDecoder().decode(AppCatalog.self, from: json)
+        XCTAssertEqual(catalog.sparkleFeedOverrides.first?.feedURL, "https://ok.example/a.xml")
+    }
 }
