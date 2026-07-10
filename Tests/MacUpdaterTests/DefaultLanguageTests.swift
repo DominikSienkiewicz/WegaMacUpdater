@@ -29,3 +29,23 @@ final class DefaultLanguageTests: XCTestCase {
         XCTAssertEqual(defaultLanguage(preferredLanguages: ["pl"]), .pl)
     }
 }
+
+/// The presentation side of `AppLanguage`. Small, but it is the only thing the Settings
+/// picker renders, and it was the one part of the M1 type nothing exercised.
+final class AppLanguagePresentationTests: XCTestCase {
+    func testEveryShippedLanguageHasAName() {
+        XCTAssertEqual(AppLanguage.pl.displayName, "Polski")
+        XCTAssertEqual(AppLanguage.en.displayName, "English")
+    }
+
+    func testEveryShippedLanguageHasAFlag() {
+        XCTAssertEqual(AppLanguage.pl.flag, "🇵🇱")
+        XCTAssertEqual(AppLanguage.en.flag, "🇬🇧")
+    }
+
+    /// The picker iterates `allCases` and keys rows by `id`; a duplicate id would collapse rows.
+    func testIdentifiersAreTheRawValuesAndAreUnique() {
+        XCTAssertEqual(AppLanguage.allCases.map(\.id), ["pl", "en"])
+        XCTAssertEqual(Set(AppLanguage.allCases.map(\.id)).count, AppLanguage.allCases.count)
+    }
+}
