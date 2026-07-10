@@ -67,6 +67,9 @@ struct ContentView: View {
     @State private var securityBadge: Int   = 0
     @State private var appsBadge:     Int   = 0
     @State private var cliBadge:      Int   = 0
+    /// D5 — one namespace for the toolbar's scan control, so `.glassEffectID` can morph
+    /// glass between its ready and checking states.
+    @Namespace private var glassNamespace
 
     init() {
         _brewInstalled = State(initialValue: BinaryLocator().locateBrew() != nil)
@@ -101,6 +104,10 @@ struct ContentView: View {
             .navigationTitle(selection.label)
             .navigationSubtitle(selection.hint)
             .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    ScanControl(namespace: glassNamespace)
+                }
+                ToolbarSpacer(.fixed)
                 ToolbarItem(placement: .primaryAction) {
                     SettingsLink { Image(systemName: "gearshape") }
                         .help(tr("Ustawienia"))
