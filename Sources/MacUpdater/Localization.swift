@@ -2,29 +2,6 @@ import Foundation
 import Combine
 import MacUpdaterCore
 
-/// UI languages Wega ships. Polish is the base (the literal strings in the views),
-/// English is provided by the translation table in `Translations.swift`.
-public enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
-    case pl
-    case en
-
-    public var id: String { rawValue }
-
-    public var displayName: String {
-        switch self {
-        case .pl: return "Polski"
-        case .en: return "English"
-        }
-    }
-
-    public var flag: String {
-        switch self {
-        case .pl: return "🇵🇱"
-        case .en: return "🇬🇧"
-        }
-    }
-}
-
 /// Backing store read by the free `tr(_:)` function from any context. Mirrors the
 /// manager's current language so string lookup needs no actor hop. Written only on
 /// the main thread (from the manager), read on the main thread (view bodies).
@@ -62,7 +39,8 @@ public func trf(_ base: String, _ args: CVarArg...) -> String {
     String(format: tr(base), arguments: args)
 }
 
-/// Observable language selection, persisted across launches. Default: Polish.
+/// Observable language selection, persisted across launches. With nothing persisted the
+/// system locale decides — see `defaultLanguage(preferredLanguages:)`.
 @MainActor
 public final class LocalizationManager: ObservableObject {
     public static let shared = LocalizationManager()
@@ -78,7 +56,7 @@ public final class LocalizationManager: ObservableObject {
 
     private init() {
         let stored = UserDefaults.standard.string(forKey: Self.defaultsKey).flatMap(AppLanguage.init(rawValue:))
-        let initial = stored ?? .pl
+        let initial = stored ?? defaultLanguage(preferredLanguages: Locale.preferredLanguages)
         self.language = initial
         LocalizedStrings.current = initial
     }
