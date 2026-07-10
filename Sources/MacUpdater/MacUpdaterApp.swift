@@ -26,6 +26,7 @@ struct WegaMacUpdaterApp: App {
                 .environmentObject(scan)
                 // Re-key the whole tree on language change so every tr(...) re-evaluates.
                 .id(localization.language)
+                .tint(Color.wegaHoney)
                 .task {
                     await model.refreshSystemStatus()
                 }

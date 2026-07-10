@@ -57,7 +57,6 @@ struct WegaState: Equatable {
 
 // MARK: - Layout constants
 enum WegaLayout {
-    static let sidebarWidth: CGFloat     = 240
     static let cardRadius: CGFloat       = 12
     static let rowRadius: CGFloat        = 8
     static let windowMinWidth: CGFloat   = 980
