@@ -33,6 +33,9 @@ struct ScanControl: View {
                 .tint(Color.wegaHoney)
                 .foregroundStyle(Color.wegaInk)
                 .glassEffectID("scan", in: namespace)
+                // A rescan during an install would race the upgrade it is meant to describe.
+                // The button this control replaced carried the same guard.
+                .disabled(scan.updating)
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: scan.status)
