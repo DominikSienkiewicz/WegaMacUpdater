@@ -356,6 +356,16 @@ public enum Translations {
             "This cask installs no app, so it cannot be snapshotted or rolled back.",
         "Bez ochrony cofnięciem": "No rollback protection",
         "Więcej działań": "More actions",
+        // F2 — podgląd planu: każde pole wolno powiedzieć „nie wiem”.
+        "Pokaż, co dokładnie zrobię": "Show exactly what I will do",
+        "Sprawdzam rozmiary pobrań…": "Checking download sizes…",
+        "rozmiar nieznany": "size unknown",
+        "nieznany host": "unknown host",
+        "suma sprawdzana": "checksum verified",
+        "bez weryfikacji sumy": "checksum not verified",
+        "Może poprosić o hasło administratora.": "May ask for an admin password.",
+        "Nie udało się ustalić rozmiaru pobrania — zakładam duży plik.":
+            "Could not determine the download size — assuming a large file.",
         // F4 — brak Homebrew to zaproszenie, nie mur.
         "Zainstaluj Homebrew, żeby odblokować więcej aktualizacji":
             "Install Homebrew to unlock more updates",

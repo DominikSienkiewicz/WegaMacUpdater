@@ -50,6 +50,13 @@ final class ScanStore: ObservableObject {
     @Published var cleaningStaleCasks = false
     /// M5 — whether each outdated cask is covered by snapshot → canary → auto-rollback.
     @Published var caskProtection:    [String: RollbackProtection.Verdict] = [:]
+    /// F2 — what each outdated cask installs. Feeds the "may need an admin password" note.
+    @Published var caskProfiles:      [String: CaskArtifactProfile] = [:]
+    /// F2 — download sizes, probed on demand. `unknown` is a first-class answer: brew's JSON
+    /// carries no size and a CDN may omit `Content-Length`.
+    @Published var caskSizes:         [String: DownloadSizeProbeResult] = [:]
+    @Published var probingSizes       = false
+    @Published var showPlanPreview    = false
     /// M2(c) — where the scan actually is. `nil` before the first one ever runs.
     @Published var progress: ScanProgress?
     /// F4 — tools the user has not installed. An invitation to install them, not an error.
@@ -548,6 +555,13 @@ extension ScanStore {
         emitWegaState(WegaState(pose: .sniff, line: tr("Aktualizuję, chwila…")))
 
         let plan          = UpdatePlanner.plan(selectedKeys: selected, allKeys: allItems.map(\.key))
+        // F2 — the exact argument vectors come from the planner, the same call the preview
+        // panel renders. Building them here as well is how a dry-run starts to lie: the
+        // `--force` retry path below is precisely the drift that was waiting to happen.
+        let commands      = UpdatePlanner.commands(for: plan)
+        let formulaArgs   = commands.first { $0.executable == "brew" && !$0.arguments.contains("--cask") }?.arguments
+        let caskArgs      = commands.first { $0.executable == "brew" && $0.arguments.contains("--cask") }?.arguments
+        let npmCommands   = commands.filter { $0.executable == "npm" }
         let formulaNames  = plan.formulaNames
         let caskNames     = plan.caskNames
         let npmNames      = plan.npmNames
@@ -564,10 +578,26 @@ extension ScanStore {
 
         // FEAT-07: dla casków (duże pobrania) doradczo ostrzeż przy złych warunkach
         // (łącze taryfowe / throttling). Akcja jest user-initiated → kontynuujemy.
+        //
+        // F2 — the gate used to be fed a hard-coded `200MB + 1`, because `brew info --json`
+        // carries no size. It now gets the sum of whatever the HEAD probes could actually
+        // measure. When nothing could be measured we keep the old pessimistic assumption
+        // (a cask is usually large) but say so in the log, rather than pretending to know.
         if !caskNames.isEmpty {
+            await probeDownloadSizes()
+            let measured = caskNames.compactMap { token -> Int64? in
+                if case .known(let bytes) = caskSizes[token] { return bytes }
+                return nil
+            }
+            let assumedSize: Int64 = 200 * 1024 * 1024 + 1
+            let sizeBytes = measured.isEmpty ? assumedSize : measured.reduce(0, +)
+            if measured.isEmpty {
+                brewLog.append("ℹ️ " + tr("Nie udało się ustalić rozmiaru pobrania — zakładam duży plik."))
+            }
+
             let (net, pow) = await LiveConditions.snapshot()
             if case let .postpone(reason) = DownloadGate.decide(
-                sizeBytes: 200 * 1024 * 1024 + 1, network: net, power: pow) {
+                sizeBytes: sizeBytes, network: net, power: pow) {
                 brewLog.append("⚠️ " + trf("Niekorzystne warunki pobierania (%@) — kontynuuję na żądanie.", "\(reason)"))
                 emitWegaState(WegaState(pose: .alert, line: tr("Uwaga: kosztowne łącze lub throttling — pobieram mimo to.")))
             }
@@ -576,16 +606,14 @@ extension ScanStore {
         var outcomes: [BrewUpgradeOutcome] = []
 
         // Brew upgrade — formulae
-        if !formulaNames.isEmpty {
-            let args = ["upgrade"] + formulaNames
-            outcomes.append(await runBrewUpgrade(arguments: args))
+        if let formulaArgs {
+            outcomes.append(await runBrewUpgrade(arguments: formulaArgs))
         }
 
         // Brew upgrade — casks (FEAT-05 snapshot przed, canary/rollback + FEAT-04 ledger po)
-        if !caskNames.isEmpty {
+        if let caskArgs, !caskNames.isEmpty {
             let snapshots = snapshotCasks(caskNames)
-            let args = ["upgrade", "--cask"] + caskNames
-            var caskOutcome = await runBrewUpgrade(arguments: args)
+            var caskOutcome = await runBrewUpgrade(arguments: caskArgs)
 
             // Auto-recover an interrupted upgrade: if a cask bailed because a stale
             // staged app from a previous, cut-short upgrade is in the way ("already an
@@ -595,7 +623,7 @@ extension ScanStore {
             if !retryTokens.isEmpty {
                 brewLog.append("↻ " + trf("Przerwana aktualizacja (%@) — ponawiam z --force.", "\(retryTokens.joined(separator: ", "))"))
                 WegaLog.info(.homebrew, "Przerwana aktualizacja casku — ponawiam z --force: \(retryTokens.joined(separator: ", "))")
-                let retryOutcome = await runBrewUpgrade(arguments: ["upgrade", "--cask", "--force"] + retryTokens)
+                let retryOutcome = await runBrewUpgrade(arguments: UpdatePlanner.forcedCaskCommand(tokens: retryTokens).arguments)
                 caskOutcome = BrewUpgradeOutcome.merging(original: caskOutcome, forcedRetry: retryOutcome, retriedTokens: retryTokens)
             }
 
@@ -604,8 +632,8 @@ extension ScanStore {
         }
 
         // npm global upgrade — one package at a time (npm semantics).
-        for pkg in npmNames {
-            outcomes.append(await runNpmUpgrade(name: pkg))
+        for (pkg, command) in zip(npmNames, npmCommands) {
+            outcomes.append(await runNpmUpgrade(name: pkg, arguments: command.arguments))
         }
 
         // MAS upgrade
@@ -692,9 +720,9 @@ extension ScanStore {
         return BrewUpgradeOutcome.analyze(exitCode: exitCode, output: captured)
     }
 
-    private func runNpmUpgrade(name: String) async -> BrewUpgradeOutcome {
+    private func runNpmUpgrade(name: String, arguments: [String]) async -> BrewUpgradeOutcome {
         guard let model else { return BrewUpgradeOutcome(exitCode: -1, failedTokens: [name], errorLines: []) }
-        brewLog.append("$ npm install -g \(name)@latest")
+        brewLog.append("$ npm " + arguments.joined(separator: " "))
         var exitCode: Int32 = 0
         do {
             let stream = try model.npmService.upgradeEvents(name: name)
@@ -786,6 +814,7 @@ extension ScanStore {
     private func resolveRollbackProtection() async {
         guard let model, let casks = brewOutdated?.casks, !casks.isEmpty else {
             caskProtection = [:]
+            caskProfiles = [:]
             return
         }
         let profiles = (try? await model.brewService.caskArtifactProfiles(tokens: casks.map(\.name))) ?? []
@@ -799,6 +828,37 @@ extension ScanStore {
             }
         }
         caskProtection = verdicts
+        caskProfiles = Dictionary(profiles.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first })
+        // Sizes are a network round-trip per cask; they are not worth paying for until the
+        // user asks to see the plan.
+        caskSizes = [:]
+    }
+
+    /// F2 — the exact commands the upgrade will run, from the same planner call the upgrade
+    /// itself uses. If this ever disagrees with execution, it is because someone rebuilt an
+    /// argument vector by hand.
+    var plannedCommands: [UpdateCommand] {
+        UpdatePlanner.commands(for: UpdatePlanner.plan(selectedKeys: selected, allKeys: allItems.map(\.key)))
+    }
+
+    /// The casks this run would upgrade, in the order the command lists them.
+    var plannedCaskTokens: [String] {
+        UpdatePlanner.plan(selectedKeys: selected, allKeys: allItems.map(\.key)).caskNames
+    }
+
+    /// F2 — one HEAD per cask, on demand. `brew info --json` has no size field (verified),
+    /// and a CDN may withhold `Content-Length`, so "unknown" is a legitimate answer that the
+    /// panel shows verbatim rather than guessing a number.
+    func probeDownloadSizes() async {
+        guard !probingSizes else { return }
+        probingSizes = true
+        defer { probingSizes = false }
+
+        let probe = DownloadSizeProbe()
+        for token in plannedCaskTokens where caskSizes[token] == nil {
+            guard let url = caskDownloads[token]?.url else { continue }
+            caskSizes[token] = await probe.probe(urlString: url)
+        }
     }
 
     /// M3(b) — the cleanup the scan used to perform silently, now behind the user's consent.

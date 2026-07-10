@@ -314,6 +314,15 @@ public struct CaskArtifactProfile: Equatable, Sendable {
         artifacts.contains { $0.kind == kind }
     }
 
+    /// F2 — whether upgrading this cask *might* raise an admin-password prompt.
+    ///
+    /// `brew info --json` tells us a `pkg` / `installer` / `preflight` stanza exists; it
+    /// cannot tell us what the stanza does. Presence is detectable, content is not — hence
+    /// "may", never "will", and hence an unrecognised stanza is not counted as evidence.
+    public var mayRequireAdminPassword: Bool {
+        !artifactKinds.isDisjoint(with: [.pkg, .installer, .preflight])
+    }
+
     /// App-bundle targets only — the backward-compatible view used for icon
     /// resolution (`BrewCaskInstallationInfo.appArtifacts` is derived from this).
     public var appArtifacts: [String] {
