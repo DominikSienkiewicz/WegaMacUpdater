@@ -228,6 +228,20 @@ public enum UpdatePlanner {
         )
     }
 
+    /// Drops casks whose app bundle is gone (M3b). Homebrew still reports them as outdated
+    /// — that is the phantom-outdated bug the old silent `brew uninstall --force` inside
+    /// "check for updates" was hiding. Now the uninstall waits for the user's consent, so
+    /// the scan must filter the list itself or the counter would offer upgrades for apps
+    /// that are not installed. Only casks are matched: a formula may legitimately share a
+    /// stale cask's name.
+    public static func excludingStaleCasks(_ outdated: BrewOutdated?, staleTokens: [String]) -> BrewOutdated? {
+        guard let outdated, !staleTokens.isEmpty else { return outdated }
+        let stale = Set(staleTokens)
+        var filtered = outdated
+        filtered.casks.removeAll { stale.contains($0.name) }
+        return filtered
+    }
+
     /// The one count every surface reports (M4), split into the two halves that behave
     /// differently: `installable` is what Wega can upgrade for you (brew / mas / npm),
     /// `manual` is what it found but can only point you at.

@@ -50,9 +50,24 @@ public enum HomebrewEnvironment {
     /// password dialog. When Touch ID is NOT enabled, the shim + SUDO_ASKPASS
     /// remain the only way brew's cask hooks (Zoom, Parallels, kext
     /// installers) can authenticate without a controlling terminal.
+    /// Whether the askpass helper and the sudo shim are needed at all. With Touch ID wired
+    /// into `sudo_local` they are not merely redundant — the shim would suppress the
+    /// biometric prompt — so we neither install nor reference them.
+    public static func shouldBootstrapAskpass(touchIDState: TouchIDSudoConfigurator.State) -> Bool {
+        touchIDState != .enabled
+    }
+
     public static var environment: [String: String] {
         let state = touchIDStateOverride ?? TouchIDSudoConfigurator.currentState()
-        let useAskpassFallback = (state != .enabled)
+        let useAskpassFallback = shouldBootstrapAskpass(touchIDState: state)
+
+        // M3(c) — install the helper files here, on the way to spawning brew, rather than
+        // at app launch. A user who opens Wega to look around never gets a `sudo` shim
+        // written into Application Support behind their back. Only the real thing does:
+        // the test seam (`touchIDStateOverride`) marks a unit test, which must not touch disk.
+        if useAskpassFallback && touchIDStateOverride == nil {
+            bootstrapAskpass()
+        }
 
         var path = processPath
         if useAskpassFallback, let shim = sudoShimDirectory {

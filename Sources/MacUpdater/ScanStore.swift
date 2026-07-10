@@ -44,6 +44,10 @@ final class ScanStore: ObservableObject {
     @Published var caskIconPaths:     [String: URL]       = [:]
     @Published var caskDownloads:     [String: CaskDownloadInfo] = [:]   // FEAT-03
     @Published var inspectedKey:      String?
+    /// M3(b) — casks Homebrew still tracks but whose app bundle is gone. Detected during a
+    /// scan, removed only when the user says so.
+    @Published var staleCasks:        [String]            = []
+    @Published var cleaningStaleCasks = false
 
     /// Rebound on every appearance of the view that owns the backing `@State` — see
     /// `bind(_:)`. Replayed from `replayLastScan()` so a rebuilt tree does not show an
@@ -191,14 +195,17 @@ extension ScanStore {
         // would be missed even though `brew info` against the API shows it.
         _ = try? await model.brewService.update()
 
-        // Usuń stale casks zanim sprawdzimy co jest outdated
+        // M3(b) — detect stale casks; never uninstall them here. "Check for updates" is a
+        // read-only operation, and `brew uninstall --force` behind that button was the
+        // single most surprising thing Wega did. The user is offered the cleanup as a card
+        // in the results (see `staleCasks`) and the tokens are filtered out of the outdated
+        // list below, so deferring the removal cannot resurrect phantom outdated entries.
         let installedTokens = (try? await model.brewService.installedCasks()) ?? []
-        if !installedTokens.isEmpty {
+        if installedTokens.isEmpty {
+            staleCasks = []
+        } else {
             let installInfo = (try? await model.brewService.caskInstallationInfo(tokens: Array(installedTokens))) ?? []
-            let staleTokens = StaleCaskDetector().staleCasks(from: installInfo)
-            for token in staleTokens {
-                _ = try? await model.brewService.uninstallCask(token: token, force: true)
-            }
+            staleCasks = StaleCaskDetector().staleCasks(from: installInfo)
         }
 
         // Count sources whose check genuinely failed (vs. a tool that's simply not
@@ -209,7 +216,14 @@ extension ScanStore {
         // log (each manual-checker failure is logged individually by ManualUpdateScanner).
         var silentSources: [String] = []
 
-        do { brewOutdated = try await model.brewService.outdatedGreedy() }
+        do {
+            // Stale casks are still reported outdated by brew even though their app is gone
+            // — drop them here so the count only ever offers upgrades the user can install.
+            brewOutdated = UpdatePlanner.excludingStaleCasks(
+                try await model.brewService.outdatedGreedy(),
+                staleTokens: staleCasks
+            )
+        }
         catch { errorMessage = error.localizedDescription; brewOutdated = nil; failed += 1
                 silentSources.append("brew outdated")
                 WegaLog.error(.homebrew, "brew outdated: \(error.localizedDescription)") }
@@ -617,6 +631,32 @@ extension ScanStore {
 
     private func isProcessRunning(_ name: String) async -> Bool {
         await processes.isRunning(name)
+    }
+
+    /// M3(b) — the cleanup the scan used to perform silently, now behind the user's consent.
+    func cleanUpStaleCasks() async {
+        guard let model, !cleaningStaleCasks, !staleCasks.isEmpty else { return }
+        cleaningStaleCasks = true
+        defer { cleaningStaleCasks = false }
+
+        var removed: [String] = []
+        for token in staleCasks {
+            if (try? await model.brewService.uninstallCask(token: token, force: true)) != nil {
+                removed.append(token)
+            } else {
+                WegaLog.error(.homebrew, "Nie udało się usunąć nieaktualnego casku: \(token)")
+            }
+        }
+        staleCasks.removeAll { removed.contains($0) }
+        WegaLog.info(.homebrew, "Usunięto nieaktualne caski: \(removed.joined(separator: ", "))")
+        showBanner(BannerData(variant: .success,
+                              title: trf("Usunięto %@ nieaktualnych casków", "\(removed.count)"),
+                              message: tr("Homebrew nie śledzi już aplikacji, których nie ma na dysku.")))
+    }
+
+    /// The user does not want to clean up now. Drop the card for this scan.
+    func dismissStaleCasks() {
+        staleCasks = []
     }
 
     func restartApp(_ info: RestartInfo) async {

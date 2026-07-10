@@ -181,6 +181,8 @@ struct UpdateView: View {
                     .padding(.bottom, 8)
             }
 
+            staleCaskCard
+
             HStack(spacing: 0) {
                 listColumn
                     .frame(maxWidth: .infinity)
@@ -288,6 +290,35 @@ struct UpdateView: View {
                 message: tr("W tej kategorii nie ma teraz aktualizacji. Przełącz kategorię w panelu bocznym."),
                 compact: true
             )
+        }
+    }
+
+    /// M3(b) — offers the cleanup that "check for updates" used to perform behind the
+    /// user's back. Names every cask it would remove; the scan already excluded them from
+    /// the list above, so nothing here is load-bearing for the count.
+    @ViewBuilder
+    private var staleCaskCard: some View {
+        if !scan.staleCasks.isEmpty {
+            WegaCard {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "trash").foregroundStyle(Color.wegaToffee)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(trf("%@ casków bez aplikacji", "\(scan.staleCasks.count)"))
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(trf("Homebrew wciąż śledzi: %@. Aplikacji nie ma na dysku — możesz je wyrejestrować.", "\(scan.staleCasks.joined(separator: ", "))"))
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    Button(tr("Nie teraz")) { scan.dismissStaleCasks() }
+                        .disabled(scan.cleaningStaleCasks)
+                    Button(tr("Wyrejestruj")) { Task { await scan.cleanUpStaleCasks() } }
+                        .disabled(scan.cleaningStaleCasks)
+                }
+                .padding(12)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
         }
     }
 

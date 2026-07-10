@@ -150,12 +150,7 @@ private struct SidebarView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("WegaMacUpdater")
                         .font(.system(size: 14, weight: .bold))
-                    HStack(spacing: 5) {
-                        Circle().fill(Color.wegaSuccess).frame(width: 5, height: 5)
-                        Text(tr("brew · helper aktywny"))
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(.tertiary)
-                    }
+                    HelperChip()
                 }
                 Spacer()
             }
@@ -481,6 +476,82 @@ private struct WegaSpeechBubble: View {
     }
 }
 
+// MARK: - Helper chip
+
+/// M3(a) — reports the privileged helper's real `SMAppService` status instead of a
+/// hard-coded green dot. Re-reads the status when the app comes back to the front, since
+/// approval happens outside our process (System Settings → Login Items).
+private struct HelperChip: View {
+    @State private var state = HelperChipState(status: PrivilegedHelperClient.shared.status)
+
+    private var color: Color {
+        switch state {
+        case .active:        return .wegaSuccess
+        case .needsApproval: return .wegaHoney
+        case .inactive:      return .secondary
+        }
+    }
+
+    private var label: String {
+        switch state {
+        case .active:        return tr("brew · helper aktywny")
+        case .needsApproval: return tr("brew · helper wymaga zgody")
+        case .inactive:      return tr("brew · helper nieaktywny")
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 5, height: 5)
+            Text(label)
+                .font(.system(size: 10.5))
+                .foregroundStyle(.tertiary)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if state.opensLoginItemsSettings { PrivilegedHelperClient.shared.openLoginItemsSettings() }
+        }
+        .accessibilityLabel(label)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            state = HelperChipState(status: PrivilegedHelperClient.shared.status)
+        }
+    }
+}
+
+// MARK: - Notification explanation (M3d)
+
+/// Explains, in Wega's own window, why it would like to post notifications — before macOS
+/// throws its one-shot permission dialog at a user who is looking at another app. Appears
+/// only once the background agent has actually found something worth announcing, and never
+/// again after the user answers either way.
+private struct NotificationExplanationCard: View {
+    @ObservedObject private var agent = MenuBarAgent.shared
+
+    var body: some View {
+        if agent.needsNotificationExplanation {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "bell.badge").foregroundStyle(Color.wegaHoney)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tr("Powiadamiać o nowych aktualizacjach?"))
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(tr("Wega sprawdza w tle i może dać znać, gdy pojawi się coś nowego. macOS zapyta o zgodę tylko raz."))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Button(tr("Nie teraz")) { agent.declineNotifications() }
+                Button(tr("Powiadamiaj")) { Task { await agent.agreeToNotifications() } }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.wegaHoney)
+                    .foregroundStyle(Color(red: 0.16, green: 0.11, blue: 0.07))
+            }
+            .padding(12)
+            .background(Color.wegaHoney.opacity(0.06))
+        }
+    }
+}
+
 // MARK: - Content area
 
 private struct ContentArea: View {
@@ -535,6 +606,8 @@ private struct ContentArea: View {
             .background(Color.wegaHoney.opacity(0.02))
 
             Divider().opacity(0.5)
+
+            NotificationExplanationCard()
 
             // Tab body.
             //
