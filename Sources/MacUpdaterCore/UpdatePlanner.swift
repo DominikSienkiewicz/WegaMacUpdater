@@ -18,13 +18,31 @@ public struct OutdatedItem: Identifiable, Equatable, Sendable {
     public let from: String?
     public let to: String?
     public let kind: Kind
+    /// Optional human-readable release notes for this update (F1). Sources may not
+    /// provide any, so it defaults to `nil` and existing call sites need no change.
+    public var releaseNotes: String?
 
-    public init(key: String, name: String, from: String?, to: String?, kind: Kind) {
+    public init(key: String, name: String, from: String?, to: String?, kind: Kind, releaseNotes: String? = nil) {
         self.key = key
         self.name = name
         self.from = from
         self.to = to
         self.kind = kind
+        self.releaseNotes = releaseNotes
+    }
+}
+
+/// A single package-manager invocation the update run will execute. Kept pure and
+/// `Equatable` so the plan-preview (dry-run) panel and the real execution path in
+/// `runUpdate` share one source of truth — the preview can never drift from what runs.
+public struct UpdateCommand: Equatable, Sendable {
+    /// The tool to invoke: `"brew"`, `"npm"` or `"mas"`.
+    public let executable: String
+    public let arguments: [String]
+
+    public init(executable: String, arguments: [String]) {
+        self.executable = executable
+        self.arguments = arguments
     }
 }
 
@@ -183,6 +201,33 @@ public enum UpdatePlanner {
 
     private static func name(of key: String, prefix: String) -> String? {
         key.hasPrefix(prefix) ? String(key.dropFirst(prefix.count)) : nil
+    }
+
+    /// The exact commands a plan maps to, in the order `runUpdate` executes them:
+    /// formulae (`brew upgrade …`), casks (`brew upgrade --cask …`), npm one-per-package
+    /// (`npm install -g <name>@latest`), then mas (`mas upgrade`). Empty sections are
+    /// skipped. This is the single source of truth the dry-run preview renders.
+    public static func commands(for plan: UpdatePlan) -> [UpdateCommand] {
+        var commands: [UpdateCommand] = []
+        if !plan.formulaNames.isEmpty {
+            commands.append(UpdateCommand(executable: "brew", arguments: ["upgrade"] + plan.formulaNames))
+        }
+        if !plan.caskNames.isEmpty {
+            commands.append(UpdateCommand(executable: "brew", arguments: ["upgrade", "--cask"] + plan.caskNames))
+        }
+        for pkg in plan.npmNames {
+            commands.append(UpdateCommand(executable: "npm", arguments: ["install", "-g", "\(pkg)@latest"]))
+        }
+        if plan.includesMas {
+            commands.append(UpdateCommand(executable: "mas", arguments: ["upgrade"]))
+        }
+        return commands
+    }
+
+    /// The forced cask-upgrade command the auto-recovery path runs when an interrupted
+    /// upgrade left a staged app behind: `brew upgrade --cask --force <tokens>`.
+    public static func forcedCaskCommand(tokens: [String]) -> UpdateCommand {
+        UpdateCommand(executable: "brew", arguments: ["upgrade", "--cask", "--force"] + tokens)
     }
 
     public static func selectAllState(selectedCount: Int, totalCount: Int) -> SelectAllState {

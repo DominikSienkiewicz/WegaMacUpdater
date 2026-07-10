@@ -70,14 +70,86 @@ final class ScanStore: ObservableObject {
 
     private var model: AppViewModel?
     private let processes = RunningProcessService()
+    /// M2(b) — the last scan, on disk. Read once on first appearance, written after each
+    /// completed scan, so a relaunch shows the previous list instead of an empty hero.
+    private let resultStore: ScanResultStore
+    private var restoredLastScan = false
     /// M2(c) — the scan runs here, not in a view. A `Task` started from `UpdateView` died
     /// with the view tree; this one outlives a language re-key and a tab switch, and gives
     /// **Cancel** something to cancel.
     private var scanTask: Task<Void, Never>?
 
+    init(resultStore: ScanResultStore = ScanResultStore()) {
+        self.resultStore = resultStore
+    }
+
     /// Services are owned by the app-level `AppViewModel`; hand them over on first appearance.
     func attach(model: AppViewModel) {
         self.model = model
+    }
+
+    /// M2(a)+(b) — put a result on screen **now**, before any scanning starts.
+    ///
+    /// Two sources compete: the snapshot on disk from a previous launch, and the lists the
+    /// menu-bar agent already built during its last background check (it used to compute
+    /// them and throw everything but the count away). The newer one wins. Neither claims to
+    /// be current — `freshness` decides how loudly the UI has to say when it was taken.
+    func restoreLastScan() {
+        guard !restoredLastScan, status == .ready else { return }
+        restoredLastScan = true
+
+        let snapshot = resultStore.load()
+        let background = MenuBarAgent.shared.lastResult
+
+        // Prefer whichever was taken later; a nil timestamp can never win.
+        let useBackground: Bool
+        switch (snapshot?.scannedAt, background?.scannedAt) {
+        case (nil, nil):            return
+        case (nil, _):              useBackground = true
+        case (_, nil):              useBackground = false
+        case (let s?, let b?):      useBackground = b > s
+        }
+
+        if useBackground, let background {
+            brewOutdated   = background.brew
+            masOutdated    = background.mas
+            npmOutdated    = background.npm
+            manualOutdated = background.manualApps
+            lastCheck      = background.scannedAt
+            failedSources  = background.failedChecks
+        } else if let snapshot {
+            brewOutdated   = snapshot.brew
+            masOutdated    = snapshot.mas
+            npmOutdated    = snapshot.npm
+            manualOutdated = snapshot.manual
+            lastCheck      = snapshot.scannedAt
+        } else {
+            return
+        }
+
+        status = .results
+        // Deliberately no `emitActivitySignal`: nothing is running. The tab icon must not
+        // spin, and the scan-finished sound of `finishScan` would be a lie.
+        emitCounts()
+    }
+
+    /// How old the result on screen is. `nil` when nothing has ever been scanned.
+    func freshness(now: Date = Date()) -> ScanFreshness? {
+        lastCheck.map { ScanFreshness.of(scannedAt: $0, now: now) }
+    }
+
+    /// Persist what the last scan found, so the next launch has something to show at once.
+    private func persistLastScan() {
+        guard let lastCheck else { return }
+        let snapshot = ScanSnapshot(
+            scannedAt: lastCheck,
+            brew: brewOutdated ?? BrewOutdated(formulae: [], casks: []),
+            mas: masOutdated,
+            npm: npmOutdated,
+            manual: manualOutdated
+        )
+        do { try resultStore.save(snapshot) }
+        catch { WegaLog.error(.app, "Nie udało się zapisać wyniku skanu: \(error.localizedDescription)") }
     }
 
     /// Re-bind the view-tree sinks. Called on every appearance because the closures
@@ -224,33 +296,39 @@ extension ScanStore {
         return true
     }
 
-    func runCheck(emitActivity: Bool = true) async {
+    /// `lightweight` skips the two expensive, redundant steps after an upgrade (M2d):
+    /// `brew update` (metadata was refreshed minutes ago, at the start of the upgrade) and
+    /// the stale-cask sweep (nothing has become stale in the meantime). What remains is a
+    /// plain `brew outdated` re-query, which is all the post-upgrade list actually needs.
+    func runCheck(emitActivity: Bool = true, lightweight: Bool = false) async {
         guard let model else { return }
         status = .checking
         errorMessage = nil
         if emitActivity { emitActivitySignal(.scanning) }
-        WegaLog.info(.scanner, tr("Skan rozpoczęty"))
+        WegaLog.info(.scanner, lightweight ? "Lekkie odświeżenie listy" : tr("Skan rozpoczęty"))
         emitWegaState(WegaState(pose: .sniff, line: tr("Węszę po Homebrew…")))
 
         progress = .running(.brew)
 
-        // Refresh brew metadata before asking what is outdated — otherwise a
-        // newly-released cask/formula version that hasn't landed locally yet
-        // would be missed even though `brew info` against the API shows it.
-        _ = try? await model.brewService.update()
-        if await bailIfCancelled(at: .brew, emitActivity: emitActivity) { return }
+        if !lightweight {
+            // Refresh brew metadata before asking what is outdated — otherwise a
+            // newly-released cask/formula version that hasn't landed locally yet
+            // would be missed even though `brew info` against the API shows it.
+            _ = try? await model.brewService.update()
+            if await bailIfCancelled(at: .brew, emitActivity: emitActivity) { return }
 
-        // M3(b) — detect stale casks; never uninstall them here. "Check for updates" is a
-        // read-only operation, and `brew uninstall --force` behind that button was the
-        // single most surprising thing Wega did. The user is offered the cleanup as a card
-        // in the results (see `staleCasks`) and the tokens are filtered out of the outdated
-        // list below, so deferring the removal cannot resurrect phantom outdated entries.
-        let installedTokens = (try? await model.brewService.installedCasks()) ?? []
-        if installedTokens.isEmpty {
-            staleCasks = []
-        } else {
-            let installInfo = (try? await model.brewService.caskInstallationInfo(tokens: Array(installedTokens))) ?? []
-            staleCasks = StaleCaskDetector().staleCasks(from: installInfo)
+            // M3(b) — detect stale casks; never uninstall them here. "Check for updates" is a
+            // read-only operation, and `brew uninstall --force` behind that button was the
+            // single most surprising thing Wega did. The user is offered the cleanup as a card
+            // in the results (see `staleCasks`) and the tokens are filtered out of the outdated
+            // list below, so deferring the removal cannot resurrect phantom outdated entries.
+            let installedTokens = (try? await model.brewService.installedCasks()) ?? []
+            if installedTokens.isEmpty {
+                staleCasks = []
+            } else {
+                let installInfo = (try? await model.brewService.caskInstallationInfo(tokens: Array(installedTokens))) ?? []
+                staleCasks = StaleCaskDetector().staleCasks(from: installInfo)
+            }
         }
 
         // F4 — an absent tool is "not applicable", never a failure. `brewNotFound` used to
@@ -405,6 +483,7 @@ extension ScanStore {
         // which also runs on a bare view rebuild and must not claim a scan just happened.
         MenuBarAgent.shared.reportWindowScan(count: updateCount.badgeCount, failedChecks: sources)
         emitCounts()
+        persistLastScan()
     }
 
     private func scanManualUpdates(brewOutdatedCasks: Set<String> = []) async -> (apps: [ManualOutdatedApp], failedChecks: Int) {
@@ -550,7 +629,8 @@ extension ScanStore {
         // Re-query brew/mas so the list reflects reality, not optimistic clearing.
         // If a cask failed (e.g. "App source not there"), it will still appear here.
         // Suppress its icon signal — the upgrade outcome below sets the final state.
-        await runCheck(emitActivity: false)
+        // M2(d) — lightweight: no second `brew update`, no second stale-cask sweep.
+        await runCheck(emitActivity: false, lightweight: true)
 
         updating = false
 

@@ -23,6 +23,10 @@ final class MenuBarAgent: ObservableObject {
     /// M3(d) — set when the agent had something to announce but has never been allowed to
     /// ask for permission. The window renders an explanation card; the system dialog waits.
     @Published private(set) var needsNotificationExplanation = false
+    /// M2(a) — the lists the last background check produced. The agent used to build these,
+    /// keep the count and throw the rest away, so the window opened empty and rescanned from
+    /// scratch. Now the window adopts them, which is the whole "instant value" of M2.
+    @Published private(set) var lastResult: MenuBarScanResult?
 
     private var lastNotifiedCount = 0
     private var loop: Task<Void, Never>?
@@ -119,6 +123,7 @@ final class MenuBarAgent: ObservableObject {
         let policies = UpdatePolicyStore.shared.policiesMap
         let result = await MenuBarUpdateChecker().availableUpdateCount(policies: policies)
 
+        lastResult = result
         updateCount = result.total
         lastCheckFailed = result.total == 0 && result.failedChecks > 0
         lastCheck = Date()

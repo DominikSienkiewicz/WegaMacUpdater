@@ -10,7 +10,7 @@ public struct NpmGlobalPackage: Equatable, Sendable {
     }
 }
 
-public struct NpmGlobalOutdated: Equatable, Sendable {
+public struct NpmGlobalOutdated: Codable, Equatable, Sendable {
     public var name: String
     public var installedVersion: String
     public var latestVersion: String

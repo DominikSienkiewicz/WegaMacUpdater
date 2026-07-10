@@ -65,6 +65,9 @@ struct UpdateView: View {
                     footerInfo:     onFooterInfo,
                     categoryCounts: onCategoryCounts
                 ))
+                // M2 — put the previous result on screen before doing anything else. It is
+                // a no-op after the first appearance and whenever a scan has already run.
+                scan.restoreLastScan()
                 scan.replayLastScan()
             }
     }
@@ -146,13 +149,19 @@ struct UpdateView: View {
                     Text(headline)
                         .font(.system(size: 18, weight: .semibold))
                     if let d = scan.lastCheck {
+                        // M2 — a restored list must never pass for a fresh one. Anything
+                        // older than a quarter of an hour carries its date, and a day-old
+                        // result says so in words.
+                        let freshness = scan.freshness() ?? .fresh
                         HStack(spacing: 4) {
-                            Text(trf("Sprawdzono %@", "\(d.formatted(date: .omitted, time: .shortened))"))
+                            Text(freshness == .stale
+                                 ? trf("Znaleziono %@", "\(d.formatted(date: .abbreviated, time: .shortened))")
+                                 : trf("Sprawdzono %@", "\(d.formatted(date: .omitted, time: .shortened))"))
                             Text("·")
                             Text("brew + mas").font(.system(size: 11, design: .monospaced))
                         }
                         .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(freshness.needsExplicitTimestamp ? AnyShapeStyle(Color.wegaToffee) : AnyShapeStyle(.tertiary))
                     }
                 }
                 Spacer()

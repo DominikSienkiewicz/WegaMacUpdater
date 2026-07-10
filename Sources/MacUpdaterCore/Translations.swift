@@ -82,6 +82,8 @@ public enum Translations {
         "%@ do zainstalowania + %@ ręcznych": "%@ to install + %@ manual",
         "%@ do ręcznej aktualizacji": "%@ to update manually",
         "Sprawdzono %@": "Checked %@",
+        // M2 — stara lista mówi wprost, kiedy powstała.
+        "Znaleziono %@": "Found %@",
         "Sprawdź ponownie": "Check again",
         "Zaktualizuj wszystkie (%@)": "Update all (%@)",
         "Zaktualizuj wybrane (%@)": "Update selected (%@)",
