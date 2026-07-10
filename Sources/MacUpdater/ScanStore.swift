@@ -155,10 +155,16 @@ final class ScanStore: ObservableObject {
         sinks.activity?(activity)
     }
 
+    /// The single count every surface reports (M4): the window header, the sidebar badge,
+    /// the menu-bar badge and the notification all read it from here.
+    var updateCount: UnifiedUpdateCount {
+        UpdatePlanner.unifiedCount(installable: allItems.count, manual: visibleManual.count)
+    }
+
     /// Badge, error, footer and category counts — all derived from the current lists,
     /// so this is safe to call both at the end of a scan and after a view rebuild.
     private func emitCounts() {
-        sinks.badgeChange?(allItems.count)
+        sinks.badgeChange?(updateCount.badgeCount)
         sinks.errorCount?(failedSources)
         sinks.footerInfo?(lastCheck, visibleManual.filter(isSecurityApp).count)
         let appsCount = allItems.filter { $0.kind.category == .apps }.count + visibleManual.count
@@ -316,6 +322,10 @@ extension ScanStore {
                                   action: .openLogs))
             emitWegaState(WegaState(pose: .alert, line: trf("Znalazłam %@, ale część źródeł milczy.", "\(updates)")))
         }
+        // M4 — the dock badge has one owner (the agent); a window scan hands it the fresh
+        // number instead of leaving yesterday's. Only from here, never from `emitCounts()`,
+        // which also runs on a bare view rebuild and must not claim a scan just happened.
+        MenuBarAgent.shared.reportWindowScan(count: updateCount.badgeCount, failedChecks: sources)
         emitCounts()
     }
 

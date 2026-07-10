@@ -128,7 +128,7 @@ struct UpdateView: View {
             // Top bar
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(allItems.isEmpty ? tr("Wszystko aktualne") : trf("%@ aktualizacji do zainstalowania", "\(allItems.count)"))
+                    Text(headline)
                         .font(.system(size: 18, weight: .semibold))
                     if let d = scan.lastCheck {
                         HStack(spacing: 4) {
@@ -289,6 +289,20 @@ struct UpdateView: View {
                 compact: true
             )
         }
+    }
+
+    /// M4 — the header names both halves of the count, because they behave differently:
+    /// the installable ones are what the button below will actually upgrade.
+    private var headline: String {
+        let count = scan.updateCount
+        if count.isEmpty { return tr("Wszystko aktualne") }
+        if count.manual == 0 {
+            return trf("%@ aktualizacji do zainstalowania", "\(count.installable)")
+        }
+        if count.installable == 0 {
+            return trf("%@ do ręcznej aktualizacji", "\(count.manual)")
+        }
+        return trf("%@ do zainstalowania + %@ ręcznych", "\(count.installable)", "\(count.manual)")
     }
 
     private var selectAllSymbol: String {

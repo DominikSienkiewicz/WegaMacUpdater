@@ -85,6 +85,19 @@ final class MenuBarAgent: ObservableObject {
         }
     }
 
+    /// M4 — the dock badge has exactly one owner: this agent. A scan run from the window
+    /// reports its result here instead of leaving the badge showing yesterday's number.
+    /// Also resets the notification watermark, so the next background check does not
+    /// re-announce updates the user has just seen (or just installed).
+    func reportWindowScan(count: Int, failedChecks: Int) {
+        updateCount = count
+        lastCheckFailed = count == 0 && failedChecks > 0
+        lastCheck = Date()
+        lastNotifiedCount = count
+        persist()
+        updateDockBadge()
+    }
+
     private func persist() {
         let defaults = UserDefaults.standard
         defaults.set(updateCount, forKey: Keys.lastCount)

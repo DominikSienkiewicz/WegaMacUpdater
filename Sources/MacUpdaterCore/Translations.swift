@@ -78,6 +78,9 @@ public enum Translations {
         "Ten cask wymaga odświeżenia": "This cask needs refreshing",
         "Wszystko aktualne": "Everything up to date",
         "%@ aktualizacji do zainstalowania": "%@ updates to install",
+        // M4 — nagłówek nazywa obie połowy licznika; przycisk obiecuje tylko instalowalne.
+        "%@ do zainstalowania + %@ ręcznych": "%@ to install + %@ manual",
+        "%@ do ręcznej aktualizacji": "%@ to update manually",
         "Sprawdzono %@": "Checked %@",
         "Sprawdź ponownie": "Check again",
         "Zaktualizuj wszystkie (%@)": "Update all (%@)",

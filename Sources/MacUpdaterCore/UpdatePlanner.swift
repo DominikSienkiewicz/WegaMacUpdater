@@ -51,6 +51,30 @@ public enum SelectAllState: Equatable, Sendable { case none, all, partial }
 
 /// What the Update screen should communicate after a check, separating a clean
 /// "everything is current" from a check that couldn't complete (e.g. offline).
+/// How many updates there are, in the two shapes the UI needs (M4).
+public struct UnifiedUpdateCount: Equatable, Sendable {
+    /// Upgrades Wega performs itself: Homebrew formulae + casks, Mac App Store, npm.
+    public let installable: Int
+    /// Updates Wega detected but cannot install — the app updates itself, or has no
+    /// package manager behind it.
+    public let manual: Int
+
+    public init(installable: Int, manual: Int) {
+        self.installable = installable
+        self.manual = manual
+    }
+
+    /// Everything that is out of date. The number a badge shows.
+    public var total: Int { installable + manual }
+
+    public var badgeCount: Int { total }
+
+    /// What "Update all (N)" may claim — never the manual half.
+    public var updateAllButtonCount: Int { installable }
+
+    public var isEmpty: Bool { total == 0 }
+}
+
 public enum ScanState: Equatable, Sendable {
     case upToDate
     case outdated(Int)
@@ -202,6 +226,17 @@ public enum UpdatePlanner {
             // so it folds in with `.manual` for a total partition.
             manual:   items.filter { $0.origin == .manual || $0.origin == .npm }
         )
+    }
+
+    /// The one count every surface reports (M4), split into the two halves that behave
+    /// differently: `installable` is what Wega can upgrade for you (brew / mas / npm),
+    /// `manual` is what it found but can only point you at.
+    ///
+    /// Keeping them apart is what makes the header honest — "12 to install + 3 manual" —
+    /// while `updateAllButtonCount` stays at 12, because a button must never promise more
+    /// than it delivers. Badges have room for one number, so they show `total`.
+    public static func unifiedCount(installable: Int, manual: Int) -> UnifiedUpdateCount {
+        UnifiedUpdateCount(installable: installable, manual: manual)
     }
 
     /// Decides what the screen reports given how many updates were found and how many
