@@ -127,6 +127,20 @@ final class MenuBarAgent: ObservableObject {
         updateCount = result.total
         lastCheckFailed = result.total == 0 && result.failedChecks > 0
         lastCheck = Date()
+
+        // F3 — upgrade the safe, opted-in subset before announcing anything, so the badge and
+        // the notification describe the world *after* the background work, not before it.
+        let upgraded = await BackgroundUpdater.shared.runIfEligible(
+            candidates: result.brew?.casks.map(\.name) ?? [],
+            policies: policies
+        )
+        if !upgraded.isEmpty {
+            // Those casks are no longer outdated; re-check so the badge does not keep offering
+            // upgrades that have already happened.
+            let refreshed = await MenuBarUpdateChecker().availableUpdateCount(policies: policies)
+            lastResult = refreshed
+            updateCount = refreshed.total
+        }
         persist()
         updateDockBadge()
 

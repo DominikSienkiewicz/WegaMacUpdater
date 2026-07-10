@@ -548,6 +548,14 @@ extension ScanStore {
 
     func runUpdate() async {
         guard let model else { return }
+        // F3 — never overlap with a background upgrade: both take snapshots and both call
+        // `brew upgrade --cask`. The window is the one the user is waiting on.
+        guard UpgradeMutex.shared.acquire() else {
+            showBanner(BannerData(variant: .danger, title: tr("Aktualizacja w toku"),
+                                  message: tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.")))
+            return
+        }
+        defer { UpgradeMutex.shared.release() }
         updating = true
         emitActivitySignal(.scanning)
         brewLog = []
@@ -749,55 +757,27 @@ extension ScanStore {
 
     // MARK: FEAT-05 (rollback) + FEAT-04 (watchdog Team ID)
 
-    /// FEAT-05: instant COW clone (clonefile) of each cask's app before upgrade,
-    /// so a bad upgrade can be rolled back. Returns token→snapshot URL.
+    /// FEAT-05 + FEAT-04, now shared with the background updater so the two can never
+    /// diverge on what "safe upgrade" means. See `CaskRollbackGuard`.
     private func snapshotCasks(_ tokens: [String]) -> [String: URL] {
-        let base = FileManager.default.temporaryDirectory.appendingPathComponent("wega-rollback", isDirectory: true)
-        var snapshots: [String: URL] = [:]
-        for token in tokens {
-            guard let appURL = caskIconPaths[token] else { continue }
-            let dest = base.appendingPathComponent("\(token).app")
-            if (try? BundleSnapshot.clone(appURL, to: dest)) != nil { snapshots[token] = dest }
-        }
-        return snapshots
+        CaskRollbackGuard.snapshot(tokens: tokens, appPaths: caskIconPaths)
     }
 
-    /// FEAT-05 canary (Gatekeeper) — on failure restore the clone (auto-rollback).
-    /// FEAT-04 — on success record the publisher Team ID; alert if it changed.
     private func postCaskUpgrade(_ tokens: [String], snapshots: [String: URL]) async {
-        for token in tokens {
-            guard let appURL = caskIconPaths[token] else { continue }
-            let healthy = await Task.detached { CanaryCheck.passesGatekeeper(appAt: appURL) }.value
-            if !healthy, let snapshot = snapshots[token] {
-                var restored = false
-                do {
-                    try BundleSnapshot.restore(snapshot: snapshot, to: appURL)
-                    restored = true
-                } catch {
-                    // FEAT-05: lokalizacja chroniona (brak prawa zapisu) → przez root-helpera.
-                    if PrivilegedHelperClient.shared.isEnabled {
-                        do {
-                            try await PrivilegedHelperClient.shared.replaceBundle(at: appURL.path, withSnapshotAt: snapshot.path)
-                            restored = true
-                        } catch {
-                            AppLogger.app.error("Rollback przez helper nie powiódł się: \(error.localizedDescription, privacy: .public)")
-                        }
-                    }
-                }
-                if restored {
-                    brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.", "\(token)"))
-                    emitWegaState(WegaState(pose: .alert, line: trf("Cofnęłam %@ — nowa wersja nie przeszła kontroli.", "\(token)")))
-                } else {
-                    brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli, ale rollback się nie powiódł.", "\(token)"))
-                }
-            } else {
-                let teamID = await Task.detached { CodeSignatureVerifier.teamID(ofAppAt: appURL) }.value
-                if case let .changed(old, new) = TeamIDLedger.shared.record(bundleID: "cask:\(token)", teamID: teamID) {
-                    showStickyBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"),
-                                                message: trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.", "\(token)", "\(old)", "\(new ?? "—")")))
-                }
+        let outcomes = await CaskRollbackGuard.verify(tokens: tokens, appPaths: caskIconPaths, snapshots: snapshots)
+        for (token, outcome) in outcomes {
+            switch outcome {
+            case .healthy:
+                continue
+            case .rolledBack:
+                brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.", "\(token)"))
+                emitWegaState(WegaState(pose: .alert, line: trf("Cofnęłam %@ — nowa wersja nie przeszła kontroli.", "\(token)")))
+            case .rollbackFailed:
+                brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli, ale rollback się nie powiódł.", "\(token)"))
+            case .publisherChanged(let old, let new):
+                showStickyBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"),
+                                            message: trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.", "\(token)", "\(old)", "\(new ?? "—")")))
             }
-            if let snapshot = snapshots[token] { try? FileManager.default.removeItem(at: snapshot) }
         }
     }
 

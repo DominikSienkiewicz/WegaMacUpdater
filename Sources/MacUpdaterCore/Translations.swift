@@ -356,6 +356,13 @@ public enum Translations {
             "This cask installs no app, so it cannot be snapshotted or rolled back.",
         "Bez ochrony cofnięciem": "No rollback protection",
         "Więcej działań": "More actions",
+        // F3 — ciche aktualizacje w tle: opt-in per aplikacja, tylko dla chronionych casków.
+        "Aktualizuj automatycznie w tle": "Update automatically in the background",
+        "Aktualizacje w tle": "Background updates",
+        "Zaktualizowano %@ w tle · wszystkie przeszły test.": "Updated %@ in the background · all passed their check.",
+        "Zaktualizowano %@ w tle · %@ cofnięto po nieudanym teście.": "Updated %@ in the background · %@ rolled back after a failed check.",
+        "Aktualizacja w toku": "Update in progress",
+        "Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.": "Wega is updating something in the background. Try again in a moment.",
         // F2 — podgląd planu: każde pole wolno powiedzieć „nie wiem”.
         "Pokaż, co dokładnie zrobię": "Show exactly what I will do",
         "Sprawdzam rozmiary pobrań…": "Checking download sizes…",

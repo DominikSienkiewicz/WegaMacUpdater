@@ -168,7 +168,8 @@ struct UpdateSection: View {
                     onToggle:       { toggle(item.key) },
                     onSelect:       { onInspect?(item) },
                     onIgnore:       { onIgnore?(item) },
-                    onPin:          { onPin?(item) }
+                    onPin:          { onPin?(item) },
+                    backgroundUpdateToken: item.kind == .cask ? item.name : nil
                 )
                 .contextMenu {
                     UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) })
