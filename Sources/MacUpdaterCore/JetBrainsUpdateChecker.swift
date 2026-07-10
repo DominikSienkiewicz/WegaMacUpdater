@@ -37,6 +37,11 @@ public struct JetBrainsUpdateChecker: Sendable {
     }
 }
 
-private struct JetBrainsRelease: Decodable {
+/// One release entry from JetBrains' `data.services.jetbrains.com` releases feed.
+/// `whatsnew` is the HTML changelog blob the feed ships per release; it is optional
+/// because older/other entries omit it. Kept `internal` (not `private`) so the parser
+/// layer is unit-testable. Raw HTML is returned untouched — rendering is a UI concern.
+struct JetBrainsRelease: Decodable {
     let version: String
+    let whatsnew: String?
 }

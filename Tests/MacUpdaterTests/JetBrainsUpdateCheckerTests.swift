@@ -83,4 +83,22 @@ struct JetBrainsUpdateCheckerTests {
             .check(app: app(bundleID: bundleID, version: "2026.1.1"))
         #expect(result == .failed)
     }
+
+    // MARK: - JetBrainsRelease.whatsnew (F1)
+
+    // The releases endpoint carries an HTML `whatsnew` blob per release. The decoder
+    // must surface it so the release-notes UI can render it later.
+    @Test func releaseDecodesWhatsnewField() throws {
+        let json = #"{"\#(code)":[{"version":"2026.1.2","whatsnew":"<p>Faster indexing.</p>"}]}"#
+        let releases = try JSONDecoder().decode([String: [JetBrainsRelease]].self, from: Data(json.utf8))
+        #expect(releases[code]?.first?.version == "2026.1.2")
+        #expect(releases[code]?.first?.whatsnew == "<p>Faster indexing.</p>")
+    }
+
+    // `whatsnew` is optional: releases without it still decode (nil, not a failure).
+    @Test func releaseWhatsnewIsNilWhenAbsent() throws {
+        let json = #"{"\#(code)":[{"version":"2026.1.2"}]}"#
+        let releases = try JSONDecoder().decode([String: [JetBrainsRelease]].self, from: Data(json.utf8))
+        #expect(releases[code]?.first?.whatsnew == nil)
+    }
 }

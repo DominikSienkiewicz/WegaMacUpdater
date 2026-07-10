@@ -51,6 +51,81 @@ struct SparkleUpdateCheckerTests {
         #expect(AppcastParser.parse(data: Data(xml.utf8)) == nil)
     }
 
+    // MARK: - AppcastParser release notes (F1)
+
+    // The `<description>` is frequently HTML wrapped in CDATA. The parser must hand
+    // back the *raw* markup untouched — sanitizing/AttributedString conversion is a
+    // UI concern, not the parser's.
+    @Test func parserExtractsDescriptionFromCDATA() {
+        let xml = """
+        <?xml version="1.0"?>
+        <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+            <channel>
+                <item>
+                    <enclosure url="https://example.com/App-1.1.0.dmg" sparkle:shortVersionString="1.1.0"/>
+                    <description><![CDATA[<h1>What's new</h1><p>Fixed a crash.</p>]]></description>
+                </item>
+            </channel>
+        </rss>
+        """
+        let item = AppcastParser.parseItem(data: Data(xml.utf8))
+        #expect(item?.version == "1.1.0")
+        #expect(item?.descriptionHTML == "<h1>What's new</h1><p>Fixed a crash.</p>")
+    }
+
+    // Plain (non-CDATA) text description is returned verbatim.
+    @Test func parserExtractsPlainDescription() {
+        let xml = """
+        <?xml version="1.0"?>
+        <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+            <channel>
+                <item>
+                    <enclosure url="https://example.com/App-1.1.0.dmg" sparkle:shortVersionString="1.1.0"/>
+                    <description>Minor bug fixes.</description>
+                </item>
+            </channel>
+        </rss>
+        """
+        #expect(AppcastParser.parseItem(data: Data(xml.utf8))?.descriptionHTML == "Minor bug fixes.")
+    }
+
+    // A separate release-notes page linked via <sparkle:releaseNotesLink>.
+    @Test func parserExtractsReleaseNotesLink() {
+        let xml = """
+        <?xml version="1.0"?>
+        <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+            <channel>
+                <item>
+                    <sparkle:releaseNotesLink>https://example.com/notes/1.1.0.html</sparkle:releaseNotesLink>
+                    <enclosure url="https://example.com/App-1.1.0.dmg" sparkle:shortVersionString="1.1.0"/>
+                </item>
+            </channel>
+        </rss>
+        """
+        let item = AppcastParser.parseItem(data: Data(xml.utf8))
+        #expect(item?.version == "1.1.0")
+        #expect(item?.releaseNotesLink == URL(string: "https://example.com/notes/1.1.0.html"))
+    }
+
+    // SEC-09: a plain-HTTP release-notes link is MITM-able → reject it, just like the
+    // feed URL. Version still parses; only the insecure link is dropped.
+    @Test func parserRejectsNonHTTPSReleaseNotesLink() {
+        let xml = """
+        <?xml version="1.0"?>
+        <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+            <channel>
+                <item>
+                    <sparkle:releaseNotesLink>http://example.com/notes/1.1.0.html</sparkle:releaseNotesLink>
+                    <enclosure url="https://example.com/App-1.1.0.dmg" sparkle:shortVersionString="1.1.0"/>
+                </item>
+            </channel>
+        </rss>
+        """
+        let item = AppcastParser.parseItem(data: Data(xml.utf8))
+        #expect(item?.version == "1.1.0")
+        #expect(item?.releaseNotesLink == nil)
+    }
+
     // MARK: - check(app:)
 
     private let overrideBundleID = "com.test.app"
