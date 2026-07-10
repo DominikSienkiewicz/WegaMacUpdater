@@ -19,10 +19,10 @@ public enum CatalogSignature {
     //   let key = Curve25519.Signing.PrivateKey()
     //   key.publicKey.rawRepresentation.base64EncodedString()   // ← tutaj
     // Podpisy generuj kluczem prywatnym nad bajtami pliku → base64 → <plik>.sig
-    public static let publicKeyBase64 = "REPLACE_ED25519_PUBKEY"
+    public static let publicKeyBase64 = "hIBhd9jCe39fbyQQimwzJqgwW79/Z3L7GRPbPfr+4zQ="
 
     /// True once a real publisher key is set (gates the fail-closed paths).
-    public static var isConfigured: Bool { publicKeyBase64 != "REPLACE_ED25519_PUBKEY" }
+    public static var isConfigured: Bool { publicKeyBase64 != "hIBhd9jCe39fbyQQimwzJqgwW79/Z3L7GRPbPfr+4zQ=" }
 
     /// Verifies a detached base64 Ed25519 signature over `data`. Returns false on
     /// any decode/verify failure (fail-closed). No-ops to false if unconfigured —

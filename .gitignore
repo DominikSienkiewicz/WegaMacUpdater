@@ -72,3 +72,7 @@ DerivedData/
 /.idea/
 /.claude/
 /docs/
+
+# Ed25519 catalog signing key — NIGDY w repo
+wega-catalog.pem
+*.pem
