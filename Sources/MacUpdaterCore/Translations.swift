@@ -82,6 +82,8 @@ public enum Translations {
         "%@ do zainstalowania + %@ ręcznych": "%@ to install + %@ manual",
         "%@ do ręcznej aktualizacji": "%@ to update manually",
         "Sprawdzono %@": "Checked %@",
+        // M2 — stara lista mówi wprost, kiedy powstała.
+        "Znaleziono %@": "Found %@",
         "Sprawdź ponownie": "Check again",
         "Zaktualizuj wszystkie (%@)": "Update all (%@)",
         "Zaktualizuj wybrane (%@)": "Update selected (%@)",
@@ -354,6 +356,23 @@ public enum Translations {
             "This cask installs no app, so it cannot be snapshotted or rolled back.",
         "Bez ochrony cofnięciem": "No rollback protection",
         "Więcej działań": "More actions",
+        // F3 — ciche aktualizacje w tle: opt-in per aplikacja, tylko dla chronionych casków.
+        "Aktualizuj automatycznie w tle": "Update automatically in the background",
+        "Aktualizacje w tle": "Background updates",
+        "Zaktualizowano %@ w tle · wszystkie przeszły test.": "Updated %@ in the background · all passed their check.",
+        "Zaktualizowano %@ w tle · %@ cofnięto po nieudanym teście.": "Updated %@ in the background · %@ rolled back after a failed check.",
+        "Aktualizacja w toku": "Update in progress",
+        "Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.": "Wega is updating something in the background. Try again in a moment.",
+        // F2 — podgląd planu: każde pole wolno powiedzieć „nie wiem”.
+        "Pokaż, co dokładnie zrobię": "Show exactly what I will do",
+        "Sprawdzam rozmiary pobrań…": "Checking download sizes…",
+        "rozmiar nieznany": "size unknown",
+        "nieznany host": "unknown host",
+        "suma sprawdzana": "checksum verified",
+        "bez weryfikacji sumy": "checksum not verified",
+        "Może poprosić o hasło administratora.": "May ask for an admin password.",
+        "Nie udało się ustalić rozmiaru pobrania — zakładam duży plik.":
+            "Could not determine the download size — assuming a large file.",
         // F4 — brak Homebrew to zaproszenie, nie mur.
         "Zainstaluj Homebrew, żeby odblokować więcej aktualizacji":
             "Install Homebrew to unlock more updates",
@@ -438,6 +457,8 @@ public enum Translations {
         "Co się działo": "What happened",
         "Co się ostatnio działo?": "What happened recently?",
         "Skan rozpoczęty": "Scan started",
+        // M2(c) — anulowanie skanu ma swój komunikat; skan nie udaje, że się skończył.
+        "Przerwałam skanowanie.": "I stopped scanning.",
         "Zaglądam do notatek…": "Checking my notes…",
         "Ostrzeżenia+": "Warnings+",
         "Tylko błędy": "Errors only",

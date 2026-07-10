@@ -213,4 +213,59 @@ final class UpdatePlannerTests: XCTestCase {
         let firefox = UpdatePlanner.outdatedItems(brew: brew, mas: [], npm: [])[0]
         XCTAssertTrue(UpdatePlanner.casksWithoutChecksum([firefox], downloads: [:]).isEmpty)
     }
+
+    // MARK: commands(for:) — F2 plan-preview shares one source of truth with execution
+
+    /// A mixed plan must produce exactly the commands `runUpdate` runs, in the same
+    /// order: formulae, then casks, then npm (one per package), then mas.
+    func testCommandsForMixedPlanMatchesExecutionOrder() {
+        let plan = UpdatePlan(formulaNames: ["wget", "jq"], caskNames: ["firefox"],
+                              npmNames: ["@openai/codex", "typescript"], includesMas: true, count: 6)
+        XCTAssertEqual(UpdatePlanner.commands(for: plan), [
+            UpdateCommand(executable: "brew", arguments: ["upgrade", "wget", "jq"]),
+            UpdateCommand(executable: "brew", arguments: ["upgrade", "--cask", "firefox"]),
+            UpdateCommand(executable: "npm", arguments: ["install", "-g", "@openai/codex@latest"]),
+            UpdateCommand(executable: "npm", arguments: ["install", "-g", "typescript@latest"]),
+            UpdateCommand(executable: "mas", arguments: ["upgrade"])
+        ])
+    }
+
+    func testCommandsForEmptyPlanProducesNoCommands() {
+        let plan = UpdatePlan(formulaNames: [], caskNames: [], npmNames: [], includesMas: false, count: 0)
+        XCTAssertTrue(UpdatePlanner.commands(for: plan).isEmpty)
+    }
+
+    func testCommandsForMasOnly() {
+        let plan = UpdatePlan(formulaNames: [], caskNames: [], npmNames: [], includesMas: true, count: 1)
+        XCTAssertEqual(UpdatePlanner.commands(for: plan), [UpdateCommand(executable: "mas", arguments: ["upgrade"])])
+    }
+
+    func testCommandsForNpmIsOnePerPackage() {
+        let plan = UpdatePlan(formulaNames: [], caskNames: [], npmNames: ["a", "b", "c"], includesMas: false, count: 3)
+        XCTAssertEqual(UpdatePlanner.commands(for: plan), [
+            UpdateCommand(executable: "npm", arguments: ["install", "-g", "a@latest"]),
+            UpdateCommand(executable: "npm", arguments: ["install", "-g", "b@latest"]),
+            UpdateCommand(executable: "npm", arguments: ["install", "-g", "c@latest"])
+        ])
+    }
+
+    /// The auto-recovery retry for an interrupted cask upgrade runs
+    /// `brew upgrade --cask --force <tokens>` — the preview must reflect that verbatim.
+    func testForcedCaskCommandMatchesRetryPath() {
+        XCTAssertEqual(
+            UpdatePlanner.forcedCaskCommand(tokens: ["docker", "postman"]),
+            UpdateCommand(executable: "brew", arguments: ["upgrade", "--cask", "--force", "docker", "postman"])
+        )
+    }
+
+    func testOutdatedItemReleaseNotesDefaultsToNil() {
+        let item = OutdatedItem(key: "f:wget", name: "wget", from: "1.0", to: "1.1", kind: .formula)
+        XCTAssertNil(item.releaseNotes)
+    }
+
+    func testOutdatedItemCarriesReleaseNotesWhenProvided() {
+        let item = OutdatedItem(key: "c:firefox", name: "firefox", from: "120", to: "121",
+                                kind: .cask, releaseNotes: "Fixes and improvements")
+        XCTAssertEqual(item.releaseNotes, "Fixes and improvements")
+    }
 }

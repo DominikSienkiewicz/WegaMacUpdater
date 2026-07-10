@@ -65,6 +65,9 @@ struct UpdateView: View {
                     footerInfo:     onFooterInfo,
                     categoryCounts: onCategoryCounts
                 ))
+                // M2 — put the previous result on screen before doing anything else. It is
+                // a no-op after the first appearance and whenever a scan has already run.
+                scan.restoreLastScan()
                 scan.replayLastScan()
             }
     }
@@ -85,7 +88,7 @@ struct UpdateView: View {
             title: tr("Sprawdźmy, co się zestarzało"),
             message: tr("Wega zajrzy do Homebrew oraz Mac App Store i powie, co warto odświeżyć."),
             action: AnyView(
-                Button { Task { await scan.runCheck() } } label: {
+                Button { scan.startCheck() } label: {
                     Label(tr("Sprawdź aktualizacje"), systemImage: "arrow.triangle.2.circlepath")
                 }
                 .buttonStyle(.borderedProminent)
@@ -97,10 +100,25 @@ struct UpdateView: View {
     }
 
     // MARK: Checking
+    //
+    // M2(c) — this screen used to animate five invented command bars on a timer, regardless
+    // of what the scan was doing or how long it would take, with no way to stop it. The scan
+    // is strictly sequential, so the bar now reports the phase it is genuinely in.
     private var checkingView: some View {
         VStack(alignment: .leading, spacing: 14) {
-            ForEach(Array(["brew update", "brew outdated", "brew outdated --cask --greedy", "mas outdated", "sparkle · cask check"].enumerated()), id: \.offset) { idx, cmd in
-                CheckingBar(command: cmd, delay: Double(idx) * 0.2)
+            HStack(spacing: 10) {
+                ProgressView(value: scan.progress?.fractionCompleted ?? 0)
+                    .progressViewStyle(.linear)
+                    .tint(Color.wegaHoney)
+                if scan.progress?.isCancellable == true {
+                    Button(tr("Anuluj")) { scan.cancelScan() }
+                        .controlSize(.small)
+                }
+            }
+            if case .running(let phase) = scan.progress {
+                Text(phase.commandLabel)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.tertiary)
             }
             SniffingScene(
                 caption: tr("Wega węszy po Homebrew…"),
@@ -131,17 +149,23 @@ struct UpdateView: View {
                     Text(headline)
                         .font(.system(size: 18, weight: .semibold))
                     if let d = scan.lastCheck {
+                        // M2 — a restored list must never pass for a fresh one. Anything
+                        // older than a quarter of an hour carries its date, and a day-old
+                        // result says so in words.
+                        let freshness = scan.freshness() ?? .fresh
                         HStack(spacing: 4) {
-                            Text(trf("Sprawdzono %@", "\(d.formatted(date: .omitted, time: .shortened))"))
+                            Text(freshness == .stale
+                                 ? trf("Znaleziono %@", "\(d.formatted(date: .abbreviated, time: .shortened))")
+                                 : trf("Sprawdzono %@", "\(d.formatted(date: .omitted, time: .shortened))"))
                             Text("·")
                             Text("brew + mas").font(.system(size: 11, design: .monospaced))
                         }
                         .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(freshness.needsExplicitTimestamp ? AnyShapeStyle(Color.wegaToffee) : AnyShapeStyle(.tertiary))
                     }
                 }
                 Spacer()
-                Button { Task { await scan.runCheck() } } label: {
+                Button { scan.startCheck() } label: {
                     Label(tr("Sprawdź ponownie"), systemImage: "arrow.triangle.2.circlepath")
                 }
                 .disabled(scan.updating || scan.status == .checking)
@@ -180,6 +204,8 @@ struct UpdateView: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
             }
+
+            planPreview
 
             staleCaskCard
 
@@ -293,6 +319,57 @@ struct UpdateView: View {
         }
     }
 
+    /// F2 — "show me exactly what you will do", before anything is done.
+    ///
+    /// The commands are read from `UpdatePlanner.commands(for:)`, the same call the upgrade
+    /// executes, so the preview cannot drift from reality. Per cask it reports the download
+    /// host and whether Homebrew will verify its checksum, whether the rollback net covers
+    /// it, whether the cask *may* ask for an admin password, and how big the download is —
+    /// with **unknown** shown as itself, never as a guess.
+    @ViewBuilder
+    private var planPreview: some View {
+        if !allItems.isEmpty {
+            DisclosureGroup(isExpanded: $scan.showPlanPreview) {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(scan.plannedCommands.enumerated()), id: \.offset) { _, command in
+                        Text("$ \(command.executable) \(command.arguments.joined(separator: " "))")
+                            .font(.system(size: 11, design: .monospaced))
+                            .textSelection(.enabled)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    if !scan.plannedCaskTokens.isEmpty {
+                        Divider().opacity(0.4)
+                        ForEach(scan.plannedCaskTokens, id: \.self) { token in
+                            PlanPreviewCaskRow(
+                                token: token,
+                                download: scan.caskDownloads[token],
+                                protection: scan.caskProtection[token],
+                                mayNeedPassword: scan.caskProfiles[token]?.mayRequireAdminPassword ?? false,
+                                size: scan.caskSizes[token]
+                            )
+                        }
+                        if scan.probingSizes {
+                            HStack(spacing: 6) {
+                                ProgressView().controlSize(.small)
+                                Text(tr("Sprawdzam rozmiary pobrań…")).font(.system(size: 11)).foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                }
+                .padding(.top, 8)
+            } label: {
+                Text(tr("Pokaż, co dokładnie zrobię"))
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+            .onChange(of: scan.showPlanPreview) { _, expanded in
+                if expanded { Task { await scan.probeDownloadSizes() } }
+            }
+        }
+    }
+
     /// M3(b) — offers the cleanup that "check for updates" used to perform behind the
     /// user's back. Names every cask it would remove; the scan already excluded them from
     /// the list above, so nothing here is load-bearing for the count.
@@ -384,5 +461,74 @@ struct UpdateView: View {
                 .padding(12)
             }
         }
+    }
+}
+
+/// One cask in the plan preview (F2): download host, checksum status, rollback coverage,
+/// a possible admin-password prompt, and the download size.
+///
+/// Every field is allowed to say "I don't know". `brew info --json` has no size, so a size
+/// is a HEAD probe away and a CDN may still withhold `Content-Length`; a `pkg`/`installer`/
+/// `preflight` stanza is visible but its contents are not, so the password note says *may*.
+private struct PlanPreviewCaskRow: View {
+    let token: String
+    let download: CaskDownloadInfo?
+    let protection: RollbackProtection.Verdict?
+    let mayNeedPassword: Bool
+    let size: DownloadSizeProbeResult?
+
+    private var host: String {
+        download?.url.flatMap { URL(string: $0)?.host() } ?? tr("nieznany host")
+    }
+
+    private var sizeLabel: String {
+        switch size {
+        case .known(let bytes):
+            return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+        case .unknown, .failed:
+            return tr("rozmiar nieznany")
+        case nil:
+            return "—"
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(token)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .frame(width: 150, alignment: .leading)
+            Text(host)
+                .font(.system(size: 10.5))
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            if download?.hasChecksum == true {
+                Label(tr("suma sprawdzana"), systemImage: "checkmark.seal")
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(Color.wegaSuccess)
+                    .help(tr("suma sprawdzana"))
+            } else {
+                Label(tr("bez weryfikacji sumy"), systemImage: "exclamationmark.shield")
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(Color.wegaDanger)
+                    .help(tr("bez weryfikacji sumy"))
+            }
+            if protection == .protected {
+                Image(systemName: "shield.lefthalf.filled").foregroundStyle(Color.wegaSuccess)
+                    .help(tr("Chronione automatycznym cofnięciem"))
+            } else if protection != nil {
+                Image(systemName: "shield.slash").foregroundStyle(.tertiary)
+                    .help(tr("Bez ochrony cofnięciem"))
+            }
+            if mayNeedPassword {
+                Image(systemName: "key").foregroundStyle(Color.wegaToffee)
+                    .help(tr("Może poprosić o hasło administratora."))
+            }
+            Text(sizeLabel)
+                .font(.system(size: 10.5, design: .monospaced))
+                .foregroundStyle(.tertiary)
+                .frame(width: 96, alignment: .trailing)
+        }
+        .font(.system(size: 11))
     }
 }

@@ -168,7 +168,8 @@ struct UpdateSection: View {
                     onToggle:       { toggle(item.key) },
                     onSelect:       { onInspect?(item) },
                     onIgnore:       { onIgnore?(item) },
-                    onPin:          { onPin?(item) }
+                    onPin:          { onPin?(item) },
+                    backgroundUpdateToken: item.kind == .cask ? item.name : nil
                 )
                 .contextMenu {
                     UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) })
@@ -300,6 +301,7 @@ struct ManualUpdateSection: View {
 
             ForEach(items, id: \.path) { item in
                 let isInspected = "m:" + item.path.path == inspectedKey
+                VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     AppIcon(path: item.path, size: 32)
                     VStack(alignment: .leading, spacing: 2) {
@@ -327,6 +329,16 @@ struct ManualUpdateSection: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
+
+                // F1 — the release notes, inline, from whichever source could supply them.
+                // Rows whose source publishes none simply have no disclosure: the UI says
+                // nothing rather than inventing a "no changes" that it cannot know.
+                if let notes = item.releaseNotes, !notes.isEmpty {
+                    ReleaseNotesDisclosure(notes: notes)
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 10)
+                }
+                }
                 .background(isInspected ? Color.wegaHoney.opacity(0.14) : Color.clear)
                 .overlay(alignment: .leading) {
                     if isInspected {
@@ -536,6 +548,40 @@ struct ManualUpdateActionView: View {
                     Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
                 }
                 .controlSize(.small)
+            }
+        }
+    }
+}
+
+/// F1 — expands a row into the vendor's own release notes.
+///
+/// The text is scrubbed of markup by `ReleaseNotesText` first: it arrives as HTML from a
+/// Sparkle appcast or the JetBrains API, written by a third party and fetched over the
+/// network, and Wega renders it. Long notes are truncated in place with a scroll rather
+/// than pushing the update list off screen.
+private struct ReleaseNotesDisclosure: View {
+    let notes: String
+
+    @State private var expanded = false
+
+    private var text: String { ReleaseNotesText.plain(fromHTML: notes) }
+
+    var body: some View {
+        if !text.isEmpty {
+            DisclosureGroup(isExpanded: $expanded) {
+                ScrollView {
+                    Text(text)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 4)
+                }
+                .frame(maxHeight: 160)
+            } label: {
+                Text(tr("Co nowego"))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.tertiary)
             }
         }
     }

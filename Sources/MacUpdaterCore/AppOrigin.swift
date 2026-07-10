@@ -9,7 +9,7 @@ import Foundation
 /// the two windows from disagreeing — e.g. Docker showing "Brew" in the inventory but
 /// "Ręcznie zainstalowane" in the updates list. A regression there fails
 /// `AppOriginTests` / the consistency test rather than only surfacing as a visual bug.
-public enum AppOrigin: Equatable, Sendable {
+public enum AppOrigin: Codable, Equatable, Sendable {
     case brew
     case appStore
     case npm

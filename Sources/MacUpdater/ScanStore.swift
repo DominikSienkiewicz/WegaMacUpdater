@@ -50,6 +50,15 @@ final class ScanStore: ObservableObject {
     @Published var cleaningStaleCasks = false
     /// M5 — whether each outdated cask is covered by snapshot → canary → auto-rollback.
     @Published var caskProtection:    [String: RollbackProtection.Verdict] = [:]
+    /// F2 — what each outdated cask installs. Feeds the "may need an admin password" note.
+    @Published var caskProfiles:      [String: CaskArtifactProfile] = [:]
+    /// F2 — download sizes, probed on demand. `unknown` is a first-class answer: brew's JSON
+    /// carries no size and a CDN may omit `Content-Length`.
+    @Published var caskSizes:         [String: DownloadSizeProbeResult] = [:]
+    @Published var probingSizes       = false
+    @Published var showPlanPreview    = false
+    /// M2(c) — where the scan actually is. `nil` before the first one ever runs.
+    @Published var progress: ScanProgress?
     /// F4 — tools the user has not installed. An invitation to install them, not an error.
     @Published var unavailableSources = 0
     /// F4 — false when `brew` is absent. Drives the soft "install Homebrew" card.
@@ -68,10 +77,86 @@ final class ScanStore: ObservableObject {
 
     private var model: AppViewModel?
     private let processes = RunningProcessService()
+    /// M2(b) — the last scan, on disk. Read once on first appearance, written after each
+    /// completed scan, so a relaunch shows the previous list instead of an empty hero.
+    private let resultStore: ScanResultStore
+    private var restoredLastScan = false
+    /// M2(c) — the scan runs here, not in a view. A `Task` started from `UpdateView` died
+    /// with the view tree; this one outlives a language re-key and a tab switch, and gives
+    /// **Cancel** something to cancel.
+    private var scanTask: Task<Void, Never>?
+
+    init(resultStore: ScanResultStore = ScanResultStore()) {
+        self.resultStore = resultStore
+    }
 
     /// Services are owned by the app-level `AppViewModel`; hand them over on first appearance.
     func attach(model: AppViewModel) {
         self.model = model
+    }
+
+    /// M2(a)+(b) — put a result on screen **now**, before any scanning starts.
+    ///
+    /// Two sources compete: the snapshot on disk from a previous launch, and the lists the
+    /// menu-bar agent already built during its last background check (it used to compute
+    /// them and throw everything but the count away). The newer one wins. Neither claims to
+    /// be current — `freshness` decides how loudly the UI has to say when it was taken.
+    func restoreLastScan() {
+        guard !restoredLastScan, status == .ready else { return }
+        restoredLastScan = true
+
+        let snapshot = resultStore.load()
+        let background = MenuBarAgent.shared.lastResult
+
+        // Prefer whichever was taken later; a nil timestamp can never win.
+        let useBackground: Bool
+        switch (snapshot?.scannedAt, background?.scannedAt) {
+        case (nil, nil):            return
+        case (nil, _):              useBackground = true
+        case (_, nil):              useBackground = false
+        case (let s?, let b?):      useBackground = b > s
+        }
+
+        if useBackground, let background {
+            brewOutdated   = background.brew
+            masOutdated    = background.mas
+            npmOutdated    = background.npm
+            manualOutdated = background.manualApps
+            lastCheck      = background.scannedAt
+            failedSources  = background.failedChecks
+        } else if let snapshot {
+            brewOutdated   = snapshot.brew
+            masOutdated    = snapshot.mas
+            npmOutdated    = snapshot.npm
+            manualOutdated = snapshot.manual
+            lastCheck      = snapshot.scannedAt
+        } else {
+            return
+        }
+
+        status = .results
+        // Deliberately no `emitActivitySignal`: nothing is running. The tab icon must not
+        // spin, and the scan-finished sound of `finishScan` would be a lie.
+        emitCounts()
+    }
+
+    /// How old the result on screen is. `nil` when nothing has ever been scanned.
+    func freshness(now: Date = Date()) -> ScanFreshness? {
+        lastCheck.map { ScanFreshness.of(scannedAt: $0, now: now) }
+    }
+
+    /// Persist what the last scan found, so the next launch has something to show at once.
+    private func persistLastScan() {
+        guard let lastCheck else { return }
+        let snapshot = ScanSnapshot(
+            scannedAt: lastCheck,
+            brew: brewOutdated ?? BrewOutdated(formulae: [], casks: []),
+            mas: masOutdated,
+            npm: npmOutdated,
+            manual: manualOutdated
+        )
+        do { try resultStore.save(snapshot) }
+        catch { WegaLog.error(.app, "Nie udało się zapisać wyniku skanu: \(error.localizedDescription)") }
     }
 
     /// Re-bind the view-tree sinks. Called on every appearance because the closures
@@ -188,30 +273,69 @@ final class ScanStore: ObservableObject {
 // Split into an extension (same file, so `private` state stays accessible) to keep the
 // `ScanStore` body within SwiftLint's type_body_length budget.
 extension ScanStore {
-    func runCheck(emitActivity: Bool = true) async {
+    /// Kicks off a scan owned by the store. Idempotent: a second press while one is running
+    /// is ignored rather than racing a second `brew update` against the first.
+    func startCheck() {
+        guard scanTask == nil else { return }
+        scanTask = Task { @MainActor [weak self] in
+            await self?.runCheck()
+            self?.scanTask = nil
+        }
+    }
+
+    /// M2(c) — cancellation is not new plumbing: `ProcessRunner` already honours
+    /// `Task.isCancelled` end to end and surfaces `.cancelled`. It just had no button.
+    func cancelScan() {
+        scanTask?.cancel()
+    }
+
+    /// Returns `true` when the caller must stop. Freezes progress at the phase we reached,
+    /// so the screen can say where it stopped instead of snapping to 0% or to "done".
+    private func bailIfCancelled(at phase: ScanPhase, emitActivity: Bool) async -> Bool {
+        guard Task.isCancelled else { return false }
+        progress = .cancelled(at: phase)
+        // Keep whatever the previous scan found rather than blanking the window: an empty
+        // list would read as "nothing is outdated", which we have not established.
+        status = lastCheck == nil ? .ready : .results
+        if emitActivity { emitActivitySignal(.idle) }
+        emitWegaState(WegaState(pose: .idle, line: tr("Przerwałam skanowanie.")))
+        WegaLog.info(.scanner, "Skan anulowany na etapie: \(phase.commandLabel)")
+        return true
+    }
+
+    /// `lightweight` skips the two expensive, redundant steps after an upgrade (M2d):
+    /// `brew update` (metadata was refreshed minutes ago, at the start of the upgrade) and
+    /// the stale-cask sweep (nothing has become stale in the meantime). What remains is a
+    /// plain `brew outdated` re-query, which is all the post-upgrade list actually needs.
+    func runCheck(emitActivity: Bool = true, lightweight: Bool = false) async {
         guard let model else { return }
         status = .checking
         errorMessage = nil
         if emitActivity { emitActivitySignal(.scanning) }
-        WegaLog.info(.scanner, tr("Skan rozpoczęty"))
+        WegaLog.info(.scanner, lightweight ? "Lekkie odświeżenie listy" : tr("Skan rozpoczęty"))
         emitWegaState(WegaState(pose: .sniff, line: tr("Węszę po Homebrew…")))
 
-        // Refresh brew metadata before asking what is outdated — otherwise a
-        // newly-released cask/formula version that hasn't landed locally yet
-        // would be missed even though `brew info` against the API shows it.
-        _ = try? await model.brewService.update()
+        progress = .running(.brew)
 
-        // M3(b) — detect stale casks; never uninstall them here. "Check for updates" is a
-        // read-only operation, and `brew uninstall --force` behind that button was the
-        // single most surprising thing Wega did. The user is offered the cleanup as a card
-        // in the results (see `staleCasks`) and the tokens are filtered out of the outdated
-        // list below, so deferring the removal cannot resurrect phantom outdated entries.
-        let installedTokens = (try? await model.brewService.installedCasks()) ?? []
-        if installedTokens.isEmpty {
-            staleCasks = []
-        } else {
-            let installInfo = (try? await model.brewService.caskInstallationInfo(tokens: Array(installedTokens))) ?? []
-            staleCasks = StaleCaskDetector().staleCasks(from: installInfo)
+        if !lightweight {
+            // Refresh brew metadata before asking what is outdated — otherwise a
+            // newly-released cask/formula version that hasn't landed locally yet
+            // would be missed even though `brew info` against the API shows it.
+            _ = try? await model.brewService.update()
+            if await bailIfCancelled(at: .brew, emitActivity: emitActivity) { return }
+
+            // M3(b) — detect stale casks; never uninstall them here. "Check for updates" is a
+            // read-only operation, and `brew uninstall --force` behind that button was the
+            // single most surprising thing Wega did. The user is offered the cleanup as a card
+            // in the results (see `staleCasks`) and the tokens are filtered out of the outdated
+            // list below, so deferring the removal cannot resurrect phantom outdated entries.
+            let installedTokens = (try? await model.brewService.installedCasks()) ?? []
+            if installedTokens.isEmpty {
+                staleCasks = []
+            } else {
+                let installInfo = (try? await model.brewService.caskInstallationInfo(tokens: Array(installedTokens))) ?? []
+                staleCasks = StaleCaskDetector().staleCasks(from: installInfo)
+            }
         }
 
         // F4 — an absent tool is "not applicable", never a failure. `brewNotFound` used to
@@ -234,13 +358,18 @@ extension ScanStore {
                 brewOutcome = .failed("brew outdated")
                 WegaLog.error(.homebrew, "brew outdated: \(error.localizedDescription)") }
         outcomes.append(brewOutcome)
+        if await bailIfCancelled(at: .brew, emitActivity: emitActivity) { return }
 
+        progress = .running(.mas)
         do { masOutdated = try await model.masService.outdated(); outcomes.append(.succeeded) }
         catch MasServiceError.masNotFound { masOutdated = []; outcomes.append(.notInstalled) }
         catch { masOutdated = []
                 outcomes.append(.failed("Mac App Store"))
                 WegaLog.error(.app, "mas outdated: \(error.localizedDescription)") }
 
+        if await bailIfCancelled(at: .mas, emitActivity: emitActivity) { return }
+
+        progress = .running(.npm)
         do { npmOutdated = try await model.npmService.outdated(); outcomes.append(.succeeded) }
         catch NpmServiceError.npmNotFound { npmOutdated = []; outcomes.append(.notInstalled) }
         catch { npmOutdated = []
@@ -254,6 +383,9 @@ extension ScanStore {
         unavailableSources = UpdatePlanner.unavailableSourceCount(outcomes)
         brewAvailable = brewOutcome != .notInstalled
 
+        if await bailIfCancelled(at: .npm, emitActivity: emitActivity) { return }
+
+        progress = .running(.manual)
         let brewOutdatedCasks = Set(brewOutdated?.casks.map(\.name) ?? [])
         let scan = await scanManualUpdates(brewOutdatedCasks: brewOutdatedCasks)
         manualOutdated = scan.apps
@@ -300,6 +432,7 @@ extension ScanStore {
 
         lastCheck = Date()
         status    = .results
+        progress  = .finished
 
         finishScan(emitActivity: emitActivity, silentSources: silentSources, failedSources: failed)
     }
@@ -357,6 +490,7 @@ extension ScanStore {
         // which also runs on a bare view rebuild and must not claim a scan just happened.
         MenuBarAgent.shared.reportWindowScan(count: updateCount.badgeCount, failedChecks: sources)
         emitCounts()
+        persistLastScan()
     }
 
     private func scanManualUpdates(brewOutdatedCasks: Set<String> = []) async -> (apps: [ManualOutdatedApp], failedChecks: Int) {
@@ -414,6 +548,14 @@ extension ScanStore {
 
     func runUpdate() async {
         guard let model else { return }
+        // F3 — never overlap with a background upgrade: both take snapshots and both call
+        // `brew upgrade --cask`. The window is the one the user is waiting on.
+        guard UpgradeMutex.shared.acquire() else {
+            showBanner(BannerData(variant: .danger, title: tr("Aktualizacja w toku"),
+                                  message: tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.")))
+            return
+        }
+        defer { UpgradeMutex.shared.release() }
         updating = true
         emitActivitySignal(.scanning)
         brewLog = []
@@ -421,6 +563,13 @@ extension ScanStore {
         emitWegaState(WegaState(pose: .sniff, line: tr("Aktualizuję, chwila…")))
 
         let plan          = UpdatePlanner.plan(selectedKeys: selected, allKeys: allItems.map(\.key))
+        // F2 — the exact argument vectors come from the planner, the same call the preview
+        // panel renders. Building them here as well is how a dry-run starts to lie: the
+        // `--force` retry path below is precisely the drift that was waiting to happen.
+        let commands      = UpdatePlanner.commands(for: plan)
+        let formulaArgs   = commands.first { $0.executable == "brew" && !$0.arguments.contains("--cask") }?.arguments
+        let caskArgs      = commands.first { $0.executable == "brew" && $0.arguments.contains("--cask") }?.arguments
+        let npmCommands   = commands.filter { $0.executable == "npm" }
         let formulaNames  = plan.formulaNames
         let caskNames     = plan.caskNames
         let npmNames      = plan.npmNames
@@ -437,10 +586,26 @@ extension ScanStore {
 
         // FEAT-07: dla casków (duże pobrania) doradczo ostrzeż przy złych warunkach
         // (łącze taryfowe / throttling). Akcja jest user-initiated → kontynuujemy.
+        //
+        // F2 — the gate used to be fed a hard-coded `200MB + 1`, because `brew info --json`
+        // carries no size. It now gets the sum of whatever the HEAD probes could actually
+        // measure. When nothing could be measured we keep the old pessimistic assumption
+        // (a cask is usually large) but say so in the log, rather than pretending to know.
         if !caskNames.isEmpty {
+            await probeDownloadSizes()
+            let measured = caskNames.compactMap { token -> Int64? in
+                if case .known(let bytes) = caskSizes[token] { return bytes }
+                return nil
+            }
+            let assumedSize: Int64 = 200 * 1024 * 1024 + 1
+            let sizeBytes = measured.isEmpty ? assumedSize : measured.reduce(0, +)
+            if measured.isEmpty {
+                brewLog.append("ℹ️ " + tr("Nie udało się ustalić rozmiaru pobrania — zakładam duży plik."))
+            }
+
             let (net, pow) = await LiveConditions.snapshot()
             if case let .postpone(reason) = DownloadGate.decide(
-                sizeBytes: 200 * 1024 * 1024 + 1, network: net, power: pow) {
+                sizeBytes: sizeBytes, network: net, power: pow) {
                 brewLog.append("⚠️ " + trf("Niekorzystne warunki pobierania (%@) — kontynuuję na żądanie.", "\(reason)"))
                 emitWegaState(WegaState(pose: .alert, line: tr("Uwaga: kosztowne łącze lub throttling — pobieram mimo to.")))
             }
@@ -449,16 +614,14 @@ extension ScanStore {
         var outcomes: [BrewUpgradeOutcome] = []
 
         // Brew upgrade — formulae
-        if !formulaNames.isEmpty {
-            let args = ["upgrade"] + formulaNames
-            outcomes.append(await runBrewUpgrade(arguments: args))
+        if let formulaArgs {
+            outcomes.append(await runBrewUpgrade(arguments: formulaArgs))
         }
 
         // Brew upgrade — casks (FEAT-05 snapshot przed, canary/rollback + FEAT-04 ledger po)
-        if !caskNames.isEmpty {
+        if let caskArgs, !caskNames.isEmpty {
             let snapshots = snapshotCasks(caskNames)
-            let args = ["upgrade", "--cask"] + caskNames
-            var caskOutcome = await runBrewUpgrade(arguments: args)
+            var caskOutcome = await runBrewUpgrade(arguments: caskArgs)
 
             // Auto-recover an interrupted upgrade: if a cask bailed because a stale
             // staged app from a previous, cut-short upgrade is in the way ("already an
@@ -468,7 +631,7 @@ extension ScanStore {
             if !retryTokens.isEmpty {
                 brewLog.append("↻ " + trf("Przerwana aktualizacja (%@) — ponawiam z --force.", "\(retryTokens.joined(separator: ", "))"))
                 WegaLog.info(.homebrew, "Przerwana aktualizacja casku — ponawiam z --force: \(retryTokens.joined(separator: ", "))")
-                let retryOutcome = await runBrewUpgrade(arguments: ["upgrade", "--cask", "--force"] + retryTokens)
+                let retryOutcome = await runBrewUpgrade(arguments: UpdatePlanner.forcedCaskCommand(tokens: retryTokens).arguments)
                 caskOutcome = BrewUpgradeOutcome.merging(original: caskOutcome, forcedRetry: retryOutcome, retriedTokens: retryTokens)
             }
 
@@ -477,8 +640,8 @@ extension ScanStore {
         }
 
         // npm global upgrade — one package at a time (npm semantics).
-        for pkg in npmNames {
-            outcomes.append(await runNpmUpgrade(name: pkg))
+        for (pkg, command) in zip(npmNames, npmCommands) {
+            outcomes.append(await runNpmUpgrade(name: pkg, arguments: command.arguments))
         }
 
         // MAS upgrade
@@ -502,7 +665,8 @@ extension ScanStore {
         // Re-query brew/mas so the list reflects reality, not optimistic clearing.
         // If a cask failed (e.g. "App source not there"), it will still appear here.
         // Suppress its icon signal — the upgrade outcome below sets the final state.
-        await runCheck(emitActivity: false)
+        // M2(d) — lightweight: no second `brew update`, no second stale-cask sweep.
+        await runCheck(emitActivity: false, lightweight: true)
 
         updating = false
 
@@ -564,9 +728,9 @@ extension ScanStore {
         return BrewUpgradeOutcome.analyze(exitCode: exitCode, output: captured)
     }
 
-    private func runNpmUpgrade(name: String) async -> BrewUpgradeOutcome {
+    private func runNpmUpgrade(name: String, arguments: [String]) async -> BrewUpgradeOutcome {
         guard let model else { return BrewUpgradeOutcome(exitCode: -1, failedTokens: [name], errorLines: []) }
-        brewLog.append("$ npm install -g \(name)@latest")
+        brewLog.append("$ npm " + arguments.joined(separator: " "))
         var exitCode: Int32 = 0
         do {
             let stream = try model.npmService.upgradeEvents(name: name)
@@ -593,55 +757,27 @@ extension ScanStore {
 
     // MARK: FEAT-05 (rollback) + FEAT-04 (watchdog Team ID)
 
-    /// FEAT-05: instant COW clone (clonefile) of each cask's app before upgrade,
-    /// so a bad upgrade can be rolled back. Returns token→snapshot URL.
+    /// FEAT-05 + FEAT-04, now shared with the background updater so the two can never
+    /// diverge on what "safe upgrade" means. See `CaskRollbackGuard`.
     private func snapshotCasks(_ tokens: [String]) -> [String: URL] {
-        let base = FileManager.default.temporaryDirectory.appendingPathComponent("wega-rollback", isDirectory: true)
-        var snapshots: [String: URL] = [:]
-        for token in tokens {
-            guard let appURL = caskIconPaths[token] else { continue }
-            let dest = base.appendingPathComponent("\(token).app")
-            if (try? BundleSnapshot.clone(appURL, to: dest)) != nil { snapshots[token] = dest }
-        }
-        return snapshots
+        CaskRollbackGuard.snapshot(tokens: tokens, appPaths: caskIconPaths)
     }
 
-    /// FEAT-05 canary (Gatekeeper) — on failure restore the clone (auto-rollback).
-    /// FEAT-04 — on success record the publisher Team ID; alert if it changed.
     private func postCaskUpgrade(_ tokens: [String], snapshots: [String: URL]) async {
-        for token in tokens {
-            guard let appURL = caskIconPaths[token] else { continue }
-            let healthy = await Task.detached { CanaryCheck.passesGatekeeper(appAt: appURL) }.value
-            if !healthy, let snapshot = snapshots[token] {
-                var restored = false
-                do {
-                    try BundleSnapshot.restore(snapshot: snapshot, to: appURL)
-                    restored = true
-                } catch {
-                    // FEAT-05: lokalizacja chroniona (brak prawa zapisu) → przez root-helpera.
-                    if PrivilegedHelperClient.shared.isEnabled {
-                        do {
-                            try await PrivilegedHelperClient.shared.replaceBundle(at: appURL.path, withSnapshotAt: snapshot.path)
-                            restored = true
-                        } catch {
-                            AppLogger.app.error("Rollback przez helper nie powiódł się: \(error.localizedDescription, privacy: .public)")
-                        }
-                    }
-                }
-                if restored {
-                    brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.", "\(token)"))
-                    emitWegaState(WegaState(pose: .alert, line: trf("Cofnęłam %@ — nowa wersja nie przeszła kontroli.", "\(token)")))
-                } else {
-                    brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli, ale rollback się nie powiódł.", "\(token)"))
-                }
-            } else {
-                let teamID = await Task.detached { CodeSignatureVerifier.teamID(ofAppAt: appURL) }.value
-                if case let .changed(old, new) = TeamIDLedger.shared.record(bundleID: "cask:\(token)", teamID: teamID) {
-                    showStickyBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"),
-                                                message: trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.", "\(token)", "\(old)", "\(new ?? "—")")))
-                }
+        let outcomes = await CaskRollbackGuard.verify(tokens: tokens, appPaths: caskIconPaths, snapshots: snapshots)
+        for (token, outcome) in outcomes {
+            switch outcome {
+            case .healthy:
+                continue
+            case .rolledBack:
+                brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.", "\(token)"))
+                emitWegaState(WegaState(pose: .alert, line: trf("Cofnęłam %@ — nowa wersja nie przeszła kontroli.", "\(token)")))
+            case .rollbackFailed:
+                brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli, ale rollback się nie powiódł.", "\(token)"))
+            case .publisherChanged(let old, let new):
+                showStickyBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"),
+                                            message: trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.", "\(token)", "\(old)", "\(new ?? "—")")))
             }
-            if let snapshot = snapshots[token] { try? FileManager.default.removeItem(at: snapshot) }
         }
     }
 
@@ -658,6 +794,7 @@ extension ScanStore {
     private func resolveRollbackProtection() async {
         guard let model, let casks = brewOutdated?.casks, !casks.isEmpty else {
             caskProtection = [:]
+            caskProfiles = [:]
             return
         }
         let profiles = (try? await model.brewService.caskArtifactProfiles(tokens: casks.map(\.name))) ?? []
@@ -671,6 +808,37 @@ extension ScanStore {
             }
         }
         caskProtection = verdicts
+        caskProfiles = Dictionary(profiles.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first })
+        // Sizes are a network round-trip per cask; they are not worth paying for until the
+        // user asks to see the plan.
+        caskSizes = [:]
+    }
+
+    /// F2 — the exact commands the upgrade will run, from the same planner call the upgrade
+    /// itself uses. If this ever disagrees with execution, it is because someone rebuilt an
+    /// argument vector by hand.
+    var plannedCommands: [UpdateCommand] {
+        UpdatePlanner.commands(for: UpdatePlanner.plan(selectedKeys: selected, allKeys: allItems.map(\.key)))
+    }
+
+    /// The casks this run would upgrade, in the order the command lists them.
+    var plannedCaskTokens: [String] {
+        UpdatePlanner.plan(selectedKeys: selected, allKeys: allItems.map(\.key)).caskNames
+    }
+
+    /// F2 — one HEAD per cask, on demand. `brew info --json` has no size field (verified),
+    /// and a CDN may withhold `Content-Length`, so "unknown" is a legitimate answer that the
+    /// panel shows verbatim rather than guessing a number.
+    func probeDownloadSizes() async {
+        guard !probingSizes else { return }
+        probingSizes = true
+        defer { probingSizes = false }
+
+        let probe = DownloadSizeProbe()
+        for token in plannedCaskTokens where caskSizes[token] == nil {
+            guard let url = caskDownloads[token]?.url else { continue }
+            caskSizes[token] = await probe.probe(urlString: url)
+        }
     }
 
     /// M3(b) — the cleanup the scan used to perform silently, now behind the user's consent.

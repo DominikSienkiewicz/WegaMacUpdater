@@ -59,7 +59,7 @@ public struct ApplicationInfo: Identifiable, Equatable, Sendable {
     }
 }
 
-public struct BrewOutdated: Equatable, Sendable {
+public struct BrewOutdated: Codable, Equatable, Sendable {
     public var formulae: [BrewOutdatedItem]
     public var casks: [BrewOutdatedItem]
 
@@ -73,7 +73,7 @@ public struct BrewOutdated: Equatable, Sendable {
     }
 }
 
-public struct BrewOutdatedItem: Equatable, Sendable {
+public struct BrewOutdatedItem: Codable, Equatable, Sendable {
     public var name: String
     public var installedVersions: [String]
     public var currentVersion: String?
@@ -95,7 +95,7 @@ public struct BrewOutdatedItem: Equatable, Sendable {
     }
 }
 
-public struct MasOutdatedApp: Equatable, Sendable {
+public struct MasOutdatedApp: Codable, Equatable, Sendable {
     public var appStoreID: String
     public var name: String
     public var installedVersion: String?
@@ -126,8 +126,8 @@ public struct MasInstalledApp: Equatable, Sendable {
     }
 }
 
-public struct ManualOutdatedApp: Equatable, Sendable {
-    public enum UpdateSource: Equatable, Sendable {
+public struct ManualOutdatedApp: Codable, Equatable, Sendable {
+    public enum UpdateSource: Codable, Equatable, Sendable {
         case sparkle
         case cask(token: String)
         case mas(appStoreID: String)
@@ -314,6 +314,15 @@ public struct CaskArtifactProfile: Equatable, Sendable {
         artifacts.contains { $0.kind == kind }
     }
 
+    /// F2 — whether upgrading this cask *might* raise an admin-password prompt.
+    ///
+    /// `brew info --json` tells us a `pkg` / `installer` / `preflight` stanza exists; it
+    /// cannot tell us what the stanza does. Presence is detectable, content is not — hence
+    /// "may", never "will", and hence an unrecognised stanza is not counted as evidence.
+    public var mayRequireAdminPassword: Bool {
+        !artifactKinds.isDisjoint(with: [.pkg, .installer, .preflight])
+    }
+
     /// App-bundle targets only — the backward-compatible view used for icon
     /// resolution (`BrewCaskInstallationInfo.appArtifacts` is derived from this).
     public var appArtifacts: [String] {
@@ -325,7 +334,7 @@ public struct CaskArtifactProfile: Equatable, Sendable {
 /// artifact comes from and whether Homebrew will verify its checksum.
 /// `sha256 == "no_check"` means the cask installs WITHOUT checksum verification
 /// (common for auto-updating apps) — a power-user safety signal worth surfacing.
-public struct CaskDownloadInfo: Equatable, Sendable {
+public struct CaskDownloadInfo: Codable, Equatable, Sendable {
     public var token: String
     public var url: String?
     public var sha256: String?

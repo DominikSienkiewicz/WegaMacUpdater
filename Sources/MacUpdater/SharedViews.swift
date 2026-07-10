@@ -232,6 +232,9 @@ struct PackageRow: View {
     /// M5 — the ignore / pin actions, previously reachable only by right-click.
     var onIgnore: (() -> Void)? = nil
     var onPin:    (() -> Void)? = nil
+    /// F3 — per-app opt-in for unattended background upgrades. Offered only where the
+    /// rollback net covers the cask, so the menu never proposes what Wega cannot undo.
+    var backgroundUpdateToken: String? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -274,6 +277,10 @@ struct PackageRow: View {
                     }
                     if let onPin {
                         Button(action: onPin) { Label(tr("Przypnij wersję…"), systemImage: "pin") }
+                    }
+                    if let token = backgroundUpdateToken, rollback == .protected {
+                        Divider()
+                        BackgroundUpdateToggle(token: token)
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -422,5 +429,26 @@ struct BannerView: View {
                     lineWidth: 1
                 )
         )
+    }
+}
+
+/// F3 — the per-app opt-in, in the row's ⋯ menu.
+///
+/// Offered only for casks the rollback net actually covers. Turning it on does not promise
+/// that this app *will* update in the background: the eligibility predicate still has the
+/// last word (no privileged hooks, a verified checksum, and the app not running), and
+/// nothing runs at all while Wega is closed — it is a menu-bar agent, not a daemon.
+private struct BackgroundUpdateToggle: View {
+    let token: String
+
+    @ObservedObject private var store = BackgroundUpdateOptInStore.shared
+
+    var body: some View {
+        Toggle(isOn: Binding(
+            get: { store.isOptedIn(token) },
+            set: { store.setOptedIn($0, token: token) }
+        )) {
+            Label(tr("Aktualizuj automatycznie w tle"), systemImage: "clock.arrow.2.circlepath")
+        }
     }
 }
