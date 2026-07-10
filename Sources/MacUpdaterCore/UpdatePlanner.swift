@@ -75,6 +75,20 @@ public struct UnifiedUpdateCount: Equatable, Sendable {
     public var isEmpty: Bool { total == 0 }
 }
 
+/// How one update source answered during a scan (F4).
+///
+/// The distinction that matters is between a tool that is *absent* and a tool that is
+/// *broken*. Homebrew not being installed says nothing about the health of the scan; brew
+/// being installed and timing out says everything. Collapsing the two — which is what a
+/// bare `catch` does — turns "Wega works fine without Homebrew" into a permanent red banner.
+public enum SourceCheckOutcome: Equatable, Sendable {
+    case succeeded
+    /// The tool is not installed. Not applicable — never a failure.
+    case notInstalled
+    /// The tool is there and did not answer. The `String` names it for the scan log.
+    case failed(String)
+}
+
 public enum ScanState: Equatable, Sendable {
     case upToDate
     case outdated(Int)
@@ -256,6 +270,26 @@ public enum UpdatePlanner {
     /// Decides what the screen reports given how many updates were found and how many
     /// source checks failed. A failed check with zero finds must read as "couldn't
     /// check", never "up to date".
+    ///
+    /// Sources that are present but went silent. An uninstalled tool never counts (F4).
+    public static func failedSourceCount(_ outcomes: [SourceCheckOutcome]) -> Int {
+        failedSourceNames(outcomes).count
+    }
+
+    /// Names of the silent sources, for the scan log. Absent tools have nothing to report.
+    public static func failedSourceNames(_ outcomes: [SourceCheckOutcome]) -> [String] {
+        outcomes.compactMap { outcome in
+            if case .failed(let name) = outcome { return name }
+            return nil
+        }
+    }
+
+    /// Tools the user has not installed. Drives the "install Homebrew to unlock more
+    /// updates" card — an invitation, never an error.
+    public static func unavailableSourceCount(_ outcomes: [SourceCheckOutcome]) -> Int {
+        outcomes.filter { $0 == .notInstalled }.count
+    }
+
     public static func scanState(updateCount: Int, failedChecks: Int) -> ScanState {
         switch (updateCount, failedChecks) {
         case (0, 0):            return .upToDate

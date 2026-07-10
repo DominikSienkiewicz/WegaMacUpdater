@@ -50,6 +50,10 @@ final class ScanStore: ObservableObject {
     @Published var cleaningStaleCasks = false
     /// M5 — whether each outdated cask is covered by snapshot → canary → auto-rollback.
     @Published var caskProtection:    [String: RollbackProtection.Verdict] = [:]
+    /// F4 — tools the user has not installed. An invitation to install them, not an error.
+    @Published var unavailableSources = 0
+    /// F4 — false when `brew` is absent. Drives the soft "install Homebrew" card.
+    @Published var brewAvailable      = true
 
     /// Rebound on every appearance of the view that owns the backing `@State` — see
     /// `bind(_:)`. Replayed from `replayLastScan()` so a rebuilt tree does not show an
@@ -210,13 +214,11 @@ extension ScanStore {
             staleCasks = StaleCaskDetector().staleCasks(from: installInfo)
         }
 
-        // Count sources whose check genuinely failed (vs. a tool that's simply not
-        // installed, which is "not applicable", not a failure). Drives the
-        // "couldn't check" vs "up to date" distinction below.
-        var failed = 0
-        // Names of the top-level sources that genuinely went silent, for the scan-end
-        // log (each manual-checker failure is logged individually by ManualUpdateScanner).
-        var silentSources: [String] = []
+        // F4 — an absent tool is "not applicable", never a failure. `brewNotFound` used to
+        // land in the generic catch below, so a machine without Homebrew wore a permanent
+        // red "the list may be incomplete" banner over a list that was complete.
+        var outcomes: [SourceCheckOutcome] = []
+        let brewOutcome: SourceCheckOutcome
 
         do {
             // Stale casks are still reported outdated by brew even though their app is gone
@@ -225,22 +227,32 @@ extension ScanStore {
                 try await model.brewService.outdatedGreedy(),
                 staleTokens: staleCasks
             )
+            brewOutcome = .succeeded
         }
-        catch { errorMessage = error.localizedDescription; brewOutdated = nil; failed += 1
-                silentSources.append("brew outdated")
+        catch BrewServiceError.brewNotFound { brewOutdated = nil; brewOutcome = .notInstalled }
+        catch { errorMessage = error.localizedDescription; brewOutdated = nil
+                brewOutcome = .failed("brew outdated")
                 WegaLog.error(.homebrew, "brew outdated: \(error.localizedDescription)") }
+        outcomes.append(brewOutcome)
 
-        do { masOutdated = try await model.masService.outdated() }
-        catch MasServiceError.masNotFound { masOutdated = [] }
-        catch { masOutdated = []; failed += 1
-                silentSources.append("Mac App Store")
+        do { masOutdated = try await model.masService.outdated(); outcomes.append(.succeeded) }
+        catch MasServiceError.masNotFound { masOutdated = []; outcomes.append(.notInstalled) }
+        catch { masOutdated = []
+                outcomes.append(.failed("Mac App Store"))
                 WegaLog.error(.app, "mas outdated: \(error.localizedDescription)") }
 
-        do { npmOutdated = try await model.npmService.outdated() }
-        catch NpmServiceError.npmNotFound { npmOutdated = [] }
-        catch { npmOutdated = []; failed += 1
-                silentSources.append("npm")
+        do { npmOutdated = try await model.npmService.outdated(); outcomes.append(.succeeded) }
+        catch NpmServiceError.npmNotFound { npmOutdated = []; outcomes.append(.notInstalled) }
+        catch { npmOutdated = []
+                outcomes.append(.failed("npm"))
                 WegaLog.error(.network, "npm outdated: \(error.localizedDescription)") }
+
+        var failed = UpdatePlanner.failedSourceCount(outcomes)
+        // Names of the top-level sources that genuinely went silent, for the scan-end
+        // log (each manual-checker failure is logged individually by ManualUpdateScanner).
+        var silentSources = UpdatePlanner.failedSourceNames(outcomes)
+        unavailableSources = UpdatePlanner.unavailableSourceCount(outcomes)
+        brewAvailable = brewOutcome != .notInstalled
 
         let brewOutdatedCasks = Set(brewOutdated?.casks.map(\.name) ?? [])
         let scan = await scanManualUpdates(brewOutdatedCasks: brewOutdatedCasks)

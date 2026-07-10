@@ -58,6 +58,7 @@ struct ContentView: View {
     @State private var logsInitialFilter: LogLevelFilter = .all
     @State private var logsErrorBadge: Int = 0
     @State private var updateActivity: UpdateActivity = .idle
+    /// F4 — informational, not a gate: drives the "install Homebrew" invitation card.
     @State private var brewInstalled: Bool
     @State private var lastCheck: Date? = nil
     @State private var securityBadge: Int = 0
@@ -70,9 +71,15 @@ struct ContentView: View {
     }
 
     var body: some View {
-        Group {
-            if brewInstalled {
-                HStack(spacing: 0) {
+        // F4 — Homebrew is no longer a wall. Without it Wega still checks the Mac App Store,
+        // Sparkle, the nine vendor feeds and npm; a card invites the user to install it
+        // rather than blocking the whole app behind a Terminal command (which would
+        // contradict the "zero terminal" promise in the first line of the README).
+        VStack(spacing: 0) {
+            if !brewInstalled {
+                BrewInviteCard { brewInstalled = BinaryLocator().locateBrew() != nil }
+            }
+            HStack(spacing: 0) {
                     SidebarView(
                         activeTab:      $activeTab,
                         wegaState:      $wegaState,
@@ -98,9 +105,6 @@ struct ContentView: View {
                         appsBadge: $appsBadge,
                         cliBadge: $cliBadge
                     )
-                }
-            } else {
-                BrewRequiredView { brewInstalled = BinaryLocator().locateBrew() != nil }
             }
         }
         .frame(minWidth: WegaLayout.windowMinWidth, minHeight: WegaLayout.windowMinHeight)
@@ -359,9 +363,13 @@ private struct SidebarItemRow: View {
     }
 }
 
-// MARK: - Brew not found
+// MARK: - Brew invitation (F4)
 
-private struct BrewRequiredView: View {
+/// Homebrew unlocks the brew formula/cask sources. Its absence is an invitation, not an
+/// error: Wega still checks the Mac App Store, Sparkle, the nine vendor feeds and npm, so
+/// the app stays fully usable and this card sits above the working UI rather than in front
+/// of it. The install command remains copyable, but it is no longer a toll gate.
+private struct BrewInviteCard: View {
     let onRecheck: () -> Void
 
     private let installCommand = AppEndpoints.shared.homebrewInstallCommand
@@ -369,85 +377,36 @@ private struct BrewRequiredView: View {
     @State private var copied = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
-
-            VStack(spacing: 28) {
-                WegaFull(pose: .sad, size: 160)
-
-                VStack(spacing: 8) {
-                    Text(tr("Homebrew nie jest zainstalowany"))
-                        .font(.system(size: 22, weight: .semibold))
-                    Text(tr("Wega potrzebuje Homebrew, żeby sprawdzać aktualizacje\ni zarządzać aplikacjami. Zainstaluj go i kliknij Sprawdź ponownie."))
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 480)
-                }
-
-                // Install command block
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(tr("Polecenie instalacji (wklej w Terminal):"))
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-
-                    HStack(spacing: 0) {
-                        Text(installCommand)
-                            .font(.system(size: 11.5, design: .monospaced))
-                            .foregroundStyle(.primary)
-                            .textSelection(.enabled)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 11)
-
-                        Divider().frame(height: 36)
-
-                        Button {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(installCommand, forType: .string)
-                            withAnimation { copied = true }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                withAnimation { copied = false }
-                            }
-                        } label: {
-                            Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                                .font(.system(size: 13))
-                                .foregroundStyle(copied ? Color.wegaSuccess : Color.wegaHoney)
-                                .frame(width: 44)
-                                .contentTransition(.symbolEffect(.replace))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .background(Color(NSColor.controlBackgroundColor), in: RoundedRectangle(cornerRadius: 9))
-                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.white.opacity(0.08), lineWidth: 1))
-                }
-                .frame(maxWidth: 560)
-
-                HStack(spacing: 10) {
-                    Button {
-                        NSWorkspace.shared.open(AppEndpoints.shared.homebrewWebsiteURL)
-                    } label: {
-                        Label(tr("Otwórz brew.sh"), systemImage: "arrow.up.right.square")
-                    }
-
-                    Button {
-                        onRecheck()
-                    } label: {
-                        Label(tr("Sprawdź ponownie"), systemImage: "arrow.clockwise")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.wegaHoney)
-                    .foregroundStyle(Color(red: 0.16, green: 0.11, blue: 0.07))
-                }
-                .controlSize(.large)
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "shippingbox").foregroundStyle(Color.wegaHoney)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(tr("Zainstaluj Homebrew, żeby odblokować więcej aktualizacji"))
+                    .font(.system(size: 12, weight: .semibold))
+                Text(tr("Wega działa bez niego — sprawdza Mac App Store, Sparkle, feedy producentów i npm. Homebrew dokłada formuły i caski."))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(installCommand)
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
-
             Spacer()
+            Button(copied ? tr("Skopiowano") : tr("Kopiuj polecenie")) {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(installCommand, forType: .string)
+                copied = true
+            }
+            Button(tr("Sprawdź ponownie"), action: onRecheck)
+                .buttonStyle(.borderedProminent)
+                .tint(Color.wegaHoney)
+                .foregroundStyle(Color(red: 0.16, green: 0.11, blue: 0.07))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.windowBackgroundColor))
+        .padding(12)
+        .background(Color.wegaHoney.opacity(0.06))
+        .overlay(alignment: .bottom) { Divider().opacity(0.5) }
     }
 }
 

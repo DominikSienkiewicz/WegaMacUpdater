@@ -354,6 +354,13 @@ public enum Translations {
             "This cask installs no app, so it cannot be snapshotted or rolled back.",
         "Bez ochrony cofnięciem": "No rollback protection",
         "Więcej działań": "More actions",
+        // F4 — brak Homebrew to zaproszenie, nie mur.
+        "Zainstaluj Homebrew, żeby odblokować więcej aktualizacji":
+            "Install Homebrew to unlock more updates",
+        "Wega działa bez niego — sprawdza Mac App Store, Sparkle, feedy producentów i npm. Homebrew dokłada formuły i caski.":
+            "Wega works without it — it checks the Mac App Store, Sparkle, vendor feeds and npm. Homebrew adds formulae and casks.",
+        "Kopiuj polecenie": "Copy command",
+        "Skopiowano": "Copied",
         "Usunięto %@ nieaktualnych casków": "Removed %@ stale casks",
         "Homebrew nie śledzi już aplikacji, których nie ma na dysku.":
             "Homebrew no longer tracks apps that are gone from disk.",
