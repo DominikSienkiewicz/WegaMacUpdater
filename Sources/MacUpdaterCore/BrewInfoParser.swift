@@ -8,14 +8,30 @@ public struct BrewInfoParser {
     }
 
     public func parseCaskInstallations(_ data: Data) throws -> [BrewCaskInstallationInfo] {
-        let response = try decoder.decode(BrewInfoResponse.self, from: data)
-        return response.casks.map {
+        try parseCaskArtifactProfiles(data).map {
             BrewCaskInstallationInfo(token: $0.token, appArtifacts: $0.appArtifacts)
         }
     }
 
     public func parseCaskInstallations(_ json: String) throws -> [BrewCaskInstallationInfo] {
         try parseCaskInstallations(Data(json.utf8))
+    }
+
+    // MARK: - Cask artifact profiles + homepage (shared prerequisite for F1/F2/F3)
+
+    /// Full artifact picture per cask from `brew info --cask --json=v2`: homepage
+    /// plus every declared artifact stanza (`app`, `binary`, `zap`, `pkg`,
+    /// `installer`, `preflight`, and any other stanza preserved verbatim). This is
+    /// the model F2 ("may need admin password") and F3 (eligibility) reason over.
+    public func parseCaskArtifactProfiles(_ data: Data) throws -> [CaskArtifactProfile] {
+        let response = try decoder.decode(BrewInfoResponse.self, from: data)
+        return response.casks.map {
+            CaskArtifactProfile(token: $0.token, homepage: $0.homepage, artifacts: $0.artifacts)
+        }
+    }
+
+    public func parseCaskArtifactProfiles(_ json: String) throws -> [CaskArtifactProfile] {
+        try parseCaskArtifactProfiles(Data(json.utf8))
     }
 
     // MARK: - Download transparency (FEAT-03)
@@ -92,38 +108,53 @@ private struct BrewInfoResponse: Decodable {
 
 private struct BrewInfoCask: Decodable {
     var token: String
-    var appArtifacts: [String]
+    var homepage: String?
+    var artifacts: [CaskArtifact]
 
     private enum CodingKeys: String, CodingKey {
         case token
+        case homepage
         case artifacts
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         token = try container.decode(String.self, forKey: .token)
-        let artifacts = try container.decodeIfPresent([BrewArtifact].self, forKey: .artifacts) ?? []
-        appArtifacts = artifacts.flatMap(\.apps)
+        homepage = try container.decodeIfPresent(String.self, forKey: .homepage)
+        let raw = try container.decodeIfPresent([BrewArtifact].self, forKey: .artifacts) ?? []
+        artifacts = raw.flatMap(\.artifacts)
     }
 }
 
+/// One element of a cask's `artifacts` array. In `brew info --json=v2` each
+/// element is a single-key object (`{ "app": [...] }`, `{ "preflight": {} }`);
+/// this decoder reads whatever key(s) it carries dynamically so no stanza is lost.
 private struct BrewArtifact: Decodable {
-    var apps: [String]
+    var artifacts: [CaskArtifact]
 
-    private enum CodingKeys: String, CodingKey {
-        case app
+    private struct DynamicKey: CodingKey {
+        var stringValue: String
+        var intValue: Int?
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { self.intValue = intValue; self.stringValue = "\(intValue)" }
     }
 
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        apps = try container.decodeIfPresent(AppArtifactValue.self, forKey: .app)?.apps ?? []
+        let container = try decoder.container(keyedBy: DynamicKey.self)
+        artifacts = container.allKeys.map { key in
+            let names = (try? container.decode(ArtifactNames.self, forKey: key))?.names ?? []
+            return CaskArtifact(kind: CaskArtifactKind(rawKey: key.stringValue), names: names)
+        }
     }
 }
 
-private enum AppArtifactValue: Decodable {
+/// Best-effort extraction of concrete target names from an artifact stanza value.
+/// Handles the string / `[string]` / `[{ "target": … }]` shapes Homebrew emits;
+/// anything else (hook bodies serialised as `{}` or `null`) yields no names.
+private enum ArtifactNames: Decodable {
     case strings([String])
 
-    var apps: [String] {
+    var names: [String] {
         switch self {
         case .strings(let strings):
             return strings
@@ -143,7 +174,7 @@ private enum AppArtifactValue: Decodable {
             return
         }
 
-        if let objects = try? container.decode([AppArtifactObject].self) {
+        if let objects = try? container.decode([ArtifactObject].self) {
             self = .strings(objects.compactMap(\.target))
             return
         }
@@ -152,6 +183,6 @@ private enum AppArtifactValue: Decodable {
     }
 }
 
-private struct AppArtifactObject: Decodable {
+private struct ArtifactObject: Decodable {
     var target: String?
 }

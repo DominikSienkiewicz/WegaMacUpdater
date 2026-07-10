@@ -223,6 +223,104 @@ public struct BrewCaskInstallationInfo: Equatable, Sendable {
     }
 }
 
+/// A single artifact kind declared by a cask's `artifacts` stanza in
+/// `brew info --json=v2`. The six named cases are the ones the update strategy
+/// reasons about; every other stanza (`font`, `suite`, `manpage`, `uninstall`, …)
+/// is preserved verbatim as `.other(rawKey)` so the model stays faithful to the
+/// JSON without pretending to enumerate Homebrew's full artifact vocabulary.
+///
+/// - `app` / `binary` / `zap`: "well-behaved" drag-install + cleanup stanzas.
+/// - `pkg` / `installer` / `preflight`: stanzas that run an installer package or a
+///   Ruby hook. Their *presence* is visible in JSON; their *contents* are not —
+///   which is why any password/privilege reasoning built on them must say "may",
+///   never "will".
+public enum CaskArtifactKind: Hashable, Sendable {
+    case app
+    case binary
+    case zap
+    case pkg
+    case installer
+    case preflight
+    case other(String)
+
+    /// Maps a raw `artifacts` object key (e.g. `"app"`, `"pkg"`, `"preflight"`)
+    /// onto a kind, funnelling unrecognised keys into `.other`.
+    public init(rawKey: String) {
+        switch rawKey {
+        case "app":       self = .app
+        case "binary":    self = .binary
+        case "zap":       self = .zap
+        case "pkg":       self = .pkg
+        case "installer": self = .installer
+        case "preflight": self = .preflight
+        default:          self = .other(rawKey)
+        }
+    }
+
+    /// The JSON stanza key this kind corresponds to.
+    public var rawKey: String {
+        switch self {
+        case .app:            return "app"
+        case .binary:         return "binary"
+        case .zap:            return "zap"
+        case .pkg:            return "pkg"
+        case .installer:      return "installer"
+        case .preflight:      return "preflight"
+        case .other(let key): return key
+        }
+    }
+}
+
+/// One artifact stanza of a cask: its `kind` plus any concrete target names the
+/// JSON carried (app/binary targets, pkg filenames…). `names` is empty for hook
+/// stanzas like `preflight`, whose body is a Ruby block that does not serialise —
+/// for those, *presence of the kind* is the only observable signal.
+public struct CaskArtifact: Equatable, Sendable {
+    public var kind: CaskArtifactKind
+    public var names: [String]
+
+    public init(kind: CaskArtifactKind, names: [String] = []) {
+        self.kind = kind
+        self.names = names
+    }
+}
+
+/// The full, testable picture of what a cask installs — the shared data model
+/// behind F1 (homepage), F2 ("may need an admin password", keyed off the presence
+/// of `pkg`/`installer`/`preflight`) and F3 (eligibility, keyed off a cask having
+/// *only* `app`/`binary`/`zap`). All three questions are answerable as pure
+/// functions over this value; the helpers below (`artifactKinds`, `contains`)
+/// are the clean surface they build on.
+public struct CaskArtifactProfile: Equatable, Sendable {
+    public var token: String
+    public var homepage: String?
+    public var artifacts: [CaskArtifact]
+
+    public init(token: String, homepage: String? = nil, artifacts: [CaskArtifact] = []) {
+        self.token = token
+        self.homepage = homepage
+        self.artifacts = artifacts
+    }
+
+    /// The set of distinct artifact kinds this cask declares — the primitive both
+    /// F2 (`!isDisjoint(with: [.pkg, .installer, .preflight])`) and F3
+    /// (`isSubset(of: [.app, .binary, .zap])`) reduce to.
+    public var artifactKinds: Set<CaskArtifactKind> {
+        Set(artifacts.map(\.kind))
+    }
+
+    /// Whether the cask declares an artifact stanza of the given kind.
+    public func contains(_ kind: CaskArtifactKind) -> Bool {
+        artifacts.contains { $0.kind == kind }
+    }
+
+    /// App-bundle targets only — the backward-compatible view used for icon
+    /// resolution (`BrewCaskInstallationInfo.appArtifacts` is derived from this).
+    public var appArtifacts: [String] {
+        artifacts.filter { $0.kind == .app }.flatMap(\.names)
+    }
+}
+
 /// Pre-install download transparency for a cask (**FEAT-03 / I-2**): where the
 /// artifact comes from and whether Homebrew will verify its checksum.
 /// `sha256 == "no_check"` means the cask installs WITHOUT checksum verification
