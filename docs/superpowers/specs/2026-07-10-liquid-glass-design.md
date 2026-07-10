@@ -79,9 +79,11 @@ It lives in `MacUpdaterCore`, alongside the `UpdateFilter` it wraps, because
 `Tests/MacUpdaterTests` depends on `MacUpdaterCore` only — the app target is not testable, and
 the Sonar gate requires ≥ 80 % coverage on new code.
 
-`label`, `hint` and `systemImage` call `tr()`, which lives in the app target, so they are an
-extension declared in `Sources/MacUpdater`. `tab: SidebarTab` and `filter: UpdateFilter?` are
-computed in Core so `WegaState.forTab(_:)` keeps working unchanged.
+`filter: UpdateFilter?` is computed in Core, which already owns `UpdateFilter`.
+
+`label`, `hint` and `systemImage` call `tr()`, and `tab: SidebarTab` names a type declared in
+`ContentView.swift` — all four live in the app target, so they form an extension declared in
+`Sources/MacUpdater`. `WegaState.forTab(_:)` keeps working unchanged.
 
 `@AppStorage` cannot persist an enum with associated values directly; `SidebarSelection`
 conforms to `RawRepresentable` with string raw values (`"updates.security"`, `"logs"`, …).
@@ -208,7 +210,7 @@ nothing to do — instead of the random 18–40 s timer at `ContentView.swift:63
 
 | File | Change |
 |---|---|
-| `Package.swift` | `.macOS(.v14)` → `.macOS(.v26)` |
+| `Package.swift` | `.macOS(.v14)` → `.macOS("26.0")` — see §6.1 |
 | `.github/workflows/ci.yml` | three `runs-on: macos-15` → `macos-26` |
 | `Sources/MacUpdaterCore/SidebarSelection.swift` | new — enum, `RawRepresentable`, `@AppStorage` migration |
 | `Tests/MacUpdaterTests/SidebarSelectionTests.swift` | new — raw-value round trip, tab/filter mapping, migration |
@@ -228,6 +230,22 @@ nothing to do — instead of the random 18–40 s timer at `ContentView.swift:63
 `ContentView.swift` holds nine types in 684 lines. Since its chrome is rewritten anyway, it is
 split along the boundary the rewrite creates. No unrelated file is restructured — the four
 files at the bottom of the table receive a token substitution and nothing else.
+
+### 6.1 The platform literal
+
+`.macOS(.v26)` does not compile under this package's `swift-tools-version: 6.0` — the manifest
+fails with `error: 'v26' is unavailable`. The `.v26` case is gated behind a newer tools
+version.
+
+Use the string form, which `swift package describe` accepts unchanged at tools 6.0:
+
+```swift
+platforms: [ .macOS("26.0") ]
+```
+
+Raising `swift-tools-version` to unlock `.v26` is the alternative. It is rejected here: the
+tools-version bump changes manifest and build semantics across the whole package for no gain
+beyond one enum case.
 
 ## 7. Risks
 
