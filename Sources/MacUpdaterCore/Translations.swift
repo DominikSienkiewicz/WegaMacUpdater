@@ -12,6 +12,8 @@ public enum Translations {
     public static let en: [String: String] = [
         // UI — natywna scena Settings (⌘,).
         "Ustawienia": "Settings",
+        // UI — toolbar toggle for the .inspector() panel.
+        "Panel szczegółów": "Details panel",
         // FEAT-02 — confidence dopasowania migracji.
         "pewne": "confident",
         "sprawdź": "review",

@@ -67,6 +67,7 @@ struct ContentView: View {
     @State private var securityBadge: Int   = 0
     @State private var appsBadge:     Int   = 0
     @State private var cliBadge:      Int   = 0
+    @State private var showInspector: Bool  = true
     /// D5 — one namespace for the toolbar's scan control, so `.glassEffectID` can morph
     /// glass between its ready and checking states.
     @Namespace private var glassNamespace
@@ -99,6 +100,7 @@ struct ContentView: View {
                 appsBadge:         $appsBadge,
                 cliBadge:          $cliBadge,
                 brewInstalled:     $brewInstalled,
+                showInspector:     $showInspector,
                 onNavigate:        { selection = $0 }
             )
             .navigationTitle(selection.label)
@@ -111,6 +113,13 @@ struct ContentView: View {
                 ToolbarItem(placement: .primaryAction) {
                     SettingsLink { Image(systemName: "gearshape") }
                         .help(tr("Ustawienia"))
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showInspector.toggle() } label: {
+                        Image(systemName: "sidebar.trailing")
+                    }
+                    .help(tr("Panel szczegółów"))
+                    .disabled(selection.tab != .update)
                 }
             }
         }

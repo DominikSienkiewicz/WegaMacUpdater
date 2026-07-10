@@ -139,6 +139,7 @@ struct DetailColumn: View {
     @Binding var appsBadge:         Int
     @Binding var cliBadge:          Int
     @Binding var brewInstalled:     Bool
+    @Binding var showInspector:    Bool
     let onNavigate: (SidebarSelection) -> Void
 
     @EnvironmentObject private var scan: ScanStore
@@ -148,6 +149,16 @@ struct DetailColumn: View {
     /// that finishes while the previous bubble is still showing cannot clear it early or
     /// leave it stuck once the new sleep completes.
     @State private var quipTask: Task<Void, Never>?
+
+    /// `.inspector` is attached unconditionally so the detail column is not rebuilt on every
+    /// destination change, but it only presents on Updates: `InspectorPane`'s empty state
+    /// ("pick an update") is meaningless on Logs or Inventory.
+    private var inspectorPresented: Binding<Bool> {
+        Binding(
+            get: { showInspector && selection.tab == .update },
+            set: { showInspector = $0 }
+        )
+    }
 
     var body: some View {
         tabBody
@@ -159,6 +170,15 @@ struct DetailColumn: View {
                     updateCount:   updateBadge,
                     securityCount: securityBadge
                 )
+            }
+            .inspector(isPresented: inspectorPresented) {
+                InspectorPane(
+                    update: scan.inspectedUpdate,
+                    busyToken: scan.manualBusy,
+                    onInstall: { token in Task { await scan.installManual(token: token) } },
+                    caskDownloads: scan.caskDownloads
+                )
+                .inspectorColumnWidth(min: 280, ideal: 340, max: 460)
             }
             .overlay(alignment: .bottom) {
                 if let quip {

@@ -196,19 +196,8 @@ struct UpdateView: View {
 
             staleCaskCard
 
-            HStack(spacing: 0) {
-                listColumn
-                    .frame(maxWidth: .infinity)
-                    .layoutPriority(1)
-                Divider()
-                InspectorPane(
-                    update: scan.inspectedUpdate,
-                    busyToken: scan.manualBusy,
-                    onInstall: { token in Task { await scan.installManual(token: token) } },
-                    caskDownloads: scan.caskDownloads
-                )
-                    .frame(width: 340)
-            }
+            listColumn
+                .frame(maxWidth: .infinity)
         }
     }
 
