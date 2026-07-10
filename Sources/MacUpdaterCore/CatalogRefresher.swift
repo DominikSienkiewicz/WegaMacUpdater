@@ -20,15 +20,20 @@ public struct CatalogRefresher: Sendable {
     private let source: URL
     private let destination: URL
     private let client: HTTPClient
+    /// F5(a) — injected so the fail-closed branch is reachable from a test. Production
+    /// passes the key compiled into the build.
+    private let signatureVerifier: CatalogSignature
 
     public init(
         source: URL,
         destination: URL = AppCatalog.overlayURL,
-        client: HTTPClient = .shared
+        client: HTTPClient = .shared,
+        signatureVerifier: CatalogSignature = .shared
     ) {
         self.source = source
         self.destination = destination
         self.client = client
+        self.signatureVerifier = signatureVerifier
     }
 
     @discardableResult
@@ -51,11 +56,13 @@ public struct CatalogRefresher: Sendable {
         // SEC-04: gdy publisher key jest skonfigurowany, wymagaj poprawnego
         // odłączonego podpisu Ed25519 (<source>.sig) nad dokładnymi bajtami ciała.
         // Bez konfiguracji klucza pomijamy (zachowanie jak dotąd — decode-only).
-        if CatalogSignature.isConfigured {
+        var verifiedSignature: String?
+        if signatureVerifier.isConfigured {
             guard let signatureBase64 = try? await fetchSignature(),
-                  CatalogSignature.verify(data: response.data, signatureBase64: signatureBase64) else {
+                  signatureVerifier.verify(data: response.data, signatureBase64: signatureBase64) else {
                 return .invalid
             }
+            verifiedSignature = signatureBase64
         }
 
         do {
@@ -64,6 +71,21 @@ public struct CatalogRefresher: Sendable {
                 withIntermediateDirectories: true
             )
             try response.data.write(to: destination, options: .atomic)
+            // F5(a) — persist the signature we just verified. `AppCatalog.loadOverlay` checks
+            // it again on the next launch; an overlay written without one can never be loaded
+            // again, which would silently strand the user on the bundled catalog.
+            //
+            // Order matters: the JSON lands first, so a crash between the two writes leaves a
+            // catalog with no signature — rejected on read, falling back to the build. The
+            // reverse order would leave a signature vouching for the *previous* bytes.
+            let signaturePath = AppCatalog.signatureURL(for: destination)
+            if let verifiedSignature {
+                try Data(verifiedSignature.utf8).write(to: signaturePath, options: .atomic)
+            } else {
+                // Unsigned mode: a leftover `.sig` from a signed build would vouch for bytes
+                // that no longer exist, and `loadOverlay` would reject the fresh catalog.
+                try? FileManager.default.removeItem(at: signaturePath)
+            }
             return .updated
         } catch {
             return .failed

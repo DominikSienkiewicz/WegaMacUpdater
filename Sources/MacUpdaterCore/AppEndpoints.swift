@@ -134,15 +134,28 @@ extension AppEndpoints {
     static func loadOverlay() -> AppEndpointsOverlay? {
         let url = overlayURL
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        // SEC-04: gdy publisher key jest skonfigurowany, overlay endpointów musi
-        // mieć ważny odłączony podpis Ed25519 obok pliku (endpoints.json.sig) —
-        // inaczej ignorujemy go (fail-closed). Bez klucza: zachowanie jak dotąd.
-        if CatalogSignature.isConfigured {
-            guard let data = try? Data(contentsOf: url),
-                  let signature = try? String(contentsOf: url.appendingPathExtension("sig"), encoding: .utf8),
-                  CatalogSignature.verify(data: data, signatureBase64: signature) else {
-                return nil
-            }
+
+        // SEC-04 / F5(a): this file is one the user places on their own disk to follow a feed
+        // a vendor has moved, without waiting for a release. A signature would protect
+        // nothing — whoever can write here can already do worse — so an unsigned overlay is
+        // applied and logged. A signature that is present and *wrong*, however, means
+        // tampering, and is refused. See `ConfigOverlayTrust.forEndpoints`.
+        let signature = try? String(contentsOf: url.appendingPathExtension("sig"), encoding: .utf8)
+        let isValid = signature.map { candidate in
+            (try? Data(contentsOf: url)).map { CatalogSignature.verify(data: $0, signatureBase64: candidate) } ?? false
+        } ?? false
+
+        let decision = ConfigOverlayTrust.forEndpoints(
+            signingConfigured: CatalogSignature.isConfigured,
+            signature: signature,
+            isValid: isValid
+        )
+        guard decision.appliesOverlay else {
+            AppLogger.app.error("endpoints.json: podpis obecny, ale nieprawidłowy — overlay zignorowany.")
+            return nil
+        }
+        if decision.deservesWarning {
+            AppLogger.app.warning("endpoints.json: overlay bez podpisu — zastosowany zgodnie z polityką, ale nieweryfikowany.")
         }
         return try? decodeOverlay(contentsOf: url)
     }
