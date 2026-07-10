@@ -3,6 +3,10 @@ import MacUpdaterCore
 
 // MARK: - Tab definition
 
+/// The coarse destination, still spoken by `WegaState.forTab(_:)` and `UpdateView.onNavigate`.
+/// `SidebarSelection` is the finer navigation coordinate the window actually selects on, and it
+/// owns the sidebar's own `label` and `systemImage`; only `hint` is still read from here, via
+/// `SidebarSelection.hint`.
 enum SidebarTab: String, Identifiable {
     case update    = "update"
     case uninstall = "uninstall"
@@ -12,24 +16,6 @@ enum SidebarTab: String, Identifiable {
 
     var id: String { rawValue }
 
-    var label: String {
-        switch self {
-        case .update:    return tr("Aktualizacje")
-        case .uninstall: return tr("Odinstaluj aplikacje")
-        case .migration: return tr("Migracja")
-        case .inventory: return tr("Spis aplikacji")
-        case .logs:      return tr("Logi")
-        }
-    }
-    var systemImage: String {
-        switch self {
-        case .update:    return "arrow.triangle.2.circlepath"
-        case .uninstall: return "trash"
-        case .migration: return "arrow.right.doc.on.clipboard"
-        case .inventory: return "tablecells"
-        case .logs:      return "doc.text.magnifyingglass"
-        }
-    }
     var hint: String {
         switch self {
         case .update:    return tr("Co do odświeżenia")
