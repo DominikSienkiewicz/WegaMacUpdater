@@ -377,7 +377,7 @@ git add Sources/MacUpdater
 git commit -m "refactor(ui): extract Color.wegaInk from eleven copies of the same literal
 
 Color(red: 0.16, green: 0.11, blue: 0.07) is the ink drawn on honey fills. It was
-spelled out verbatim in seven files. No rendered colour changes."
+spelled out verbatim in six files. No rendered colour changes."
 ```
 
 ---
@@ -1181,3 +1181,151 @@ scan actually found."
 **Type consistency.** `SidebarSelection.migrating(legacyTab:)` is named identically in Task 2's implementation, Task 2's tests and Task 4's `migrateLegacyTabIfNeeded`. `SidebarSelection.filter` is produced in Task 2 and consumed in Task 4's `DetailColumn`. `Color.wegaInk` is produced in Task 3 and consumed in Task 5's `ScanControl`. `UpdateActivity` and `SidebarTab` are pre-existing app-target types, unchanged.
 
 **Known unknown.** `ScanControl` reads `ScanStore` via `@EnvironmentObject`; `ScanStore` is currently injected at `MacUpdaterApp` level, so this works — but `UpdateStatus` is declared internal in `ScanStore.swift`, and `ScanControl` compares against it. Both live in the app target, so no access change is needed. If the compiler disagrees, make `UpdateStatus` conform to `Equatable` rather than widening its access.
+
+---
+
+### Task 8: Adopt `.inspector()`, the third native container
+
+Spec decision D2 promises `NavigationSplitView` + `.toolbar` + `.inspector()`. The first two
+landed in Tasks 4b and 5. `.inspector()` was silently dropped from this plan's §6, and the
+whole-branch review caught it: `InspectorPane` is still an inline 340 pt column inside
+`UpdateView`'s `resultsView`, behind a hand-drawn `Divider()` — exactly the content-layer
+construction the redesign set out to replace.
+
+Worse, Task 6 deleted `InspectorPane`'s background on the stated grounds that "`.inspector()`
+supplies the surface". No `.inspector()` existed. This task makes that comment true.
+
+**Files:**
+- Modify: `Sources/MacUpdater/UpdateView.swift` — remove the `HStack` / `Divider()` / fixed-width `InspectorPane`
+- Modify: `Sources/MacUpdater/DetailColumn.swift` — attach `.inspector(isPresented:)`
+- Modify: `Sources/MacUpdater/ContentView.swift` — own `showInspector`, add the toolbar toggle
+- Modify: `Sources/MacUpdaterCore/Translations.swift` — English for the toggle's help string
+
+**Interfaces:**
+- Consumes: `ScanStore.inspectedUpdate: InspectedUpdate?`, `.manualBusy: String?`, `.caskDownloads: [String: CaskDownloadInfo]`, `func installManual(token:) async`. `DetailColumn` already holds `@EnvironmentObject private var scan: ScanStore`.
+- Produces: nothing new.
+
+- [ ] **Step 1: Strip the inline pane from `resultsView`**
+
+In `Sources/MacUpdater/UpdateView.swift`, replace
+
+```swift
+            HStack(spacing: 0) {
+                listColumn
+                    .frame(maxWidth: .infinity)
+                    .layoutPriority(1)
+                Divider()
+                InspectorPane(
+                    update: scan.inspectedUpdate,
+                    busyToken: scan.manualBusy,
+                    onInstall: { token in Task { await scan.installManual(token: token) } },
+                    caskDownloads: scan.caskDownloads
+                )
+                    .frame(width: 340)
+            }
+```
+
+with
+
+```swift
+            listColumn
+                .frame(maxWidth: .infinity)
+```
+
+- [ ] **Step 2: Attach the inspector to the detail column**
+
+In `Sources/MacUpdater/DetailColumn.swift`, add a binding and the modifier. The inspector is
+only meaningful on the Updates destination — everywhere else `InspectorPane` would show its
+"pick an update" empty state, which is nonsense on Logs.
+
+```swift
+    @Binding var showInspector: Bool
+```
+
+```swift
+    /// `.inspector` is attached unconditionally so the detail column is not rebuilt on every
+    /// destination change, but it only presents on Updates: `InspectorPane`'s empty state
+    /// ("pick an update") is meaningless on Logs or Inventory.
+    private var inspectorPresented: Binding<Bool> {
+        Binding(
+            get: { showInspector && selection.tab == .update },
+            set: { showInspector = $0 }
+        )
+    }
+```
+
+and, on the same view the `.safeAreaInset` modifiers hang from:
+
+```swift
+            .inspector(isPresented: inspectorPresented) {
+                InspectorPane(
+                    update: scan.inspectedUpdate,
+                    busyToken: scan.manualBusy,
+                    onInstall: { token in Task { await scan.installManual(token: token) } },
+                    caskDownloads: scan.caskDownloads
+                )
+                .inspectorColumnWidth(min: 280, ideal: 340, max: 460)
+            }
+```
+
+- [ ] **Step 3: Own the state and add the toolbar toggle**
+
+In `Sources/MacUpdater/ContentView.swift`:
+
+```swift
+    @State private var showInspector: Bool = true
+```
+
+Pass `showInspector: $showInspector` to `DetailColumn`. Add to the `.toolbar`, after the
+`SettingsLink` item:
+
+```swift
+                    ToolbarItem(placement: .primaryAction) {
+                        Button { showInspector.toggle() } label: {
+                            Image(systemName: "sidebar.trailing")
+                        }
+                        .help(tr("Panel szczegółów"))
+                        .disabled(selection.tab != .update)
+                    }
+```
+
+- [ ] **Step 4: Add the English translation**
+
+`tr("Panel szczegółów")` is a new string and the `LocalizationCompleteness` test fails without
+an English entry. In `Sources/MacUpdaterCore/Translations.swift`, alongside the other UI
+strings:
+
+```swift
+        "Panel szczegółów": "Details panel",
+```
+
+- [ ] **Step 5: Run the gate**
+
+```bash
+./scripts/check.sh
+```
+
+Expected: `✅ build + test + lint OK`.
+
+- [ ] **Step 6: Verify structurally**
+
+```bash
+grep -rn "\.inspector(" Sources/MacUpdater/          # exactly one hit, in DetailColumn.swift
+grep -n "InspectorPane(" Sources/MacUpdater/         # exactly one hit, in DetailColumn.swift
+grep -n "frame(width: 340)" Sources/MacUpdater/      # zero hits
+```
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add Sources
+git commit -m "feat(ui): move the inspector into the native .inspector() container
+
+Spec D2 promised NavigationSplitView + .toolbar + .inspector(); only the first
+two were adopted. InspectorPane remained an inline 340pt column behind a
+hand-drawn Divider, and Task 6 had already deleted its background on the false
+premise that .inspector() supplied the surface.
+
+The pane now gets the system's glass trailing surface, a resizable column, and a
+toolbar toggle. It presents only on Updates, where its empty state makes sense."
+```

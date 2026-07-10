@@ -190,7 +190,7 @@ action and stays in the results top bar.
 ### 5.2 Colour tokens
 
 `Color(red: 0.16, green: 0.11, blue: 0.07)` — the ink used on honey fills — is repeated
-verbatim **11 times across 7 files**: `ContentView` (×3), `MigrationView` (×3), `UpdateView`
+verbatim **11 times across 6 files**: `ContentView` (×3), `MigrationView` (×3), `UpdateView`
 (×2), `SniffingScene`, `UpdateViewSupport`, `UninstallView`. It becomes `Color.wegaInk` in
 `WegaTheme`, and all 11 sites are swept. The substitution is mechanical and changes no
 rendered colour.
