@@ -346,6 +346,14 @@ public enum Translations {
         "Homebrew wciąż śledzi: %@. Aplikacji nie ma na dysku — możesz je wyrejestrować.":
             "Homebrew still tracks: %@. The apps are gone from disk — you can deregister them.",
         "Wyrejestruj": "Deregister",
+        // M5 — siatka bezpieczeństwa staje się widoczna; badge nie obiecuje ręcznego „Cofnij”.
+        "Przed aktualizacją robię kopię. Jeśli nowa wersja nie przejdzie testu, wracam do poprzedniej.":
+            "I snapshot the app before updating. If the new version fails its check, I put the old one back.",
+        "Chronione automatycznym cofnięciem": "Protected by automatic rollback",
+        "Ten cask nie instaluje aplikacji, więc nie da się zrobić kopii ani cofnąć aktualizacji.":
+            "This cask installs no app, so it cannot be snapshotted or rolled back.",
+        "Bez ochrony cofnięciem": "No rollback protection",
+        "Więcej działań": "More actions",
         "Usunięto %@ nieaktualnych casków": "Removed %@ stale casks",
         "Homebrew nie śledzi już aplikacji, których nie ma na dysku.":
             "Homebrew no longer tracks apps that are gone from disk.",

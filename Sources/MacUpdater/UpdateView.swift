@@ -228,7 +228,7 @@ struct UpdateView: View {
                         let npmPkgs  = allItems.filter { $0.kind == .npm }
                         if !formulae.isEmpty && updateFilter.allowsCli { UpdateSection(title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"),  icon: "terminal",  items: formulae, selected: $scan.selected, inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreItem, onPin: requestPin, onInspect: { scan.inspectedKey = $0.key }) }
                         if !casks.isEmpty && updateFilter.allowsApps {
-                            UpdateSection(title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), icon: "app.gift", items: casks, iconPaths: scan.caskIconPaths, selected: $scan.selected, inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreItem, onPin: requestPin, onInspect: { scan.inspectedKey = $0.key })
+                            UpdateSection(title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), icon: "app.gift", items: casks, iconPaths: scan.caskIconPaths, rollbackProtection: scan.caskProtection, selected: $scan.selected, inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreItem, onPin: requestPin, onInspect: { scan.inspectedKey = $0.key })
                             caskTransparencyNote(casks: casks)
                         }
                         if !store.isEmpty && updateFilter.allowsApps    { UpdateSection(title: tr("Mac App Store"),     subtitle: tr("via mas-cli"),      icon: "bag",      items: store,    selected: $scan.selected, inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreItem, onPin: requestPin, onInspect: { scan.inspectedKey = $0.key }) }

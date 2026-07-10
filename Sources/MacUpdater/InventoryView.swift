@@ -115,12 +115,12 @@ struct InventoryView: View {
 
             // Table header
             WegaCard(padded: false) {
-                HStack(spacing: 12) {
-                    SortHeaderCell(label: tr("Aplikacja"),   key: .name,       sortKey: $sortKey, sortAsc: $sortAsc, flex: 1.6)
-                    SortHeaderCell(label: tr("Wersja"),      key: .version,    sortKey: $sortKey, sortAsc: $sortAsc, flex: 0.6)
-                    SortHeaderCell(label: "Bundle ID",   key: .bundleId,   sortKey: $sortKey, sortAsc: $sortAsc, flex: 1.2)
-                    SortHeaderCell(label: tr("Źródło"),      key: .source,     sortKey: $sortKey, sortAsc: $sortAsc, flex: 0.8)
-                    SortHeaderCell(label: tr("Aktualizacja"),key: .updateDate, sortKey: $sortKey, sortAsc: $sortAsc, flex: 1.2)
+                ProportionalHStack(weights: InventoryRow.columnWeights, spacing: InventoryRow.columnSpacing) {
+                    SortHeaderCell(label: tr("Aplikacja"),   key: .name,       sortKey: $sortKey, sortAsc: $sortAsc)
+                    SortHeaderCell(label: tr("Wersja"),      key: .version,    sortKey: $sortKey, sortAsc: $sortAsc)
+                    SortHeaderCell(label: "Bundle ID",   key: .bundleId,   sortKey: $sortKey, sortAsc: $sortAsc)
+                    SortHeaderCell(label: tr("Źródło"),      key: .source,     sortKey: $sortKey, sortAsc: $sortAsc)
+                    SortHeaderCell(label: tr("Aktualizacja"),key: .updateDate, sortKey: $sortKey, sortAsc: $sortAsc)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
@@ -380,7 +380,6 @@ private struct SortHeaderCell: View {
     let key:     SortKey
     @Binding var sortKey: SortKey
     @Binding var sortAsc: Bool
-    var flex:    CGFloat = 1
 
     var body: some View {
         Button {
@@ -399,7 +398,7 @@ private struct SortHeaderCell: View {
                         .foregroundStyle(Color.wegaHoney)
                 }
             }
-            .frame(maxWidth: .infinity * flex, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(.plain)
     }
@@ -411,6 +410,10 @@ private struct InventoryRow: View {
 
     @State private var hovered = false
 
+    /// Column weights, shared with the table header so the two never drift apart.
+    static let columnWeights: [CGFloat] = [1.6, 0.6, 1.2, 0.8, 1.2]
+    static let columnSpacing: CGFloat = 12
+
     /// Row background: hover wins, otherwise alternating rows get a faint tint.
     private var rowBackground: Color {
         if hovered { return Color.wegaHoney.opacity(0.04) }
@@ -418,32 +421,32 @@ private struct InventoryRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Name (flex 1.6)
+        ProportionalHStack(weights: Self.columnWeights, spacing: Self.columnSpacing) {
+            // Name
             HStack(spacing: 9) {
                 AppIcon(path: app.path, size: 22)
                 Text(app.name)
                     .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
             }
-            .frame(maxWidth: .infinity * 1.6, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Version (flex 0.6)
+            // Version
             Text(app.version ?? "—")
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .frame(maxWidth: .infinity * 0.6, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Bundle ID (flex 1.2)
+            // Bundle ID
             Text(app.bundleIdentifier ?? "—")
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .frame(maxWidth: .infinity * 1.2, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Source (flex 0.8) — classified by the SAME `AppOrigin` the Updates window
+            // Source — classified by the SAME `AppOrigin` the Updates window
             // groups by, so the two windows can never disagree about an app's origin.
             HStack(spacing: 6) {
                 switch AppOrigin.of(app) {
@@ -467,15 +470,56 @@ private struct InventoryRow: View {
                     WegaBadge(label: tr("Ręcznie"), variant: .manual)
                 }
             }
-            .frame(maxWidth: .infinity * 0.8, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Update date (flex 1.2)
+            // Update date
             UpdateDateCell(date: app.updateDate)
-                .frame(maxWidth: .infinity * 1.2, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .background(rowBackground)
         .onHover { hovered = $0 }
+    }
+}
+
+/// Lays out its subviews side by side with widths proportional to `weights` (M5).
+///
+/// Replaces `.frame(maxWidth: .infinity * weight)`, which reads like proportional sizing
+/// but is not: `infinity * 1.6` and `infinity * 0.6` are the same number, so every column
+/// asked for the same unbounded width and the stack split the row evenly.
+struct ProportionalHStack: Layout {
+    let weights: [CGFloat]
+    var spacing: CGFloat = 0
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? subviews.reduce(0) { $0 + $1.sizeThatFits(.unspecified).width }
+        let height = subviews.map { $0.sizeThatFits(.unspecified).height }.max() ?? 0
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let widths = ColumnLayout.proportionalWidths(total: bounds.width, weights: weights, spacing: spacing)
+        guard widths.count == subviews.count else {
+            // Weight/subview mismatch is a programming error; fall back to equal columns
+            // rather than dropping views on the floor.
+            let equal = ColumnLayout.proportionalWidths(
+                total: bounds.width, weights: subviews.map { _ in 1 }, spacing: spacing)
+            place(subviews, widths: equal, in: bounds)
+            return
+        }
+        place(subviews, widths: widths, in: bounds)
+    }
+
+    private func place(_ subviews: Subviews, widths: [CGFloat], in bounds: CGRect) {
+        var x = bounds.minX
+        for (subview, width) in zip(subviews, widths) {
+            subview.place(
+                at: CGPoint(x: x, y: bounds.midY),
+                anchor: .leading,
+                proposal: ProposedViewSize(width: width, height: bounds.height)
+            )
+            x += width + spacing
+        }
     }
 }

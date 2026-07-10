@@ -48,6 +48,8 @@ final class ScanStore: ObservableObject {
     /// scan, removed only when the user says so.
     @Published var staleCasks:        [String]            = []
     @Published var cleaningStaleCasks = false
+    /// M5 — whether each outdated cask is covered by snapshot → canary → auto-rollback.
+    @Published var caskProtection:    [String: RollbackProtection.Verdict] = [:]
 
     /// Rebound on every appearance of the view that owns the backing `@State` — see
     /// `bind(_:)`. Replayed from `replayLastScan()` so a rebuilt tree does not show an
@@ -281,6 +283,8 @@ extension ScanStore {
         } else {
             caskDownloads = [:]
         }
+
+        await resolveRollbackProtection()
 
         lastCheck = Date()
         status    = .results
@@ -631,6 +635,30 @@ extension ScanStore {
 
     private func isProcessRunning(_ name: String) async -> Bool {
         await processes.isRunning(name)
+    }
+
+    /// M5 — works out which outdated casks the rollback net actually covers.
+    ///
+    /// A cask that installs no `.app` cannot be snapshotted, so `postCaskUpgrade` has always
+    /// skipped it — silently, with no log line and no hint in the UI. The hole cannot be
+    /// closed (there is nothing to clone), only disclosed: the row gets an honest "no
+    /// protection" badge, and the log says so before the upgrade runs, not after.
+    private func resolveRollbackProtection() async {
+        guard let model, let casks = brewOutdated?.casks, !casks.isEmpty else {
+            caskProtection = [:]
+            return
+        }
+        let profiles = (try? await model.brewService.caskArtifactProfiles(tokens: casks.map(\.name))) ?? []
+        var verdicts: [String: RollbackProtection.Verdict] = [:]
+        for profile in profiles {
+            let verdict = RollbackProtection.evaluate(profile: profile)
+            verdicts[profile.token] = verdict
+            if verdict.deservesWarning {
+                WegaLog.error(.homebrew,
+                              "\(profile.token): brak ochrony rollbackiem — cask nie instaluje aplikacji, nie da się zrobić snapshotu.")
+            }
+        }
+        caskProtection = verdicts
     }
 
     /// M3(b) — the cleanup the scan used to perform silently, now behind the user's consent.

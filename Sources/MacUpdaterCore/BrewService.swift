@@ -76,6 +76,16 @@ public final class BrewService: @unchecked Sendable {
         return try infoParser.parseInstalledVersions(result.stdout)
     }
 
+    /// M5/F3: the full artifact picture for a cask — what it installs, and its homepage.
+    /// Feeds `RollbackProtection` (can we snapshot it?) and `BackgroundUpdateEligibility`.
+    public func caskArtifactProfiles(tokens: [String]) async throws -> [CaskArtifactProfile] {
+        guard !tokens.isEmpty else { return [] }
+        let arguments = ["info", "--cask", "--json=v2"] + tokens
+        let result = try await runBrew(arguments)
+        try ensureSuccess(result, arguments: arguments)
+        return try infoParser.parseCaskArtifactProfiles(result.stdout)
+    }
+
     /// FEAT-03: pre-install download transparency (host + checksum status) for casks.
     public func caskDownloadInfo(tokens: [String]) async throws -> [CaskDownloadInfo] {
         guard !tokens.isEmpty else { return [] }
