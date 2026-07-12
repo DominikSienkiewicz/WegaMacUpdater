@@ -93,6 +93,12 @@ struct BinaryStream: View {
                 endPoint:   .trailing
             )
         )
+        // The Canvas draws 160-glyph lanes that overflow its own bounds by design (they
+        // scroll and are gradient-masked). Without pinning the layout width, that intrinsic
+        // width propagates up and forces the detail column so wide it shoves the sidebar off
+        // the window's left edge during a scan. `maxWidth: .infinity` with a zero floor keeps
+        // the stream purely decorative: it fills whatever width it is given and demands none.
+        .frame(minWidth: 0, maxWidth: .infinity)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }

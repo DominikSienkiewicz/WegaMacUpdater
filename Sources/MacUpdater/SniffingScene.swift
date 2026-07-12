@@ -116,7 +116,12 @@ struct ThoughtBubble: View {
             .padding(.leading, 6)
             .opacity(visible ? 1 : 0)
         }
-        .fixedSize(horizontal: true, vertical: true)
+        // Vertical only. `horizontal: true` pinned the bubble to its text's intrinsic width
+        // and refused to be squeezed — one more element telling the layout "make room for
+        // me", which (with the binary stream) pushed the detail column wide enough to shove
+        // the sidebar off-screen during a scan. The thoughts are short, so nothing wraps in
+        // practice; this just stops the bubble from dictating width.
+        .fixedSize(horizontal: false, vertical: true)
         .task(id: thoughts.count) {
             guard thoughts.count > 1 else { return }
             // Start on a random thought so multiple screens don't sync up.
