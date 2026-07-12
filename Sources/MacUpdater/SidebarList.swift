@@ -22,22 +22,41 @@ struct SidebarList: View {
 
     var body: some View {
         List(selection: listSelection) {
-            Section(tr("Do aktualizacji")) {
+            Section {
                 row(.updates(.all),      badge: appsBadge + cliBadge, spins: true)
                 row(.updates(.apps),     badge: appsBadge)
                 row(.updates(.cli),      badge: cliBadge)
                 row(.updates(.security), badge: securityBadge, isDanger: true)
-            }
-            Section(tr("Zainstalowane")) {
+            } header: { header(tr("Do aktualizacji")) }
+            Section {
                 row(.migration)
                 row(.inventory)
-            }
-            Section(tr("Narzędzia")) {
+            } header: { header(tr("Zainstalowane")) }
+            Section {
                 row(.uninstall)
                 row(.logs, badge: logsErrorBadge, isDanger: true)
-            }
+            } header: { header(tr("Narzędzia")) }
         }
         .listStyle(.sidebar)
+        // On this SDK the sidebar `List` renders with almost no leading inset, so its rows'
+        // icons touch the window's left edge. `safeAreaPadding` restores the inset for the
+        // scrollable rows — but not for the sticky section headers, which is why they alone
+        // kept spilling off-screen; `header(_:)` gives them their own matching inset.
+        //
+        // The extra during a scan is deliberate: `safeAreaPadding` builds on the window's
+        // leading safe area, which shrinks by ~23pt while the toolbar morphs its scan control.
+        // A single value can't satisfy both states (the base differs), so the idle inset stays
+        // as-is and the scan state compensates for exactly that loss — values dialled in by eye
+        // against this SDK, since there is no API reporting the transient inset.
+        .safeAreaPadding(.leading, leadingInset)
+    }
+
+    private var leadingInset: CGFloat { updateActivity == .scanning ? 41 : 18 }
+
+    /// A section header carrying the same leading inset the rows get from `safeAreaPadding`,
+    /// which does not reach sticky headers on this SDK.
+    private func header(_ title: String) -> some View {
+        Text(title).padding(.leading, 18)
     }
 
     @ViewBuilder

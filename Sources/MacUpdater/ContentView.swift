@@ -72,7 +72,11 @@ struct ContentView: View {
                 logsErrorBadge: logsErrorBadge,
                 updateActivity: updateActivity
             )
-            .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 300)
+            // Fixed, not a range: with a min/ideal/max the split view re-solved the sidebar
+            // width against the detail column's changing content and shifted it left during a
+            // scan, clipping the section headers. A single value pins it so the sidebar looks
+            // identical whatever the detail shows.
+            .navigationSplitViewColumnWidth(240)
         } detail: {
             DetailColumn(
                 selection:         selection,

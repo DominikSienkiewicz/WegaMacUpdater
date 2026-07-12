@@ -107,6 +107,10 @@ struct UpdateView: View {
             ProgressView(value: scan.progress?.fractionCompleted ?? 0)
                 .progressViewStyle(.linear)
                 .tint(Color.wegaHoney)
+                // A linear ProgressView reports a nonzero intrinsic width, which — with no
+                // upper bound — propagates up and pushes the detail column wide enough to
+                // shove the sidebar off-screen. Pin it elastic (0…∞) so it fills, not forces.
+                .frame(minWidth: 0, maxWidth: .infinity)
             if case .running(let phase) = scan.progress {
                 Text(phase.commandLabel)
                     .font(.system(size: 11, design: .monospaced))
@@ -127,8 +131,12 @@ struct UpdateView: View {
                     tr("Ten cask wymaga odświeżenia")
                 ]
             )
+            .frame(maxWidth: .infinity)
             .padding(.top, 16)
         }
+        // The whole checking screen fills the detail column and demands no minimum of its
+        // own, so the sidebar keeps the exact width (and inset) it has when idle.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(24)
     }
 
