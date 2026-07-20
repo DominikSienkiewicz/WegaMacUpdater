@@ -161,6 +161,7 @@ struct InspectorPane: View {
         case .discord:            return "Discord"
         case .signal:             return "Signal"
         case .chrome:             return "Chrome"
+        case .obsidian:           return "Obsidian"
         }
     }
 

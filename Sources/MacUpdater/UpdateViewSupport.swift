@@ -549,6 +549,16 @@ struct ManualUpdateActionView: View {
                 }
                 .controlSize(.small)
             }
+        case .obsidian:
+            HStack(spacing: 8) {
+                WegaBadge(label: "Obsidian", color: item.source.provenance.badgeColor)
+                Button {
+                    NSWorkspace.shared.open(item.path)
+                } label: {
+                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
+                }
+                .controlSize(.small)
+            }
         }
     }
 }
