@@ -158,6 +158,9 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
         case signal
         /// Google Chrome (stable / beta / dev / canary) — self-updating via Keystone.
         case chrome
+        /// Obsidian — self-updating ASAR package; may follow the Catalyst insider channel
+        /// independently of the app bundle and Homebrew cask versions.
+        case obsidian
 
         public var priority: Int {
             switch self {
@@ -169,6 +172,7 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
             case .discord:     return 5
             case .signal:      return 5
             case .chrome:      return 5
+            case .obsidian:    return 5
             case .jetbrains:   return 4
             case .github:      return 3
             case .synology:    return 3

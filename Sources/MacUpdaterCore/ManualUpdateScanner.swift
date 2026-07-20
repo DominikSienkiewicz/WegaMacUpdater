@@ -1,7 +1,7 @@
 import Foundation
 
 /// Runs the manual-app update checkers (Sparkle, JetBrains, GitHub, Synology,
-/// Antigravity, Parallels, Google Drive, ChatGPT) plus the brew-cask version check
+/// Antigravity, Parallels, Google Drive, ChatGPT, Obsidian) plus the brew-cask version check
 /// over every installed app, and returns the outdated ones deduplicated by source
 /// priority — together with the number of checks that genuinely failed.
 ///
@@ -109,6 +109,7 @@ public struct ManualUpdateScanner: Sendable {
         let discordChecker = DiscordUpdateChecker()
         let signalChecker = SignalUpdateChecker()
         let chromeChecker = ChromeUpdateChecker()
+        let obsidianChecker = ObsidianUpdateChecker()
         let brew = brewService
 
         // Build every per-app check as an independent unit of work, then run them with a
@@ -166,6 +167,12 @@ public struct ManualUpdateScanner: Sendable {
                 work.append(Self.logged("Discord", app) { await discordChecker.check(app: app) })
                 work.append(Self.logged("Signal", app) { await signalChecker.check(app: app) })
                 work.append(Self.logged("Chrome", app) { await chromeChecker.check(app: app) })
+            }
+            // Obsidian self-updates its ASAR package independently of its installer.
+            // Run this even when Homebrew owns the current cask: brew may correctly report
+            // the installer as current while an insider package update is still available.
+            if app.bundleIdentifier == ObsidianUpdateChecker.bundleIdentifier {
+                work.append(Self.logged("Obsidian", app) { await obsidianChecker.check(app: app) })
             }
             // Sparkle ALWAYS — it's the app's own appcast, independent of Homebrew. Also
             // keeps working for an app that merely shares a name with a CLI-only cask

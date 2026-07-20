@@ -28,6 +28,7 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public let discordUpdate: String
     public let signalUpdate: String
     public let chromeVersions: String
+    public let obsidianDesktopReleases: String
     public let homebrewWebsite: String
     public let homebrewInstallCommand: String
     public let githubReleasesPage: String
@@ -85,6 +86,7 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
 
     public var chatgptAppcastURL: URL { URL(string: chatgptAppcast)! }
     public var signalUpdateURL: URL { URL(string: signalUpdate)! }
+    public var obsidianDesktopReleasesURL: URL { URL(string: obsidianDesktopReleases)! }
     public var googleDriveOmahaURL: URL { URL(string: googleDriveOmaha)! }
     public var caskDatabaseURL: URL { URL(string: caskDatabase)! }
     public var appCatalogURL: URL { URL(string: appCatalog)! }
@@ -203,6 +205,7 @@ extension AppEndpoints {
             discordUpdate: raw(other.discordUpdate, discordUpdate),
             signalUpdate: validURL(other.signalUpdate, signalUpdate),
             chromeVersions: raw(other.chromeVersions, chromeVersions),
+            obsidianDesktopReleases: validURL(other.obsidianDesktopReleases, obsidianDesktopReleases),
             homebrewWebsite: validURL(other.homebrewWebsite, homebrewWebsite),
             homebrewInstallCommand: raw(other.homebrewInstallCommand, homebrewInstallCommand),
             githubReleasesPage: raw(other.githubReleasesPage, githubReleasesPage),
@@ -236,6 +239,7 @@ public struct AppEndpointsOverlay: Decodable, Sendable, Equatable {
     public let discordUpdate: String?
     public let signalUpdate: String?
     public let chromeVersions: String?
+    public var obsidianDesktopReleases: String? = nil
     public let homebrewWebsite: String?
     public let homebrewInstallCommand: String?
     public let githubReleasesPage: String?
