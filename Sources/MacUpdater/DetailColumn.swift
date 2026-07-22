@@ -161,16 +161,23 @@ struct DetailColumn: View {
     }
 
     var body: some View {
-        tabBody
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .safeAreaInset(edge: .top, spacing: 0) { banners }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                StatusFooter(
-                    lastCheck:     lastCheck,
-                    updateCount:   updateBadge,
-                    securityCount: securityBadge
-                )
-            }
+        // `NavigationSplitView` asks this root for the detail column's min/max constraints.
+        // The scan states have very different intrinsic sizes; publishing those changes while
+        // the native split view is resolving its children can create an AppKit constraint loop.
+        // GeometryReader accepts the split view's proposal and keeps this boundary stable while
+        // the content, safe-area insets, and toolbar update inside it.
+        GeometryReader { _ in
+            tabBody
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .safeAreaInset(edge: .top, spacing: 0) { banners }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    StatusFooter(
+                        lastCheck:     lastCheck,
+                        updateCount:   updateBadge,
+                        securityCount: securityBadge
+                    )
+                }
+        }
             .inspector(isPresented: inspectorPresented) {
                 InspectorPane(
                     update: scan.inspectedUpdate,

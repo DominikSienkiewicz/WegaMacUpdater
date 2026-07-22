@@ -28,6 +28,9 @@ struct WegaMacUpdaterApp: App {
                 .id(localization.language)
                 .tint(Color.wegaHoney)
                 .task {
+#if DEBUG
+                    if await scan.runLayoutRegressionScenarioIfRequested() { return }
+#endif
                     await model.refreshSystemStatus()
                 }
                 .onAppear {
