@@ -25,7 +25,7 @@ if [[ -z "$VERSION" ]]; then
   exit 1
 fi
 echo "→ Wersja (z AppMetadata.version): $VERSION"
-MIN_MACOS="13.0"
+MIN_MACOS="26.0"
 # Universal binary domyślnie (Apple Silicon + Intel). Nadpisz listą arch przez env:
 #   ARCHS="arm64" ./scripts/build-pkg.sh        # tylko Apple Silicon
 read -r -a ARCHS <<< "${ARCHS:-arm64 x86_64}"
@@ -46,12 +46,44 @@ mkdir -p "$(dirname "$OUTPUT_PKG")"
 
 # ---------------------------------------------------------------------------
 echo "→ Buduję release binary (arch: ${ARCHS[*]})..."
-ARCH_FLAGS=()
-for a in "${ARCHS[@]}"; do ARCH_FLAGS+=(--arch "$a"); done
-swift build -c release "${ARCH_FLAGS[@]}"
+ARCH_BIN_DIRS=()
+for arch in "${ARCHS[@]}"; do
+  case "$arch" in
+    arm64|x86_64) ;;
+    *)
+      echo "❌ Nieobsługiwana architektura: $arch"
+      exit 1
+      ;;
+  esac
 
-# Robustne ustalenie katalogu wyjściowego (działa dla single- i multi-arch).
-BIN_DIR="$(swift build -c release "${ARCH_FLAGS[@]}" --show-bin-path)"
+  # SwiftPM/Xcode 27 interpretuje wieloarchitekturowe `--arch` względem SDK 27
+  # i ostrzega o x86_64. Jawny triple zachowuje wspierany target macOS 26.
+  SCRATCH_PATH="$(pwd)/.build/pkg-$arch"
+  SWIFT_BUILD_ARGS=(-c release --triple "$arch-apple-macosx$MIN_MACOS" --scratch-path "$SCRATCH_PATH")
+  swift build "${SWIFT_BUILD_ARGS[@]}"
+  ARCH_BIN_DIRS+=("$(swift build "${SWIFT_BUILD_ARGS[@]}" --show-bin-path)")
+done
+
+RESOURCE_BIN_DIR="${ARCH_BIN_DIRS[0]}"
+if (( ${#ARCH_BIN_DIRS[@]} > 1 )); then
+  BIN_DIR="$BUILD_DIR/universal-bin"
+  mkdir -p "$BIN_DIR"
+  for product in "$APP_NAME" "WegaPrivilegedHelper"; do
+    PRODUCT_SLICES=()
+    for arch_bin_dir in "${ARCH_BIN_DIRS[@]}"; do
+      PRODUCT_SLICE="$arch_bin_dir/$product"
+      if [[ ! -f "$PRODUCT_SLICE" ]]; then
+        echo "❌ Nie znaleziono binary w $PRODUCT_SLICE. Sprawdź wynik swift build."
+        exit 1
+      fi
+      PRODUCT_SLICES+=("$PRODUCT_SLICE")
+    done
+    lipo -create "${PRODUCT_SLICES[@]}" -output "$BIN_DIR/$product"
+  done
+else
+  BIN_DIR="${ARCH_BIN_DIRS[0]}"
+fi
+
 BINARY="$BIN_DIR/$APP_NAME"
 if [[ ! -f "$BINARY" ]]; then
   echo "❌ Nie znaleziono binary w $BIN_DIR. Sprawdź wynik swift build."
@@ -77,7 +109,7 @@ echo "   ✓ Helper + launchd plist osadzone"
 # Bundle zasobów SPM (app-catalog.json). Bez tego Bundle.module w spakowanej aplikacji
 # nie znajdzie katalogu → AppCatalog.loadBundled() rzuca → wszystkie checkery oparte
 # o katalog (GitHub, JetBrains, Synology, override'y Sparkle) tracą swoje mapowania.
-RES_BUNDLE="$BIN_DIR/${APP_NAME}_MacUpdaterCore.bundle"
+RES_BUNDLE="$RESOURCE_BIN_DIR/${APP_NAME}_MacUpdaterCore.bundle"
 if [[ -d "$RES_BUNDLE" ]]; then
   cp -R "$RES_BUNDLE" "$CONTENTS/Resources/"
   echo "   ✓ Skopiowano bundle zasobów: $(basename "$RES_BUNDLE")"
@@ -192,13 +224,21 @@ mkdir -p "$DMG_STAGING"
 cp -R "$APP_BUNDLE" "$DMG_STAGING/"
 ln -s /Applications "$DMG_STAGING/Applications"
 rm -f "$OUTPUT_DMG"
-hdiutil create \
-    -volname "$APP_NAME" \
-    -srcfolder "$DMG_STAGING" \
-    -fs HFS+ \
-    -format UDZO \
-    -ov \
-    "$OUTPUT_DMG" >/dev/null
+if diskutil image create from --help >/dev/null 2>&1; then
+    diskutil image create from \
+        --volumeName "$APP_NAME" \
+        --format UDZO \
+        "$DMG_STAGING" \
+        "$OUTPUT_DMG" >/dev/null
+else
+    hdiutil create \
+        -volname "$APP_NAME" \
+        -srcfolder "$DMG_STAGING" \
+        -fs HFS+ \
+        -format UDZO \
+        -ov \
+        "$OUTPUT_DMG" >/dev/null
+fi
 if [[ -n "$SIGN_IDENTITY" ]]; then
     codesign --force --sign "$SIGN_IDENTITY" "$OUTPUT_DMG"
 fi

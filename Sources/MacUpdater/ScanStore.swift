@@ -570,7 +570,6 @@ extension ScanStore {
         let formulaArgs   = commands.first { $0.executable == "brew" && !$0.arguments.contains("--cask") }?.arguments
         let caskArgs      = commands.first { $0.executable == "brew" && $0.arguments.contains("--cask") }?.arguments
         let npmCommands   = commands.filter { $0.executable == "npm" }
-        let formulaNames  = plan.formulaNames
         let caskNames     = plan.caskNames
         let npmNames      = plan.npmNames
         let hasMasItems   = plan.includesMas
