@@ -191,6 +191,10 @@ struct DetailColumn: View {
                 }
             }
             .animation(.spring(response: 0.38, dampingFraction: 0.72), value: quip != nil)
+            .onReceive(scan.$inspectedKey) { key in
+                guard key != nil else { return }
+                showInspector = true
+            }
             .onChange(of: scan.status) { old, new in
                 // A cancelled scan also lands on `.results` (ScanStore.bailIfCancelled), so the
                 // status transition alone is not enough — only a finished scan earns a comment.
