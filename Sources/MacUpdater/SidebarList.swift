@@ -22,22 +22,33 @@ struct SidebarList: View {
 
     var body: some View {
         List(selection: listSelection) {
-            Section(tr("Do aktualizacji")) {
+            Section {
                 row(.updates(.all),      badge: appsBadge + cliBadge, spins: true)
                 row(.updates(.apps),     badge: appsBadge)
                 row(.updates(.cli),      badge: cliBadge)
                 row(.updates(.security), badge: securityBadge, isDanger: true)
-            }
-            Section(tr("Zainstalowane")) {
+            } header: { header(tr("Do aktualizacji")) }
+            Section {
                 row(.migration)
                 row(.inventory)
-            }
-            Section(tr("Narzędzia")) {
+            } header: { header(tr("Zainstalowane")) }
+            Section {
                 row(.uninstall)
                 row(.logs, badge: logsErrorBadge, isDanger: true)
-            }
+            } header: { header(tr("Narzędzia")) }
         }
         .listStyle(.sidebar)
+        // On this SDK the sidebar `List` renders with almost no leading inset, so its rows'
+        // icons touch the window's left edge. Keep this padding fixed: making it depend on scan
+        // activity changes NSSplitView geometry during a safe-area update and can create an
+        // unbounded AppKit constraints loop. Sticky headers need their own matching inset.
+        .safeAreaPadding(.leading, 18)
+    }
+
+    /// A section header carrying the same leading inset the rows get from `safeAreaPadding`,
+    /// which does not reach sticky headers on this SDK.
+    private func header(_ title: String) -> some View {
+        Text(title).padding(.leading, 18)
     }
 
     @ViewBuilder

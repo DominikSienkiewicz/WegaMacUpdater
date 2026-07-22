@@ -12,6 +12,7 @@
   "discordUpdate": "https://discord.com/api/updates/{channel}?platform=osx&version={version}",
   "signalUpdate": "https://updates.signal.org/desktop/latest-mac.yml",
   "chromeVersions": "https://versionhistory.googleapis.com/v1/chrome/platforms/mac/channels/{channel}/versions",
+  "obsidianDesktopReleases": "https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/desktop-releases.json",
   "homebrewWebsite": "https://brew.sh",
   "homebrewInstallCommand": "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"",
   "githubReleasesPage": "https://github.com/{repo}/releases/latest",

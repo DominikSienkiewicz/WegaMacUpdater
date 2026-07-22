@@ -36,6 +36,10 @@ enum UpdateActivity: Equatable {
 // MARK: - Root view
 
 struct ContentView: View {
+    /// Presenting a native inspector during the window's first layout pass can make AppKit
+    /// recursively invalidate `NavigationSplitView` constraints and abort the process.
+    static let showsInspectorAtLaunch = false
+
     /// Persisted so a language switch (which re-keys the view tree) doesn't bounce the user off
     /// their current destination — and the last one is restored on next launch.
     @AppStorage("wega.sidebarSelection") private var selection: SidebarSelection = .default
@@ -53,7 +57,7 @@ struct ContentView: View {
     @State private var securityBadge: Int   = 0
     @State private var appsBadge:     Int   = 0
     @State private var cliBadge:      Int   = 0
-    @State private var showInspector: Bool  = true
+    @State private var showInspector: Bool  = Self.showsInspectorAtLaunch
     /// D5 — one namespace for the toolbar's scan control, so `.glassEffectID` can morph
     /// glass between its ready and checking states.
     @Namespace private var glassNamespace
@@ -72,7 +76,11 @@ struct ContentView: View {
                 logsErrorBadge: logsErrorBadge,
                 updateActivity: updateActivity
             )
-            .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 300)
+            // Fixed, not a range: with a min/ideal/max the split view re-solved the sidebar
+            // width against the detail column's changing content and shifted it left during a
+            // scan, clipping the section headers. A single value pins it so the sidebar looks
+            // identical whatever the detail shows.
+            .navigationSplitViewColumnWidth(240)
         } detail: {
             DetailColumn(
                 selection:         selection,

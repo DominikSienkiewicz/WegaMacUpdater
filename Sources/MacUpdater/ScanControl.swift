@@ -14,17 +14,12 @@ struct ScanControl: View {
     var body: some View {
         GlassEffectContainer(spacing: 8) {
             if scan.status == .checking {
-                HStack(spacing: 8) {
-                    ProgressView(value: scan.progress?.fractionCompleted ?? 0)
-                        .progressViewStyle(.linear)
-                        .tint(Color.wegaHoney)
-                        .frame(width: 90)
-                    if scan.progress?.isCancellable == true {
-                        Button(tr("Anuluj")) { scan.cancelScan() }
-                            .buttonStyle(.glass)
-                    }
-                }
-                .glassEffectID("scan", in: namespace)
+                // The progress bar lives in the scan view's centre (`checkingView`), next to
+                // the phase label and the sniffing scene — one bar, not two. The toolbar keeps
+                // only the action: cancelling the scan it started.
+                Button(tr("Anuluj")) { scan.cancelScan() }
+                    .buttonStyle(.glass)
+                    .glassEffectID("scan", in: namespace)
             } else {
                 Button { scan.startCheck() } label: {
                     Label(tr("Sprawdź teraz"), systemImage: "arrow.triangle.2.circlepath")
@@ -38,6 +33,10 @@ struct ScanControl: View {
                 .disabled(scan.updating)
             }
         }
+        // Keep the toolbar item's geometry constant while its action changes. A width change
+        // here invalidates the window safe area; combined with NavigationSplitView that can
+        // make AppKit re-run constraints until it aborts the process.
+        .frame(width: 135)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: scan.status)
     }
 }
