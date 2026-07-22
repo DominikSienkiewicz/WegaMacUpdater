@@ -39,19 +39,11 @@ struct SidebarList: View {
         }
         .listStyle(.sidebar)
         // On this SDK the sidebar `List` renders with almost no leading inset, so its rows'
-        // icons touch the window's left edge. `safeAreaPadding` restores the inset for the
-        // scrollable rows — but not for the sticky section headers, which is why they alone
-        // kept spilling off-screen; `header(_:)` gives them their own matching inset.
-        //
-        // The extra during a scan is deliberate: `safeAreaPadding` builds on the window's
-        // leading safe area, which shrinks by ~23pt while the toolbar morphs its scan control.
-        // A single value can't satisfy both states (the base differs), so the idle inset stays
-        // as-is and the scan state compensates for exactly that loss — values dialled in by eye
-        // against this SDK, since there is no API reporting the transient inset.
-        .safeAreaPadding(.leading, leadingInset)
+        // icons touch the window's left edge. Keep this padding fixed: making it depend on scan
+        // activity changes NSSplitView geometry during a safe-area update and can create an
+        // unbounded AppKit constraints loop. Sticky headers need their own matching inset.
+        .safeAreaPadding(.leading, 18)
     }
-
-    private var leadingInset: CGFloat { updateActivity == .scanning ? 41 : 18 }
 
     /// A section header carrying the same leading inset the rows get from `safeAreaPadding`,
     /// which does not reach sticky headers on this SDK.

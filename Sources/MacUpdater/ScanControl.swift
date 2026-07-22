@@ -33,6 +33,10 @@ struct ScanControl: View {
                 .disabled(scan.updating)
             }
         }
+        // Keep the toolbar item's geometry constant while its action changes. A width change
+        // here invalidates the window safe area; combined with NavigationSplitView that can
+        // make AppKit re-run constraints until it aborts the process.
+        .frame(width: 135)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: scan.status)
     }
 }
