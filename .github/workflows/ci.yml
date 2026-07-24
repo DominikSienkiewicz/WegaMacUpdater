@@ -60,6 +60,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
+      # SEC-06 — the signing key must live outside the working tree (~/.secrets/). A key
+      # sitting in this public repo is one `git add -f`, one .gitignore edit or one folder
+      # backup away from disclosure and a forced rotation of the OTA catalog signature.
+      # `.gitignore` cannot enforce that; sign-catalog.sh refuses such a key, and this
+      # keeps the refusal from silently rotting.
+      - name: Regression test — sign-catalog.sh refuses an in-repo key
+        run: ./scripts/test-sign-catalog-guard.sh
+
       # Exit 3 means signing is not configured yet (placeholder key) — not a failure.
       - name: Verify app-catalog.json.sig matches app-catalog.json
         run: |

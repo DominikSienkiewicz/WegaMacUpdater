@@ -172,6 +172,8 @@ WEGA_CATALOG_KEY=~/.secrets/wega-catalog.pem ./scripts/sign-catalog.sh   # re-si
 swift run WegaMacUpdater  # launch app
 ```
 
+**The signing key must live outside the working tree.** `scripts/sign-catalog.sh` refuses — exit 2, before it touches OpenSSL — any private key that resolves to a path inside this repository: its root, any subdirectory, and any linked worktree, whether given as an absolute path, a relative one, a `~` path, or reached through a symlink in either direction. This repository is public, and `.gitignore` only stops an *accidental* `git add`; it does nothing against `git add -f`, an edited ignore rule, or a backup of the folder — any one of which discloses a production key and forces a rotation of the OTA catalog signature for every installation. Keep the key in `~/.secrets/wega-catalog.pem` (`chmod 700` the directory, `600` the file) and point at it with `WEGA_CATALOG_KEY`. `scripts/test-sign-catalog-guard.sh` is the regression test for that refusal; it runs in `scripts/check.sh` and in CI, and only ever uses dummy key files.
+
 The package targets the **Swift 6 language mode** (`swift-tools-version: 6.0`), so the whole codebase compiles under strict concurrency checking. Every push and pull request to `main` runs four GitHub Actions jobs (`.github/workflows/ci.yml`) on a `macos-15` runner with the latest stable Xcode (the SonarCloud job runs on `ubuntu-latest`):
 
 - **Build & Test** — `swift build --build-tests` + `swift test`, both with `--enable-code-coverage`. `scripts/coverage-sonarqube.sh` then converts SwiftPM's llvm-cov output into a SonarQube generic coverage report (`sonarqube-generic-coverage.xml`) that is uploaded as an artifact for the SonarCloud job (which runs on Linux and can't run the macOS tests itself).

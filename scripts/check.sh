@@ -5,6 +5,7 @@ set -euo pipefail
 # check.sh — local quality gate before commit/push.
 #
 # Runs, in order (each must pass before the next — `set -e`):
+#   0. test-sign-catalog-guard  — sign-catalog.sh refuses an in-repo private key
 #   1. swift build              — compiles app + helper + core
 #   2. swift test               — full unit-test suite
 #   3. swiftlint lint --strict  — zero lint violations (warnings fail too)
@@ -17,6 +18,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
+
+# Runs before the toolchain gate on purpose: it is pure bash, needs neither Xcode nor
+# OpenSSL, and it guards a secret — it should never be skipped because the machine is
+# missing a Swift toolchain.
+echo "→ ./scripts/test-sign-catalog-guard.sh"
+./scripts/test-sign-catalog-guard.sh
 
 # Fail fast on a CommandLineTools-only toolchain: it lacks the FoundationModelsMacros
 # plugin (ReleaseNotesTriage's @Generable/@Guide won't expand) and a SourceKit that
