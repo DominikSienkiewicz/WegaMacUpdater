@@ -64,6 +64,12 @@ public enum MigrationPlanner {
 
     /// The `~/Library` locations a freshly-migrated app may have left behind. Pure path
     /// construction; the caller filters these by existence on disk.
+    ///
+    /// SEC-01: **currently has no caller in the UI.** The post-migration "clean leftovers"
+    /// step was removed because, for a migration (same bundle id, same app, new package
+    /// manager), these paths hold the app's *live* data — and the step deleted them
+    /// permanently, preselected. The function itself deletes nothing and stays here,
+    /// unit-tested, as the foundation UX-13 will redesign that area on top of.
     public static func libraryLeftoverCandidates(bundleId: String, home: URL) -> [URL] {
         // SEC-06: refuse to build deletion paths from an unsafe bundle id.
         guard isSafeBundleID(bundleId) else { return [] }

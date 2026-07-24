@@ -73,6 +73,20 @@ bump and move its entries under the new version heading when cutting a release.
   remaining glue can't be reached by the XCTest bundle without a real system/root/network
   — same rationale as the already-excluded SwiftUI app, documented inline.
 
+### Removed
+- The post-migration **"clean leftovers"** step (`SEC-01`). After a successful
+  `brew install --cask` the Migration screen scanned `~/Library` for the app's bundle id
+  and offered every hit as a leftover of the old installation. A migration doesn't change
+  the bundle id, so those paths — `Application Support`, `Preferences`, `Caches`,
+  `Saved Application State`, `Containers` — were the *live* data of the app just adopted.
+  Every entry was preselected, deletion went through `removeItem` (permanent, bypassing
+  the Trash the rest of the app uses), per-item failures were swallowed, and the sheet
+  reported `urls.count` as the success count — so it always claimed full success, even
+  when it had deleted nothing. A migration now ends at the success banner and touches
+  nothing in `~/Library`. `MigrationPlanner.libraryLeftoverCandidates` stays (pure path
+  construction, deletes nothing) and is guarded against regaining a caller by
+  `MigrationLeftoverCleanupDisabledTests`.
+
 ### Fixed
 - `.pkg` signing in `scripts/build-pkg.sh` and the release workflow: the package was
   signed with the same identity as the app, but `pkgbuild` only accepts a
