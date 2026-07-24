@@ -6,6 +6,7 @@ set -euo pipefail
 #
 # Runs, in order (each must pass before the next — `set -e`):
 #   0. test-sign-catalog-guard  — sign-catalog.sh refuses an in-repo private key
+#   0b. test-merge              — merge.sh guard rails (dirty tree, conflicts, gate)
 #   1. swift build              — compiles app + helper + core
 #   2. swift test               — full unit-test suite
 #   3. swiftlint lint --strict  — zero lint violations (warnings fail too)
@@ -24,6 +25,13 @@ cd "$SCRIPT_DIR/.."
 # missing a Swift toolchain.
 echo "→ ./scripts/test-sign-catalog-guard.sh"
 ./scripts/test-sign-catalog-guard.sh
+
+# Also pure bash, also before the toolchain gate. merge.sh deletes branches and
+# worktrees after integrating into main, so its refusals are the thing standing
+# between a mistake and lost work — they get tested, not just documented. The cases
+# run in throwaway repositories under $TMPDIR and never touch this one.
+echo "→ ./scripts/test-merge.sh"
+./scripts/test-merge.sh
 
 # Fail fast on a CommandLineTools-only toolchain: it lacks the FoundationModelsMacros
 # plugin (ReleaseNotesTriage's @Generable/@Guide won't expand) and a SourceKit that
