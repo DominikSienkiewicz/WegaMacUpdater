@@ -16,9 +16,6 @@ struct MigrationView: View {
     @State private var logLines:        [String]          = []
     @State private var errorMessage:    String?
     @State private var banner:          BannerData?
-    @State private var showLibraryCleanup: Bool           = false
-    @State private var cleanupApp:      ApplicationInfo?  = nil
-    @State private var libraryLeftovers: [URL]            = []
     @State private var masCandidates: [(app: ApplicationInfo, masID: String)] = []
     @State private var npmBrewDuplicates: [NpmBrewDuplicate] = []
     @State private var dupConfirm: DuplicateRemoval? = nil
@@ -288,16 +285,6 @@ struct MigrationView: View {
                 Task { await migrate(app) }
             }
         }
-        .sheet(isPresented: $showLibraryCleanup) {
-            if let app = cleanupApp {
-                LibraryCleanupSheet(
-                    appName: app.name,
-                    leftovers: libraryLeftovers,
-                    onClean: { urls in cleanLibrary(urls, app: app) },
-                    onDismiss: { dismissCleanup(app: app) }
-                )
-            }
-        }
         .alert(item: $dupConfirm) { removal in
             Alert(
                 title: Text(tr("Usunąć duplikat?")),
@@ -408,18 +395,9 @@ struct MigrationView: View {
                 migrated.insert(token)
                 logLines = []
                 await recordPublisher(for: app)   // FEAT-04: ledger Team ID + alert na zmianę wydawcy
-                // Scan for Library leftovers from old installation
-                if let bundleId = app.bundleIdentifier {
-                    let found = scanLibraryLeftovers(bundleId: bundleId)
-                    if !found.isEmpty {
-                        libraryLeftovers = found
-                        cleanupApp = app
-                        showLibraryCleanup = true
-                        onWegaState?(WegaState(pose: .happy, line: trf("%@ przejęty! Znalazłam resztki — zajrzyjmy.", "\(app.name)")))
-                        migrating = nil
-                        return
-                    }
-                }
+                // SEC-01: migracja kończy się tutaj. Krok „czyszczenie resztek" — skan
+                // ~/Library po tym samym bundle ID — usunięto: wskazywał *aktywne* dane
+                // przejętej aplikacji jako resztki i kasował je trwale.
                 banner = BannerData(variant: .success,
                                     title: trf("%@ pod Homebrew", "\(app.name)"),
                                     message: trf("Token: %@", "\(token)"))
@@ -445,32 +423,6 @@ struct MigrationView: View {
             errorMessage = trf("Uwaga: wydawca %@ zmienił Team ID (%@ → %@). Zweryfikuj, zanim zaufasz.", "\(app.name)", "\(old)", "\(new ?? "—")")
             onWegaState?(WegaState(pose: .alert, line: tr("Zmienił się wydawca aplikacji — sprawdź.")))
         }
-    }
-
-    private func scanLibraryLeftovers(bundleId: String) -> [URL] {
-        let candidates = MigrationPlanner.libraryLeftoverCandidates(
-            bundleId: bundleId,
-            home: FileManager.default.homeDirectoryForCurrentUser
-        )
-        return candidates.filter { FileManager.default.fileExists(atPath: $0.path) }
-    }
-
-    private func cleanLibrary(_ urls: [URL], app: ApplicationInfo) {
-        for url in urls { try? FileManager.default.removeItem(at: url) }
-        showLibraryCleanup = false
-        cleanupApp = nil
-        libraryLeftovers = []
-        let msg = urls.count == 1 ? tr("Usunięto 1 plik/folder.") : trf("Usunięto %@ pliki/foldery.", "\(urls.count)")
-        banner = BannerData(variant: .success, title: trf("%@ pod Homebrew", "\(app.name)"), message: msg)
-        onWegaState?(WegaState(pose: .happy, line: trf("%@ przejęty i posprzątane!", "\(app.name)")))
-    }
-
-    private func dismissCleanup(app: ApplicationInfo) {
-        showLibraryCleanup = false
-        cleanupApp = nil
-        libraryLeftovers = []
-        banner = BannerData(variant: .success, title: trf("%@ pod Homebrew", "\(app.name)"), message: trf("Token: %@", "\(app.caskToken ?? "—")"))
-        onWegaState?(WegaState(pose: .happy, line: trf("%@ przejęty! Idziemy dalej.", "\(app.name)")))
     }
 
     private func isProcessRunning(_ name: String) async -> Bool {
@@ -755,105 +707,5 @@ private struct MigrationLogView: View {
         }
         .background(Color.black.opacity(0.85))
         .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-// MARK: - LibraryCleanupSheet
-
-private struct LibraryCleanupSheet: View {
-    let appName:   String
-    let leftovers: [URL]
-    let onClean:   ([URL]) -> Void
-    let onDismiss: () -> Void
-
-    @State private var selected: Set<String>
-
-    init(appName: String, leftovers: [URL], onClean: @escaping ([URL]) -> Void, onDismiss: @escaping () -> Void) {
-        self.appName   = appName
-        self.leftovers = leftovers
-        self.onClean   = onClean
-        self.onDismiss = onDismiss
-        _selected = State(initialValue: Set(leftovers.map(\.path)))
-    }
-
-    private let home = FileManager.default.homeDirectoryForCurrentUser.path
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 11)
-                        .fill(Color.wegaHoney.opacity(0.12))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "trash.circle")
-                        .foregroundStyle(Color.wegaHoney)
-                        .font(.system(size: 20))
-                }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(tr("Resztki po starej instalacji"))
-                        .font(.system(size: 15, weight: .semibold))
-                    Text(trf("Znalezione pliki %@ z poprzedniej instalacji", "\(appName)"))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 14)
-
-            Divider().opacity(0.5)
-
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(leftovers, id: \.path) { url in
-                    let isSelected = selected.contains(url.path)
-                    HStack(spacing: 10) {
-                        Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                            .foregroundStyle(isSelected ? Color.wegaHoney : .secondary)
-                            .font(.system(size: 15))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(url.lastPathComponent)
-                                .font(.system(size: 12, weight: .medium))
-                            Text(url.path.replacingOccurrences(of: home, with: "~"))
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-                        Spacer()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 9)
-                    .contentShape(Rectangle())
-                    .onTapGesture { toggle(url.path) }
-
-                    if url.path != leftovers.last?.path {
-                        Divider().opacity(0.4).padding(.leading, 46)
-                    }
-                }
-            }
-
-            Divider().opacity(0.5)
-
-            HStack(spacing: 8) {
-                Spacer()
-                Button(tr("Zostaw"), action: onDismiss)
-                Button(tr("Wyczyść zaznaczone")) {
-                    onClean(leftovers.filter { selected.contains($0.path) })
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.wegaHoney)
-                .foregroundStyle(Color.wegaInk)
-                .disabled(selected.isEmpty)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 14)
-            .padding(.bottom, 18)
-            .overlay(alignment: .top) { Divider().opacity(0.5) }
-        }
-        .frame(width: 460)
-    }
-
-    private func toggle(_ path: String) {
-        if selected.contains(path) { selected.remove(path) } else { selected.insert(path) }
     }
 }
