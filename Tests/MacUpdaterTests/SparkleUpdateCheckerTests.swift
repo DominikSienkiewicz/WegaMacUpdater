@@ -178,6 +178,24 @@ struct SparkleUpdateCheckerTests {
         #expect(result == .upToDate)
     }
 
+    // REL-10: an installed build ahead of the feed (beta channel, or a feed that lags
+    // behind the shipped release) must never be reported as "update available" — that
+    // is an offer to downgrade, not to update.
+    @Test func upToDateWhenInstalledIsNewerThanFeed() async {
+        let result = await checker(FakeHTTP.client(ok: appcast(version: "1.9.0")))
+            .check(app: app(bundleID: overrideBundleID, version: "2.0.0"))
+        #expect(result == .upToDate)
+    }
+
+    // REL-10: `CFBundleShortVersionString` often carries the build number ("7.0.0 (77593)")
+    // while the appcast advertises the bare marketing version ("7.0.0"). The strings differ
+    // but the versions do not, so this must not surface as an update.
+    @Test func upToDateWhenInstalledCarriesBuildNumberAndFeedDoesNot() async {
+        let result = await checker(FakeHTTP.client(ok: appcast(version: "7.0.0")))
+            .check(app: app(bundleID: overrideBundleID, version: "7.0.0 (77593)"))
+        #expect(result == .upToDate)
+    }
+
     // No override, no plist on disk, no UserDefaults entry → the feed can't be
     // resolved, so the checker doesn't apply (and makes no request).
     @Test func notApplicableWhenNoFeedResolves() async {
