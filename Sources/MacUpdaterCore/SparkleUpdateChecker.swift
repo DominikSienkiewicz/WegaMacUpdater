@@ -24,7 +24,10 @@ public struct SparkleUpdateChecker: Sendable {
 
         let installed = app.version ?? ""
         guard !installed.isEmpty else { return .notApplicable }
-        guard latest != installed else { return .upToDate }
+        // REL-10: compare versions, not strings. A plain `latest != installed` reports an
+        // update whenever the feed lags behind the installed build, or merely formats the
+        // version differently ("7.0.0" vs "7.0.0 (77593)") — both offer a downgrade.
+        guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
 
         return .outdated(ManualOutdatedApp(
             name: app.name,
