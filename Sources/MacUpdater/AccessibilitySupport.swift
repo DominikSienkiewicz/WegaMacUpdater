@@ -39,6 +39,27 @@ enum PackageRowKeyboardBehavior {
     }
 }
 
+enum ManualUpdateRowKeyboardCommand {
+    case returnKey
+    case spaceKey
+}
+
+enum ManualUpdateRowKeyboardBehavior {
+    @discardableResult
+    static func handle(
+        _ command: ManualUpdateRowKeyboardCommand,
+        item: ManualOutdatedApp,
+        onInspect: ((ManualOutdatedApp) -> Void)?
+    ) -> Bool {
+        switch command {
+        case .returnKey, .spaceKey:
+            guard let onInspect else { return false }
+            onInspect(item)
+            return true
+        }
+    }
+}
+
 struct UninstallOptionAccessibilitySemantics: Equatable {
     let label: String
     let value: String

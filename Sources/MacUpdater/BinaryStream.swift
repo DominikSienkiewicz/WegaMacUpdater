@@ -1,6 +1,62 @@
 import Foundation
 import SwiftUI
 
+struct BinaryStreamLane: Identifiable, Equatable {
+    let id: Int
+    let glyphs: String
+    let speed: Double
+    let yFraction: CGFloat
+    let opacity: Double
+    let fontSize: CGFloat
+    let phase: Double
+}
+
+enum BinaryStreamLaneFactory {
+    private static let stableSeed: UInt64 = 0x5745_4741_4D41_4321
+
+    static func make(lanes: Int, baseSpeed: Double) -> [BinaryStreamLane] {
+        let laneCount = max(0, lanes)
+        guard laneCount > 0 else { return [] }
+
+        var rng = BinaryStreamRandomNumberGenerator(seed: stableSeed)
+        return (0..<laneCount).map { index in
+            var glyphs = ""
+            for _ in 0..<160 {
+                glyphs.append(Bool.random(using: &rng) ? "1" : "0")
+                if Int.random(in: 0...5, using: &rng) == 0 { glyphs.append(" ") }
+            }
+
+            let speedJitter = Double.random(in: 0.55...1.45, using: &rng)
+            let direction: Double = Bool.random(using: &rng) ? 1 : -1
+            return BinaryStreamLane(
+                id: index,
+                glyphs: glyphs,
+                speed: baseSpeed * speedJitter * direction,
+                yFraction: (CGFloat(index) + 0.5) / CGFloat(laneCount),
+                opacity: Double.random(in: 0.10...0.32, using: &rng),
+                fontSize: CGFloat.random(in: 10...15, using: &rng),
+                phase: Double.random(in: 0...1, using: &rng)
+            )
+        }
+    }
+}
+
+private struct BinaryStreamRandomNumberGenerator: RandomNumberGenerator {
+    private var state: UInt64
+
+    init(seed: UInt64) {
+        state = seed
+    }
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var value = state
+        value = (value ^ (value >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        value = (value ^ (value >> 27)) &* 0x94D0_49BB_1331_11EB
+        return value ^ (value >> 31)
+    }
+}
+
 /// The render schedule is a value so Reduce Motion is both enforceable and unit-testable.
 /// A static mode never creates a `TimelineView`, avoiding hidden 30-fps work as well as motion.
 enum BinaryStreamMotionMode: Equatable {
@@ -34,50 +90,14 @@ struct BinaryStream: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private struct Lane: Identifiable {
-        let id: Int
-        let glyphs: String
-        let speed: Double
-        let yFraction: CGFloat
-        let opacity: Double
-        let fontSize: CGFloat
-        let phase: Double
-    }
-
-    private let laneData: [Lane]
+    private let laneData: [BinaryStreamLane]
 
     init(lanes: Int = 9, color: Color = .wegaHoney, baseSpeed: Double = 38) {
         self.lanes = lanes
         self.color = color
         self.baseSpeed = baseSpeed
 
-        var rng = SystemRandomNumberGenerator()
-        var data: [Lane] = []
-        for i in 0..<lanes {
-            var s = ""
-            for _ in 0..<160 {
-                let bit = Bool.random(using: &rng) ? "1" : "0"
-                s.append(bit)
-                if Int.random(in: 0...5, using: &rng) == 0 { s.append(" ") }
-            }
-            let speedJitter = Double.random(in: 0.55...1.45, using: &rng)
-            let opacity     = Double.random(in: 0.10...0.32, using: &rng)
-            let fontSize    = CGFloat.random(in: 10...15, using: &rng)
-            let phase       = Double.random(in: 0...1, using: &rng)
-            let direction: Double = Bool.random(using: &rng) ? 1 : -1
-            data.append(
-                Lane(
-                    id: i,
-                    glyphs: s,
-                    speed: baseSpeed * speedJitter * direction,
-                    yFraction: (CGFloat(i) + 0.5) / CGFloat(lanes),
-                    opacity: opacity,
-                    fontSize: fontSize,
-                    phase: phase
-                )
-            )
-        }
-        self.laneData = data
+        self.laneData = BinaryStreamLaneFactory.make(lanes: lanes, baseSpeed: baseSpeed)
     }
 
     var body: some View {

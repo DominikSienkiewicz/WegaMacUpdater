@@ -346,7 +346,31 @@ struct ManualUpdateSection: View {
                     }
                 }
                 .contentShape(Rectangle())
-                .onTapGesture { onInspect?(item) }
+                .gesture(TapGesture().onEnded { onInspect?(item) })
+                .focusable(onInspect != nil)
+                .onKeyPress(.return) {
+                    ManualUpdateRowKeyboardBehavior.handle(
+                        .returnKey,
+                        item: item,
+                        onInspect: onInspect
+                    ) ? .handled : .ignored
+                }
+                .onKeyPress(.space) {
+                    ManualUpdateRowKeyboardBehavior.handle(
+                        .spaceKey,
+                        item: item,
+                        onInspect: onInspect
+                    ) ? .handled : .ignored
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(item.name)
+                .accessibilityValue(
+                    "\(item.installedVersion ?? "—") → \(item.availableVersion ?? "—")"
+                )
+                .accessibilityHint(tr("Naciśnij Return lub spację, aby pokazać szczegóły."))
+                .accessibilityAction(named: tr("Pokaż szczegóły")) {
+                    onInspect?(item)
+                }
                 .contextMenu {
                     UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) })
                 }

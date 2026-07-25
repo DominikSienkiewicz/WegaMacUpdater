@@ -568,6 +568,8 @@ public enum Translations {
 
         // I-2 — inspector pane (Update list).
         "Wybierz aktualizację, aby zobaczyć szczegóły": "Select an update to see details",
+        "Pokaż szczegóły": "Show details",
+        "Naciśnij Return lub spację, aby pokazać szczegóły.": "Press Return or Space to show details.",
 
         // I-3 — inspector body.
         "Szczegóły": "Details",
