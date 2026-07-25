@@ -7,6 +7,7 @@ set -euo pipefail
 # Runs, in order (each must pass before the next — `set -e`):
 #   0. test-sign-catalog-guard  — sign-catalog.sh refuses an in-repo private key
 #   0b. test-merge              — merge.sh guard rails (dirty tree, conflicts, gate)
+#   0c. test-clean-script-guard — root clean.sh cannot regain destructive Git actions
 #   1. swift build              — compiles app + helper + core
 #   2. swift test               — full unit-test suite
 #   3. swiftlint lint --strict  — zero lint violations (warnings fail too)
@@ -32,6 +33,12 @@ echo "→ ./scripts/test-sign-catalog-guard.sh"
 # run in throwaway repositories under $TMPDIR and never touch this one.
 echo "→ ./scripts/test-merge.sh"
 ./scripts/test-merge.sh
+
+# QA-08: a tracked root clean.sh used to be a one-shot code generator that overwrote
+# sources, committed directly to main and could delete a worktree/branch. Keep that
+# misleading destructive entry point out of the repository.
+echo "→ ./scripts/test-clean-script-guard.sh"
+./scripts/test-clean-script-guard.sh
 
 # Fail fast on a CommandLineTools-only toolchain: it lacks the FoundationModelsMacros
 # plugin (ReleaseNotesTriage's @Generable/@Guide won't expand) and a SourceKit that

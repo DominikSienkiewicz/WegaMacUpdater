@@ -183,6 +183,12 @@ swift run WegaMacUpdater  # launch app
 
 **Integrating a feature branch** goes through `./scripts/merge.sh <branch> "<merge message>"`, run from anywhere in the repo. It fetches `origin/main` and stops if the local one is behind, rehearses the merge with `git merge-tree` so a conflicting branch is reported *before* `main` is touched, names any untracked file the merge would overwrite instead of aborting halfway through, and only then merges with `--no-ff`. The quality gate runs on the **merged** result, and the branch and its worktree are deleted only once it is green — a red gate leaves both in place to fix and prints the `git reset --hard ORIG_HEAD` undo rather than performing it. `--no-verify` skips the gate (for a machine without a full Xcode toolchain; CI still runs it), `--force` discards local changes when removing the worktree. `scripts/test-merge.sh` covers those refusals in throwaway repositories and runs inside `scripts/check.sh`.
 
+The repository intentionally has no root `clean.sh`: the former file was a completed
+one-shot code generator whose misleading name hid source overwrites, `git add -A`, a
+direct commit to `main`, and optional worktree/branch deletion. Use the narrowly named
+scripts under `scripts/` for maintenance. `scripts/test-clean-script-guard.sh` prevents
+that destructive entry point from returning and runs inside `scripts/check.sh`.
+
 The package targets the **Swift 6 language mode** (`swift-tools-version: 6.0`), so the whole codebase compiles under strict concurrency checking. Every push and pull request to `main` runs four GitHub Actions jobs (`.github/workflows/ci.yml`) on a `macos-15` runner with the latest stable Xcode (the SonarCloud job runs on `ubuntu-latest`):
 
 - **Build & Test** — `swift build --build-tests` + `swift test`, both with `--enable-code-coverage`. `scripts/coverage-sonarqube.sh` then converts SwiftPM's llvm-cov output into a SonarQube generic coverage report (`sonarqube-generic-coverage.xml`) that is uploaded as an artifact for the SonarCloud job (which runs on Linux and can't run the macOS tests itself).

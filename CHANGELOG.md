@@ -85,6 +85,10 @@ bump and move its entries under the new version heading when cutting a release.
   — same rationale as the already-excluded SwiftUI app, documented inline.
 
 ### Removed
+- The obsolete root `clean.sh` one-shot generator (`QA-08`). Despite its cleanup-like
+  name, it overwrote application sources, staged the whole repository, committed
+  directly to `main`, and could delete a worktree and branch. A regression guard in
+  `scripts/check.sh` prevents this destructive entry point from returning.
 - The post-migration **"clean leftovers"** step (`SEC-01`). After a successful
   `brew install --cask` the Migration screen scanned `~/Library` for the app's bundle id
   and offered every hit as a leftover of the old installation. A migration doesn't change
