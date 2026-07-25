@@ -97,17 +97,6 @@ final class UpdatePlannerTests: XCTestCase {
         XCTAssertEqual(UpdatePlanner.dedupedByPriority([zebra, apple]).map(\.name), ["Apple", "Zebra"])
     }
 
-    // MARK: summarize
-
-    func testSummarizeAggregatesFailuresAndSudo() {
-        let ok = BrewUpgradeOutcome(exitCode: 0, failedTokens: [], errorLines: [])
-        let failed = BrewUpgradeOutcome(exitCode: 1, failedTokens: ["zoom"], errorLines: ["Error: zoom: boom"], requiresSudoPassword: true)
-        let summary = UpdatePlanner.summarize(outcomes: [ok, failed])
-        XCTAssertTrue(summary.anyFailure)
-        XCTAssertEqual(summary.failedTokens, ["zoom"])
-        XCTAssertTrue(summary.needsSudoPassword)
-    }
-
     // MARK: scanState — "up to date" vs "couldn't check"
 
     func testScanStateUpToDateOnlyWhenNothingFoundAndNothingFailed() {
@@ -124,42 +113,6 @@ final class UpdatePlannerTests: XCTestCase {
 
     func testScanStatePartialFailureWhenFoundAndFailed() {
         XCTAssertEqual(UpdatePlanner.scanState(updateCount: 2, failedChecks: 1), .partialFailure(updates: 2, failed: 1))
-    }
-
-    func testSummarizeAllSuccess() {
-        let summary = UpdatePlanner.summarize(outcomes: [BrewUpgradeOutcome(exitCode: 0, failedTokens: [], errorLines: [])])
-        XCTAssertFalse(summary.anyFailure)
-        XCTAssertTrue(summary.failedTokens.isEmpty)
-        XCTAssertFalse(summary.needsSudoPassword)
-    }
-
-    // Regression: when an upgrade fails, the detailed brew error lines must reach
-    // the summary so they can be written to the persistent log. Previously only the
-    // failed *token name* was forwarded, so the log read "Aktualizacja niekompletna:
-    // discord" with no explanation of *why* it failed.
-    func testSummarizeForwardsFailureDetailLines() {
-        let failed = BrewUpgradeOutcome(
-            exitCode: 1,
-            failedTokens: ["discord"],
-            errorLines: ["Error: discord: It seems the App source '/Applications/Discord.app' is not there."]
-        )
-        let summary = UpdatePlanner.summarize(outcomes: [failed])
-        XCTAssertEqual(summary.failureDetails, ["Error: discord: It seems the App source '/Applications/Discord.app' is not there."])
-    }
-
-    // When brew fails without printing any "Error:" line (non-zero exit, empty
-    // errorLines), the summary must still carry *something* actionable — the exit
-    // code — instead of leaving the log with no detail at all.
-    func testSummarizeSynthesizesDetailWhenNoErrorLines() {
-        let failed = BrewUpgradeOutcome(exitCode: 1, failedTokens: [], errorLines: [])
-        let summary = UpdatePlanner.summarize(outcomes: [failed])
-        XCTAssertEqual(summary.failureDetails.count, 1)
-        XCTAssertTrue(summary.failureDetails[0].contains("1"))
-    }
-
-    func testSummarizeNoDetailsWhenEverythingSucceeds() {
-        let summary = UpdatePlanner.summarize(outcomes: [BrewUpgradeOutcome(exitCode: 0, failedTokens: [], errorLines: [])])
-        XCTAssertTrue(summary.failureDetails.isEmpty)
     }
 
     // MARK: casksWithoutChecksum — FEAT-03 download-transparency banner

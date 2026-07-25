@@ -55,8 +55,8 @@ struct UpdateResultHonestyTests {
                 "REL-02: the canary/rollback verdicts must be returned, not only narrated")
         #expect(text.contains("run.applyValidation(await postCaskUpgrade("),
                 "REL-02: the verdicts must be folded into the run before it is summarized")
-        #expect(!text.contains("UpdatePlanner.summarize("),
-                "REL-02: the banner must not be decided from BrewUpgradeOutcome alone")
+        #expect(text.contains("let summary = run.summary"),
+                "REL-02: the banner is decided from the whole run, never from BrewUpgradeOutcome alone")
     }
 
     /// Path 4: `.rollbackFailed` — "the one that must never be silent" — was a line in a

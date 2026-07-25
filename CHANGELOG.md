@@ -88,6 +88,11 @@ bump and move its entries under the new version heading when cutting a release.
   `MigrationLeftoverCleanupDisabledTests`.
 
 ### Fixed
+- Sparkle-based apps are no longer reported as outdated when the installed
+  build is newer than the feed, or when only the version format differs
+  (`7.0.0 (77593)` vs `7.0.0`). The checker now compares versions with the
+  shared `isUpgrade` comparator instead of matching version strings exactly,
+  so it can no longer offer a downgrade as an update (REL-10).
 - **A green "everything is done" over a failed update (REL-02).** Six independent paths
   ended in the same lie, and one result type closes all of them: `UpdateRunOutcome` keeps
   **one verdict per item and source**, covering execution, the Gatekeeper canary, the
