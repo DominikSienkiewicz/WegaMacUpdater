@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import MacUpdaterCore
 
 @main
@@ -61,13 +62,85 @@ struct WegaMacUpdaterApp: App {
 /// kicks off the background update loop on launch.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+
+    /// The two AppKit touch-points of the REL-06 quit path, held as properties so a test can
+    /// stand in for them: an alert needs a running event loop, and
+    /// `reply(toApplicationShouldTerminate:)` only means anything inside AppKit's own
+    /// termination sequence. Production values are the real ones.
+    var confirmQuitDuringMutation: @MainActor (String) -> QuitDuringMutationChoice = AppDelegate.askWhetherToWait
+    var replyToTermination: @MainActor (Bool) -> Void = { NSApplication.shared.reply(toApplicationShouldTerminate: $0) }
+
     func applicationDidFinishLaunching(_: Notification) {
+        registerMutationSources()
         MenuBarAgent.shared.start()
         refreshAppCatalog()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
         false
+    }
+
+    /// REL-06 — ⌘Q, "Zakończ Wega", log-out and shutdown all arrive here. Without this
+    /// method they ended the process on the spot, including halfway through `brew upgrade
+    /// --cask`: the old bundle already moved aside, the new one not yet in place.
+    ///
+    /// A mutation in flight makes the quit a question rather than an order. The reply is
+    /// deferred (`.terminateLater`, never `.terminateCancel` — ⌘Q must not silently do
+    /// nothing) until the user has answered and, if they chose to wait, until the mutation
+    /// has actually finished.
+    func applicationShouldTerminate(_: NSApplication) -> NSApplication.TerminateReply {
+        switch MutationGuard.shared.terminationDecision() {
+        case .now:
+            return .terminateNow
+        case .waitForMutation:
+            resolveQuitDuringMutation()
+            return .terminateLater
+        }
+    }
+
+    /// `UpgradeMutex` is owned by the upgrade paths (`ScanStore.runUpdate` and the
+    /// background round) and only exposes a boolean, so it joins the guard as a probe.
+    private func registerMutationSources() {
+        MutationGuard.shared.addProbe(tr("aktualizacja Homebrew")) { UpgradeMutex.shared.isBusy }
+    }
+
+    /// Every branch has to end in a reply — a `.terminateLater` that never answers is a
+    /// log-out that hangs until macOS force-quits the app.
+    private func resolveQuitDuringMutation() {
+        let running = MutationGuard.shared.runningLabels.joined(separator: ", ")
+        switch confirmQuitDuringMutation(running) {
+        case .waitForMutation:
+            WegaLog.info(.app, "Zamknięcie odroczone — czekam na zakończenie: \(running)")
+            Task { @MainActor in
+                await MutationGuard.shared.waitUntilIdle()
+                WegaLog.info(.app, "Mutacja zakończona — zamykam Wegę.")
+                self.replyToTermination(true)
+            }
+        case .quitAnyway:
+            WegaLog.warning(.app, "Zamknięcie mimo trwającej mutacji: \(running)")
+            replyToTermination(true)
+        case .cancel:
+            replyToTermination(false)
+        }
+    }
+
+    private static func askWhetherToWait(running: String) -> QuitDuringMutationChoice {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = tr("Wega jest w trakcie zmiany")
+        alert.informativeText = running.isEmpty
+            ? tr("Zamknięcie teraz może zostawić aplikację w połowie zainstalowanej.")
+            : trf("Trwa: %@. Zamknięcie teraz może zostawić aplikację w połowie zainstalowanej.", running)
+        alert.addButton(withTitle: tr("Poczekaj na zakończenie"))
+        alert.addButton(withTitle: tr("Zakończ mimo to"))
+        alert.addButton(withTitle: tr("Anuluj"))
+        NSApplication.shared.activate(ignoringOtherApps: true)
+
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:  return .waitForMutation
+        case .alertSecondButtonReturn: return .quitAnyway
+        default:                       return .cancel
+        }
     }
 
     /// Fire-and-forget refresh of the `AppCatalog` overlay from its canonical source.

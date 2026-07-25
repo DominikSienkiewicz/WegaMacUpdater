@@ -507,5 +507,17 @@ public enum Translations {
         "Suma kontrolna": "Checksum",
         "obecna": "present",
         "brak": "missing",
+
+        // REL-06 — zamknięcie aplikacji w trakcie mutacji Caskroom.
+        "Wega jest w trakcie zmiany": "Wega is in the middle of a change",
+        "Zamknięcie teraz może zostawić aplikację w połowie zainstalowanej.":
+            "Quitting now may leave an app half-installed.",
+        "Trwa: %@. Zamknięcie teraz może zostawić aplikację w połowie zainstalowanej.":
+            "In progress: %@. Quitting now may leave an app half-installed.",
+        "Poczekaj na zakończenie": "Wait until it finishes",
+        "Zakończ mimo to": "Quit anyway",
+        "aktualizacja Homebrew": "Homebrew update",
+        "migracja %@": "migrating %@",
+        "usuwanie duplikatu %@": "removing duplicate %@",
     ]
 }
