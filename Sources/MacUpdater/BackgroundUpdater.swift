@@ -127,6 +127,12 @@ final class BackgroundUpdater {
 
         let snapshots = CaskRollbackGuard.snapshot(tokens: lockedTokens, appPaths: appPaths)
         let tokens = BackgroundUpdateSafety.snapshotBackedTokens(lockedTokens, snapshots: snapshots)
+        for token in lockedTokens where snapshots[token] == nil {
+            WegaLog.error(
+                .homebrew,
+                "\(token): aktualizacja w tle odroczona — nie udało się utworzyć wymaganego snapshotu."
+            )
+        }
         guard !tokens.isEmpty else {
             WegaLog.error(.homebrew, "Aktualizacja w tle pominięta — nie udało się utworzyć snapshotu.")
             return []
