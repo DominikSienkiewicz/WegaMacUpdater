@@ -37,3 +37,44 @@ public struct CaskReplacementArtifactIdentity: Equatable, Sendable {
         return values["CFBundleIdentifier"] as? String
     }
 }
+
+public enum CaskReplacementArtifactLocation: Equatable, Sendable {
+    case resolved(URL)
+    case unresolved
+    case ambiguous
+}
+
+/// Resolves one already-selected cask artifact without silently preferring an install root.
+public struct CaskReplacementArtifactLocationResolver {
+    private let applicationsDirectory: URL
+    private let userApplicationsDirectory: URL
+    private let fileExists: (URL) -> Bool
+
+    public init(
+        applicationsDirectory: URL = SystemPaths.applicationsDirectory,
+        userApplicationsDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Applications", isDirectory: true),
+        fileExists: @escaping (URL) -> Bool = {
+            FileManager.default.fileExists(atPath: $0.path)
+        }
+    ) {
+        self.applicationsDirectory = applicationsDirectory
+        self.userApplicationsDirectory = userApplicationsDirectory
+        self.fileExists = fileExists
+    }
+
+    public func resolve(artifact: String) -> CaskReplacementArtifactLocation {
+        let matches = [applicationsDirectory, userApplicationsDirectory]
+            .map { $0.appendingPathComponent(artifact) }
+            .filter(fileExists)
+
+        switch matches.count {
+        case 0:
+            return .unresolved
+        case 1:
+            return .resolved(matches[0])
+        default:
+            return .ambiguous
+        }
+    }
+}

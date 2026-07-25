@@ -120,7 +120,9 @@ bump and move its entries under the new version heading when cutting a release.
   move between `~/Applications` and `/Applications` cannot make Wega verify or restore the
   stale source path. The replacement keeps the concrete artifact name and bundle ID, so a
   multi-app cask cannot redirect the canary or rollback to its first declared app. A missing
-  or ambiguous post-install target fails closed and retains the snapshot.
+  post-install target, or the same artifact existing in both application directories, fails
+  closed and retains the snapshot. Bundle-identity mismatch rollback now also restores from
+  a working copy so the original snapshot survives successful automatic recovery.
 - **Destructive fallbacks no longer change meaning without consent (UX-04).** A
   migration now identifies every running candidate by its resolved bundle path (or one
   unambiguous bundle ID), asks that exact app to quit normally and waits; only an app that

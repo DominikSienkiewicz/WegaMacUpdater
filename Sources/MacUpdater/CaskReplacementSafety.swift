@@ -99,8 +99,32 @@ enum CaskReplacementSafety {
                 )
                 return nil
             }
-            let installationInfo = [BrewCaskInstallationInfo(token: token, appArtifacts: [artifact])]
-            return CaskAppPathResolver().appPaths(from: installationInfo)[token]
+            switch CaskReplacementArtifactLocationResolver().resolve(artifact: artifact) {
+            case .resolved(let appURL):
+                let installationInfo = [
+                    BrewCaskInstallationInfo(token: token, appArtifacts: [artifact])
+                ]
+                guard CaskAppPathResolver().appPaths(from: installationInfo)[token] == appURL else {
+                    WegaLog.error(
+                        .homebrew,
+                        "\(token): lokalizacja artefaktu \(artifact) zmieniła się podczas weryfikacji."
+                    )
+                    return nil
+                }
+                return appURL
+            case .unresolved:
+                WegaLog.error(
+                    .homebrew,
+                    "\(token): artefakt \(artifact) nie istnieje po instalacji."
+                )
+                return nil
+            case .ambiguous:
+                WegaLog.error(
+                    .homebrew,
+                    "\(token): artefakt \(artifact) istnieje w /Applications i ~/Applications."
+                )
+                return nil
+            }
         } catch {
             WegaLog.error(
                 .homebrew,

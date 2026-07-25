@@ -120,7 +120,11 @@ enum CaskRollbackGuard {
                     "\(token): identyfikator bundle zmienił się (\(expectedBundleIdentifier ?? "—") → \(installedBundleIdentifier ?? "—")); przywracam poprzednią wersję."
                 )
                 guard let snapshotURL else { return .rollbackFailed }
-                return await restore(snapshot: snapshotURL, to: validationURL)
+                return await restore(
+                    snapshot: snapshotURL,
+                    to: validationURL,
+                    preservingSnapshot: true
+                )
                     ? .rolledBack
                     : .rollbackFailed
             }
