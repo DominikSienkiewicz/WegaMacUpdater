@@ -118,7 +118,9 @@ bump and move its entries under the new version heading when cutting a release.
   and cannot produce a success banner. The pre-mutation Team ID now travels directly into
   that canary, and the installed app path is resolved again after Homebrew finishes, so a
   move between `~/Applications` and `/Applications` cannot make Wega verify or restore the
-  stale source path. A missing post-install target fails closed and retains the snapshot.
+  stale source path. The replacement keeps the concrete artifact name and bundle ID, so a
+  multi-app cask cannot redirect the canary or rollback to its first declared app. A missing
+  or ambiguous post-install target fails closed and retains the snapshot.
 - **Destructive fallbacks no longer change meaning without consent (UX-04).** A
   migration now identifies every running candidate by its resolved bundle path (or one
   unambiguous bundle ID), asks that exact app to quit normally and waits; only an app that

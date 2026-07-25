@@ -9,6 +9,7 @@ enum CaskReplacementSafety {
         let token: String
         let snapshotURL: URL
         let expectedTeamID: String?
+        let identity: CaskReplacementArtifactIdentity
     }
 
     enum PreparationResult {
@@ -54,7 +55,7 @@ enum CaskReplacementSafety {
         let installedTeamID = await Task.detached {
             CodeSignatureVerifier.teamID(ofAppAt: appURL)
         }.value
-        let bundleID = Bundle(url: appURL)?.bundleIdentifier
+        let bundleID = CaskReplacementArtifactIdentity.bundleIdentifier(at: appURL)
         let ledger = TeamIDLedger.shared
         let publisherAudit = TeamIDLedger.classifyCask(
             storedByBundleID: bundleID.flatMap { ledger.teamID(forBundleID: $0) },
@@ -73,13 +74,32 @@ enum CaskReplacementSafety {
         return .ready(Preparation(
             token: token,
             snapshotURL: snapshotURL,
-            expectedTeamID: installedTeamID
+            expectedTeamID: installedTeamID,
+            identity: CaskReplacementArtifactIdentity(
+                bundleIdentifier: bundleID,
+                appURL: appURL
+            )
         ))
     }
 
-    static func resolveInstalledAppURL(token: String, brewService: BrewService) async -> URL? {
+    static func resolveInstalledAppURL(
+        _ preparation: Preparation,
+        brewService: BrewService
+    ) async -> URL? {
+        let token = preparation.token
         do {
-            let installationInfo = try await brewService.caskInstallationInfo(tokens: [token])
+            let caskInstallationInfo = try await brewService.caskInstallationInfo(tokens: [token])
+            guard let artifact = preparation.identity.matchingArtifact(
+                token: token,
+                in: caskInstallationInfo
+            ) else {
+                WegaLog.error(
+                    .homebrew,
+                    "\(token): brak jednoznacznego artefaktu aplikacji po instalacji."
+                )
+                return nil
+            }
+            let installationInfo = [BrewCaskInstallationInfo(token: token, appArtifacts: [artifact])]
             return CaskAppPathResolver().appPaths(from: installationInfo)[token]
         } catch {
             WegaLog.error(
@@ -99,7 +119,8 @@ enum CaskReplacementSafety {
             token: preparation.token,
             snapshotURL: preparation.snapshotURL,
             validationURL: installedAppURL,
-            expectedTeamID: preparation.expectedTeamID
+            expectedTeamID: preparation.expectedTeamID,
+            expectedBundleIdentifier: preparation.identity.bundleIdentifier
         )
     }
 }

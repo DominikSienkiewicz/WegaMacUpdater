@@ -26,6 +26,11 @@ enum CaskRollbackGuard {
         case expected(String?)
     }
 
+    private enum BundleIdentityBaseline {
+        case unchecked
+        case expected(String?)
+    }
+
     /// Reads the installed publishers before any snapshot or package-manager mutation.
     /// A bundle that already differs from the trusted ledger is not a safe rollback source,
     /// so callers must exclude every returned token from the upgrade command.
@@ -72,7 +77,8 @@ enum CaskRollbackGuard {
                 token: token,
                 snapshotURL: snapshots[token],
                 validationURL: appURL,
-                publisherBaseline: .ledger
+                publisherBaseline: .ledger,
+                bundleIdentityBaseline: .unchecked
             )
         }
         return outcomes
@@ -85,13 +91,15 @@ enum CaskRollbackGuard {
         token: String,
         snapshotURL: URL,
         validationURL: URL,
-        expectedTeamID: String?
+        expectedTeamID: String?,
+        expectedBundleIdentifier: String?
     ) async -> Outcome {
         await verify(
             token: token,
             snapshotURL: snapshotURL,
             validationURL: validationURL,
-            publisherBaseline: .expected(expectedTeamID)
+            publisherBaseline: .expected(expectedTeamID),
+            bundleIdentityBaseline: .expected(expectedBundleIdentifier)
         )
     }
 
@@ -99,8 +107,25 @@ enum CaskRollbackGuard {
         token: String,
         snapshotURL: URL?,
         validationURL: URL,
-        publisherBaseline: PublisherBaseline
+        publisherBaseline: PublisherBaseline,
+        bundleIdentityBaseline: BundleIdentityBaseline
     ) async -> Outcome {
+        if case .expected(let expectedBundleIdentifier) = bundleIdentityBaseline {
+            let installedBundleIdentifier = CaskReplacementArtifactIdentity.bundleIdentifier(
+                at: validationURL
+            )
+            guard expectedBundleIdentifier == installedBundleIdentifier else {
+                WegaLog.error(
+                    .homebrew,
+                    "\(token): identyfikator bundle zmienił się (\(expectedBundleIdentifier ?? "—") → \(installedBundleIdentifier ?? "—")); przywracam poprzednią wersję."
+                )
+                guard let snapshotURL else { return .rollbackFailed }
+                return await restore(snapshot: snapshotURL, to: validationURL)
+                    ? .rolledBack
+                    : .rollbackFailed
+            }
+        }
+
         let healthy = await Task.detached {
             CanaryCheck.passesGatekeeper(appAt: validationURL)
         }.value

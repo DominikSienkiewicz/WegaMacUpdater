@@ -369,7 +369,7 @@ extension ScanStore {
         }
 
         let installedAppURL = await CaskReplacementSafety.resolveInstalledAppURL(
-            token: token,
+            preparation,
             brewService: model.brewService
         )
         let verification = await CaskReplacementSafety.verify(
