@@ -212,7 +212,17 @@ struct UpdateView: View {
     @ViewBuilder
     private var listColumn: some View {
         if allItems.isEmpty && visibleManual.isEmpty && scan.restartCandidates.isEmpty {
-            EmptyHero(pose: .sleep, title: tr("Wszystko aktualne"), message: tr("Wega się zdrzemnie. Zajrzymy znowu za jakiś czas."), compact: true, playful: true)
+            // REL-09 — an empty list only means "up to date" when the scan behind it heard
+            // from every source. After a restart with the network down it used to mean
+            // nothing at all, and said the most reassuring thing on the screen anyway.
+            if scan.lastScanComplete {
+                EmptyHero(pose: .sleep, title: tr("Wszystko aktualne"), message: tr("Wega się zdrzemnie. Zajrzymy znowu za jakiś czas."), compact: true, playful: true)
+            } else {
+                EmptyHero(pose: .sad,
+                          title: tr("Nie wiem, czy wszystko aktualne"),
+                          message: tr("Ostatni skan nie dostał odpowiedzi od wszystkich źródeł — pusta lista nic tu nie znaczy. Odśwież, gdy wróci połączenie."),
+                          compact: true)
+            }
         } else if filterHasContent(updateFilter) || !scan.restartCandidates.isEmpty {
             VStack(spacing: 0) {
                 // Select-all row

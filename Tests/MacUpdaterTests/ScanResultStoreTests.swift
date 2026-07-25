@@ -104,6 +104,100 @@ final class ScanResultStoreTests: XCTestCase {
         XCTAssertNil(store.load())
     }
 
+    // MARK: REL-09 — an incomplete scan stays incomplete across a relaunch
+
+    /// "Brew never answered" and "Brew answered: nothing is outdated" are different facts.
+    /// The snapshot stored both as an empty list, which is what turned a network outage
+    /// into a convincing "everything is up to date" after a restart.
+    func testAMissingBrewResultRoundTripsAsAbsentNotAsAnEmptyList() throws {
+        let io = InMemoryScanSnapshotIO()
+        let store = ScanResultStore(io: io)
+        let snapshot = ScanSnapshot(
+            scannedAt: Date(timeIntervalSince1970: 1),
+            brew: nil,
+            mas: [], npm: [], manual: [],
+            sources: ScanSourceReports(
+                brew: ScanSourceReport(outcome: .failed("brew outdated"), error: "network is unreachable")
+            )
+        )
+
+        try store.save(snapshot)
+
+        XCTAssertNil(store.load()?.brew)
+        XCTAssertNotEqual(store.load()?.brew, BrewOutdated(formulae: [], casks: []))
+    }
+
+    func testPerSourceResultsAndTheirErrorsSurviveTheRoundTrip() throws {
+        let io = InMemoryScanSnapshotIO()
+        let store = ScanResultStore(io: io)
+        let sources = ScanSourceReports(
+            brewMetadata: ScanSourceReport(outcome: .failed("brew update"), error: "brew update: no internet"),
+            brew: ScanSourceReport(outcome: .succeeded),
+            mas: ScanSourceReport(outcome: .notInstalled),
+            npm: ScanSourceReport(outcome: .succeeded),
+            manual: ScanSourceReport(outcome: .failed("ręczne checki"), error: "ręczne checki: 3 źródeł nie odpowiedziało")
+        )
+
+        try store.save(ScanSnapshot(scannedAt: Date(timeIntervalSince1970: 1), brew: nil,
+                                    mas: [], npm: [], manual: [], sources: sources))
+        let loaded = try XCTUnwrap(store.load())
+
+        XCTAssertEqual(loaded.sources, sources)
+        XCTAssertEqual(loaded.sources.brewMetadata?.error, "brew update: no internet")
+        XCTAssertEqual(loaded.sources.errors.count, 2)
+    }
+
+    /// Completeness is stored, but it defaults to what the per-source results say, so the
+    /// two cannot drift apart by omission at the call site.
+    func testCompletenessDefaultsToWhatTheSourcesReport() {
+        let failing = ScanSnapshot(
+            scannedAt: Date(), brew: nil, mas: [], npm: [], manual: [],
+            sources: ScanSourceReports(brew: ScanSourceReport(outcome: .failed("brew outdated"), error: "boom"))
+        )
+        let clean = ScanSnapshot(
+            scannedAt: Date(), brew: BrewOutdated(formulae: [], casks: []), mas: [], npm: [], manual: [],
+            sources: ScanSourceReports(brew: ScanSourceReport(outcome: .succeeded),
+                                       mas: ScanSourceReport(outcome: .notInstalled))
+        )
+
+        XCTAssertFalse(failing.isComplete)
+        // A tool that is not installed is *not applicable*, never a failed check (F4).
+        XCTAssertTrue(clean.isComplete)
+    }
+
+    /// A scan cut short before a source ran leaves no report for it — which is not the same
+    /// as that source failing, and must not be counted as one.
+    func testAnAbsentReportIsNotAFailure() {
+        let reports = ScanSourceReports(brew: ScanSourceReport(outcome: .succeeded))
+
+        XCTAssertTrue(reports.isComplete)
+        XCTAssertEqual(reports.failedSourceCount, 0)
+        XCTAssertTrue(reports.errors.isEmpty)
+    }
+
+    func testFailedSourcesAreCountedAndTheirErrorsCollected() {
+        let reports = ScanSourceReports(
+            brewMetadata: ScanSourceReport(outcome: .failed("brew update"), error: "no internet"),
+            brew: ScanSourceReport(outcome: .succeeded),
+            npm: ScanSourceReport(outcome: .failed("npm"), error: "registry timeout")
+        )
+
+        XCTAssertFalse(reports.isComplete)
+        XCTAssertEqual(reports.failedSourceCount, 2)
+        XCTAssertEqual(Set(reports.errors), ["no internet", "registry timeout"])
+    }
+
+    /// A snapshot from the pre-REL-09 schema carries no per-source result, so it cannot say
+    /// whether it was complete. Reading it as complete is the false reassurance the version
+    /// bump exists to prevent — it fails soft, and the next scan writes a current one.
+    func testAPreREL09SnapshotIsRejected() throws {
+        let io = InMemoryScanSnapshotIO()
+        let store = ScanResultStore(io: io)
+        try store.save(makeSnapshot(scannedAt: Date(), schemaVersion: 1))
+
+        XCTAssertNil(store.load())
+    }
+
     func testSavePropagatesWriteError() {
         let io = InMemoryScanSnapshotIO()
         io.writeError = FakeIOError.boom

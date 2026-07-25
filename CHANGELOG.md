@@ -88,6 +88,19 @@ bump and move its entries under the new version heading when cutting a release.
   `MigrationLeftoverCleanupDisabledTests`.
 
 ### Fixed
+- **A restart turned a network outage into "everything up to date" (REL-09).** The
+  `brew update` failure was discarded on the spot (`_ = try?`), the persisted snapshot
+  recorded no per-source result, and a missing Brew answer was written to disk as an empty
+  list — so after a relaunch a scan that had established nothing looked exactly like a
+  clean bill of health. The snapshot now carries **what each source answered, its error and
+  a completeness flag** (`ScanSourceReports`, built from the `SourceCheckOutcome` the scan
+  already computes), a missing Brew result stays absent instead of becoming "nothing
+  outdated", and a failed metadata refresh counts as a silent source — so it reaches the
+  usual *"the list may be incomplete"* banner and the error badge instead of being ignored.
+  A restored scan that was incomplete says so with its own banner, and the empty-state hero
+  reads *"I can't tell whether everything is up to date"* rather than *"Everything up to
+  date"*. `ScanSnapshot` moves to schema 2; a version-1 file is rejected on read (it cannot
+  say whether it was complete) and the next scan writes a fresh one.
 - **A hidden global `brew cleanup` after every update (REL-04).** The dry-run panel
   promises the literal set of commands an update will run; the update then finished with
   a `brew cleanup` that appeared in no preview — after an npm-only or App-Store-only run,

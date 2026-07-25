@@ -99,7 +99,7 @@ public struct UnifiedUpdateCount: Equatable, Sendable {
 /// *broken*. Homebrew not being installed says nothing about the health of the scan; brew
 /// being installed and timing out says everything. Collapsing the two — which is what a
 /// bare `catch` does — turns "Wega works fine without Homebrew" into a permanent red banner.
-public enum SourceCheckOutcome: Equatable, Sendable {
+public enum SourceCheckOutcome: Codable, Equatable, Sendable {
     case succeeded
     /// The tool is not installed. Not applicable — never a failure.
     case notInstalled
