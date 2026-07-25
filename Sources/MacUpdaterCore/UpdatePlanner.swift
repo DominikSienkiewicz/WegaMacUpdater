@@ -10,7 +10,7 @@ import Foundation
 /// so a mismatch silently upgraded the wrong things — now both sides share this type
 /// and are covered by `UpdatePlannerTests`.
 public struct OutdatedItem: Identifiable, Equatable, Sendable {
-    public enum Kind: Equatable, Sendable { case formula, cask, appStore, npm }
+    public enum Kind: Hashable, Sendable { case formula, cask, appStore, npm }
 
     public let key: String
     public var id: String { key }
@@ -141,6 +141,21 @@ public enum UpdatePlanner {
     static let caskPrefix = "c:"
     static let masPrefix = "a:"
     static let npmPrefix = "n:"
+
+    /// The source-tagged key for one item, the way `outdatedItems` builds it. Exposed so
+    /// code that only has a bare token (the background updater, an upgrade outcome) can
+    /// address the same row without re-deriving the prefix by hand.
+    ///
+    /// For App Store items `name` is the numeric `appStoreID`, not the app's display name —
+    /// that is what the key carries and what `plan(selectedKeys:allKeys:)` routes on.
+    public static func key(name: String, kind: OutdatedItem.Kind) -> String {
+        switch kind {
+        case .formula:  return formulaPrefix + name
+        case .cask:     return caskPrefix + name
+        case .appStore: return masPrefix + name
+        case .npm:      return npmPrefix + name
+        }
+    }
 
     /// Flattens the per-source outdated results into one selectable list, tagging each
     /// row's key with its source prefix. Order: formulae, casks, App Store, npm.

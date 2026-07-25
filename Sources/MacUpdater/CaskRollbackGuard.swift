@@ -13,17 +13,12 @@ import MacUpdaterCore
 @MainActor
 enum CaskRollbackGuard {
     /// What happened to one cask after its upgrade.
-    enum Outcome: Equatable {
-        /// Gatekeeper accepted the new version.
-        case healthy
-        /// The new version failed its check and the previous one was restored.
-        case rolledBack
-        /// The new version failed its check and could not be restored. The worst case, and
-        /// the one that must never be silent.
-        case rollbackFailed
-        /// The publisher's Team ID changed between versions — a possible takeover.
-        case publisherChanged(old: String, new: String?)
-    }
+    ///
+    /// REL-02 moved the cases into Core as `CaskValidationVerdict` so they can travel into
+    /// `UpdateRunOutcome` — the verdict is one phase of an item's result, not a private
+    /// detail of this file, and until it reached the summary a failed rollback ended under
+    /// a green banner.
+    typealias Outcome = CaskValidationVerdict
 
     /// Copy-on-write clone (`clonefile`) of each cask's app bundle, keyed by token.
     /// Casks with no resolvable `.app` are skipped — see `RollbackProtection`, which is what

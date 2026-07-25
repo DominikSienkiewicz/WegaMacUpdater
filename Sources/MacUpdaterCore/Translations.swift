@@ -43,6 +43,9 @@ public enum Translations {
         "%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.": "%@: the new version failed the check — restored the previous one.",
         "Cofnęłam %@ — nowa wersja nie przeszła kontroli.": "Rolled back %@ — the new version failed the check.",
         "%@: nowa wersja nie przeszła kontroli, ale rollback się nie powiódł.": "%@: the new version failed the check, but rollback did not succeed.",
+        // REL-02 — nieudany rollback to czerwony baner sticky, nie wpis w zwijanym logu.
+        "Rollback się nie powiódł": "Rollback failed",
+        "%@: nowa wersja nie przeszła kontroli, a przywrócenie poprzedniej nie powiodło się. Sprawdź aplikację przed użyciem.": "%@: the new version failed the check and the previous one could not be restored. Check the app before using it.",
         // FEAT-04 — watchdog (upgrade).
         "Zmiana wydawcy": "Publisher changed",
         "%@: Team ID zmienił się (%@ → %@). Zweryfikuj.": "%@: Team ID changed (%@ → %@). Verify.",
@@ -351,8 +354,13 @@ public enum Translations {
         // F3 — ciche aktualizacje w tle: opt-in per aplikacja, tylko dla chronionych casków.
         "Aktualizuj automatycznie w tle": "Update automatically in the background",
         "Aktualizacje w tle": "Background updates",
-        "Zaktualizowano %@ w tle · wszystkie przeszły test.": "Updated %@ in the background · all passed their check.",
-        "Zaktualizowano %@ w tle · %@ cofnięto po nieudanym teście.": "Updated %@ in the background · %@ rolled back after a failed check.",
+        // REL-02 — powiadomienie w tle mówi o każdym wyniku rundy, nie tylko o sukcesie.
+        "Aktualizacje w tle — wymagają uwagi": "Background updates — need your attention",
+        "Zaktualizowano %@ w tle.": "Updated %@ in the background.",
+        "%@ cofnięto po nieudanym teście.": "%@ rolled back after a failed check.",
+        "%@ nie przeszło testu i nie udało się przywrócić — sprawdź je.": "%@ failed its check and could not be restored — check it.",
+        "%@ zmieniło wydawcę (Team ID) — zweryfikuj.": "%@ changed publisher (Team ID) — verify.",
+        "%@ nie udało się zaktualizować.": "%@ could not be updated.",
         "Aktualizacja w toku": "Update in progress",
         "Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.": "Wega is updating something in the background. Try again in a moment.",
         // F2 — podgląd planu: każde pole wolno powiedzieć „nie wiem”.

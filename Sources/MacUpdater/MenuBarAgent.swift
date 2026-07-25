@@ -28,13 +28,17 @@ final class MenuBarAgent: ObservableObject {
     /// scratch. Now the window adopts them, which is the whole "instant value" of M2.
     @Published private(set) var lastResult: MenuBarScanResult?
 
-    private var lastNotifiedCount = 0
+    /// REL-02 — the identity of the update set the user was last told about. It used to be
+    /// the *count*: a round in which one update was installed and another appeared has the
+    /// same count as the round before it, so the new one was never announced.
+    private var lastNotifiedFingerprint: String
     private var loop: Task<Void, Never>?
 
     private enum Keys {
         static let interval = "wega.menubar.interval"
         static let lastCheck = "wega.menubar.lastCheck"
         static let lastCount = "wega.menubar.lastCount"
+        static let lastNotifiedFingerprint = "wega.menubar.lastNotifiedFingerprint"
         static let notificationAnswer = "wega.notifications.inAppAnswer"
     }
 
@@ -64,7 +68,7 @@ final class MenuBarAgent: ObservableObject {
         updateCount = defaults.integer(forKey: Keys.lastCount)
         let stored = defaults.double(forKey: Keys.lastCheck)
         lastCheck = stored > 0 ? Date(timeIntervalSinceReferenceDate: stored) : nil
-        lastNotifiedCount = updateCount
+        lastNotifiedFingerprint = defaults.string(forKey: Keys.lastNotifiedFingerprint) ?? ""
     }
 
     /// The user accepted the in-app explanation. Now — and only now — ask macOS.
@@ -121,35 +125,38 @@ final class MenuBarAgent: ObservableObject {
         defer { isChecking = false }
 
         let policies = UpdatePolicyStore.shared.policiesMap
-        let result = await MenuBarUpdateChecker().availableUpdateCount(policies: policies)
-
-        lastResult = result
-        updateCount = result.total
-        lastCheckFailed = result.total == 0 && result.failedChecks > 0
-        lastCheck = Date()
+        // REL-02 — exactly one current result for the whole round. The badge used to be
+        // refreshed after the background upgrade while the notification still described the
+        // list from *before* it, so the two disagreed about what was outstanding.
+        var current = await MenuBarUpdateChecker().availableUpdateCount(policies: policies)
 
         // F3 — upgrade the safe, opted-in subset before announcing anything, so the badge and
         // the notification describe the world *after* the background work, not before it.
         let upgraded = await BackgroundUpdater.shared.runIfEligible(
-            candidates: result.brew?.casks.map(\.name) ?? [],
+            candidates: current.brew?.casks.map(\.name) ?? [],
             policies: policies
         )
         if !upgraded.isEmpty {
-            // Those casks are no longer outdated; re-check so the badge does not keep offering
-            // upgrades that have already happened.
-            let refreshed = await MenuBarUpdateChecker().availableUpdateCount(policies: policies)
-            lastResult = refreshed
-            updateCount = refreshed.total
+            // Those casks are no longer outdated; re-check so neither the badge nor the
+            // notification keeps offering upgrades that have already happened.
+            current = await MenuBarUpdateChecker().availableUpdateCount(policies: policies)
         }
+
+        lastResult = current
+        updateCount = current.total
+        lastCheckFailed = current.total == 0 && current.failedChecks > 0
+        lastCheck = Date()
         persist()
         updateDockBadge()
 
-        // Notify only when something new appeared (avoid re-nagging every interval).
-        if result.total > 0 && result.total != lastNotifiedCount {
-            lastNotifiedCount = result.total
-            postNotification(count: result.total)
-        } else if result.total == 0 {
-            lastNotifiedCount = 0
+        // Notify only when the set of updates actually changed — compared by identity, not
+        // by size, so a swap between rounds is still news.
+        let fingerprint = UpdateFingerprint.of(result: current, policies: policies)
+        if current.total > 0 && fingerprint != lastNotifiedFingerprint {
+            rememberNotified(fingerprint)
+            postNotification(count: current.total)
+        } else if current.total == 0 {
+            rememberNotified("")
         }
     }
 
@@ -157,13 +164,19 @@ final class MenuBarAgent: ObservableObject {
     /// reports its result here instead of leaving the badge showing yesterday's number.
     /// Also resets the notification watermark, so the next background check does not
     /// re-announce updates the user has just seen (or just installed).
-    func reportWindowScan(count: Int, failedChecks: Int) {
+    func reportWindowScan(count: Int, failedChecks: Int, fingerprint: String) {
         updateCount = count
         lastCheckFailed = count == 0 && failedChecks > 0
         lastCheck = Date()
-        lastNotifiedCount = count
+        rememberNotified(fingerprint)
         persist()
         updateDockBadge()
+    }
+
+    /// Move the notification watermark to this exact set of updates.
+    private func rememberNotified(_ fingerprint: String) {
+        lastNotifiedFingerprint = fingerprint
+        UserDefaults.standard.set(fingerprint, forKey: Keys.lastNotifiedFingerprint)
     }
 
     private func persist() {

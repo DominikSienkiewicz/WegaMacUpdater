@@ -74,6 +74,11 @@ final class ScanStore: ObservableObject {
     private var lastWegaState: WegaState?
     private var lastActivity:  UpdateActivity?
     private var failedSources: Int = 0
+    /// REL-02 — the sources whose outdated list the last scan could actually re-read, which
+    /// is what makes a post-upgrade rescan able to *confirm* anything. Deliberately not
+    /// derived from `failedSources`: that also counts the manual per-app checkers, and a
+    /// flaky vendor endpoint says nothing about whether `brew outdated` answered.
+    private var confirmedSourceKinds: Set<OutdatedItem.Kind> = []
 
     private var model: AppViewModel?
     private let processes = RunningProcessService()
@@ -311,6 +316,9 @@ extension ScanStore {
         guard let model else { return }
         status = .checking
         errorMessage = nil
+        // Nothing is confirmed until each source has answered in this scan — a scan that
+        // gets cancelled half-way must not leave last time's confirmations standing.
+        confirmedSourceKinds = []
         if emitActivity { emitActivitySignal(.scanning) }
         WegaLog.info(.scanner, lightweight ? "Lekkie odświeżenie listy" : tr("Skan rozpoczęty"))
         emitWegaState(WegaState(pose: .sniff, line: tr("Węszę po Homebrew…")))
@@ -358,10 +366,12 @@ extension ScanStore {
                 brewOutcome = .failed("brew outdated")
                 WegaLog.error(.homebrew, "brew outdated: \(error.localizedDescription)") }
         outcomes.append(brewOutcome)
+        if brewOutcome == .succeeded { confirmedSourceKinds.formUnion([.formula, .cask]) }
         if await bailIfCancelled(at: .brew, emitActivity: emitActivity) { return }
 
         progress = .running(.mas)
-        do { masOutdated = try await model.masService.outdated(); outcomes.append(.succeeded) }
+        do { masOutdated = try await model.masService.outdated(); outcomes.append(.succeeded)
+             confirmedSourceKinds.insert(.appStore) }
         catch MasServiceError.masNotFound { masOutdated = []; outcomes.append(.notInstalled) }
         catch { masOutdated = []
                 outcomes.append(.failed("Mac App Store"))
@@ -370,7 +380,8 @@ extension ScanStore {
         if await bailIfCancelled(at: .mas, emitActivity: emitActivity) { return }
 
         progress = .running(.npm)
-        do { npmOutdated = try await model.npmService.outdated(); outcomes.append(.succeeded) }
+        do { npmOutdated = try await model.npmService.outdated(); outcomes.append(.succeeded)
+             confirmedSourceKinds.insert(.npm) }
         catch NpmServiceError.npmNotFound { npmOutdated = []; outcomes.append(.notInstalled) }
         catch { npmOutdated = []
                 outcomes.append(.failed("npm"))
@@ -488,7 +499,11 @@ extension ScanStore {
         // M4 — the dock badge has one owner (the agent); a window scan hands it the fresh
         // number instead of leaving yesterday's. Only from here, never from `emitCounts()`,
         // which also runs on a bare view rebuild and must not claim a scan just happened.
-        MenuBarAgent.shared.reportWindowScan(count: updateCount.badgeCount, failedChecks: sources)
+        MenuBarAgent.shared.reportWindowScan(
+            count: updateCount.badgeCount,
+            failedChecks: sources,
+            fingerprint: UpdateFingerprint.of(items: allItems, manual: visibleManual)
+        )
         emitCounts()
         persistLastScan()
     }
@@ -563,6 +578,11 @@ extension ScanStore {
         emitWegaState(WegaState(pose: .sniff, line: tr("Aktualizuję, chwila…")))
 
         let plan          = UpdatePlanner.plan(selectedKeys: selected, allKeys: allItems.map(\.key))
+        // The rows this run is about, captured before anything changes: the post-upgrade
+        // rescan rewrites `allItems`, and an outcome has to keep pointing at the item it
+        // was produced for. `name`/`key` here are what the tools and the rescan both use.
+        let plannedKeys   = selected.isEmpty ? Set(allItems.map(\.key)) : selected
+        let plannedItems  = allItems.filter { plannedKeys.contains($0.key) }
         // F2 — the exact argument vectors come from the planner, the same call the preview
         // panel renders. Building them here as well is how a dry-run starts to lie: the
         // `--force` retry path below is precisely the drift that was waiting to happen.
@@ -573,7 +593,6 @@ extension ScanStore {
         let caskNames     = plan.caskNames
         let npmNames      = plan.npmNames
         let hasMasItems   = plan.includesMas
-        let n             = plan.count
 
         // Pre-capture which casks being updated are currently running
         var candidates: [RestartInfo] = []
@@ -610,11 +629,14 @@ extension ScanStore {
             }
         }
 
-        var outcomes: [BrewUpgradeOutcome] = []
+        // REL-02 — one outcome per item and source, filled in phase by phase (execution →
+        // validation → rollback → rescan). Nothing announces success before every phase
+        // that applies to an item has had its say.
+        var run = UpdateRunOutcome()
 
         // Brew upgrade — formulae
         if let formulaArgs {
-            outcomes.append(await runBrewUpgrade(arguments: formulaArgs))
+            run.record(plannedItems.filter { $0.kind == .formula }, outcome: await runBrewUpgrade(arguments: formulaArgs))
         }
 
         // Brew upgrade — casks (FEAT-05 snapshot przed, canary/rollback + FEAT-04 ledger po)
@@ -634,26 +656,35 @@ extension ScanStore {
                 caskOutcome = BrewUpgradeOutcome.merging(original: caskOutcome, forcedRetry: retryOutcome, retriedTokens: retryTokens)
             }
 
-            outcomes.append(caskOutcome)
-            await postCaskUpgrade(caskNames, snapshots: snapshots)
+            run.record(plannedItems.filter { $0.kind == .cask }, outcome: caskOutcome)
+            // The canary/rollback verdict is a phase of the same result, not an aside: it
+            // used to be raised after the summary had already been computed, so a cask the
+            // guard had just rolled back still counted towards "Zaktualizowano N pakietów".
+            run.applyValidation(await postCaskUpgrade(caskNames, snapshots: snapshots))
         }
 
         // npm global upgrade — one package at a time (npm semantics).
         for (pkg, command) in zip(npmNames, npmCommands) {
-            outcomes.append(await runNpmUpgrade(name: pkg, arguments: command.arguments))
+            let outcome = await runNpmUpgrade(name: pkg, arguments: command.arguments)
+            run.record(plannedItems.filter { $0.kind == .npm && $0.name == pkg }, outcome: outcome)
         }
 
-        // MAS upgrade
+        // MAS upgrade — `mas upgrade` covers every App Store item in one process and reports
+        // no per-app result, so its failure becomes a synthetic outcome per item, exactly as
+        // `runNpmUpgrade` does. Before REL-02 the thrown error only ever reached `brewLog`.
         if hasMasItems {
             brewLog.append("$ mas upgrade")
+            var masFailure: String?
             do {
                 let result = try await model.masService.upgrade()
                 let lines = result.stdout.components(separatedBy: "\n").filter { !$0.isEmpty }
                 brewLog.append(contentsOf: lines)
             } catch {
+                masFailure = error.localizedDescription
                 brewLog.append("error: \(error.localizedDescription)")
                 WegaLog.error(.app, "mas upgrade: \(error.localizedDescription)")
             }
+            run.record(masItems: plannedItems.filter { $0.kind == .appStore }, failure: masFailure)
         }
 
         _ = try? await model.brewService.cleanup()
@@ -669,33 +700,65 @@ extension ScanStore {
 
         updating = false
 
-        let summary = UpdatePlanner.summarize(outcomes: outcomes)
-        let failedTokens = summary.failedTokens
-        let needsSudoPassword = summary.needsSudoPassword
-        if summary.anyFailure {
-            let baseDetail = failedTokens.isEmpty
-                ? tr("Brew zgłosił błąd — sprawdź log poniżej.")
-                : trf("Nie udało się: %@. Szczegóły w logu.", "\(failedTokens.joined(separator: ", "))")
-            let detail = needsSudoPassword
-                ? trf("%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła.", "\(baseDetail)")
-                : baseDetail
-            showBanner(BannerData(variant: .danger,
-                                  title: tr("Aktualizacja niekompletna"),
-                                  message: detail,
-                                  action: needsSudoPassword ? .openSettings : nil))
-            emitActivitySignal(.error)
-            emitWegaState(WegaState(pose: .alert, line: tr("Część pakietów się nie zaktualizowała.")))
-            WegaLog.error(.homebrew, "Aktualizacja niekompletna: \(failedTokens.isEmpty ? "Brew zgłosił błąd" : failedTokens.joined(separator: ", "))")
-            // Surface *why* each upgrade failed — the brew error block, not just the
-            // token name — so the log explains the failure instead of only flagging it.
-            for detail in summary.failureDetails {
-                WegaLog.error(.homebrew, detail)
-            }
-        } else {
-            showBanner(BannerData(variant: .success, title: trf("Zaktualizowano %@ pakietów", "\(n)"), message: tr("Wszystko gotowe.")))
+        // The rescan is the last phase an item has to clear: whatever the tool claimed, an
+        // item the fresh list still reports was not updated, and a rescan that could not
+        // answer leaves the upgrade unconfirmed rather than confirmed-good.
+        run.applyRescan(stillOutdatedKeys: Set(allItems.map(\.key)),
+                        confirmed: Set(plannedItems.map(\.kind)).isSubset(of: confirmedSourceKinds))
+
+        report(run: run)
+    }
+
+    /// Turns the run into what the user sees: the sticky alerts first (a failed rollback and
+    /// a changed publisher are the two things that must not be missable), then the summary
+    /// banner — green only when every item cleared every phase.
+    private func report(run: UpdateRunOutcome) {
+        let summary = run.summary
+
+        for outcome in summary.rollbackFailures {
+            showStickyBanner(BannerData(variant: .danger,
+                                        title: tr("Rollback się nie powiódł"),
+                                        message: trf("%@: nowa wersja nie przeszła kontroli, a przywrócenie poprzedniej nie powiodło się. Sprawdź aplikację przed użyciem.", "\(outcome.name)"),
+                                        action: .openLogs))
+        }
+        for outcome in summary.publisherChanges {
+            guard case .publisherChanged(let old, let new) = outcome.verdict else { continue }
+            showStickyBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"),
+                                        message: trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.", "\(outcome.name)", "\(old)", "\(new ?? "—")")))
+        }
+
+        if summary.allItemsUpgraded {
+            let count = summary.upgraded.count
+            showBanner(BannerData(variant: .success,
+                                  title: trf("Zaktualizowano %@ pakietów", "\(count)"),
+                                  message: tr("Wszystko gotowe.")))
             emitActivitySignal(.success)
-            emitWegaState(WegaState(pose: .happy, line: trf("Gotowe! %@ pakietów odświeżonych.", "\(n)")))
-            WegaLog.info(.homebrew, "Zaktualizowano \(n) pakietów")
+            emitWegaState(WegaState(pose: .happy, line: trf("Gotowe! %@ pakietów odświeżonych.", "\(count)")))
+            WegaLog.info(.homebrew, "Zaktualizowano \(count) pakietów")
+            return
+        }
+
+        let failedNames = summary.notUpgraded.map(\.name)
+        let baseDetail = failedNames.isEmpty
+            ? tr("Brew zgłosił błąd — sprawdź log poniżej.")
+            : trf("Nie udało się: %@. Szczegóły w logu.", "\(failedNames.joined(separator: ", "))")
+        let detail = summary.needsSudoPassword
+            ? trf("%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła.", "\(baseDetail)")
+            : baseDetail
+        showBanner(BannerData(variant: .danger,
+                              title: tr("Aktualizacja niekompletna"),
+                              message: detail,
+                              action: summary.needsSudoPassword ? .openSettings : nil))
+        emitActivitySignal(.error)
+        emitWegaState(WegaState(pose: .alert, line: tr("Część pakietów się nie zaktualizowała.")))
+        WegaLog.error(.homebrew, "Aktualizacja niekompletna: \(failedNames.isEmpty ? "Brew zgłosił błąd" : failedNames.joined(separator: ", "))")
+        // Surface *why* each upgrade failed — the brew error block, not just the token
+        // name — so the log explains the failure instead of only flagging it.
+        for line in summary.diagnostics {
+            WegaLog.error(.homebrew, line)
+        }
+        for outcome in summary.notUpgraded {
+            WegaLog.error(.homebrew, "\(outcome.name): \(outcome.verdict.logDescription)")
         }
     }
 
@@ -762,22 +825,23 @@ extension ScanStore {
         CaskRollbackGuard.snapshot(tokens: tokens, appPaths: caskIconPaths)
     }
 
-    private func postCaskUpgrade(_ tokens: [String], snapshots: [String: URL]) async {
-        let outcomes = await CaskRollbackGuard.verify(tokens: tokens, appPaths: caskIconPaths, snapshots: snapshots)
-        for (token, outcome) in outcomes {
-            switch outcome {
-            case .healthy:
+    /// Runs the canary/rollback chain and **returns** its verdicts, so they can join the
+    /// run's per-item result. It used to only narrate into the collapsible log, which is how
+    /// `.rollbackFailed` — the case that must never be silent — ended under a green banner.
+    private func postCaskUpgrade(_ tokens: [String], snapshots: [String: URL]) async -> [String: CaskValidationVerdict] {
+        let verdicts = await CaskRollbackGuard.verify(tokens: tokens, appPaths: caskIconPaths, snapshots: snapshots)
+        for (token, verdict) in verdicts {
+            switch verdict {
+            case .healthy, .publisherChanged:
                 continue
             case .rolledBack:
                 brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.", "\(token)"))
                 emitWegaState(WegaState(pose: .alert, line: trf("Cofnęłam %@ — nowa wersja nie przeszła kontroli.", "\(token)")))
             case .rollbackFailed:
                 brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli, ale rollback się nie powiódł.", "\(token)"))
-            case .publisherChanged(let old, let new):
-                showStickyBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"),
-                                            message: trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.", "\(token)", "\(old)", "\(new ?? "—")")))
             }
         }
+        return verdicts
     }
 
     private func isProcessRunning(_ name: String) async -> Bool {
