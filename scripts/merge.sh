@@ -13,12 +13,18 @@
 #      using <message> as the merge commit message,
 #   4. runs ./scripts/check.sh on the merged result (guard test, build, test,
 #      swiftlint --strict) — the gate that decides whether the merge is good,
-#   5. only then removes the worktree holding <branch> and deletes the branch.
+#   5. re-checks that <branch> really is in <target>, and only then removes the
+#      worktree holding it and deletes the branch.
 #
 # The quality gate sits between the merge and the cleanup on purpose: if the
 # integrated state fails, the branch and its worktree survive so the work can be
 # fixed, and the exact `git reset --hard ORIG_HEAD` undo is printed. Nothing is
 # reset automatically — undoing a commit on <target> is the caller's decision.
+#
+# Cleanup is all-or-nothing. Git refuses to delete a branch a worktree still has
+# checked out, so the worktree must go first and the order cannot be reversed;
+# instead every precondition is checked before that first irreversible step, so a
+# refusal never leaves a removed worktree next to a surviving branch.
 #
 # It is deliberately careful:
 #   - refuses if the main working tree is dirty (commit or stash first),
@@ -202,6 +208,24 @@ else
   echo ">> skipping ./scripts/check.sh (--no-verify)"
 fi
 
+# Cleanup is all-or-nothing, so everything that can say no says it here, before the
+# first irreversible step. Git forbids deleting a branch that a worktree still has
+# checked out, so the worktree has to go first — which means a check left until after
+# the removal can only ever fail with the worktree already gone and the branch still
+# there. That half-done state is what this ordering exists to prevent.
+#
+# The ancestor test is the real safety gate, and it asks the question that matters: is
+# the work already in <target>? `git branch -d` asks a different one — with an upstream
+# set it demands merged-into-UPSTREAM, so a branch created off origin/main is refused
+# for as long as <target> is unpushed ("not yet merged to refs/remotes/origin/main,
+# even though it is merged to HEAD"). Verify against <target> here, then use -D below
+# to carry that verdict out rather than let -d overrule it.
+if ! git merge-base --is-ancestor "$BRANCH" "$TARGET"; then
+  echo "refusing to clean up '$BRANCH': it is not fully merged into '$TARGET'" >&2
+  echo "   Nothing was removed — the worktree and the branch are both untouched." >&2
+  exit 1
+fi
+
 # Remove the branch's worktree (never the main one).
 if [ -n "$BRANCH_WT" ] && [ "$BRANCH_WT" != "$MAIN_WT" ]; then
   echo ">> removing worktree $BRANCH_WT"
@@ -215,17 +239,6 @@ if [ -n "$BRANCH_WT" ] && [ "$BRANCH_WT" != "$MAIN_WT" ]; then
 fi
 
 echo ">> deleting branch $BRANCH"
-# This is the real safety check, and it asks the question that matters here: is the
-# work already in <target>? `git branch -d` asks a different one — when the branch has
-# an upstream it demands merged-into-UPSTREAM, so a branch created off origin/main is
-# refused for as long as <target> is unpushed ("not yet merged to refs/remotes/origin/
-# main, even though it is merged to HEAD"), and the cleanup dies on its last step after
-# the worktree is already gone. Verify against <target> here, then use -D to carry that
-# decision out rather than let -d overrule it.
-if ! git merge-base --is-ancestor "$BRANCH" "$TARGET"; then
-  echo "refusing to delete '$BRANCH': it is not fully merged into '$TARGET'" >&2
-  exit 1
-fi
 git branch -D "$BRANCH"
 
 echo "✓ merged $BRANCH into $TARGET, gate green, cleaned up"
