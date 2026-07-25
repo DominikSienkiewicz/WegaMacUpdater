@@ -264,6 +264,48 @@ else
         "kod $RUN_STATUS; gałąź_usunięta=$branch_gone worktree_usunięty=$worktree_gone; wyjście: $RUN_OUTPUT"
 fi
 
+# Sprzątanie jest wszystko-albo-nic. Git nie pozwala usunąć gałęzi zameldowanej
+# w worktree, więc worktree musi zniknąć pierwszy i tej kolejności nie da się odwrócić.
+# Gdy jego usunięcie się nie uda, gałąź NIE może zniknąć — inaczej zostaje połowiczny
+# stan, w którym jedno posprzątane, a drugie nie.
+repo="$(make_repo brudny-worktree)"
+add_gate "$repo" 0
+feature_branch "$repo" feat/x b
+printf 'niezacommitowana praca w worktree\n' > "$repo/.worktrees/feat/x/robocze.txt"
+run_merge "$repo" feat/x "feat: zmiana" --no-fetch
+branch_alive=0
+git -C "$repo" show-ref --verify --quiet refs/heads/feat/x && branch_alive=1
+worktree_alive=0
+[ -d "$repo/.worktrees/feat/x" ] && worktree_alive=1
+merged=0
+git -C "$repo" merge-base --is-ancestor feat/x main && merged=1
+if [ "$RUN_STATUS" -eq 1 ] \
+   && [[ "$RUN_OUTPUT" == *"--force"* ]] \
+   && [ "$branch_alive" -eq 1 ] \
+   && [ "$worktree_alive" -eq 1 ] \
+   && [ "$merged" -eq 1 ]; then
+    record_pass "worktree z lokalnymi zmianami → scalenie zostaje, ale ani worktree, ani gałąź nie giną"
+else
+    record_fail "sprzątanie wszystko-albo-nic" \
+        "kod $RUN_STATUS; gałąź=$branch_alive worktree=$worktree_alive scalone=$merged; wyjście: $RUN_OUTPUT"
+fi
+
+repo="$(make_repo brudny-worktree-force)"
+add_gate "$repo" 0
+feature_branch "$repo" feat/x b
+printf 'niezacommitowana praca w worktree\n' > "$repo/.worktrees/feat/x/robocze.txt"
+run_merge "$repo" feat/x "feat: zmiana" --no-fetch --force
+branch_gone=1
+git -C "$repo" show-ref --verify --quiet refs/heads/feat/x && branch_gone=0
+worktree_gone=1
+[ -d "$repo/.worktrees/feat/x" ] && worktree_gone=0
+if [ "$RUN_STATUS" -eq 0 ] && [ "$branch_gone" -eq 1 ] && [ "$worktree_gone" -eq 1 ]; then
+    record_pass "--force na brudnym worktree → sprząta oba"
+else
+    record_fail "--force na brudnym worktree" \
+        "kod $RUN_STATUS; gałąź_usunięta=$branch_gone worktree_usunięty=$worktree_gone; wyjście: $RUN_OUTPUT"
+fi
+
 # ---------------------------------------------------------------------------
 if [ "$(git -C "$ROOT" status --porcelain)" != "$REPO_STATE_BEFORE" ]; then
     record_fail "testy nie zmieniają repozytorium projektu" \
