@@ -194,6 +194,7 @@ struct UninstallView: View {
                 UninstallDialog(
                     brewCount:  selectedBrewCount,
                     trashCount: selectedTrashCount,
+                    ambiguities: InstallationInventory.ambiguousBrewUninstalls(selected: targets, among: apps),
                     onCancel:   { showDialog = false },
                     onConfirm:  { zap in showDialog = false; Task { await uninstall(zap: zap) } }
                 )
@@ -296,6 +297,9 @@ struct UninstallView: View {
 private struct UninstallDialog: View {
     let brewCount:  Int
     let trashCount: Int
+    /// REL-16: casks whose application is installed in more than one place — see
+    /// `InstallationInventory.ambiguousBrewUninstalls`.
+    let ambiguities: [AmbiguousBrewUninstall]
     let onCancel:   () -> Void
     let onConfirm:  (Bool) -> Void
 
@@ -365,6 +369,38 @@ private struct UninstallDialog: View {
                             )
                         }
                         .padding(.horizontal, 22)
+                    }
+
+                    if !ambiguities.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(ambiguities) { item in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundStyle(Color.wegaDanger)
+                                        .font(.system(size: 13))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(tr("Homebrew usunie swoją kopię"))
+                                            .font(.system(size: 12, weight: .semibold))
+                                        Text(trf(
+                                            "%@ jest zainstalowany w %@ miejscach: %@. Homebrew usunie kopię, którą sam zarządza (brew uninstall %@) — niekoniecznie tę zaznaczoną.",
+                                            "\(item.appName)",
+                                            "\(item.locations.count)",
+                                            "\(item.locations.joined(separator: ", "))",
+                                            "\(item.caskToken)"
+                                        ))
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                            }
+                        }
+                        .padding(12)
+                        .background(Color.wegaDanger.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.wegaDanger.opacity(0.28), lineWidth: 1))
+                        .padding(.horizontal, 22)
+                        .padding(.top, brewCount > 0 ? 12 : 0)
                     }
 
                     if hasNonBrew {

@@ -90,6 +90,63 @@ final class InstallationInventoryTests: XCTestCase {
         XCTAssertEqual(app("/Applications/JetBrains/Fleet.app").locationLabel, "/Applications/JetBrains")
     }
 
+    // MARK: brew uninstall removes the copy brew owns, not necessarily the ticked one
+
+    private func brewApp(_ path: String, token: String = "firefox") -> ApplicationInfo {
+        var info = app(path)
+        info.isManagedByBrew = true
+        info.caskToken = token
+        return info
+    }
+
+    func testBrewUninstallOfAnAppInstalledTwiceIsFlaggedAsAmbiguous() {
+        let system = brewApp("/Applications/Firefox.app")
+        let user   = brewApp("/Users/x/Applications/Firefox.app")
+
+        let warnings = InstallationInventory.ambiguousBrewUninstalls(selected: [user], among: [system, user])
+
+        XCTAssertEqual(warnings.count, 1)
+        XCTAssertEqual(warnings.first?.appName, "Firefox")
+        XCTAssertEqual(warnings.first?.caskToken, "firefox")
+        XCTAssertEqual(warnings.first?.locations, ["/Applications", "/Users/x/Applications"])
+    }
+
+    func testBrewUninstallOfTheOnlyCopyIsNotFlagged() {
+        let only = brewApp("/Applications/Firefox.app")
+
+        XCTAssertTrue(InstallationInventory.ambiguousBrewUninstalls(selected: [only], among: [only]).isEmpty)
+    }
+
+    func testTrashedCopiesAreNotFlagged() {
+        // Neither copy is brew-managed: both go to the Trash by path, so the
+        // operation reaches exactly the ticked copy and needs no warning.
+        let system = app("/Applications/Firefox.app")
+        let user   = app("/Users/x/Applications/Firefox.app")
+
+        XCTAssertTrue(InstallationInventory.ambiguousBrewUninstalls(selected: [user], among: [system, user]).isEmpty)
+    }
+
+    func testSelectingBothCopiesWarnsOnceAboutTheCask() {
+        let system = brewApp("/Applications/Firefox.app")
+        let user   = brewApp("/Users/x/Applications/Firefox.app")
+
+        let warnings = InstallationInventory.ambiguousBrewUninstalls(
+            selected: [system, user], among: [system, user]
+        )
+
+        XCTAssertEqual(warnings.count, 1)
+    }
+
+    func testAnAppWithoutACaskTokenIsNotFlagged() {
+        var system = brewApp("/Applications/Firefox.app")
+        system.caskToken = nil
+        var user = brewApp("/Users/x/Applications/Firefox.app")
+        user.isManagedByBrew = false
+        user.caskToken = nil
+
+        XCTAssertTrue(InstallationInventory.ambiguousBrewUninstalls(selected: [system], among: [system, user]).isEmpty)
+    }
+
     // MARK: destructive operations hit the copy the user picked
 
     func testSelectionReachesOnlyThePickedCopy() {
