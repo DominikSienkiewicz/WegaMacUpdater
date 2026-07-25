@@ -234,6 +234,11 @@ public enum Translations {
         "aplikacji": "apps",
         "%@ przez brew · %@ do Kosza": "%@ via brew · %@ to Trash",
         "Aplikacje trafią do Kosza": "Apps will go to the Trash",
+        // REL-16 — cask usuwany po tokenie, nie po ścieżce: przy dwóch kopiach tej samej
+        // aplikacji brew skasuje swoją, która nie musi być zaznaczoną.
+        "Homebrew usunie swoją kopię": "Homebrew removes the copy it owns",
+        "%@ jest zainstalowany w %@ miejscach: %@. Homebrew usunie kopię, którą sam zarządza (brew uninstall %@) — niekoniecznie tę zaznaczoną.":
+            "%@ is installed in %@ places: %@. Homebrew removes the copy it manages (brew uninstall %@) — not necessarily the one you ticked.",
         "Wybierz, co zostawić": "Choose what to keep",
         "Tylko aplikacja": "App only",
         "Usuwa plik .app. Preferencje i cache zostają w ~/Library.": "Removes the .app file. Preferences and cache stay in ~/Library.",

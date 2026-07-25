@@ -8,8 +8,6 @@ private enum SourceFilter: String, CaseIterable {
     case manual   = "Ręcznie"
 }
 
-private enum SortKey: String { case name, version, bundleId, source, updateDate }
-
 struct InventoryView: View {
     var onWegaState: ((WegaState) -> Void)?
 
@@ -21,16 +19,22 @@ struct InventoryView: View {
     @State private var errorMessage: String?
     @State private var search:       String            = ""
     @State private var filter:       SourceFilter      = .all
-    @State private var sortKey:      SortKey           = .name
+    @State private var sortKey:      InventorySortKey  = .name
     @State private var sortAsc:      Bool              = true
     @FocusState private var searchFocused: Bool
+
+    /// REL-16: bundle identifiers with more than one installation. The rows that
+    /// carry them show where they live, so the user can tell the copies apart.
+    private var ambiguousBundleIds: Set<String> {
+        InstallationInventory.ambiguousBundleIdentifiers(apps)
+    }
 
     private var brewCount:   Int { apps.filter(\.isManagedByBrew).count }
     private var masCount:    Int { apps.filter(\.isManagedByMas).count }
     private var manualCount: Int { apps.count - brewCount - masCount }
 
     private var filtered: [ApplicationInfo] {
-        apps
+        let matching = apps
             .filter { app in
                 switch filter {
                 case .all:      true
@@ -44,23 +48,7 @@ struct InventoryView: View {
                 return app.name.localizedCaseInsensitiveContains(search)
                     || (app.bundleIdentifier?.localizedCaseInsensitiveContains(search) ?? false)
             }
-            .sorted { a, b in
-                let cmp: Bool
-                switch sortKey {
-                case .name:     cmp = a.name < b.name
-                case .version:  cmp = (a.version ?? "") < (b.version ?? "")
-                case .bundleId: cmp = (a.bundleIdentifier ?? "") < (b.bundleIdentifier ?? "")
-                case .source:
-                    func rank(_ x: ApplicationInfo) -> Int {
-                        if x.isManagedByBrew { return 0 }
-                        return x.isManagedByMas ? 1 : 2
-                    }
-                    cmp = rank(a) < rank(b)
-                case .updateDate:
-                    cmp = (a.updateDate ?? .distantPast) < (b.updateDate ?? .distantPast)
-                }
-                return sortAsc ? cmp : !cmp
-            }
+        return InventorySort.sorted(matching, by: sortKey, ascending: sortAsc)
     }
 
     var body: some View {
@@ -156,7 +144,11 @@ struct InventoryView: View {
                         LazyVStack(spacing: 0) {
                             ForEach(filtered.indices, id: \.self) { i in
                                 let app = filtered[i]
-                                InventoryRow(app: app, isAlt: i % 2 == 1)
+                                InventoryRow(
+                                    app: app,
+                                    isAlt: i % 2 == 1,
+                                    showsLocation: app.bundleIdentifier.map(ambiguousBundleIds.contains) ?? false
+                                )
                                 Divider().opacity(0.3)
                             }
                         }
@@ -192,16 +184,12 @@ struct InventoryView: View {
         let casks = (try? await CaskDatabaseClient(cache: CaskDatabaseCache(fileURL: cacheURL)).fetchCasks()) ?? []
 
         let scanner = ApplicationScanner()
-        var seen = Set<String>()
         var all:  [ApplicationInfo] = []
         for dir in buildScanDirs() {
-            let found = (try? scanner.scanApplications(in: dir, installedCasks: installedCasks, availableCasks: casks)) ?? []
-            for app in found {
-                let key = app.bundleIdentifier ?? app.path.path
-                if seen.insert(key).inserted { all.append(app) }
-            }
+            all += (try? scanner.scanApplications(in: dir, installedCasks: installedCasks, availableCasks: casks)) ?? []
         }
-        var sorted = all.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        var sorted = InstallationInventory.deduplicated(all)
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
         // Populate masAppID for App Store apps (graceful: skip if mas unavailable)
         // Only call masService if we have MAS apps to correlate
@@ -378,8 +366,8 @@ private struct FilterPills: View {
 
 private struct SortHeaderCell: View {
     let label:   String
-    let key:     SortKey
-    @Binding var sortKey: SortKey
+    let key:     InventorySortKey
+    @Binding var sortKey: InventorySortKey
     @Binding var sortAsc: Bool
 
     var body: some View {
@@ -408,6 +396,9 @@ private struct SortHeaderCell: View {
 private struct InventoryRow: View {
     let app:   ApplicationInfo
     let isAlt: Bool
+    /// REL-16: only shown for an app installed in more than one place — an
+    /// unambiguous row doesn't need its folder spelled out.
+    var showsLocation: Bool = false
 
     @State private var hovered = false
 
@@ -426,9 +417,18 @@ private struct InventoryRow: View {
             // Name
             HStack(spacing: 9) {
                 AppIcon(path: app.path, size: 22)
-                Text(app.name)
-                    .font(.system(size: 12, weight: .medium))
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(app.name)
+                        .font(.system(size: 12, weight: .medium))
+                        .lineLimit(1)
+                    if showsLocation {
+                        Text(app.locationLabel)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
