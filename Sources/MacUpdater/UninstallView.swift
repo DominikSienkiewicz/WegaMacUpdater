@@ -21,8 +21,23 @@ struct UninstallView: View {
         return apps.filter { $0.name.localizedCaseInsensitiveContains(search) }
     }
 
-    private var selectedBrewCount: Int { filtered.filter { selected.contains($0.id) && $0.isManagedByBrew }.count }
-    private var selectedTrashCount: Int { filtered.filter { selected.contains($0.id) && !$0.isManagedByBrew }.count }
+    /// REL-16: uninstalling is destructive, so a copy the user cannot tell apart
+    /// from another must not be offered as a bare name — these rows show where
+    /// the copy lives.
+    private var ambiguousBundleIds: Set<String> {
+        InstallationInventory.ambiguousBundleIdentifiers(apps)
+    }
+
+    private func showsLocation(_ app: ApplicationInfo) -> Bool {
+        app.bundleIdentifier.map(ambiguousBundleIds.contains) ?? false
+    }
+
+    private var targets: [ApplicationInfo] {
+        InstallationInventory.selected(filtered, identities: selected)
+    }
+
+    private var selectedBrewCount: Int { targets.filter(\.isManagedByBrew).count }
+    private var selectedTrashCount: Int { targets.filter { !$0.isManagedByBrew }.count }
 
     var body: some View {
         ZStack {
@@ -139,6 +154,13 @@ struct UninstallView: View {
                                     AppIcon(path: app.path, size: 26)
                                     VStack(alignment: .leading, spacing: 1) {
                                         Text(app.name).font(.system(size: 13, weight: .medium))
+                                        if showsLocation(app) {
+                                            Text(app.locationLabel)
+                                                .font(.system(size: 11, design: .monospaced))
+                                                .foregroundStyle(Color.wegaDanger.opacity(0.85))
+                                                .lineLimit(1)
+                                                .truncationMode(.middle)
+                                        }
                                         if let token = app.caskToken {
                                             Text(token)
                                                 .font(.system(size: 11, design: .monospaced))
@@ -172,6 +194,7 @@ struct UninstallView: View {
                 UninstallDialog(
                     brewCount:  selectedBrewCount,
                     trashCount: selectedTrashCount,
+                    ambiguities: InstallationInventory.ambiguousBrewUninstalls(selected: targets, among: apps),
                     onCancel:   { showDialog = false },
                     onConfirm:  { zap in showDialog = false; Task { await uninstall(zap: zap) } }
                 )
@@ -213,16 +236,12 @@ struct UninstallView: View {
         defer { isLoading = false }
         let installedCasks = (try? await model.brewService.installedCasks()) ?? []
         let scanner = ApplicationScanner()
-        var seen = Set<String>()
         var found: [ApplicationInfo] = []
         for dir in buildScanDirs() {
-            let batch = (try? scanner.scanApplications(in: dir, installedCasks: installedCasks)) ?? []
-            for app in batch {
-                let key = app.bundleIdentifier ?? app.path.path
-                if seen.insert(key).inserted { found.append(app) }
-            }
+            found += (try? scanner.scanApplications(in: dir, installedCasks: installedCasks)) ?? []
         }
-        apps = found.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        apps = InstallationInventory.deduplicated(found)
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     private func uninstall(zap: Bool) async {
@@ -230,7 +249,7 @@ struct UninstallView: View {
         defer { isUninstalling = false }
         onWegaState?(WegaState(pose: .sniff, line: tr("Aport! Zabieram to z dysku…")))
 
-        let targets = filtered.filter { selected.contains($0.id) }
+        let targets = self.targets
         var succeeded: [String] = []
         var failed:    [String] = []
 
@@ -278,6 +297,9 @@ struct UninstallView: View {
 private struct UninstallDialog: View {
     let brewCount:  Int
     let trashCount: Int
+    /// REL-16: casks whose application is installed in more than one place — see
+    /// `InstallationInventory.ambiguousBrewUninstalls`.
+    let ambiguities: [AmbiguousBrewUninstall]
     let onCancel:   () -> Void
     let onConfirm:  (Bool) -> Void
 
@@ -347,6 +369,38 @@ private struct UninstallDialog: View {
                             )
                         }
                         .padding(.horizontal, 22)
+                    }
+
+                    if !ambiguities.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(ambiguities) { item in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundStyle(Color.wegaDanger)
+                                        .font(.system(size: 13))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(tr("Homebrew usunie swoją kopię"))
+                                            .font(.system(size: 12, weight: .semibold))
+                                        Text(trf(
+                                            "%@ jest zainstalowany w %@ miejscach: %@. Homebrew usunie kopię, którą sam zarządza (brew uninstall %@) — niekoniecznie tę zaznaczoną.",
+                                            "\(item.appName)",
+                                            "\(item.locations.count)",
+                                            "\(item.locations.joined(separator: ", "))",
+                                            "\(item.caskToken)"
+                                        ))
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                            }
+                        }
+                        .padding(12)
+                        .background(Color.wegaDanger.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.wegaDanger.opacity(0.28), lineWidth: 1))
+                        .padding(.horizontal, 22)
+                        .padding(.top, brewCount > 0 ? 12 : 0)
                     }
 
                     if hasNonBrew {

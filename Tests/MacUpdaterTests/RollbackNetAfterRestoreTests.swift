@@ -39,27 +39,31 @@ struct RollbackNetAfterRestoreTests {
         try source("ScanStore.swift") + "\n" + source("ScanStore+Actions.swift")
     }
 
-    /// The bug itself, and the fix: the chain is fed a map resolved **in this run**, not
-    /// whatever the last full scan happened to leave behind.
-    @Test func theUpgradeResolvesBundlesFreshlyBeforeSnapshotting() throws {
+    /// The bug itself: the chain read a map that was filled somewhere else, at some other
+    /// time — and after `restoreLastScan()` was not filled at all.
+    @Test func theChainNoLongerReadsTheScansIconMap() throws {
         let text = try scanStore()
-        #expect(text.contains("await refreshCaskAppPaths(caskNames)"),
-                "REL-03: the upgrade must re-resolve the `.app` paths itself, before the snapshot")
-        #expect(text.contains("private func refreshCaskAppPaths(_ tokens: [String]) async"),
-                "REL-03: that resolution is a step of the upgrade, not a leftover of the scan")
+        #expect(!text.contains("CaskRollbackGuard.snapshot(tokens: tokens, appPaths: caskIconPaths)"),
+                "REL-03: the snapshot must not read `caskIconPaths` — it is empty after `restoreLastScan()`")
+        #expect(!text.contains("CaskRollbackGuard.verify(tokens: tokens, appPaths: caskIconPaths"),
+                "REL-03: `verify` must not read `caskIconPaths` either, or it skips every token")
+    }
 
-        // Order is the whole point: resolving *after* the snapshot would protect nothing.
-        let refresh = try #require(text.range(of: "await refreshCaskAppPaths(caskNames)"))
-        let snapshot = try #require(text.range(of: "let snapshots = snapshotCasks(caskNames)"))
-        #expect(refresh.lowerBound < snapshot.lowerBound,
-                "REL-03: the paths must be resolved before the snapshot is taken")
-
-        // Snapshot and canary must read the same map, or `verify` skips tokens the guard
-        // has just cloned — the second half of the same hole.
-        #expect(text.contains("CaskRollbackGuard.snapshot(tokens: tokens, appPaths: caskIconPaths)"),
-                "REL-03: the snapshot reads the refreshed map")
-        #expect(text.contains("CaskRollbackGuard.verify(tokens: tokens, appPaths: caskIconPaths, snapshots: snapshots)"),
-                "REL-03: and the canary reads that same refreshed map")
+    /// The fix: one resolution, taken in this run and **passed** to both phases.
+    ///
+    /// A parameter rather than shared state is the whole point. Ordering no longer needs
+    /// guarding — a snapshot cannot be taken without being handed the paths it covers, so a
+    /// future call site added elsewhere cannot compile its way back into this bug.
+    @Test func theResolvedPathsArePassedToBothPhases() throws {
+        let text = try scanStore()
+        #expect(text.contains("await resolveCaskAppPaths(caskNames)"),
+                "REL-03: the upgrade must resolve the `.app` paths itself, in this run")
+        #expect(text.contains("private func snapshotCasks(_ tokens: [String], appPaths: [String: URL])"),
+                "REL-03: the snapshot cannot be taken without being told which bundles it covers")
+        #expect(text.contains("snapshotCasks(caskNames, appPaths: appPaths)"),
+                "REL-03: the snapshot takes the freshly resolved paths")
+        #expect(text.contains("postCaskUpgrade(caskNames, appPaths: appPaths, snapshots: snapshots)"),
+                "REL-03: the canary verifies against the very same paths, never a second map")
     }
 
     /// One resolver, two callers — the duplicate hand-rolled loops are what let the window

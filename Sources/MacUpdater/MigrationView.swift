@@ -315,17 +315,12 @@ struct MigrationView: View {
                 brewTokens: installed
             )
             let scanner = ApplicationScanner()
-            var seen = Set<String>()
             var all:  [ApplicationInfo] = []
             for dir in buildScanDirs() {
-                let found = (try? scanner.scanApplications(in: dir, installedCasks: installed, availableCasks: casks)) ?? []
-                for app in found {
-                    let key = app.bundleIdentifier ?? app.path.path
-                    if seen.insert(key).inserted { all.append(app) }
-                }
+                all += (try? scanner.scanApplications(in: dir, installedCasks: installed, availableCasks: casks)) ?? []
             }
             // Exclude brew-managed apps AND apps already in the App Store
-            let migrationPool = MigrationPlanner.migrationPool(all)
+            let migrationPool = MigrationPlanner.migrationPool(InstallationInventory.deduplicated(all))
             candidates = migrationPool
 
             // Parallel App Store search for apps with no Homebrew match
@@ -365,6 +360,10 @@ struct MigrationView: View {
     @MainActor
     private func migrate(_ app: ApplicationInfo) async {
         guard migrating == nil, let token = app.caskToken else { return }
+        // REL-06 — `brew install --cask --force` rewrites the Caskroom, and `UpgradeMutex`
+        // never covered this path, so a quit here used to go through unannounced.
+        let ticket = MutationGuard.shared.begin(trf("migracja %@", "\(token)"))
+        defer { MutationGuard.shared.end(ticket) }
         migrating = token
         errorMessage = nil
         logLines = []
@@ -438,6 +437,9 @@ struct MigrationView: View {
     private func removeDuplicate(_ removal: DuplicateRemoval) async {
         let key = removal.busyKey
         guard dupBusy == nil else { return }
+        // REL-06 — `npm uninstall -g` / `brew uninstall` are mutations too.
+        let ticket = MutationGuard.shared.begin(trf("usuwanie duplikatu %@", "\(key)"))
+        defer { MutationGuard.shared.end(ticket) }
         dupBusy = key
         logLines = []
 

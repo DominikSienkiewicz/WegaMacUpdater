@@ -411,9 +411,10 @@ extension ScanStore {
         if let caskArgs, !caskNames.isEmpty {
             // REL-03 — resolved here, now, not left to whatever a full scan happened to put
             // in the map: after `restoreLastScan()` it is empty, and an empty map means no
-            // snapshot to roll back to and no bundle for the canary to inspect.
-            await refreshCaskAppPaths(caskNames)
-            let snapshots = snapshotCasks(caskNames)
+            // snapshot to roll back to and no bundle for the canary to inspect. Both phases
+            // are handed this one value, so neither can be given a different answer.
+            let appPaths  = await resolveCaskAppPaths(caskNames)
+            let snapshots = snapshotCasks(caskNames, appPaths: appPaths)
             var caskOutcome = await runBrewUpgrade(arguments: caskArgs)
 
             // Auto-recover an interrupted upgrade: if a cask bailed because a stale
@@ -432,7 +433,7 @@ extension ScanStore {
             // The canary/rollback verdict is a phase of the same result, not an aside: it
             // used to be raised after the summary had already been computed, so a cask the
             // guard had just rolled back still counted towards "Zaktualizowano N pakietów".
-            run.applyValidation(await postCaskUpgrade(caskNames, snapshots: snapshots))
+            run.applyValidation(await postCaskUpgrade(caskNames, appPaths: appPaths, snapshots: snapshots))
         }
 
         // npm global upgrade — one package at a time (npm semantics).
@@ -595,35 +596,41 @@ extension ScanStore {
 
     // MARK: FEAT-05 (rollback) + FEAT-04 (watchdog Team ID)
 
-    /// REL-03 — re-resolve where the casks in this run keep their `.app` bundles, right
-    /// before the snapshot is taken.
+    /// REL-03 — where the casks in this run keep their `.app` bundles, resolved at upgrade
+    /// time and **returned** so the phases that need it are handed it explicitly.
     ///
     /// `caskIconPaths` is only ever filled by a full `runCheck`, so in the most ordinary
     /// session there is — launch, look at the restored list, press "Zaktualizuj wszystkie" —
     /// it was empty, `CaskRollbackGuard` cloned nothing and `verify` skipped every token.
-    /// Merged rather than replaced: a `brew info` that cannot answer now must not take the
-    /// entries the last scan did resolve down with it.
-    private func refreshCaskAppPaths(_ tokens: [String]) async {
-        guard let model, !tokens.isEmpty else { return }
+    /// Whatever the last scan did resolve for these tokens is kept as a fallback: a
+    /// `brew info` that cannot answer now must not take the net down with it.
+    private func resolveCaskAppPaths(_ tokens: [String]) async -> [String: URL] {
+        guard let model, !tokens.isEmpty else { return [:] }
         let infos = (try? await model.brewService.caskInstallationInfo(tokens: tokens)) ?? []
-        caskIconPaths.merge(CaskAppPathResolver().appPaths(from: infos)) { _, fresh in fresh }
+        let resolved = CaskAppPathResolver().appPaths(from: infos)
+        return caskIconPaths
+            .filter { tokens.contains($0.key) }
+            .merging(resolved) { _, fresh in fresh }
     }
 
     /// FEAT-05 + FEAT-04, now shared with the background updater so the two can never
     /// diverge on what "safe upgrade" means. See `CaskRollbackGuard`.
     ///
-    /// Reads `caskIconPaths`, which `refreshCaskAppPaths` has just brought up to date —
-    /// `verify` below reads the same map, so the two phases cannot disagree about which
-    /// bundle a token means.
-    private func snapshotCasks(_ tokens: [String]) -> [String: URL] {
-        CaskRollbackGuard.snapshot(tokens: tokens, appPaths: caskIconPaths)
+    /// `appPaths` is a parameter, not a field read on the way past (REL-03): a snapshot that
+    /// cannot be taken without being told which bundles it covers is a snapshot no future
+    /// call site can quietly take of nothing.
+    private func snapshotCasks(_ tokens: [String], appPaths: [String: URL]) -> [String: URL] {
+        CaskRollbackGuard.snapshot(tokens: tokens, appPaths: appPaths)
     }
 
     /// Runs the canary/rollback chain and **returns** its verdicts, so they can join the
     /// run's per-item result. It used to only narrate into the collapsible log, which is how
     /// `.rollbackFailed` — the case that must never be silent — ended under a green banner.
-    private func postCaskUpgrade(_ tokens: [String], snapshots: [String: URL]) async -> [String: CaskValidationVerdict] {
-        let verdicts = await CaskRollbackGuard.verify(tokens: tokens, appPaths: caskIconPaths, snapshots: snapshots)
+    ///
+    /// Takes the same `appPaths` the snapshot was made from: verifying against a second,
+    /// separately obtained map is how `verify` came to skip the tokens it had just cloned.
+    private func postCaskUpgrade(_ tokens: [String], appPaths: [String: URL], snapshots: [String: URL]) async -> [String: CaskValidationVerdict] {
+        let verdicts = await CaskRollbackGuard.verify(tokens: tokens, appPaths: appPaths, snapshots: snapshots)
         for (token, verdict) in verdicts {
             switch verdict {
             case .healthy, .publisherChanged:

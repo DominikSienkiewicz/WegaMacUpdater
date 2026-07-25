@@ -54,8 +54,9 @@ bump and move its entries under the new version heading when cutting a release.
   unchanged; the members the actions half reaches for are `internal` rather than
   `private` now that the two no longer share a file, except `sourceReports` /
   `lastScanComplete`, which keep their `private(set)` behind `applyScanSourceReports(_:)`
-  so the view tree still cannot assign them. At 1034 lines the file had ~16 lines left
-  under the `file_length` warning that `swiftlint --strict` fails on.
+  so the view tree still cannot assign them. At 1041 lines the file had ~9 lines left
+  under the `file_length` warning that `swiftlint --strict` fails on; it is now 324 and
+  742.
 - Tightened the SwiftLint metric guardrails (`file_length`, `function_body_length`,
   `cyclomatic_complexity`, `type_body_length`) from "thresholds the tree happens to
   clear" to values just above the current maxima, so they catch genuine growth instead
@@ -107,8 +108,10 @@ bump and move its entries under the new version heading when cutting a release.
   usual *"the list may be incomplete"* banner and the error badge instead of being ignored.
   A restored scan that was incomplete says so with its own banner, and the empty-state hero
   reads *"I can't tell whether everything is up to date"* rather than *"Everything up to
-  date"*. `ScanSnapshot` moves to schema 2; a version-1 file is rejected on read (it cannot
-  say whether it was complete) and the next scan writes a fresh one.
+  date"*. `ScanSnapshot` moves to schema 2; a version-1 file is **migrated**
+  rather than discarded — its lists still open the window — and comes back marked
+  *incomplete*, which is the honest reading of a file that has no way to say whether every
+  source answered. A file from a newer build still fails soft to nothing.
 - **A hidden global `brew cleanup` after every update (REL-04).** The dry-run panel
   promises the literal set of commands an update will run; the update then finished with
   a `brew cleanup` that appeared in no preview — after an npm-only or App-Store-only run,
@@ -124,7 +127,9 @@ bump and move its entries under the new version heading when cutting a release.
   was cloned and the canary skipped every cask. The bundles are now resolved **at upgrade
   time**, immediately before the snapshot, through one shared `CaskAppPathResolver` that
   the window and the unattended path both use instead of each keeping its own copy of the
-  loop. The chain covers every upgrade now, not only one that follows a full scan in the
+  loop, and they are **passed** to the snapshot and the canary rather than read from shared
+  state on the way past — a snapshot can no longer be taken without saying which bundles it
+  covers. The chain covers every upgrade now, not only one that follows a full scan in the
   same session.
 - Sparkle-based apps are no longer reported as outdated when the installed
   build is newer than the feed, or when only the version format differs

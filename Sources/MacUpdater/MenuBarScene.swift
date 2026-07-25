@@ -56,8 +56,25 @@ struct MenuBarContent: View {
         Divider()
 
         Button(tr("Zakończ Wega")) {
-            NSApplication.shared.terminate(nil)
+            requestQuit()
         }
+    }
+
+    /// REL-06 — this used to be a bare `terminate(nil)`, which killed a running `brew
+    /// upgrade --cask` from a menu click. The decision now belongs to one place,
+    /// `AppDelegate.applicationShouldTerminate`, which `terminate(_:)` runs: keeping a
+    /// second copy of the policy here is how the two would drift apart.
+    ///
+    /// What the menu still has to do itself is check `MutationGuard.shared.isMutating`
+    /// (which reads `UpgradeMutex.isBusy` among others): the confirmation is a *window*,
+    /// and the menu-bar extra is not a regular app activation — without bringing Wega
+    /// forward the alert opens behind whatever the user was looking at and the click
+    /// merely seems to have done nothing.
+    private func requestQuit() {
+        if MutationGuard.shared.isMutating {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
+        NSApplication.shared.terminate(nil)
     }
 
     private var statusText: String {

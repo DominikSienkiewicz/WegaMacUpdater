@@ -237,6 +237,11 @@ public enum Translations {
         "aplikacji": "apps",
         "%@ przez brew · %@ do Kosza": "%@ via brew · %@ to Trash",
         "Aplikacje trafią do Kosza": "Apps will go to the Trash",
+        // REL-16 — cask usuwany po tokenie, nie po ścieżce: przy dwóch kopiach tej samej
+        // aplikacji brew skasuje swoją, która nie musi być zaznaczoną.
+        "Homebrew usunie swoją kopię": "Homebrew removes the copy it owns",
+        "%@ jest zainstalowany w %@ miejscach: %@. Homebrew usunie kopię, którą sam zarządza (brew uninstall %@) — niekoniecznie tę zaznaczoną.":
+            "%@ is installed in %@ places: %@. Homebrew removes the copy it manages (brew uninstall %@) — not necessarily the one you ticked.",
         "Wybierz, co zostawić": "Choose what to keep",
         "Tylko aplikacja": "App only",
         "Usuwa plik .app. Preferencje i cache zostają w ~/Library.": "Removes the .app file. Preferences and cache stay in ~/Library.",
@@ -510,5 +515,17 @@ public enum Translations {
         "Suma kontrolna": "Checksum",
         "obecna": "present",
         "brak": "missing",
+
+        // REL-06 — zamknięcie aplikacji w trakcie mutacji Caskroom.
+        "Wega jest w trakcie zmiany": "Wega is in the middle of a change",
+        "Zamknięcie teraz może zostawić aplikację w połowie zainstalowanej.":
+            "Quitting now may leave an app half-installed.",
+        "Trwa: %@. Zamknięcie teraz może zostawić aplikację w połowie zainstalowanej.":
+            "In progress: %@. Quitting now may leave an app half-installed.",
+        "Poczekaj na zakończenie": "Wait until it finishes",
+        "Zakończ mimo to": "Quit anyway",
+        "aktualizacja Homebrew": "Homebrew update",
+        "migracja %@": "migrating %@",
+        "usuwanie duplikatu %@": "removing duplicate %@",
     ]
 }
