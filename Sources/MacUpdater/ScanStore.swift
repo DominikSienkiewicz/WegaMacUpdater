@@ -61,6 +61,12 @@ final class ScanStore: ObservableObject {
     @Published var progress: ScanProgress?
     /// F4 — tools the user has not installed. An invitation to install them, not an error.
     @Published var unavailableSources = 0
+    /// REL-09 — what each source of the result currently on screen answered. Survives a
+    /// relaunch through `ScanSnapshot`, so an outage stays visible after a restart.
+    @Published private(set) var sourceReports = ScanSourceReports()
+    /// REL-09 — whether the result on screen came from a scan that heard from every source.
+    /// `true` before the first scan: an empty screen makes no claim either way.
+    @Published private(set) var lastScanComplete = true
     /// F4 — false when `brew` is absent. Drives the soft "install Homebrew" card.
     @Published var brewAvailable      = true
 
@@ -129,20 +135,46 @@ final class ScanStore: ObservableObject {
             manualOutdated = background.manualApps
             lastCheck      = background.scannedAt
             failedSources  = background.failedChecks
+            // The agent keeps a count, not per-source detail — enough to know the result is
+            // not the whole picture, which is the part that must not be lost.
+            sourceReports     = ScanSourceReports()
+            lastScanComplete  = background.failedChecks == 0
         } else if let snapshot {
             brewOutdated   = snapshot.brew
             masOutdated    = snapshot.mas
             npmOutdated    = snapshot.npm
             manualOutdated = snapshot.manual
             lastCheck      = snapshot.scannedAt
+            // REL-09 — a scan that went half-blind stays visibly half-blind across a
+            // relaunch. Without this an outage read exactly like "everything is current".
+            sourceReports    = snapshot.sources
+            failedSources    = snapshot.sources.failedSourceCount
+            lastScanComplete = snapshot.isComplete
         } else {
             return
         }
 
         status = .results
+        if !lastScanComplete { warnAboutIncompleteScan() }
         // Deliberately no `emitActivitySignal`: nothing is running. The tab icon must not
         // spin, and the scan-finished sound of `finishScan` would be a lie.
         emitCounts()
+    }
+
+    /// REL-09 — says out loud that the result on screen came from a scan that did not
+    /// finish asking. Raised on restore, where there is no scan-result banner to carry it
+    /// and where the list would otherwise read as an answer rather than a partial one.
+    private func warnAboutIncompleteScan() {
+        let detail = sourceReports.errors.first
+        showBanner(BannerData(
+            variant: .danger,
+            title: tr("Lista może być niepełna"),
+            message: detail ?? tr("Ostatni skan nie dostał odpowiedzi od wszystkich źródeł — odśwież, żeby poznać pełną listę."),
+            action: .openLogs
+        ))
+        for error in sourceReports.errors {
+            WegaLog.error(.scanner, "Ostatni skan był niepełny: \(error)")
+        }
     }
 
     /// How old the result on screen is. `nil` when nothing has ever been scanned.
@@ -153,12 +185,15 @@ final class ScanStore: ObservableObject {
     /// Persist what the last scan found, so the next launch has something to show at once.
     private func persistLastScan() {
         guard let lastCheck else { return }
+        // REL-09 — `brewOutdated` goes to disk as it is, `nil` included: a source that never
+        // answered must not come back as one that answered "nothing".
         let snapshot = ScanSnapshot(
             scannedAt: lastCheck,
-            brew: brewOutdated ?? BrewOutdated(formulae: [], casks: []),
+            brew: brewOutdated,
             mas: masOutdated,
             npm: npmOutdated,
-            manual: manualOutdated
+            manual: manualOutdated,
+            sources: sourceReports
         )
         do { try resultStore.save(snapshot) }
         catch { WegaLog.error(.app, "Nie udało się zapisać wyniku skanu: \(error.localizedDescription)") }
@@ -325,11 +360,21 @@ extension ScanStore {
 
         progress = .running(.brew)
 
+        // F4 — an absent tool is "not applicable", never a failure. `brewNotFound` used to
+        // land in the generic catch below, so a machine without Homebrew wore a permanent
+        // red "the list may be incomplete" banner over a list that was complete.
+        var outcomes: [SourceCheckOutcome] = []
+        // REL-09 — the same verdicts, kept per source and with the failure's own words, so
+        // the snapshot on disk can say which source went silent instead of losing the fact.
+        var reports = ScanSourceReports()
+
         if !lightweight {
             // Refresh brew metadata before asking what is outdated — otherwise a
             // newly-released cask/formula version that hasn't landed locally yet
             // would be missed even though `brew info` against the API shows it.
-            _ = try? await model.brewService.update()
+            let metadata = await refreshBrewMetadata()
+            reports.brewMetadata = metadata
+            if metadata.didFail { outcomes.append(.failed("brew update")) }
             if await bailIfCancelled(at: .brew, emitActivity: emitActivity) { return }
 
             // M3(b) — detect stale casks; never uninstall them here. "Check for updates" is a
@@ -346,10 +391,6 @@ extension ScanStore {
             }
         }
 
-        // F4 — an absent tool is "not applicable", never a failure. `brewNotFound` used to
-        // land in the generic catch below, so a machine without Homebrew wore a permanent
-        // red "the list may be incomplete" banner over a list that was complete.
-        var outcomes: [SourceCheckOutcome] = []
         let brewOutcome: SourceCheckOutcome
 
         do {
@@ -366,25 +407,32 @@ extension ScanStore {
                 brewOutcome = .failed("brew outdated")
                 WegaLog.error(.homebrew, "brew outdated: \(error.localizedDescription)") }
         outcomes.append(brewOutcome)
+        reports.brew = ScanSourceReport(outcome: brewOutcome, error: errorMessage)
         if brewOutcome == .succeeded { confirmedSourceKinds.formUnion([.formula, .cask]) }
         if await bailIfCancelled(at: .brew, emitActivity: emitActivity) { return }
 
         progress = .running(.mas)
         do { masOutdated = try await model.masService.outdated(); outcomes.append(.succeeded)
+             reports.mas = ScanSourceReport(outcome: .succeeded)
              confirmedSourceKinds.insert(.appStore) }
-        catch MasServiceError.masNotFound { masOutdated = []; outcomes.append(.notInstalled) }
+        catch MasServiceError.masNotFound { masOutdated = []; outcomes.append(.notInstalled)
+                reports.mas = ScanSourceReport(outcome: .notInstalled) }
         catch { masOutdated = []
                 outcomes.append(.failed("Mac App Store"))
+                reports.mas = ScanSourceReport(outcome: .failed("Mac App Store"), error: "mas outdated: \(error.localizedDescription)")
                 WegaLog.error(.app, "mas outdated: \(error.localizedDescription)") }
 
         if await bailIfCancelled(at: .mas, emitActivity: emitActivity) { return }
 
         progress = .running(.npm)
         do { npmOutdated = try await model.npmService.outdated(); outcomes.append(.succeeded)
+             reports.npm = ScanSourceReport(outcome: .succeeded)
              confirmedSourceKinds.insert(.npm) }
-        catch NpmServiceError.npmNotFound { npmOutdated = []; outcomes.append(.notInstalled) }
+        catch NpmServiceError.npmNotFound { npmOutdated = []; outcomes.append(.notInstalled)
+                reports.npm = ScanSourceReport(outcome: .notInstalled) }
         catch { npmOutdated = []
                 outcomes.append(.failed("npm"))
+                reports.npm = ScanSourceReport(outcome: .failed("npm"), error: "npm outdated: \(error.localizedDescription)")
                 WegaLog.error(.network, "npm outdated: \(error.localizedDescription)") }
 
         var failed = UpdatePlanner.failedSourceCount(outcomes)
@@ -402,6 +450,10 @@ extension ScanStore {
         manualOutdated = scan.apps
         failed += scan.failedChecks
         if scan.failedChecks > 0 { silentSources.append("ręczne checki (\(scan.failedChecks))") }
+        reports.manual = scan.failedChecks > 0
+            ? ScanSourceReport(outcome: .failed("ręczne checki"),
+                               error: "ręczne checki: \(scan.failedChecks) źródeł nie odpowiedziało")
+            : ScanSourceReport(outcome: .succeeded)
 
         // Resolve icon paths for outdated casks, and drop entries whose real
         // bundle version already matches `current_version` (self-updating apps
@@ -415,20 +467,7 @@ extension ScanStore {
                 brewOutdated = updated
             }
 
-            let home = FileManager.default.homeDirectoryForCurrentUser
-            var paths: [String: URL] = [:]
-            for info in infos where !drifted.contains(info.token) {
-                for artifact in info.appArtifacts {
-                    let system = SystemPaths.applicationsDirectory.appendingPathComponent(artifact)
-                    let user   = home.appendingPathComponent("Applications/\(artifact)")
-                    if FileManager.default.fileExists(atPath: system.path) {
-                        paths[info.token] = system; break
-                    } else if FileManager.default.fileExists(atPath: user.path) {
-                        paths[info.token] = user; break
-                    }
-                }
-            }
-            caskIconPaths = paths
+            caskIconPaths = CaskAppPathResolver().appPaths(from: infos, excluding: drifted)
         }
 
         // FEAT-03: transparentność pobrania (host + checksum) dla outdated casków.
@@ -444,8 +483,36 @@ extension ScanStore {
         lastCheck = Date()
         status    = .results
         progress  = .finished
+        // REL-09 — the per-source picture is part of the result from here on: it decides
+        // what gets persisted, and whether an empty list may call itself "up to date".
+        sourceReports    = reports
+        lastScanComplete = reports.isComplete
 
         finishScan(emitActivity: emitActivity, silentSources: silentSources, failedSources: failed)
+    }
+
+    /// REL-09 — refresh Homebrew's metadata and **report** what happened.
+    ///
+    /// This used to run as `_ = try? await …update()`. Offline, brew then computed the
+    /// outdated list from a stale index and the window presented the result as if every
+    /// source had spoken. Note `update()` does not throw on a non-zero exit — there is no
+    /// `ensureSuccess` on it — so the exit code is the signal that matters here.
+    private func refreshBrewMetadata() async -> ScanSourceReport {
+        guard let model else { return ScanSourceReport(outcome: .notInstalled) }
+        do {
+            let result = try await model.brewService.update()
+            guard result.exitCode != 0 else { return ScanSourceReport(outcome: .succeeded) }
+            let stderr = result.stderr.components(separatedBy: "\n").first { !$0.isEmpty }
+            let reason = stderr ?? "kod wyjścia \(result.exitCode)"
+            WegaLog.error(.homebrew, "brew update: \(reason)")
+            return ScanSourceReport(outcome: .failed("brew update"), error: "brew update: \(reason)")
+        } catch BrewServiceError.brewNotFound {
+            return ScanSourceReport(outcome: .notInstalled)
+        } catch {
+            WegaLog.error(.homebrew, "brew update: \(error.localizedDescription)")
+            return ScanSourceReport(outcome: .failed("brew update"),
+                                    error: "brew update: \(error.localizedDescription)")
+        }
     }
 
     /// Reports a finished scan: structured log (breakdown + per-item lines), the tab-icon
@@ -641,7 +708,12 @@ extension ScanStore {
 
         // Brew upgrade — casks (FEAT-05 snapshot przed, canary/rollback + FEAT-04 ledger po)
         if let caskArgs, !caskNames.isEmpty {
-            let snapshots = snapshotCasks(caskNames)
+            // REL-03 — resolved here, now, not left to whatever a full scan happened to put
+            // in the map: after `restoreLastScan()` it is empty, and an empty map means no
+            // snapshot to roll back to and no bundle for the canary to inspect. Both phases
+            // are handed this one value, so neither can be given a different answer.
+            let appPaths  = await resolveCaskAppPaths(caskNames)
+            let snapshots = snapshotCasks(caskNames, appPaths: appPaths)
             var caskOutcome = await runBrewUpgrade(arguments: caskArgs)
 
             // Auto-recover an interrupted upgrade: if a cask bailed because a stale
@@ -660,7 +732,7 @@ extension ScanStore {
             // The canary/rollback verdict is a phase of the same result, not an aside: it
             // used to be raised after the summary had already been computed, so a cask the
             // guard had just rolled back still counted towards "Zaktualizowano N pakietów".
-            run.applyValidation(await postCaskUpgrade(caskNames, snapshots: snapshots))
+            run.applyValidation(await postCaskUpgrade(caskNames, appPaths: appPaths, snapshots: snapshots))
         }
 
         // npm global upgrade — one package at a time (npm semantics).
@@ -687,8 +759,12 @@ extension ScanStore {
             run.record(masItems: plannedItems.filter { $0.kind == .appStore }, failure: masFailure)
         }
 
-        _ = try? await model.brewService.cleanup()
-
+        // REL-04 — no `brew cleanup` here. It ran after *every* update, including one that
+        // touched only npm or the App Store and one that had just failed, and it appeared in
+        // no preview: the plan panel renders `UpdatePlanner.commands(for:)`, which is the
+        // whole set of commands this method may execute. It is also the worst possible
+        // moment for it — clearing Homebrew's cache of previous versions removes what a
+        // recovery from a bad upgrade would reinstall from.
         selected.removeAll()
         restartCandidates = candidates
 
@@ -819,17 +895,41 @@ extension ScanStore {
 
     // MARK: FEAT-05 (rollback) + FEAT-04 (watchdog Team ID)
 
+    /// REL-03 — where the casks in this run keep their `.app` bundles, resolved at upgrade
+    /// time and **returned** so the phases that need it are handed it explicitly.
+    ///
+    /// `caskIconPaths` is only ever filled by a full `runCheck`, so in the most ordinary
+    /// session there is — launch, look at the restored list, press "Zaktualizuj wszystkie" —
+    /// it was empty, `CaskRollbackGuard` cloned nothing and `verify` skipped every token.
+    /// Whatever the last scan did resolve for these tokens is kept as a fallback: a
+    /// `brew info` that cannot answer now must not take the net down with it.
+    private func resolveCaskAppPaths(_ tokens: [String]) async -> [String: URL] {
+        guard let model, !tokens.isEmpty else { return [:] }
+        let infos = (try? await model.brewService.caskInstallationInfo(tokens: tokens)) ?? []
+        let resolved = CaskAppPathResolver().appPaths(from: infos)
+        return caskIconPaths
+            .filter { tokens.contains($0.key) }
+            .merging(resolved) { _, fresh in fresh }
+    }
+
     /// FEAT-05 + FEAT-04, now shared with the background updater so the two can never
     /// diverge on what "safe upgrade" means. See `CaskRollbackGuard`.
-    private func snapshotCasks(_ tokens: [String]) -> [String: URL] {
-        CaskRollbackGuard.snapshot(tokens: tokens, appPaths: caskIconPaths)
+    ///
+    /// `appPaths` is a parameter, not a field read on the way past (REL-03): a snapshot that
+    /// cannot be taken without being told which bundles it covers is a snapshot no future
+    /// call site can quietly take of nothing.
+    private func snapshotCasks(_ tokens: [String], appPaths: [String: URL]) -> [String: URL] {
+        CaskRollbackGuard.snapshot(tokens: tokens, appPaths: appPaths)
     }
 
     /// Runs the canary/rollback chain and **returns** its verdicts, so they can join the
     /// run's per-item result. It used to only narrate into the collapsible log, which is how
     /// `.rollbackFailed` — the case that must never be silent — ended under a green banner.
-    private func postCaskUpgrade(_ tokens: [String], snapshots: [String: URL]) async -> [String: CaskValidationVerdict] {
-        let verdicts = await CaskRollbackGuard.verify(tokens: tokens, appPaths: caskIconPaths, snapshots: snapshots)
+    ///
+    /// Takes the same `appPaths` the snapshot was made from: verifying against a second,
+    /// separately obtained map is how `verify` came to skip the tokens it had just cloned.
+    private func postCaskUpgrade(_ tokens: [String], appPaths: [String: URL], snapshots: [String: URL]) async -> [String: CaskValidationVerdict] {
+        let verdicts = await CaskRollbackGuard.verify(tokens: tokens, appPaths: appPaths, snapshots: snapshots)
         for (token, verdict) in verdicts {
             switch verdict {
             case .healthy, .publisherChanged:

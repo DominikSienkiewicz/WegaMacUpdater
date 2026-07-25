@@ -51,7 +51,10 @@ struct UpdateResultHonestyTests {
     /// returned nothing, and the summary only ever saw `BrewUpgradeOutcome`.
     @Test func canaryVerdictsReachTheSummary() throws {
         let text = try source("ScanStore.swift")
-        #expect(text.contains("postCaskUpgrade(_ tokens: [String], snapshots: [String: URL]) async -> [String: CaskValidationVerdict]"),
+        // REL-03 added the `appPaths` parameter (the rollback net no longer reads a map only
+        // a full scan filled); the assertion below is unchanged in what it demands — the
+        // verdicts must be *returned* — only the signature it quotes was updated.
+        #expect(text.contains("postCaskUpgrade(_ tokens: [String], appPaths: [String: URL], snapshots: [String: URL]) async -> [String: CaskValidationVerdict]"),
                 "REL-02: the canary/rollback verdicts must be returned, not only narrated")
         #expect(text.contains("run.applyValidation(await postCaskUpgrade("),
                 "REL-02: the verdicts must be folded into the run before it is summarized")

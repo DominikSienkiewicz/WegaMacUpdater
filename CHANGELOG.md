@@ -88,6 +88,40 @@ bump and move its entries under the new version heading when cutting a release.
   `MigrationLeftoverCleanupDisabledTests`.
 
 ### Fixed
+- **A restart turned a network outage into "everything up to date" (REL-09).** The
+  `brew update` failure was discarded on the spot (`_ = try?`), the persisted snapshot
+  recorded no per-source result, and a missing Brew answer was written to disk as an empty
+  list — so after a relaunch a scan that had established nothing looked exactly like a
+  clean bill of health. The snapshot now carries **what each source answered, its error and
+  a completeness flag** (`ScanSourceReports`, built from the `SourceCheckOutcome` the scan
+  already computes), a missing Brew result stays absent instead of becoming "nothing
+  outdated", and a failed metadata refresh counts as a silent source — so it reaches the
+  usual *"the list may be incomplete"* banner and the error badge instead of being ignored.
+  A restored scan that was incomplete says so with its own banner, and the empty-state hero
+  reads *"I can't tell whether everything is up to date"* rather than *"Everything up to
+  date"*. `ScanSnapshot` moves to schema 2; a version-1 file is **migrated**
+  rather than discarded — its lists still open the window — and comes back marked
+  *incomplete*, which is the honest reading of a file that has no way to say whether every
+  source answered. A file from a newer build still fails soft to nothing.
+- **A hidden global `brew cleanup` after every update (REL-04).** The dry-run panel
+  promises the literal set of commands an update will run; the update then finished with
+  a `brew cleanup` that appeared in no preview — after an npm-only or App-Store-only run,
+  and after a failed one too. Its scope was the whole Homebrew installation, not the plan,
+  and it deleted the cached previous versions that recovering from a bad upgrade needs.
+  The step is gone; an update now executes exactly the commands it showed. The unused
+  `BrewService.cleanup()` was removed with it — a cleanup should return, if at all, as an
+  explicit action with its own preview.
+- **An update started from a restored scan ran without the safety net (REL-03).** The
+  snapshot → canary → auto-rollback chain read the token → `.app` map that only a full
+  scan ever filled, so in the most ordinary session there is — launch Wega, look at the
+  list it restored from disk, press *Zaktualizuj wszystkie* — the map was empty: nothing
+  was cloned and the canary skipped every cask. The bundles are now resolved **at upgrade
+  time**, immediately before the snapshot, through one shared `CaskAppPathResolver` that
+  the window and the unattended path both use instead of each keeping its own copy of the
+  loop, and they are **passed** to the snapshot and the canary rather than read from shared
+  state on the way past — a snapshot can no longer be taken without saying which bundles it
+  covers. The chain covers every upgrade now, not only one that follows a full scan in the
+  same session.
 - Sparkle-based apps are no longer reported as outdated when the installed
   build is newer than the feed, or when only the version format differs
   (`7.0.0 (77593)` vs `7.0.0`). The checker now compares versions with the

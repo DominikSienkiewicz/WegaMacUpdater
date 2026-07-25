@@ -127,22 +127,11 @@ final class BackgroundUpdater {
         return Set(appPaths.filter { running.contains($0.value.standardizedFileURL) }.keys)
     }
 
+    /// REL-03 — the resolution itself now lives in `CaskAppPathResolver`, shared with the
+    /// window path, which used to read a map only a full scan ever filled.
     private func resolveAppPaths(tokens: [String]) async -> [String: URL] {
         let infos = (try? await brewService.caskInstallationInfo(tokens: tokens)) ?? []
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        var paths: [String: URL] = [:]
-        for info in infos {
-            for artifact in info.appArtifacts {
-                let system = SystemPaths.applicationsDirectory.appendingPathComponent(artifact)
-                let user = home.appendingPathComponent("Applications/\(artifact)")
-                if FileManager.default.fileExists(atPath: system.path) {
-                    paths[info.token] = system; break
-                } else if FileManager.default.fileExists(atPath: user.path) {
-                    paths[info.token] = user; break
-                }
-            }
-        }
-        return paths
+        return CaskAppPathResolver().appPaths(from: infos)
     }
 
     private func runBrew(arguments: [String]) async -> BrewUpgradeOutcome {
