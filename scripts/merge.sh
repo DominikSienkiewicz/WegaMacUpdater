@@ -215,10 +215,17 @@ if [ -n "$BRANCH_WT" ] && [ "$BRANCH_WT" != "$MAIN_WT" ]; then
 fi
 
 echo ">> deleting branch $BRANCH"
+# This is the real safety check, and it asks the question that matters here: is the
+# work already in <target>? `git branch -d` asks a different one — when the branch has
+# an upstream it demands merged-into-UPSTREAM, so a branch created off origin/main is
+# refused for as long as <target> is unpushed ("not yet merged to refs/remotes/origin/
+# main, even though it is merged to HEAD"), and the cleanup dies on its last step after
+# the worktree is already gone. Verify against <target> here, then use -D to carry that
+# decision out rather than let -d overrule it.
 if ! git merge-base --is-ancestor "$BRANCH" "$TARGET"; then
   echo "refusing to delete '$BRANCH': it is not fully merged into '$TARGET'" >&2
   exit 1
 fi
-git branch -d "$BRANCH"
+git branch -D "$BRANCH"
 
 echo "✓ merged $BRANCH into $TARGET, gate green, cleaned up"

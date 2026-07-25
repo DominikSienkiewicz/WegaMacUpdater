@@ -229,6 +229,42 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+echo "→ merge.sh sprząta gałąź niezależnie od stanu upstreamu"
+
+# `git branch -d` mierzy „czy scalona" względem UPSTREAMU gałęzi, nie względem HEAD.
+# Gałąź założona z `origin/main` dostaje upstream, a dopóki lokalny `main` nie jest
+# wypchnięty, `-d` odmawia mimo że praca jest już w `main` — i sprzątanie po scaleniu
+# pada na ostatnim kroku. Tu odtwarzamy dokładnie tę konfigurację bez sieci i bez
+# push: zdalna referencja jest tworzona przez `update-ref`, a upstream przez `config`.
+repo="$(make_repo galaz-z-upstreamem)"
+add_gate "$repo" 0
+# Sam `branch.<nazwa>.merge` nie wystarczy: bez refspeca `remote.origin.fetch` git nie
+# umie odwzorować refs/heads/main na refs/remotes/origin/main i upstream nie istnieje,
+# a test przechodzi fałszywie na zielono.
+git -C "$repo" config remote.origin.url https://example.invalid/r.git
+git -C "$repo" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+git -C "$repo" update-ref refs/remotes/origin/main "$(git -C "$repo" rev-parse main)"
+feature_branch "$repo" feat/x b
+git -C "$repo" config branch.feat/x.remote origin
+git -C "$repo" config branch.feat/x.merge refs/heads/main
+[ "$(git -C "$repo" rev-parse --abbrev-ref 'feat/x@{upstream}' 2>/dev/null)" = "origin/main" ] \
+    || record_fail "przygotowanie przypadku z upstreamem" "upstream nie został ustawiony"
+printf 'main idzie do przodu, origin/main zostaje w tyle\n' > "$repo/postep.txt"
+git -C "$repo" add -A
+git -C "$repo" commit -qm "postęp na main po utworzeniu gałęzi"
+run_merge "$repo" feat/x "feat: zmiana" --no-fetch
+branch_gone=1
+git -C "$repo" show-ref --verify --quiet refs/heads/feat/x && branch_gone=0
+worktree_gone=1
+[ -d "$repo/.worktrees/feat/x" ] && worktree_gone=0
+if [ "$RUN_STATUS" -eq 0 ] && [ "$branch_gone" -eq 1 ] && [ "$worktree_gone" -eq 1 ]; then
+    record_pass "gałąź z upstreamem na niewypchniętym main → posprzątana mimo to"
+else
+    record_fail "gałąź z upstreamem" \
+        "kod $RUN_STATUS; gałąź_usunięta=$branch_gone worktree_usunięty=$worktree_gone; wyjście: $RUN_OUTPUT"
+fi
+
+# ---------------------------------------------------------------------------
 if [ "$(git -C "$ROOT" status --porcelain)" != "$REPO_STATE_BEFORE" ]; then
     record_fail "testy nie zmieniają repozytorium projektu" \
         "git status w $ROOT różni się od stanu sprzed testów"
