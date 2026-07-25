@@ -203,10 +203,10 @@ struct VersionArrow: View {
     var body: some View {
         HStack(spacing: 5) {
             Text(from).foregroundStyle(.secondary)
-            Image(systemName: "arrow.right").foregroundStyle(.tertiary).font(.system(size: 9))
+            Image(systemName: "arrow.right").foregroundStyle(.tertiary).font(.caption2)
             Text(to).foregroundStyle(emphasis.versionColor)
         }
-        .font(.system(size: 11, design: .monospaced))
+        .font(.caption.monospaced())
     }
 }
 
@@ -237,11 +237,16 @@ struct PackageRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            if onToggle != nil {
-                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                    .foregroundStyle(isSelected ? Color.wegaHoney : .secondary)
-                    .font(.system(size: 16))
-                    .onTapGesture { onToggle?() }
+            if let onToggle {
+                Button(action: onToggle) {
+                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                        .foregroundStyle(isSelected ? Color.wegaHoney : .secondary)
+                        .font(.body)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(name)
+                .accessibilityValue(selectionAccessibilityValue(isSelected))
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
             if let path = iconPath {
                 AppIcon(path: path, size: 28)
@@ -249,10 +254,10 @@ struct PackageRow: View {
                 PackageLetterIcon(name: name)
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(name).font(.system(size: 13, weight: .medium))
+                Text(name).fontWeight(.medium)
                 if let t = token {
                     Text(t)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.caption.monospaced())
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -266,7 +271,7 @@ struct PackageRow: View {
                 VersionArrow(from: from, to: to, emphasis: emphasis)
             } else if let v = currentVersion ?? latestVersion {
                 Text(v)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
             }
             if onIgnore != nil || onPin != nil {
@@ -303,6 +308,17 @@ struct PackageRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { onSelect?() }
+        .focusable(onSelect != nil)
+        .onKeyPress(.return) {
+            guard let onSelect else { return .ignored }
+            onSelect()
+            return .handled
+        }
+        .onKeyPress(.space) {
+            guard let onToggle else { return .ignored }
+            onToggle()
+            return .handled
+        }
     }
 }
 

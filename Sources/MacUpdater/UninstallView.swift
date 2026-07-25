@@ -98,10 +98,16 @@ struct UninstallView: View {
                 // Select-all row
                 WegaCard(padded: false) {
                     HStack(spacing: 10) {
-                        Image(systemName: selectAllSymbol)
-                            .foregroundStyle(targets.isEmpty ? .secondary : Color.wegaHoney)
-                            .font(.system(size: 16))
-                            .onTapGesture { toggleAll() }
+                        Button(action: toggleAll) {
+                            Image(systemName: selectAllSymbol)
+                                .foregroundStyle(targets.isEmpty ? .secondary : Color.wegaHoney)
+                                .font(.system(size: 16))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(tr("Zaznacz wszystko"))
+                        .accessibilityValue(
+                            trf("%@ z %@ zaznaczonych", "\(targets.count)", "\(filtered.count)")
+                        )
                         Text(targets.isEmpty
                              ? trf("%@ aplikacji", "\(filtered.count)")
                              : trf("%@ zaznaczonych z %@", "\(targets.count)", "\(filtered.count)"))
@@ -151,39 +157,46 @@ struct UninstallView: View {
                         LazyVStack(spacing: 0) {
                             ForEach(filtered) { app in
                                 let isSelected = selected.contains(app.id)
-                                HStack(spacing: 12) {
-                                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                                        .foregroundStyle(isSelected ? Color.wegaHoney : .secondary)
-                                        .font(.system(size: 16))
-                                    AppIcon(path: app.path, size: 26)
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text(app.name).font(.system(size: 13, weight: .medium))
-                                        if showsLocation(app) {
-                                            Text(app.locationLabel)
-                                                .font(.system(size: 11, design: .monospaced))
-                                                .foregroundStyle(Color.wegaDanger.opacity(0.85))
-                                                .lineLimit(1)
-                                                .truncationMode(.middle)
+                                Button {
+                                    toggle(app.id)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                                            .foregroundStyle(isSelected ? Color.wegaHoney : .secondary)
+                                            .font(.body)
+                                        AppIcon(path: app.path, size: 26)
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(app.name).font(.body.weight(.medium))
+                                            if showsLocation(app) {
+                                                Text(app.locationLabel)
+                                                    .font(.caption.monospaced())
+                                                    .foregroundStyle(Color.wegaDanger.opacity(0.85))
+                                                    .lineLimit(1)
+                                                    .truncationMode(.middle)
+                                            }
+                                            if let token = app.caskToken {
+                                                Text(token)
+                                                    .font(.caption.monospaced())
+                                                    .foregroundStyle(.tertiary)
+                                            }
                                         }
-                                        if let token = app.caskToken {
-                                            Text(token)
-                                                .font(.system(size: 11, design: .monospaced))
+                                        Spacer()
+                                        if let v = app.version {
+                                            Text(v)
+                                                .font(.caption.monospaced())
                                                 .foregroundStyle(.tertiary)
                                         }
+                                        sourceLabel(app)
                                     }
-                                    Spacer()
-                                    if let v = app.version {
-                                        Text(v)
-                                            .font(.system(size: 11, design: .monospaced))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    sourceLabel(app)
+                                    .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 9)
                                 .background(isSelected ? Color.wegaDanger.opacity(0.06) : Color.clear)
-                                .contentShape(Rectangle())
-                                .onTapGesture { toggle(app.id) }
+                                .accessibilityLabel(selectionAccessibilityLabel(for: app, showsLocation: showsLocation(app)))
+                                .accessibilityValue(selectionAccessibilityValue(isSelected))
+                                .accessibilityAddTraits(isSelected ? .isSelected : [])
 
                                 Divider().opacity(0.4).padding(.leading, 54)
                             }
@@ -193,21 +206,18 @@ struct UninstallView: View {
                 }
             }
 
-            // Overlay dialog
-            if showDialog {
-                UninstallDialog(
-                    targets:     pendingUninstallTargets,
-                    ambiguities: InstallationInventory.ambiguousBrewUninstalls(
-                        selected: pendingUninstallTargets,
-                        among: apps
-                    ),
-                    onCancel: cancelUninstall,
-                    onConfirm: confirmUninstall
-                )
-                .transition(.opacity.combined(with: .scale(scale: 0.96)))
-            }
         }
-        .animation(.easeInOut(duration: 0.18), value: showDialog)
+        .sheet(isPresented: $showDialog) {
+            UninstallDialog(
+                targets:     pendingUninstallTargets,
+                ambiguities: InstallationInventory.ambiguousBrewUninstalls(
+                    selected: pendingUninstallTargets,
+                    among: apps
+                ),
+                onCancel: cancelUninstall,
+                onConfirm: confirmUninstall
+            )
+        }
         .onChange(of: search) { _, _ in
             selected.formIntersection(filtered.map(\.id))
         }
@@ -310,7 +320,7 @@ struct UninstallView: View {
     }
 }
 
-// MARK: - Custom uninstall dialog (ZStack overlay)
+// MARK: - Native uninstall sheet
 
 private struct UninstallDialog: View {
     let targets: [ApplicationInfo]
@@ -463,8 +473,10 @@ private struct UninstallDialog: View {
                     // Footer buttons
                     HStack(spacing: 8) {
                         Spacer()
-                        Button(tr("Anuluj"), action: onCancel)
-                        Button(confirmLabel) { onConfirm(zapMode) }
+                        Button(tr("Anuluj"), role: .cancel, action: onCancel)
+                            .keyboardShortcut(.cancelAction)
+                        Button(confirmLabel, role: .destructive) { onConfirm(zapMode) }
+                            .keyboardShortcut(.defaultAction)
                             .buttonStyle(.borderedProminent)
                             .tint(Color.wegaDanger)
                     }

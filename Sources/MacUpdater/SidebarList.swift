@@ -85,6 +85,7 @@ private struct SidebarRowIcon: View {
     let activity:    UpdateActivity
     let isActive:    Bool
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var rotation: Double = 0
 
     private var iconColor: Color {
@@ -98,10 +99,10 @@ private struct SidebarRowIcon: View {
 
     /// Continuous spin while scanning; ease back to rest otherwise.
     private func spin(for activity: UpdateActivity) {
-        if activity == .scanning {
+        if activity == .scanning && !reduceMotion {
             withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) { rotation = 360 }
         } else {
-            withAnimation(.easeOut(duration: 0.3)) { rotation = 0 }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) { rotation = 0 }
         }
     }
 
@@ -109,8 +110,9 @@ private struct SidebarRowIcon: View {
         Image(systemName: systemImage)
             .foregroundStyle(iconColor)
             .rotationEffect(.degrees(rotation))
-            .animation(.easeInOut(duration: 0.25), value: iconColor)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: iconColor)
             .onChange(of: activity) { _, new in spin(for: new) }
+            .onChange(of: reduceMotion) { _, _ in spin(for: activity) }
             .onAppear { spin(for: activity) }
     }
 }

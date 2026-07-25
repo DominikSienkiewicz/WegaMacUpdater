@@ -259,12 +259,18 @@ struct UpdateView: View {
             VStack(spacing: 0) {
                 // Select-all row
                 HStack(spacing: 10) {
-                    Image(systemName: selectAllSymbol)
-                        .foregroundStyle(selectedVisibleCount == 0 ? .secondary : Color.wegaHoney)
-                        .font(.system(size: 16))
-                        .onTapGesture { scan.toggleAll(filter: updateFilter) }
-                        .accessibilityLabel(tr("Zaznacz wszystko"))
-                        .accessibilityAddTraits(.isButton)
+                    Button {
+                        scan.toggleAll(filter: updateFilter)
+                    } label: {
+                        Image(systemName: selectAllSymbol)
+                            .foregroundStyle(selectedVisibleCount == 0 ? .secondary : Color.wegaHoney)
+                            .font(.system(size: 16))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(tr("Zaznacz wszystko"))
+                    .accessibilityValue(
+                        trf("%@ z %@ zaznaczonych", "\(selectedVisibleCount)", "\(visibleItems.count)")
+                    )
                     Text(selectedVisibleCount == 0 ? tr("Zaznacz wszystko") : trf("%@ z %@ zaznaczonych", "\(selectedVisibleCount)", "\(visibleItems.count)"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)

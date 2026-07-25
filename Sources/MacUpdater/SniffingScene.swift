@@ -61,13 +61,24 @@ struct SniffingScene: View {
 struct WigglyWega: View {
     var size: CGFloat = 120
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var wiggle: Bool = false
 
     var body: some View {
         WegaFull(pose: .sniff, size: size)
-            .rotationEffect(.degrees(wiggle ? 2.4 : -2.4), anchor: .bottom)
-            .offset(y: wiggle ? -1 : 1)
+            .rotationEffect(.degrees(reduceMotion ? 0 : (wiggle ? 2.4 : -2.4)), anchor: .bottom)
+            .offset(y: reduceMotion ? 0 : (wiggle ? -1 : 1))
             .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 0.22).repeatForever(autoreverses: true)) {
+                    wiggle = true
+                }
+            }
+            .onChange(of: reduceMotion) { _, shouldReduceMotion in
+                guard !shouldReduceMotion else {
+                    wiggle = false
+                    return
+                }
                 withAnimation(.easeInOut(duration: 0.22).repeatForever(autoreverses: true)) {
                     wiggle = true
                 }
@@ -82,6 +93,7 @@ struct ThoughtBubble: View {
     var thoughts: [String]
     var rotateInterval: TimeInterval = 2.5
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var index: Int = 0
     @State private var visible: Bool = true
 
@@ -89,7 +101,7 @@ struct ThoughtBubble: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 0) {
                 Text(thoughts.isEmpty ? "" : thoughts[index % max(thoughts.count, 1)])
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .font(.caption.weight(.medium).monospaced())
                     .foregroundStyle(Color.wegaInk)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
@@ -99,8 +111,8 @@ struct ThoughtBubble: View {
                     .fill(Color.wegaHoney)
                     .shadow(color: .black.opacity(0.18), radius: 4, x: 0, y: 2)
             )
-            .opacity(visible ? 1 : 0)
-            .scaleEffect(visible ? 1 : 0.85, anchor: .bottomLeading)
+            .opacity(reduceMotion || visible ? 1 : 0)
+            .scaleEffect(reduceMotion || visible ? 1 : 0.85, anchor: .bottomLeading)
 
             HStack(spacing: 4) {
                 Circle()
@@ -114,7 +126,7 @@ struct ThoughtBubble: View {
                     .frame(width: 3, height: 3)
             }
             .padding(.leading, 6)
-            .opacity(visible ? 1 : 0)
+            .opacity(reduceMotion || visible ? 1 : 0)
         }
         // Vertical only. `horizontal: true` pinned the bubble to its text's intrinsic width
         // and refused to be squeezed — one more element telling the layout "make room for
@@ -122,7 +134,12 @@ struct ThoughtBubble: View {
         // the sidebar off-screen during a scan. The thoughts are short, so nothing wraps in
         // practice; this just stops the bubble from dictating width.
         .fixedSize(horizontal: false, vertical: true)
-        .task(id: thoughts.count) {
+        .task(id: "\(thoughts.count):\(reduceMotion)") {
+            guard !reduceMotion else {
+                index = 0
+                visible = true
+                return
+            }
             guard thoughts.count > 1 else { return }
             // Start on a random thought so multiple screens don't sync up.
             index = Int.random(in: 0..<thoughts.count)

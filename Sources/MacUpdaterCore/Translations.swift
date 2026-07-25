@@ -114,6 +114,8 @@ public enum Translations {
         "Nic w tej kategorii": "Nothing in this category",
         "W tej kategorii nie ma teraz aktualizacji. Przełącz kategorię w panelu bocznym.": "There are no updates in this category right now. Switch category in the sidebar.",
         "Zaznacz wszystko": "Select all",
+        "Zaznaczone": "Selected",
+        "Niezaznaczone": "Not selected",
         "Zamknij": "Close",
         "%@ z %@ zaznaczonych": "%@ of %@ selected",
         "Homebrew Formulae": "Homebrew Formulae",
