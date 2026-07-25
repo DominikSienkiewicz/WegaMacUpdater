@@ -61,9 +61,14 @@ final class SelfUpdateController: ObservableObject {
     @Published private(set) var state: State = .idle
 
     private let dependencies: Dependencies
+    private let upgrades: UpgradeCoordinator
 
-    init(dependencies: Dependencies = .live) {
+    init(
+        dependencies: Dependencies = .live,
+        upgrades: UpgradeCoordinator = .shared
+    ) {
         self.dependencies = dependencies
+        self.upgrades = upgrades
     }
 
     var result: WegaSelfUpdateChecker.Result? {
@@ -118,7 +123,21 @@ final class SelfUpdateController: ObservableObject {
             return
         }
 
-        if await dependencies.installOrOpen(destination) {
+        let installed: Bool
+        do {
+            installed = try await upgrades.performWrite(.selfUpdate) {
+                let ticket = MutationGuard.shared.begin("self-update")
+                defer { MutationGuard.shared.end(ticket) }
+                return await self.dependencies.installOrOpen(destination)
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            WegaLog.error(.app, "Self-update — koordynacja instalacji: \(error.localizedDescription)")
+            return
+        }
+
+        if installed {
             onWegaState(WegaState(
                 pose: .happy,
                 line: tr("Aktualizacja zainstalowana przez komponent uprzywilejowany.")

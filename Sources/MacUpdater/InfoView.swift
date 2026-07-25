@@ -7,20 +7,20 @@ struct InfoView: View {
 
     @EnvironmentObject private var localization: LocalizationManager
     @EnvironmentObject private var policies: UpdatePolicyStore
-    @State private var diagnostics: DiagnosticsResult? = nil
+    @StateObject private var operations = InfoOperationsController()
     @StateObject private var selfUpdateController = SelfUpdateController()
     @StateObject private var touchIDController = TouchIDSetupController()
-    @State private var catalogRefreshing = false
-    @State private var catalogOutcome: CatalogRefresher.Outcome? = nil
-    // FEAT-01: privileged helper (SMAppService + XPC).
-    @State private var helperStatus: PrivilegedHelperClient.Status = .notRegistered
-    @State private var helperBusy = false
-    @State private var helperError: String? = nil
     // SEC-08: opcjonalny token GitHub (Keychain).
     @State private var githubTokenInput: String = ""
-    @State private var githubTokenStored: Bool = false
-    @State private var githubTokenStatus: String? = nil
 
+    private var diagnostics: DiagnosticsResult? { operations.diagnostics }
+    private var catalogRefreshing: Bool { operations.catalogRefreshing }
+    private var catalogOutcome: CatalogRefresher.Outcome? { operations.catalogOutcome }
+    private var helperStatus: PrivilegedHelperClient.Status { operations.helperStatus }
+    private var helperBusy: Bool { operations.helperBusy }
+    private var helperError: String? { operations.helperError }
+    private var githubTokenStored: Bool { operations.githubTokenStored }
+    private var githubTokenStatus: String? { operations.githubTokenStatus }
     private var selfUpdate: WegaSelfUpdateChecker.Result? { selfUpdateController.result }
     private var checkingSelfUpdate: Bool { selfUpdateController.isChecking }
     private var downloadingUpdate: Bool { selfUpdateController.isDownloading }
@@ -63,8 +63,7 @@ extension InfoView {
                 Task { await checkSelfUpdate() }
             }
             touchIDController.refresh()
-            helperStatus = PrivilegedHelperClient.shared.status
-            githubTokenStored = GitHubCredentialStore.hasToken
+            operations.refreshPersistentState()
         }
     }
 
@@ -252,19 +251,15 @@ extension InfoView {
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: 12, design: .monospaced))
                         Button(tr("Zapisz token")) {
-                            let ok = GitHubCredentialStore.setToken(githubTokenInput)
-                            githubTokenStored = GitHubCredentialStore.hasToken
+                            operations.saveGitHubToken(githubTokenInput)
                             githubTokenInput = ""
-                            githubTokenStatus = ok ? tr("Token zapisany w Keychain") : tr("Nie udało się zapisać tokenu")
                         }
                         .controlSize(.small)
                         .disabled(githubTokenInput.trimmingCharacters(in: .whitespaces).isEmpty)
 
                         if githubTokenStored {
                             Button(role: .destructive) {
-                                GitHubCredentialStore.clear()
-                                githubTokenStored = false
-                                githubTokenStatus = tr("Token usunięty")
+                                operations.clearGitHubToken()
                             } label: { Text(tr("Wyczyść")) }
                                 .controlSize(.small)
                         }
@@ -340,10 +335,10 @@ extension InfoView {
                     .disabled(helperBusy)
             case .requiresApproval:
                 Button {
-                    PrivilegedHelperClient.shared.openLoginItemsSettings()
+                    operations.openLoginItemsSettings()
                 } label: { Label(tr("Otwórz Ustawienia → Elementy logowania"), systemImage: "gearshape") }
                     .controlSize(.small)
-                Button(tr("Sprawdź ponownie")) { helperStatus = PrivilegedHelperClient.shared.status }
+                Button(tr("Sprawdź ponownie")) { operations.refreshHelperStatus() }
                     .controlSize(.small)
             default:
                 Button {
@@ -360,44 +355,13 @@ extension InfoView {
     }
 
     private func installHelper() async {
-        helperBusy = true; helperError = nil
-        defer { helperBusy = false }
-        guard WegaHelper.isTeamIDConfigured else {
-            helperError = tr("Brak skonfigurowanego Team ID — helper zadziała dopiero w podpisanym buildzie.")
-            return
-        }
-        do {
-            try PrivilegedHelperClient.shared.register()
-        } catch {
-            helperError = error.localizedDescription
-        }
-        helperStatus = PrivilegedHelperClient.shared.status
-        if helperStatus == .requiresApproval {
-            onWegaState?(WegaState(pose: .alert, line: tr("Zatwierdź komponent w Ustawieniach → Elementy logowania.")))
-        } else if helperStatus == .enabled {
-            onWegaState?(WegaState(pose: .happy, line: tr("Komponent uprzywilejowany gotowy.")))
+        await operations.installHelper { state in
+            onWegaState?(state)
         }
     }
 
     private func removeHelper() async {
-        // ICE-01: bramka biometryczna przed usunięciem komponentu root. `.unavailable`
-        // (brak biometrii) NIE blokuje — nie zamykamy właściciela poza własną apką.
-        switch await BiometricGate.shared.authenticate(
-            reason: tr("Potwierdź usunięcie komponentu uprzywilejowanego")
-        ) {
-        case .success, .unavailable: break
-        case .cancelled: return
-        case .failed(let message): helperError = message; return
-        }
-
-        helperBusy = true; helperError = nil
-        defer { helperBusy = false }
-        do {
-            try await PrivilegedHelperClient.shared.unregister()
-        } catch {
-            helperError = error.localizedDescription
-        }
-        helperStatus = PrivilegedHelperClient.shared.status
+        await operations.removeHelper()
     }
 
     private var statusBadge: some View {
@@ -720,9 +684,7 @@ extension InfoView {
     }
 
     private func refreshCatalog() async {
-        catalogRefreshing = true
-        defer { catalogRefreshing = false }
-        catalogOutcome = await CatalogRefresher(source: AppEndpoints.shared.appCatalogURL).refresh()
+        await operations.refreshCatalog()
     }
 
     // MARK: - Licenses card
@@ -795,40 +757,8 @@ extension InfoView {
     }
 
     private func loadDiagnostics() async {
-        let locator = BinaryLocator()
-        var brewV: String? = nil
-        var masV: String? = nil
-
-        if let brewURL = locator.locateBrew(),
-           let result = try? await ProcessRunner().run(ProcessRequest(
-               executableURL: brewURL, arguments: ["--version"],
-               environment: HomebrewEnvironment.environment,
-               inheritParentEnvironment: false, timeout: 5)) {
-            brewV = result.stdout.split(separator: "\n").first.map(String.init)
-        }
-
-        if let masURL = locator.locateMas(),
-           let result = try? await ProcessRunner().run(ProcessRequest(
-               executableURL: masURL, arguments: ["version"],
-               environment: HomebrewEnvironment.environment,
-               inheritParentEnvironment: false, timeout: 5)) {
-            masV = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        await MainActor.run {
-            diagnostics = DiagnosticsResult(
-                brewVersion: brewV,
-                masVersion: masV
-            )
-        }
+        await operations.loadDiagnostics()
     }
-}
-
-// MARK: - Supporting types
-
-struct DiagnosticsResult: Sendable {
-    var brewVersion: String?
-    var masVersion:  String?
 }
 
 // MARK: - Sub-views

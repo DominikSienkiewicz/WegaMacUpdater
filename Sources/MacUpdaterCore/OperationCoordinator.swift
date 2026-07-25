@@ -12,6 +12,20 @@ public actor OperationCoordinator {
         case write
     }
 
+    public enum LeaseError: Error, Equatable, Sendable {
+        case foreignCoordinator
+        case expired
+        case insufficientAccess
+    }
+
+    /// Explicit proof that the caller already owns this coordinator's read or write slot.
+    /// A write lease may authorize nested reads or writes; a read lease only nested reads.
+    public struct Lease: Sendable {
+        fileprivate let coordinatorID: UUID
+        fileprivate let operationID: UUID
+        fileprivate let access: Access
+    }
+
     public struct Snapshot: Equatable, Sendable {
         public let activeReads: Int
         public let activeWrite: String?
@@ -23,13 +37,20 @@ public actor OperationCoordinator {
     }
 
     private struct Waiter {
+        let id: UUID
         let access: Access
         let label: String
-        let continuation: CheckedContinuation<Void, Never>
+        let continuation: CheckedContinuation<Lease?, Never>
     }
 
+    private struct ActiveOperation {
+        let access: Access
+    }
+
+    private let coordinatorID = UUID()
     private var activeReads = 0
     private var activeWrite: String?
+    private var activeOperations: [UUID: ActiveOperation] = [:]
     private var waiters: [Waiter] = []
 
     public init() {}
@@ -43,39 +64,134 @@ public actor OperationCoordinator {
         )
     }
 
+    /// Source-compatible convenience for nonthrowing, Void read operations.
+    /// Cancellation while queued returns without invoking `operation`.
+    public func withRead(
+        label: String,
+        operation: @Sendable () async -> Void
+    ) async {
+        await withVoidOperation(access: .read, label: label, operation: operation)
+    }
+
+    /// Source-compatible convenience for nonthrowing, Void write operations.
+    /// Cancellation while queued returns without invoking `operation`.
+    public func withWrite(
+        label: String,
+        operation: @Sendable () async -> Void
+    ) async {
+        await withVoidOperation(access: .write, label: label, operation: operation)
+    }
+
     public func withRead<Result: Sendable>(
         label: String,
         operation: @Sendable () async throws -> Result
-    ) async rethrows -> Result {
-        try await withOperation(access: .read, label: label, operation: operation)
+    ) async throws -> Result {
+        try await withOperation(access: .read, label: label) { _ in
+            try await operation()
+        }
     }
 
     public func withWrite<Result: Sendable>(
         label: String,
         operation: @Sendable () async throws -> Result
-    ) async rethrows -> Result {
+    ) async throws -> Result {
+        try await withOperation(access: .write, label: label) { _ in
+            try await operation()
+        }
+    }
+
+    /// Acquires a read slot and exposes its lease for safe nested operations.
+    public func withReadLease<Result: Sendable>(
+        label: String,
+        operation: @Sendable (Lease) async throws -> Result
+    ) async throws -> Result {
+        try await withOperation(access: .read, label: label, operation: operation)
+    }
+
+    /// Acquires a write slot and exposes its lease for safe nested operations.
+    public func withWriteLease<Result: Sendable>(
+        label: String,
+        operation: @Sendable (Lease) async throws -> Result
+    ) async throws -> Result {
         try await withOperation(access: .write, label: label, operation: operation)
+    }
+
+    /// Runs a nested read only when `lease` is still active and authorizes it.
+    public func withRead<Result: Sendable>(
+        holding lease: Lease,
+        label _: String,
+        operation: @Sendable () async throws -> Result
+    ) async throws -> Result {
+        try validate(lease, requestedAccess: .read)
+        try Task.checkCancellation()
+        return try await operation()
+    }
+
+    /// Runs a nested write only under an active write lease.
+    public func withWrite<Result: Sendable>(
+        holding lease: Lease,
+        label _: String,
+        operation: @Sendable () async throws -> Result
+    ) async throws -> Result {
+        try validate(lease, requestedAccess: .write)
+        try Task.checkCancellation()
+        return try await operation()
+    }
+
+    private func withVoidOperation(
+        access: Access,
+        label: String,
+        operation: @Sendable () async -> Void
+    ) async {
+        guard let lease = await acquire(access: access, label: label) else { return }
+        defer { release(lease) }
+        guard !Task.isCancelled else { return }
+        await operation()
     }
 
     private func withOperation<Result: Sendable>(
         access: Access,
         label: String,
-        operation: @Sendable () async throws -> Result
-    ) async rethrows -> Result {
-        await acquire(access: access, label: label)
-        defer { release(access: access) }
-        return try await operation()
+        operation: @Sendable (Lease) async throws -> Result
+    ) async throws -> Result {
+        guard let lease = await acquire(access: access, label: label) else {
+            throw CancellationError()
+        }
+        defer { release(lease) }
+        try Task.checkCancellation()
+        return try await operation(lease)
     }
 
-    private func acquire(access: Access, label: String) async {
+    private func acquire(access: Access, label: String) async -> Lease? {
+        guard !Task.isCancelled else { return nil }
         if canStartImmediately(access) {
-            start(access: access, label: label)
-            return
+            return start(access: access, label: label)
         }
 
-        await withCheckedContinuation { continuation in
-            waiters.append(Waiter(access: access, label: label, continuation: continuation))
+        let waiterID = UUID()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                if Task.isCancelled {
+                    continuation.resume(returning: nil)
+                } else {
+                    waiters.append(Waiter(
+                        id: waiterID,
+                        access: access,
+                        label: label,
+                        continuation: continuation
+                    ))
+                }
+            }
+        } onCancel: {
+            Task { await self.cancelWaiter(waiterID) }
         }
+    }
+
+    private func cancelWaiter(_ id: UUID) {
+        guard let index = waiters.firstIndex(where: { $0.id == id }) else { return }
+        let waiter = waiters.remove(at: index)
+        waiter.continuation.resume(returning: nil)
+        drainWaitersIfPossible()
     }
 
     private func canStartImmediately(_ access: Access) -> Bool {
@@ -88,17 +204,21 @@ public actor OperationCoordinator {
         }
     }
 
-    private func start(access: Access, label: String) {
+    private func start(access: Access, label: String) -> Lease {
+        let operationID = UUID()
         switch access {
         case .read:
             activeReads += 1
         case .write:
             activeWrite = label
         }
+        activeOperations[operationID] = ActiveOperation(access: access)
+        return Lease(coordinatorID: coordinatorID, operationID: operationID, access: access)
     }
 
-    private func release(access: Access) {
-        switch access {
+    private func release(_ lease: Lease) {
+        guard let active = activeOperations.removeValue(forKey: lease.operationID) else { return }
+        switch active.access {
         case .read:
             activeReads -= 1
         case .write:
@@ -107,20 +227,30 @@ public actor OperationCoordinator {
         drainWaitersIfPossible()
     }
 
+    private func validate(_ lease: Lease, requestedAccess: Access) throws {
+        guard lease.coordinatorID == coordinatorID else { throw LeaseError.foreignCoordinator }
+        guard let active = activeOperations[lease.operationID], active.access == lease.access else {
+            throw LeaseError.expired
+        }
+        if requestedAccess == .write, active.access != .write {
+            throw LeaseError.insufficientAccess
+        }
+    }
+
     private func drainWaitersIfPossible() {
         guard activeReads == 0, activeWrite == nil, !waiters.isEmpty else { return }
 
         if waiters[0].access == .write {
             let waiter = waiters.removeFirst()
-            start(access: waiter.access, label: waiter.label)
-            waiter.continuation.resume()
+            let lease = start(access: waiter.access, label: waiter.label)
+            waiter.continuation.resume(returning: lease)
             return
         }
 
         while !waiters.isEmpty, waiters[0].access == .read {
             let waiter = waiters.removeFirst()
-            start(access: waiter.access, label: waiter.label)
-            waiter.continuation.resume()
+            let lease = start(access: waiter.access, label: waiter.label)
+            waiter.continuation.resume(returning: lease)
         }
     }
 }

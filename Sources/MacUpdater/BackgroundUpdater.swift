@@ -3,6 +3,12 @@ import Foundation
 import MacUpdaterCore
 import UserNotifications
 
+private struct BackgroundUpdatePreflight: Sendable {
+    let profiles: [CaskArtifactProfile]
+    let downloads: [CaskDownloadInfo]
+    let appPaths: [String: URL]
+}
+
 /// Upgrades the safe subset of casks while nobody is watching (F3).
 ///
 /// This is the only code path in Wega that changes the user's machine without them present,
@@ -29,21 +35,19 @@ final class BackgroundUpdater {
         let optedIn = BackgroundUpdateOptInStore.shared.tokens
         guard !candidates.isEmpty, !optedIn.isEmpty else { return [] }
 
-        let profiles: [CaskArtifactProfile]
+        let preflight: BackgroundUpdatePreflight
         do {
-            profiles = try await brewService.caskArtifactProfiles(tokens: candidates)
+            preflight = try await OperationCoordinator.shared.withReadLease(
+                label: "background update preflight"
+            ) { @MainActor _ in
+                await self.loadPreflight(candidates: candidates)
+            }
         } catch {
-            WegaLog.error(.homebrew, "Aktualizacja w tle — profile artefaktów: \(error.localizedDescription)")
-            profiles = []
+            return []
         }
-        let downloads: [CaskDownloadInfo]
-        do {
-            downloads = try await brewService.caskDownloadInfo(tokens: candidates)
-        } catch {
-            WegaLog.error(.homebrew, "Aktualizacja w tle — dane pobierania: \(error.localizedDescription)")
-            downloads = []
-        }
-        let appPaths = await resolveAppPaths(tokens: candidates)
+        let profiles = preflight.profiles
+        let downloads = preflight.downloads
+        let appPaths = preflight.appPaths
 
         let pathBackedCandidates = BackgroundUpdateSafety.pathBackedTokens(candidates, appPaths: appPaths)
         let downloadsByToken = Dictionary(
@@ -64,7 +68,7 @@ final class BackgroundUpdater {
             downloads: downloadsByToken
         )
 
-        return await UpgradeCoordinator.shared.performWrite(.backgroundUpgrade) {
+        return (try? await UpgradeCoordinator.shared.performWrite(.backgroundUpgrade) {
             // F3 — the shared write queue admits only one Homebrew mutation at a time. Keep
             // the legacy mutex check as a fail-closed guard for callers outside that boundary.
             guard UpgradeMutex.shared.acquire() else {
@@ -143,7 +147,29 @@ final class BackgroundUpdater {
 
             notify(summary: summary)
             return summary.upgraded.map(\.name)
+        }) ?? []
+    }
+
+    private func loadPreflight(candidates: [String]) async -> BackgroundUpdatePreflight {
+        let profiles: [CaskArtifactProfile]
+        do {
+            profiles = try await brewService.caskArtifactProfiles(tokens: candidates)
+        } catch {
+            WegaLog.error(.homebrew, "Aktualizacja w tle — profile artefaktów: \(error.localizedDescription)")
+            profiles = []
         }
+        let downloads: [CaskDownloadInfo]
+        do {
+            downloads = try await brewService.caskDownloadInfo(tokens: candidates)
+        } catch {
+            WegaLog.error(.homebrew, "Aktualizacja w tle — dane pobierania: \(error.localizedDescription)")
+            downloads = []
+        }
+        return BackgroundUpdatePreflight(
+            profiles: profiles,
+            downloads: downloads,
+            appPaths: await resolveAppPaths(tokens: candidates)
+        )
     }
 
     /// The last phase: ask brew again what is outdated. A cask brew claims to have upgraded

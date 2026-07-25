@@ -61,7 +61,11 @@ extension ScanStore {
     /// `brew update` (metadata was refreshed minutes ago, at the start of the upgrade) and
     /// the stale-cask sweep (nothing has become stale in the meantime). What remains is a
     /// plain `brew outdated` re-query, which is all the post-upgrade list actually needs.
-    func runCheck(emitActivity: Bool = true, lightweight: Bool = false) async {
+    func runCheck(
+        emitActivity: Bool = true,
+        lightweight: Bool = false,
+        operationLease: OperationCoordinator.Lease? = nil
+    ) async {
         guard let model else { return }
         status = .checking
         errorMessage = nil
@@ -73,7 +77,54 @@ extension ScanStore {
         emitWegaState(WegaState(pose: .sniff, line: tr("Węszę po Homebrew…")))
 
         progress = .running(.brew)
+        var metadata: ScanSourceReport?
+        if !lightweight {
+            // Refresh brew metadata before asking what is outdated — otherwise a
+            // newly-released cask/formula version that hasn't landed locally yet
+            // would be missed even though `brew info` against the API shows it.
+            metadata = await refreshBrewMetadata()
+            if await bailIfCancelled(at: .brew, emitActivity: emitActivity) { return }
+        }
 
+        do {
+            if let operationLease {
+                try await OperationCoordinator.shared.withRead(
+                    holding: operationLease,
+                    label: "foreground post-upgrade scan"
+                ) { @MainActor in
+                    await self.runCheckReadPhases(
+                        model: model,
+                        emitActivity: emitActivity,
+                        lightweight: lightweight,
+                        metadata: metadata
+                    )
+                }
+            } else {
+                try await OperationCoordinator.shared.withReadLease(label: "foreground scan") { @MainActor _ in
+                    await self.runCheckReadPhases(
+                        model: model,
+                        emitActivity: emitActivity,
+                        lightweight: lightweight,
+                        metadata: metadata
+                    )
+                }
+            }
+        } catch is CancellationError {
+            _ = await bailIfCancelled(at: .brew, emitActivity: emitActivity)
+        } catch {
+            errorMessage = error.localizedDescription
+            status = lastCheck == nil ? .ready : .results
+            if emitActivity { emitActivitySignal(.error) }
+            WegaLog.error(.scanner, "Koordynacja skanu: \(error.localizedDescription)")
+        }
+    }
+
+    private func runCheckReadPhases(
+        model: AppViewModel,
+        emitActivity: Bool,
+        lightweight: Bool,
+        metadata: ScanSourceReport?
+    ) async {
         // F4 — an absent tool is "not applicable", never a failure. `brewNotFound` used to
         // land in the generic catch below, so a machine without Homebrew wore a permanent
         // red "the list may be incomplete" banner over a list that was complete.
@@ -81,16 +132,12 @@ extension ScanStore {
         // REL-09 — the same verdicts, kept per source and with the failure's own words, so
         // the snapshot on disk can say which source went silent instead of losing the fact.
         var reports = ScanSourceReports()
-
-        if !lightweight {
-            // Refresh brew metadata before asking what is outdated — otherwise a
-            // newly-released cask/formula version that hasn't landed locally yet
-            // would be missed even though `brew info` against the API shows it.
-            let metadata = await refreshBrewMetadata()
+        if let metadata {
             reports.brewMetadata = metadata
             if metadata.didFail { outcomes.append(.failed("brew update")) }
-            if await bailIfCancelled(at: .brew, emitActivity: emitActivity) { return }
+        }
 
+        if !lightweight {
             // M3(b) — detect stale casks; never uninstall them here. "Check for updates" is a
             // read-only operation, and `brew uninstall --force` behind that button was the
             // single most surprising thing Wega did. The user is offered the cleanup as a card
@@ -508,12 +555,21 @@ extension ScanStore {
     }
 
     func runUpdate(targetKeys: Set<String>) async {
-        await UpgradeCoordinator.shared.performWrite(.foregroundUpgrade) {
-            await self.runUpdateCoordinated(targetKeys: targetKeys)
+        do {
+            try await UpgradeCoordinator.shared.performWriteLease(.foregroundUpgrade) { lease in
+                await self.runUpdateCoordinated(targetKeys: targetKeys, operationLease: lease)
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            WegaLog.error(.homebrew, "Koordynacja aktualizacji: \(error.localizedDescription)")
         }
     }
 
-    private func runUpdateCoordinated(targetKeys: Set<String>) async {
+    private func runUpdateCoordinated(
+        targetKeys: Set<String>,
+        operationLease: OperationCoordinator.Lease
+    ) async {
         guard let model, !targetKeys.isEmpty else { return }
         // F3 — never overlap with a background upgrade: both take snapshots and both call
         // `brew upgrade --cask`. The window is the one the user is waiting on.
@@ -661,7 +717,7 @@ extension ScanStore {
         // If a cask failed (e.g. "App source not there"), it will still appear here.
         // Suppress its icon signal — the upgrade outcome below sets the final state.
         // M2(d) — lightweight: no second `brew update`, no second stale-cask sweep.
-        await runCheck(emitActivity: false, lightweight: true)
+        await runCheck(emitActivity: false, lightweight: true, operationLease: operationLease)
 
         updating = false
 

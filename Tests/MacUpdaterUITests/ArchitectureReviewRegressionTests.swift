@@ -1,0 +1,153 @@
+import Foundation
+import Testing
+import MacUpdaterCore
+@testable import WegaMacUpdater
+
+@Suite("Architecture review regressions")
+@MainActor
+struct ArchitectureReviewRegressionTests {
+    @Test func selfUpdateInstallationWaitsForTheSharedWriteGateAndProtectsQuit() async {
+        let operations = OperationCoordinator()
+        let upgrades = UpgradeCoordinator(operations: operations)
+        let blockerStarted = UILatch()
+        let releaseBlocker = UILatch()
+        let installProbe = SelfUpdateInstallProbe()
+        let controller = SelfUpdateController(
+            dependencies: .init(
+                check: { .upToDate },
+                download: { $0 },
+                verify: { _ in },
+                installOrOpen: { _ in
+                    installProbe.record(
+                        mutationLabels: MutationGuard.shared.runningLabels
+                    )
+                    return true
+                },
+                openFallback: {}
+            ),
+            upgrades: upgrades
+        )
+
+        let blocker = Task {
+            await operations.withWrite(label: "blocker") { @MainActor in
+                blockerStarted.open()
+                await releaseBlocker.wait()
+            }
+        }
+        await blockerStarted.wait()
+
+        let update = Task {
+            await controller.downloadAndOpen(URL(fileURLWithPath: "/tmp/Wega.pkg")) { _ in }
+        }
+        while (await operations.snapshot()).queuedWrites == 0 {
+            await Task.yield()
+        }
+        #expect(!installProbe.didRun)
+
+        releaseBlocker.open()
+        await blocker.value
+        await update.value
+
+        #expect(installProbe.didRun)
+        #expect(installProbe.mutationLabels.contains("self-update"))
+    }
+
+    @Test func viewsContainNoRealProcessNetworkOrFilesystemWork() throws {
+        let root = packageRoot()
+        let info = executableSource(try source("Sources/MacUpdater/InfoView.swift", root: root))
+        let migration = executableSource(
+            try source("Sources/MacUpdater/MigrationView.swift", root: root)
+        )
+
+        for forbidden in [
+            "ProcessRunner().run",
+            "CatalogRefresher(",
+            "PrivilegedHelperClient.shared.register()",
+            "PrivilegedHelperClient.shared.unregister()",
+            "GitHubCredentialStore.setToken",
+            "GitHubCredentialStore.clear()"
+        ] {
+            #expect(!info.contains(forbidden), "InfoView still owns I/O: \(forbidden)")
+        }
+
+        for forbidden in [
+            "FileManager.default",
+            "CaskDatabaseClient(",
+            "model.brewService",
+            "model.npmService",
+            "model.masService",
+            "processes.forceKill",
+            "runningApplicationInspector.runningApplications()",
+            "runningApplicationTerminator.requestGracefulTermination",
+            "NSWorkspace.shared.open"
+        ] {
+            #expect(!migration.contains(forbidden), "MigrationView still owns I/O: \(forbidden)")
+        }
+    }
+
+    @Test func topLevelHomebrewReadRoundsUseTheSharedGate() throws {
+        let root = packageRoot()
+        let foreground = executableSource(
+            try source("Sources/MacUpdater/ScanStore+Actions.swift", root: root)
+        )
+        let background = executableSource(
+            try source("Sources/MacUpdater/BackgroundUpdater.swift", root: root)
+        )
+
+        #expect(foreground.contains("withReadLease(label: \"foreground scan\")"))
+        #expect(foreground.contains("OperationCoordinator.shared.withRead("))
+        #expect(foreground.contains("holding: operationLease"))
+        #expect(background.contains("OperationCoordinator.shared.withReadLease("))
+        #expect(background.contains("label: \"background update preflight\""))
+    }
+
+    private func packageRoot(file: String = #filePath) -> URL {
+        URL(fileURLWithPath: file)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    private func source(_ path: String, root: URL) throws -> String {
+        try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+    }
+
+    private func executableSource(_ source: String) -> String {
+        source
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+    }
+}
+
+@MainActor
+private final class UILatch {
+    private var isOpen = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        guard !isOpen else { return }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    func open() {
+        guard !isOpen else { return }
+        isOpen = true
+        let pending = waiters
+        waiters.removeAll()
+        pending.forEach { $0.resume() }
+    }
+}
+
+@MainActor
+private final class SelfUpdateInstallProbe {
+    private(set) var didRun = false
+    private(set) var mutationLabels: [String] = []
+
+    func record(mutationLabels: [String]) {
+        didRun = true
+        self.mutationLabels = mutationLabels
+    }
+}

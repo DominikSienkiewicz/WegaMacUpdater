@@ -26,14 +26,18 @@ final class UninstallCoordinator: ObservableObject {
         defer { state = .idle }
 
         let directories = buildScanDirs()
-        return await OperationCoordinator.shared.withRead(label: "uninstall scan") {
-            let installedCasks = (try? await brewService.installedCasks()) ?? []
-            let scanner = ApplicationScanner()
-            let found = directories.flatMap { directory in
-                (try? scanner.scanApplications(in: directory, installedCasks: installedCasks)) ?? []
+        do {
+            return try await OperationCoordinator.shared.withRead(label: "uninstall scan") {
+                let installedCasks = (try? await brewService.installedCasks()) ?? []
+                let scanner = ApplicationScanner()
+                let found = directories.flatMap { directory in
+                    (try? scanner.scanApplications(in: directory, installedCasks: installedCasks)) ?? []
+                }
+                return InstallationInventory.deduplicated(found)
+                    .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
             }
-            return InstallationInventory.deduplicated(found)
-                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        } catch {
+            return []
         }
     }
 
@@ -42,8 +46,12 @@ final class UninstallCoordinator: ObservableObject {
         zap: Bool,
         using brewService: BrewService
     ) async -> Outcome {
-        await UpgradeCoordinator.shared.performWrite(.uninstall) {
-            await self.uninstallCoordinated(targets: targets, zap: zap, using: brewService)
+        do {
+            return try await UpgradeCoordinator.shared.performWrite(.uninstall) {
+                await self.uninstallCoordinated(targets: targets, zap: zap, using: brewService)
+            }
+        } catch {
+            return Outcome(succeeded: [], failedIDs: Set(targets.map(\.id)))
         }
     }
 
