@@ -10,7 +10,11 @@ struct BackgroundUpdateConsentSettingsCard: View {
     @ObservedObject private var store = BackgroundUpdateOptInStore.shared
     @State private var qualifications: [String: BackgroundUpdateConsentQualification] = [:]
 
-    private let brewService = BrewService()
+    private let metadataReader: BackgroundUpdateConsentMetadataReader
+
+    init(metadataReader: BackgroundUpdateConsentMetadataReader = .init()) {
+        self.metadataReader = metadataReader
+    }
 
     private var tokensKey: String {
         let policyKey = policies.policiesMap.sorted { $0.key < $1.key }.map { key, policy in
@@ -224,33 +228,24 @@ struct BackgroundUpdateConsentSettingsCard: View {
         }
 
         do {
-            async let profileRequest = brewService.caskArtifactProfiles(tokens: tokens)
-            async let downloadRequest = brewService.caskDownloadInfo(tokens: tokens)
-            async let outdatedRequest = brewService.outdatedGreedy()
-            async let installationRequest = brewService.caskInstallationInfo(tokens: tokens)
-            let (profiles, downloads, outdated, installations) = try await (
-                profileRequest,
-                downloadRequest,
-                outdatedRequest,
-                installationRequest
-            )
+            let metadata = try await metadataReader.read(tokens: tokens)
             guard !Task.isCancelled else { return }
             let profilesByToken = Dictionary(
-                profiles.map { ($0.token, $0) },
+                metadata.profiles.map { ($0.token, $0) },
                 uniquingKeysWith: { first, _ in first }
             )
             let downloadsByToken = Dictionary(
-                downloads.map { ($0.token, $0) },
+                metadata.downloads.map { ($0.token, $0) },
                 uniquingKeysWith: { first, _ in first }
             )
-            let appPaths = CaskAppPathResolver().appPaths(from: installations)
+            let appPaths = CaskAppPathResolver().appPaths(from: metadata.installations)
             let runningAppPaths = Set(
                 NSWorkspace.shared.runningApplications.compactMap(
                     \.bundleURL?.standardizedFileURL
                 )
             )
             let context = BackgroundUpdateConsentContext(
-                candidateTokens: Set(outdated.casks.map(\.name)),
+                candidateTokens: Set(metadata.outdated.casks.map(\.name)),
                 resolvedAppTokens: Set(appPaths.keys),
                 runningTokens: Set(
                     appPaths.filter {

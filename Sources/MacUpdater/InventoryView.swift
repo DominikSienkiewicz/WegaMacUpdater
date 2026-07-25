@@ -13,15 +13,17 @@ struct InventoryView: View {
 
     @EnvironmentObject private var model: AppViewModel
 
-    @State private var apps:         [ApplicationInfo] = []
-    @State private var npmGlobals:   [NpmGlobalPackage] = []
-    @State private var isScanning:   Bool              = false
-    @State private var errorMessage: String?
+    @StateObject private var inventory = InventoryStore()
     @State private var search:       String            = ""
     @State private var filter:       SourceFilter      = .all
     @State private var sortKey:      InventorySortKey  = .name
     @State private var sortAsc:      Bool              = true
     @FocusState private var searchFocused: Bool
+
+    private var apps: [ApplicationInfo] { inventory.apps }
+    private var npmGlobals: [NpmGlobalPackage] { inventory.npmGlobals }
+    private var isScanning: Bool { inventory.isScanning }
+    private var errorMessage: String? { inventory.errorMessage }
 
     /// REL-16: bundle identifiers with more than one installation. The rows that
     /// carry them show where they live, so the user can tell the copies apart.
@@ -171,47 +173,9 @@ struct InventoryView: View {
     private func setFilter(_ f: SourceFilter) { filter = filter == f ? .all : f }
 
     private func scan() async {
-        isScanning = true; errorMessage = nil
-        defer { isScanning = false }
-        onWegaState?(WegaState(pose: .sniff, line: tr("Obchód wszystkich kątów…")))
-
-        let installedCasks: Set<String>
-        do { installedCasks = try await model.brewService.installedCasks() }
-        catch { installedCasks = [] }
-
-        let cacheURL = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Caches/\(AppMetadata.bundleIdentifier)/casks.json")
-        let casks = (try? await CaskDatabaseClient(cache: CaskDatabaseCache(fileURL: cacheURL)).fetchCasks()) ?? []
-
-        let scanner = ApplicationScanner()
-        var all:  [ApplicationInfo] = []
-        for dir in buildScanDirs() {
-            all += (try? scanner.scanApplications(in: dir, installedCasks: installedCasks, availableCasks: casks)) ?? []
+        await inventory.scan(model: model) { state in
+            onWegaState?(state)
         }
-        var sorted = InstallationInventory.deduplicated(all)
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-
-        // Populate masAppID for App Store apps (graceful: skip if mas unavailable)
-        // Only call masService if we have MAS apps to correlate
-        if sorted.contains(where: \.isManagedByMas) {
-            let masApps = (try? await model.masService.list()) ?? []
-            if !masApps.isEmpty {
-                let masIndex = masApps.reduce(into: [:]) { dict, app in
-                    dict[StringNormalizer.normalize(app.name)] = app.appStoreID
-                }
-                sorted = sorted.map { app in
-                    guard app.isManagedByMas, app.masAppID == nil else { return app }
-                    var updated = app
-                    updated.masAppID = masIndex[StringNormalizer.normalize(app.name)]
-                    return updated
-                }
-            }
-        }
-
-        apps = sorted
-        npmGlobals = (try? await model.npmService.installedGlobals()) ?? []
-
-        onWegaState?(WegaState(pose: .happy, line: trf("Obchód skończony — %@ aplikacji pod opieką.", "\(apps.count)")))
     }
 }
 

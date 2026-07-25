@@ -88,8 +88,14 @@ final class UpgradeCoordinator: ObservableObject {
 
     private func finish(_ requestID: UUID) {
         requests.removeAll { $0.id == requestID }
-        guard runningRequestID == requestID else { return }
-        runningRequestID = nil
-        state = requests.first.map { .waiting($0.flow) } ?? .idle
+        if runningRequestID == requestID {
+            runningRequestID = nil
+        }
+        if let runningRequestID,
+           let running = requests.first(where: { $0.id == runningRequestID }) {
+            state = .running(running.flow)
+        } else {
+            state = requests.first.map { .waiting($0.flow) } ?? .idle
+        }
     }
 }

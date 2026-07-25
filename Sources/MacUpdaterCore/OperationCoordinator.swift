@@ -45,6 +45,8 @@ public actor OperationCoordinator {
 
     private struct ActiveOperation {
         let access: Access
+        var rootReleased = false
+        var nestedOperations = 0
     }
 
     private let coordinatorID = UUID()
@@ -122,7 +124,8 @@ public actor OperationCoordinator {
         label _: String,
         operation: @Sendable () async throws -> Result
     ) async throws -> Result {
-        try validate(lease, requestedAccess: .read)
+        try retainNestedOperation(lease, requestedAccess: .read)
+        defer { releaseNestedOperation(lease) }
         try Task.checkCancellation()
         return try await operation()
     }
@@ -133,7 +136,8 @@ public actor OperationCoordinator {
         label _: String,
         operation: @Sendable () async throws -> Result
     ) async throws -> Result {
-        try validate(lease, requestedAccess: .write)
+        try retainNestedOperation(lease, requestedAccess: .write)
+        defer { releaseNestedOperation(lease) }
         try Task.checkCancellation()
         return try await operation()
     }
@@ -144,7 +148,7 @@ public actor OperationCoordinator {
         operation: @Sendable () async -> Void
     ) async {
         guard let lease = await acquire(access: access, label: label) else { return }
-        defer { release(lease) }
+        defer { releaseRootOperation(lease) }
         guard !Task.isCancelled else { return }
         await operation()
     }
@@ -157,7 +161,7 @@ public actor OperationCoordinator {
         guard let lease = await acquire(access: access, label: label) else {
             throw CancellationError()
         }
-        defer { release(lease) }
+        defer { releaseRootOperation(lease) }
         try Task.checkCancellation()
         return try await operation(lease)
     }
@@ -216,9 +220,36 @@ public actor OperationCoordinator {
         return Lease(coordinatorID: coordinatorID, operationID: operationID, access: access)
     }
 
-    private func release(_ lease: Lease) {
-        guard let active = activeOperations.removeValue(forKey: lease.operationID) else { return }
-        switch active.access {
+    private func releaseRootOperation(_ lease: Lease) {
+        guard var active = activeOperations[lease.operationID] else { return }
+        if active.nestedOperations > 0 {
+            active.rootReleased = true
+            activeOperations[lease.operationID] = active
+            return
+        }
+        finishOperation(id: lease.operationID, access: active.access)
+    }
+
+    private func retainNestedOperation(_ lease: Lease, requestedAccess: Access) throws {
+        try validate(lease, requestedAccess: requestedAccess)
+        activeOperations[lease.operationID]?.nestedOperations += 1
+    }
+
+    private func releaseNestedOperation(_ lease: Lease) {
+        guard var active = activeOperations[lease.operationID], active.nestedOperations > 0 else {
+            return
+        }
+        active.nestedOperations -= 1
+        if active.rootReleased, active.nestedOperations == 0 {
+            finishOperation(id: lease.operationID, access: active.access)
+        } else {
+            activeOperations[lease.operationID] = active
+        }
+    }
+
+    private func finishOperation(id: UUID, access: Access) {
+        activeOperations.removeValue(forKey: id)
+        switch access {
         case .read:
             activeReads -= 1
         case .write:
@@ -229,7 +260,9 @@ public actor OperationCoordinator {
 
     private func validate(_ lease: Lease, requestedAccess: Access) throws {
         guard lease.coordinatorID == coordinatorID else { throw LeaseError.foreignCoordinator }
-        guard let active = activeOperations[lease.operationID], active.access == lease.access else {
+        guard let active = activeOperations[lease.operationID],
+              active.access == lease.access,
+              !active.rootReleased else {
             throw LeaseError.expired
         }
         if requestedAccess == .write, active.access != .write {
