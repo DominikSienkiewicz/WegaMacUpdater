@@ -39,6 +39,18 @@ public enum Translations {
         // FEAT-07 — gating pobrań.
         "Niekorzystne warunki pobierania (%@) — kontynuuję na żądanie.": "Unfavorable download conditions (%@) — continuing at your request.",
         "Uwaga: kosztowne łącze lub throttling — pobieram mimo to.": "Note: metered link or throttling — downloading anyway.",
+        "Bramka zasobów": "Resource gate",
+        "Wega sprawdza miejsce, łącze, baterię i temperaturę przed snapshotem i pobraniem.": "Wega checks disk space, network, battery and temperature before snapshotting and downloading.",
+        "Duże pobranie": "Large download",
+        "Niska bateria": "Low battery",
+        "Mnożnik rozpakowania": "Unpacking multiplier",
+        "Margines dysku": "Disk safety margin",
+        "Aktualizacja odroczona": "Update postponed",
+        "Aktualizacja odroczona: %@.": "Update postponed: %@.",
+        "Bramka zasobów: %@.": "Resource gate: %@.",
+        "Warunki nie pozwalają teraz bezpiecznie pobrać aktualizacji.": "Current conditions do not allow the update to be downloaded safely.",
+        "Nie udało się utworzyć snapshotu dla: %@.": "Could not create a snapshot for: %@.",
+        "Nie udało się utworzyć wymaganego snapshotu.": "Could not create the required snapshot.",
         // FEAT-05 — rollback casków.
         "%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.": "%@: the new version failed the check — restored the previous one.",
         "Cofnęłam %@ — nowa wersja nie przeszła kontroli.": "Rolled back %@ — the new version failed the check.",

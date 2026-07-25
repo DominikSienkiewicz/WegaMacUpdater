@@ -13,6 +13,12 @@ bump and move its entries under the new version heading when cutting a release.
 ## [Unreleased]
 
 ### Added
+- A hard download resource gate shared by window and unattended cask upgrades. Before
+  snapshotting or downloading it vetoes metered/Low Data Mode networking, low battery,
+  thermal throttling and insufficient (or unreadable) disk capacity. Required space is
+  budgeted as download + unpacked payload + rollback snapshot + safety margin; the
+  thresholds and estimates are persisted and configurable in the native Settings window.
+  Background deferrals retain their reason in the activity log.
 - Unit tests for `JetBrainsUpdateChecker` and `SparkleUpdateChecker` — the two manual
   checkers that previously had no dedicated coverage despite driving 14 JetBrains IDEs
   and every generic Sparkle app. Both are exercised through the injected `HTTPClient`

@@ -329,6 +329,53 @@ extension ScanStore {
         manualBusy = nil
     }
 
+    private func prepareForegroundCasks(
+        _ caskNames: [String],
+        targetKeys: Set<String>
+    ) async -> (appPaths: [String: URL], snapshots: [String: URL])? {
+        await probeDownloadSizes(targetKeys: targetKeys)
+        let appPaths = await resolveCaskAppPaths(caskNames)
+        let resourceDecision = await foregroundResourceDecision(caskNames, appPaths: appPaths)
+        guard case .allow = resourceDecision else {
+            guard case .postpone(let reason) = resourceDecision else { return nil }
+            brewLog.append("⏸ " + trf("Aktualizacja odroczona: %@.", "\(reason)"))
+            WegaLog.info(.homebrew, "Aktualizacja z okna odroczona — \(reason).")
+            showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
+                                  message: trf("Bramka zasobów: %@.", "\(reason)")))
+            emitActivitySignal(.error)
+            emitWegaState(WegaState(pose: .alert, line: tr("Warunki nie pozwalają teraz bezpiecznie pobrać aktualizacji.")))
+            return nil
+        }
+
+        let snapshots = snapshotCasks(caskNames, appPaths: appPaths)
+        let missing = caskNames.filter { appPaths[$0] != nil && snapshots[$0] == nil }
+        guard missing.isEmpty else {
+            for snapshot in snapshots.values { try? FileManager.default.removeItem(at: snapshot) }
+            let names = missing.joined(separator: ", ")
+            brewLog.append("⏸ " + trf("Nie udało się utworzyć snapshotu dla: %@.", "\(names)"))
+            WegaLog.error(.homebrew, "Aktualizacja z okna odroczona — brak snapshotu: \(names).")
+            showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
+                                  message: tr("Nie udało się utworzyć wymaganego snapshotu.")))
+            emitActivitySignal(.error)
+            return nil
+        }
+        return (appPaths, snapshots)
+    }
+
+    private func foregroundResourceDecision(
+        _ caskNames: [String],
+        appPaths: [String: URL]
+    ) async -> DownloadGate.Decision {
+        let sizes = Dictionary(
+            uniqueKeysWithValues: caskNames.map { ($0, caskSizes[$0] ?? .unknown) }
+        )
+        return await DownloadResourcePreflight.decision(
+            tokens: caskNames,
+            downloadSizes: sizes,
+            appPaths: appPaths
+        )
+    }
+
     func runUpdate(targetKeys: Set<String>) async {
         guard let model, !targetKeys.isEmpty else { return }
         // F3 — never overlap with a background upgrade: both take snapshots and both call
@@ -362,38 +409,22 @@ extension ScanStore {
         let npmNames      = plan.npmNames
         let masAppStoreIDs = plan.masAppStoreIDs
 
+        let caskPreparation: (appPaths: [String: URL], snapshots: [String: URL])?
+        if caskNames.isEmpty {
+            caskPreparation = nil
+        } else {
+            guard let prepared = await prepareForegroundCasks(caskNames, targetKeys: targetKeys) else {
+                updating = false
+                return
+            }
+            caskPreparation = prepared
+        }
+
         // Pre-capture which casks being updated are currently running
         var candidates: [RestartInfo] = []
         for token in caskNames {
             if let info = MacUpdaterConstants.restartMap[token], await isProcessRunning(info.processName) {
                 candidates.append(info)
-            }
-        }
-
-        // FEAT-07: dla casków (duże pobrania) doradczo ostrzeż przy złych warunkach
-        // (łącze taryfowe / throttling). Akcja jest user-initiated → kontynuujemy.
-        //
-        // F2 — the gate used to be fed a hard-coded `200MB + 1`, because `brew info --json`
-        // carries no size. It now gets the sum of whatever the HEAD probes could actually
-        // measure. When nothing could be measured we keep the old pessimistic assumption
-        // (a cask is usually large) but say so in the log, rather than pretending to know.
-        if !caskNames.isEmpty {
-            await probeDownloadSizes(targetKeys: targetKeys)
-            let measured = caskNames.compactMap { token -> Int64? in
-                if case .known(let bytes) = caskSizes[token] { return bytes }
-                return nil
-            }
-            let assumedSize: Int64 = 200 * 1024 * 1024 + 1
-            let sizeBytes = measured.isEmpty ? assumedSize : measured.reduce(0, +)
-            if measured.isEmpty {
-                brewLog.append("ℹ️ " + tr("Nie udało się ustalić rozmiaru pobrania — zakładam duży plik."))
-            }
-
-            let (net, pow) = await LiveConditions.snapshot()
-            if case let .postpone(reason) = DownloadGate.decide(
-                sizeBytes: sizeBytes, network: net, power: pow) {
-                brewLog.append("⚠️ " + trf("Niekorzystne warunki pobierania (%@) — kontynuuję na żądanie.", "\(reason)"))
-                emitWegaState(WegaState(pose: .alert, line: tr("Uwaga: kosztowne łącze lub throttling — pobieram mimo to.")))
             }
         }
 
@@ -408,13 +439,13 @@ extension ScanStore {
         }
 
         // Brew upgrade — casks (FEAT-05 snapshot przed, canary/rollback + FEAT-04 ledger po)
-        if let caskArgs, !caskNames.isEmpty {
+        if let caskArgs, let caskPreparation {
             // REL-03 — resolved here, now, not left to whatever a full scan happened to put
             // in the map: after `restoreLastScan()` it is empty, and an empty map means no
             // snapshot to roll back to and no bundle for the canary to inspect. Both phases
             // are handed this one value, so neither can be given a different answer.
-            let appPaths  = await resolveCaskAppPaths(caskNames)
-            let snapshots = snapshotCasks(caskNames, appPaths: appPaths)
+            let appPaths = caskPreparation.appPaths
+            let snapshots = caskPreparation.snapshots
             var caskOutcome = await runBrewUpgrade(arguments: caskArgs)
 
             // Auto-recover an interrupted upgrade: if a cask bailed because a stale
