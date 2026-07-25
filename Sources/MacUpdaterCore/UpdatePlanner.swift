@@ -51,14 +51,25 @@ public struct UpdatePlan: Equatable, Sendable {
     public var formulaNames: [String]
     public var caskNames: [String]
     public var npmNames: [String]
+    /// App Store IDs selected for this run. Empty only for legacy callers that request
+    /// an intentionally global `mas upgrade` through `includesMas`.
+    public var masAppStoreIDs: [String]
     public var includesMas: Bool
 
     public var count: Int
 
-    public init(formulaNames: [String], caskNames: [String], npmNames: [String], includesMas: Bool, count: Int) {
+    public init(
+        formulaNames: [String],
+        caskNames: [String],
+        npmNames: [String],
+        includesMas: Bool,
+        count: Int,
+        masAppStoreIDs: [String] = []
+    ) {
         self.formulaNames = formulaNames
         self.caskNames = caskNames
         self.npmNames = npmNames
+        self.masAppStoreIDs = masAppStoreIDs
         self.includesMas = includesMas
         self.count = count
     }
@@ -168,6 +179,37 @@ public enum UpdatePlanner {
         return items
     }
 
+    /// The installable rows surfaced by one sidebar filter. UX-01 requires every
+    /// selection count, preview, confirmation and update run to start from this exact
+    /// collection, rather than letting each layer reinterpret the filter independently.
+    public static func visibleItems(_ items: [OutdatedItem], filter: UpdateFilter) -> [OutdatedItem] {
+        switch filter {
+        case .all:
+            return items
+        case .apps:
+            return items.filter { $0.kind.category == .apps }
+        case .cli:
+            return items.filter { $0.kind.category == .cli }
+        case .security:
+            // The security view currently contains only manually-checked apps, which
+            // have per-row install actions and do not participate in the batch plan.
+            return []
+        }
+    }
+
+    /// The visible rows the next batch update will touch, in display order. An empty
+    /// visible selection retains the established "update all" meaning, but "all" now
+    /// means all rows in the active filter — never rows hidden in another category.
+    public static func targets(
+        from items: [OutdatedItem],
+        selectedKeys: Set<String>,
+        filter: UpdateFilter
+    ) -> [OutdatedItem] {
+        let visible = visibleItems(items, filter: filter)
+        let selected = visible.filter { selectedKeys.contains($0.key) }
+        return selected.isEmpty ? visible : selected
+    }
+
     /// FEAT-03 download transparency: the subset of outdated casks Homebrew will install
     /// **without** verifying a checksum (`sha256` absent or `"no_check"`), used to drive
     /// the "no checksum" banner. Looked up by cask **token**: for a cask `OutdatedItem`
@@ -192,7 +234,8 @@ public enum UpdatePlanner {
             caskNames:    keys.compactMap { name(of: $0, prefix: caskPrefix) }.sorted(),
             npmNames:     keys.compactMap { name(of: $0, prefix: npmPrefix) }.sorted(),
             includesMas:  keys.contains { $0.hasPrefix(masPrefix) },
-            count:        keys.count
+            count:        keys.count,
+            masAppStoreIDs: keys.compactMap { name(of: $0, prefix: masPrefix) }.sorted()
         )
     }
 
@@ -202,8 +245,8 @@ public enum UpdatePlanner {
 
     /// The exact commands a plan maps to, in the order `runUpdate` executes them:
     /// formulae (`brew upgrade …`), casks (`brew upgrade --cask …`), npm one-per-package
-    /// (`npm install -g <name>@latest`), then mas (`mas upgrade`). Empty sections are
-    /// skipped. This is the single source of truth the dry-run preview renders.
+    /// (`npm install -g <name>@latest`), then mas (`mas upgrade <app-id> …`). Empty
+    /// sections are skipped. This is the single source of truth the dry-run preview renders.
     public static func commands(for plan: UpdatePlan) -> [UpdateCommand] {
         var commands: [UpdateCommand] = []
         if !plan.formulaNames.isEmpty {
@@ -216,7 +259,7 @@ public enum UpdatePlanner {
             commands.append(UpdateCommand(executable: "npm", arguments: ["install", "-g", "\(pkg)@latest"]))
         }
         if plan.includesMas {
-            commands.append(UpdateCommand(executable: "mas", arguments: ["upgrade"]))
+            commands.append(UpdateCommand(executable: "mas", arguments: ["upgrade"] + plan.masAppStoreIDs))
         }
         return commands
     }

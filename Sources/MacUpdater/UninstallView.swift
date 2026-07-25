@@ -12,6 +12,10 @@ struct UninstallView: View {
     @State private var isLoading:      Bool              = false
     @State private var isUninstalling: Bool              = false
     @State private var showDialog:     Bool              = false
+    /// UX-01: the exact visible installations named by the confirmation. Execution
+    /// consumes this frozen collection instead of resolving selection through a filter
+    /// for a second time after consent.
+    @State private var pendingUninstallTargets: [ApplicationInfo] = []
     @State private var errorMessage:   String?
     @State private var banner:         BannerData?
     @FocusState private var searchFocused: Bool
@@ -35,9 +39,6 @@ struct UninstallView: View {
     private var targets: [ApplicationInfo] {
         InstallationInventory.selected(filtered, identities: selected)
     }
-
-    private var selectedBrewCount: Int { targets.filter(\.isManagedByBrew).count }
-    private var selectedTrashCount: Int { targets.filter { !$0.isManagedByBrew }.count }
 
     var body: some View {
         ZStack {
@@ -71,15 +72,16 @@ struct UninstallView: View {
                     .disabled(isLoading)
 
                     Button {
-                        guard !selected.isEmpty else { return }
+                        guard !targets.isEmpty else { return }
+                        pendingUninstallTargets = targets
                         showDialog = true
                     } label: {
                         if isUninstalling { ProgressView().controlSize(.small) }
-                        else { Label(selected.isEmpty ? tr("Odinstaluj") : trf("Odinstaluj (%@)", "\(selected.count)"), systemImage: "trash") }
+                        else { Label(targets.isEmpty ? tr("Odinstaluj") : trf("Odinstaluj (%@)", "\(targets.count)"), systemImage: "trash") }
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.wegaDanger)
-                    .disabled(selected.isEmpty || isUninstalling)
+                    .disabled(targets.isEmpty || isUninstalling)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -95,12 +97,12 @@ struct UninstallView: View {
                 WegaCard(padded: false) {
                     HStack(spacing: 10) {
                         Image(systemName: selectAllSymbol)
-                            .foregroundStyle(selected.isEmpty ? .secondary : Color.wegaHoney)
+                            .foregroundStyle(targets.isEmpty ? .secondary : Color.wegaHoney)
                             .font(.system(size: 16))
                             .onTapGesture { toggleAll() }
-                        Text(selected.isEmpty
+                        Text(targets.isEmpty
                              ? trf("%@ aplikacji", "\(filtered.count)")
-                             : trf("%@ zaznaczonych z %@", "\(selected.count)", "\(filtered.count)"))
+                             : trf("%@ zaznaczonych z %@", "\(targets.count)", "\(filtered.count)"))
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -192,16 +194,21 @@ struct UninstallView: View {
             // Overlay dialog
             if showDialog {
                 UninstallDialog(
-                    brewCount:  selectedBrewCount,
-                    trashCount: selectedTrashCount,
-                    ambiguities: InstallationInventory.ambiguousBrewUninstalls(selected: targets, among: apps),
-                    onCancel:   { showDialog = false },
-                    onConfirm:  { zap in showDialog = false; Task { await uninstall(zap: zap) } }
+                    targets:     pendingUninstallTargets,
+                    ambiguities: InstallationInventory.ambiguousBrewUninstalls(
+                        selected: pendingUninstallTargets,
+                        among: apps
+                    ),
+                    onCancel: cancelUninstall,
+                    onConfirm: confirmUninstall
                 )
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
         .animation(.easeInOut(duration: 0.18), value: showDialog)
+        .onChange(of: search) { _, _ in
+            selected.formIntersection(filtered.map(\.id))
+        }
         .task { await scan() }
     }
 
@@ -217,8 +224,8 @@ struct UninstallView: View {
     }
 
     private var selectAllSymbol: String {
-        if selected.isEmpty { return "square" }
-        if selected.count == filtered.count { return "checkmark.square.fill" }
+        if targets.isEmpty { return "square" }
+        if targets.count == filtered.count { return "checkmark.square.fill" }
         return "minus.square.fill"
     }
 
@@ -227,8 +234,20 @@ struct UninstallView: View {
     }
 
     private func toggleAll() {
-        if selected.count == filtered.count { selected.removeAll() }
+        if Set(targets.map(\.id)) == Set(filtered.map(\.id)) { selected.removeAll() }
         else { selected = Set(filtered.map(\.id)) }
+    }
+
+    private func cancelUninstall() {
+        showDialog = false
+        pendingUninstallTargets = []
+    }
+
+    private func confirmUninstall(zap: Bool) {
+        let targets = pendingUninstallTargets
+        showDialog = false
+        pendingUninstallTargets = []
+        Task { await uninstall(targets: targets, zap: zap) }
     }
 
     private func scan() async {
@@ -244,9 +263,8 @@ struct UninstallView: View {
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    private func uninstall(zap: Bool) async {
-        let targets = self.targets
-
+    private func uninstall(targets: [ApplicationInfo], zap: Bool) async {
+        guard !targets.isEmpty else { return }
         // REL-06 — `brew uninstall --cask` (with `--zap` it also deletes preferences and
         // Application Support) rewrites the Caskroom, and `UpgradeMutex` only covers upgrades.
         // Without a ticket a quit here ends the process between the Caskroom entry and the
@@ -303,8 +321,7 @@ struct UninstallView: View {
 // MARK: - Custom uninstall dialog (ZStack overlay)
 
 private struct UninstallDialog: View {
-    let brewCount:  Int
-    let trashCount: Int
+    let targets: [ApplicationInfo]
     /// REL-16: casks whose application is installed in more than one place — see
     /// `InstallationInventory.ambiguousBrewUninstalls`.
     let ambiguities: [AmbiguousBrewUninstall]
@@ -315,7 +332,9 @@ private struct UninstallDialog: View {
     /// preferences, caches and Application Support; the user opts into that deliberately.
     @State private var zapMode: Bool = false
 
-    private var totalCount: Int { brewCount + trashCount }
+    private var brewCount: Int { targets.filter(\.isManagedByBrew).count }
+    private var trashCount: Int { targets.count - brewCount }
+    private var totalCount: Int { targets.count }
     private var hasMixed: Bool { brewCount > 0 && trashCount > 0 }
     private var hasNonBrew: Bool { trashCount > 0 }
 
@@ -355,6 +374,30 @@ private struct UninstallDialog: View {
                     .padding(.horizontal, 22)
                     .padding(.top, 20)
                     .padding(.bottom, 16)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(tr("Dokładne cele"))
+                            .font(.system(size: 12, weight: .semibold))
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(targets) { app in
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(app.name).font(.system(size: 12, weight: .medium))
+                                        Text(app.path.path)
+                                            .font(.system(size: 10.5, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                            .textSelection(.enabled)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                        }
+                        .frame(maxHeight: 120)
+                    }
+                    .padding(12)
+                    .background(Color(NSColor.controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 12)
 
                     // Options — only shown when brew casks are selected
                     if brewCount > 0 {

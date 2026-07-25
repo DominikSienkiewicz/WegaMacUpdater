@@ -35,9 +35,20 @@ struct UpdateView: View {
     /// Purely transient: a modal that no background task writes to, so it may die
     /// with the view tree.
     @State private var pinTarget: PinRequest? = nil
+    /// UX-01: the exact visible batch the user is being asked to approve. Keeping the
+    /// rows, rather than recomputing after the dialog opens, makes confirmation and
+    /// execution one immutable decision.
+    @State private var pendingUpdateTargets: [OutdatedItem] = []
+    @State private var showUpdateConfirmation = false
 
     private var allItems: [OutdatedItem] { scan.allItems }
+    private var visibleItems: [OutdatedItem] { scan.visibleItems(for: updateFilter) }
     private var visibleManual: [ManualOutdatedApp] { scan.visibleManual }
+    private var updateTargets: [OutdatedItem] { scan.updateTargets(for: updateFilter) }
+    private var updateTargetKeys: Set<String> { Set(updateTargets.map(\.key)) }
+    private var selectedVisibleCount: Int {
+        scan.selected.intersection(visibleItems.map(\.key)).count
+    }
 
     var body: some View {
         content
@@ -46,11 +57,31 @@ struct UpdateView: View {
                     policies.pin(key: req.key, name: req.name, version: version)
                 }
             }
+            .confirmationDialog(
+                trf("Zaktualizować %@ pozycji?", "\(pendingUpdateTargets.count)"),
+                isPresented: $showUpdateConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button(trf("Zaktualizuj wybrane (%@)", "\(pendingUpdateTargets.count)")) {
+                    let targetKeys = Set(pendingUpdateTargets.map(\.key))
+                    pendingUpdateTargets = []
+                    Task { await scan.runUpdate(targetKeys: targetKeys) }
+                }
+                Button(tr("Anuluj"), role: .cancel) { pendingUpdateTargets = [] }
+            } message: {
+                Text(pendingUpdateTargets.map(updateTargetDescription).joined(separator: "\n"))
+            }
+            .onChange(of: showUpdateConfirmation) { _, isPresented in
+                if !isPresented { pendingUpdateTargets = [] }
+            }
             // Switching the sidebar category re-filters the list but not the inspector's
             // resolver, so a selection made in one category would otherwise keep showing in
             // the pane after switching away from it. Clear it so the detail pane never
             // describes an item that's no longer in the visible list.
-            .onChange(of: updateFilter) { scan.inspectedKey = nil }
+            .onChange(of: updateFilter) { _, filter in
+                scan.inspectedKey = nil
+                scan.restrictSelection(to: filter)
+            }
             .onAppear {
                 // The tree this view sits in is rebuilt whenever the language re-keys it
                 // (and whenever the sidebar tab changes), handing us fresh closures over
@@ -69,6 +100,7 @@ struct UpdateView: View {
                 // a no-op after the first appearance and whenever a scan has already run.
                 scan.restoreLastScan()
                 scan.replayLastScan()
+                scan.restrictSelection(to: updateFilter)
             }
     }
 
@@ -165,14 +197,14 @@ struct UpdateView: View {
                     }
                 }
                 Spacer()
-                if !allItems.isEmpty {
-                    Button { Task { await scan.runUpdate() } } label: {
+                if !visibleItems.isEmpty {
+                    Button(action: requestUpdate) {
                         if scan.updating {
                             ProgressView().controlSize(.small)
-                        } else if scan.selected.isEmpty {
-                            Label(trf("Zaktualizuj wszystkie (%@)", "\(allItems.count)"), systemImage: "arrow.down.circle.fill")
+                        } else if selectedVisibleCount == 0 {
+                            Label(trf("Zaktualizuj wszystkie (%@)", "\(updateTargets.count)"), systemImage: "arrow.down.circle.fill")
                         } else {
-                            Label(trf("Zaktualizuj wybrane (%@)", "\(scan.selected.count)"), systemImage: "arrow.down.circle.fill")
+                            Label(trf("Zaktualizuj wybrane (%@)", "\(updateTargets.count)"), systemImage: "arrow.down.circle.fill")
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -228,12 +260,12 @@ struct UpdateView: View {
                 // Select-all row
                 HStack(spacing: 10) {
                     Image(systemName: selectAllSymbol)
-                        .foregroundStyle(scan.selected.isEmpty ? .secondary : Color.wegaHoney)
+                        .foregroundStyle(selectedVisibleCount == 0 ? .secondary : Color.wegaHoney)
                         .font(.system(size: 16))
-                        .onTapGesture { scan.toggleAll() }
+                        .onTapGesture { scan.toggleAll(filter: updateFilter) }
                         .accessibilityLabel(tr("Zaznacz wszystko"))
                         .accessibilityAddTraits(.isButton)
-                    Text(scan.selected.isEmpty ? tr("Zaznacz wszystko") : trf("%@ z %@ zaznaczonych", "\(scan.selected.count)", "\(allItems.count)"))
+                    Text(selectedVisibleCount == 0 ? tr("Zaznacz wszystko") : trf("%@ z %@ zaznaczonych", "\(selectedVisibleCount)", "\(visibleItems.count)"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
@@ -242,10 +274,10 @@ struct UpdateView: View {
 
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        let formulae = allItems.filter { $0.kind == .formula }
-                        let casks    = allItems.filter { $0.kind == .cask }
-                        let store    = allItems.filter { $0.kind == .appStore }
-                        let npmPkgs  = allItems.filter { $0.kind == .npm }
+                        let formulae = visibleItems.filter { $0.kind == .formula }
+                        let casks    = visibleItems.filter { $0.kind == .cask }
+                        let store    = visibleItems.filter { $0.kind == .appStore }
+                        let npmPkgs  = visibleItems.filter { $0.kind == .npm }
                         if !formulae.isEmpty && updateFilter.allowsCli { UpdateSection(title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"),  icon: "terminal",  items: formulae, selected: $scan.selected, inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreItem, onPin: requestPin, onInspect: { scan.inspectedKey = $0.key }) }
                         if !casks.isEmpty && updateFilter.allowsApps {
                             UpdateSection(title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), icon: "app.gift", items: casks, iconPaths: scan.caskIconPaths, rollbackProtection: scan.caskProtection, selected: $scan.selected, inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreItem, onPin: requestPin, onInspect: { scan.inspectedKey = $0.key })
@@ -323,19 +355,19 @@ struct UpdateView: View {
     /// with **unknown** shown as itself, never as a guess.
     @ViewBuilder
     private var planPreview: some View {
-        if !allItems.isEmpty {
+        if !visibleItems.isEmpty {
             DisclosureGroup(isExpanded: $scan.showPlanPreview) {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(scan.plannedCommands.enumerated()), id: \.offset) { _, command in
+                    ForEach(Array(scan.plannedCommands(targetKeys: updateTargetKeys).enumerated()), id: \.offset) { _, command in
                         Text("$ \(command.executable) \(command.arguments.joined(separator: " "))")
                             .font(.system(size: 11, design: .monospaced))
                             .textSelection(.enabled)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    if !scan.plannedCaskTokens.isEmpty {
+                    if !scan.plannedCaskTokens(targetKeys: updateTargetKeys).isEmpty {
                         Divider().opacity(0.4)
-                        ForEach(scan.plannedCaskTokens, id: \.self) { token in
+                        ForEach(scan.plannedCaskTokens(targetKeys: updateTargetKeys), id: \.self) { token in
                             PlanPreviewCaskRow(
                                 token: token,
                                 download: scan.caskDownloads[token],
@@ -360,7 +392,7 @@ struct UpdateView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
             .onChange(of: scan.showPlanPreview) { _, expanded in
-                if expanded { Task { await scan.probeDownloadSizes() } }
+                if expanded { Task { await scan.probeDownloadSizes(targetKeys: updateTargetKeys) } }
             }
         }
     }
@@ -409,10 +441,26 @@ struct UpdateView: View {
     }
 
     private var selectAllSymbol: String {
-        switch UpdatePlanner.selectAllState(selectedCount: scan.selected.count, totalCount: allItems.count) {
+        switch UpdatePlanner.selectAllState(selectedCount: selectedVisibleCount, totalCount: visibleItems.count) {
         case .none:    return "square"
         case .all:     return "checkmark.square.fill"
         case .partial: return "minus.square.fill"
+        }
+    }
+
+    private func requestUpdate() {
+        let targets = updateTargets
+        guard !targets.isEmpty else { return }
+        pendingUpdateTargets = targets
+        showUpdateConfirmation = true
+    }
+
+    private func updateTargetDescription(_ item: OutdatedItem) -> String {
+        switch item.kind {
+        case .formula:  return "\(tr("Homebrew Formulae")): \(item.name)"
+        case .cask:     return "\(tr("Homebrew Casks")): \(item.name)"
+        case .appStore: return "\(tr("Mac App Store")): \(item.name)"
+        case .npm:      return "npm: \(item.name)"
         }
     }
 
