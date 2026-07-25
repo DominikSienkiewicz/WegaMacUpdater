@@ -21,8 +21,12 @@ struct UninstallView: View {
         return apps.filter { $0.name.localizedCaseInsensitiveContains(search) }
     }
 
-    private var selectedBrewCount: Int { filtered.filter { selected.contains($0.id) && $0.isManagedByBrew }.count }
-    private var selectedTrashCount: Int { filtered.filter { selected.contains($0.id) && !$0.isManagedByBrew }.count }
+    private var targets: [ApplicationInfo] {
+        InstallationInventory.selected(filtered, identities: selected)
+    }
+
+    private var selectedBrewCount: Int { targets.filter(\.isManagedByBrew).count }
+    private var selectedTrashCount: Int { targets.filter { !$0.isManagedByBrew }.count }
 
     var body: some View {
         ZStack {
@@ -213,16 +217,12 @@ struct UninstallView: View {
         defer { isLoading = false }
         let installedCasks = (try? await model.brewService.installedCasks()) ?? []
         let scanner = ApplicationScanner()
-        var seen = Set<String>()
         var found: [ApplicationInfo] = []
         for dir in buildScanDirs() {
-            let batch = (try? scanner.scanApplications(in: dir, installedCasks: installedCasks)) ?? []
-            for app in batch {
-                let key = app.bundleIdentifier ?? app.path.path
-                if seen.insert(key).inserted { found.append(app) }
-            }
+            found += (try? scanner.scanApplications(in: dir, installedCasks: installedCasks)) ?? []
         }
-        apps = found.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        apps = InstallationInventory.deduplicated(found)
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     private func uninstall(zap: Bool) async {
@@ -230,7 +230,7 @@ struct UninstallView: View {
         defer { isUninstalling = false }
         onWegaState?(WegaState(pose: .sniff, line: tr("Aport! Zabieram to z dysku…")))
 
-        let targets = filtered.filter { selected.contains($0.id) }
+        let targets = self.targets
         var succeeded: [String] = []
         var failed:    [String] = []
 

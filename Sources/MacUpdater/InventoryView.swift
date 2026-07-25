@@ -8,8 +8,6 @@ private enum SourceFilter: String, CaseIterable {
     case manual   = "Ręcznie"
 }
 
-private enum SortKey: String { case name, version, bundleId, source, updateDate }
-
 struct InventoryView: View {
     var onWegaState: ((WegaState) -> Void)?
 
@@ -21,7 +19,7 @@ struct InventoryView: View {
     @State private var errorMessage: String?
     @State private var search:       String            = ""
     @State private var filter:       SourceFilter      = .all
-    @State private var sortKey:      SortKey           = .name
+    @State private var sortKey:      InventorySortKey  = .name
     @State private var sortAsc:      Bool              = true
     @FocusState private var searchFocused: Bool
 
@@ -30,7 +28,7 @@ struct InventoryView: View {
     private var manualCount: Int { apps.count - brewCount - masCount }
 
     private var filtered: [ApplicationInfo] {
-        apps
+        let matching = apps
             .filter { app in
                 switch filter {
                 case .all:      true
@@ -44,23 +42,7 @@ struct InventoryView: View {
                 return app.name.localizedCaseInsensitiveContains(search)
                     || (app.bundleIdentifier?.localizedCaseInsensitiveContains(search) ?? false)
             }
-            .sorted { a, b in
-                let cmp: Bool
-                switch sortKey {
-                case .name:     cmp = a.name < b.name
-                case .version:  cmp = (a.version ?? "") < (b.version ?? "")
-                case .bundleId: cmp = (a.bundleIdentifier ?? "") < (b.bundleIdentifier ?? "")
-                case .source:
-                    func rank(_ x: ApplicationInfo) -> Int {
-                        if x.isManagedByBrew { return 0 }
-                        return x.isManagedByMas ? 1 : 2
-                    }
-                    cmp = rank(a) < rank(b)
-                case .updateDate:
-                    cmp = (a.updateDate ?? .distantPast) < (b.updateDate ?? .distantPast)
-                }
-                return sortAsc ? cmp : !cmp
-            }
+        return InventorySort.sorted(matching, by: sortKey, ascending: sortAsc)
     }
 
     var body: some View {
@@ -192,16 +174,12 @@ struct InventoryView: View {
         let casks = (try? await CaskDatabaseClient(cache: CaskDatabaseCache(fileURL: cacheURL)).fetchCasks()) ?? []
 
         let scanner = ApplicationScanner()
-        var seen = Set<String>()
         var all:  [ApplicationInfo] = []
         for dir in buildScanDirs() {
-            let found = (try? scanner.scanApplications(in: dir, installedCasks: installedCasks, availableCasks: casks)) ?? []
-            for app in found {
-                let key = app.bundleIdentifier ?? app.path.path
-                if seen.insert(key).inserted { all.append(app) }
-            }
+            all += (try? scanner.scanApplications(in: dir, installedCasks: installedCasks, availableCasks: casks)) ?? []
         }
-        var sorted = all.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        var sorted = InstallationInventory.deduplicated(all)
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
         // Populate masAppID for App Store apps (graceful: skip if mas unavailable)
         // Only call masService if we have MAS apps to correlate
@@ -378,8 +356,8 @@ private struct FilterPills: View {
 
 private struct SortHeaderCell: View {
     let label:   String
-    let key:     SortKey
-    @Binding var sortKey: SortKey
+    let key:     InventorySortKey
+    @Binding var sortKey: InventorySortKey
     @Binding var sortAsc: Bool
 
     var body: some View {
