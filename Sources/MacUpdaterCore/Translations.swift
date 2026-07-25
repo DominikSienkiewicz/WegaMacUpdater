@@ -404,6 +404,30 @@ public enum Translations {
         "Więcej działań": "More actions",
         // F3 — ciche aktualizacje w tle: opt-in per aplikacja, tylko dla chronionych casków.
         "Aktualizuj automatycznie w tle": "Update automatically in the background",
+        // BG-05 — trwały audyt i cofanie zgód niezależnie od bieżącej listy aktualizacji.
+        "Zgody na aktualizacje w tle": "Background update permissions",
+        "Brak zgód. Możesz je nadać z menu ⋯ przy chronionym casku na liście aktualizacji.":
+            "No permissions. You can grant one from the ⋯ menu of a protected cask in the update list.",
+        "Zgoda udzielona: %@": "Granted: %@",
+        "Cofnij zgodę": "Revoke permission",
+        "Przed każdą aktualizacją Wega ponownie sprawdza, czy aplikacja nie działa, nie jest zignorowana lub przypięta oraz czy można utworzyć snapshot.":
+            "Before every update, Wega checks again that the app is not running, ignored or pinned, and that a snapshot can be created.",
+        "Stałe warunki spełnione": "Stable requirements met",
+        "Stałe warunki niespełnione": "Stable requirements not met",
+        "Nie można ocenić": "Cannot evaluate",
+        "Instaluje aplikację bez uprzywilejowanych hooków, a pobranie ma sumę SHA-256.":
+            "Installs an app without privileged hooks, and the download has a SHA-256 checksum.",
+        "Homebrew nie opisuje artefaktów tego casku, więc nie można potwierdzić bezpiecznej aktualizacji.":
+            "Homebrew does not describe this cask's artifacts, so a safe update cannot be confirmed.",
+        "Cask nie instaluje aplikacji .app, więc nie można utworzyć snapshotu ani sprawdzić wyniku.":
+            "The cask does not install an .app, so Wega cannot create a snapshot or verify the result.",
+        "Cask zawiera uprzywilejowany lub nieznany artefakt, który może wymagać nadzoru.":
+            "The cask contains a privileged or unknown artifact that may require supervision.",
+        "Pobranie nie ma konkretnej sumy SHA-256, więc Homebrew nie zweryfikuje pliku.":
+            "The download has no concrete SHA-256 checksum, so Homebrew will not verify the file.",
+        "Nie można teraz odczytać metadanych Homebrew. Zgoda pozostaje zapisana i można ją cofnąć.":
+            "Homebrew metadata cannot be read right now. The permission remains saved and can be revoked.",
+        "Sprawdzam metadane Homebrew…": "Checking Homebrew metadata…",
         "Aktualizacje w tle": "Background updates",
         // REL-02 — powiadomienie w tle mówi o każdym wyniku rundy, nie tylko o sukcesie.
         "Aktualizacje w tle — wymagają uwagi": "Background updates — need your attention",

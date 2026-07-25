@@ -41,6 +41,7 @@ extension InfoView {
                 appCard
                 languageCard
                 ResourceGateSettingsCard()
+                BackgroundUpdateConsentSettingsCard()
                 policiesCard
                 diagnosticsCard
                 catalogCard

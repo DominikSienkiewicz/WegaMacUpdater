@@ -3,33 +3,6 @@ import Foundation
 import MacUpdaterCore
 import UserNotifications
 
-/// Per-app opt-in for unattended upgrades (F3).
-///
-/// Deliberately *not* a new case on `UpdatePolicy`, despite the strategy note suggesting it:
-/// a policy holds exactly one value per key, so `.autoUpdate` could not coexist with
-/// `.pinned(version:)`, and "update this automatically, but never past 18" is a combination
-/// a user is entitled to. Same store pattern, separate concern.
-@MainActor
-final class BackgroundUpdateOptInStore: ObservableObject {
-    static let shared = BackgroundUpdateOptInStore()
-
-    private static let defaultsKey = "wega.backgroundUpdate.optIn"
-
-    @Published private(set) var tokens: Set<String>
-
-    private init() {
-        let stored = UserDefaults.standard.stringArray(forKey: Self.defaultsKey) ?? []
-        tokens = Set(stored)
-    }
-
-    func isOptedIn(_ token: String) -> Bool { tokens.contains(token) }
-
-    func setOptedIn(_ optedIn: Bool, token: String) {
-        if optedIn { tokens.insert(token) } else { tokens.remove(token) }
-        UserDefaults.standard.set(Array(tokens), forKey: Self.defaultsKey)
-    }
-}
-
 /// Upgrades the safe subset of casks while nobody is watching (F3).
 ///
 /// This is the only code path in Wega that changes the user's machine without them present,
