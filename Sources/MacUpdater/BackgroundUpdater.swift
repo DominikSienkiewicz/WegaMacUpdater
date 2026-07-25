@@ -56,8 +56,20 @@ final class BackgroundUpdater {
         let optedIn = BackgroundUpdateOptInStore.shared.tokens
         guard !candidates.isEmpty, !optedIn.isEmpty else { return [] }
 
-        let profiles = (try? await brewService.caskArtifactProfiles(tokens: candidates)) ?? []
-        let downloads = (try? await brewService.caskDownloadInfo(tokens: candidates)) ?? []
+        let profiles: [CaskArtifactProfile]
+        do {
+            profiles = try await brewService.caskArtifactProfiles(tokens: candidates)
+        } catch {
+            WegaLog.error(.homebrew, "Aktualizacja w tle — profile artefaktów: \(error.localizedDescription)")
+            profiles = []
+        }
+        let downloads: [CaskDownloadInfo]
+        do {
+            downloads = try await brewService.caskDownloadInfo(tokens: candidates)
+        } catch {
+            WegaLog.error(.homebrew, "Aktualizacja w tle — dane pobierania: \(error.localizedDescription)")
+            downloads = []
+        }
         let appPaths = await resolveAppPaths(tokens: candidates)
 
         let pathBackedCandidates = BackgroundUpdateSafety.pathBackedTokens(candidates, appPaths: appPaths)
@@ -128,7 +140,11 @@ final class BackgroundUpdater {
     /// and still lists as outdated was not upgraded, and a query that fails leaves the round
     /// unconfirmed — which the notification says rather than glossing over.
     private func confirmByRescan(_ run: inout UpdateRunOutcome) async {
-        guard let outdated = try? await brewService.outdatedGreedy() else {
+        let outdated: BrewOutdated
+        do {
+            outdated = try await brewService.outdatedGreedy()
+        } catch {
+            WegaLog.error(.homebrew, "Aktualizacja w tle — skan potwierdzający: \(error.localizedDescription)")
             run.applyRescan(stillOutdatedKeys: [], confirmed: false)
             return
         }
@@ -151,13 +167,19 @@ final class BackgroundUpdater {
     /// REL-03 — the resolution itself now lives in `CaskAppPathResolver`, shared with the
     /// window path, which used to read a map only a full scan ever filled.
     private func resolveAppPaths(tokens: [String]) async -> [String: URL] {
-        let infos = (try? await brewService.caskInstallationInfo(tokens: tokens)) ?? []
-        return CaskAppPathResolver().appPaths(from: infos)
+        do {
+            let infos = try await brewService.caskInstallationInfo(tokens: tokens)
+            return CaskAppPathResolver().appPaths(from: infos)
+        } catch {
+            WegaLog.error(.homebrew, "Aktualizacja w tle — ścieżki aplikacji: \(error.localizedDescription)")
+            return [:]
+        }
     }
 
     private func runBrew(arguments: [String]) async -> BrewUpgradeOutcome {
         var captured = ""
         var exitCode: Int32 = 0
+        let brewOutcome: BrewUpgradeOutcome
         do {
             for try await event in try brewService.events(arguments: arguments) {
                 switch event {
@@ -165,10 +187,14 @@ final class BackgroundUpdater {
                 case .finished(let result): exitCode = result.exitCode
                 }
             }
+            brewOutcome = BrewUpgradeOutcome.analyze(exitCode: exitCode, output: captured)
         } catch {
-            return BrewUpgradeOutcome(exitCode: -1, failedTokens: [], errorLines: [error.localizedDescription])
+            brewOutcome = BrewUpgradeOutcome(exitCode: -1, failedTokens: [], errorLines: [error.localizedDescription])
         }
-        return BrewUpgradeOutcome.analyze(exitCode: exitCode, output: captured)
+        for line in brewOutcome.errorLines {
+            WegaLog.error(.homebrew, "Aktualizacja w tle — brew: \(line)")
+        }
+        return brewOutcome
     }
 
     /// Reports what happened — every outcome, not just the happy one. A background updater

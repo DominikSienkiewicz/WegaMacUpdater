@@ -568,8 +568,9 @@ extension InfoView {
                     bundleID: AppMetadata.bundleIdentifier
                 )
             } catch {
-                AppLogger.app.error(
-                    "Self-update odrzucony przez weryfikację podpisu: \(error.localizedDescription, privacy: .public)"
+                WegaLog.error(
+                    .app,
+                    "Self-update odrzucony przez weryfikację podpisu: \(error.localizedDescription)"
                 )
                 try? FileManager.default.removeItem(at: dest)
                 onWegaState?(WegaState(pose: .alert,
@@ -596,8 +597,9 @@ extension InfoView {
                     line: tr("Aktualizacja zainstalowana przez komponent uprzywilejowany.")))
                 return
             } catch {
-                AppLogger.app.error(
-                    "Instalacja przez helper nie powiodła się: \(error.localizedDescription, privacy: .public)"
+                WegaLog.error(
+                    .helper,
+                    "Instalacja przez helper nie powiodła się: \(error.localizedDescription)"
                 )
             }
         }
@@ -619,8 +621,9 @@ extension InfoView {
                 onWegaState?(WegaState(pose: .happy, line: tr("Touch ID podpięty pod sudo.")))
                 return
             } catch {
-                AppLogger.app.error(
-                    "Helper enableTouchIDForSudo nie powiódł się: \(error.localizedDescription, privacy: .public)"
+                WegaLog.error(
+                    .helper,
+                    "Helper enableTouchIDForSudo nie powiódł się: \(error.localizedDescription)"
                 )
             }
         }

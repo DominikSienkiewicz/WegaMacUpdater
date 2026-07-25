@@ -218,7 +218,7 @@ extension AppCatalog {
             signature: signature,
             isValid: isValid
         ).appliesOverlay else {
-            AppLogger.app.error("app-catalog.json: brak ważnego podpisu — overlay zignorowany, używam katalogu z builda.")
+            WegaLog.error(.app, "app-catalog.json: brak ważnego podpisu — overlay zignorowany, używam katalogu z builda.")
             return nil
         }
         return try? decode(contentsOf: url)

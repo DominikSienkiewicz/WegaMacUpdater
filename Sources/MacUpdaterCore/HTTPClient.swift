@@ -171,8 +171,9 @@ public final class HTTPClient: @unchecked Sendable {
                    attempt < maxRetries {
                     attempt += 1
                     let delay = retryDelay(http: http, attempt: attempt)
-                    AppLogger.network.notice(
-                        "HTTP \(http.statusCode, privacy: .public) from \(target, privacy: .public) — retry \(attempt, privacy: .public)/\(self.maxRetries, privacy: .public) za \(delay, privacy: .public)s"
+                    WegaLog.warning(
+                        .network,
+                        "HTTP \(http.statusCode) from \(target) — retry \(attempt)/\(self.maxRetries) za \(delay)s"
                     )
                     try await sleepFor(delay)
                     continue
@@ -181,17 +182,19 @@ public final class HTTPClient: @unchecked Sendable {
             } catch {
                 if attempt < maxRetries, isRetryable(error) {
                     attempt += 1
-                    AppLogger.network.notice(
-                        "transport error for \(target, privacy: .public) — retry \(attempt, privacy: .public)/\(self.maxRetries, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                    WegaLog.warning(
+                        .network,
+                        "transport error for \(target) — retry \(attempt)/\(self.maxRetries): \(error.localizedDescription)"
                     )
                     try await sleepFor(retryDelay(http: nil, attempt: attempt))
                     continue
                 }
                 // A user-driven cancellation isn't a failure worth flagging — only log
-                // genuine give-ups so Console shows real connectivity/endpoint problems.
+                // genuine give-ups so diagnostics show real connectivity/endpoint problems.
                 if !(error is CancellationError), (error as? URLError)?.code != .cancelled {
-                    AppLogger.network.error(
-                        "HTTP request to \(target, privacy: .public) failed (\(attempt, privacy: .public) retries used): \(error.localizedDescription, privacy: .public)"
+                    WegaLog.error(
+                        .network,
+                        "HTTP request to \(target) failed (\(attempt) retries used): \(error.localizedDescription)"
                     )
                 }
                 throw error

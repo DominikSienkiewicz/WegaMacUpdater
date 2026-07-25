@@ -19,10 +19,12 @@ bump and move its entries under the new version heading when cutting a release.
   seam with a fake transport (no network).
 - Shared `FakeHTTPTransport` test double in `TestDoubles.swift` for HTTP-level checker
   tests.
-- Diagnostic logging through `AppLogger` (OSLog): `HTTPClient` records retry attempts
-  and final transport failures, and `ProcessRunner` records non-zero exits, timeouts,
-  and cancellations — so a swallowed network/process error is now visible in
-  Console.app instead of vanishing. Adds a `network` logging category.
+- Diagnostic logging through `WegaLog` (OSLog, the in-app Logs tab and the rotating
+  `wega.log` file): `HTTPClient` records retry attempts and final transport failures,
+  while `ProcessRunner` records non-zero exits, timeouts and cancellations. The menu-bar
+  and unattended scans retain source errors and Brew stderr, self-update signature and
+  helper failures are persisted, and the root helper audits rejected XPC connections and
+  every whitelisted operation. Adds `network`, `process` and `helper` log categories.
 - `CatalogRefresher` is now wired into the running app: the bundled `endpoints.json`
   carries an `appCatalog` source URL, and the **Info → Katalog aplikacji** card offers
   a one-click "Odśwież katalog" with status feedback. The overlay is refreshed

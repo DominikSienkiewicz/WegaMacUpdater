@@ -127,17 +127,26 @@ public struct MenuBarUpdateChecker: Sendable {
         var brew: BrewOutdated?
         do { brew = try await brewService.outdatedGreedy() }
         catch BrewServiceError.brewNotFound { /* Homebrew not installed — nothing to report, not a failure */ }
-        catch { failed += 1 }
+        catch {
+            failed += 1
+            WegaLog.error(.homebrew, "Skan z paska menu — brew outdated: \(error.localizedDescription)")
+        }
 
         var mas: [MasOutdatedApp] = []
         do { mas = try await masService.outdated() }
         catch MasServiceError.masNotFound { /* mas not installed — no App Store updates to report, not a failure */ }
-        catch { failed += 1 }
+        catch {
+            failed += 1
+            WegaLog.error(.app, "Skan z paska menu — mas outdated: \(error.localizedDescription)")
+        }
 
         var npm: [NpmGlobalOutdated] = []
         do { npm = try await npmService.outdated() }
         catch NpmServiceError.npmNotFound { /* npm not installed — no global packages to report, not a failure */ }
-        catch { failed += 1 }
+        catch {
+            failed += 1
+            WegaLog.error(.network, "Skan z paska menu — npm outdated: \(error.localizedDescription)")
+        }
 
         let items = UpdatePlanner.applyPolicies(
             UpdatePlanner.outdatedItems(brew: brew, mas: mas, npm: npm),

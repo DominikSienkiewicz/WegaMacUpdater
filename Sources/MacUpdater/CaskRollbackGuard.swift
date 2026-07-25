@@ -74,7 +74,7 @@ enum CaskRollbackGuard {
                 try await PrivilegedHelperClient.shared.replaceBundle(at: appURL.path, withSnapshotAt: snapshot.path)
                 return true
             } catch {
-                AppLogger.app.error("Rollback przez helper nie powiódł się: \(error.localizedDescription, privacy: .public)")
+                WegaLog.error(.helper, "Rollback przez helper nie powiódł się: \(error.localizedDescription)")
                 return false
             }
         }
