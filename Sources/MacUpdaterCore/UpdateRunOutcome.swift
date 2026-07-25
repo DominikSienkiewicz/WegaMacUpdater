@@ -142,6 +142,23 @@ public struct UpdateRunOutcome: Equatable, Sendable {
         needsSudoPassword = needsSudoPassword || outcome.requiresSudoPassword
     }
 
+    /// Records an unattended batch, where a non-zero process exit invalidates the whole
+    /// command. Background execution has no user present to inspect a partial result, so a
+    /// global failure may not be narrowed to only the tokens brew happened to name.
+    public mutating func recordBackgroundRound(_ covered: [OutdatedItem], outcome: BrewUpgradeOutcome) {
+        guard outcome.exitCode != 0 else {
+            record(covered, outcome: outcome)
+            return
+        }
+
+        record(covered, outcome: BrewUpgradeOutcome(
+            exitCode: outcome.exitCode,
+            failedTokens: covered.map(\.name),
+            errorLines: outcome.errorLines,
+            requiresSudoPassword: outcome.requiresSudoPassword
+        ))
+    }
+
     /// `mas upgrade` is one process for every App Store item and reports no per-item result:
     /// it either completes or throws. Pass the thrown error's description as `failure`.
     ///

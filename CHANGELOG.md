@@ -97,6 +97,12 @@ bump and move its entries under the new version heading when cutting a release.
   `MigrationLeftoverCleanupDisabledTests`.
 
 ### Fixed
+- **Unattended upgrades could run without a rollback snapshot (BG-01).** Background
+  candidates now require a resolved `.app` and a successfully created copy-on-write
+  snapshot before `brew` may start. Policy and running-process vetoes are sampled again
+  after acquiring the upgrade mutex, binary-only casks stay in the user-present flow, and
+  any non-zero global brew exit invalidates the whole unattended batch instead of allowing
+  the unnamed tokens to be reported as upgraded.
 - **A restart turned a network outage into "everything up to date" (REL-09).** The
   `brew update` failure was discarded on the spot (`_ = try?`), the persisted snapshot
   recorded no per-source result, and a missing Brew answer was written to disk as an empty

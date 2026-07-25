@@ -5,10 +5,10 @@ import Foundation
 /// Background updating is only responsible where the outcome is verifiable and reversible.
 /// Two properties decide it, both readable from `brew info --json`:
 ///
-/// 1. **No privileged artifacts.** `pkg`, `installer` and `preflight` can run arbitrary
-///    code or demand an admin password. A cask must declare *only* `app` / `binary` / `zap`
-///    to qualify — and an unrecognised stanza counts against it, because "we don't know
-///    what this does" is not a safety argument.
+/// 1. **An app and no privileged artifacts.** `pkg`, `installer` and `preflight` can run
+///    arbitrary code or demand an admin password. A cask must install an `.app` and declare
+///    only `app` / `binary` / `zap` artifacts to qualify — without an app there is nothing
+///    the rollback guard can clone and verify.
 /// 2. **A concrete `sha256`.** Without it Homebrew verifies nothing (`:no_check`), and an
 ///    unattended install of an unverified download is precisely the risk we refuse.
 ///
@@ -21,6 +21,8 @@ public enum BackgroundUpdateEligibility {
     public enum Rejection: Equatable, Sendable {
         /// The cask declares no artifacts at all — nothing is known about what it installs.
         case noArtifacts
+        /// The cask installs no `.app`, so the rollback guard has nothing to protect.
+        case noAppBundle
         /// A `pkg` / `installer` / `preflight` stanza, or a stanza we do not recognise.
         case privilegedArtifact
         /// Homebrew would install without verifying the download (`:no_check`, or absent).
@@ -38,6 +40,7 @@ public enum BackgroundUpdateEligibility {
         let kinds = profile.artifactKinds
         guard !kinds.isEmpty else { return .ineligible(.noArtifacts) }
         guard kinds.isSubset(of: safeArtifactKinds) else { return .ineligible(.privilegedArtifact) }
+        guard kinds.contains(.app) else { return .ineligible(.noAppBundle) }
         guard download?.hasChecksum == true else { return .ineligible(.noChecksum) }
         return .eligible
     }
