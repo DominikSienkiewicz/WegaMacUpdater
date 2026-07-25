@@ -87,28 +87,37 @@ final class BackgroundUpdater {
         ))
         guard let arguments = command.first(where: { $0.executable == "brew" })?.arguments else { return [] }
 
-        let outcome = await runBrew(arguments: arguments)
-        let verdicts = await CaskRollbackGuard.verify(tokens: tokens, appPaths: appPaths, snapshots: snapshots)
+        // REL-02 — the same per-item result type the window builds, filled in by the same
+        // phases: execution, validation/rollback, then a rescan that has to agree.
+        var run = UpdateRunOutcome()
+        run.record(tokens.map(Self.caskItem), outcome: await runBrew(arguments: arguments))
+        run.applyValidation(await CaskRollbackGuard.verify(tokens: tokens, appPaths: appPaths, snapshots: snapshots))
+        await confirmByRescan(&run)
 
-        let succeeded = tokens.filter { token in
-            !outcome.failedTokens.contains(token) && verdicts[token] == .healthy
-        }
-        let rolledBack = verdicts.filter { $0.value == .rolledBack }.map(\.key)
-        for (token, verdict) in verdicts {
-            switch verdict {
-            case .rolledBack:
-                WegaLog.error(.homebrew, "\(token): aktualizacja w tle cofnięta — nowa wersja nie przeszła kontroli.")
-            case .rollbackFailed:
-                WegaLog.error(.homebrew, "\(token): aktualizacja w tle nie przeszła kontroli, a rollback się nie powiódł.")
-            case .publisherChanged(let old, let new):
-                WegaLog.error(.homebrew, "\(token): Team ID zmienił się (\(old) → \(new ?? "—")). Zweryfikuj.")
-            case .healthy:
-                continue
-            }
+        let summary = run.summary
+        for outcome in summary.items where outcome.verdict != .succeeded {
+            WegaLog.error(.homebrew, "\(outcome.name): aktualizacja w tle — \(outcome.verdict.logDescription).")
         }
 
-        notify(upgraded: succeeded, rolledBack: rolledBack)
-        return succeeded
+        notify(summary: summary)
+        return summary.upgraded.map(\.name)
+    }
+
+    /// The last phase: ask brew again what is outdated. A cask brew claims to have upgraded
+    /// and still lists as outdated was not upgraded, and a query that fails leaves the round
+    /// unconfirmed — which the notification says rather than glossing over.
+    private func confirmByRescan(_ run: inout UpdateRunOutcome) async {
+        guard let outdated = try? await brewService.outdatedGreedy() else {
+            run.applyRescan(stillOutdatedKeys: [], confirmed: false)
+            return
+        }
+        run.applyRescan(stillOutdatedKeys: Set(outdated.casks.map { Self.caskItem($0.name).key }),
+                        confirmed: true)
+    }
+
+    private static func caskItem(_ token: String) -> OutdatedItem {
+        OutdatedItem(key: UpdatePlanner.key(name: token, kind: .cask), name: token,
+                     from: nil, to: nil, kind: .cask)
     }
 
     /// Which of these casks own an app that is running right now. Matched by bundle URL, not
@@ -152,25 +161,50 @@ final class BackgroundUpdater {
         return BrewUpgradeOutcome.analyze(exitCode: exitCode, output: captured)
     }
 
-    /// Reports what happened, including the rollbacks. A background updater that only ever
-    /// announces success is one you cannot trust with the failures.
-    private func notify(upgraded: [String], rolledBack: [String]) {
-        guard Bundle.main.bundleIdentifier != nil, !(upgraded.isEmpty && rolledBack.isEmpty) else { return }
-        let body: String
-        if rolledBack.isEmpty {
-            body = trf("Zaktualizowano %@ w tle · wszystkie przeszły test.", "\(upgraded.count)")
-        } else {
-            body = trf("Zaktualizowano %@ w tle · %@ cofnięto po nieudanym teście.",
-                       "\(upgraded.count)", "\(rolledBack.count)")
-        }
+    /// Reports what happened — every outcome, not just the happy one. A background updater
+    /// that only ever announces success is one you cannot trust with the failures, and a
+    /// round whose *only* result was a changed publisher or a failed rollback used to post
+    /// no notification at all.
+    private func notify(summary: UpdateRunSummary) {
+        guard Bundle.main.bundleIdentifier != nil, !summary.isEmpty else { return }
+        let title = summary.critical.isEmpty
+            ? tr("Aktualizacje w tle")
+            : tr("Aktualizacje w tle — wymagają uwagi")
+        let body = Self.notificationBody(for: summary)
         Task {
             let settings = await UNUserNotificationCenter.current().notificationSettings()
             guard settings.authorizationStatus == .authorized else { return }
             let content = UNMutableNotificationContent()
-            content.title = tr("Aktualizacje w tle")
+            content.title = title
             content.body = body
             let request = UNNotificationRequest(identifier: "wega.background-updates", content: content, trigger: nil)
             try? await UNUserNotificationCenter.current().add(request)
         }
+    }
+
+    /// One clause per outcome the round produced, so the notification cannot claim a clean
+    /// sweep over a rollback that failed or a publisher that changed.
+    private static func notificationBody(for summary: UpdateRunSummary) -> String {
+        let rolledBack = summary.names { $0 == .rolledBack }
+        let rollbackFailed = summary.rollbackFailures.map(\.name)
+        let publisherChanged = summary.publisherChanges.map(\.name)
+        let failed = summary.names { $0 == .executionFailed || $0 == .stillOutdated || $0 == .notVerified }
+
+        var clauses: [String] = [trf("Zaktualizowano %@ w tle.", "\(summary.upgraded.count)")]
+        if !rolledBack.isEmpty {
+            clauses.append(trf("%@ cofnięto po nieudanym teście.", "\(rolledBack.count)"))
+        }
+        if !rollbackFailed.isEmpty {
+            clauses.append(trf("%@ nie przeszło testu i nie udało się przywrócić — sprawdź je.",
+                               "\(rollbackFailed.joined(separator: ", "))"))
+        }
+        if !publisherChanged.isEmpty {
+            clauses.append(trf("%@ zmieniło wydawcę (Team ID) — zweryfikuj.",
+                               "\(publisherChanged.joined(separator: ", "))"))
+        }
+        if !failed.isEmpty {
+            clauses.append(trf("%@ nie udało się zaktualizować.", "\(failed.count)"))
+        }
+        return clauses.joined(separator: " · ")
     }
 }

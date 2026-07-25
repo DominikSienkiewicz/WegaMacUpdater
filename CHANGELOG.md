@@ -88,6 +88,34 @@ bump and move its entries under the new version heading when cutting a release.
   `MigrationLeftoverCleanupDisabledTests`.
 
 ### Fixed
+- Sparkle-based apps are no longer reported as outdated when the installed
+  build is newer than the feed, or when only the version format differs
+  (`7.0.0 (77593)` vs `7.0.0`). The checker now compares versions with the
+  shared `isUpgrade` comparator instead of matching version strings exactly,
+  so it can no longer offer a downgrade as an update (REL-10).
+- **A green "everything is done" over a failed update (REL-02).** Six independent paths
+  ended in the same lie, and one result type closes all of them: `UpdateRunOutcome` keeps
+  **one verdict per item and source**, covering execution, the Gatekeeper canary, the
+  rollback **and** the post-upgrade rescan, and success is announced only once every item
+  has cleared every phase. Concretely, what changes for you:
+  - a `mas upgrade` that fails now names the App Store apps it did not update, instead of
+    writing the error into the collapsible log and letting the banner say *"Wszystko
+    gotowe"*;
+  - a cask the canary rejected and rolled back is reported as not updated — its verdict
+    used to arrive after the summary had already been computed and could not enter it;
+  - a **rollback that failed** — the new version rejected *and* the old one not restored —
+    raises a red **sticky** banner telling you to check that app, instead of a line in a
+    collapsed log underneath a green headline;
+  - an item the post-upgrade rescan still lists as outdated is not counted as updated, and
+    an upgrade the rescan could not confirm (its source went silent) is reported as
+    unconfirmed rather than verified;
+  - the background notification reports every outcome of the round — rollbacks, failed
+    rollbacks, publisher (Team ID) changes and plain failures — and posts even when one of
+    those is the round's *only* result, which previously went out silently;
+  - the menu-bar badge and the notification are now derived from **one** result taken after
+    the background upgrade, and "is this new?" compares the fingerprint of the update
+    identifiers instead of their count — installing one update while another appears leaves
+    the count unchanged, and the new one used to go unannounced.
 - `.pkg` signing in `scripts/build-pkg.sh` and the release workflow: the package was
   signed with the same identity as the app, but `pkgbuild` only accepts a
   **Developer ID Installer** certificate — a "Developer ID Application" identity would

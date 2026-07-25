@@ -10,7 +10,7 @@ import Foundation
 /// so a mismatch silently upgraded the wrong things — now both sides share this type
 /// and are covered by `UpdatePlannerTests`.
 public struct OutdatedItem: Identifiable, Equatable, Sendable {
-    public enum Kind: Equatable, Sendable { case formula, cask, appStore, npm }
+    public enum Kind: Hashable, Sendable { case formula, cask, appStore, npm }
 
     public let key: String
     public var id: String { key }
@@ -116,24 +116,6 @@ public enum ScanState: Equatable, Sendable {
     case partialFailure(updates: Int, failed: Int)
 }
 
-/// Aggregated verdict over a batch of brew/npm upgrades, used to pick the result banner.
-public struct UpdateOutcomeSummary: Equatable, Sendable {
-    public var anyFailure: Bool
-    public var failedTokens: [String]
-    public var needsSudoPassword: Bool
-    /// Human-readable detail lines explaining *why* the failed upgrades failed —
-    /// the brew "Error:" block (with its continuation lines), or a synthesized
-    /// exit-code note when brew produced no message. Written verbatim to the log.
-    public var failureDetails: [String]
-
-    public init(anyFailure: Bool, failedTokens: [String], needsSudoPassword: Bool, failureDetails: [String] = []) {
-        self.anyFailure = anyFailure
-        self.failedTokens = failedTokens
-        self.needsSudoPassword = needsSudoPassword
-        self.failureDetails = failureDetails
-    }
-}
-
 /// Pure, view-independent orchestration logic for the Update screen. Extracted out
 /// of `UpdateView` so it can be unit-tested without SwiftUI or live services.
 public enum UpdatePlanner {
@@ -141,6 +123,21 @@ public enum UpdatePlanner {
     static let caskPrefix = "c:"
     static let masPrefix = "a:"
     static let npmPrefix = "n:"
+
+    /// The source-tagged key for one item, the way `outdatedItems` builds it. Exposed so
+    /// code that only has a bare token (the background updater, an upgrade outcome) can
+    /// address the same row without re-deriving the prefix by hand.
+    ///
+    /// For App Store items `name` is the numeric `appStoreID`, not the app's display name —
+    /// that is what the key carries and what `plan(selectedKeys:allKeys:)` routes on.
+    public static func key(name: String, kind: OutdatedItem.Kind) -> String {
+        switch kind {
+        case .formula:  return formulaPrefix + name
+        case .cask:     return caskPrefix + name
+        case .appStore: return masPrefix + name
+        case .npm:      return npmPrefix + name
+        }
+    }
 
     /// Flattens the per-source outdated results into one selectable list, tagging each
     /// row's key with its source prefix. Order: formulae, casks, App Store, npm.
@@ -342,24 +339,5 @@ public enum UpdatePlanner {
         case (let n, 0):        return .outdated(n)
         case (let n, let f):    return .partialFailure(updates: n, failed: f)
         }
-    }
-
-    /// Collapses a batch of upgrade outcomes into the booleans the result banner needs,
-    /// plus the detail lines that explain each failure for the log.
-    public static func summarize(outcomes: [BrewUpgradeOutcome]) -> UpdateOutcomeSummary {
-        var details: [String] = []
-        for outcome in outcomes where !outcome.isSuccessful {
-            if outcome.errorLines.isEmpty {
-                details.append("brew zakończył działanie z kodem \(outcome.exitCode) bez komunikatu „Error:”.")
-            } else {
-                details.append(contentsOf: outcome.errorLines)
-            }
-        }
-        return UpdateOutcomeSummary(
-            anyFailure: outcomes.contains { !$0.isSuccessful },
-            failedTokens: outcomes.flatMap(\.failedTokens),
-            needsSudoPassword: outcomes.contains { $0.requiresSudoPassword },
-            failureDetails: details
-        )
     }
 }
