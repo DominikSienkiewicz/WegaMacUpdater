@@ -92,4 +92,17 @@ struct TerminationDuringMutationTests {
         #expect(text.contains("MutationGuard.shared.begin("),
                 "REL-06: a migration is a Caskroom mutation and must be visible to the termination guard")
     }
+
+    /// The gap REL-06 shipped with: `UninstallView` belonged to another branch while the guard
+    /// was written, so `uninstall(zap:)` — which runs `brew uninstall --cask`, optionally with
+    /// `--zap`, and moves bundles to the Trash — was the one mutation nothing reported. Neither
+    /// `UpgradeMutex` (it only covers upgrades) nor a ticket stood behind it, so ⌘Q during an
+    /// uninstall still ended the process mid-Caskroom.
+    @Test func theUninstallRegistersItsMutation() throws {
+        let text = try source("Sources/MacUpdater/UninstallView.swift")
+        #expect(text.contains("MutationGuard.shared.begin("),
+                "REL-06: an uninstall rewrites the Caskroom and must be visible to the termination guard")
+        #expect(text.contains("MutationGuard.shared.end("),
+                "REL-06: the uninstall ticket must be released, or the guard blocks every later quit")
+    }
 }

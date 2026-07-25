@@ -527,5 +527,6 @@ public enum Translations {
         "aktualizacja Homebrew": "Homebrew update",
         "migracja %@": "migrating %@",
         "usuwanie duplikatu %@": "removing duplicate %@",
+        "dezinstalacja %@ aplikacji": "uninstalling %@ app(s)",
     ]
 }
