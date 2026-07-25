@@ -109,6 +109,14 @@ bump and move its entries under the new version heading when cutting a release.
   `MigrationLeftoverCleanupDisabledTests`.
 
 ### Fixed
+- **Manual cask adoption bypassed the upgrade safety boundary (P1).** Both the Updates
+  screen's manual `brew install --cask --force` action and the Migration wizard now take
+  the shared upgrade mutex and pass the hard disk/network/power gate before downloading.
+  They read the installed app's Team ID before replacement, reject a mismatch without
+  changing the trusted baseline, require a copy-on-write rollback snapshot, and run the
+  shared Gatekeeper/publisher canary afterwards. A rejected replacement is rolled back
+  and cannot produce a success banner; migration no longer seeds trust from the bundle
+  only after Homebrew has overwritten it.
 - **Destructive fallbacks no longer change meaning without consent (UX-04).** A
   migration now asks a running app to quit normally and waits; only an app that
   remains open produces a separate unsaved-data warning, and the resulting

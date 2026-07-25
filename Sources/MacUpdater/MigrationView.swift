@@ -443,16 +443,48 @@ struct MigrationView: View {
 
     @MainActor
     private func performMigration(_ app: ApplicationInfo, token: String) async {
-        // REL-06 — `brew install --cask --force` rewrites the Caskroom, and `UpgradeMutex`
-        // never covered this path, so a quit here used to go through unannounced.
+        defer { migrating = nil }
+        guard UpgradeMutex.shared.acquire() else {
+            errorMessage = tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.")
+            return
+        }
+        defer { UpgradeMutex.shared.release() }
         let ticket = MutationGuard.shared.begin(trf("migracja %@", "\(token)"))
         defer { MutationGuard.shared.end(ticket) }
-        defer { migrating = nil }
         onWegaState?(WegaState(pose: .sniff, line: trf("Instaluję %@ przez Homebrew…", "\(app.name)")))
 
+        let preparation: CaskReplacementSafety.Preparation
+        switch await CaskReplacementSafety.prepare(
+            token: token,
+            appURL: app.path,
+            brewService: model.brewService
+        ) {
+        case .ready(let ready):
+            preparation = ready
+        case .resourcePostponed(let reason):
+            logLines.append("⏸ " + trf("Aktualizacja odroczona: %@.", "\(reason)"))
+            errorMessage = trf("Bramka zasobów: %@.", "\(reason)")
+            onWegaState?(WegaState(
+                pose: .alert,
+                line: tr("Warunki nie pozwalają teraz bezpiecznie pobrać aktualizacji.")
+            ))
+            return
+        case .publisherRejected(let old, let new):
+            errorMessage = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
+                               "\(token)", "\(old)", "\(new ?? "—")")
+            if let errorMessage { logLines.append("⏸ " + errorMessage) }
+            onWegaState?(WegaState(pose: .alert, line: tr("Zmienił się wydawca aplikacji — sprawdź.")))
+            return
+        case .snapshotFailed:
+            errorMessage = tr("Nie udało się utworzyć wymaganego snapshotu.")
+            onWegaState?(WegaState(pose: .alert, line: tr("Aktualizacja odroczona")))
+            return
+        }
+
+        var installError: Error?
+        var exitCode: Int32 = 0
         do {
             let stream = try model.brewService.events(arguments: ["install", "--cask", "--force", token])
-            var exitCode: Int32 = 0
             for try await event in stream {
                 switch event {
                 case .stdout(let line), .stderr(let line):
@@ -465,37 +497,59 @@ struct MigrationView: View {
                     exitCode = result.exitCode
                 }
             }
-            if exitCode == 0 {
-                migrated.insert(token)
-                logLines = []
-                await recordPublisher(for: app)   // FEAT-04: ledger Team ID + alert na zmianę wydawcy
-                // SEC-01: migracja kończy się tutaj. Krok „czyszczenie resztek" — skan
-                // ~/Library po tym samym bundle ID — usunięto: wskazywał *aktywne* dane
-                // przejętej aplikacji jako resztki i kasował je trwale.
-                banner = BannerData(variant: .success,
-                                    title: trf("%@ pod Homebrew", "\(app.name)"),
-                                    message: trf("Token: %@", "\(token)"))
-                onWegaState?(WegaState(pose: .happy, line: trf("%@ przejęty! Idziemy dalej.", "\(app.name)")))
-            } else {
-                errorMessage = trf("Instalacja %@ zakończyła się błędem (kod %@). Sprawdź log poniżej.", "\(token)", "\(exitCode)")
-                onWegaState?(WegaState(pose: .sad, line: trf("Ups. Brew zgłosił problem z %@.", "\(app.name)")))
-            }
         } catch {
-            errorMessage = error.localizedDescription
+            logLines.append("error: \(error.localizedDescription)")
+            installError = error
+        }
+
+        let verification = await CaskReplacementSafety.verify(preparation)
+        guard reportMigrationVerification(verification, app: app, token: token) else { return }
+
+        if let installError {
+            errorMessage = installError.localizedDescription
             onWegaState?(WegaState(pose: .sad, line: trf("Błąd podczas migracji %@.", "\(app.name)")))
+        } else if exitCode == 0 {
+            migrated.insert(token)
+            logLines = []
+            // SEC-01: migracja kończy się tutaj. Krok „czyszczenie resztek" — skan
+            // ~/Library po tym samym bundle ID — usunięto: wskazywał *aktywne* dane
+            // przejętej aplikacji jako resztki i kasował je trwale.
+            banner = BannerData(variant: .success,
+                                title: trf("%@ pod Homebrew", "\(app.name)"),
+                                message: trf("Token: %@", "\(token)"))
+            onWegaState?(WegaState(pose: .happy, line: trf("%@ przejęty! Idziemy dalej.", "\(app.name)")))
+        } else {
+            errorMessage = trf("Instalacja %@ zakończyła się błędem (kod %@). Sprawdź log poniżej.",
+                               "\(token)", "\(exitCode)")
+            onWegaState?(WegaState(pose: .sad, line: trf("Ups. Brew zgłosił problem z %@.", "\(app.name)")))
         }
     }
 
-    /// FEAT-04: record the freshly-installed app's signing Team ID. On `.changed`
-    /// (publisher silently swapped) raise a caution. Team ID read off-main.
-    private func recordPublisher(for app: ApplicationInfo) async {
-        guard let bundleId = app.bundleIdentifier else { return }
-        let path = app.path
-        let newTeamID = await Task.detached { CodeSignatureVerifier.teamID(ofAppAt: path) }.value
-        if case let .changed(old, new) = TeamIDLedger.shared.record(bundleID: bundleId, teamID: newTeamID) {
-            errorMessage = trf("Uwaga: wydawca %@ zmienił Team ID (%@ → %@). Zweryfikuj, zanim zaufasz.", "\(app.name)", "\(old)", "\(new ?? "—")")
-            onWegaState?(WegaState(pose: .alert, line: tr("Zmienił się wydawca aplikacji — sprawdź.")))
+    private func reportMigrationVerification(
+        _ verdict: CaskValidationVerdict,
+        app: ApplicationInfo,
+        token: String
+    ) -> Bool {
+        switch verdict {
+        case .healthy:
+            return true
+        case .rolledBack:
+            errorMessage = trf("%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.", "\(token)")
+        case .rollbackFailed:
+            errorMessage = trf(
+                "%@: nowa wersja nie przeszła kontroli, a przywrócenie poprzedniej nie powiodło się. Sprawdź aplikację przed użyciem.",
+                "\(token)"
+            )
+        case .publisherChanged(let old, let new):
+            errorMessage = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
+                               "\(token)", "\(old)", "\(new ?? "—")")
+        case .publisherChangedAndRolledBack(let old, let new):
+            errorMessage = trf("%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
+                               "\(token)", "\(old)", "\(new ?? "—")")
         }
+        if let errorMessage { logLines.append("⚠️ " + errorMessage) }
+        onWegaState?(WegaState(pose: .alert, line: trf("Błąd podczas migracji %@.", "\(app.name)")))
+        return false
     }
 
     private func isProcessRunning(_ name: String) async -> Bool {
