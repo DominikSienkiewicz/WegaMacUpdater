@@ -245,11 +245,19 @@ struct UninstallView: View {
     }
 
     private func uninstall(zap: Bool) async {
+        let targets = self.targets
+
+        // REL-06 — `brew uninstall --cask` (with `--zap` it also deletes preferences and
+        // Application Support) rewrites the Caskroom, and `UpgradeMutex` only covers upgrades.
+        // Without a ticket a quit here ends the process between the Caskroom entry and the
+        // bundle, which is the half-removed state the guard exists to prevent.
+        let ticket = MutationGuard.shared.begin(trf("dezinstalacja %@ aplikacji", "\(targets.count)"))
+        defer { MutationGuard.shared.end(ticket) }
+
         isUninstalling = true; errorMessage = nil; banner = nil
         defer { isUninstalling = false }
         onWegaState?(WegaState(pose: .sniff, line: tr("Aport! Zabieram to z dysku…")))
 
-        let targets = self.targets
         var succeeded: [String] = []
         var failed:    [String] = []
 

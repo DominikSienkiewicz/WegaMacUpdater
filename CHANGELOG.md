@@ -131,6 +131,28 @@ bump and move its entries under the new version heading when cutting a release.
   state on the way past — a snapshot can no longer be taken without saying which bundles it
   covers. The chain covers every upgrade now, not only one that follows a full scan in the
   same session.
+- **Quitting mid-change cut it in half (REL-06).** ⌘Q, *Zakończ Wega*, log-out and shutdown
+  ended the process instantly — including in the middle of an upgrade, a background round, an
+  uninstall or a migration — leaving a half-written Caskroom with the old version already moved
+  aside and the new one not yet in place. The app now defers the quit
+  (`applicationShouldTerminate` → `.terminateLater`), names what is running and offers to wait
+  for it, and holds a `suddenTerminationDisabled` activity assertion so a log-out cannot kill it
+  unasked. Foreground updates, background rounds, migrations, duplicate removals and uninstalls
+  all report in.
+- **Installation identity is the app's path, not its bundle ID (REL-16).** Inventory,
+  uninstall and migration de-duplicated the scan by bundle identifier, so a second copy
+  of an application in another folder never appeared in the list and a destructive
+  operation silently acted on whichever copy was scanned first. Copies are now identified
+  by their standardized path and listed separately; the bundle identifier only groups
+  them, and a row whose identifier is installed more than once shows the folder it lives in.
+- **Uninstalling a cask now says which copy Homebrew will remove (REL-16).** Homebrew
+  removes a cask by token, so for an app installed in more than one place it deletes the
+  copy it manages — not necessarily the row that was ticked. The confirmation names every
+  folder the app occupies and states that brew picks among them.
+- **Descending sort no longer breaks strict ordering (REL-16).** Reversing a column
+  negated the comparison (`!less(a, b)`), which returns `true` for both `(a, b)` and
+  `(b, a)` when two rows compare equal — not the strict weak ordering `sort(by:)` requires.
+  Descending now reverses the operands and breaks ties on the installation path.
 - Sparkle-based apps are no longer reported as outdated when the installed
   build is newer than the feed, or when only the version format differs
   (`7.0.0 (77593)` vs `7.0.0`). The checker now compares versions with the
