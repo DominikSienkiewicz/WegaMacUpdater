@@ -105,6 +105,7 @@ public final class MasService: @unchecked Sendable {
                 executableURL: sudoURL,
                 arguments: args,
                 environment: HomebrewEnvironment.environment,
+                inheritParentEnvironment: false,
                 timeout: 120
             )
         )
@@ -127,6 +128,7 @@ public final class MasService: @unchecked Sendable {
                 executableURL: masURL,
                 arguments: arguments,
                 environment: HomebrewEnvironment.environment,
+                inheritParentEnvironment: false,
                 timeout: 15
             )
         )
@@ -151,6 +153,7 @@ public final class MasService: @unchecked Sendable {
                 executableURL: masURL,
                 arguments: arguments,
                 environment: HomebrewEnvironment.environment,
+                inheritParentEnvironment: false,
                 timeout: nil
             )
         )

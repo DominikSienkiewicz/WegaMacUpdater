@@ -1,5 +1,6 @@
 import Foundation
 
+#if DEBUG
 /// Writes a tiny shell script that satisfies sudo's `SUDO_ASKPASS` contract:
 /// when sudo runs without a controlling terminal and `SUDO_ASKPASS` points at
 /// an executable, sudo invokes that program and reads the password from its
@@ -9,8 +10,8 @@ import Foundation
 /// Without this, brew's cask uninstall hooks (`sudo launchctl …`,
 /// `sudo pkgutil --forget …`) fail when Wega runs from the Finder/Dock — see
 /// the Zoom upgrade case in [BrewUpgradeOutcomeTests].
-public enum AskpassHelper {
-    public static let scriptName = "askpass.sh"
+enum AskpassHelper {
+    static let scriptName = "askpass.sh"
 
     /// AppleScript dialog. The first prompt the user sees comes from the cask
     /// itself (e.g. "Removing launchctl service us.zoom.ZoomDaemon") — keep
@@ -34,27 +35,25 @@ public enum AskpassHelper {
     /// Idempotently writes the script into `directory` with mode 0700.
     /// Returns the absolute file URL of the installed script.
     @discardableResult
-    public static func install(in directory: URL) throws -> URL {
+    static func install(in directory: URL) throws -> URL {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o700)],
+            ofItemAtPath: directory.path
+        )
         let url = directory.appendingPathComponent(scriptName)
-        try Data(scriptBody.utf8).write(to: url, options: .atomic)
+        let expected = Data(scriptBody.utf8)
+        if (try? Data(contentsOf: url)) != expected {
+            try expected.write(to: url, options: .atomic)
+        }
         try FileManager.default.setAttributes(
             [.posixPermissions: NSNumber(value: 0o700)],
             ofItemAtPath: url.path
         )
+        guard try Data(contentsOf: url) == expected else {
+            throw CocoaError(.fileWriteUnknown)
+        }
         return url
     }
-
-    /// Default install location: `~/Library/Application Support/WegaMacUpdater/`.
-    /// Returns the URL of the installed script (creating it on first call).
-    @discardableResult
-    public static func installInApplicationSupport() throws -> URL {
-        let support = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ).appendingPathComponent("WegaMacUpdater", isDirectory: true)
-        return try install(in: support)
-    }
 }
+#endif

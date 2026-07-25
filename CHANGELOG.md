@@ -56,6 +56,15 @@ bump and move its entries under the new version heading when cutting a release.
 - This `CHANGELOG.md`.
 
 ### Changed
+- Hardened the no-TTY sudo path (`SEC-05`). Production no longer writes or executes
+  user-modifiable askpass/sudo shell scripts from Application Support. The packaged app
+  embeds compiled `WegaAskpass` and `WegaSudoShim` executables, signs them inside-out,
+  and cryptographically revalidates their code bytes before every environment attachment.
+  Brew and mas now run with an explicit environment allowlist, so loader variables and
+  inherited escape hatches such as `WEGA_SUDO_REAL` never reach the authorization path.
+  The PAM writer uses backup → atomic replacement → readback verification → rollback;
+  without the signed helper the UI fails closed and offers a transactional Terminal command
+  whose active-directive check ignores commented `pam_tid.so` lines.
 - Split `ScanStore` across two files along the seam it already had: `ScanStore.swift`
   keeps the published state and the small operations over it, and the scan/upgrade
   actions move to `ScanStore+Actions.swift`. The type, its API and its behaviour are

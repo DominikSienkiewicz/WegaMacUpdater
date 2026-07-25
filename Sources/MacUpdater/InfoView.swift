@@ -424,13 +424,13 @@ extension InfoView {
         }
     }
 
-    /// Manual fallback shown when macOS TCC blocks the in-app write.
+    /// Manual fallback shown when the signed privileged helper is unavailable.
     /// Renders the exact one-liner the user should paste into Terminal,
     /// plus buttons to copy it and to open Terminal.app pre-armed with it.
     @ViewBuilder
     private var manualEnableFallback: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(tr("macOS zablokował zapis do /etc/pam.d/sudo_local z poziomu Wegi (TCC). Uruchom poniższą komendę w Terminalu — wystarczy raz:"))
+            Text(tr("Bezpieczny zapis PAM wymaga podpisanego helpera. Jeśli jest niedostępny, uruchom poniższą transakcyjną komendę w Terminalu — wystarczy raz:"))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -802,14 +802,16 @@ extension InfoView {
         if let brewURL = locator.locateBrew(),
            let result = try? await ProcessRunner().run(ProcessRequest(
                executableURL: brewURL, arguments: ["--version"],
-               environment: HomebrewEnvironment.environment, timeout: 5)) {
+               environment: HomebrewEnvironment.environment,
+               inheritParentEnvironment: false, timeout: 5)) {
             brewV = result.stdout.split(separator: "\n").first.map(String.init)
         }
 
         if let masURL = locator.locateMas(),
            let result = try? await ProcessRunner().run(ProcessRequest(
                executableURL: masURL, arguments: ["version"],
-               environment: HomebrewEnvironment.environment, timeout: 5)) {
+               environment: HomebrewEnvironment.environment,
+               inheritParentEnvironment: false, timeout: 5)) {
             masV = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
