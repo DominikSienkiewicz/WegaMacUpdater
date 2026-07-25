@@ -31,10 +31,18 @@ struct RollbackNetAfterRestoreTests {
                    encoding: .utf8)
     }
 
+    /// `ScanStore`'s implementation. It spans two files — the state in `ScanStore.swift`,
+    /// the scan/upgrade actions in `ScanStore+Actions.swift` — and is read as one text so
+    /// that a `!contains` guard still covers the whole type: pinned to one half only, the
+    /// pattern it forbids could reappear in the other and the assertion would pass.
+    private func scanStore() throws -> String {
+        try source("ScanStore.swift") + "\n" + source("ScanStore+Actions.swift")
+    }
+
     /// The bug itself, and the fix: the chain is fed a map resolved **in this run**, not
     /// whatever the last full scan happened to leave behind.
     @Test func theUpgradeResolvesBundlesFreshlyBeforeSnapshotting() throws {
-        let text = try source("ScanStore.swift")
+        let text = try scanStore()
         #expect(text.contains("await refreshCaskAppPaths(caskNames)"),
                 "REL-03: the upgrade must re-resolve the `.app` paths itself, before the snapshot")
         #expect(text.contains("private func refreshCaskAppPaths(_ tokens: [String]) async"),
@@ -57,7 +65,7 @@ struct RollbackNetAfterRestoreTests {
     /// One resolver, two callers — the duplicate hand-rolled loops are what let the window
     /// path and the unattended path disagree about where an app lives.
     @Test func bothUpgradePathsShareOneResolver() throws {
-        let store = try source("ScanStore.swift")
+        let store = try scanStore()
         let background = try source("BackgroundUpdater.swift")
         #expect(store.contains("CaskAppPathResolver()"),
                 "REL-03: the window path resolves through the shared resolver")

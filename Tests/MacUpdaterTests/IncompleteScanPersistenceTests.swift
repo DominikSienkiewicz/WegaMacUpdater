@@ -29,10 +29,18 @@ struct IncompleteScanPersistenceTests {
                    encoding: .utf8)
     }
 
+    /// `ScanStore`'s implementation. It spans two files — the state in `ScanStore.swift`,
+    /// the scan/upgrade actions in `ScanStore+Actions.swift` — and is read as one text so
+    /// that a `!contains` guard still covers the whole type: pinned to one half only, the
+    /// pattern it forbids could reappear in the other and the assertion would pass.
+    private func scanStore() throws -> String {
+        try source("ScanStore.swift") + "\n" + source("ScanStore+Actions.swift")
+    }
+
     /// The metadata refresh is the source a network outage takes out first, and its result
     /// was discarded on the spot.
     @Test func theMetadataRefreshResultIsNotThrownAway() throws {
-        let text = try source("ScanStore.swift")
+        let text = try scanStore()
         #expect(!text.contains("_ = try? await model.brewService.update()"),
                 "REL-09: a failed `brew update` must be recorded and shown, not swallowed by `try?`")
         #expect(text.contains("brewMetadata"),
@@ -42,14 +50,14 @@ struct IncompleteScanPersistenceTests {
     /// "Brew said nothing" and "Brew said nothing is outdated" are different facts, and the
     /// snapshot used to store both as an empty list.
     @Test func aMissingBrewAnswerIsNotPersistedAsAnEmptyList() throws {
-        let text = try source("ScanStore.swift")
+        let text = try scanStore()
         #expect(!text.contains("brew: brewOutdated ?? BrewOutdated(formulae: [], casks: [])"),
                 "REL-09: a missing Brew result must persist as absent, never as `no updates`")
     }
 
     /// What the restored scan knows about itself, and what it does with it.
     @Test func theRestoredScanCarriesItsOwnCompleteness() throws {
-        let text = try source("ScanStore.swift")
+        let text = try scanStore()
         #expect(text.contains("sources: sourceReports"),
                 "REL-09: the per-source results are part of what gets persisted")
         #expect(text.contains("lastScanComplete"),
