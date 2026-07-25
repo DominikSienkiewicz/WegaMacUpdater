@@ -678,8 +678,12 @@ extension ScanStore {
             run.record(masItems: plannedItems.filter { $0.kind == .appStore }, failure: masFailure)
         }
 
-        _ = try? await model.brewService.cleanup()
-
+        // REL-04 — no `brew cleanup` here. It ran after *every* update, including one that
+        // touched only npm or the App Store and one that had just failed, and it appeared in
+        // no preview: the plan panel renders `UpdatePlanner.commands(for:)`, which is the
+        // whole set of commands this method may execute. It is also the worst possible
+        // moment for it — clearing Homebrew's cache of previous versions removes what a
+        // recovery from a bad upgrade would reinstall from.
         selected.removeAll()
         restartCandidates = candidates
 

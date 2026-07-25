@@ -88,6 +88,14 @@ bump and move its entries under the new version heading when cutting a release.
   `MigrationLeftoverCleanupDisabledTests`.
 
 ### Fixed
+- **A hidden global `brew cleanup` after every update (REL-04).** The dry-run panel
+  promises the literal set of commands an update will run; the update then finished with
+  a `brew cleanup` that appeared in no preview — after an npm-only or App-Store-only run,
+  and after a failed one too. Its scope was the whole Homebrew installation, not the plan,
+  and it deleted the cached previous versions that recovering from a bad upgrade needs.
+  The step is gone; an update now executes exactly the commands it showed. The unused
+  `BrewService.cleanup()` was removed with it — a cleanup should return, if at all, as an
+  explicit action with its own preview.
 - **An update started from a restored scan ran without the safety net (REL-03).** The
   snapshot → canary → auto-rollback chain read the token → `.app` map that only a full
   scan ever filled, so in the most ordinary session there is — launch Wega, look at the

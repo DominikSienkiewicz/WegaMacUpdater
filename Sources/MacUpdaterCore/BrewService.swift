@@ -127,13 +127,6 @@ public final class BrewService: @unchecked Sendable {
         return result
     }
 
-    public func cleanup() async throws -> ProcessResult {
-        let arguments = ["cleanup"]
-        let result = try await runBrew(arguments)
-        try ensureSuccess(result, arguments: arguments)
-        return result
-    }
-
     public func installCask(token: String) async throws -> ProcessResult {
         let arguments = ["install", "--cask", token]
         let result = try await runBrew(arguments)
