@@ -200,6 +200,21 @@ public enum Translations {
         "Wszystko porządku. Wega nie znalazła uciekinierów.": "All good. Wega found no runaways.",
         "Instaluję %@ przez Homebrew…": "Installing %@ via Homebrew…",
         "⚠ %@ jest uruchomiony — zamykam przed instalacją…": "⚠ %@ is running — closing it before installation…",
+        "Proszę %@ o łagodne zakończenie…": "Asking %@ to quit gracefully…",
+        "Łagodna prośba o zamknięcie %@ nie powiodła się; sprawdzam stan procesu…":
+            "The graceful quit request for %@ failed; checking the process state…",
+        "%@ zamknięto łagodnie.": "%@ quit gracefully.",
+        "%@ nadal działa": "%@ is still running",
+        "Nie udało się zamknąć %@ łagodnie. Wymuszone zamknięcie może spowodować utratę niezapisanych danych. Wymusić zamknięcie i kontynuować migrację?":
+            "%@ did not quit gracefully. Force quitting may discard unsaved data. Force quit and continue the migration?",
+        "Wymuś zamknięcie": "Force quit",
+        "Migracja %@ została anulowana — aplikacja pozostała uruchomiona.":
+            "Migration of %@ was cancelled — the app is still running.",
+        "Wymuszam zamknięcie %@ za Twoją zgodą…": "Force quitting %@ with your consent…",
+        "Nie udało się wymusić zamknięcia %@. Migracja nie została uruchomiona.":
+            "Could not force quit %@. The migration was not started.",
+        "%@ nadal działa po próbie wymuszonego zamknięcia. Migracja nie została uruchomiona.":
+            "%@ is still running after the force-quit attempt. The migration was not started.",
         "%@ pod Homebrew": "%@ under Homebrew",
         "Token: %@": "Token: %@",
         "%@ przejęty! Idziemy dalej.": "%@ taken over! Let's move on.",
@@ -246,6 +261,9 @@ public enum Translations {
         "Odinstalowano %@ aplikacji": "Uninstalled %@ apps",
         "Załatwione — %@ mniej na dysku.": "Done — %@ fewer on the disk.",
         "Nie udało się: %@": "Failed: %@",
+        "Odinstalowanie niepełne — nie usunięto: %@": "Uninstall incomplete — not removed: %@",
+        "Nie uruchomiono --force; wybrane usunięcie wraz z resztkami nie zostało po cichu zmienione.":
+            "--force was not run; the selected app-and-leftovers removal was not silently changed.",
         "Odinstalować %@ %@?": "Uninstall %@ %@?",
         "aplikację": "app",
         "aplikacji": "apps",

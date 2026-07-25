@@ -109,6 +109,13 @@ bump and move its entries under the new version heading when cutting a release.
   `MigrationLeftoverCleanupDisabledTests`.
 
 ### Fixed
+- **Destructive fallbacks no longer change meaning without consent (UX-04).** A
+  migration now asks a running app to quit normally and waits; only an app that
+  remains open produces a separate unsaved-data warning, and the resulting
+  `killall -KILL` must both be explicitly approved and succeed before Homebrew starts.
+  A failed `brew uninstall --zap` is no longer retried silently as `--force` without
+  zap or counted as success: it stays selected and is reported as an incomplete
+  uninstall.
 - **Unattended upgrades could run without a rollback snapshot (BG-01).** Background
   candidates now require a resolved `.app` and a successfully created copy-on-write
   snapshot before `brew` may start. Policy and running-process vetoes are sampled again

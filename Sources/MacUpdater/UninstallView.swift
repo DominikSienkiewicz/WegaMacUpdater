@@ -277,7 +277,7 @@ struct UninstallView: View {
         onWegaState?(WegaState(pose: .sniff, line: tr("Aport! Zabieram to z dysku…")))
 
         var succeeded: [String] = []
-        var failed:    [String] = []
+        var failed: [(name: String, requestedZap: Bool)] = []
 
         for app in targets {
             if app.isManagedByBrew, let token = app.caskToken {
@@ -285,16 +285,16 @@ struct UninstallView: View {
                     _ = try await model.brewService.uninstallCask(token: token, zap: zap)
                     succeeded.append(app.id)
                 } catch {
-                    do {
-                        _ = try await model.brewService.uninstallCask(token: token, zap: false, force: true)
-                        succeeded.append(app.id)
-                    } catch { failed.append(app.name) }
+                    // UX-04: `--zap` is the meaning the user explicitly chose. Silently
+                    // replacing it with `--force` leaves the selected data behind and must
+                    // never be counted as success. Report the original attempt as failed.
+                    failed.append((app.name, zap))
                 }
             } else {
                 do {
                     try FileManager.default.trashItem(at: app.path, resultingItemURL: nil)
                     succeeded.append(app.id)
-                } catch { failed.append(app.name) }
+                } catch { failed.append((app.name, false)) }
             }
         }
 
@@ -313,7 +313,13 @@ struct UninstallView: View {
             onWegaState?(WegaState(pose: .happy, line: trf("Załatwione — %@ mniej na dysku.", "\(succeeded.count)")))
         }
         if !failed.isEmpty {
-            errorMessage = trf("Nie udało się: %@", "\(failed.joined(separator: ", "))")
+            errorMessage = trf(
+                "Odinstalowanie niepełne — nie usunięto: %@",
+                "\(failed.map(\.name).joined(separator: ", "))"
+            )
+            if failed.contains(where: \.requestedZap) {
+                errorMessage? += " " + tr("Nie uruchomiono --force; wybrane usunięcie wraz z resztkami nie zostało po cichu zmienione.")
+            }
         }
     }
 }

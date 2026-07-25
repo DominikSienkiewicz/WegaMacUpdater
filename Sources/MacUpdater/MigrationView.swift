@@ -3,6 +3,13 @@ import MacUpdaterCore
 
 private enum MigrationStatus { case ready, scanning, results }
 
+private struct PendingForceTermination: Identifiable {
+    let app: ApplicationInfo
+    let info: RestartInfo
+
+    var id: String { app.id }
+}
+
 struct MigrationView: View {
     var onWegaState: ((WegaState) -> Void)?
 
@@ -20,6 +27,7 @@ struct MigrationView: View {
     @State private var npmBrewDuplicates: [NpmBrewDuplicate] = []
     @State private var dupConfirm: DuplicateRemoval? = nil
     @State private var dupBusy: String? = nil
+    @State private var pendingForceTermination: PendingForceTermination?
 
     private let processes = RunningProcessService()
 
@@ -295,6 +303,24 @@ struct MigrationView: View {
                 secondaryButton: .cancel(Text(tr("Anuluj")))
             )
         }
+        .alert(item: $pendingForceTermination) { request in
+            Alert(
+                title: Text(trf("%@ nadal działa", "\(request.info.appName)")),
+                message: Text(trf(
+                    "Nie udało się zamknąć %@ łagodnie. Wymuszone zamknięcie może spowodować utratę niezapisanych danych. Wymusić zamknięcie i kontynuować migrację?",
+                    "\(request.info.appName)"
+                )),
+                primaryButton: .destructive(Text(tr("Wymuś zamknięcie"))) {
+                    Task { await forceTerminateAndMigrate(request) }
+                },
+                secondaryButton: .cancel(Text(tr("Anuluj"))) {
+                    errorMessage = trf(
+                        "Migracja %@ została anulowana — aplikacja pozostała uruchomiona.",
+                        "\(request.app.name)"
+                    )
+                }
+            )
+        }
     }
 
     private func scan() async {
@@ -360,22 +386,71 @@ struct MigrationView: View {
     @MainActor
     private func migrate(_ app: ApplicationInfo) async {
         guard migrating == nil, let token = app.caskToken else { return }
+        migrating = token
+        errorMessage = nil
+        logLines = []
+
+        if let info = MacUpdaterConstants.restartMap[token], await isProcessRunning(info.processName) {
+            logLines.append(trf("Proszę %@ o łagodne zakończenie…", "\(info.appName)"))
+            let requestDelivered = await processes.requestGracefulTermination(
+                appName: info.appName,
+                processName: info.processName
+            )
+            if !requestDelivered {
+                logLines.append(trf(
+                    "Łagodna prośba o zamknięcie %@ nie powiodła się; sprawdzam stan procesu…",
+                    "\(info.appName)"
+                ))
+            }
+            if await waitForProcessToStop(info.processName) {
+                logLines.append(trf("%@ zamknięto łagodnie.", "\(info.appName)"))
+            } else {
+                migrating = nil
+                pendingForceTermination = PendingForceTermination(app: app, info: info)
+                return
+            }
+        }
+
+        await performMigration(app, token: token)
+    }
+
+    @MainActor
+    private func forceTerminateAndMigrate(_ request: PendingForceTermination) async {
+        guard migrating == nil, let token = request.app.caskToken else { return }
+        pendingForceTermination = nil
+        migrating = token
+        logLines.append(trf("Wymuszam zamknięcie %@ za Twoją zgodą…", "\(request.info.appName)"))
+
+        guard await processes.forceKill(request.info.processName) else {
+            errorMessage = trf(
+                "Nie udało się wymusić zamknięcia %@. Migracja nie została uruchomiona.",
+                "\(request.info.appName)"
+            )
+            migrating = nil
+            return
+        }
+        guard await waitForProcessToStop(request.info.processName) else {
+            errorMessage = trf(
+                "%@ nadal działa po próbie wymuszonego zamknięcia. Migracja nie została uruchomiona.",
+                "\(request.info.appName)"
+            )
+            migrating = nil
+            return
+        }
+
+        await performMigration(request.app, token: token)
+    }
+
+    @MainActor
+    private func performMigration(_ app: ApplicationInfo, token: String) async {
         // REL-06 — `brew install --cask --force` rewrites the Caskroom, and `UpgradeMutex`
         // never covered this path, so a quit here used to go through unannounced.
         let ticket = MutationGuard.shared.begin(trf("migracja %@", "\(token)"))
         defer { MutationGuard.shared.end(ticket) }
-        migrating = token
-        errorMessage = nil
-        logLines = []
+        defer { migrating = nil }
         onWegaState?(WegaState(pose: .sniff, line: trf("Instaluję %@ przez Homebrew…", "\(app.name)")))
 
         do {
-            // Kill app if running before brew install
-            if let info = MacUpdaterConstants.restartMap[token], await isProcessRunning(info.processName) {
-                logLines.append(trf("⚠ %@ jest uruchomiony — zamykam przed instalacją…", "\(info.appName)"))
-                await killProcess(info.processName)
-            }
-
             let stream = try model.brewService.events(arguments: ["install", "--cask", "--force", token])
             var exitCode: Int32 = 0
             for try await event in stream {
@@ -409,7 +484,6 @@ struct MigrationView: View {
             errorMessage = error.localizedDescription
             onWegaState?(WegaState(pose: .sad, line: trf("Błąd podczas migracji %@.", "\(app.name)")))
         }
-        migrating = nil
     }
 
     /// FEAT-04: record the freshly-installed app's signing Team ID. On `.changed`
@@ -428,9 +502,12 @@ struct MigrationView: View {
         await processes.isRunning(name)
     }
 
-    private func killProcess(_ name: String) async {
-        await processes.kill(name)
-        try? await Task.sleep(for: .milliseconds(500))
+    private func waitForProcessToStop(_ name: String) async -> Bool {
+        for _ in 0..<10 {
+            if !(await isProcessRunning(name)) { return true }
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        return !(await isProcessRunning(name))
     }
 
     @MainActor
