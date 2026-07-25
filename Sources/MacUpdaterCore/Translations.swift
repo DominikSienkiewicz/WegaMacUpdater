@@ -61,6 +61,9 @@ public enum Translations {
         // FEAT-04 — watchdog (upgrade).
         "Zmiana wydawcy": "Publisher changed",
         "%@: Team ID zmienił się (%@ → %@). Zweryfikuj.": "%@: Team ID changed (%@ → %@). Verify.",
+        "%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.": "%@: Team ID changed (%@ → %@). Restored the previous trusted version.",
+        "%@: zmienił się Team ID wydawcy — przywrócono poprzednią zaufaną wersję.": "%@: the publisher's Team ID changed — restored the previous trusted version.",
+        "Cofnęłam %@ — zmienił się wydawca.": "Rolled back %@ — the publisher changed.",
         // FEAT-06 — AI triage (self-update).
         "możliwa poprawka bezpieczeństwa": "possible security fix",
         // FEAT-01 / SEC-03 — privileged helper + self-update verification.

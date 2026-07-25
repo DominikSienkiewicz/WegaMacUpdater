@@ -531,9 +531,25 @@ extension ScanStore {
                                         action: .openLogs))
         }
         for outcome in summary.publisherChanges {
-            guard case .publisherChanged(let old, let new) = outcome.verdict else { continue }
+            let old: String
+            let new: String?
+            let message: String
+            switch outcome.verdict {
+            case .publisherChanged(let previous, let current):
+                old = previous
+                new = current
+                message = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
+                              "\(outcome.name)", "\(old)", "\(new ?? "—")")
+            case .publisherChangedAndRolledBack(let previous, let current):
+                old = previous
+                new = current
+                message = trf("%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
+                              "\(outcome.name)", "\(old)", "\(new ?? "—")")
+            default:
+                continue
+            }
             showStickyBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"),
-                                        message: trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.", "\(outcome.name)", "\(old)", "\(new ?? "—")")))
+                                        message: message))
         }
 
         if summary.allItemsUpgraded {
@@ -667,6 +683,10 @@ extension ScanStore {
             switch verdict {
             case .healthy, .publisherChanged:
                 continue
+            case .publisherChangedAndRolledBack:
+                brewLog.append("⚠️ " + trf("%@: zmienił się Team ID wydawcy — przywrócono poprzednią zaufaną wersję.", "\(token)"))
+                emitWegaState(WegaState(pose: .alert,
+                                        line: trf("Cofnęłam %@ — zmienił się wydawca.", "\(token)")))
             case .rolledBack:
                 brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.", "\(token)"))
                 emitWegaState(WegaState(pose: .alert, line: trf("Cofnęłam %@ — nowa wersja nie przeszła kontroli.", "\(token)")))

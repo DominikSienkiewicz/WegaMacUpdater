@@ -116,6 +116,11 @@ bump and move its entries under the new version heading when cutting a release.
   A failed `brew uninstall --zap` is no longer retried silently as `--force` without
   zap or counted as success: it stays selected and is reported as an incomplete
   uninstall.
+- **A publisher change legalized itself as the new trusted baseline (SEC-02).** The cask
+  guard now reads and records the installed app's Team ID before `brew` can mutate it.
+  `TeamIDLedger` never replaces a known-good value when classification returns `.changed`;
+  the new bundle is rolled back, the alert preserves both Team IDs, and a failed restore
+  leaves the snapshot in place instead of deleting the only recovery copy.
 - **Unattended upgrades could run without a rollback snapshot (BG-01).** Background
   candidates now require a resolved `.app` and a successfully created copy-on-write
   snapshot before `brew` may start. Policy and running-process vetoes are sampled again

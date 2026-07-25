@@ -15,6 +15,8 @@ public enum CaskValidationVerdict: Equatable, Sendable {
     case rollbackFailed
     /// The publisher's Team ID changed between versions — a possible takeover.
     case publisherChanged(old: String, new: String?)
+    /// The publisher changed and the previous version was restored from its snapshot.
+    case publisherChangedAndRolledBack(old: String, new: String?)
 }
 
 /// How one item ended the run, across **every** phase it had to clear: execution,
@@ -29,6 +31,8 @@ public enum ItemUpdateVerdict: Equatable, Sendable {
     /// Installed and verified, but the publisher's Team ID changed — the upgrade happened,
     /// and the user still has to be told.
     case publisherChanged(old: String, new: String?)
+    /// The publisher changed, so the guard restored the previous trusted version.
+    case publisherChangedAndRolledBack(old: String, new: String?)
     /// The upgrade ran, but the rescan that would confirm it could not complete.
     case notVerified
     /// The rescan still lists this item as outdated, whatever the tool reported.
@@ -39,6 +43,8 @@ public enum ItemUpdateVerdict: Equatable, Sendable {
     case executionFailed
     /// The unattended batch failed globally after this app had already been restored.
     case executionFailedAfterRollback
+    /// The unattended batch failed globally and a publisher mismatch also triggered rollback.
+    case executionFailedAfterPublisherRollback(old: String, new: String?)
     /// The unattended batch failed globally, but the app left on disk changed publisher.
     case executionFailedWithPublisherChange(old: String, new: String?)
     /// The new version failed its check and could not be restored.
@@ -48,8 +54,9 @@ public enum ItemUpdateVerdict: Equatable, Sendable {
     public var upgraded: Bool {
         switch self {
         case .succeeded, .publisherChanged: return true
-        case .notVerified, .stillOutdated, .rolledBack, .executionFailed,
-             .executionFailedAfterRollback, .executionFailedWithPublisherChange,
+        case .notVerified, .stillOutdated, .rolledBack, .publisherChangedAndRolledBack,
+             .executionFailed, .executionFailedAfterRollback, .executionFailedAfterPublisherRollback,
+             .executionFailedWithPublisherChange,
              .rollbackFailed: return false
         }
     }
@@ -58,7 +65,8 @@ public enum ItemUpdateVerdict: Equatable, Sendable {
     /// notification of their own, never a line in a collapsed log.
     public var isCritical: Bool {
         switch self {
-        case .rollbackFailed, .publisherChanged, .executionFailedWithPublisherChange: return true
+        case .rollbackFailed, .publisherChanged, .publisherChangedAndRolledBack,
+             .executionFailedAfterPublisherRollback, .executionFailedWithPublisherChange: return true
         case .succeeded, .notVerified, .stillOutdated, .rolledBack,
              .executionFailed, .executionFailedAfterRollback: return false
         }
@@ -69,12 +77,16 @@ public enum ItemUpdateVerdict: Equatable, Sendable {
         switch self {
         case .succeeded:        return "zaktualizowano"
         case .publisherChanged: return "zaktualizowano, ale zmienił się Team ID wydawcy"
+        case .publisherChangedAndRolledBack:
+            return "zmienił się Team ID wydawcy — przywrócono poprzednią zaufaną wersję"
         case .notVerified:      return "zaktualizowano, ale skan po aktualizacji nie potwierdził wyniku"
         case .stillOutdated:    return "nadal widnieje jako nieaktualne po skanie kontrolnym"
         case .rolledBack:       return "nowa wersja nie przeszła kontroli — przywrócono poprzednią"
         case .executionFailed:  return "menedżer pakietów zgłosił błąd"
         case .executionFailedAfterRollback:
             return "menedżer pakietów zgłosił błąd; przywrócono poprzednią wersję po kontroli"
+        case .executionFailedAfterPublisherRollback:
+            return "menedżer pakietów zgłosił błąd; zmiana wydawcy wymusiła przywrócenie poprzedniej wersji"
         case .executionFailedWithPublisherChange:
             return "menedżer pakietów zgłosił błąd, ale aplikacja na dysku zmieniła Team ID wydawcy"
         case .rollbackFailed:   return "nowa wersja nie przeszła kontroli, a rollback się nie powiódł"
@@ -90,9 +102,10 @@ public enum ItemUpdateVerdict: Equatable, Sendable {
         case .publisherChanged: return 1
         case .notVerified:      return 2
         case .stillOutdated:    return 3
-        case .rolledBack:       return 4
+        case .rolledBack, .publisherChangedAndRolledBack: return 4
         case .executionFailed:  return 5
-        case .executionFailedAfterRollback, .executionFailedWithPublisherChange: return 5
+        case .executionFailedAfterRollback, .executionFailedAfterPublisherRollback,
+             .executionFailedWithPublisherChange: return 5
         case .rollbackFailed:   return 6
         }
     }
@@ -123,12 +136,16 @@ public struct ItemUpdateOutcome: Equatable, Sendable {
         switch (verdict, validation) {
         case (.executionFailed, .rolledBack):
             verdict = .executionFailedAfterRollback
+        case (.executionFailed, .publisherChangedAndRolledBack(let old, let new)):
+            verdict = .executionFailedAfterPublisherRollback(old: old, new: new)
         case (.executionFailed, .publisherChanged(let old, let new)):
             verdict = .executionFailedWithPublisherChange(old: old, new: new)
         case (_, .healthy):
             break
         case (_, .rolledBack):
             escalate(to: .rolledBack)
+        case (_, .publisherChangedAndRolledBack(let old, let new)):
+            escalate(to: .publisherChangedAndRolledBack(old: old, new: new))
         case (_, .rollbackFailed):
             escalate(to: .rollbackFailed)
         case (_, .publisherChanged(let old, let new)):
@@ -141,6 +158,10 @@ public struct ItemUpdateOutcome: Equatable, Sendable {
         switch verdict {
         case .executionFailedAfterRollback:
             return [.executionFailed, .rolledBack]
+        case .publisherChangedAndRolledBack(let old, let new):
+            return [.rolledBack, .publisherChangedAndRolledBack(old: old, new: new)]
+        case .executionFailedAfterPublisherRollback(let old, let new):
+            return [.executionFailed, .rolledBack, .publisherChangedAndRolledBack(old: old, new: new)]
         case .executionFailedWithPublisherChange(let old, let new):
             return [.executionFailed, .publisherChanged(old: old, new: new)]
         default:
@@ -293,6 +314,11 @@ public struct UpdateRunSummary: Equatable, Sendable {
             switch item.verdict {
             case .publisherChanged:
                 return item
+            case .publisherChangedAndRolledBack:
+                return item
+            case .executionFailedAfterPublisherRollback(let old, let new):
+                return ItemUpdateOutcome(key: item.key, name: item.name, kind: item.kind,
+                                         verdict: .publisherChangedAndRolledBack(old: old, new: new))
             case .executionFailedWithPublisherChange(let old, let new):
                 return ItemUpdateOutcome(key: item.key, name: item.name, kind: item.kind,
                                          verdict: .publisherChanged(old: old, new: new))
