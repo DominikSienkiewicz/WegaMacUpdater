@@ -103,7 +103,7 @@ final class BackgroundUpdater {
         // the mutex is ours, every mutable veto is sampled again before any mutation.
         let lockedPolicies = UpdatePolicyStore.shared.policiesMap
         let lockedRunningProcessTokens = runningTokens(appPaths: appPaths)
-        let lockedTokens = BackgroundUpdatePlanner.eligibleTokens(.init(
+        let eligibleLockedTokens = BackgroundUpdatePlanner.eligibleTokens(.init(
             candidates: initiallyEligibleTokens,
             profiles: Dictionary(profiles.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first }),
             downloads: Dictionary(downloads.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first }),
@@ -111,10 +111,10 @@ final class BackgroundUpdater {
             runningProcessTokens: lockedRunningProcessTokens,
             policies: lockedPolicies
         ))
-        guard !lockedTokens.isEmpty else { return [] }
+        guard !eligibleLockedTokens.isEmpty else { return [] }
 
         let resourceDecision = await backgroundResourceDecision(
-            tokens: lockedTokens,
+            tokens: eligibleLockedTokens,
             downloadSizes: downloadSizes,
             appPaths: appPaths
         )
@@ -126,14 +126,14 @@ final class BackgroundUpdater {
         }
 
         let publisherVetoes = CaskRollbackGuard.publisherVetoes(
-            tokens: lockedTokens, appPaths: appPaths
+            tokens: eligibleLockedTokens, appPaths: appPaths
         )
-        let trustedTokens = lockedTokens.filter { publisherVetoes[$0] == nil }
-        let snapshots = CaskRollbackGuard.snapshot(tokens: trustedTokens, appPaths: appPaths)
-        let tokens = BackgroundUpdateSafety.snapshotBackedTokens(trustedTokens, snapshots: snapshots)
+        let lockedTokens = eligibleLockedTokens.filter { publisherVetoes[$0] == nil }
+        let snapshots = CaskRollbackGuard.snapshot(tokens: lockedTokens, appPaths: appPaths)
+        let tokens = BackgroundUpdateSafety.snapshotBackedTokens(lockedTokens, snapshots: snapshots)
         var run = UpdateRunOutcome()
-        run.recordPublisherVetoes(lockedTokens.map(Self.caskItem), audits: publisherVetoes)
-        for token in trustedTokens where snapshots[token] == nil {
+        run.recordPublisherVetoes(eligibleLockedTokens.map(Self.caskItem), audits: publisherVetoes)
+        for token in lockedTokens where snapshots[token] == nil {
             WegaLog.error(
                 .homebrew,
                 "\(token): aktualizacja w tle odroczona — nie udało się utworzyć wymaganego snapshotu."

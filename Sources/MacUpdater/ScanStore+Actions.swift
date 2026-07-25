@@ -355,9 +355,9 @@ extension ScanStore {
         let publisherVetoes = CaskRollbackGuard.publisherVetoes(
             tokens: caskNames, appPaths: appPaths
         )
-        let trustedCaskNames = caskNames.filter { publisherVetoes[$0] == nil }
-        let snapshots = snapshotCasks(trustedCaskNames, appPaths: appPaths)
-        let missing = trustedCaskNames.filter { appPaths[$0] != nil && snapshots[$0] == nil }
+        let caskNames = caskNames.filter { publisherVetoes[$0] == nil }
+        let snapshots = snapshotCasks(caskNames, appPaths: appPaths)
+        let missing = caskNames.filter { appPaths[$0] != nil && snapshots[$0] == nil }
         guard missing.isEmpty else {
             for snapshot in snapshots.values { try? FileManager.default.removeItem(at: snapshot) }
             let names = missing.joined(separator: ", ")
@@ -368,7 +368,7 @@ extension ScanStore {
             emitActivitySignal(.error)
             return nil
         }
-        return (appPaths, snapshots, trustedCaskNames, publisherVetoes)
+        return (appPaths, snapshots, caskNames, publisherVetoes)
     }
 
     private func foregroundResourceDecision(
