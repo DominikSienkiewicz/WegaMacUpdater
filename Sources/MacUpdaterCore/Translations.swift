@@ -592,6 +592,7 @@ public enum Translations {
         "Poczekaj na zakończenie": "Wait until it finishes",
         "Zakończ mimo to": "Quit anyway",
         "aktualizacja Homebrew": "Homebrew update",
+        "czyszczenie Homebrew": "Homebrew cleanup",
         "migracja %@": "migrating %@",
         "usuwanie duplikatu %@": "removing duplicate %@",
         "dezinstalacja %@ aplikacji": "uninstalling %@ app(s)",

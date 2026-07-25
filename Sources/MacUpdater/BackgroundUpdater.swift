@@ -64,84 +64,86 @@ final class BackgroundUpdater {
             downloads: downloadsByToken
         )
 
-        // F3 — the window always wins. If the user is upgrading by hand right now, this
-        // round is skipped entirely; the next scheduled check will pick it up.
-        guard UpgradeMutex.shared.acquire() else {
-            WegaLog.info(.homebrew, "Aktualizacja w tle pominięta — trwa aktualizacja z okna.")
-            return []
-        }
-        defer { UpgradeMutex.shared.release() }
-
-        // Policy and process state can change while this round waits for the window. Once
-        // the mutex is ours, every mutable veto is sampled again before any mutation.
-        let lockedPolicies = UpdatePolicyStore.shared.policiesMap
-        let lockedRunningProcessTokens = runningTokens(appPaths: appPaths)
-        let eligibleLockedTokens = BackgroundUpdatePlanner.eligibleTokens(.init(
-            candidates: initiallyEligibleTokens,
-            profiles: Dictionary(profiles.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first }),
-            downloads: Dictionary(downloads.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first }),
-            optedIn: BackgroundUpdateOptInStore.shared.tokens,
-            runningProcessTokens: lockedRunningProcessTokens,
-            policies: lockedPolicies
-        ))
-        guard !eligibleLockedTokens.isEmpty else { return [] }
-
-        let resourceDecision = await backgroundResourceDecision(
-            tokens: eligibleLockedTokens,
-            downloadSizes: downloadSizes,
-            appPaths: appPaths
-        )
-        guard case .allow = resourceDecision else {
-            if case .postpone(let reason) = resourceDecision {
-                WegaLog.info(.homebrew, "Aktualizacja w tle odroczona — \(reason).")
+        return await UpgradeCoordinator.shared.performWrite(.backgroundUpgrade) {
+            // F3 — the shared write queue admits only one Homebrew mutation at a time. Keep
+            // the legacy mutex check as a fail-closed guard for callers outside that boundary.
+            guard UpgradeMutex.shared.acquire() else {
+                WegaLog.info(.homebrew, "Aktualizacja w tle pominięta — trwa aktualizacja z okna.")
+                return []
             }
-            return []
-        }
+            defer { UpgradeMutex.shared.release() }
 
-        let publisherVetoes = CaskRollbackGuard.publisherVetoes(
-            tokens: eligibleLockedTokens, appPaths: appPaths
-        )
-        let lockedTokens = eligibleLockedTokens.filter { publisherVetoes[$0] == nil }
-        let snapshots = CaskRollbackGuard.snapshot(tokens: lockedTokens, appPaths: appPaths)
-        let tokens = BackgroundUpdateSafety.snapshotBackedTokens(lockedTokens, snapshots: snapshots)
-        var run = UpdateRunOutcome()
-        run.recordPublisherVetoes(eligibleLockedTokens.map(Self.caskItem), audits: publisherVetoes)
-        for token in lockedTokens where snapshots[token] == nil {
-            WegaLog.error(
-                .homebrew,
-                "\(token): aktualizacja w tle odroczona — nie udało się utworzyć wymaganego snapshotu."
+            // Policy and process state can change while this round waits for the window. Once
+            // the mutex is ours, every mutable veto is sampled again before any mutation.
+            let lockedPolicies = UpdatePolicyStore.shared.policiesMap
+            let lockedRunningProcessTokens = runningTokens(appPaths: appPaths)
+            let eligibleLockedTokens = BackgroundUpdatePlanner.eligibleTokens(.init(
+                candidates: initiallyEligibleTokens,
+                profiles: Dictionary(profiles.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first }),
+                downloads: Dictionary(downloads.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first }),
+                optedIn: BackgroundUpdateOptInStore.shared.tokens,
+                runningProcessTokens: lockedRunningProcessTokens,
+                policies: lockedPolicies
+            ))
+            guard !eligibleLockedTokens.isEmpty else { return [] }
+
+            let resourceDecision = await backgroundResourceDecision(
+                tokens: eligibleLockedTokens,
+                downloadSizes: downloadSizes,
+                appPaths: appPaths
             )
-        }
-        guard !tokens.isEmpty else {
-            if run.summary.isEmpty {
-                WegaLog.error(.homebrew, "Aktualizacja w tle pominięta — nie udało się utworzyć snapshotu.")
-            } else {
-                notify(summary: run.summary)
+            guard case .allow = resourceDecision else {
+                if case .postpone(let reason) = resourceDecision {
+                    WegaLog.info(.homebrew, "Aktualizacja w tle odroczona — \(reason).")
+                }
+                return []
             }
-            return []
+
+            let publisherVetoes = CaskRollbackGuard.publisherVetoes(
+                tokens: eligibleLockedTokens, appPaths: appPaths
+            )
+            let lockedTokens = eligibleLockedTokens.filter { publisherVetoes[$0] == nil }
+            let snapshots = CaskRollbackGuard.snapshot(tokens: lockedTokens, appPaths: appPaths)
+            let tokens = BackgroundUpdateSafety.snapshotBackedTokens(lockedTokens, snapshots: snapshots)
+            var run = UpdateRunOutcome()
+            run.recordPublisherVetoes(eligibleLockedTokens.map(Self.caskItem), audits: publisherVetoes)
+            for token in lockedTokens where snapshots[token] == nil {
+                WegaLog.error(
+                    .homebrew,
+                    "\(token): aktualizacja w tle odroczona — nie udało się utworzyć wymaganego snapshotu."
+                )
+            }
+            guard !tokens.isEmpty else {
+                if run.summary.isEmpty {
+                    WegaLog.error(.homebrew, "Aktualizacja w tle pominięta — nie udało się utworzyć snapshotu.")
+                } else {
+                    notify(summary: run.summary)
+                }
+                return []
+            }
+
+            WegaLog.info(.homebrew, "Aktualizacja w tle: \(tokens.joined(separator: ", "))")
+
+            let command = UpdatePlanner.commands(for: UpdatePlanner.plan(
+                selectedKeys: Set(tokens.map { "c:\($0)" }),
+                allKeys: tokens.map { "c:\($0)" }
+            ))
+            guard let arguments = command.first(where: { $0.executable == "brew" })?.arguments else { return [] }
+
+            // REL-02 — the same per-item result type the window builds, filled in by the same
+            // phases: execution, validation/rollback, then a rescan that has to agree.
+            run.recordBackgroundRound(tokens.map(Self.caskItem), outcome: await runBrew(arguments: arguments))
+            run.applyValidation(await CaskRollbackGuard.verify(tokens: tokens, appPaths: appPaths, snapshots: snapshots))
+            await confirmByRescan(&run)
+
+            let summary = run.summary
+            for outcome in summary.items where outcome.verdict != .succeeded {
+                WegaLog.error(.homebrew, "\(outcome.name): aktualizacja w tle — \(outcome.verdict.logDescription).")
+            }
+
+            notify(summary: summary)
+            return summary.upgraded.map(\.name)
         }
-
-        WegaLog.info(.homebrew, "Aktualizacja w tle: \(tokens.joined(separator: ", "))")
-
-        let command = UpdatePlanner.commands(for: UpdatePlanner.plan(
-            selectedKeys: Set(tokens.map { "c:\($0)" }),
-            allKeys: tokens.map { "c:\($0)" }
-        ))
-        guard let arguments = command.first(where: { $0.executable == "brew" })?.arguments else { return [] }
-
-        // REL-02 — the same per-item result type the window builds, filled in by the same
-        // phases: execution, validation/rollback, then a rescan that has to agree.
-        run.recordBackgroundRound(tokens.map(Self.caskItem), outcome: await runBrew(arguments: arguments))
-        run.applyValidation(await CaskRollbackGuard.verify(tokens: tokens, appPaths: appPaths, snapshots: snapshots))
-        await confirmByRescan(&run)
-
-        let summary = run.summary
-        for outcome in summary.items where outcome.verdict != .succeeded {
-            WegaLog.error(.homebrew, "\(outcome.name): aktualizacja w tle — \(outcome.verdict.logDescription).")
-        }
-
-        notify(summary: summary)
-        return summary.upgraded.map(\.name)
     }
 
     /// The last phase: ask brew again what is outdated. A cask brew claims to have upgraded

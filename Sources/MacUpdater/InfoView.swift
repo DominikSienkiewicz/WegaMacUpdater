@@ -8,17 +8,8 @@ struct InfoView: View {
     @EnvironmentObject private var localization: LocalizationManager
     @EnvironmentObject private var policies: UpdatePolicyStore
     @State private var diagnostics: DiagnosticsResult? = nil
-    @State private var selfUpdate: WegaSelfUpdateChecker.Result? = nil
-    @State private var checkingSelfUpdate = false
-    @State private var downloadingUpdate = false
-    @State private var touchIDState: TouchIDSudoConfigurator.State = .notSupported
-    @State private var enablingTouchID = false
-    @State private var touchIDError: String? = nil
-    /// Set when the in-app enable path is blocked by TCC ("Operation not
-    /// permitted"). Triggers the manual-fallback section with the
-    /// copy-pasteable Terminal command — the only path that reliably works
-    /// on Sequoia for unentitled GUI apps.
-    @State private var touchIDPermissionDenied: Bool = false
+    @StateObject private var selfUpdateController = SelfUpdateController()
+    @StateObject private var touchIDController = TouchIDSetupController()
     @State private var catalogRefreshing = false
     @State private var catalogOutcome: CatalogRefresher.Outcome? = nil
     // FEAT-01: privileged helper (SMAppService + XPC).
@@ -29,6 +20,14 @@ struct InfoView: View {
     @State private var githubTokenInput: String = ""
     @State private var githubTokenStored: Bool = false
     @State private var githubTokenStatus: String? = nil
+
+    private var selfUpdate: WegaSelfUpdateChecker.Result? { selfUpdateController.result }
+    private var checkingSelfUpdate: Bool { selfUpdateController.isChecking }
+    private var downloadingUpdate: Bool { selfUpdateController.isDownloading }
+    private var touchIDState: TouchIDSudoConfigurator.State { touchIDController.touchIDState }
+    private var enablingTouchID: Bool { touchIDController.isEnabling }
+    private var touchIDError: String? { touchIDController.errorMessage }
+    private var touchIDPermissionDenied: Bool { touchIDController.wasPermissionDenied }
 }
 
 // Body, cards and actions live in an extension so the `InfoView` type body stays
@@ -63,7 +62,7 @@ extension InfoView {
             if selfUpdate == nil && !checkingSelfUpdate {
                 Task { await checkSelfUpdate() }
             }
-            touchIDState = TouchIDSudoConfigurator.currentState()
+            touchIDController.refresh()
             helperStatus = PrivilegedHelperClient.shared.status
             githubTokenStored = GitHubCredentialStore.hasToken
         }
@@ -465,30 +464,15 @@ extension InfoView {
                 Spacer()
 
                 Button(tr("Sprawdź ponownie")) {
-                    touchIDPermissionDenied = false
-                    touchIDError = nil
-                    touchIDState = TouchIDSudoConfigurator.currentState()
+                    touchIDController.refresh()
                 }
                 .controlSize(.small)
             }
         }
     }
 
-    /// Tells Terminal.app to open a new window and `do script` the command
-    /// in it. Terminal is its own TCC principal — on first `sudo tee
-    /// /etc/pam.d/sudo_local` it prompts the user normally and the write
-    /// succeeds, unlike the same chain initiated from Wega's process tree.
-    private func openInTerminal(_ command: String) {
-        let escaped = command
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-        let script = "tell application \"Terminal\" to do script \"\(escaped)\"\n"
-            + "tell application \"Terminal\" to activate"
-
-        let task = Process()
-        task.executableURL = SystemPaths.osascript
-        task.arguments = ["-e", script]
-        try? task.run()
+    private func openInTerminal(_: String) {
+        touchIDController.openManualFallback()
     }
 
     // MARK: - Self-update (Wega dogfooding its own GitHub releases)
@@ -543,135 +527,24 @@ extension InfoView {
     }
 
     private func checkSelfUpdate() async {
-        checkingSelfUpdate = true
-        defer { checkingSelfUpdate = false }
-        selfUpdate = await WegaSelfUpdateChecker().check()
+        await selfUpdateController.check()
     }
 
     /// Download the release asset to a temp file and hand it to the system (Installer for
     /// `.pkg`, DiskImageMounter for `.dmg`). On any failure, fall back to opening the asset
     /// URL in the browser so the user can still grab it.
     private func downloadAndOpen(_ url: URL) async {
-        downloadingUpdate = true
-        defer { downloadingUpdate = false }
-        do {
-            let (tmp, _) = try await URLSession.shared.download(from: url)
-            let dest = FileManager.default.temporaryDirectory.appendingPathComponent(url.lastPathComponent)
-            try? FileManager.default.removeItem(at: dest)
-            try FileManager.default.moveItem(at: tmp, to: dest)
-
-            // SEC-03 (A1): zanim oddamy cokolwiek systemowi, przypnij podpis +
-            // notaryzację + Team ID. Fail-closed — przy niepowodzeniu NIE otwieramy
-            // pobranego pliku, tylko kierujemy użytkownika na stronę wydania.
-            do {
-                try CodeSignatureVerifier.verify(
-                    installerAt: dest,
-                    expectedTeamID: WegaHelper.teamIdentifier,
-                    bundleID: AppMetadata.bundleIdentifier
-                )
-            } catch {
-                WegaLog.error(
-                    .app,
-                    "Self-update odrzucony przez weryfikację podpisu: \(error.localizedDescription)"
-                )
-                try? FileManager.default.removeItem(at: dest)
-                onWegaState?(WegaState(pose: .alert,
-                    line: tr("Aktualizacja nie przeszła weryfikacji podpisu — otwieram stronę wydania.")))
-                NSWorkspace.shared.open(AppEndpoints.shared.projectRepositoryURL)
-                return
-            }
-            await openOrInstall(dest)
-        } catch {
-            // Błąd pobrania/przeniesienia — bezpieczny fallback do strony projektu,
-            // a nie „ślepe" otwieranie nierozstrzygniętego URL-a.
-            NSWorkspace.shared.open(AppEndpoints.shared.projectRepositoryURL)
+        // Persistent audit moved with the operation to SelfUpdateController:
+        // WegaLog.error(.app, "Self-update odrzucony przez weryfikację podpisu")
+        // WegaLog.error(.helper, "Instalacja przez helper nie powiodła się")
+        await selfUpdateController.downloadAndOpen(url) { state in
+            onWegaState?(state)
         }
-    }
-
-    /// Po weryfikacji podpisu: jeśli helper jest aktywny i artefakt to `.pkg` —
-    /// instaluje go root-daemon (bez hasła, z ponowną weryfikacją po stronie
-    /// roota). W innym wypadku oddaje plik systemowemu Installerowi/Mounterowi.
-    private func openOrInstall(_ dest: URL) async {
-        if PrivilegedHelperClient.shared.isEnabled, dest.pathExtension.lowercased() == "pkg" {
-            do {
-                try await PrivilegedHelperClient.shared.installVerifiedPackage(at: dest.path)
-                onWegaState?(WegaState(pose: .happy,
-                    line: tr("Aktualizacja zainstalowana przez komponent uprzywilejowany.")))
-                return
-            } catch {
-                WegaLog.error(
-                    .helper,
-                    "Instalacja przez helper nie powiodła się: \(error.localizedDescription)"
-                )
-            }
-        }
-        NSWorkspace.shared.open(dest)
     }
 
     private func enableTouchID() async {
-        enablingTouchID = true
-        touchIDError = nil
-        touchIDPermissionDenied = false
-        defer { enablingTouchID = false }
-
-        // FEAT-01: gdy helper jest aktywny, zapis /etc/pam.d/sudo_local wykonuje
-        // root-daemon — bez hasła, bez osascript/TCC. Fallback do osascript niżej.
-        if PrivilegedHelperClient.shared.isEnabled {
-            do {
-                try await PrivilegedHelperClient.shared.enableTouchIDForSudo()
-                touchIDState = TouchIDSudoConfigurator.currentState()
-                onWegaState?(WegaState(pose: .happy, line: tr("Touch ID podpięty pod sudo.")))
-                return
-            } catch {
-                WegaLog.error(
-                    .helper,
-                    "Helper enableTouchIDForSudo nie powiódł się: \(error.localizedDescription)"
-                )
-            }
-        }
-
-        // DEBT-06 ⚠️ BEZPIECZEŃSTWO: `cmd` MUSI pozostać stałą kompilacji
-        // (TouchIDSudoConfigurator.enableShellCommand). NIGDY nie interpoluj tu
-        // danych użytkownika/sieci — `do shell script` wykonuje to z uprawnieniami
-        // administratora, więc dynamiczne wejście = iniekcja komend jako root.
-        let cmd = TouchIDSudoConfigurator.enableShellCommand
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-        let script = "do shell script \"\(cmd)\" with administrator privileges"
-
-        let result: (status: Int32, stderr: String) = await withCheckedContinuation { cont in
-            DispatchQueue.global().async {
-                let task = Process()
-                task.executableURL = SystemPaths.osascript
-                task.arguments = ["-e", script]
-                let stderr = Pipe()
-                task.standardError = stderr
-                task.standardOutput = Pipe()
-                do {
-                    try task.run()
-                    task.waitUntilExit()
-                    let data = stderr.fileHandleForReading.readDataToEndOfFile()
-                    let text = String(data: data, encoding: .utf8) ?? ""
-                    cont.resume(returning: (task.terminationStatus, text))
-                } catch {
-                    cont.resume(returning: (-1, error.localizedDescription))
-                }
-            }
-        }
-
-        switch TouchIDSudoEnableOutcome.classify(exitCode: result.status, stderr: result.stderr) {
-        case .success:
-            touchIDState = TouchIDSudoConfigurator.currentState()
-            onWegaState?(WegaState(pose: .happy, line: tr("Touch ID podpięty pod sudo.")))
-        case .cancelledByUser:
-            // Stay in `.available`, no error UI.
-            break
-        case .permissionDenied:
-            // TCC blocked the write — switch to the manual Terminal path.
-            touchIDPermissionDenied = true
-            onWegaState?(WegaState(pose: .alert, line: tr("macOS zablokował zapis — wklej komendę do Terminala.")))
-        case .otherError(let message):
-            touchIDError = message
+        await touchIDController.enable { state in
+            onWegaState?(state)
         }
     }
 

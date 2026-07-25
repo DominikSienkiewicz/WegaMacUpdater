@@ -9,8 +9,7 @@ struct UninstallView: View {
     @State private var apps:          [ApplicationInfo] = []
     @State private var selected:       Set<String>       = []
     @State private var search:         String            = ""
-    @State private var isLoading:      Bool              = false
-    @State private var isUninstalling: Bool              = false
+    @StateObject private var operations = UninstallCoordinator()
     @State private var showDialog:     Bool              = false
     /// UX-01: the exact visible installations named by the confirmation. Execution
     /// consumes this frozen collection instead of resolving selection through a filter
@@ -19,6 +18,9 @@ struct UninstallView: View {
     @State private var errorMessage:   String?
     @State private var banner:         BannerData?
     @FocusState private var searchFocused: Bool
+
+    private var isLoading: Bool { operations.isScanning }
+    private var isUninstalling: Bool { operations.isUninstalling }
 
     private var filtered: [ApplicationInfo] {
         guard !search.isEmpty else { return apps }
@@ -251,16 +253,8 @@ struct UninstallView: View {
     }
 
     private func scan() async {
-        isLoading = true; errorMessage = nil
-        defer { isLoading = false }
-        let installedCasks = (try? await model.brewService.installedCasks()) ?? []
-        let scanner = ApplicationScanner()
-        var found: [ApplicationInfo] = []
-        for dir in buildScanDirs() {
-            found += (try? scanner.scanApplications(in: dir, installedCasks: installedCasks)) ?? []
-        }
-        apps = InstallationInventory.deduplicated(found)
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        errorMessage = nil
+        apps = await operations.scan(using: model.brewService)
     }
 
     private func uninstall(targets: [ApplicationInfo], zap: Bool) async {
@@ -272,29 +266,21 @@ struct UninstallView: View {
         let ticket = MutationGuard.shared.begin(trf("dezinstalacja %@ aplikacji", "\(targets.count)"))
         defer { MutationGuard.shared.end(ticket) }
 
-        isUninstalling = true; errorMessage = nil; banner = nil
-        defer { isUninstalling = false }
+        errorMessage = nil; banner = nil
         onWegaState?(WegaState(pose: .sniff, line: tr("Aport! Zabieram to z dysku…")))
 
-        var succeeded: [String] = []
+        let outcome = await operations.uninstall(
+            targets: targets,
+            zap: zap,
+            using: model.brewService
+        )
+        let succeeded = outcome.succeeded
         var failed: [(name: String, requestedZap: Bool)] = []
-
-        for app in targets {
-            if app.isManagedByBrew, let token = app.caskToken {
-                do {
-                    _ = try await model.brewService.uninstallCask(token: token, zap: zap)
-                    succeeded.append(app.id)
-                } catch {
-                    // UX-04: `--zap` is the meaning the user explicitly chose. Silently
-                    // replacing it with `--force` leaves the selected data behind and must
-                    // never be counted as success. Report the original attempt as failed.
-                    failed.append((app.name, zap))
-                }
+        for app in targets where outcome.failedIDs.contains(app.id) {
+            if app.isManagedByBrew {
+                failed.append((app.name, zap))
             } else {
-                do {
-                    try FileManager.default.trashItem(at: app.path, resultingItemURL: nil)
-                    succeeded.append(app.id)
-                } catch { failed.append((app.name, false)) }
+                failed.append((app.name, false))
             }
         }
 

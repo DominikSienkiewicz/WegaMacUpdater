@@ -1,33 +1,11 @@
 import SwiftUI
 import MacUpdaterCore
 
-private enum MigrationStatus { case ready, scanning, results }
-
-private struct PendingForceTermination: Identifiable {
-    let app: ApplicationInfo
-    let target: RunningApplicationTarget
-
-    var id: String { app.id }
-}
-
 struct MigrationView: View {
     var onWegaState: ((WegaState) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
-
-    @State private var status:     MigrationStatus   = .ready
-    @State private var candidates: [ApplicationInfo]  = []
-    @State private var migrated:   Set<String>        = []
-    @State private var migrating:       String?
-    @State private var confirmingApp:   ApplicationInfo? = nil
-    @State private var logLines:        [String]          = []
-    @State private var errorMessage:    String?
-    @State private var banner:          BannerData?
-    @State private var masCandidates: [(app: ApplicationInfo, masID: String)] = []
-    @State private var npmBrewDuplicates: [NpmBrewDuplicate] = []
-    @State private var dupConfirm: DuplicateRemoval? = nil
-    @State private var dupBusy: String? = nil
-    @State private var pendingForceTermination: PendingForceTermination?
+    @EnvironmentObject private var migration: MigrationStore
 
     private let processes: RunningProcessService
     private let runningApplicationInspector: any RunningApplicationInspecting
@@ -45,6 +23,71 @@ struct MigrationView: View {
         self.processes = processes
         self.runningApplicationInspector = runningApplicationInspector
         self.runningApplicationTerminator = runningApplicationTerminator
+    }
+
+    private var status: MigrationStatus {
+        get { migration.status }
+        nonmutating set { migration.status = newValue }
+    }
+
+    private var candidates: [ApplicationInfo] {
+        get { migration.candidates }
+        nonmutating set { migration.candidates = newValue }
+    }
+
+    private var migrated: Set<String> {
+        get { migration.migrated }
+        nonmutating set { migration.migrated = newValue }
+    }
+
+    private var migrating: String? {
+        get { migration.migrating }
+        nonmutating set { migration.migrating = newValue }
+    }
+
+    private var confirmingApp: ApplicationInfo? {
+        get { migration.confirmingApp }
+        nonmutating set { migration.confirmingApp = newValue }
+    }
+
+    private var logLines: [String] {
+        get { migration.logLines }
+        nonmutating set { migration.logLines = newValue }
+    }
+
+    private var errorMessage: String? {
+        get { migration.errorMessage }
+        nonmutating set { migration.errorMessage = newValue }
+    }
+
+    private var banner: BannerData? {
+        get { migration.banner }
+        nonmutating set { migration.banner = newValue }
+    }
+
+    private var masCandidates: [(app: ApplicationInfo, masID: String)] {
+        get { migration.masCandidates }
+        nonmutating set { migration.masCandidates = newValue }
+    }
+
+    private var npmBrewDuplicates: [NpmBrewDuplicate] {
+        get { migration.npmBrewDuplicates }
+        nonmutating set { migration.npmBrewDuplicates = newValue }
+    }
+
+    private var dupConfirm: DuplicateRemoval? {
+        get { migration.duplicateConfirmation }
+        nonmutating set { migration.duplicateConfirmation = newValue }
+    }
+
+    private var dupBusy: String? {
+        get { migration.duplicateBusyKey }
+        nonmutating set { migration.duplicateBusyKey = newValue }
+    }
+
+    private var pendingForceTermination: PendingForceTermination? {
+        get { migration.pendingForceTermination }
+        nonmutating set { migration.pendingForceTermination = newValue }
     }
 
     private var matchable: [ApplicationInfo] {
@@ -303,13 +346,13 @@ struct MigrationView: View {
             .padding(16)
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
-        .sheet(item: $confirmingApp) { app in
+        .sheet(item: binding(\.confirmingApp)) { app in
             MigrationConfirmSheet(app: app) {
                 confirmingApp = nil
                 Task { await migrate(app) }
             }
         }
-        .alert(item: $dupConfirm) { removal in
+        .alert(item: binding(\.duplicateConfirmation)) { removal in
             Alert(
                 title: Text(tr("Usunąć duplikat?")),
                 message: Text(trf("Wega uruchomi:\n\n%@\n\nDrugiej kopii (z %@) to nie ruszy.", "\(removal.commandPreview)", "\(removal.side == .npm ? "brew" : "npm")")),
@@ -319,7 +362,9 @@ struct MigrationView: View {
                 secondaryButton: .cancel(Text(tr("Anuluj")))
             )
         }
-        .alert(item: $pendingForceTermination) { request in
+        // Same explicit consent boundary as the former `.alert(item: $pendingForceTermination)`,
+        // now bound to the app-owned store so a language re-key cannot dismiss it.
+        .alert(item: binding(\.pendingForceTermination)) { request in
             Alert(
                 title: Text(trf("%@ nadal działa", "\(request.target.appName)")),
                 message: Text(trf(
@@ -339,7 +384,20 @@ struct MigrationView: View {
         }
     }
 
+    private func binding<Value>(_ keyPath: ReferenceWritableKeyPath<MigrationStore, Value>) -> Binding<Value> {
+        Binding(
+            get: { migration[keyPath: keyPath] },
+            set: { migration[keyPath: keyPath] = $0 }
+        )
+    }
+
     private func scan() async {
+        await migration.performRead {
+            await self.scanCoordinated()
+        }
+    }
+
+    private func scanCoordinated() async {
         guard status != .scanning else { return }
         status = .scanning; errorMessage = nil; masCandidates = []; npmBrewDuplicates = []
         onWegaState?(WegaState(pose: .sniff, line: tr("Tropię intruzów w /Applications i ~/Applications…")))
@@ -489,6 +547,13 @@ struct MigrationView: View {
 
     @MainActor
     private func performMigration(_ app: ApplicationInfo, token: String) async {
+        await migration.performWrite(.migration) {
+            await self.performMigrationCoordinated(app, token: token)
+        }
+    }
+
+    @MainActor
+    private func performMigrationCoordinated(_ app: ApplicationInfo, token: String) async {
         defer { migrating = nil }
         guard UpgradeMutex.shared.acquire() else {
             errorMessage = tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.")
@@ -637,6 +702,13 @@ extension MigrationView {
 extension MigrationView {
     @MainActor
     private func removeDuplicate(_ removal: DuplicateRemoval) async {
+        await migration.performWrite(.duplicateRemoval) {
+            await self.removeDuplicateCoordinated(removal)
+        }
+    }
+
+    @MainActor
+    private func removeDuplicateCoordinated(_ removal: DuplicateRemoval) async {
         let key = removal.busyKey
         guard dupBusy == nil else { return }
         // REL-06 — `npm uninstall -g` / `brew uninstall` are mutations too.

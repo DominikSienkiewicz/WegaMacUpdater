@@ -213,7 +213,11 @@ extension ScanStore {
     private func refreshBrewMetadata() async -> ScanSourceReport {
         guard let model else { return ScanSourceReport(outcome: .notInstalled) }
         do {
-            let result = try await model.brewService.update()
+            let result = try await UpgradeCoordinator.shared.performWrite(.brewMetadata) {
+                let ticket = MutationGuard.shared.begin(tr("aktualizacja Homebrew"))
+                defer { MutationGuard.shared.end(ticket) }
+                return try await model.brewService.update()
+            }
             guard result.exitCode != 0 else { return ScanSourceReport(outcome: .succeeded) }
             let stderr = result.stderr.components(separatedBy: "\n").first { !$0.isEmpty }
             let reason = stderr ?? "kod wyjścia \(result.exitCode)"
@@ -294,6 +298,12 @@ extension ScanStore {
     }
 
     func installManual(token: String) async {
+        await UpgradeCoordinator.shared.performWrite(.manualInstall) {
+            await self.installManualCoordinated(token: token)
+        }
+    }
+
+    private func installManualCoordinated(token: String) async {
         guard let model, manualBusy == nil else { return }
         guard UpgradeMutex.shared.acquire() else {
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja w toku"),
@@ -498,6 +508,12 @@ extension ScanStore {
     }
 
     func runUpdate(targetKeys: Set<String>) async {
+        await UpgradeCoordinator.shared.performWrite(.foregroundUpgrade) {
+            await self.runUpdateCoordinated(targetKeys: targetKeys)
+        }
+    }
+
+    private func runUpdateCoordinated(targetKeys: Set<String>) async {
         guard let model, !targetKeys.isEmpty else { return }
         // F3 — never overlap with a background upgrade: both take snapshots and both call
         // `brew upgrade --cask`. The window is the one the user is waiting on.
@@ -904,7 +920,15 @@ extension ScanStore {
 
     /// M3(b) — the cleanup the scan used to perform silently, now behind the user's consent.
     func cleanUpStaleCasks() async {
+        await UpgradeCoordinator.shared.performWrite(.cleanup) {
+            await self.cleanUpStaleCasksCoordinated()
+        }
+    }
+
+    private func cleanUpStaleCasksCoordinated() async {
         guard let model, !cleaningStaleCasks, !staleCasks.isEmpty else { return }
+        let ticket = MutationGuard.shared.begin(tr("czyszczenie Homebrew"))
+        defer { MutationGuard.shared.end(ticket) }
         cleaningStaleCasks = true
         defer { cleaningStaleCasks = false }
 
