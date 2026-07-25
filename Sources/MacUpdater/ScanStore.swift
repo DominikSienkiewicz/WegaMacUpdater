@@ -415,20 +415,7 @@ extension ScanStore {
                 brewOutdated = updated
             }
 
-            let home = FileManager.default.homeDirectoryForCurrentUser
-            var paths: [String: URL] = [:]
-            for info in infos where !drifted.contains(info.token) {
-                for artifact in info.appArtifacts {
-                    let system = SystemPaths.applicationsDirectory.appendingPathComponent(artifact)
-                    let user   = home.appendingPathComponent("Applications/\(artifact)")
-                    if FileManager.default.fileExists(atPath: system.path) {
-                        paths[info.token] = system; break
-                    } else if FileManager.default.fileExists(atPath: user.path) {
-                        paths[info.token] = user; break
-                    }
-                }
-            }
-            caskIconPaths = paths
+            caskIconPaths = CaskAppPathResolver().appPaths(from: infos, excluding: drifted)
         }
 
         // FEAT-03: transparentność pobrania (host + checksum) dla outdated casków.
@@ -641,6 +628,10 @@ extension ScanStore {
 
         // Brew upgrade — casks (FEAT-05 snapshot przed, canary/rollback + FEAT-04 ledger po)
         if let caskArgs, !caskNames.isEmpty {
+            // REL-03 — resolved here, now, not left to whatever a full scan happened to put
+            // in the map: after `restoreLastScan()` it is empty, and an empty map means no
+            // snapshot to roll back to and no bundle for the canary to inspect.
+            await refreshCaskAppPaths(caskNames)
             let snapshots = snapshotCasks(caskNames)
             var caskOutcome = await runBrewUpgrade(arguments: caskArgs)
 
@@ -819,8 +810,26 @@ extension ScanStore {
 
     // MARK: FEAT-05 (rollback) + FEAT-04 (watchdog Team ID)
 
+    /// REL-03 — re-resolve where the casks in this run keep their `.app` bundles, right
+    /// before the snapshot is taken.
+    ///
+    /// `caskIconPaths` is only ever filled by a full `runCheck`, so in the most ordinary
+    /// session there is — launch, look at the restored list, press "Zaktualizuj wszystkie" —
+    /// it was empty, `CaskRollbackGuard` cloned nothing and `verify` skipped every token.
+    /// Merged rather than replaced: a `brew info` that cannot answer now must not take the
+    /// entries the last scan did resolve down with it.
+    private func refreshCaskAppPaths(_ tokens: [String]) async {
+        guard let model, !tokens.isEmpty else { return }
+        let infos = (try? await model.brewService.caskInstallationInfo(tokens: tokens)) ?? []
+        caskIconPaths.merge(CaskAppPathResolver().appPaths(from: infos)) { _, fresh in fresh }
+    }
+
     /// FEAT-05 + FEAT-04, now shared with the background updater so the two can never
     /// diverge on what "safe upgrade" means. See `CaskRollbackGuard`.
+    ///
+    /// Reads `caskIconPaths`, which `refreshCaskAppPaths` has just brought up to date —
+    /// `verify` below reads the same map, so the two phases cannot disagree about which
+    /// bundle a token means.
     private func snapshotCasks(_ tokens: [String]) -> [String: URL] {
         CaskRollbackGuard.snapshot(tokens: tokens, appPaths: caskIconPaths)
     }

@@ -88,6 +88,15 @@ bump and move its entries under the new version heading when cutting a release.
   `MigrationLeftoverCleanupDisabledTests`.
 
 ### Fixed
+- **An update started from a restored scan ran without the safety net (REL-03).** The
+  snapshot → canary → auto-rollback chain read the token → `.app` map that only a full
+  scan ever filled, so in the most ordinary session there is — launch Wega, look at the
+  list it restored from disk, press *Zaktualizuj wszystkie* — the map was empty: nothing
+  was cloned and the canary skipped every cask. The bundles are now resolved **at upgrade
+  time**, immediately before the snapshot, through one shared `CaskAppPathResolver` that
+  the window and the unattended path both use instead of each keeping its own copy of the
+  loop. The chain covers every upgrade now, not only one that follows a full scan in the
+  same session.
 - Sparkle-based apps are no longer reported as outdated when the installed
   build is newer than the feed, or when only the version format differs
   (`7.0.0 (77593)` vs `7.0.0`). The checker now compares versions with the
