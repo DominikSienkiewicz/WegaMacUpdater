@@ -1,6 +1,13 @@
 import Foundation
 import MacUpdaterCore
 
+private struct ForegroundCaskPreparation {
+    let appPaths: [String: URL]
+    let snapshots: [String: URL]
+    let trustedCaskNames: [String]
+    let publisherVetoes: [String: TeamIDAudit]
+}
+
 // MARK: - Scan & update actions
 //
 // The half of `ScanStore` that *produces* a result — the scan, the upgrade, and the
@@ -423,12 +430,7 @@ extension ScanStore {
     private func prepareForegroundCasks(
         _ caskNames: [String],
         targetKeys: Set<String>
-    ) async -> (
-        appPaths: [String: URL],
-        snapshots: [String: URL],
-        trustedCaskNames: [String],
-        publisherVetoes: [String: TeamIDAudit]
-    )? {
+    ) async -> ForegroundCaskPreparation? {
         await probeDownloadSizes(targetKeys: targetKeys)
         let appPaths = await resolveCaskAppPaths(caskNames)
         let resourceDecision = await foregroundResourceDecision(caskNames, appPaths: appPaths)
@@ -459,7 +461,12 @@ extension ScanStore {
             emitActivitySignal(.error)
             return nil
         }
-        return (appPaths, snapshots, caskNames, publisherVetoes)
+        return ForegroundCaskPreparation(
+            appPaths: appPaths,
+            snapshots: snapshots,
+            trustedCaskNames: caskNames,
+            publisherVetoes: publisherVetoes
+        )
     }
 
     private func foregroundResourceDecision(
@@ -505,20 +512,15 @@ extension ScanStore {
         let formulaArgs   = commands.first { $0.executable == "brew" && !$0.arguments.contains("--cask") }?.arguments
         let caskArgs      = commands.first { $0.executable == "brew" && $0.arguments.contains("--cask") }?.arguments
         let npmCommands   = commands.filter { $0.executable == "npm" }
-        let caskNames     = plan.caskNames
+        let plannedCaskNames = plan.caskNames
         let npmNames      = plan.npmNames
         let masAppStoreIDs = plan.masAppStoreIDs
 
-        let caskPreparation: (
-            appPaths: [String: URL],
-            snapshots: [String: URL],
-            trustedCaskNames: [String],
-            publisherVetoes: [String: TeamIDAudit]
-        )?
-        if caskNames.isEmpty {
+        let caskPreparation: ForegroundCaskPreparation?
+        if plannedCaskNames.isEmpty {
             caskPreparation = nil
         } else {
-            guard let prepared = await prepareForegroundCasks(caskNames, targetKeys: targetKeys) else {
+            guard let prepared = await prepareForegroundCasks(plannedCaskNames, targetKeys: targetKeys) else {
                 updating = false
                 return
             }
@@ -527,7 +529,7 @@ extension ScanStore {
 
         // Pre-capture which casks being updated are currently running
         var candidates: [RestartInfo] = []
-        for token in caskNames {
+        for token in plannedCaskNames {
             if let info = MacUpdaterConstants.restartMap[token], await isProcessRunning(info.processName) {
                 candidates.append(info)
             }
@@ -555,9 +557,9 @@ extension ScanStore {
                 plannedItems.filter { $0.kind == .cask },
                 audits: caskPreparation.publisherVetoes
             )
-            let trustedCaskNames = caskPreparation.trustedCaskNames
-            if !trustedCaskNames.isEmpty {
-                let trustedCaskArgs = UpdatePlanner.caskUpgradeCommand(tokens: trustedCaskNames).arguments
+            let caskNames = caskPreparation.trustedCaskNames
+            if !caskNames.isEmpty {
+                let trustedCaskArgs = UpdatePlanner.caskUpgradeCommand(tokens: caskNames).arguments
                 var caskOutcome = await runBrewUpgrade(arguments: trustedCaskArgs)
 
                 // Auto-recover an interrupted upgrade: if a cask bailed because a stale
@@ -573,17 +575,13 @@ extension ScanStore {
                 }
 
                 let trustedItems = plannedItems.filter {
-                    $0.kind == .cask && trustedCaskNames.contains($0.name)
+                    $0.kind == .cask && caskNames.contains($0.name)
                 }
                 run.record(trustedItems, outcome: caskOutcome)
                 // The canary/rollback verdict is a phase of the same result, not an aside: it
                 // used to be raised after the summary had already been computed, so a cask the
                 // guard had just rolled back still counted towards "Zaktualizowano N pakietów".
-                run.applyValidation(await postCaskUpgrade(
-                    trustedCaskNames,
-                    appPaths: appPaths,
-                    snapshots: snapshots
-                ))
+                run.applyValidation(await postCaskUpgrade(caskNames, appPaths: appPaths, snapshots: snapshots))
             }
         }
 
