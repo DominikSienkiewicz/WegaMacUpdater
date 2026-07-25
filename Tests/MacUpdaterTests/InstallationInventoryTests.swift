@@ -61,6 +61,35 @@ final class InstallationInventoryTests: XCTestCase {
         XCTAssertEqual(InstallationInventory.deduplicated([a, b]).count, 2)
     }
 
+    // MARK: bundle id as a grouping key only
+
+    func testBundleIdentifierGroupsInstallationsInsteadOfHidingThem() {
+        let system = app("/Applications/Firefox.app")
+        let user   = app("/Users/x/Applications/Firefox.app")
+        let other  = app("/Applications/Slack.app", name: "Slack", bundleId: "com.tinyspeck.slackmacgap")
+
+        let groups = InstallationInventory.groupedByBundleIdentifier([system, user, other])
+
+        XCTAssertEqual(groups["org.mozilla.firefox"]?.map(\.id), [system.id, user.id])
+        XCTAssertEqual(groups["com.tinyspeck.slackmacgap"]?.map(\.id), [other.id])
+    }
+
+    func testAmbiguousBundleIdentifiersAreTheOnesInstalledMoreThanOnce() {
+        let system = app("/Applications/Firefox.app")
+        let user   = app("/Users/x/Applications/Firefox.app")
+        let other  = app("/Applications/Slack.app", name: "Slack", bundleId: "com.tinyspeck.slackmacgap")
+        let noId   = app("/Applications/Odd.app", name: "Odd", bundleId: nil)
+
+        let ambiguous = InstallationInventory.ambiguousBundleIdentifiers([system, user, other, noId])
+
+        XCTAssertEqual(ambiguous, ["org.mozilla.firefox"])
+    }
+
+    func testLocationLabelNamesTheFolderTheCopyLivesIn() {
+        XCTAssertEqual(app("/Applications/Firefox.app").locationLabel, "/Applications")
+        XCTAssertEqual(app("/Applications/JetBrains/Fleet.app").locationLabel, "/Applications/JetBrains")
+    }
+
     // MARK: destructive operations hit the copy the user picked
 
     func testSelectionReachesOnlyThePickedCopy() {

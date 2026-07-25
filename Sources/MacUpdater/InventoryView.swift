@@ -23,6 +23,12 @@ struct InventoryView: View {
     @State private var sortAsc:      Bool              = true
     @FocusState private var searchFocused: Bool
 
+    /// REL-16: bundle identifiers with more than one installation. The rows that
+    /// carry them show where they live, so the user can tell the copies apart.
+    private var ambiguousBundleIds: Set<String> {
+        InstallationInventory.ambiguousBundleIdentifiers(apps)
+    }
+
     private var brewCount:   Int { apps.filter(\.isManagedByBrew).count }
     private var masCount:    Int { apps.filter(\.isManagedByMas).count }
     private var manualCount: Int { apps.count - brewCount - masCount }
@@ -138,7 +144,11 @@ struct InventoryView: View {
                         LazyVStack(spacing: 0) {
                             ForEach(filtered.indices, id: \.self) { i in
                                 let app = filtered[i]
-                                InventoryRow(app: app, isAlt: i % 2 == 1)
+                                InventoryRow(
+                                    app: app,
+                                    isAlt: i % 2 == 1,
+                                    showsLocation: app.bundleIdentifier.map(ambiguousBundleIds.contains) ?? false
+                                )
                                 Divider().opacity(0.3)
                             }
                         }
@@ -386,6 +396,9 @@ private struct SortHeaderCell: View {
 private struct InventoryRow: View {
     let app:   ApplicationInfo
     let isAlt: Bool
+    /// REL-16: only shown for an app installed in more than one place — an
+    /// unambiguous row doesn't need its folder spelled out.
+    var showsLocation: Bool = false
 
     @State private var hovered = false
 
@@ -404,9 +417,18 @@ private struct InventoryRow: View {
             // Name
             HStack(spacing: 9) {
                 AppIcon(path: app.path, size: 22)
-                Text(app.name)
-                    .font(.system(size: 12, weight: .medium))
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(app.name)
+                        .font(.system(size: 12, weight: .medium))
+                        .lineLimit(1)
+                    if showsLocation {
+                        Text(app.locationLabel)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 

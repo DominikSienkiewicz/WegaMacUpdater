@@ -21,6 +21,17 @@ struct UninstallView: View {
         return apps.filter { $0.name.localizedCaseInsensitiveContains(search) }
     }
 
+    /// REL-16: uninstalling is destructive, so a copy the user cannot tell apart
+    /// from another must not be offered as a bare name — these rows show where
+    /// the copy lives.
+    private var ambiguousBundleIds: Set<String> {
+        InstallationInventory.ambiguousBundleIdentifiers(apps)
+    }
+
+    private func showsLocation(_ app: ApplicationInfo) -> Bool {
+        app.bundleIdentifier.map(ambiguousBundleIds.contains) ?? false
+    }
+
     private var targets: [ApplicationInfo] {
         InstallationInventory.selected(filtered, identities: selected)
     }
@@ -143,6 +154,13 @@ struct UninstallView: View {
                                     AppIcon(path: app.path, size: 26)
                                     VStack(alignment: .leading, spacing: 1) {
                                         Text(app.name).font(.system(size: 13, weight: .medium))
+                                        if showsLocation(app) {
+                                            Text(app.locationLabel)
+                                                .font(.system(size: 11, design: .monospaced))
+                                                .foregroundStyle(Color.wegaDanger.opacity(0.85))
+                                                .lineLimit(1)
+                                                .truncationMode(.middle)
+                                        }
                                         if let token = app.caskToken {
                                             Text(token)
                                                 .font(.system(size: 11, design: .monospaced))

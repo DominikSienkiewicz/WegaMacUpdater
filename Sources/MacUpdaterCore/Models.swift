@@ -21,7 +21,9 @@ public struct BrewCask: Codable, Equatable, Sendable {
 }
 
 public struct ApplicationInfo: Identifiable, Equatable, Sendable {
-    public var id: String { path.path }
+    /// REL-16: one installed copy, identified by its standardized path — not by
+    /// its bundle identifier, which two copies of the same app share.
+    public var id: String { installation.rawValue }
 
     public var path: URL
     public var name: String
