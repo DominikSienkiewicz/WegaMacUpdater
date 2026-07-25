@@ -332,7 +332,12 @@ extension ScanStore {
     private func prepareForegroundCasks(
         _ caskNames: [String],
         targetKeys: Set<String>
-    ) async -> (appPaths: [String: URL], snapshots: [String: URL])? {
+    ) async -> (
+        appPaths: [String: URL],
+        snapshots: [String: URL],
+        trustedCaskNames: [String],
+        publisherVetoes: [String: TeamIDAudit]
+    )? {
         await probeDownloadSizes(targetKeys: targetKeys)
         let appPaths = await resolveCaskAppPaths(caskNames)
         let resourceDecision = await foregroundResourceDecision(caskNames, appPaths: appPaths)
@@ -347,8 +352,12 @@ extension ScanStore {
             return nil
         }
 
-        let snapshots = snapshotCasks(caskNames, appPaths: appPaths)
-        let missing = caskNames.filter { appPaths[$0] != nil && snapshots[$0] == nil }
+        let publisherVetoes = CaskRollbackGuard.publisherVetoes(
+            tokens: caskNames, appPaths: appPaths
+        )
+        let trustedCaskNames = caskNames.filter { publisherVetoes[$0] == nil }
+        let snapshots = snapshotCasks(trustedCaskNames, appPaths: appPaths)
+        let missing = trustedCaskNames.filter { appPaths[$0] != nil && snapshots[$0] == nil }
         guard missing.isEmpty else {
             for snapshot in snapshots.values { try? FileManager.default.removeItem(at: snapshot) }
             let names = missing.joined(separator: ", ")
@@ -359,7 +368,7 @@ extension ScanStore {
             emitActivitySignal(.error)
             return nil
         }
-        return (appPaths, snapshots)
+        return (appPaths, snapshots, trustedCaskNames, publisherVetoes)
     }
 
     private func foregroundResourceDecision(
@@ -409,7 +418,12 @@ extension ScanStore {
         let npmNames      = plan.npmNames
         let masAppStoreIDs = plan.masAppStoreIDs
 
-        let caskPreparation: (appPaths: [String: URL], snapshots: [String: URL])?
+        let caskPreparation: (
+            appPaths: [String: URL],
+            snapshots: [String: URL],
+            trustedCaskNames: [String],
+            publisherVetoes: [String: TeamIDAudit]
+        )?
         if caskNames.isEmpty {
             caskPreparation = nil
         } else {
@@ -439,32 +453,47 @@ extension ScanStore {
         }
 
         // Brew upgrade — casks (FEAT-05 snapshot przed, canary/rollback + FEAT-04 ledger po)
-        if let caskArgs, let caskPreparation {
+        if caskArgs != nil, let caskPreparation {
             // REL-03 — resolved here, now, not left to whatever a full scan happened to put
             // in the map: after `restoreLastScan()` it is empty, and an empty map means no
             // snapshot to roll back to and no bundle for the canary to inspect. Both phases
             // are handed this one value, so neither can be given a different answer.
             let appPaths = caskPreparation.appPaths
             let snapshots = caskPreparation.snapshots
-            var caskOutcome = await runBrewUpgrade(arguments: caskArgs)
+            run.recordPublisherVetoes(
+                plannedItems.filter { $0.kind == .cask },
+                audits: caskPreparation.publisherVetoes
+            )
+            let trustedCaskNames = caskPreparation.trustedCaskNames
+            if !trustedCaskNames.isEmpty {
+                let trustedCaskArgs = UpdatePlanner.caskUpgradeCommand(tokens: trustedCaskNames).arguments
+                var caskOutcome = await runBrewUpgrade(arguments: trustedCaskArgs)
 
-            // Auto-recover an interrupted upgrade: if a cask bailed because a stale
-            // staged app from a previous, cut-short upgrade is in the way ("already an
-            // App at …"), retry just those casks once with --force, which overwrites
-            // the leftover. Without this they fail on every attempt until cleaned by hand.
-            let retryTokens = caskOutcome.tokensRetryableWithForce
-            if !retryTokens.isEmpty {
-                brewLog.append("↻ " + trf("Przerwana aktualizacja (%@) — ponawiam z --force.", "\(retryTokens.joined(separator: ", "))"))
-                WegaLog.info(.homebrew, "Przerwana aktualizacja casku — ponawiam z --force: \(retryTokens.joined(separator: ", "))")
-                let retryOutcome = await runBrewUpgrade(arguments: UpdatePlanner.forcedCaskCommand(tokens: retryTokens).arguments)
-                caskOutcome = BrewUpgradeOutcome.merging(original: caskOutcome, forcedRetry: retryOutcome, retriedTokens: retryTokens)
+                // Auto-recover an interrupted upgrade: if a cask bailed because a stale
+                // staged app from a previous, cut-short upgrade is in the way ("already an
+                // App at …"), retry just those casks once with --force, which overwrites
+                // the leftover. Without this they fail on every attempt until cleaned by hand.
+                let retryTokens = caskOutcome.tokensRetryableWithForce
+                if !retryTokens.isEmpty {
+                    brewLog.append("↻ " + trf("Przerwana aktualizacja (%@) — ponawiam z --force.", "\(retryTokens.joined(separator: ", "))"))
+                    WegaLog.info(.homebrew, "Przerwana aktualizacja casku — ponawiam z --force: \(retryTokens.joined(separator: ", "))")
+                    let retryOutcome = await runBrewUpgrade(arguments: UpdatePlanner.forcedCaskCommand(tokens: retryTokens).arguments)
+                    caskOutcome = BrewUpgradeOutcome.merging(original: caskOutcome, forcedRetry: retryOutcome, retriedTokens: retryTokens)
+                }
+
+                let trustedItems = plannedItems.filter {
+                    $0.kind == .cask && trustedCaskNames.contains($0.name)
+                }
+                run.record(trustedItems, outcome: caskOutcome)
+                // The canary/rollback verdict is a phase of the same result, not an aside: it
+                // used to be raised after the summary had already been computed, so a cask the
+                // guard had just rolled back still counted towards "Zaktualizowano N pakietów".
+                run.applyValidation(await postCaskUpgrade(
+                    trustedCaskNames,
+                    appPaths: appPaths,
+                    snapshots: snapshots
+                ))
             }
-
-            run.record(plannedItems.filter { $0.kind == .cask }, outcome: caskOutcome)
-            // The canary/rollback verdict is a phase of the same result, not an aside: it
-            // used to be raised after the summary had already been computed, so a cask the
-            // guard had just rolled back still counted towards "Zaktualizowano N pakietów".
-            run.applyValidation(await postCaskUpgrade(caskNames, appPaths: appPaths, snapshots: snapshots))
         }
 
         // npm global upgrade — one package at a time (npm semantics).
@@ -544,6 +573,11 @@ extension ScanStore {
                 old = previous
                 new = current
                 message = trf("%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
+                              "\(outcome.name)", "\(old)", "\(new ?? "—")")
+            case .publisherMismatchBeforeUpgrade(let previous, let current):
+                old = previous
+                new = current
+                message = trf("%@: Team ID już różnił się od zaufanego baseline (%@ → %@). Aktualizację zablokowano przed uruchomieniem.",
                               "\(outcome.name)", "\(old)", "\(new ?? "—")")
             default:
                 continue

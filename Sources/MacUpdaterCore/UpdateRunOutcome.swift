@@ -33,6 +33,8 @@ public enum ItemUpdateVerdict: Equatable, Sendable {
     case publisherChanged(old: String, new: String?)
     /// The publisher changed, so the guard restored the previous trusted version.
     case publisherChangedAndRolledBack(old: String, new: String?)
+    /// The installed app already differed from the trusted baseline, so no upgrade ran.
+    case publisherMismatchBeforeUpgrade(old: String, current: String?)
     /// The upgrade ran, but the rescan that would confirm it could not complete.
     case notVerified
     /// The rescan still lists this item as outdated, whatever the tool reported.
@@ -55,6 +57,7 @@ public enum ItemUpdateVerdict: Equatable, Sendable {
         switch self {
         case .succeeded, .publisherChanged: return true
         case .notVerified, .stillOutdated, .rolledBack, .publisherChangedAndRolledBack,
+             .publisherMismatchBeforeUpgrade,
              .executionFailed, .executionFailedAfterRollback, .executionFailedAfterPublisherRollback,
              .executionFailedWithPublisherChange,
              .rollbackFailed: return false
@@ -66,6 +69,7 @@ public enum ItemUpdateVerdict: Equatable, Sendable {
     public var isCritical: Bool {
         switch self {
         case .rollbackFailed, .publisherChanged, .publisherChangedAndRolledBack,
+             .publisherMismatchBeforeUpgrade,
              .executionFailedAfterPublisherRollback, .executionFailedWithPublisherChange: return true
         case .succeeded, .notVerified, .stillOutdated, .rolledBack,
              .executionFailed, .executionFailedAfterRollback: return false
@@ -79,6 +83,8 @@ public enum ItemUpdateVerdict: Equatable, Sendable {
         case .publisherChanged: return "zaktualizowano, ale zmienił się Team ID wydawcy"
         case .publisherChangedAndRolledBack:
             return "zmienił się Team ID wydawcy — przywrócono poprzednią zaufaną wersję"
+        case .publisherMismatchBeforeUpgrade:
+            return "Team ID już różnił się od zaufanego baseline — aktualizację zablokowano przed uruchomieniem"
         case .notVerified:      return "zaktualizowano, ale skan po aktualizacji nie potwierdził wyniku"
         case .stillOutdated:    return "nadal widnieje jako nieaktualne po skanie kontrolnym"
         case .rolledBack:       return "nowa wersja nie przeszła kontroli — przywrócono poprzednią"
@@ -103,6 +109,7 @@ public enum ItemUpdateVerdict: Equatable, Sendable {
         case .notVerified:      return 2
         case .stillOutdated:    return 3
         case .rolledBack, .publisherChangedAndRolledBack: return 4
+        case .publisherMismatchBeforeUpgrade: return 5
         case .executionFailed:  return 5
         case .executionFailedAfterRollback, .executionFailedAfterPublisherRollback,
              .executionFailedWithPublisherChange: return 5
@@ -182,6 +189,23 @@ public struct UpdateRunOutcome: Equatable, Sendable {
     public private(set) var needsSudoPassword = false
 
     public init() {}
+
+    /// Records casks rejected before the package manager runs because the installed app
+    /// already differs from the trusted publisher baseline.
+    public mutating func recordPublisherVetoes(
+        _ covered: [OutdatedItem],
+        audits: [String: TeamIDAudit]
+    ) {
+        for item in covered {
+            guard case let .changed(old, current) = audits[item.name] else { continue }
+            items.append(ItemUpdateOutcome(
+                key: item.key,
+                name: item.name,
+                kind: item.kind,
+                verdict: .publisherMismatchBeforeUpgrade(old: old, current: current)
+            ))
+        }
+    }
 
     /// Records what one package-manager invocation did to the items it covered.
     /// `failedTokens` is matched against `OutdatedItem.name` — the token the tool prints.
@@ -315,6 +339,8 @@ public struct UpdateRunSummary: Equatable, Sendable {
             case .publisherChanged:
                 return item
             case .publisherChangedAndRolledBack:
+                return item
+            case .publisherMismatchBeforeUpgrade:
                 return item
             case .executionFailedAfterPublisherRollback(let old, let new):
                 return ItemUpdateOutcome(key: item.key, name: item.name, kind: item.kind,

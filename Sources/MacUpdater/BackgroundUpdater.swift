@@ -125,16 +125,26 @@ final class BackgroundUpdater {
             return []
         }
 
-        let snapshots = CaskRollbackGuard.snapshot(tokens: lockedTokens, appPaths: appPaths)
-        let tokens = BackgroundUpdateSafety.snapshotBackedTokens(lockedTokens, snapshots: snapshots)
-        for token in lockedTokens where snapshots[token] == nil {
+        let publisherVetoes = CaskRollbackGuard.publisherVetoes(
+            tokens: lockedTokens, appPaths: appPaths
+        )
+        let trustedTokens = lockedTokens.filter { publisherVetoes[$0] == nil }
+        let snapshots = CaskRollbackGuard.snapshot(tokens: trustedTokens, appPaths: appPaths)
+        let tokens = BackgroundUpdateSafety.snapshotBackedTokens(trustedTokens, snapshots: snapshots)
+        var run = UpdateRunOutcome()
+        run.recordPublisherVetoes(lockedTokens.map(Self.caskItem), audits: publisherVetoes)
+        for token in trustedTokens where snapshots[token] == nil {
             WegaLog.error(
                 .homebrew,
                 "\(token): aktualizacja w tle odroczona — nie udało się utworzyć wymaganego snapshotu."
             )
         }
         guard !tokens.isEmpty else {
-            WegaLog.error(.homebrew, "Aktualizacja w tle pominięta — nie udało się utworzyć snapshotu.")
+            if run.summary.isEmpty {
+                WegaLog.error(.homebrew, "Aktualizacja w tle pominięta — nie udało się utworzyć snapshotu.")
+            } else {
+                notify(summary: run.summary)
+            }
             return []
         }
 
@@ -148,7 +158,6 @@ final class BackgroundUpdater {
 
         // REL-02 — the same per-item result type the window builds, filled in by the same
         // phases: execution, validation/rollback, then a rescan that has to agree.
-        var run = UpdateRunOutcome()
         run.recordBackgroundRound(tokens.map(Self.caskItem), outcome: await runBrew(arguments: arguments))
         run.applyValidation(await CaskRollbackGuard.verify(tokens: tokens, appPaths: appPaths, snapshots: snapshots))
         await confirmByRescan(&run)

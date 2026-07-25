@@ -44,7 +44,7 @@ struct PublisherBaselineProtectionTests {
         let foreground = try source("Sources/MacUpdater/ScanStore+Actions.swift")
         let foregroundSnapshot = try #require(foreground.range(of: "let snapshots = snapshotCasks("))
         let foregroundMutation = try #require(foreground.range(
-            of: "var caskOutcome = await runBrewUpgrade(arguments: caskArgs)"))
+            of: "var caskOutcome = await runBrewUpgrade(arguments: trustedCaskArgs)"))
         #expect(foregroundSnapshot.lowerBound < foregroundMutation.lowerBound,
                 "SEC-02: the foreground path must capture the old publisher before brew mutates the app")
 
@@ -107,5 +107,50 @@ struct PublisherBaselineProtectionTests {
         #expect(summary.publisherChanges.map(\.name) == ["figma"])
         #expect(summary.names { $0 == .executionFailed } == ["figma"])
         #expect(summary.names { $0 == .rolledBack } == ["figma"])
+    }
+
+    @Test func preexistingPublisherMismatchVetoesBothUpgradePathsBeforeBrew() throws {
+        let foreground = try source("Sources/MacUpdater/ScanStore+Actions.swift")
+        let foregroundVeto = try #require(foreground.range(
+            of: "let publisherVetoes = CaskRollbackGuard.publisherVetoes("))
+        let foregroundMutation = try #require(foreground.range(
+            of: "var caskOutcome = await runBrewUpgrade(arguments: trustedCaskArgs)"))
+        #expect(foregroundVeto.lowerBound < foregroundMutation.lowerBound)
+        #expect(foreground.contains("run.recordPublisherVetoes("),
+                "SEC-02: a foreground veto needs a critical per-item outcome")
+
+        let background = try source("Sources/MacUpdater/BackgroundUpdater.swift")
+        let backgroundVeto = try #require(background.range(
+            of: "let publisherVetoes = CaskRollbackGuard.publisherVetoes("))
+        let backgroundMutation = try #require(background.range(
+            of: "outcome: await runBrew(arguments: arguments)"))
+        #expect(backgroundVeto.lowerBound < backgroundMutation.lowerBound)
+        #expect(background.contains("run.recordPublisherVetoes("),
+                "SEC-02: a background veto needs a critical per-item outcome")
+    }
+
+    @Test func preexistingPublisherMismatchIsCriticalWithoutClaimingMutationOrRollback() {
+        let item = OutdatedItem(key: "c:figma", name: "figma", from: "1.0", to: "2.0", kind: .cask)
+        var run = UpdateRunOutcome()
+        run.recordPublisherVetoes([item], audits: [
+            "figma": .changed(old: "TRUSTED", new: "INSTALLED"),
+        ])
+
+        let summary = run.summary
+        #expect(summary.items.map(\.verdict) == [
+            .publisherMismatchBeforeUpgrade(old: "TRUSTED", current: "INSTALLED"),
+        ])
+        #expect(summary.upgraded.isEmpty,
+                "SEC-02: a preflight veto must never count as an executed upgrade")
+        #expect(summary.critical.map(\.name) == ["figma"])
+        #expect(summary.publisherChanges.map(\.name) == ["figma"])
+        #expect(summary.names { $0 == .rolledBack }.isEmpty,
+                "SEC-02: no rollback happened because brew never ran")
+    }
+
+    @Test func readmeDoesNotClaimMismatchSnapshotsAlwaysEndWithTheCanaryWindow() throws {
+        let readme = try source("README.md")
+        #expect(!readme.contains("because the snapshot lives only for the canary window"))
+        #expect(readme.contains("After a publisher mismatch, the original snapshot remains"))
     }
 }

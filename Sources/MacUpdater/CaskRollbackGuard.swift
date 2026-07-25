@@ -9,8 +9,8 @@ import MacUpdaterCore
 /// that could quietly diverge from the first. So there is one copy, and both callers use it.
 ///
 /// A healthy upgrade consumes no rollback storage: its snapshot is deleted after all checks.
-/// Failed restoration keeps the snapshot for manual recovery; successful restoration consumes
-/// it while atomically putting the old bundle back in place.
+/// A publisher mismatch preserves the original snapshot even after a successful restoration;
+/// failed restoration also leaves it available for manual recovery.
 @MainActor
 enum CaskRollbackGuard {
     /// What happened to one cask after its upgrade.
@@ -21,6 +21,25 @@ enum CaskRollbackGuard {
     /// a green banner.
     typealias Outcome = CaskValidationVerdict
 
+    /// Reads the installed publishers before any snapshot or package-manager mutation.
+    /// A bundle that already differs from the trusted ledger is not a safe rollback source,
+    /// so callers must exclude every returned token from the upgrade command.
+    static func publisherVetoes(tokens: [String], appPaths: [String: URL]) -> [String: TeamIDAudit] {
+        var vetoes: [String: TeamIDAudit] = [:]
+        for token in tokens {
+            guard let appURL = appPaths[token] else { continue }
+            let currentTeamID = CodeSignatureVerifier.teamID(ofAppAt: appURL)
+            let audit = TeamIDLedger.shared.record(bundleID: "cask:\(token)", teamID: currentTeamID)
+            guard case let .changed(old, new) = audit else { continue }
+            vetoes[token] = audit
+            WegaLog.error(
+                .homebrew,
+                "\(token): aktualizacja zablokowana przed brew — zainstalowana aplikacja ma inny Team ID niż zaufany baseline (\(old) → \(new ?? "—"))."
+            )
+        }
+        return vetoes
+    }
+
     /// Copy-on-write clone (`clonefile`) of each cask's app bundle, keyed by token.
     /// Casks with no resolvable `.app` are skipped — see `RollbackProtection`, which is what
     /// tells the user so up front instead of leaving them silently unprotected.
@@ -29,20 +48,9 @@ enum CaskRollbackGuard {
         var snapshots: [String: URL] = [:]
         for token in tokens {
             guard let appURL = appPaths[token] else { continue }
-            // This is the last read of the installed app before brew can mutate it. Seeding
-            // from the post-upgrade bundle would make a first publisher swap look trusted.
-            let oldTeamID = CodeSignatureVerifier.teamID(ofAppAt: appURL)
             let dest = base.appendingPathComponent("\(token).app")
             if (try? BundleSnapshot.clone(appURL, to: dest)) != nil {
                 snapshots[token] = dest
-                if case let .changed(old, new) = TeamIDLedger.shared.record(
-                    bundleID: "cask:\(token)", teamID: oldTeamID
-                ) {
-                    WegaLog.error(
-                        .homebrew,
-                        "\(token): zainstalowana aplikacja ma inny Team ID niż zaufany baseline (\(old) → \(new ?? "—"))."
-                    )
-                }
             }
         }
         return snapshots
