@@ -1,3 +1,4 @@
+import AppKit
 import MacUpdaterCore
 import SwiftUI
 
@@ -5,13 +6,17 @@ import SwiftUI
 /// The rows come from the durable consent ledger, never from the current outdated list.
 struct BackgroundUpdateConsentSettingsCard: View {
     @EnvironmentObject private var localization: LocalizationManager
+    @EnvironmentObject private var policies: UpdatePolicyStore
     @ObservedObject private var store = BackgroundUpdateOptInStore.shared
     @State private var qualifications: [String: BackgroundUpdateConsentQualification] = [:]
 
     private let brewService = BrewService()
 
     private var tokensKey: String {
-        store.consents.map(\.token).joined(separator: "\u{1f}")
+        let policyKey = policies.policiesMap.sorted { $0.key < $1.key }.map { key, policy in
+            "\(key)=\(String(describing: policy))"
+        }.joined(separator: "\u{1e}")
+        return store.consents.map(\.token).joined(separator: "\u{1f}") + "|" + policyKey
     }
 
     var body: some View {
@@ -106,7 +111,7 @@ struct BackgroundUpdateConsentSettingsCard: View {
     private var runtimeNote: some View {
         Text(
             tr(
-                "Przed każdą aktualizacją Wega ponownie sprawdza, czy aplikacja nie działa, nie jest zignorowana lub przypięta oraz czy można utworzyć snapshot."
+                "Status każdego pakietu uwzględnia bieżącą aktualizację, reguły i uruchomioną aplikację. Snapshot, zasoby i bezpieczeństwo wydawcy są sprawdzane dopiero bezpośrednio przed aktualizacją."
             )
         )
         .font(.system(size: 10))
@@ -122,9 +127,11 @@ struct BackgroundUpdateConsentSettingsCard: View {
     ) -> String {
         switch qualification {
         case .eligible:
-            return tr("Stałe warunki spełnione")
+            return tr("Gotowe do kontroli końcowej")
         case .ineligible:
             return tr("Stałe warunki niespełnione")
+        case .blocked:
+            return tr("Teraz zablokowane")
         case .metadataUnavailable:
             return tr("Nie można ocenić")
         case nil:
@@ -138,6 +145,10 @@ struct BackgroundUpdateConsentSettingsCard: View {
         switch qualification {
         case .eligible:
             return .success
+        case .blocked(.notCurrentlyOutdated):
+            return .info
+        case .blocked:
+            return .manual
         case .metadataUnavailable, nil:
             return .info
         case .ineligible:
@@ -151,7 +162,22 @@ struct BackgroundUpdateConsentSettingsCard: View {
         switch qualification {
         case .eligible:
             return tr(
-                "Instaluje aplikację bez uprzywilejowanych hooków, a pobranie ma sumę SHA-256.")
+                "Pakiet oczekuje na aktualizację, aplikacja nie działa, nie ma reguły blokującej, a metadane spełniają stałe warunki.")
+        case .blocked(let blocker):
+            switch blocker {
+            case .ignored:
+                return tr("Aktualizacje tego pakietu są ignorowane.")
+            case .pinned(let version):
+                return trf("Pakiet jest przypięty do wersji %@.", version)
+            case .notCurrentlyOutdated:
+                return tr("Pakiet nie oczekuje teraz na aktualizację; zgoda pozostaje zapisana.")
+            case .installedAppUnavailable:
+                return tr(
+                    "Nie można rozpoznać zainstalowanej aplikacji .app wymaganej do snapshotu i kontroli wyniku."
+                )
+            case .running:
+                return tr("Aplikacja jest teraz uruchomiona i nie może być bezpiecznie zastąpiona.")
+            }
         case .ineligible(let reason):
             switch reason {
             case .noArtifacts:
@@ -200,7 +226,14 @@ struct BackgroundUpdateConsentSettingsCard: View {
         do {
             async let profileRequest = brewService.caskArtifactProfiles(tokens: tokens)
             async let downloadRequest = brewService.caskDownloadInfo(tokens: tokens)
-            let (profiles, downloads) = try await (profileRequest, downloadRequest)
+            async let outdatedRequest = brewService.outdatedGreedy()
+            async let installationRequest = brewService.caskInstallationInfo(tokens: tokens)
+            let (profiles, downloads, outdated, installations) = try await (
+                profileRequest,
+                downloadRequest,
+                outdatedRequest,
+                installationRequest
+            )
             guard !Task.isCancelled else { return }
             let profilesByToken = Dictionary(
                 profiles.map { ($0.token, $0) },
@@ -210,21 +243,53 @@ struct BackgroundUpdateConsentSettingsCard: View {
                 downloads.map { ($0.token, $0) },
                 uniquingKeysWith: { first, _ in first }
             )
+            let appPaths = CaskAppPathResolver().appPaths(from: installations)
+            let runningAppPaths = Set(
+                NSWorkspace.shared.runningApplications.compactMap(
+                    \.bundleURL?.standardizedFileURL
+                )
+            )
+            let context = BackgroundUpdateConsentContext(
+                candidateTokens: Set(outdated.casks.map(\.name)),
+                resolvedAppTokens: Set(appPaths.keys),
+                runningTokens: Set(
+                    appPaths.filter {
+                        runningAppPaths.contains($0.value.standardizedFileURL)
+                    }.keys
+                ),
+                policies: policies.policiesMap
+            )
             qualifications = Dictionary(
                 uniqueKeysWithValues: tokens.map { token in
                     (
                         token,
                         BackgroundUpdateConsentQualification.evaluate(
+                            token: token,
                             profile: profilesByToken[token],
-                            download: downloadsByToken[token]
+                            download: downloadsByToken[token],
+                            context: context
                         )
                     )
                 })
         } catch {
             guard !Task.isCancelled else { return }
+            let unknownRuntimeContext = BackgroundUpdateConsentContext(
+                candidateTokens: Set(tokens),
+                resolvedAppTokens: Set(tokens),
+                runningTokens: [],
+                policies: policies.policiesMap
+            )
             qualifications = Dictionary(
-                uniqueKeysWithValues: tokens.map {
-                    ($0, BackgroundUpdateConsentQualification.metadataUnavailable)
+                uniqueKeysWithValues: tokens.map { token in
+                    (
+                        token,
+                        BackgroundUpdateConsentQualification.evaluate(
+                            token: token,
+                            profile: nil,
+                            download: nil,
+                            context: unknownRuntimeContext
+                        )
+                    )
                 })
             WegaLog.warning(
                 .homebrew,

@@ -414,11 +414,25 @@ public enum Translations {
         "Cofnij zgodę": "Revoke permission",
         "Przed każdą aktualizacją Wega ponownie sprawdza, czy aplikacja nie działa, nie jest zignorowana lub przypięta oraz czy można utworzyć snapshot.":
             "Before every update, Wega checks again that the app is not running, ignored or pinned, and that a snapshot can be created.",
+        "Status każdego pakietu uwzględnia bieżącą aktualizację, reguły i uruchomioną aplikację. Snapshot, zasoby i bezpieczeństwo wydawcy są sprawdzane dopiero bezpośrednio przed aktualizacją.":
+            "Each package status includes its current update, policies, and running app. Snapshot, resources, and publisher safety are checked only immediately before an update.",
         "Stałe warunki spełnione": "Stable requirements met",
         "Stałe warunki niespełnione": "Stable requirements not met",
+        "Gotowe do kontroli końcowej": "Ready for final checks",
+        "Teraz zablokowane": "Currently blocked",
         "Nie można ocenić": "Cannot evaluate",
         "Instaluje aplikację bez uprzywilejowanych hooków, a pobranie ma sumę SHA-256.":
             "Installs an app without privileged hooks, and the download has a SHA-256 checksum.",
+        "Pakiet oczekuje na aktualizację, aplikacja nie działa, nie ma reguły blokującej, a metadane spełniają stałe warunki.":
+            "The package has an available update, the app is not running, no policy blocks it, and its metadata meets the stable requirements.",
+        "Aktualizacje tego pakietu są ignorowane.": "Updates for this package are ignored.",
+        "Pakiet jest przypięty do wersji %@.": "The package is pinned to version %@.",
+        "Pakiet nie oczekuje teraz na aktualizację; zgoda pozostaje zapisana.":
+            "The package has no update waiting right now; its permission remains saved.",
+        "Nie można rozpoznać zainstalowanej aplikacji .app wymaganej do snapshotu i kontroli wyniku.":
+            "The installed .app required for a snapshot and result verification cannot be resolved.",
+        "Aplikacja jest teraz uruchomiona i nie może być bezpiecznie zastąpiona.":
+            "The app is currently running and cannot be replaced safely.",
         "Homebrew nie opisuje artefaktów tego casku, więc nie można potwierdzić bezpiecznej aktualizacji.":
             "Homebrew does not describe this cask's artifacts, so a safe update cannot be confirmed.",
         "Cask nie instaluje aplikacji .app, więc nie można utworzyć snapshotu ani sprawdzić wyniku.":

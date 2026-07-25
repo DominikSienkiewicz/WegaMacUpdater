@@ -310,14 +310,18 @@ struct PackageRow: View {
         .onTapGesture { onSelect?() }
         .focusable(onSelect != nil)
         .onKeyPress(.return) {
-            guard let onSelect else { return .ignored }
-            onSelect()
-            return .handled
+            PackageRowKeyboardBehavior.handle(
+                .inspect,
+                onSelect: onSelect,
+                onToggle: onToggle
+            ) ? .handled : .ignored
         }
         .onKeyPress(.space) {
-            guard let onToggle else { return .ignored }
-            onToggle()
-            return .handled
+            PackageRowKeyboardBehavior.handle(
+                .toggleSelection,
+                onSelect: onSelect,
+                onToggle: onToggle
+            ) ? .handled : .ignored
         }
     }
 }

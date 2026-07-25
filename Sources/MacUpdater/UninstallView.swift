@@ -322,7 +322,7 @@ struct UninstallView: View {
 
 // MARK: - Native uninstall sheet
 
-private struct UninstallDialog: View {
+struct UninstallDialog: View {
     let targets: [ApplicationInfo]
     /// REL-16: casks whose application is installed in more than one place — see
     /// `InstallationInventory.ambiguousBrewUninstalls`.
@@ -341,156 +341,166 @@ private struct UninstallDialog: View {
     private var hasNonBrew: Bool { trashCount > 0 }
 
     var body: some View {
-        Color.black.opacity(0.5)
-            .ignoresSafeArea()
-            .overlay {
-                VStack(spacing: 0) {
-                    // Header
-                    HStack(alignment: .top, spacing: 14) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 11)
-                                .fill(Color.wegaDanger.opacity(0.12))
-                                .frame(width: 44, height: 44)
-                            Image(systemName: "trash")
-                                .foregroundStyle(Color.wegaDanger)
-                                .font(.system(size: 18))
-                        }
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(trf("Odinstalować %@ %@?", "\(totalCount)", totalCount == 1 ? tr("aplikację") : tr("aplikacji")))
-                                .font(.system(size: 15, weight: .semibold))
-                            if hasMixed {
-                                Text(trf("%@ przez brew · %@ do Kosza", "\(brewCount)", "\(trashCount)"))
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                            } else if hasNonBrew {
-                                Text(tr("Aplikacje trafią do Kosza"))
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                Text(tr("Wybierz, co zostawić"))
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 22)
-                    .padding(.top, 20)
-                    .padding(.bottom, 16)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(tr("Dokładne cele"))
-                            .font(.system(size: 12, weight: .semibold))
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 8) {
-                                ForEach(targets) { app in
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(app.name).font(.system(size: 12, weight: .medium))
-                                        Text(app.path.path)
-                                            .font(.system(size: 10.5, design: .monospaced))
-                                            .foregroundStyle(.secondary)
-                                            .textSelection(.enabled)
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                            }
-                        }
-                        .frame(maxHeight: 120)
-                    }
-                    .padding(12)
-                    .background(Color(NSColor.controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
-                    .padding(.horizontal, 22)
-                    .padding(.bottom, 12)
-
-                    // Options — only shown when brew casks are selected
-                    if brewCount > 0 {
-                        VStack(spacing: 8) {
-                            UninstallOption(
-                                title:       tr("Tylko aplikacja"),
-                                subtitle:    tr("Usuwa plik .app. Preferencje i cache zostają w ~/Library."),
-                                command:     "brew uninstall",
-                                recommended: true,
-                                isSelected:  !zapMode,
-                                onSelect:    { zapMode = false }
-                            )
-                            UninstallOption(
-                                title:       tr("Aplikacja + resztki"),
-                                subtitle:    tr("Zabiera też pliki w ~/Library/Preferences, Caches i Application Support. Tego nie da się cofnąć."),
-                                command:     "brew uninstall --zap",
-                                recommended: false,
-                                isSelected:  zapMode,
-                                onSelect:    { zapMode = true }
-                            )
-                        }
-                        .padding(.horizontal, 22)
-                    }
-
-                    if !ambiguities.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(ambiguities) { item in
-                                HStack(alignment: .top, spacing: 8) {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .foregroundStyle(Color.wegaDanger)
-                                        .font(.system(size: 13))
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(tr("Homebrew usunie swoją kopię"))
-                                            .font(.system(size: 12, weight: .semibold))
-                                        Text(trf(
-                                            "%@ jest zainstalowany w %@ miejscach: %@. Homebrew usunie kopię, którą sam zarządza (brew uninstall %@) — niekoniecznie tę zaznaczoną.",
-                                            "\(item.appName)",
-                                            "\(item.locations.count)",
-                                            "\(item.locations.joined(separator: ", "))",
-                                            "\(item.caskToken)"
-                                        ))
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                    }
-                                    Spacer(minLength: 0)
-                                }
-                            }
-                        }
-                        .padding(12)
-                        .background(Color.wegaDanger.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.wegaDanger.opacity(0.28), lineWidth: 1))
-                        .padding(.horizontal, 22)
-                        .padding(.top, brewCount > 0 ? 12 : 0)
-                    }
-
-                    if hasNonBrew {
-                        HStack(spacing: 8) {
-                            Image(systemName: "info.circle")
-                                .foregroundStyle(Color.wegaInfo)
-                                .font(.system(size: 13))
-                            Text(trf("%@ %@ przez brew — trafi do Kosza.", "\(trashCount)", trashCount == 1 ? tr("aplikacja nie jest zarządzana") : tr("aplikacji nie jest zarządzanych")))
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 22)
-                        .padding(.top, brewCount > 0 ? 10 : 0)
-                    }
-
-                    // Footer buttons
-                    HStack(spacing: 8) {
-                        Spacer()
-                        Button(tr("Anuluj"), role: .cancel, action: onCancel)
-                            .keyboardShortcut(.cancelAction)
-                        Button(confirmLabel, role: .destructive) { onConfirm(zapMode) }
-                            .keyboardShortcut(.defaultAction)
-                            .buttonStyle(.borderedProminent)
-                            .tint(Color.wegaDanger)
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 16)
-                    .padding(.bottom, 18)
-                    .background(Color.black.opacity(0.15))
-                    .overlay(alignment: .top) { Divider().opacity(0.5) }
+        VStack(spacing: 0) {
+            // Header
+            HStack(alignment: .top, spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 11)
+                        .fill(Color.wegaDanger.opacity(0.12))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "trash")
+                        .foregroundStyle(Color.wegaDanger)
+                        .font(.system(size: 18))
                 }
-                .background(Color(NSColor.windowBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.10), lineWidth: 1))
-                .shadow(color: .black.opacity(0.5), radius: 40, y: 12)
-                .frame(width: 480)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(trf("Odinstalować %@ %@?", "\(totalCount)", totalCount == 1 ? tr("aplikację") : tr("aplikacji")))
+                        .font(.system(size: 15, weight: .semibold))
+                    if hasMixed {
+                        Text(trf("%@ przez brew · %@ do Kosza", "\(brewCount)", "\(trashCount)"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    } else if hasNonBrew {
+                        Text(tr("Aplikacje trafią do Kosza"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(tr("Wybierz, co zostawić"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
+            .padding(.horizontal, 22)
+            .padding(.top, 20)
+            .padding(.bottom, 16)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(tr("Dokładne cele"))
+                    .font(.system(size: 12, weight: .semibold))
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(targets) { app in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(app.name).font(.system(size: 12, weight: .medium))
+                                Text(app.path.path)
+                                    .font(.system(size: 10.5, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+                .frame(maxHeight: 120)
+            }
+            .padding(12)
+            .background(Color(NSColor.controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal, 22)
+            .padding(.bottom, 12)
+
+            // Options — only shown when brew casks are selected
+            if brewCount > 0 {
+                VStack(spacing: 8) {
+                    UninstallOption(
+                        title:       tr("Tylko aplikacja"),
+                        subtitle:    tr("Usuwa plik .app. Preferencje i cache zostają w ~/Library."),
+                        command:     "brew uninstall",
+                        recommended: true,
+                        isSelected:  !zapMode,
+                        onSelect:    { zapMode = false }
+                    )
+                    UninstallOption(
+                        title:       tr("Aplikacja + resztki"),
+                        subtitle:    tr("Zabiera też pliki w ~/Library/Preferences, Caches i Application Support. Tego nie da się cofnąć."),
+                        command:     "brew uninstall --zap",
+                        recommended: false,
+                        isSelected:  zapMode,
+                        onSelect:    { zapMode = true }
+                    )
+                }
+                .padding(.horizontal, 22)
+            }
+
+            if !ambiguities.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(ambiguities) { item in
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(Color.wegaDanger)
+                                .font(.system(size: 13))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(tr("Homebrew usunie swoją kopię"))
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text(trf(
+                                    "%@ jest zainstalowany w %@ miejscach: %@. Homebrew usunie kopię, którą sam zarządza (brew uninstall %@) — niekoniecznie tę zaznaczoną.",
+                                    "\(item.appName)",
+                                    "\(item.locations.count)",
+                                    "\(item.locations.joined(separator: ", "))",
+                                    "\(item.caskToken)"
+                                ))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                .padding(12)
+                .background(Color.wegaDanger.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.wegaDanger.opacity(0.28), lineWidth: 1))
+                .padding(.horizontal, 22)
+                .padding(.top, brewCount > 0 ? 12 : 0)
+            }
+
+            if hasNonBrew {
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(Color.wegaInfo)
+                        .font(.system(size: 13))
+                    Text(trf("%@ %@ przez brew — trafi do Kosza.", "\(trashCount)", trashCount == 1 ? tr("aplikacja nie jest zarządzana") : tr("aplikacji nie jest zarządzanych")))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, brewCount > 0 ? 10 : 0)
+            }
+
+            // Footer buttons
+            HStack(spacing: 8) {
+                Spacer()
+                Button(tr("Anuluj"), role: .cancel) {
+                    UninstallDialogKeyboardBehavior.perform(
+                        .cancel,
+                        zapMode: zapMode,
+                        onCancel: onCancel,
+                        onConfirm: onConfirm
+                    )
+                }
+                .keyboardShortcut(.cancelAction)
+                Button(confirmLabel, role: .destructive) {
+                    UninstallDialogKeyboardBehavior.perform(
+                        .confirm,
+                        zapMode: zapMode,
+                        onCancel: onCancel,
+                        onConfirm: onConfirm
+                    )
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .tint(Color.wegaDanger)
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 16)
+            .padding(.bottom, 18)
+            .background(Color.black.opacity(0.15))
+            .overlay(alignment: .top) { Divider().opacity(0.5) }
+        }
+        .background(Color(NSColor.windowBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.10), lineWidth: 1))
+        .shadow(color: .black.opacity(0.5), radius: 40, y: 12)
+        .frame(width: 480)
     }
 
     private var confirmLabel: String {
@@ -501,7 +511,7 @@ private struct UninstallDialog: View {
     }
 }
 
-private struct UninstallOption: View {
+struct UninstallOption: View {
     let title:       String
     let subtitle:    String
     let command:     String
@@ -510,6 +520,10 @@ private struct UninstallOption: View {
     let onSelect:    () -> Void
 
     var body: some View {
+        let semantics = UninstallOptionAccessibilitySemantics(
+            title: title,
+            isSelected: isSelected
+        )
         Button(action: onSelect) {
             HStack(alignment: .top, spacing: 12) {
                 ZStack {
@@ -549,6 +563,9 @@ private struct UninstallOption: View {
             .padding(14)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(semantics.label)
+        .accessibilityValue(semantics.value)
+        .accessibilityAddTraits(semantics.isSelected ? .isSelected : [])
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(isSelected ? Color.wegaHoney.opacity(0.06) : Color(NSColor.controlBackgroundColor))

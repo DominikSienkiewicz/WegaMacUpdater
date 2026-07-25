@@ -1,6 +1,24 @@
 import SwiftUI
 import MacUpdaterCore
 
+enum SidebarFocusPolicy {
+    static let orderedSelections: [SidebarSelection] = [
+        .updates(.all),
+        .updates(.apps),
+        .updates(.cli),
+        .updates(.security),
+        .migration,
+        .inventory,
+        .uninstall,
+        .logs,
+    ]
+
+    static func accessibilityPriority(for selection: SidebarSelection) -> Double {
+        guard let index = orderedSelections.firstIndex(of: selection) else { return 0 }
+        return Double(orderedSelections.count - index)
+    }
+}
+
 /// The glass sidebar. `NavigationSplitView` supplies the material, the selection capsule and
 /// the hover fill; the hand-rolled `SidebarItemRow` that used to draw them is gone.
 struct SidebarList: View {
@@ -69,6 +87,7 @@ struct SidebarList: View {
         }
         .badge(count > 0 ? Text(badgeText(count, isDanger: isDanger)) : Text?.none)
         .tag(item)
+        .accessibilitySortPriority(SidebarFocusPolicy.accessibilityPriority(for: item))
     }
 
     private func badgeText(_ count: Int, isDanger: Bool) -> AttributedString {

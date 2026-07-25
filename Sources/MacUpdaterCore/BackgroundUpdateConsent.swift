@@ -110,6 +110,7 @@ public final class BackgroundUpdateOptInStore: ObservableObject {
 public enum BackgroundUpdateConsentQualification: Equatable, Sendable {
     case eligible
     case ineligible(BackgroundUpdateEligibility.Rejection)
+    case blocked(BackgroundUpdateConsentBlocker)
     case metadataUnavailable
 
     public static func evaluate(
@@ -123,5 +124,64 @@ public enum BackgroundUpdateConsentQualification: Equatable, Sendable {
         case .ineligible(let rejection):
             return .ineligible(rejection)
         }
+    }
+
+    /// The current per-token verdict shown in Settings. Unlike the stable metadata-only
+    /// overload above, this mirrors every pre-snapshot veto used by the background planner.
+    public static func evaluate(
+        token: String,
+        profile: CaskArtifactProfile?,
+        download: CaskDownloadInfo?,
+        context: BackgroundUpdateConsentContext
+    ) -> BackgroundUpdateConsentQualification {
+        if let policy = context.policies["c:\(token)"] {
+            switch policy {
+            case .ignored:
+                return .blocked(.ignored)
+            case .pinned(let version):
+                return .blocked(.pinned(version: version))
+            }
+        }
+        guard context.candidateTokens.contains(token) else {
+            return .blocked(.notCurrentlyOutdated)
+        }
+        guard context.resolvedAppTokens.contains(token) else {
+            return .blocked(.installedAppUnavailable)
+        }
+        guard !context.runningTokens.contains(token) else {
+            return .blocked(.running)
+        }
+        return evaluate(profile: profile, download: download)
+    }
+}
+
+/// A current, actionable reason why a durable consent cannot run unattended right now.
+public enum BackgroundUpdateConsentBlocker: Equatable, Sendable {
+    case ignored
+    case pinned(version: String)
+    case notCurrentlyOutdated
+    case installedAppUnavailable
+    case running
+}
+
+/// Snapshot creation and resource pressure are intentionally omitted: checking either from
+/// Settings would mutate disk or perform a potentially stale preflight. The UI says explicitly
+/// that those final vetoes are evaluated immediately before an unattended update.
+public struct BackgroundUpdateConsentContext: Equatable, Sendable {
+    public let candidateTokens: Set<String>
+    public let resolvedAppTokens: Set<String>
+    public let runningTokens: Set<String>
+    public let policies: [String: UpdatePolicy]
+
+    public init(
+        candidateTokens: Set<String>,
+        resolvedAppTokens: Set<String>,
+        runningTokens: Set<String>,
+        policies: [String: UpdatePolicy]
+    ) {
+        self.candidateTokens = candidateTokens
+        self.resolvedAppTokens = resolvedAppTokens
+        self.runningTokens = runningTokens
+        self.policies = policies
     }
 }
