@@ -6,7 +6,8 @@ let sudo = Process()
 sudo.executableURL = URL(fileURLWithPath: "/usr/bin/sudo")
 sudo.arguments = ["-A"] + Array(CommandLine.arguments.dropFirst())
 sudo.environment = AuthorizationEnvironment.sanitized(
-    inherited: ProcessInfo.processInfo.environment
+    inherited: ProcessInfo.processInfo.environment,
+    overrides: HomebrewEnvironment.trustedSudoShimOverrides()
 )
 
 do {

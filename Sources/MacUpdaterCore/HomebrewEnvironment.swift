@@ -81,7 +81,17 @@ public enum HomebrewEnvironment {
         )
     }
 
-    /// Resolves and verifies the compiled askpass and sudo shim from an immutable location.
+    /// Builds the trusted overrides used by the compiled sudo shim. It deliberately ignores
+    /// the shim's inherited environment and resolves the root-owned system helper again.
+    public static func trustedSudoShimOverrides() -> [String: String] {
+        var overrides = ["PATH": processPath]
+        if let components = try? AuthorizationComponentResolver().resolveAndVerify() {
+            overrides["SUDO_ASKPASS"] = components.askpassExecutable.path
+        }
+        return overrides
+    }
+
+    /// Resolves and verifies the compiled askpass and sudo shim from the system installation.
     /// Failure clears both paths, so no stale or unverified executable remains attached.
     static func bootstrapAskpass() {
         do {

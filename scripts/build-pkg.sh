@@ -222,9 +222,9 @@ chmod 0555 "$CONTENTS/Helpers/WegaAskpass" "$CONTENTS/Helpers/sudo-shim/sudo"
 # ---------------------------------------------------------------------------
 echo "→ Tworzę PKG..."
 # `/Applications` is commonly root:admin 0775, so an administrator can replace a
-# nested helper after signature verification. The PKG therefore installs a second
-# signed copy below a root-owned, non-writable system path. The app prefers it at
-# runtime and uses the bundle copy only from a genuinely read-only volume.
+# nested helper after signature verification. Runtime therefore accepts only the
+# signed copy installed below this root-owned, non-writable system path. The signed
+# bundle copy is packaging input and is never a DMG/runtime fallback.
 mkdir -p "$PKG_APPLICATIONS" "$PKG_AUTHORIZATION_DIR/sudo-shim"
 cp -R "$APP_BUNDLE" "$PKG_APPLICATIONS/"
 cp "$CONTENTS/Helpers/WegaAskpass" "$PKG_AUTHORIZATION_DIR/WegaAskpass"

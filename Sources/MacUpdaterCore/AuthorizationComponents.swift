@@ -112,7 +112,7 @@ struct AuthorizationPathTrustValidator {
     }
 }
 
-/// Locates the two compiled authorization helpers in an immutable installed or bundled path.
+/// Locates the two compiled authorization helpers in the immutable system installation.
 /// Every resolution validates that invariant and their code signatures before the paths are
 /// attached to a child process environment.
 struct AuthorizationComponentResolver {
@@ -130,10 +130,8 @@ struct AuthorizationComponentResolver {
     private let validateLocation: LocationValidator
 
     init(fileManager: FileManager = .default) {
-        let bundled = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/Helpers", isDirectory: true)
         self.init(
-            helperDirectories: [Self.installedHelpersDirectory, bundled],
+            helperDirectories: [Self.installedHelpersDirectory],
             fileManager: fileManager,
             verifyCode: { url, signingID in
                 try CodeSignatureVerifier.verifyStaticCode(
@@ -242,17 +240,20 @@ struct AuthorizationComponentResolver {
 /// Environment accepted by authorization-bearing child processes. Anything outside this
 /// finite list is removed, including loader injection variables and `WEGA_SUDO_REAL`.
 public enum AuthorizationEnvironment {
-    private static let allowedKeys: Set<String> = [
-        "HOME", "LANG", "LC_ALL", "LC_CTYPE", "LOGNAME", "PATH",
-        "SUDO_ASKPASS", "TMPDIR", "USER"
+    private static let inheritedKeys: Set<String> = [
+        "HOME", "LANG", "LC_ALL", "LC_CTYPE", "LOGNAME", "TMPDIR", "USER"
+    ]
+    private static let overrideOnlyKeys: Set<String> = [
+        "PATH", "SUDO_ASKPASS"
     ]
 
     public static func sanitized(
         inherited: [String: String],
         overrides: [String: String] = [:]
     ) -> [String: String] {
-        var result = inherited.filter { allowedKeys.contains($0.key) }
-        for (key, value) in overrides where allowedKeys.contains(key) {
+        var result = inherited.filter { inheritedKeys.contains($0.key) }
+        let allowedOverrideKeys = inheritedKeys.union(overrideOnlyKeys)
+        for (key, value) in overrides where allowedOverrideKeys.contains(key) {
             result[key] = value
         }
         return result

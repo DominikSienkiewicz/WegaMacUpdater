@@ -62,12 +62,13 @@ bump and move its entries under the new version heading when cutting a release.
   and cryptographically revalidates their code bytes before every environment attachment.
   Brew and mas now run with an explicit environment allowlist, so loader variables and
   inherited escape hatches such as `WEGA_SUDO_REAL` never reach the authorization path.
-  Runtime accepts the signed components only from a symlink-free, root-owned and
-  non-user-writable path or a read-only mounted filesystem, closing the validation-to-use
-  race. Because `/Applications` is commonly administrator-writable, the PKG installs a
-  preferred system copy under `/Library/Application Support/WegaMacUpdater/Authorization`
-  as root-owned `0755` directories and `0555` executables; the bundle copy is accepted only
-  from a genuinely read-only volume.
+  Inherited `PATH` and `SUDO_ASKPASS` are now override-only; the latter can come only from
+  a successful trusted-component resolution, including a fresh resolution inside the sudo
+  shim. Runtime accepts the signed components exclusively from the symlink-free, root-owned
+  and non-user-writable system payload under
+  `/Library/Application Support/WegaMacUpdater/Authorization`. The PKG installs it as
+  root-owned `0755` directories and `0555` executables. Bundle, DMG and network/FUSE
+  locations are no longer runtime fallbacks, removing their validation-to-use race.
   The PAM writer uses backup → atomic replacement → readback verification → rollback;
   without the signed helper the UI fails closed and offers a transactional Terminal command
   whose active-directive check ignores commented `pam_tid.so` lines.
