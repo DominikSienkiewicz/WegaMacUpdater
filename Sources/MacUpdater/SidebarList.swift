@@ -1,6 +1,24 @@
 import SwiftUI
 import MacUpdaterCore
 
+enum SidebarFocusPolicy {
+    static let orderedSelections: [SidebarSelection] = [
+        .updates(.all),
+        .updates(.apps),
+        .updates(.cli),
+        .updates(.security),
+        .migration,
+        .inventory,
+        .uninstall,
+        .logs,
+    ]
+
+    static func accessibilityPriority(for selection: SidebarSelection) -> Double {
+        guard let index = orderedSelections.firstIndex(of: selection) else { return 0 }
+        return Double(orderedSelections.count - index)
+    }
+}
+
 /// The glass sidebar. `NavigationSplitView` supplies the material, the selection capsule and
 /// the hover fill; the hand-rolled `SidebarItemRow` that used to draw them is gone.
 struct SidebarList: View {
@@ -69,6 +87,7 @@ struct SidebarList: View {
         }
         .badge(count > 0 ? Text(badgeText(count, isDanger: isDanger)) : Text?.none)
         .tag(item)
+        .accessibilitySortPriority(SidebarFocusPolicy.accessibilityPriority(for: item))
     }
 
     private func badgeText(_ count: Int, isDanger: Bool) -> AttributedString {
@@ -85,6 +104,7 @@ private struct SidebarRowIcon: View {
     let activity:    UpdateActivity
     let isActive:    Bool
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var rotation: Double = 0
 
     private var iconColor: Color {
@@ -98,10 +118,10 @@ private struct SidebarRowIcon: View {
 
     /// Continuous spin while scanning; ease back to rest otherwise.
     private func spin(for activity: UpdateActivity) {
-        if activity == .scanning {
+        if activity == .scanning && !reduceMotion {
             withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) { rotation = 360 }
         } else {
-            withAnimation(.easeOut(duration: 0.3)) { rotation = 0 }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) { rotation = 0 }
         }
     }
 
@@ -109,8 +129,9 @@ private struct SidebarRowIcon: View {
         Image(systemName: systemImage)
             .foregroundStyle(iconColor)
             .rotationEffect(.degrees(rotation))
-            .animation(.easeInOut(duration: 0.25), value: iconColor)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: iconColor)
             .onChange(of: activity) { _, new in spin(for: new) }
+            .onChange(of: reduceMotion) { _, _ in spin(for: activity) }
             .onAppear { spin(for: activity) }
     }
 }

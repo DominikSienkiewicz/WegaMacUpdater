@@ -9,6 +9,14 @@ enum InspectedUpdate: Equatable {
     case manual(ManualOutdatedApp)
 }
 
+@MainActor
+enum UpdateFilterInteraction {
+    static func apply(_ filter: UpdateFilter, to scan: ScanStore) {
+        scan.inspectedKey = nil
+        scan.restrictSelection(to: filter)
+    }
+}
+
 struct UpdateView: View {
     var onWegaState:   ((WegaState) -> Void)?
     var onBadgeChange: ((Int) -> Void)?
@@ -79,8 +87,7 @@ struct UpdateView: View {
             // the pane after switching away from it. Clear it so the detail pane never
             // describes an item that's no longer in the visible list.
             .onChange(of: updateFilter) { _, filter in
-                scan.inspectedKey = nil
-                scan.restrictSelection(to: filter)
+                UpdateFilterInteraction.apply(filter, to: scan)
             }
             .onAppear {
                 // The tree this view sits in is rebuilt whenever the language re-keys it
@@ -100,7 +107,7 @@ struct UpdateView: View {
                 // a no-op after the first appearance and whenever a scan has already run.
                 scan.restoreLastScan()
                 scan.replayLastScan()
-                scan.restrictSelection(to: updateFilter)
+                UpdateFilterInteraction.apply(updateFilter, to: scan)
             }
     }
 
@@ -259,12 +266,18 @@ struct UpdateView: View {
             VStack(spacing: 0) {
                 // Select-all row
                 HStack(spacing: 10) {
-                    Image(systemName: selectAllSymbol)
-                        .foregroundStyle(selectedVisibleCount == 0 ? .secondary : Color.wegaHoney)
-                        .font(.system(size: 16))
-                        .onTapGesture { scan.toggleAll(filter: updateFilter) }
-                        .accessibilityLabel(tr("Zaznacz wszystko"))
-                        .accessibilityAddTraits(.isButton)
+                    Button {
+                        scan.toggleAll(filter: updateFilter)
+                    } label: {
+                        Image(systemName: selectAllSymbol)
+                            .foregroundStyle(selectedVisibleCount == 0 ? .secondary : Color.wegaHoney)
+                            .font(.system(size: 16))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(tr("Zaznacz wszystko"))
+                    .accessibilityValue(
+                        trf("%@ z %@ zaznaczonych", "\(selectedVisibleCount)", "\(visibleItems.count)")
+                    )
                     Text(selectedVisibleCount == 0 ? tr("Zaznacz wszystko") : trf("%@ z %@ zaznaczonych", "\(selectedVisibleCount)", "\(visibleItems.count)"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)

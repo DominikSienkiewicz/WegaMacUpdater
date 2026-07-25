@@ -1,5 +1,6 @@
 import Foundation
 
+#if DEBUG
 /// `sudo` PATH-shim that transparently injects the `-A` flag.
 ///
 /// Why: `mas upgrade` (and potentially other CLIs we wrap) shells out to
@@ -14,8 +15,8 @@ import Foundation
 /// `sudo …`, the kernel resolves *our* `sudo` first, which re-execs
 /// `/usr/bin/sudo -A …` and lets the existing askpass helper render the
 /// password dialog.
-public enum SudoShim {
-    public static let scriptName = "sudo"
+enum SudoShim {
+    static let scriptName = "sudo"
 
     /// `WEGA_SUDO_REAL` is an escape hatch for tests: when set, the shim
     /// delegates to that path instead of `/usr/bin/sudo`. Production code
@@ -32,28 +33,25 @@ public enum SudoShim {
     /// and returns the URL of the *directory* (intended to be prepended to
     /// `PATH`, not the script itself).
     @discardableResult
-    public static func install(in directory: URL) throws -> URL {
+    static func install(in directory: URL) throws -> URL {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o700)],
+            ofItemAtPath: directory.path
+        )
         let script = directory.appendingPathComponent(scriptName)
-        try Data(scriptBody.utf8).write(to: script, options: .atomic)
+        let expected = Data(scriptBody.utf8)
+        if (try? Data(contentsOf: script)) != expected {
+            try expected.write(to: script, options: .atomic)
+        }
         try FileManager.default.setAttributes(
             [.posixPermissions: NSNumber(value: 0o700)],
             ofItemAtPath: script.path
         )
+        guard try Data(contentsOf: script) == expected else {
+            throw CocoaError(.fileWriteUnknown)
+        }
         return directory
     }
-
-    /// Default install location:
-    /// `~/Library/Application Support/WegaMacUpdater/sudo-shim/`.
-    /// Returns the directory URL (creating it on first call).
-    @discardableResult
-    public static func installInApplicationSupport() throws -> URL {
-        let support = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ).appendingPathComponent("WegaMacUpdater/sudo-shim", isDirectory: true)
-        return try install(in: support)
-    }
 }
+#endif

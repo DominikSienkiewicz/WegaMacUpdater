@@ -167,6 +167,7 @@ public final class BrewService: @unchecked Sendable {
                 executableURL: brewURL,
                 arguments: arguments,
                 environment: HomebrewEnvironment.environment,
+                inheritParentEnvironment: false,
                 timeout: nil
             )
         )
@@ -182,6 +183,7 @@ public final class BrewService: @unchecked Sendable {
                 executableURL: brewURL,
                 arguments: arguments,
                 environment: HomebrewEnvironment.environment,
+                inheritParentEnvironment: false,
                 timeout: timeout
             )
         )

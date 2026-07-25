@@ -49,6 +49,9 @@ public enum WegaHelper {
     public static let plistName = "com.wega.WegaMacUpdater.helper.plist"
     /// Code-signing identifier the helper binary is signed with (`codesign -i …`).
     public static let helperSigningID = "com.wega.WegaMacUpdater.helper"
+    /// Signing identifiers of the compiled, bundle-sealed authorization components.
+    public static let askpassSigningID = "com.wega.WegaMacUpdater.askpass"
+    public static let sudoShimSigningID = "com.wega.WegaMacUpdater.sudo-shim"
     /// Main app bundle identifier.
     public static let appBundleID = AppMetadata.bundleIdentifier
     /// Helper protocol version (bump on breaking interface changes).

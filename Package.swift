@@ -10,6 +10,8 @@ let package = Package(
     ],
     products: [
         .executable(name: "WegaMacUpdater", targets: ["WegaMacUpdater"]),
+        .executable(name: "WegaAskpass", targets: ["WegaAskpass"]),
+        .executable(name: "WegaSudoShim", targets: ["WegaSudoShim"]),
         .library(name: "MacUpdaterCore", targets: ["MacUpdaterCore"]),
     ],
     targets: [
@@ -33,6 +35,15 @@ let package = Package(
             dependencies: ["MacUpdaterCore"],
             path: "Sources/WegaPrivilegedHelper",
             exclude: ["com.wega.WegaMacUpdater.helper.plist"]
+        ),
+        .executableTarget(
+            name: "WegaAskpass",
+            path: "Sources/WegaAskpass"
+        ),
+        .executableTarget(
+            name: "WegaSudoShim",
+            dependencies: ["MacUpdaterCore"],
+            path: "Sources/WegaSudoShim"
         ),
         .testTarget(
             name: "MacUpdaterTests",

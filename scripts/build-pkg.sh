@@ -36,12 +36,15 @@ INSTALLER_IDENTITY="${2:-}"   # "Developer ID Installer: …" — podpis instala
 BUILD_DIR="$(pwd)/.build/pkg-staging"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"
+PKG_ROOT="$BUILD_DIR/pkg-root"
+PKG_APPLICATIONS="$PKG_ROOT/Applications"
+PKG_AUTHORIZATION_DIR="$PKG_ROOT/Library/Application Support/WegaMacUpdater/Authorization"
 OUTPUT_PKG="$(pwd)/build/$APP_NAME.pkg"
 OUTPUT_DMG="$(pwd)/build/$APP_NAME.dmg"
 
 echo "→ Czyszczę staging..."
 rm -rf "$BUILD_DIR"
-mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources"
+mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources" "$CONTENTS/Helpers/sudo-shim"
 mkdir -p "$(dirname "$OUTPUT_PKG")"
 
 # ---------------------------------------------------------------------------
@@ -68,7 +71,7 @@ RESOURCE_BIN_DIR="${ARCH_BIN_DIRS[0]}"
 if (( ${#ARCH_BIN_DIRS[@]} > 1 )); then
   BIN_DIR="$BUILD_DIR/universal-bin"
   mkdir -p "$BIN_DIR"
-  for product in "$APP_NAME" "WegaPrivilegedHelper"; do
+  for product in "$APP_NAME" "WegaPrivilegedHelper" "WegaAskpass" "WegaSudoShim"; do
     PRODUCT_SLICES=()
     for arch_bin_dir in "${ARCH_BIN_DIRS[@]}"; do
       PRODUCT_SLICE="$arch_bin_dir/$product"
@@ -91,6 +94,19 @@ if [[ ! -f "$BINARY" ]]; then
 fi
 
 cp "$BINARY" "$CONTENTS/MacOS/$APP_NAME"
+
+# SEC-05: compiled authorization components replace user-writable shell scripts.
+ASKPASS_BIN="$BIN_DIR/WegaAskpass"
+SUDO_SHIM_BIN="$BIN_DIR/WegaSudoShim"
+if [[ ! -f "$ASKPASS_BIN" || ! -f "$SUDO_SHIM_BIN" ]]; then
+  echo "❌ Nie znaleziono skompilowanych komponentów autoryzacji w $BIN_DIR."
+  exit 1
+fi
+cp "$ASKPASS_BIN" "$CONTENTS/Helpers/WegaAskpass"
+cp "$SUDO_SHIM_BIN" "$CONTENTS/Helpers/sudo-shim/sudo"
+chmod 0755 "$CONTENTS/Helpers" "$CONTENTS/Helpers/sudo-shim"
+chmod 0555 "$CONTENTS/Helpers/WegaAskpass" "$CONTENTS/Helpers/sudo-shim/sudo"
+echo "   ✓ Skompilowane askpass + sudo shim osadzone w Contents/Helpers"
 
 # ---------------------------------------------------------------------------
 # FEAT-01: osadź privileged helper + jego launchd plist w bundlu.
@@ -167,11 +183,21 @@ cat > "$CONTENTS/Info.plist" << PLIST
 PLIST
 
 # ---------------------------------------------------------------------------
-# Podpis INSIDE-OUT (DEBT-01): najpierw zagnieżdżony helper, potem kontener.
+# Podpis INSIDE-OUT (DEBT-01): najpierw zagnieżdżone komponenty, potem kontener.
 # Apple odradza --deep do podpisywania — psuje notaryzację przy zagnieżdżonym kodzie.
 echo "→ Podpisuję (inside-out: helper → app)..."
 HELPER_SIGN_ID="com.wega.WegaMacUpdater.helper"
+ASKPASS_SIGN_ID="com.wega.WegaMacUpdater.askpass"
+SUDO_SHIM_SIGN_ID="com.wega.WegaMacUpdater.sudo-shim"
 if [[ -n "$SIGN_IDENTITY" ]]; then
+    codesign --force --options runtime --timestamp \
+        -i "$ASKPASS_SIGN_ID" \
+        --sign "$SIGN_IDENTITY" \
+        "$CONTENTS/Helpers/WegaAskpass"
+    codesign --force --options runtime --timestamp \
+        -i "$SUDO_SHIM_SIGN_ID" \
+        --sign "$SIGN_IDENTITY" \
+        "$CONTENTS/Helpers/sudo-shim/sudo"
     codesign --force --options runtime --timestamp \
         -i "$HELPER_SIGN_ID" \
         --sign "$SIGN_IDENTITY" \
@@ -181,24 +207,46 @@ if [[ -n "$SIGN_IDENTITY" ]]; then
         "$APP_BUNDLE"
     echo "   ✓ Podpisano (Developer ID + hardened runtime): $SIGN_IDENTITY"
 else
+    codesign --force -i "$ASKPASS_SIGN_ID" --sign - "$CONTENTS/Helpers/WegaAskpass"
+    codesign --force -i "$SUDO_SHIM_SIGN_ID" --sign - "$CONTENTS/Helpers/sudo-shim/sudo"
     codesign --force -i "$HELPER_SIGN_ID" --sign - "$CONTENTS/MacOS/WegaPrivilegedHelper"
     codesign --force --sign - "$APP_BUNDLE"
     echo "   ⚠️ Ad-hoc (bez Developer ID). UWAGA: SMAppService helper NIE zarejestruje się bez podpisu Developer ID."
 fi
 
+# `pkgbuild` installs system-domain payloads as root:wheel. Keep authorization
+# components executable/readable by the GUI user, but never writable by it.
+chmod 0755 "$CONTENTS/Helpers" "$CONTENTS/Helpers/sudo-shim"
+chmod 0555 "$CONTENTS/Helpers/WegaAskpass" "$CONTENTS/Helpers/sudo-shim/sudo"
+
 # ---------------------------------------------------------------------------
 echo "→ Tworzę PKG..."
-# Pliki kopiowane z .build (binarka helpera, bundle zasobów) bywają read-only —
-# pkgbuild zgłasza wtedy "write: Permission denied" przy analizie payloadu.
-# Nadanie prawa zapisu właścicielowi usuwa te ostrzeżenia (bez wpływu na wynik).
-chmod -R u+w "$APP_BUNDLE" 2>/dev/null || true
+# `/Applications` is commonly root:admin 0775, so an administrator can replace a
+# nested helper after signature verification. Runtime therefore accepts only the
+# signed copy installed below this root-owned, non-writable system path. The signed
+# bundle copy is packaging input and is never a DMG/runtime fallback.
+mkdir -p "$PKG_APPLICATIONS" "$PKG_AUTHORIZATION_DIR/sudo-shim"
+cp -R "$APP_BUNDLE" "$PKG_APPLICATIONS/"
+cp "$CONTENTS/Helpers/WegaAskpass" "$PKG_AUTHORIZATION_DIR/WegaAskpass"
+cp "$CONTENTS/Helpers/sudo-shim/sudo" "$PKG_AUTHORIZATION_DIR/sudo-shim/sudo"
+chmod 0755 \
+    "$PKG_ROOT/Library" \
+    "$PKG_ROOT/Library/Application Support" \
+    "$PKG_ROOT/Library/Application Support/WegaMacUpdater" \
+    "$PKG_AUTHORIZATION_DIR" \
+    "$PKG_AUTHORIZATION_DIR/sudo-shim"
+chmod 0555 \
+    "$PKG_AUTHORIZATION_DIR/WegaAskpass" \
+    "$PKG_AUTHORIZATION_DIR/sudo-shim/sudo"
+
 # DEBT-02: podpisz sam pakiet (nie tylko .app w środku). pkgbuild akceptuje wyłącznie
 # certyfikat "Developer ID Installer" — tożsamość "Developer ID Application" (arg 1)
 # nie podpisze pakietu, dlatego .pkg ma własną, drugą tożsamość (arg 2).
 if [[ -n "$INSTALLER_IDENTITY" ]]; then
     pkgbuild \
-        --component "$APP_BUNDLE" \
-        --install-location /Applications \
+        --root "$PKG_ROOT" \
+        --install-location / \
+        --ownership recommended \
         --identifier "$BUNDLE_ID" \
         --version "$VERSION" \
         --sign "$INSTALLER_IDENTITY" \
@@ -209,8 +257,9 @@ else
         echo "   ⚠️ Brak tożsamości 'Developer ID Installer' (drugi argument) — .pkg będzie NIEPODPISANY (notaryzacja .pkg nie przejdzie)."
     fi
     pkgbuild \
-        --component "$APP_BUNDLE" \
-        --install-location /Applications \
+        --root "$PKG_ROOT" \
+        --install-location / \
+        --ownership recommended \
         --identifier "$BUNDLE_ID" \
         --version "$VERSION" \
         "$OUTPUT_PKG"

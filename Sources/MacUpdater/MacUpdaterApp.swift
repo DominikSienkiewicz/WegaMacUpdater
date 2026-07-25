@@ -12,6 +12,8 @@ struct WegaMacUpdaterApp: App {
     /// Held here, above `.id(localization.language)`, so a language switch re-keys the
     /// view tree without discarding scan results or a running upgrade.
     @StateObject private var scan = ScanStore()
+    /// Migration can remain active while `.id(localization.language)` rebuilds its view.
+    @StateObject private var migration = MigrationStore()
 
     // Deliberately no `init()`. The askpass helper and the sudo shim used to be written into
     // Application Support here, on every launch, before the user had authorised anything.
@@ -25,6 +27,7 @@ struct WegaMacUpdaterApp: App {
                 .environmentObject(localization)
                 .environmentObject(policies)
                 .environmentObject(scan)
+                .environmentObject(migration)
                 // Re-key the whole tree on language change so every tr(...) re-evaluates.
                 .id(localization.language)
                 .tint(Color.wegaHoney)

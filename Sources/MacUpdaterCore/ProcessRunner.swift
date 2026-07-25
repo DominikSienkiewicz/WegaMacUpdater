@@ -4,17 +4,20 @@ public struct ProcessRequest: Equatable, Sendable {
     public var executableURL: URL
     public var arguments: [String]
     public var environment: [String: String]
+    public var inheritParentEnvironment: Bool
     public var timeout: TimeInterval?
 
     public init(
         executableURL: URL,
         arguments: [String] = [],
         environment: [String: String] = [:],
+        inheritParentEnvironment: Bool = true,
         timeout: TimeInterval? = nil
     ) {
         self.executableURL = executableURL
         self.arguments = arguments
         self.environment = environment
+        self.inheritParentEnvironment = inheritParentEnvironment
         self.timeout = timeout
     }
 }
@@ -108,7 +111,9 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         process.arguments = request.arguments
 
         if !request.environment.isEmpty {
-            var environment = ProcessInfo.processInfo.environment
+            var environment = request.inheritParentEnvironment
+                ? ProcessInfo.processInfo.environment
+                : [:]
             request.environment.forEach { key, value in
                 environment[key] = value
             }

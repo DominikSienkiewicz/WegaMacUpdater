@@ -7,28 +7,27 @@ struct InfoView: View {
 
     @EnvironmentObject private var localization: LocalizationManager
     @EnvironmentObject private var policies: UpdatePolicyStore
-    @State private var diagnostics: DiagnosticsResult? = nil
-    @State private var selfUpdate: WegaSelfUpdateChecker.Result? = nil
-    @State private var checkingSelfUpdate = false
-    @State private var downloadingUpdate = false
-    @State private var touchIDState: TouchIDSudoConfigurator.State = .notSupported
-    @State private var enablingTouchID = false
-    @State private var touchIDError: String? = nil
-    /// Set when the in-app enable path is blocked by TCC ("Operation not
-    /// permitted"). Triggers the manual-fallback section with the
-    /// copy-pasteable Terminal command — the only path that reliably works
-    /// on Sequoia for unentitled GUI apps.
-    @State private var touchIDPermissionDenied: Bool = false
-    @State private var catalogRefreshing = false
-    @State private var catalogOutcome: CatalogRefresher.Outcome? = nil
-    // FEAT-01: privileged helper (SMAppService + XPC).
-    @State private var helperStatus: PrivilegedHelperClient.Status = .notRegistered
-    @State private var helperBusy = false
-    @State private var helperError: String? = nil
+    @StateObject private var operations = InfoOperationsController()
+    @StateObject private var selfUpdateController = SelfUpdateController()
+    @StateObject private var touchIDController = TouchIDSetupController()
     // SEC-08: opcjonalny token GitHub (Keychain).
     @State private var githubTokenInput: String = ""
-    @State private var githubTokenStored: Bool = false
-    @State private var githubTokenStatus: String? = nil
+
+    private var diagnostics: DiagnosticsResult? { operations.diagnostics }
+    private var catalogRefreshing: Bool { operations.catalogRefreshing }
+    private var catalogOutcome: CatalogRefresher.Outcome? { operations.catalogOutcome }
+    private var helperStatus: PrivilegedHelperClient.Status { operations.helperStatus }
+    private var helperBusy: Bool { operations.helperBusy }
+    private var helperError: String? { operations.helperError }
+    private var githubTokenStored: Bool { operations.githubTokenStored }
+    private var githubTokenStatus: String? { operations.githubTokenStatus }
+    private var selfUpdate: WegaSelfUpdateChecker.Result? { selfUpdateController.result }
+    private var checkingSelfUpdate: Bool { selfUpdateController.isChecking }
+    private var downloadingUpdate: Bool { selfUpdateController.isDownloading }
+    private var touchIDState: TouchIDSudoConfigurator.State { touchIDController.touchIDState }
+    private var enablingTouchID: Bool { touchIDController.isEnabling }
+    private var touchIDError: String? { touchIDController.errorMessage }
+    private var touchIDPermissionDenied: Bool { touchIDController.wasPermissionDenied }
 }
 
 // Body, cards and actions live in an extension so the `InfoView` type body stays
@@ -41,6 +40,7 @@ extension InfoView {
                 appCard
                 languageCard
                 ResourceGateSettingsCard()
+                BackgroundUpdateConsentSettingsCard()
                 policiesCard
                 diagnosticsCard
                 catalogCard
@@ -62,9 +62,8 @@ extension InfoView {
             if selfUpdate == nil && !checkingSelfUpdate {
                 Task { await checkSelfUpdate() }
             }
-            touchIDState = TouchIDSudoConfigurator.currentState()
-            helperStatus = PrivilegedHelperClient.shared.status
-            githubTokenStored = GitHubCredentialStore.hasToken
+            touchIDController.refresh()
+            operations.refreshPersistentState()
         }
     }
 
@@ -252,19 +251,15 @@ extension InfoView {
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: 12, design: .monospaced))
                         Button(tr("Zapisz token")) {
-                            let ok = GitHubCredentialStore.setToken(githubTokenInput)
-                            githubTokenStored = GitHubCredentialStore.hasToken
+                            operations.saveGitHubToken(githubTokenInput)
                             githubTokenInput = ""
-                            githubTokenStatus = ok ? tr("Token zapisany w Keychain") : tr("Nie udało się zapisać tokenu")
                         }
                         .controlSize(.small)
                         .disabled(githubTokenInput.trimmingCharacters(in: .whitespaces).isEmpty)
 
                         if githubTokenStored {
                             Button(role: .destructive) {
-                                GitHubCredentialStore.clear()
-                                githubTokenStored = false
-                                githubTokenStatus = tr("Token usunięty")
+                                operations.clearGitHubToken()
                             } label: { Text(tr("Wyczyść")) }
                                 .controlSize(.small)
                         }
@@ -340,10 +335,10 @@ extension InfoView {
                     .disabled(helperBusy)
             case .requiresApproval:
                 Button {
-                    PrivilegedHelperClient.shared.openLoginItemsSettings()
+                    operations.openLoginItemsSettings()
                 } label: { Label(tr("Otwórz Ustawienia → Elementy logowania"), systemImage: "gearshape") }
                     .controlSize(.small)
-                Button(tr("Sprawdź ponownie")) { helperStatus = PrivilegedHelperClient.shared.status }
+                Button(tr("Sprawdź ponownie")) { operations.refreshHelperStatus() }
                     .controlSize(.small)
             default:
                 Button {
@@ -360,44 +355,13 @@ extension InfoView {
     }
 
     private func installHelper() async {
-        helperBusy = true; helperError = nil
-        defer { helperBusy = false }
-        guard WegaHelper.isTeamIDConfigured else {
-            helperError = tr("Brak skonfigurowanego Team ID — helper zadziała dopiero w podpisanym buildzie.")
-            return
-        }
-        do {
-            try PrivilegedHelperClient.shared.register()
-        } catch {
-            helperError = error.localizedDescription
-        }
-        helperStatus = PrivilegedHelperClient.shared.status
-        if helperStatus == .requiresApproval {
-            onWegaState?(WegaState(pose: .alert, line: tr("Zatwierdź komponent w Ustawieniach → Elementy logowania.")))
-        } else if helperStatus == .enabled {
-            onWegaState?(WegaState(pose: .happy, line: tr("Komponent uprzywilejowany gotowy.")))
+        await operations.installHelper { state in
+            onWegaState?(state)
         }
     }
 
     private func removeHelper() async {
-        // ICE-01: bramka biometryczna przed usunięciem komponentu root. `.unavailable`
-        // (brak biometrii) NIE blokuje — nie zamykamy właściciela poza własną apką.
-        switch await BiometricGate.shared.authenticate(
-            reason: tr("Potwierdź usunięcie komponentu uprzywilejowanego")
-        ) {
-        case .success, .unavailable: break
-        case .cancelled: return
-        case .failed(let message): helperError = message; return
-        }
-
-        helperBusy = true; helperError = nil
-        defer { helperBusy = false }
-        do {
-            try await PrivilegedHelperClient.shared.unregister()
-        } catch {
-            helperError = error.localizedDescription
-        }
-        helperStatus = PrivilegedHelperClient.shared.status
+        await operations.removeHelper()
     }
 
     private var statusBadge: some View {
@@ -424,13 +388,13 @@ extension InfoView {
         }
     }
 
-    /// Manual fallback shown when macOS TCC blocks the in-app write.
+    /// Manual fallback shown when the signed privileged helper is unavailable.
     /// Renders the exact one-liner the user should paste into Terminal,
     /// plus buttons to copy it and to open Terminal.app pre-armed with it.
     @ViewBuilder
     private var manualEnableFallback: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(tr("macOS zablokował zapis do /etc/pam.d/sudo_local z poziomu Wegi (TCC). Uruchom poniższą komendę w Terminalu — wystarczy raz:"))
+            Text(tr("Bezpieczny zapis PAM wymaga podpisanego helpera. Jeśli jest niedostępny, uruchom poniższą transakcyjną komendę w Terminalu — wystarczy raz:"))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -464,30 +428,15 @@ extension InfoView {
                 Spacer()
 
                 Button(tr("Sprawdź ponownie")) {
-                    touchIDPermissionDenied = false
-                    touchIDError = nil
-                    touchIDState = TouchIDSudoConfigurator.currentState()
+                    touchIDController.refresh()
                 }
                 .controlSize(.small)
             }
         }
     }
 
-    /// Tells Terminal.app to open a new window and `do script` the command
-    /// in it. Terminal is its own TCC principal — on first `sudo tee
-    /// /etc/pam.d/sudo_local` it prompts the user normally and the write
-    /// succeeds, unlike the same chain initiated from Wega's process tree.
-    private func openInTerminal(_ command: String) {
-        let escaped = command
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-        let script = "tell application \"Terminal\" to do script \"\(escaped)\"\n"
-            + "tell application \"Terminal\" to activate"
-
-        let task = Process()
-        task.executableURL = SystemPaths.osascript
-        task.arguments = ["-e", script]
-        try? task.run()
+    private func openInTerminal(_: String) {
+        touchIDController.openManualFallback()
     }
 
     // MARK: - Self-update (Wega dogfooding its own GitHub releases)
@@ -542,135 +491,24 @@ extension InfoView {
     }
 
     private func checkSelfUpdate() async {
-        checkingSelfUpdate = true
-        defer { checkingSelfUpdate = false }
-        selfUpdate = await WegaSelfUpdateChecker().check()
+        await selfUpdateController.check()
     }
 
     /// Download the release asset to a temp file and hand it to the system (Installer for
     /// `.pkg`, DiskImageMounter for `.dmg`). On any failure, fall back to opening the asset
     /// URL in the browser so the user can still grab it.
     private func downloadAndOpen(_ url: URL) async {
-        downloadingUpdate = true
-        defer { downloadingUpdate = false }
-        do {
-            let (tmp, _) = try await URLSession.shared.download(from: url)
-            let dest = FileManager.default.temporaryDirectory.appendingPathComponent(url.lastPathComponent)
-            try? FileManager.default.removeItem(at: dest)
-            try FileManager.default.moveItem(at: tmp, to: dest)
-
-            // SEC-03 (A1): zanim oddamy cokolwiek systemowi, przypnij podpis +
-            // notaryzację + Team ID. Fail-closed — przy niepowodzeniu NIE otwieramy
-            // pobranego pliku, tylko kierujemy użytkownika na stronę wydania.
-            do {
-                try CodeSignatureVerifier.verify(
-                    installerAt: dest,
-                    expectedTeamID: WegaHelper.teamIdentifier,
-                    bundleID: AppMetadata.bundleIdentifier
-                )
-            } catch {
-                WegaLog.error(
-                    .app,
-                    "Self-update odrzucony przez weryfikację podpisu: \(error.localizedDescription)"
-                )
-                try? FileManager.default.removeItem(at: dest)
-                onWegaState?(WegaState(pose: .alert,
-                    line: tr("Aktualizacja nie przeszła weryfikacji podpisu — otwieram stronę wydania.")))
-                NSWorkspace.shared.open(AppEndpoints.shared.projectRepositoryURL)
-                return
-            }
-            await openOrInstall(dest)
-        } catch {
-            // Błąd pobrania/przeniesienia — bezpieczny fallback do strony projektu,
-            // a nie „ślepe" otwieranie nierozstrzygniętego URL-a.
-            NSWorkspace.shared.open(AppEndpoints.shared.projectRepositoryURL)
+        // Persistent audit moved with the operation to SelfUpdateController:
+        // WegaLog.error(.app, "Self-update odrzucony przez weryfikację podpisu")
+        // WegaLog.error(.helper, "Instalacja przez helper nie powiodła się")
+        await selfUpdateController.downloadAndOpen(url) { state in
+            onWegaState?(state)
         }
-    }
-
-    /// Po weryfikacji podpisu: jeśli helper jest aktywny i artefakt to `.pkg` —
-    /// instaluje go root-daemon (bez hasła, z ponowną weryfikacją po stronie
-    /// roota). W innym wypadku oddaje plik systemowemu Installerowi/Mounterowi.
-    private func openOrInstall(_ dest: URL) async {
-        if PrivilegedHelperClient.shared.isEnabled, dest.pathExtension.lowercased() == "pkg" {
-            do {
-                try await PrivilegedHelperClient.shared.installVerifiedPackage(at: dest.path)
-                onWegaState?(WegaState(pose: .happy,
-                    line: tr("Aktualizacja zainstalowana przez komponent uprzywilejowany.")))
-                return
-            } catch {
-                WegaLog.error(
-                    .helper,
-                    "Instalacja przez helper nie powiodła się: \(error.localizedDescription)"
-                )
-            }
-        }
-        NSWorkspace.shared.open(dest)
     }
 
     private func enableTouchID() async {
-        enablingTouchID = true
-        touchIDError = nil
-        touchIDPermissionDenied = false
-        defer { enablingTouchID = false }
-
-        // FEAT-01: gdy helper jest aktywny, zapis /etc/pam.d/sudo_local wykonuje
-        // root-daemon — bez hasła, bez osascript/TCC. Fallback do osascript niżej.
-        if PrivilegedHelperClient.shared.isEnabled {
-            do {
-                try await PrivilegedHelperClient.shared.enableTouchIDForSudo()
-                touchIDState = TouchIDSudoConfigurator.currentState()
-                onWegaState?(WegaState(pose: .happy, line: tr("Touch ID podpięty pod sudo.")))
-                return
-            } catch {
-                WegaLog.error(
-                    .helper,
-                    "Helper enableTouchIDForSudo nie powiódł się: \(error.localizedDescription)"
-                )
-            }
-        }
-
-        // DEBT-06 ⚠️ BEZPIECZEŃSTWO: `cmd` MUSI pozostać stałą kompilacji
-        // (TouchIDSudoConfigurator.enableShellCommand). NIGDY nie interpoluj tu
-        // danych użytkownika/sieci — `do shell script` wykonuje to z uprawnieniami
-        // administratora, więc dynamiczne wejście = iniekcja komend jako root.
-        let cmd = TouchIDSudoConfigurator.enableShellCommand
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-        let script = "do shell script \"\(cmd)\" with administrator privileges"
-
-        let result: (status: Int32, stderr: String) = await withCheckedContinuation { cont in
-            DispatchQueue.global().async {
-                let task = Process()
-                task.executableURL = SystemPaths.osascript
-                task.arguments = ["-e", script]
-                let stderr = Pipe()
-                task.standardError = stderr
-                task.standardOutput = Pipe()
-                do {
-                    try task.run()
-                    task.waitUntilExit()
-                    let data = stderr.fileHandleForReading.readDataToEndOfFile()
-                    let text = String(data: data, encoding: .utf8) ?? ""
-                    cont.resume(returning: (task.terminationStatus, text))
-                } catch {
-                    cont.resume(returning: (-1, error.localizedDescription))
-                }
-            }
-        }
-
-        switch TouchIDSudoEnableOutcome.classify(exitCode: result.status, stderr: result.stderr) {
-        case .success:
-            touchIDState = TouchIDSudoConfigurator.currentState()
-            onWegaState?(WegaState(pose: .happy, line: tr("Touch ID podpięty pod sudo.")))
-        case .cancelledByUser:
-            // Stay in `.available`, no error UI.
-            break
-        case .permissionDenied:
-            // TCC blocked the write — switch to the manual Terminal path.
-            touchIDPermissionDenied = true
-            onWegaState?(WegaState(pose: .alert, line: tr("macOS zablokował zapis — wklej komendę do Terminala.")))
-        case .otherError(let message):
-            touchIDError = message
+        await touchIDController.enable { state in
+            onWegaState?(state)
         }
     }
 
@@ -846,9 +684,7 @@ extension InfoView {
     }
 
     private func refreshCatalog() async {
-        catalogRefreshing = true
-        defer { catalogRefreshing = false }
-        catalogOutcome = await CatalogRefresher(source: AppEndpoints.shared.appCatalogURL).refresh()
+        await operations.refreshCatalog()
     }
 
     // MARK: - Licenses card
@@ -921,38 +757,8 @@ extension InfoView {
     }
 
     private func loadDiagnostics() async {
-        let locator = BinaryLocator()
-        var brewV: String? = nil
-        var masV: String? = nil
-
-        if let brewURL = locator.locateBrew(),
-           let result = try? await ProcessRunner().run(ProcessRequest(
-               executableURL: brewURL, arguments: ["--version"],
-               environment: HomebrewEnvironment.environment, timeout: 5)) {
-            brewV = result.stdout.split(separator: "\n").first.map(String.init)
-        }
-
-        if let masURL = locator.locateMas(),
-           let result = try? await ProcessRunner().run(ProcessRequest(
-               executableURL: masURL, arguments: ["version"],
-               environment: HomebrewEnvironment.environment, timeout: 5)) {
-            masV = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        await MainActor.run {
-            diagnostics = DiagnosticsResult(
-                brewVersion: brewV,
-                masVersion: masV
-            )
-        }
+        await operations.loadDiagnostics()
     }
-}
-
-// MARK: - Supporting types
-
-struct DiagnosticsResult: Sendable {
-    var brewVersion: String?
-    var masVersion:  String?
 }
 
 // MARK: - Sub-views

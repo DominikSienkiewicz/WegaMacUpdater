@@ -86,23 +86,15 @@ public enum TouchIDSudoConfigurator {
         return base
     }
 
-    /// Writes `sudo_local` enabling Touch ID, as **root** (called only from the
-    /// privileged helper). Uses a non-atomic write (`open+write`, not temp+rename)
-    /// on purpose: on Sequoia the kernel/TCC policy rejects `rename(2)` into
-    /// `/etc/pam.d/` even for elevated processes, while a direct write is allowed
-    /// — the same reason the shell path used `tee`. Then locks down 0644 root:wheel.
+    /// Writes `sudo_local` as root through a backup → atomic write → readback
+    /// transaction. Any failure restores the original bytes and metadata; a failed
+    /// restoration is surfaced explicitly instead of leaving a partially written PAM stack.
     public static func writeSudoLocalEnablingTouchID() throws {
         let current = (try? String(contentsOfFile: sudoLocalPath, encoding: .utf8))
             ?? (try? String(contentsOfFile: SystemPaths.sudoLocalTemplate, encoding: .utf8))
         let contents = contentsEnablingTouchID(current: current)
         let url = URL(fileURLWithPath: sudoLocalPath)
-        try Data(contents.utf8).write(to: url, options: []) // non-atomic on purpose
-        try FileManager.default.setAttributes(
-            [.posixPermissions: NSNumber(value: 0o644),
-             .ownerAccountID: NSNumber(value: 0),        // root
-             .groupOwnerAccountID: NSNumber(value: 0)],  // wheel
-            ofItemAtPath: sudoLocalPath
-        )
+        try SudoLocalTransactionalWriter().writeAtomically(Data(contents.utf8), to: url)
     }
 
     /// Pure decision: combine the outcome of an `LAContext` biometry probe
@@ -166,21 +158,9 @@ public enum TouchIDSudoConfigurator {
         return false
     }
 
-    /// One-line shell command suitable for `osascript -e "do shell script ...
-    /// with administrator privileges"`. Idempotent: re-running on an
-    /// already-enabled file just rewrites the same content.
-    ///
-    /// Writes the final file **in place** with `tee` rather than building
-    /// the content in a `/var/folders/` temp and `mv`-ing it across. Reason:
-    /// on macOS Sequoia, `rename(2)` from `/var/folders/...` into
-    /// `/etc/pam.d/sudo_local` fails with `Operation not permitted` even
-    /// when the parent osascript was elevated to root — the kernel/TCC
-    /// policy treats rename into the PAM directory as protected, while
-    /// `open(O_WRONLY|O_CREAT|O_TRUNC) + write` (the tee path) is
-    /// allowed. The trade-off is atomicity: a one-line file is small
-    /// enough that a torn write would be visibly malformed and
-    /// re-runnable, which is acceptable.
-    public static let enableShellCommand: String = """
+    /// Retained as an internal compatibility seam for the pre-SEC-05 regression tests.
+    /// Production no longer executes shell text as root; it uses the bounded XPC method.
+    static let enableShellCommand: String = """
     /bin/sh -c '\
     set -e; \
     tmp="$(/usr/bin/mktemp)"; \
@@ -196,18 +176,29 @@ public enum TouchIDSudoConfigurator {
     /bin/rm -f "$tmp"'
     """
 
-    /// Copy-pasteable one-liner the user can run inside Terminal.app when
-    /// the in-app enable path fails with `Operation not permitted` (macOS
-    /// Sequoia TCC blocks writes to `/etc/pam.d/` from GUI apps and their
-    /// osascript-elevated children — Terminal.app is its own TCC
-    /// principal and prompts/grants on first use, so the same `sudo tee`
-    /// invocation works there).
-    ///
-    /// Idempotent: the `grep -q` guard prevents the directive from being
-    /// double-appended on re-runs. Uses `-a` (append) deliberately — we
-    /// never want to clobber any other lines the user may have added.
-    public static let manualEnableTerminalCommand: String =
-        #"grep -q 'pam_tid.so' /etc/pam.d/sudo_local 2>/dev/null || echo 'auth       sufficient     pam_tid.so' | sudo tee -a /etc/pam.d/sudo_local"#
+    /// Copy-pasteable fallback for Terminal.app. It performs backup, stages the new
+    /// contents in the PAM directory, atomically renames them into place, verifies
+    /// the bytes, and rolls back on failure. The grep accepts only active directives.
+    public static let manualEnableTerminalCommand: String = [
+        #"sudo /bin/sh -c 'set -eu; target=/etc/pam.d/sudo_local;"#,
+        #"backup=$(/usr/bin/mktemp /etc/pam.d/.sudo_local.wega-backup.XXXXXX);"#,
+        #"staged=$(/usr/bin/mktemp /etc/pam.d/.sudo_local.wega-new.XXXXXX);"#,
+        #"check=$(/usr/bin/mktemp /etc/pam.d/.sudo_local.wega-check.XXXXXX); had=0;"#,
+        #"if [ -e "$target" ]; then /bin/cp -p "$target" "$backup";"#,
+        #"/bin/cat "$target" > "$staged"; had=1;"#,
+        #"elif [ -r /etc/pam.d/sudo_local.template ]; then"#,
+        #"/bin/cat /etc/pam.d/sudo_local.template > "$staged"; fi;"#,
+        #"if ! /usr/bin/grep -E "^[[:space:]]*auth[[:space:]]+sufficient[[:space:]]+pam_tid\\.so""#,
+        #" "$staged" >/dev/null 2>&1; then"#,
+        #"/bin/echo "auth       sufficient     pam_tid.so" >> "$staged"; fi;"#,
+        #"/bin/chmod 0644 "$staged"; /usr/sbin/chown root:wheel "$staged";"#,
+        #"/bin/cp "$staged" "$check"; rollback() {"#,
+        #"if [ "$had" -eq 1 ]; then /bin/mv -f "$backup" "$target";"#,
+        #"else /bin/rm -f "$target"; fi; /bin/rm -f "$staged" "$check"; };"#,
+        #"if ! /bin/mv -f "$staged" "$target"; then rollback; exit 1; fi;"#,
+        #"if ! /usr/bin/cmp -s "$target" "$check"; then rollback; exit 1; fi;"#,
+        #"/bin/rm -f "$backup" "$check"'"#
+    ].joined(separator: " ")
 }
 
 /// Classified result of attempting to enable Touch ID for sudo via the
@@ -219,7 +210,7 @@ public enum TouchIDSudoConfigurator {
 ///   manual Terminal command + "Otwórz Terminal" button instead of a raw
 ///   stderr blob.
 /// - `.otherError` — genuine unexpected failure; surface stderr verbatim.
-public enum TouchIDSudoEnableOutcome: Equatable, Sendable {
+enum TouchIDSudoEnableOutcome: Equatable, Sendable {
     case success
     case cancelledByUser
     case permissionDenied

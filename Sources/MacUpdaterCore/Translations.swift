@@ -114,6 +114,8 @@ public enum Translations {
         "Nic w tej kategorii": "Nothing in this category",
         "W tej kategorii nie ma teraz aktualizacji. Przełącz kategorię w panelu bocznym.": "There are no updates in this category right now. Switch category in the sidebar.",
         "Zaznacz wszystko": "Select all",
+        "Zaznaczone": "Selected",
+        "Niezaznaczone": "Not selected",
         "Zamknij": "Close",
         "%@ z %@ zaznaczonych": "%@ of %@ selected",
         "Homebrew Formulae": "Homebrew Formulae",
@@ -404,6 +406,44 @@ public enum Translations {
         "Więcej działań": "More actions",
         // F3 — ciche aktualizacje w tle: opt-in per aplikacja, tylko dla chronionych casków.
         "Aktualizuj automatycznie w tle": "Update automatically in the background",
+        // BG-05 — trwały audyt i cofanie zgód niezależnie od bieżącej listy aktualizacji.
+        "Zgody na aktualizacje w tle": "Background update permissions",
+        "Brak zgód. Możesz je nadać z menu ⋯ przy chronionym casku na liście aktualizacji.":
+            "No permissions. You can grant one from the ⋯ menu of a protected cask in the update list.",
+        "Zgoda udzielona: %@": "Granted: %@",
+        "Cofnij zgodę": "Revoke permission",
+        "Przed każdą aktualizacją Wega ponownie sprawdza, czy aplikacja nie działa, nie jest zignorowana lub przypięta oraz czy można utworzyć snapshot.":
+            "Before every update, Wega checks again that the app is not running, ignored or pinned, and that a snapshot can be created.",
+        "Status każdego pakietu uwzględnia bieżącą aktualizację, reguły i uruchomioną aplikację. Snapshot, zasoby i bezpieczeństwo wydawcy są sprawdzane dopiero bezpośrednio przed aktualizacją.":
+            "Each package status includes its current update, policies, and running app. Snapshot, resources, and publisher safety are checked only immediately before an update.",
+        "Stałe warunki spełnione": "Stable requirements met",
+        "Stałe warunki niespełnione": "Stable requirements not met",
+        "Gotowe do kontroli końcowej": "Ready for final checks",
+        "Teraz zablokowane": "Currently blocked",
+        "Nie można ocenić": "Cannot evaluate",
+        "Instaluje aplikację bez uprzywilejowanych hooków, a pobranie ma sumę SHA-256.":
+            "Installs an app without privileged hooks, and the download has a SHA-256 checksum.",
+        "Pakiet oczekuje na aktualizację, aplikacja nie działa, nie ma reguły blokującej, a metadane spełniają stałe warunki.":
+            "The package has an available update, the app is not running, no policy blocks it, and its metadata meets the stable requirements.",
+        "Aktualizacje tego pakietu są ignorowane.": "Updates for this package are ignored.",
+        "Pakiet jest przypięty do wersji %@.": "The package is pinned to version %@.",
+        "Pakiet nie oczekuje teraz na aktualizację; zgoda pozostaje zapisana.":
+            "The package has no update waiting right now; its permission remains saved.",
+        "Nie można rozpoznać zainstalowanej aplikacji .app wymaganej do snapshotu i kontroli wyniku.":
+            "The installed .app required for a snapshot and result verification cannot be resolved.",
+        "Aplikacja jest teraz uruchomiona i nie może być bezpiecznie zastąpiona.":
+            "The app is currently running and cannot be replaced safely.",
+        "Homebrew nie opisuje artefaktów tego casku, więc nie można potwierdzić bezpiecznej aktualizacji.":
+            "Homebrew does not describe this cask's artifacts, so a safe update cannot be confirmed.",
+        "Cask nie instaluje aplikacji .app, więc nie można utworzyć snapshotu ani sprawdzić wyniku.":
+            "The cask does not install an .app, so Wega cannot create a snapshot or verify the result.",
+        "Cask zawiera uprzywilejowany lub nieznany artefakt, który może wymagać nadzoru.":
+            "The cask contains a privileged or unknown artifact that may require supervision.",
+        "Pobranie nie ma konkretnej sumy SHA-256, więc Homebrew nie zweryfikuje pliku.":
+            "The download has no concrete SHA-256 checksum, so Homebrew will not verify the file.",
+        "Nie można teraz odczytać metadanych Homebrew. Zgoda pozostaje zapisana i można ją cofnąć.":
+            "Homebrew metadata cannot be read right now. The permission remains saved and can be revoked.",
+        "Sprawdzam metadane Homebrew…": "Checking Homebrew metadata…",
         "Aktualizacje w tle": "Background updates",
         // REL-02 — powiadomienie w tle mówi o każdym wyniku rundy, nie tylko o sukcesie.
         "Aktualizacje w tle — wymagają uwagi": "Background updates — need your attention",
@@ -466,10 +506,12 @@ public enum Translations {
         "Sudo używa Touch ID. Aktualizacje casków z sudo (Zoom, sterowniki, launchd) potwierdzisz odciskiem zamiast hasła.": "Sudo uses Touch ID. You'll confirm cask updates that require sudo (Zoom, drivers, launchd) with your fingerprint instead of a password.",
         "Po włączeniu, brew nie zapyta o hasło w okienku — pojawi się natywny sheet Touch ID. Wymaga jednorazowo uprawnień administratora do zapisu /etc/pam.d/sudo_local.": "Once enabled, brew won't ask for a password in a dialog — a native Touch ID sheet appears instead. Requires administrator privileges once to write /etc/pam.d/sudo_local.",
         "macOS zablokował zapis do /etc/pam.d/sudo_local z poziomu Wegi (TCC). Uruchom poniższą komendę w Terminalu — wystarczy raz:": "macOS blocked writing to /etc/pam.d/sudo_local from within Wega (TCC). Run the command below in Terminal — just once:",
+        "Bezpieczny zapis PAM wymaga podpisanego helpera. Jeśli jest niedostępny, uruchom poniższą transakcyjną komendę w Terminalu — wystarczy raz:": "A safe PAM write requires the signed helper. If it is unavailable, run the transactional command below in Terminal — just once:",
         "Skopiuj komendę": "Copy command",
         "Otwórz w Terminalu": "Open in Terminal",
         "Touch ID podpięty pod sudo.": "Touch ID is now wired up to sudo.",
         "macOS zablokował zapis — wklej komendę do Terminala.": "macOS blocked the write — paste the command into Terminal.",
+        "Bezpieczna konfiguracja wymaga helpera albo komendy w Terminalu.": "Safe configuration requires the helper or the Terminal command.",
         "Build": "Build",
         "Architected & Developed by": "Architected & Developed by",
         "Zgłoś błąd": "Report a bug",
@@ -526,6 +568,8 @@ public enum Translations {
 
         // I-2 — inspector pane (Update list).
         "Wybierz aktualizację, aby zobaczyć szczegóły": "Select an update to see details",
+        "Pokaż szczegóły": "Show details",
+        "Naciśnij Return lub spację, aby pokazać szczegóły.": "Press Return or Space to show details.",
 
         // I-3 — inspector body.
         "Szczegóły": "Details",
@@ -568,6 +612,7 @@ public enum Translations {
         "Poczekaj na zakończenie": "Wait until it finishes",
         "Zakończ mimo to": "Quit anyway",
         "aktualizacja Homebrew": "Homebrew update",
+        "czyszczenie Homebrew": "Homebrew cleanup",
         "migracja %@": "migrating %@",
         "usuwanie duplikatu %@": "removing duplicate %@",
         "dezinstalacja %@ aplikacji": "uninstalling %@ app(s)",

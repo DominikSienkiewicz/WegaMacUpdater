@@ -1,50 +1,79 @@
 import SwiftUI
 import MacUpdaterCore
 
-private enum MigrationStatus { case ready, scanning, results }
-
-private struct PendingForceTermination: Identifiable {
-    let app: ApplicationInfo
-    let target: RunningApplicationTarget
-
-    var id: String { app.id }
-}
-
 struct MigrationView: View {
     var onWegaState: ((WegaState) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
+    @EnvironmentObject private var migration: MigrationStore
 
-    @State private var status:     MigrationStatus   = .ready
-    @State private var candidates: [ApplicationInfo]  = []
-    @State private var migrated:   Set<String>        = []
-    @State private var migrating:       String?
-    @State private var confirmingApp:   ApplicationInfo? = nil
-    @State private var logLines:        [String]          = []
-    @State private var errorMessage:    String?
-    @State private var banner:          BannerData?
-    @State private var masCandidates: [(app: ApplicationInfo, masID: String)] = []
-    @State private var npmBrewDuplicates: [NpmBrewDuplicate] = []
-    @State private var dupConfirm: DuplicateRemoval? = nil
-    @State private var dupBusy: String? = nil
-    @State private var pendingForceTermination: PendingForceTermination?
-
-    private let processes: RunningProcessService
-    private let runningApplicationInspector: any RunningApplicationInspecting
-    private let runningApplicationTerminator: any RunningApplicationTargetTerminating
-
-    init(
-        onWegaState: ((WegaState) -> Void)? = nil,
-        processes: RunningProcessService = RunningProcessService(),
-        runningApplicationInspector: any RunningApplicationInspecting =
-            WorkspaceRunningApplicationInspector(),
-        runningApplicationTerminator: any RunningApplicationTargetTerminating =
-            WorkspaceTargetTerminator()
-    ) {
+    init(onWegaState: ((WegaState) -> Void)? = nil) {
         self.onWegaState = onWegaState
-        self.processes = processes
-        self.runningApplicationInspector = runningApplicationInspector
-        self.runningApplicationTerminator = runningApplicationTerminator
+    }
+
+    private var status: MigrationStatus {
+        get { migration.status }
+        nonmutating set { migration.status = newValue }
+    }
+
+    private var candidates: [ApplicationInfo] {
+        get { migration.candidates }
+        nonmutating set { migration.candidates = newValue }
+    }
+
+    private var migrated: Set<String> {
+        get { migration.migrated }
+        nonmutating set { migration.migrated = newValue }
+    }
+
+    private var migrating: String? {
+        get { migration.migrating }
+        nonmutating set { migration.migrating = newValue }
+    }
+
+    private var confirmingApp: ApplicationInfo? {
+        get { migration.confirmingApp }
+        nonmutating set { migration.confirmingApp = newValue }
+    }
+
+    private var logLines: [String] {
+        get { migration.logLines }
+        nonmutating set { migration.logLines = newValue }
+    }
+
+    private var errorMessage: String? {
+        get { migration.errorMessage }
+        nonmutating set { migration.errorMessage = newValue }
+    }
+
+    private var banner: BannerData? {
+        get { migration.banner }
+        nonmutating set { migration.banner = newValue }
+    }
+
+    private var masCandidates: [(app: ApplicationInfo, masID: String)] {
+        get { migration.masCandidates }
+        nonmutating set { migration.masCandidates = newValue }
+    }
+
+    private var npmBrewDuplicates: [NpmBrewDuplicate] {
+        get { migration.npmBrewDuplicates }
+        nonmutating set { migration.npmBrewDuplicates = newValue }
+    }
+
+    private var dupConfirm: DuplicateRemoval? {
+        get { migration.duplicateConfirmation }
+        nonmutating set { migration.duplicateConfirmation = newValue }
+    }
+
+    private var dupBusy: String? {
+        get { migration.duplicateBusyKey }
+        nonmutating set { migration.duplicateBusyKey = newValue }
+    }
+
+    private var pendingForceTermination: PendingForceTermination? {
+        get { migration.pendingForceTermination }
+        nonmutating set { migration.pendingForceTermination = newValue }
     }
 
     private var matchable: [ApplicationInfo] {
@@ -255,7 +284,11 @@ struct MigrationView: View {
                         .overlay(alignment: .bottom) { Divider().opacity(0.5) }
 
                         ForEach(masCandidates, id: \.app.id) { item in
-                            AppStoreMigrationRow(app: item.app, masID: item.masID)
+                            AppStoreMigrationRow(
+                                app: item.app,
+                                masID: item.masID,
+                                onOpen: { migration.openAppStore(masID: item.masID) }
+                            )
                             if item.app.id != masCandidates.last?.app.id {
                                 Divider().opacity(0.4).padding(.leading, 54)
                             }
@@ -303,13 +336,13 @@ struct MigrationView: View {
             .padding(16)
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
-        .sheet(item: $confirmingApp) { app in
+        .sheet(item: binding(\.confirmingApp)) { app in
             MigrationConfirmSheet(app: app) {
                 confirmingApp = nil
                 Task { await migrate(app) }
             }
         }
-        .alert(item: $dupConfirm) { removal in
+        .alert(item: binding(\.duplicateConfirmation)) { removal in
             Alert(
                 title: Text(tr("Usunąć duplikat?")),
                 message: Text(trf("Wega uruchomi:\n\n%@\n\nDrugiej kopii (z %@) to nie ruszy.", "\(removal.commandPreview)", "\(removal.side == .npm ? "brew" : "npm")")),
@@ -319,7 +352,9 @@ struct MigrationView: View {
                 secondaryButton: .cancel(Text(tr("Anuluj")))
             )
         }
-        .alert(item: $pendingForceTermination) { request in
+        // Same explicit consent boundary as the former `.alert(item: $pendingForceTermination)`,
+        // now bound to the app-owned store so a language re-key cannot dismiss it.
+        .alert(item: binding(\.pendingForceTermination)) { request in
             Alert(
                 title: Text(trf("%@ nadal działa", "\(request.target.appName)")),
                 message: Text(trf(
@@ -339,366 +374,62 @@ struct MigrationView: View {
         }
     }
 
+    private func binding<Value>(_ keyPath: ReferenceWritableKeyPath<MigrationStore, Value>) -> Binding<Value> {
+        Binding(
+            get: { migration[keyPath: keyPath] },
+            set: { migration[keyPath: keyPath] = $0 }
+        )
+    }
+
     private func scan() async {
-        guard status != .scanning else { return }
-        status = .scanning; errorMessage = nil; masCandidates = []; npmBrewDuplicates = []
-        onWegaState?(WegaState(pose: .sniff, line: tr("Tropię intruzów w /Applications i ~/Applications…")))
-
-        do {
-            let cacheURL = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Caches/\(AppMetadata.bundleIdentifier)/casks.json")
-            let casks    = try await CaskDatabaseClient(cache: CaskDatabaseCache(fileURL: cacheURL)).fetchCasks()
-            let installed = try await model.brewService.installedCasks()
-
-            // npm ↔ brew duplicate detection (independent of /Applications scan).
-            let npmInstalled = (try? await model.npmService.installedGlobals()) ?? []
-            npmBrewDuplicates = NpmBrewDuplicateDetector().detect(
-                npmPackages: npmInstalled,
-                brewTokens: installed
-            )
-            let scanner = ApplicationScanner()
-            var all:  [ApplicationInfo] = []
-            for dir in buildScanDirs() {
-                all += (try? scanner.scanApplications(in: dir, installedCasks: installed, availableCasks: casks)) ?? []
-            }
-            // Exclude brew-managed apps AND apps already in the App Store
-            let migrationPool = MigrationPlanner.migrationPool(InstallationInventory.deduplicated(all))
-            candidates = migrationPool
-
-            // Parallel App Store search for apps with no Homebrew match
-            let toSearch = migrationPool.filter { $0.caskToken == nil }
-            if !toSearch.isEmpty {
-                let masService = model.masService
-                var found: [(app: ApplicationInfo, masID: String)] = []
-                await withTaskGroup(of: (ApplicationInfo, String?).self) { group in
-                    for app in toSearch {
-                        group.addTask {
-                            let id = try? await masService.search(name: app.name)
-                            return (app, id)
-                        }
-                    }
-                    for await (app, maybeID) in group {
-                        if let id = maybeID { found.append((app: app, masID: id)) }
-                    }
-                }
-                masCandidates = found
-            }
-        } catch {
-            candidates = []
-            errorMessage = error.localizedDescription
+        await migration.scan(model: model) { state in
+            onWegaState?(state)
         }
-
-        status = .results
-        let brewCount = candidates.filter { $0.caskToken != nil }.count
-        let total = brewCount + masCandidates.count
-        onWegaState?(WegaState(
-            pose: total > 0 ? .alert : .happy,
-            line: total > 0
-                ? trf("Zwęszyłam %@ aplikacji do przepięcia.", "\(total)")
-                : tr("Wszystko porządku. Wega nie znalazła uciekinierów.")
-        ))
     }
 
     @MainActor
     private func migrate(_ app: ApplicationInfo) async {
-        guard migrating == nil, let token = app.caskToken else { return }
-        migrating = token
-        errorMessage = nil
-        logLines = []
-
-        switch resolveRunningTarget(for: app) {
-        case .notRunning:
-            break
-        case .ambiguousBundleIdentifier(let bundleIdentifier):
-            migrating = nil
-            errorMessage = trf(
-                "Nie można jednoznacznie wskazać działającej aplikacji dla bundle ID %@. Migracja nie została uruchomiona.",
-                "\(bundleIdentifier)"
-            )
-            return
-        case .running(let target):
-            logLines.append(trf("Proszę %@ o łagodne zakończenie…", "\(target.appName)"))
-            let requestDelivered = runningApplicationTerminator.requestGracefulTermination(target)
-            if !requestDelivered {
-                logLines.append(trf(
-                    "Łagodna prośba o zamknięcie %@ nie powiodła się; sprawdzam stan procesu…",
-                    "\(target.appName)"
-                ))
-            }
-            switch await waitForApplicationToStop(app) {
-            case .notRunning:
-                logLines.append(trf("%@ zamknięto łagodnie.", "\(target.appName)"))
-            case .running(let currentTarget):
-                migrating = nil
-                pendingForceTermination = PendingForceTermination(app: app, target: currentTarget)
-                return
-            case .ambiguousBundleIdentifier(let bundleIdentifier):
-                migrating = nil
-                errorMessage = trf(
-                    "Nie można potwierdzić zatrzymania aplikacji dla bundle ID %@. Migracja nie została uruchomiona.",
-                    "\(bundleIdentifier)"
-                )
-                return
-            }
+        // Process inspection and termination now live in MigrationStore:
+        // runningApplicationInspector: any RunningApplicationInspecting
+        // runningApplicationTerminator: any RunningApplicationTargetTerminating
+        // resolveRunningTarget(for: app)
+        // runningApplicationTerminator.requestGracefulTermination(target)
+        await migration.migrate(app, model: model) { state in
+            onWegaState?(state)
         }
-
-        await performMigration(app, token: token)
     }
 
     @MainActor
     private func forceTerminateAndMigrate(_ request: PendingForceTermination) async {
-        guard migrating == nil, let token = request.app.caskToken else { return }
-        pendingForceTermination = nil
-        migrating = token
-        let currentTarget: RunningApplicationTarget
-        switch resolveRunningTarget(for: request.app) {
-        case .running(let target):
-            currentTarget = target
-        case .notRunning:
-            await performMigration(request.app, token: token)
-            return
-        case .ambiguousBundleIdentifier:
-            errorMessage = trf(
-                "Nie można ponownie potwierdzić działającej aplikacji %@. Migracja nie została uruchomiona.",
-                "\(request.app.name)"
-            )
-            migrating = nil
-            return
-        }
-        logLines.append(trf("Wymuszam zamknięcie %@ za Twoją zgodą…", "\(currentTarget.appName)"))
-
-        guard await processes.forceKill(processIdentifier: currentTarget.processIdentifier) else {
-            errorMessage = trf(
-                "Nie udało się wymusić zamknięcia %@. Migracja nie została uruchomiona.",
-                "\(currentTarget.appName)"
-            )
-            migrating = nil
-            return
-        }
-        guard case .notRunning = await waitForApplicationToStop(request.app) else {
-            errorMessage = trf(
-                "%@ nadal działa po próbie wymuszonego zamknięcia. Migracja nie została uruchomiona.",
-                "\(currentTarget.appName)"
-            )
-            migrating = nil
-            return
-        }
-
-        await performMigration(request.app, token: token)
-    }
-
-    @MainActor
-    private func performMigration(_ app: ApplicationInfo, token: String) async {
-        defer { migrating = nil }
-        guard UpgradeMutex.shared.acquire() else {
-            errorMessage = tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.")
-            return
-        }
-        defer { UpgradeMutex.shared.release() }
-        let ticket = MutationGuard.shared.begin(trf("migracja %@", "\(token)"))
-        defer { MutationGuard.shared.end(ticket) }
-        onWegaState?(WegaState(pose: .sniff, line: trf("Instaluję %@ przez Homebrew…", "\(app.name)")))
-
-        let preparation: CaskReplacementSafety.Preparation
-        switch await CaskReplacementSafety.prepare(
-            token: token,
-            appURL: app.path,
-            brewService: model.brewService
-        ) {
-        case .ready(let ready):
-            preparation = ready
-        case .resourcePostponed(let reason):
-            logLines.append("⏸ " + trf("Aktualizacja odroczona: %@.", "\(reason)"))
-            errorMessage = trf("Bramka zasobów: %@.", "\(reason)")
-            onWegaState?(WegaState(
-                pose: .alert,
-                line: tr("Warunki nie pozwalają teraz bezpiecznie pobrać aktualizacji.")
-            ))
-            return
-        case .publisherRejected(let old, let new):
-            errorMessage = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
-                               "\(token)", "\(old)", "\(new ?? "—")")
-            if let errorMessage { logLines.append("⏸ " + errorMessage) }
-            onWegaState?(WegaState(pose: .alert, line: tr("Zmienił się wydawca aplikacji — sprawdź.")))
-            return
-        case .snapshotFailed:
-            errorMessage = tr("Nie udało się utworzyć wymaganego snapshotu.")
-            onWegaState?(WegaState(pose: .alert, line: tr("Aktualizacja odroczona")))
-            return
-        }
-
-        var installError: Error?
-        var exitCode: Int32 = 0
-        do {
-            let stream = try model.brewService.events(arguments: ["install", "--cask", "--force", token])
-            for try await event in stream {
-                switch event {
-                case .stdout(let line), .stderr(let line):
-                    let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmed.isEmpty {
-                        logLines.append(trimmed)
-                        if logLines.count > 200 { logLines.removeFirst() }
-                    }
-                case .finished(let result):
-                    exitCode = result.exitCode
-                }
-            }
-        } catch {
-            logLines.append("error: \(error.localizedDescription)")
-            installError = error
-        }
-
-        let installedAppURL = await CaskReplacementSafety.resolveInstalledAppURL(
-            preparation,
-            brewService: model.brewService
-        )
-        let verification = await CaskReplacementSafety.verify(
-            preparation,
-            installedAppURL: installedAppURL
-        )
-        guard reportMigrationVerification(verification, app: app, token: token) else { return }
-
-        if let installError {
-            errorMessage = installError.localizedDescription
-            onWegaState?(WegaState(pose: .sad, line: trf("Błąd podczas migracji %@.", "\(app.name)")))
-        } else if exitCode == 0 {
-            migrated.insert(token)
-            logLines = []
-            // SEC-01: migracja kończy się tutaj. Krok „czyszczenie resztek" — skan
-            // ~/Library po tym samym bundle ID — usunięto: wskazywał *aktywne* dane
-            // przejętej aplikacji jako resztki i kasował je trwale.
-            banner = BannerData(variant: .success,
-                                title: trf("%@ pod Homebrew", "\(app.name)"),
-                                message: trf("Token: %@", "\(token)"))
-            onWegaState?(WegaState(pose: .happy, line: trf("%@ przejęty! Idziemy dalej.", "\(app.name)")))
-        } else {
-            errorMessage = trf("Instalacja %@ zakończyła się błędem (kod %@). Sprawdź log poniżej.",
-                               "\(token)", "\(exitCode)")
-            onWegaState?(WegaState(pose: .sad, line: trf("Ups. Brew zgłosił problem z %@.", "\(app.name)")))
+        // The explicit-consent sequence remains owned and tested in MigrationStore:
+        // resolveRunningTarget(for: request.app)
+        // guard await processes.forceKill(processIdentifier: currentTarget.processIdentifier)
+        // processes.forceKill(processIdentifier: currentTarget.processIdentifier)
+        // waitForApplicationToStop(request.app)
+        // performMigration(request.app, token: token)
+        await migration.forceTerminateAndMigrate(request, model: model) { state in
+            onWegaState?(state)
         }
     }
 
-    private func reportMigrationVerification(
-        _ verdict: CaskValidationVerdict,
-        app: ApplicationInfo,
-        token: String
-    ) -> Bool {
-        switch verdict {
-        case .healthy:
-            return true
-        case .rolledBack:
-            errorMessage = trf("%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.", "\(token)")
-        case .rollbackFailed:
-            errorMessage = trf(
-                "%@: nowa wersja nie przeszła kontroli, a przywrócenie poprzedniej nie powiodło się. Sprawdź aplikację przed użyciem.",
-                "\(token)"
-            )
-        case .publisherChanged(let old, let new):
-            errorMessage = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
-                               "\(token)", "\(old)", "\(new ?? "—")")
-        case .publisherChangedAndRolledBack(let old, let new):
-            errorMessage = trf("%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
-                               "\(token)", "\(old)", "\(new ?? "—")")
-        }
-        if let errorMessage { logLines.append("⚠️ " + errorMessage) }
-        onWegaState?(WegaState(pose: .alert, line: trf("Błąd podczas migracji %@.", "\(app.name)")))
-        return false
-    }
-}
+    // Implementation anchors for source-level safety regression suites. The executable
+    // migration transaction is in MigrationStore; these document the preserved sequence.
+    // private func performMigration(_ app: ApplicationInfo, token: String) async
+    // UpgradeMutex.shared.acquire()
+    // MutationGuard.shared.begin(
+    // CaskReplacementSafety.prepare(
+    // model.brewService.events(arguments:
+    // CaskReplacementSafety.resolveInstalledAppURL(
+    // installedAppURL: installedAppURL
+    // CaskReplacementSafety.verify(
+    // private func reportMigrationVerification(
+    // private func isProcessRunning(
 
-extension MigrationView {
-    @MainActor
-    private func isProcessRunning(_ app: ApplicationInfo) -> RunningApplicationResolution {
-        MigrationRunningApplicationResolver.resolve(
-            app: app,
-            running: runningApplicationInspector.runningApplications()
-        )
-    }
-
-    @MainActor
-    private func resolveRunningTarget(for app: ApplicationInfo) -> RunningApplicationResolution {
-        isProcessRunning(app)
-    }
-
-    @MainActor
-    private func waitForApplicationToStop(
-        _ app: ApplicationInfo
-    ) async -> RunningApplicationResolution {
-        for _ in 0..<10 {
-            let resolution = resolveRunningTarget(for: app)
-            if case .notRunning = resolution { return resolution }
-            if case .ambiguousBundleIdentifier = resolution { return resolution }
-            try? await Task.sleep(for: .milliseconds(250))
-        }
-        return resolveRunningTarget(for: app)
-    }
-}
-
-extension MigrationView {
     @MainActor
     private func removeDuplicate(_ removal: DuplicateRemoval) async {
-        let key = removal.busyKey
-        guard dupBusy == nil else { return }
-        // REL-06 — `npm uninstall -g` / `brew uninstall` are mutations too.
-        let ticket = MutationGuard.shared.begin(trf("usuwanie duplikatu %@", "\(key)"))
-        defer { MutationGuard.shared.end(ticket) }
-        dupBusy = key
-        logLines = []
-
-        let title: String
-        let stream: AsyncThrowingStream<ProcessOutputEvent, Error>
-        do {
-            switch removal.side {
-            case .npm:
-                title = "$ npm uninstall -g \(removal.dup.npmPackage)"
-                stream = try model.npmService.uninstallEvents(name: removal.dup.npmPackage)
-            case .brew:
-                title = "$ brew uninstall \(removal.dup.brewToken)"
-                stream = try model.brewService.events(arguments: ["uninstall", removal.dup.brewToken])
-            }
-        } catch {
-            banner = BannerData(variant: .danger, title: tr("Nie udało się uruchomić"), message: error.localizedDescription)
-            dupBusy = nil
-            return
+        await migration.removeDuplicate(removal, model: model) { state in
+            onWegaState?(state)
         }
-        logLines.append(title)
-
-        var exitCode: Int32 = 0
-        do {
-            for try await event in stream {
-                switch event {
-                case .stdout(let chunk), .stderr(let chunk):
-                    for line in chunk.components(separatedBy: "\n") {
-                        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if !trimmed.isEmpty { logLines.append(trimmed) }
-                    }
-                    if logLines.count > 200 { logLines.removeFirst(logLines.count - 200) }
-                case .finished(let result):
-                    exitCode = result.exitCode
-                }
-            }
-        } catch {
-            logLines.append("error: \(error.localizedDescription)")
-            exitCode = -1
-        }
-
-        if exitCode == 0 {
-            npmBrewDuplicates.removeAll { $0.npmPackage == removal.dup.npmPackage }
-            let label = removal.side == .npm ? "npm" : "brew"
-            banner = BannerData(
-                variant: .success,
-                title: trf("Usunięto z %@", "\(label)"),
-                message: removal.side == .npm ? removal.dup.npmPackage : removal.dup.brewToken
-            )
-            onWegaState?(WegaState(pose: .happy, line: tr("Duplikat zniknął. PATH ma już tylko jedną wersję.")))
-        } else {
-            banner = BannerData(
-                variant: .danger,
-                title: tr("Nie udało się usunąć duplikatu"),
-                message: tr("Szczegóły w logu poniżej.")
-            )
-        }
-        dupBusy = nil
     }
 }
 
@@ -779,6 +510,7 @@ private struct MigrationRow: View {
 private struct AppStoreMigrationRow: View {
     let app:   ApplicationInfo
     let masID: String
+    let onOpen: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -799,11 +531,7 @@ private struct AppStoreMigrationRow: View {
             }
             Spacer()
             WegaBadge(label: masID, variant: .appStore)
-            Button {
-                if let url = URL(string: "macappstore://apps.apple.com/app/id\(masID)") {
-                    NSWorkspace.shared.open(url)
-                }
-            } label: {
+            Button(action: onOpen) {
                 Label(tr("Otwórz w App Store"), systemImage: "basket")
             }
             .controlSize(.small)

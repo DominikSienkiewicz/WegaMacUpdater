@@ -101,6 +101,7 @@ public struct MenuBarUpdateChecker: Sendable {
     private let masService: MasOutdatedProviding
     private let npmService: NpmOutdatedProviding
     private let scanner: ManualScanning
+    private let operations: OperationCoordinator
 
     /// Note on `scanner`: it no longer inherits the injected `brewService`, because that
     /// parameter is now a protocol and `ManualUpdateScanner` wants the concrete type. In
@@ -111,15 +112,37 @@ public struct MenuBarUpdateChecker: Sendable {
         brewService: BrewOutdatedProviding = BrewService(),
         masService: MasOutdatedProviding = MasService(),
         npmService: NpmOutdatedProviding = NpmGlobalService(),
-        scanner: ManualScanning = ManualUpdateScanner()
+        scanner: ManualScanning = ManualUpdateScanner(),
+        operations: OperationCoordinator = .shared
     ) {
         self.brewService = brewService
         self.masService = masService
         self.npmService = npmService
         self.scanner = scanner
+        self.operations = operations
     }
 
     public func availableUpdateCount(policies: [String: UpdatePolicy] = [:]) async -> MenuBarScanResult {
+        do {
+            return try await operations.withReadLease(label: "menu-bar scan") { _ in
+                await availableUpdateCountCoordinated(policies: policies)
+            }
+        } catch {
+            return MenuBarScanResult(
+                brew: nil,
+                mas: [],
+                npm: [],
+                manualApps: [],
+                failedChecks: 0,
+                scannedAt: Date(),
+                total: 0
+            )
+        }
+    }
+
+    private func availableUpdateCountCoordinated(
+        policies: [String: UpdatePolicy]
+    ) async -> MenuBarScanResult {
         var failed = 0
 
         // F4 — brew missing is "not applicable", exactly as for mas and npm below. Counting
