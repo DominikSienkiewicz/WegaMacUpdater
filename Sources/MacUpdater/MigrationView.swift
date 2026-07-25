@@ -5,7 +5,7 @@ private enum MigrationStatus { case ready, scanning, results }
 
 private struct PendingForceTermination: Identifiable {
     let app: ApplicationInfo
-    let info: RestartInfo
+    let target: RunningApplicationTarget
 
     var id: String { app.id }
 }
@@ -29,7 +29,23 @@ struct MigrationView: View {
     @State private var dupBusy: String? = nil
     @State private var pendingForceTermination: PendingForceTermination?
 
-    private let processes = RunningProcessService()
+    private let processes: RunningProcessService
+    private let runningApplicationInspector: any RunningApplicationInspecting
+    private let runningApplicationTerminator: any RunningApplicationTargetTerminating
+
+    init(
+        onWegaState: ((WegaState) -> Void)? = nil,
+        processes: RunningProcessService = RunningProcessService(),
+        runningApplicationInspector: any RunningApplicationInspecting =
+            WorkspaceRunningApplicationInspector(),
+        runningApplicationTerminator: any RunningApplicationTargetTerminating =
+            WorkspaceTargetTerminator()
+    ) {
+        self.onWegaState = onWegaState
+        self.processes = processes
+        self.runningApplicationInspector = runningApplicationInspector
+        self.runningApplicationTerminator = runningApplicationTerminator
+    }
 
     private var matchable: [ApplicationInfo] {
         MigrationPlanner.matchable(candidates: candidates, migrated: migrated)
@@ -305,10 +321,10 @@ struct MigrationView: View {
         }
         .alert(item: $pendingForceTermination) { request in
             Alert(
-                title: Text(trf("%@ nadal działa", "\(request.info.appName)")),
+                title: Text(trf("%@ nadal działa", "\(request.target.appName)")),
                 message: Text(trf(
                     "Nie udało się zamknąć %@ łagodnie. Wymuszone zamknięcie może spowodować utratę niezapisanych danych. Wymusić zamknięcie i kontynuować migrację?",
-                    "\(request.info.appName)"
+                    "\(request.target.appName)"
                 )),
                 primaryButton: .destructive(Text(tr("Wymuś zamknięcie"))) {
                     Task { await forceTerminateAndMigrate(request) }
@@ -390,23 +406,38 @@ struct MigrationView: View {
         errorMessage = nil
         logLines = []
 
-        if let info = MacUpdaterConstants.restartMap[token], await isProcessRunning(info.processName) {
-            logLines.append(trf("Proszę %@ o łagodne zakończenie…", "\(info.appName)"))
-            let requestDelivered = await processes.requestGracefulTermination(
-                appName: info.appName,
-                processName: info.processName
+        switch resolveRunningTarget(for: app) {
+        case .notRunning:
+            break
+        case .ambiguousBundleIdentifier(let bundleIdentifier):
+            migrating = nil
+            errorMessage = trf(
+                "Nie można jednoznacznie wskazać działającej aplikacji dla bundle ID %@. Migracja nie została uruchomiona.",
+                "\(bundleIdentifier)"
             )
+            return
+        case .running(let target):
+            logLines.append(trf("Proszę %@ o łagodne zakończenie…", "\(target.appName)"))
+            let requestDelivered = runningApplicationTerminator.requestGracefulTermination(target)
             if !requestDelivered {
                 logLines.append(trf(
                     "Łagodna prośba o zamknięcie %@ nie powiodła się; sprawdzam stan procesu…",
-                    "\(info.appName)"
+                    "\(target.appName)"
                 ))
             }
-            if await waitForProcessToStop(info.processName) {
-                logLines.append(trf("%@ zamknięto łagodnie.", "\(info.appName)"))
-            } else {
+            switch await waitForApplicationToStop(app) {
+            case .notRunning:
+                logLines.append(trf("%@ zamknięto łagodnie.", "\(target.appName)"))
+            case .running(let currentTarget):
                 migrating = nil
-                pendingForceTermination = PendingForceTermination(app: app, info: info)
+                pendingForceTermination = PendingForceTermination(app: app, target: currentTarget)
+                return
+            case .ambiguousBundleIdentifier(let bundleIdentifier):
+                migrating = nil
+                errorMessage = trf(
+                    "Nie można potwierdzić zatrzymania aplikacji dla bundle ID %@. Migracja nie została uruchomiona.",
+                    "\(bundleIdentifier)"
+                )
                 return
             }
         }
@@ -419,20 +450,35 @@ struct MigrationView: View {
         guard migrating == nil, let token = request.app.caskToken else { return }
         pendingForceTermination = nil
         migrating = token
-        logLines.append(trf("Wymuszam zamknięcie %@ za Twoją zgodą…", "\(request.info.appName)"))
-
-        guard await processes.forceKill(request.info.processName) else {
+        let currentTarget: RunningApplicationTarget
+        switch resolveRunningTarget(for: request.app) {
+        case .running(let target):
+            currentTarget = target
+        case .notRunning:
+            await performMigration(request.app, token: token)
+            return
+        case .ambiguousBundleIdentifier:
             errorMessage = trf(
-                "Nie udało się wymusić zamknięcia %@. Migracja nie została uruchomiona.",
-                "\(request.info.appName)"
+                "Nie można ponownie potwierdzić działającej aplikacji %@. Migracja nie została uruchomiona.",
+                "\(request.app.name)"
             )
             migrating = nil
             return
         }
-        guard await waitForProcessToStop(request.info.processName) else {
+        logLines.append(trf("Wymuszam zamknięcie %@ za Twoją zgodą…", "\(currentTarget.appName)"))
+
+        guard await processes.forceKill(processIdentifier: currentTarget.processIdentifier) else {
+            errorMessage = trf(
+                "Nie udało się wymusić zamknięcia %@. Migracja nie została uruchomiona.",
+                "\(currentTarget.appName)"
+            )
+            migrating = nil
+            return
+        }
+        guard case .notRunning = await waitForApplicationToStop(request.app) else {
             errorMessage = trf(
                 "%@ nadal działa po próbie wymuszonego zamknięcia. Migracja nie została uruchomiona.",
-                "\(request.info.appName)"
+                "\(currentTarget.appName)"
             )
             migrating = nil
             return
@@ -502,7 +548,14 @@ struct MigrationView: View {
             installError = error
         }
 
-        let verification = await CaskReplacementSafety.verify(preparation)
+        let installedAppURL = await CaskReplacementSafety.resolveInstalledAppURL(
+            token: token,
+            brewService: model.brewService
+        )
+        let verification = await CaskReplacementSafety.verify(
+            preparation,
+            installedAppURL: installedAppURL
+        )
         guard reportMigrationVerification(verification, app: app, token: token) else { return }
 
         if let installError {
@@ -551,19 +604,37 @@ struct MigrationView: View {
         onWegaState?(WegaState(pose: .alert, line: trf("Błąd podczas migracji %@.", "\(app.name)")))
         return false
     }
+}
 
-    private func isProcessRunning(_ name: String) async -> Bool {
-        await processes.isRunning(name)
+extension MigrationView {
+    @MainActor
+    private func isProcessRunning(_ app: ApplicationInfo) -> RunningApplicationResolution {
+        MigrationRunningApplicationResolver.resolve(
+            app: app,
+            running: runningApplicationInspector.runningApplications()
+        )
     }
 
-    private func waitForProcessToStop(_ name: String) async -> Bool {
+    @MainActor
+    private func resolveRunningTarget(for app: ApplicationInfo) -> RunningApplicationResolution {
+        isProcessRunning(app)
+    }
+
+    @MainActor
+    private func waitForApplicationToStop(
+        _ app: ApplicationInfo
+    ) async -> RunningApplicationResolution {
         for _ in 0..<10 {
-            if !(await isProcessRunning(name)) { return true }
+            let resolution = resolveRunningTarget(for: app)
+            if case .notRunning = resolution { return resolution }
+            if case .ambiguousBundleIdentifier = resolution { return resolution }
             try? await Task.sleep(for: .milliseconds(250))
         }
-        return !(await isProcessRunning(name))
+        return resolveRunningTarget(for: app)
     }
+}
 
+extension MigrationView {
     @MainActor
     private func removeDuplicate(_ removal: DuplicateRemoval) async {
         let key = removal.busyKey

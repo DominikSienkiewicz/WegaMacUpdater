@@ -21,6 +21,11 @@ enum CaskRollbackGuard {
     /// a green banner.
     typealias Outcome = CaskValidationVerdict
 
+    private enum PublisherBaseline {
+        case ledger
+        case expected(String?)
+    }
+
     /// Reads the installed publishers before any snapshot or package-manager mutation.
     /// A bundle that already differs from the trusted ledger is not a safe rollback source,
     /// so callers must exclude every returned token from the upgrade command.
@@ -63,39 +68,86 @@ enum CaskRollbackGuard {
 
         for token in tokens {
             guard let appURL = appPaths[token] else { continue }
-            let healthy = await Task.detached { CanaryCheck.passesGatekeeper(appAt: appURL) }.value
-
-            if !healthy, let snapshot = snapshots[token] {
-                outcomes[token] = await restore(snapshot: snapshot, to: appURL) ? .rolledBack : .rollbackFailed
-            } else if !healthy {
-                // Nothing to restore from: the cask installs no app bundle we could clone.
-                outcomes[token] = .rollbackFailed
-            } else {
-                let teamID = await Task.detached { CodeSignatureVerifier.teamID(ofAppAt: appURL) }.value
-                switch TeamIDLedger.shared.record(bundleID: "cask:\(token)", teamID: teamID) {
-                case let .changed(old, new):
-                    WegaLog.error(
-                        .homebrew,
-                        "\(token): Team ID wydawcy zmienił się (\(old) → \(new ?? "—")); przywracam poprzednią wersję."
-                    )
-                    guard let snapshot = snapshots[token] else {
-                        outcomes[token] = .rollbackFailed
-                        continue
-                    }
-                    outcomes[token] = await restore(
-                        snapshot: snapshot, to: appURL, preservingSnapshot: true
-                    )
-                        ? .publisherChangedAndRolledBack(old: old, new: new)
-                        : .rollbackFailed
-                case .firstSeen, .unchanged:
-                    outcomes[token] = .healthy
-                    if let snapshot = snapshots[token] {
-                        try? FileManager.default.removeItem(at: snapshot)
-                    }
-                }
-            }
+            outcomes[token] = await verify(
+                token: token,
+                snapshotURL: snapshots[token],
+                validationURL: appURL,
+                publisherBaseline: .ledger
+            )
         }
         return outcomes
+    }
+
+    /// Verifies a replacement against the publisher read before mutation. The snapshot can
+    /// originate in `~/Applications` while the installed artifact now lives in `/Applications`;
+    /// validation and rollback therefore intentionally use `validationURL`, not the old path.
+    static func verify(
+        token: String,
+        snapshotURL: URL,
+        validationURL: URL,
+        expectedTeamID: String?
+    ) async -> Outcome {
+        await verify(
+            token: token,
+            snapshotURL: snapshotURL,
+            validationURL: validationURL,
+            publisherBaseline: .expected(expectedTeamID)
+        )
+    }
+
+    private static func verify(
+        token: String,
+        snapshotURL: URL?,
+        validationURL: URL,
+        publisherBaseline: PublisherBaseline
+    ) async -> Outcome {
+        let healthy = await Task.detached {
+            CanaryCheck.passesGatekeeper(appAt: validationURL)
+        }.value
+        guard healthy else {
+            guard let snapshotURL else { return .rollbackFailed }
+            return await restore(snapshot: snapshotURL, to: validationURL) ? .rolledBack : .rollbackFailed
+        }
+
+        let installedTeamID = await Task.detached {
+            CodeSignatureVerifier.teamID(ofAppAt: validationURL)
+        }.value
+        let publisherAudit: TeamIDAudit
+        switch publisherBaseline {
+        case .ledger:
+            publisherAudit = TeamIDLedger.shared.record(
+                bundleID: "cask:\(token)",
+                teamID: installedTeamID
+            )
+        case .expected(let expectedTeamID):
+            publisherAudit = expectedTeamID == installedTeamID
+                ? .unchanged(teamID: installedTeamID)
+                : .changed(old: expectedTeamID ?? "—", new: installedTeamID)
+        }
+
+        switch publisherAudit {
+        case let .changed(old, new):
+            WegaLog.error(
+                .homebrew,
+                "\(token): Team ID wydawcy zmienił się (\(old) → \(new ?? "—")); przywracam poprzednią wersję."
+            )
+            guard let snapshotURL else { return .rollbackFailed }
+            return await restore(
+                snapshot: snapshotURL,
+                to: validationURL,
+                preservingSnapshot: true
+            )
+                ? .publisherChangedAndRolledBack(old: old, new: new)
+                : .rollbackFailed
+        case .firstSeen, .unchanged:
+            if case .expected = publisherBaseline {
+                TeamIDLedger.shared.record(bundleID: "cask:\(token)", teamID: installedTeamID)
+            }
+            if let snapshotURL {
+                try? FileManager.default.removeItem(at: snapshotURL)
+            }
+            return .healthy
+        }
     }
 
     /// Restores in place; falls back to the root helper when the destination is protected

@@ -33,6 +33,7 @@ public struct WorkspaceApplicationTerminator: ApplicationTerminating {
 public struct RunningProcessService: Sendable {
     private let runner: ProcessRunning
     private let pgrepURL: URL
+    private let killURL: URL
     private let killallURL: URL
     private let openURL: URL
     private let applicationTerminator: any ApplicationTerminating
@@ -40,12 +41,14 @@ public struct RunningProcessService: Sendable {
     public init(
         runner: ProcessRunning = ProcessRunner(),
         pgrepURL: URL = SystemPaths.pgrep,
+        killURL: URL = SystemPaths.kill,
         killallURL: URL = SystemPaths.killall,
         openURL: URL = SystemPaths.open,
         applicationTerminator: any ApplicationTerminating = WorkspaceApplicationTerminator()
     ) {
         self.runner = runner
         self.pgrepURL = pgrepURL
+        self.killURL = killURL
         self.killallURL = killallURL
         self.openURL = openURL
         self.applicationTerminator = applicationTerminator
@@ -69,6 +72,15 @@ public struct RunningProcessService: Sendable {
     /// from the graceful request: callers must obtain explicit consent and honor `false`.
     public func forceKill(_ processName: String) async -> Bool {
         let request = ProcessRequest(executableURL: killallURL, arguments: ["-KILL", processName])
+        return (try? await runner.run(request))?.exitCode == 0
+    }
+
+    /// Forcefully terminates only the process the caller identified and confirmed.
+    public func forceKill(processIdentifier: Int32) async -> Bool {
+        let request = ProcessRequest(
+            executableURL: killURL,
+            arguments: ["-KILL", String(processIdentifier)]
+        )
         return (try? await runner.run(request))?.exitCode == 0
     }
 

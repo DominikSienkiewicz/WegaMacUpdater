@@ -115,12 +115,16 @@ bump and move its entries under the new version heading when cutting a release.
   They read the installed app's Team ID before replacement, reject a mismatch without
   changing the trusted baseline, require a copy-on-write rollback snapshot, and run the
   shared Gatekeeper/publisher canary afterwards. A rejected replacement is rolled back
-  and cannot produce a success banner; migration no longer seeds trust from the bundle
-  only after Homebrew has overwritten it.
+  and cannot produce a success banner. The pre-mutation Team ID now travels directly into
+  that canary, and the installed app path is resolved again after Homebrew finishes, so a
+  move between `~/Applications` and `/Applications` cannot make Wega verify or restore the
+  stale source path. A missing post-install target fails closed and retains the snapshot.
 - **Destructive fallbacks no longer change meaning without consent (UX-04).** A
-  migration now asks a running app to quit normally and waits; only an app that
-  remains open produces a separate unsaved-data warning, and the resulting
-  `killall -KILL` must both be explicitly approved and succeed before Homebrew starts.
+  migration now identifies every running candidate by its resolved bundle path (or one
+  unambiguous bundle ID), asks that exact app to quit normally and waits; only an app that
+  remains open produces a separate unsaved-data warning. After explicit approval Wega
+  resolves the target again, sends `SIGKILL` only to that PID, and confirms it stopped
+  before Homebrew starts. Ambiguous duplicate bundle IDs fail closed.
   A failed `brew uninstall --zap` is no longer retried silently as `--force` without
   zap or counted as success: it stays selected and is reported as an incomplete
   uninstall.
@@ -128,7 +132,9 @@ bump and move its entries under the new version heading when cutting a release.
   guard now reads and records the installed app's Team ID before `brew` can mutate it.
   `TeamIDLedger` never replaces a known-good value when classification returns `.changed`;
   the new bundle is rolled back, the alert preserves both Team IDs, and a failed restore
-  leaves the snapshot in place instead of deleting the only recovery copy.
+  leaves the snapshot in place instead of deleting the only recovery copy. A foreground
+  publisher veto also remains a critical visible result when snapshotting a different cask
+  later fails; the whole batch stops before `brew` without discarding the security alert.
 - **Unattended upgrades could run without a rollback snapshot (BG-01).** Background
   candidates now require a resolved `.app` and a successfully created copy-on-write
   snapshot before `brew` may start. Policy and running-process vetoes are sampled again

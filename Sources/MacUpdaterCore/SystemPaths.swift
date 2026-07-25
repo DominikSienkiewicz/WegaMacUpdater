@@ -23,6 +23,7 @@ public enum SystemPaths {
 
     public static let sudo = URL(fileURLWithPath: "/usr/bin/sudo")
     public static let pgrep = URL(fileURLWithPath: "/usr/bin/pgrep")
+    public static let kill = URL(fileURLWithPath: "/bin/kill")
     public static let killall = URL(fileURLWithPath: "/usr/bin/killall")
     public static let open = URL(fileURLWithPath: "/usr/bin/open")
     public static let osascript = URL(fileURLWithPath: "/usr/bin/osascript")

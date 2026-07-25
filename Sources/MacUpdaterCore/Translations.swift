@@ -208,6 +208,10 @@ public enum Translations {
         "Proszę %@ o łagodne zakończenie…": "Asking %@ to quit gracefully…",
         "Łagodna prośba o zamknięcie %@ nie powiodła się; sprawdzam stan procesu…":
             "The graceful quit request for %@ failed; checking the process state…",
+        "Nie można jednoznacznie wskazać działającej aplikacji dla bundle ID %@. Migracja nie została uruchomiona.":
+            "Could not uniquely identify the running app for bundle ID %@. The migration was not started.",
+        "Nie można potwierdzić zatrzymania aplikacji dla bundle ID %@. Migracja nie została uruchomiona.":
+            "Could not confirm that the app for bundle ID %@ stopped. The migration was not started.",
         "%@ zamknięto łagodnie.": "%@ quit gracefully.",
         "%@ nadal działa": "%@ is still running",
         "Nie udało się zamknąć %@ łagodnie. Wymuszone zamknięcie może spowodować utratę niezapisanych danych. Wymusić zamknięcie i kontynuować migrację?":
@@ -216,6 +220,8 @@ public enum Translations {
         "Migracja %@ została anulowana — aplikacja pozostała uruchomiona.":
             "Migration of %@ was cancelled — the app is still running.",
         "Wymuszam zamknięcie %@ za Twoją zgodą…": "Force quitting %@ with your consent…",
+        "Nie można ponownie potwierdzić działającej aplikacji %@. Migracja nie została uruchomiona.":
+            "Could not re-identify the running %@ app. The migration was not started.",
         "Nie udało się wymusić zamknięcia %@. Migracja nie została uruchomiona.":
             "Could not force quit %@. The migration was not started.",
         "%@ nadal działa po próbie wymuszonego zamknięcia. Migracja nie została uruchomiona.":

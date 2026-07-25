@@ -7,8 +7,8 @@ import MacUpdaterCore
 enum CaskReplacementSafety {
     struct Preparation {
         let token: String
-        let appURL: URL
         let snapshotURL: URL
+        let expectedTeamID: String?
     }
 
     enum PreparationResult {
@@ -70,15 +70,36 @@ enum CaskReplacementSafety {
 
         let snapshots = CaskRollbackGuard.snapshot(tokens: [token], appPaths: appPaths)
         guard let snapshotURL = snapshots[token] else { return .snapshotFailed }
-        return .ready(Preparation(token: token, appURL: appURL, snapshotURL: snapshotURL))
+        return .ready(Preparation(
+            token: token,
+            snapshotURL: snapshotURL,
+            expectedTeamID: installedTeamID
+        ))
     }
 
-    static func verify(_ preparation: Preparation) async -> CaskValidationVerdict {
-        let verdicts = await CaskRollbackGuard.verify(
-            tokens: [preparation.token],
-            appPaths: [preparation.token: preparation.appURL],
-            snapshots: [preparation.token: preparation.snapshotURL]
+    static func resolveInstalledAppURL(token: String, brewService: BrewService) async -> URL? {
+        do {
+            let installationInfo = try await brewService.caskInstallationInfo(tokens: [token])
+            return CaskAppPathResolver().appPaths(from: installationInfo)[token]
+        } catch {
+            WegaLog.error(
+                .homebrew,
+                "\(token): nie udało się ustalić ścieżki aplikacji po instalacji — \(error.localizedDescription)"
+            )
+            return nil
+        }
+    }
+
+    static func verify(
+        _ preparation: Preparation,
+        installedAppURL: URL?
+    ) async -> CaskValidationVerdict {
+        guard let installedAppURL else { return .rollbackFailed }
+        return await CaskRollbackGuard.verify(
+            token: preparation.token,
+            snapshotURL: preparation.snapshotURL,
+            validationURL: installedAppURL,
+            expectedTeamID: preparation.expectedTeamID
         )
-        return verdicts[preparation.token] ?? .rollbackFailed
     }
 }

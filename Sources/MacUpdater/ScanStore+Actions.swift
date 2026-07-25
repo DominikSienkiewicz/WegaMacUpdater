@@ -8,6 +8,11 @@ private struct ForegroundCaskPreparation {
     let publisherVetoes: [String: TeamIDAudit]
 }
 
+private enum ForegroundCaskPreparationResult {
+    case ready(ForegroundCaskPreparation)
+    case blocked(publisherVetoes: [String: TeamIDAudit])
+}
+
 // MARK: - Scan & update actions
 //
 // The half of `ScanStore` that *produces* a result — the scan, the upgrade, and the
@@ -363,7 +368,14 @@ extension ScanStore {
             installError = error
         }
 
-        let verification = await CaskReplacementSafety.verify(preparation)
+        let installedAppURL = await CaskReplacementSafety.resolveInstalledAppURL(
+            token: token,
+            brewService: model.brewService
+        )
+        let verification = await CaskReplacementSafety.verify(
+            preparation,
+            installedAppURL: installedAppURL
+        )
         guard reportManualReplacementVerification(verification, token: token) else { return }
 
         if let installError {
@@ -430,19 +442,21 @@ extension ScanStore {
     private func prepareForegroundCasks(
         _ caskNames: [String],
         targetKeys: Set<String>
-    ) async -> ForegroundCaskPreparation? {
+    ) async -> ForegroundCaskPreparationResult {
         await probeDownloadSizes(targetKeys: targetKeys)
         let appPaths = await resolveCaskAppPaths(caskNames)
         let resourceDecision = await foregroundResourceDecision(caskNames, appPaths: appPaths)
         guard case .allow = resourceDecision else {
-            guard case .postpone(let reason) = resourceDecision else { return nil }
+            guard case .postpone(let reason) = resourceDecision else {
+                return .blocked(publisherVetoes: [:])
+            }
             brewLog.append("⏸ " + trf("Aktualizacja odroczona: %@.", "\(reason)"))
             WegaLog.info(.homebrew, "Aktualizacja z okna odroczona — \(reason).")
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
                                   message: trf("Bramka zasobów: %@.", "\(reason)")))
             emitActivitySignal(.error)
             emitWegaState(WegaState(pose: .alert, line: tr("Warunki nie pozwalają teraz bezpiecznie pobrać aktualizacji.")))
-            return nil
+            return .blocked(publisherVetoes: [:])
         }
 
         let publisherVetoes = CaskRollbackGuard.publisherVetoes(
@@ -459,14 +473,14 @@ extension ScanStore {
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
                                   message: tr("Nie udało się utworzyć wymaganego snapshotu.")))
             emitActivitySignal(.error)
-            return nil
+            return .blocked(publisherVetoes: publisherVetoes)
         }
-        return ForegroundCaskPreparation(
+        return .ready(ForegroundCaskPreparation(
             appPaths: appPaths,
             snapshots: snapshots,
             trustedCaskNames: caskNames,
             publisherVetoes: publisherVetoes
-        )
+        ))
     }
 
     private func foregroundResourceDecision(
@@ -520,11 +534,19 @@ extension ScanStore {
         if plannedCaskNames.isEmpty {
             caskPreparation = nil
         } else {
-            guard let prepared = await prepareForegroundCasks(plannedCaskNames, targetKeys: targetKeys) else {
+            switch await prepareForegroundCasks(plannedCaskNames, targetKeys: targetKeys) {
+            case .ready(let prepared):
+                caskPreparation = prepared
+            case .blocked(let publisherVetoes):
+                var blockedRun = UpdateRunOutcome()
+                blockedRun.recordPublisherVetoes(
+                    plannedItems.filter { $0.kind == .cask },
+                    audits: publisherVetoes
+                )
+                if !blockedRun.summary.isEmpty { report(run: blockedRun) }
                 updating = false
                 return
             }
-            caskPreparation = prepared
         }
 
         // Pre-capture which casks being updated are currently running
