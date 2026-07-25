@@ -365,6 +365,10 @@ struct MigrationView: View {
     @MainActor
     private func migrate(_ app: ApplicationInfo) async {
         guard migrating == nil, let token = app.caskToken else { return }
+        // REL-06 — `brew install --cask --force` rewrites the Caskroom, and `UpgradeMutex`
+        // never covered this path, so a quit here used to go through unannounced.
+        let ticket = MutationGuard.shared.begin(trf("migracja %@", "\(token)"))
+        defer { MutationGuard.shared.end(ticket) }
         migrating = token
         errorMessage = nil
         logLines = []
@@ -438,6 +442,9 @@ struct MigrationView: View {
     private func removeDuplicate(_ removal: DuplicateRemoval) async {
         let key = removal.busyKey
         guard dupBusy == nil else { return }
+        // REL-06 — `npm uninstall -g` / `brew uninstall` are mutations too.
+        let ticket = MutationGuard.shared.begin(trf("usuwanie duplikatu %@", "\(key)"))
+        defer { MutationGuard.shared.end(ticket) }
         dupBusy = key
         logLines = []
 
