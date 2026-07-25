@@ -19,10 +19,12 @@ bump and move its entries under the new version heading when cutting a release.
   seam with a fake transport (no network).
 - Shared `FakeHTTPTransport` test double in `TestDoubles.swift` for HTTP-level checker
   tests.
-- Diagnostic logging through `AppLogger` (OSLog): `HTTPClient` records retry attempts
-  and final transport failures, and `ProcessRunner` records non-zero exits, timeouts,
-  and cancellations — so a swallowed network/process error is now visible in
-  Console.app instead of vanishing. Adds a `network` logging category.
+- Diagnostic logging through `WegaLog` (OSLog, the in-app Logs tab and the rotating
+  `wega.log` file): `HTTPClient` records retry attempts and final transport failures,
+  while `ProcessRunner` records non-zero exits, timeouts and cancellations. The menu-bar
+  and unattended scans retain source errors and Brew stderr, self-update signature and
+  helper failures are persisted, and the root helper audits rejected XPC connections and
+  every whitelisted operation. Adds `network`, `process` and `helper` log categories.
 - `CatalogRefresher` is now wired into the running app: the bundled `endpoints.json`
   carries an `appCatalog` source URL, and the **Info → Katalog aplikacji** card offers
   a one-click "Odśwież katalog" with status feedback. The overlay is refreshed
@@ -97,6 +99,19 @@ bump and move its entries under the new version heading when cutting a release.
   `MigrationLeftoverCleanupDisabledTests`.
 
 ### Fixed
+- **Unattended upgrades could run without a rollback snapshot (BG-01).** Background
+  candidates now require a resolved `.app` and a successfully created copy-on-write
+  snapshot before `brew` may start. Policy and running-process vetoes are sampled again
+  after acquiring the upgrade mutex, binary-only casks stay in the user-present flow, and
+  any non-zero global brew exit invalidates the whole unattended batch instead of allowing
+  the unnamed tokens to be reported as upgraded.
+- **Filtered selections could mutate rows the user could not see (UX-01).** The Updates
+  view now derives its button count, select-all state, plan preview and execution targets
+  from the active sidebar filter, then names and freezes that exact batch in a confirmation
+  dialog; selected App Store rows are passed to `mas upgrade` by ID instead of expanding
+  into a global upgrade. The Uninstall view drops selections as search hides them, counts
+  only visible targets, lists every approved application and path in its confirmation, and
+  passes that frozen collection into execution instead of resolving the filter again afterward.
 - **A restart turned a network outage into "everything up to date" (REL-09).** The
   `brew update` failure was discarded on the spot (`_ = try?`), the persisted snapshot
   recorded no per-source result, and a missing Brew answer was written to disk as an empty

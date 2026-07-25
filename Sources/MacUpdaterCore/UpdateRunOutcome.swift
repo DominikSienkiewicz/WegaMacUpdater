@@ -37,6 +37,10 @@ public enum ItemUpdateVerdict: Equatable, Sendable {
     case rolledBack
     /// The package manager failed to install it.
     case executionFailed
+    /// The unattended batch failed globally after this app had already been restored.
+    case executionFailedAfterRollback
+    /// The unattended batch failed globally, but the app left on disk changed publisher.
+    case executionFailedWithPublisherChange(old: String, new: String?)
     /// The new version failed its check and could not be restored.
     case rollbackFailed
 
@@ -44,7 +48,9 @@ public enum ItemUpdateVerdict: Equatable, Sendable {
     public var upgraded: Bool {
         switch self {
         case .succeeded, .publisherChanged: return true
-        case .notVerified, .stillOutdated, .rolledBack, .executionFailed, .rollbackFailed: return false
+        case .notVerified, .stillOutdated, .rolledBack, .executionFailed,
+             .executionFailedAfterRollback, .executionFailedWithPublisherChange,
+             .rollbackFailed: return false
         }
     }
 
@@ -52,8 +58,9 @@ public enum ItemUpdateVerdict: Equatable, Sendable {
     /// notification of their own, never a line in a collapsed log.
     public var isCritical: Bool {
         switch self {
-        case .rollbackFailed, .publisherChanged: return true
-        case .succeeded, .notVerified, .stillOutdated, .rolledBack, .executionFailed: return false
+        case .rollbackFailed, .publisherChanged, .executionFailedWithPublisherChange: return true
+        case .succeeded, .notVerified, .stillOutdated, .rolledBack,
+             .executionFailed, .executionFailedAfterRollback: return false
         }
     }
 
@@ -66,6 +73,10 @@ public enum ItemUpdateVerdict: Equatable, Sendable {
         case .stillOutdated:    return "nadal widnieje jako nieaktualne po skanie kontrolnym"
         case .rolledBack:       return "nowa wersja nie przeszła kontroli — przywrócono poprzednią"
         case .executionFailed:  return "menedżer pakietów zgłosił błąd"
+        case .executionFailedAfterRollback:
+            return "menedżer pakietów zgłosił błąd; przywrócono poprzednią wersję po kontroli"
+        case .executionFailedWithPublisherChange:
+            return "menedżer pakietów zgłosił błąd, ale aplikacja na dysku zmieniła Team ID wydawcy"
         case .rollbackFailed:   return "nowa wersja nie przeszła kontroli, a rollback się nie powiódł"
         }
     }
@@ -81,6 +92,7 @@ public enum ItemUpdateVerdict: Equatable, Sendable {
         case .stillOutdated:    return 3
         case .rolledBack:       return 4
         case .executionFailed:  return 5
+        case .executionFailedAfterRollback, .executionFailedWithPublisherChange: return 5
         case .rollbackFailed:   return 6
         }
     }
@@ -103,6 +115,37 @@ public struct ItemUpdateOutcome: Equatable, Sendable {
 
     mutating func escalate(to newVerdict: ItemUpdateVerdict) {
         if newVerdict.severity > verdict.severity { verdict = newVerdict }
+    }
+
+    /// Validation describes the app left on disk, independently of the process-wide exit.
+    /// Preserve both facts when a background batch failed after mutating this item.
+    mutating func applyValidation(_ validation: CaskValidationVerdict) {
+        switch (verdict, validation) {
+        case (.executionFailed, .rolledBack):
+            verdict = .executionFailedAfterRollback
+        case (.executionFailed, .publisherChanged(let old, let new)):
+            verdict = .executionFailedWithPublisherChange(old: old, new: new)
+        case (_, .healthy):
+            break
+        case (_, .rolledBack):
+            escalate(to: .rolledBack)
+        case (_, .rollbackFailed):
+            escalate(to: .rollbackFailed)
+        case (_, .publisherChanged(let old, let new)):
+            escalate(to: .publisherChanged(old: old, new: new))
+        }
+    }
+
+    /// Compound background verdicts participate in each relevant summary bucket.
+    var reportedVerdicts: [ItemUpdateVerdict] {
+        switch verdict {
+        case .executionFailedAfterRollback:
+            return [.executionFailed, .rolledBack]
+        case .executionFailedWithPublisherChange(let old, let new):
+            return [.executionFailed, .publisherChanged(old: old, new: new)]
+        default:
+            return [verdict]
+        }
     }
 }
 
@@ -142,6 +185,23 @@ public struct UpdateRunOutcome: Equatable, Sendable {
         needsSudoPassword = needsSudoPassword || outcome.requiresSudoPassword
     }
 
+    /// Records an unattended batch, where a non-zero process exit invalidates the whole
+    /// command. Background execution has no user present to inspect a partial result, so a
+    /// global failure may not be narrowed to only the tokens brew happened to name.
+    public mutating func recordBackgroundRound(_ covered: [OutdatedItem], outcome: BrewUpgradeOutcome) {
+        guard outcome.exitCode != 0 else {
+            record(covered, outcome: outcome)
+            return
+        }
+
+        record(covered, outcome: BrewUpgradeOutcome(
+            exitCode: outcome.exitCode,
+            failedTokens: covered.map(\.name),
+            errorLines: outcome.errorLines,
+            requiresSudoPassword: outcome.requiresSudoPassword
+        ))
+    }
+
     /// `mas upgrade` is one process for every App Store item and reports no per-item result:
     /// it either completes or throws. Pass the thrown error's description as `failure`.
     ///
@@ -163,16 +223,8 @@ public struct UpdateRunOutcome: Equatable, Sendable {
     /// verdict would talk a failed install back up into a success.
     public mutating func applyValidation(_ verdicts: [String: CaskValidationVerdict]) {
         for index in items.indices where items[index].kind == .cask {
-            switch verdicts[items[index].name] {
-            case .none, .healthy:
-                continue
-            case .rolledBack:
-                items[index].escalate(to: .rolledBack)
-            case .rollbackFailed:
-                items[index].escalate(to: .rollbackFailed)
-            case .publisherChanged(let old, let new):
-                items[index].escalate(to: .publisherChanged(old: old, new: new))
-            }
+            guard let validation = verdicts[items[index].name] else { continue }
+            items[index].applyValidation(validation)
         }
     }
 
@@ -229,7 +281,7 @@ public struct UpdateRunSummary: Equatable, Sendable {
     public var allItemsUpgraded: Bool { notUpgraded.isEmpty }
 
     public func names(where predicate: (ItemUpdateVerdict) -> Bool) -> [String] {
-        items.filter { predicate($0.verdict) }.map(\.name)
+        items.filter { $0.reportedVerdicts.contains(where: predicate) }.map(\.name)
     }
 
     public var rollbackFailures: [ItemUpdateOutcome] {
@@ -237,6 +289,16 @@ public struct UpdateRunSummary: Equatable, Sendable {
     }
 
     public var publisherChanges: [ItemUpdateOutcome] {
-        items.filter { if case .publisherChanged = $0.verdict { return true } else { return false } }
+        items.compactMap { item in
+            switch item.verdict {
+            case .publisherChanged:
+                return item
+            case .executionFailedWithPublisherChange(let old, let new):
+                return ItemUpdateOutcome(key: item.key, name: item.name, kind: item.kind,
+                                         verdict: .publisherChanged(old: old, new: new))
+            default:
+                return nil
+            }
+        }
     }
 }

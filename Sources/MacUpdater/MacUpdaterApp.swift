@@ -150,7 +150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func refreshAppCatalog() {
         Task.detached(priority: .background) {
             let outcome = await CatalogRefresher(source: AppEndpoints.shared.appCatalogURL).refresh()
-            AppLogger.app.debug("app-catalog refresh: \(String(describing: outcome), privacy: .public)")
+            WegaLog.debug(.app, "app-catalog refresh: \(String(describing: outcome))")
         }
     }
 }

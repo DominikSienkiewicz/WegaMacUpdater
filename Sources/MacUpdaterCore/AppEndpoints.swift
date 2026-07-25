@@ -153,11 +153,11 @@ extension AppEndpoints {
             isValid: isValid
         )
         guard decision.appliesOverlay else {
-            AppLogger.app.error("endpoints.json: podpis obecny, ale nieprawidłowy — overlay zignorowany.")
+            WegaLog.error(.app, "endpoints.json: podpis obecny, ale nieprawidłowy — overlay zignorowany.")
             return nil
         }
         if decision.deservesWarning {
-            AppLogger.app.warning("endpoints.json: overlay bez podpisu — zastosowany zgodnie z polityką, ale nieweryfikowany.")
+            WegaLog.warning(.app, "endpoints.json: overlay bez podpisu — zastosowany zgodnie z polityką, ale nieweryfikowany.")
         }
         return try? decodeOverlay(contentsOf: url)
     }

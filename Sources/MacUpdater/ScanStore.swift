@@ -238,6 +238,16 @@ final class ScanStore: ObservableObject {
         )
     }
 
+    /// The installable rows the active sidebar category actually renders.
+    func visibleItems(for filter: UpdateFilter) -> [OutdatedItem] {
+        UpdatePlanner.visibleItems(allItems, filter: filter)
+    }
+
+    /// The exact visible rows the batch button, plan preview and confirmation describe.
+    func updateTargets(for filter: UpdateFilter) -> [OutdatedItem] {
+        UpdatePlanner.targets(from: allItems, selectedKeys: selected, filter: filter)
+    }
+
     /// Manual updates with ignore/pin rules applied.
     var visibleManual: [ManualOutdatedApp] {
         UpdatePlanner.applyPolicies(manualOutdated, policies: UpdatePolicyStore.shared.policiesMap)
@@ -263,8 +273,15 @@ final class ScanStore: ObservableObject {
         app.releaseNotes.map { ReleaseNotesTriage.heuristic($0).isLikelySecurityFix } ?? false
     }
 
-    func toggleAll() {
-        selected = UpdatePlanner.toggledAll(selected: selected, allKeys: allItems.map(\.key))
+    /// Selections cannot survive invisibly across filters. Keeping this invariant in the
+    /// store also protects a rebuilt SwiftUI tree whose first `onChange` never fires.
+    func restrictSelection(to filter: UpdateFilter) {
+        selected.formIntersection(visibleItems(for: filter).map(\.key))
+    }
+
+    func toggleAll(filter: UpdateFilter) {
+        restrictSelection(to: filter)
+        selected = UpdatePlanner.toggledAll(selected: selected, allKeys: visibleItems(for: filter).map(\.key))
     }
 
     func ignoreItem(_ item: OutdatedItem) {

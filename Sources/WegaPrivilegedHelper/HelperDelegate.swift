@@ -1,5 +1,10 @@
 import Foundation
 import MacUpdaterCore
+import OSLog
+
+private enum HelperAuditLog {
+    static let logger = Logger(subsystem: WegaHelper.helperSigningID, category: "PrivilegedHelper")
+}
 
 /// Accepts XPC connections only from the genuine, correctly-signed app, then
 /// vends the whitelisted operations object.
@@ -8,7 +13,10 @@ final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked 
         // Pin the client: Apple chain + app identifier + Team ID. The kernel
         // enforces this against the peer's audit token (not a forgeable PID).
         // macOS 13+. Refuse everything if the Team ID hasn't been configured.
-        guard WegaHelper.isTeamIDConfigured else { return false }
+        guard WegaHelper.isTeamIDConfigured else {
+            HelperAuditLog.logger.error("Odrzucono połączenie XPC: Team ID helpera nie jest skonfigurowany.")
+            return false
+        }
         newConnection.setCodeSigningRequirement(WegaHelper.clientRequirement())
 
         newConnection.exportedInterface = NSXPCInterface(with: WegaPrivilegedOps.self)
@@ -23,14 +31,17 @@ final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked 
 final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
 
     func helperVersion(withReply reply: @escaping @Sendable (String) -> Void) {
+        HelperAuditLog.logger.info("helperVersion: sukces")
         reply(WegaHelper.version)
     }
 
     func enableTouchIDForSudo(withReply reply: @escaping @Sendable (Bool, String?) -> Void) {
         do {
             try TouchIDSudoConfigurator.writeSudoLocalEnablingTouchID()
+            HelperAuditLog.logger.info("enableTouchIDForSudo: sukces")
             reply(true, nil)
         } catch {
+            HelperAuditLog.logger.error("enableTouchIDForSudo: błąd")
             reply(false, error.localizedDescription)
         }
     }
@@ -43,6 +54,7 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
         do {
             try CodeSignatureVerifier.verify(installerAt: url, expectedTeamID: WegaHelper.teamIdentifier)
         } catch {
+            HelperAuditLog.logger.error("installVerifiedPackage: błąd")
             reply(false, "Weryfikacja pakietu nie powiodła się: \(error.localizedDescription)")
             return
         }
@@ -56,13 +68,16 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
             try process.run()
             process.waitUntilExit()
             if process.terminationStatus == 0 {
+                HelperAuditLog.logger.info("installVerifiedPackage: sukces")
                 reply(true, nil)
             } else {
                 let data = stderrPipe.fileHandleForReading.readDataToEndOfFile()
                 let message = String(data: data, encoding: .utf8) ?? "installer zakończył się kodem \(process.terminationStatus)"
+                HelperAuditLog.logger.error("installVerifiedPackage: błąd")
                 reply(false, message)
             }
         } catch {
+            HelperAuditLog.logger.error("installVerifiedPackage: błąd")
             reply(false, error.localizedDescription)
         }
     }
@@ -74,23 +89,29 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
 
         // Twarda walidacja — to NIE jest generyczne „nadpisz cokolwiek jako root".
         guard targetPath.hasSuffix(".app"), snapshotPath.hasSuffix(".app") else {
+            HelperAuditLog.logger.error("replaceBundle: błąd")
             reply(false, "Dozwolone tylko bundle .app."); return
         }
         guard targetPath.hasPrefix("/Applications/") else {
+            HelperAuditLog.logger.error("replaceBundle: błąd")
             reply(false, "Cel poza /Applications — odrzucono."); return
         }
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: snapshotPath, isDirectory: &isDirectory), isDirectory.boolValue else {
+            HelperAuditLog.logger.error("replaceBundle: błąd")
             reply(false, "Brak prawidłowego snapshotu do przywrócenia."); return
         }
         // Defense in depth: przywracamy tylko prawidłowo podpisaną aplikację.
         guard CodeSignatureVerifier.passesGatekeeperForExecution(at: snapshot) else {
+            HelperAuditLog.logger.error("replaceBundle: błąd")
             reply(false, "Snapshot nie przeszedł oceny Gatekeeper."); return
         }
         do {
             _ = try fileManager.replaceItemAt(target, withItemAt: snapshot)
+            HelperAuditLog.logger.info("replaceBundle: sukces")
             reply(true, nil)
         } catch {
+            HelperAuditLog.logger.error("replaceBundle: błąd")
             reply(false, error.localizedDescription)
         }
     }

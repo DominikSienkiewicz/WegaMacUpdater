@@ -181,8 +181,9 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             process.terminate()
             exitSemaphore.wait()
             detachHandlers()
-            AppLogger.process.error(
-                "\(request.executableURL.lastPathComponent, privacy: .public) aborted: \(error.localizedDescription, privacy: .public)"
+            WegaLog.error(
+                .process,
+                "\(request.executableURL.lastPathComponent) aborted: \(error.localizedDescription)"
             )
             throw error
         }
@@ -210,10 +211,11 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             stderr: String(decoding: stderrBuffer.data, as: UTF8.self)
         )
         // Non-zero is often domain-meaningful (handled by callers), so keep it at
-        // debug — visible when diagnosing, silent in normal Console output.
+        // debug — available for diagnosis without escalating it to a warning/error.
         if result.exitCode != 0 {
-            AppLogger.process.debug(
-                "\(request.executableURL.lastPathComponent, privacy: .public) exited \(result.exitCode, privacy: .public)"
+            WegaLog.debug(
+                .process,
+                "\(request.executableURL.lastPathComponent) exited \(result.exitCode)"
             )
         }
         return result

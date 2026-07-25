@@ -43,7 +43,19 @@ public final class MasService: @unchecked Sendable {
     }
 
     public func upgrade() async throws -> ProcessResult {
-        let arguments = ["upgrade"]
+        try await runUpgrade(arguments: ["upgrade"])
+    }
+
+    /// UX-01: `mas upgrade` without IDs upgrades every outdated App Store app. The
+    /// filtered Updates view must pass the exact IDs it displayed and the user approved.
+    public func upgrade(appStoreIDs: [String]) async throws -> ProcessResult {
+        guard !appStoreIDs.isEmpty else {
+            return ProcessResult(exitCode: 0, stdout: "", stderr: "")
+        }
+        return try await runUpgrade(arguments: ["upgrade"] + appStoreIDs)
+    }
+
+    private func runUpgrade(arguments: [String]) async throws -> ProcessResult {
         let first = try await runMas(arguments)
         if first.exitCode == 0 {
             return first

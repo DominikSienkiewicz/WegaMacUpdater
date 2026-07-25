@@ -329,8 +329,8 @@ extension ScanStore {
         manualBusy = nil
     }
 
-    func runUpdate() async {
-        guard let model else { return }
+    func runUpdate(targetKeys: Set<String>) async {
+        guard let model, !targetKeys.isEmpty else { return }
         // F3 — never overlap with a background upgrade: both take snapshots and both call
         // `brew upgrade --cask`. The window is the one the user is waiting on.
         guard UpgradeMutex.shared.acquire() else {
@@ -345,11 +345,11 @@ extension ScanStore {
         showLog = true
         emitWegaState(WegaState(pose: .sniff, line: tr("Aktualizuję, chwila…")))
 
-        let plan          = UpdatePlanner.plan(selectedKeys: selected, allKeys: allItems.map(\.key))
+        let plan          = UpdatePlanner.plan(selectedKeys: targetKeys, allKeys: allItems.map(\.key))
         // The rows this run is about, captured before anything changes: the post-upgrade
         // rescan rewrites `allItems`, and an outcome has to keep pointing at the item it
         // was produced for. `name`/`key` here are what the tools and the rescan both use.
-        let plannedKeys   = selected.isEmpty ? Set(allItems.map(\.key)) : selected
+        let plannedKeys   = targetKeys
         let plannedItems  = allItems.filter { plannedKeys.contains($0.key) }
         // F2 — the exact argument vectors come from the planner, the same call the preview
         // panel renders. Building them here as well is how a dry-run starts to lie: the
@@ -360,7 +360,7 @@ extension ScanStore {
         let npmCommands   = commands.filter { $0.executable == "npm" }
         let caskNames     = plan.caskNames
         let npmNames      = plan.npmNames
-        let hasMasItems   = plan.includesMas
+        let masAppStoreIDs = plan.masAppStoreIDs
 
         // Pre-capture which casks being updated are currently running
         var candidates: [RestartInfo] = []
@@ -378,7 +378,7 @@ extension ScanStore {
         // measure. When nothing could be measured we keep the old pessimistic assumption
         // (a cask is usually large) but say so in the log, rather than pretending to know.
         if !caskNames.isEmpty {
-            await probeDownloadSizes()
+            await probeDownloadSizes(targetKeys: targetKeys)
             let measured = caskNames.compactMap { token -> Int64? in
                 if case .known(let bytes) = caskSizes[token] { return bytes }
                 return nil
@@ -442,14 +442,15 @@ extension ScanStore {
             run.record(plannedItems.filter { $0.kind == .npm && $0.name == pkg }, outcome: outcome)
         }
 
-        // MAS upgrade — `mas upgrade` covers every App Store item in one process and reports
-        // no per-app result, so its failure becomes a synthetic outcome per item, exactly as
-        // `runNpmUpgrade` does. Before REL-02 the thrown error only ever reached `brewLog`.
-        if hasMasItems {
-            brewLog.append("$ mas upgrade")
+        // MAS upgrade — the IDs are load-bearing. A bare `mas upgrade` expands to every
+        // outdated App Store app, including rows outside the visible/confirmed UX-01 set.
+        // mas still reports no per-app result, so one failure becomes a synthetic outcome
+        // per planned item, exactly as `runNpmUpgrade` does.
+        if !masAppStoreIDs.isEmpty {
+            brewLog.append("$ mas upgrade " + masAppStoreIDs.joined(separator: " "))
             var masFailure: String?
             do {
-                let result = try await model.masService.upgrade()
+                let result = try await model.masService.upgrade(appStoreIDs: masAppStoreIDs)
                 let lines = result.stdout.components(separatedBy: "\n").filter { !$0.isEmpty }
                 brewLog.append(contentsOf: lines)
             } catch {
@@ -681,25 +682,25 @@ extension ScanStore {
     /// F2 — the exact commands the upgrade will run, from the same planner call the upgrade
     /// itself uses. If this ever disagrees with execution, it is because someone rebuilt an
     /// argument vector by hand.
-    var plannedCommands: [UpdateCommand] {
-        UpdatePlanner.commands(for: UpdatePlanner.plan(selectedKeys: selected, allKeys: allItems.map(\.key)))
+    func plannedCommands(targetKeys: Set<String>) -> [UpdateCommand] {
+        UpdatePlanner.commands(for: UpdatePlanner.plan(selectedKeys: targetKeys, allKeys: allItems.map(\.key)))
     }
 
     /// The casks this run would upgrade, in the order the command lists them.
-    var plannedCaskTokens: [String] {
-        UpdatePlanner.plan(selectedKeys: selected, allKeys: allItems.map(\.key)).caskNames
+    func plannedCaskTokens(targetKeys: Set<String>) -> [String] {
+        UpdatePlanner.plan(selectedKeys: targetKeys, allKeys: allItems.map(\.key)).caskNames
     }
 
     /// F2 — one HEAD per cask, on demand. `brew info --json` has no size field (verified),
     /// and a CDN may withhold `Content-Length`, so "unknown" is a legitimate answer that the
     /// panel shows verbatim rather than guessing a number.
-    func probeDownloadSizes() async {
+    func probeDownloadSizes(targetKeys: Set<String>) async {
         guard !probingSizes else { return }
         probingSizes = true
         defer { probingSizes = false }
 
         let probe = DownloadSizeProbe()
-        for token in plannedCaskTokens where caskSizes[token] == nil {
+        for token in plannedCaskTokens(targetKeys: targetKeys) where caskSizes[token] == nil {
             guard let url = caskDownloads[token]?.url else { continue }
             caskSizes[token] = await probe.probe(urlString: url)
         }
