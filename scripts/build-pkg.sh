@@ -36,6 +36,9 @@ INSTALLER_IDENTITY="${2:-}"   # "Developer ID Installer: …" — podpis instala
 BUILD_DIR="$(pwd)/.build/pkg-staging"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"
+PKG_ROOT="$BUILD_DIR/pkg-root"
+PKG_APPLICATIONS="$PKG_ROOT/Applications"
+PKG_AUTHORIZATION_DIR="$PKG_ROOT/Library/Application Support/WegaMacUpdater/Authorization"
 OUTPUT_PKG="$(pwd)/build/$APP_NAME.pkg"
 OUTPUT_DMG="$(pwd)/build/$APP_NAME.dmg"
 
@@ -101,8 +104,8 @@ if [[ ! -f "$ASKPASS_BIN" || ! -f "$SUDO_SHIM_BIN" ]]; then
 fi
 cp "$ASKPASS_BIN" "$CONTENTS/Helpers/WegaAskpass"
 cp "$SUDO_SHIM_BIN" "$CONTENTS/Helpers/sudo-shim/sudo"
-chmod 0700 "$CONTENTS/Helpers" "$CONTENTS/Helpers/sudo-shim"
-chmod 0500 "$CONTENTS/Helpers/WegaAskpass" "$CONTENTS/Helpers/sudo-shim/sudo"
+chmod 0755 "$CONTENTS/Helpers" "$CONTENTS/Helpers/sudo-shim"
+chmod 0555 "$CONTENTS/Helpers/WegaAskpass" "$CONTENTS/Helpers/sudo-shim/sudo"
 echo "   ✓ Skompilowane askpass + sudo shim osadzone w Contents/Helpers"
 
 # ---------------------------------------------------------------------------
@@ -211,19 +214,39 @@ else
     echo "   ⚠️ Ad-hoc (bez Developer ID). UWAGA: SMAppService helper NIE zarejestruje się bez podpisu Developer ID."
 fi
 
+# `pkgbuild` installs system-domain payloads as root:wheel. Keep authorization
+# components executable/readable by the GUI user, but never writable by it.
+chmod 0755 "$CONTENTS/Helpers" "$CONTENTS/Helpers/sudo-shim"
+chmod 0555 "$CONTENTS/Helpers/WegaAskpass" "$CONTENTS/Helpers/sudo-shim/sudo"
+
 # ---------------------------------------------------------------------------
 echo "→ Tworzę PKG..."
-# Pliki kopiowane z .build (binarka helpera, bundle zasobów) bywają read-only —
-# pkgbuild zgłasza wtedy "write: Permission denied" przy analizie payloadu.
-# Nadanie prawa zapisu właścicielowi usuwa te ostrzeżenia (bez wpływu na wynik).
-chmod -R u+w "$APP_BUNDLE" 2>/dev/null || true
+# `/Applications` is commonly root:admin 0775, so an administrator can replace a
+# nested helper after signature verification. The PKG therefore installs a second
+# signed copy below a root-owned, non-writable system path. The app prefers it at
+# runtime and uses the bundle copy only from a genuinely read-only volume.
+mkdir -p "$PKG_APPLICATIONS" "$PKG_AUTHORIZATION_DIR/sudo-shim"
+cp -R "$APP_BUNDLE" "$PKG_APPLICATIONS/"
+cp "$CONTENTS/Helpers/WegaAskpass" "$PKG_AUTHORIZATION_DIR/WegaAskpass"
+cp "$CONTENTS/Helpers/sudo-shim/sudo" "$PKG_AUTHORIZATION_DIR/sudo-shim/sudo"
+chmod 0755 \
+    "$PKG_ROOT/Library" \
+    "$PKG_ROOT/Library/Application Support" \
+    "$PKG_ROOT/Library/Application Support/WegaMacUpdater" \
+    "$PKG_AUTHORIZATION_DIR" \
+    "$PKG_AUTHORIZATION_DIR/sudo-shim"
+chmod 0555 \
+    "$PKG_AUTHORIZATION_DIR/WegaAskpass" \
+    "$PKG_AUTHORIZATION_DIR/sudo-shim/sudo"
+
 # DEBT-02: podpisz sam pakiet (nie tylko .app w środku). pkgbuild akceptuje wyłącznie
 # certyfikat "Developer ID Installer" — tożsamość "Developer ID Application" (arg 1)
 # nie podpisze pakietu, dlatego .pkg ma własną, drugą tożsamość (arg 2).
 if [[ -n "$INSTALLER_IDENTITY" ]]; then
     pkgbuild \
-        --component "$APP_BUNDLE" \
-        --install-location /Applications \
+        --root "$PKG_ROOT" \
+        --install-location / \
+        --ownership recommended \
         --identifier "$BUNDLE_ID" \
         --version "$VERSION" \
         --sign "$INSTALLER_IDENTITY" \
@@ -234,8 +257,9 @@ else
         echo "   ⚠️ Brak tożsamości 'Developer ID Installer' (drugi argument) — .pkg będzie NIEPODPISANY (notaryzacja .pkg nie przejdzie)."
     fi
     pkgbuild \
-        --component "$APP_BUNDLE" \
-        --install-location /Applications \
+        --root "$PKG_ROOT" \
+        --install-location / \
+        --ownership recommended \
         --identifier "$BUNDLE_ID" \
         --version "$VERSION" \
         "$OUTPUT_PKG"

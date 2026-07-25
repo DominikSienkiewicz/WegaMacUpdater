@@ -81,7 +81,7 @@ public enum HomebrewEnvironment {
         )
     }
 
-    /// Resolves and verifies the compiled askpass and sudo shim in the signed app bundle.
+    /// Resolves and verifies the compiled askpass and sudo shim from an immutable location.
     /// Failure clears both paths, so no stale or unverified executable remains attached.
     static func bootstrapAskpass() {
         do {
