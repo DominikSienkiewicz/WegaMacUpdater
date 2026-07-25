@@ -116,7 +116,9 @@ bump and move its entries under the new version heading when cutting a release.
   was cloned and the canary skipped every cask. The bundles are now resolved **at upgrade
   time**, immediately before the snapshot, through one shared `CaskAppPathResolver` that
   the window and the unattended path both use instead of each keeping its own copy of the
-  loop. The chain covers every upgrade now, not only one that follows a full scan in the
+  loop, and they are **passed** to the snapshot and the canary rather than read from shared
+  state on the way past — a snapshot can no longer be taken without saying which bundles it
+  covers. The chain covers every upgrade now, not only one that follows a full scan in the
   same session.
 - Sparkle-based apps are no longer reported as outdated when the installed
   build is newer than the feed, or when only the version format differs
