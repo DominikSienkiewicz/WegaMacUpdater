@@ -13,6 +13,16 @@ excluded:
   - .build
   - .swiftpm
   - scripts        # standalone Swift scripts (make-icon.swift) — not app code
+  # Linked worktrees hold other branches' copies of this same tree, plus their own
+  # build artifacts. `excluded` paths resolve against this file's directory, so the
+  # `.build` entry above covers only the top-level one — without these two entries a
+  # lint run from the main checkout descends into every worktree, grading code that
+  # belongs to another branch and walking SwiftPM/Xcode output. Run from a worktree it
+  # never showed up (a worktree contains no nested worktrees); run from the main
+  # checkout it turned 232 files into ~5900 and killed SwiftLint 0.65.0 with SIGILL
+  # inside a nested .build.
+  - .worktrees     # AGENTS.md layout: <repo>/.worktrees/<name>
+  - .claude        # older .claude/worktrees/* layout and Claude Code's own state
 
 disabled_rules:
   - colon                              # author aligns colons in multiline literals
