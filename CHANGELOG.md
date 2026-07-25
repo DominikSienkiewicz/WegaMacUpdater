@@ -48,6 +48,15 @@ bump and move its entries under the new version heading when cutting a release.
 - This `CHANGELOG.md`.
 
 ### Changed
+- Split `ScanStore` across two files along the seam it already had: `ScanStore.swift`
+  keeps the published state and the small operations over it, and the scan/upgrade
+  actions move to `ScanStore+Actions.swift`. The type, its API and its behaviour are
+  unchanged; the members the actions half reaches for are `internal` rather than
+  `private` now that the two no longer share a file, except `sourceReports` /
+  `lastScanComplete`, which keep their `private(set)` behind `applyScanSourceReports(_:)`
+  so the view tree still cannot assign them. At 1041 lines the file had ~9 lines left
+  under the `file_length` warning that `swiftlint --strict` fails on; it is now 324 and
+  742.
 - Tightened the SwiftLint metric guardrails (`file_length`, `function_body_length`,
   `cyclomatic_complexity`, `type_body_length`) from "thresholds the tree happens to
   clear" to values just above the current maxima, so they catch genuine growth instead

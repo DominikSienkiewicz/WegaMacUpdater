@@ -31,10 +31,18 @@ struct RollbackNetAfterRestoreTests {
                    encoding: .utf8)
     }
 
+    /// `ScanStore`'s implementation. It spans two files — the state in `ScanStore.swift`,
+    /// the scan/upgrade actions in `ScanStore+Actions.swift` — and is read as one text so
+    /// that a `!contains` guard still covers the whole type: pinned to one half only, the
+    /// pattern it forbids could reappear in the other and the assertion would pass.
+    private func scanStore() throws -> String {
+        try source("ScanStore.swift") + "\n" + source("ScanStore+Actions.swift")
+    }
+
     /// The bug itself: the chain read a map that was filled somewhere else, at some other
     /// time — and after `restoreLastScan()` was not filled at all.
     @Test func theChainNoLongerReadsTheScansIconMap() throws {
-        let text = try source("ScanStore.swift")
+        let text = try scanStore()
         #expect(!text.contains("CaskRollbackGuard.snapshot(tokens: tokens, appPaths: caskIconPaths)"),
                 "REL-03: the snapshot must not read `caskIconPaths` — it is empty after `restoreLastScan()`")
         #expect(!text.contains("CaskRollbackGuard.verify(tokens: tokens, appPaths: caskIconPaths"),
@@ -47,7 +55,7 @@ struct RollbackNetAfterRestoreTests {
     /// guarding — a snapshot cannot be taken without being handed the paths it covers, so a
     /// future call site added elsewhere cannot compile its way back into this bug.
     @Test func theResolvedPathsArePassedToBothPhases() throws {
-        let text = try source("ScanStore.swift")
+        let text = try scanStore()
         #expect(text.contains("await resolveCaskAppPaths(caskNames)"),
                 "REL-03: the upgrade must resolve the `.app` paths itself, in this run")
         #expect(text.contains("private func snapshotCasks(_ tokens: [String], appPaths: [String: URL])"),
@@ -61,7 +69,7 @@ struct RollbackNetAfterRestoreTests {
     /// One resolver, two callers — the duplicate hand-rolled loops are what let the window
     /// path and the unattended path disagree about where an app lives.
     @Test func bothUpgradePathsShareOneResolver() throws {
-        let store = try source("ScanStore.swift")
+        let store = try scanStore()
         let background = try source("BackgroundUpdater.swift")
         #expect(store.contains("CaskAppPathResolver()"),
                 "REL-03: the window path resolves through the shared resolver")

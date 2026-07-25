@@ -26,6 +26,14 @@ struct UpdateResultHonestyTests {
                    encoding: .utf8)
     }
 
+    /// `ScanStore`'s implementation. It spans two files — the state in `ScanStore.swift`,
+    /// the scan/upgrade actions in `ScanStore+Actions.swift` — and is read as one text so
+    /// that a `!contains` guard still covers the whole type: pinned to one half only, the
+    /// pattern it forbids could reappear in the other and the assertion would pass.
+    private func scanStore() throws -> String {
+        try source("ScanStore.swift") + "\n" + source("ScanStore+Actions.swift")
+    }
+
     /// The text of the `for`/`switch` block introduced by `header`, up to the line that
     /// closes it at the same indentation — enough to assert what a branch does with its case.
     private func block(after header: String, in text: String) -> String {
@@ -40,7 +48,7 @@ struct UpdateResultHonestyTests {
     /// Path 1: the `mas upgrade` error only ever reached `brewLog`, so the run had no
     /// outcome to be unhappy about and the banner announced "Wszystko gotowe".
     @Test func masFailureBecomesAnOutcome() throws {
-        let text = try source("ScanStore.swift")
+        let text = try scanStore()
         #expect(text.contains("run.record(masItems:"),
                 "REL-02: a failed `mas upgrade` must produce an outcome, not just a log line")
         #expect(text.contains("masFailure = error.localizedDescription"),
@@ -50,7 +58,7 @@ struct UpdateResultHonestyTests {
     /// Paths 2–3: the cask result was summarized before the canary ran, `postCaskUpgrade`
     /// returned nothing, and the summary only ever saw `BrewUpgradeOutcome`.
     @Test func canaryVerdictsReachTheSummary() throws {
-        let text = try source("ScanStore.swift")
+        let text = try scanStore()
         // REL-03 added the `appPaths` parameter (the rollback net no longer reads a map only
         // a full scan filled); the assertion below is unchanged in what it demands — the
         // verdicts must be *returned* — only the signature it quotes was updated.
@@ -65,7 +73,7 @@ struct UpdateResultHonestyTests {
     /// Path 4: `.rollbackFailed` — "the one that must never be silent" — was a line in a
     /// collapsible log underneath a green banner.
     @Test func failedRollbackRaisesAStickyBanner() throws {
-        let text = try source("ScanStore.swift")
+        let text = try scanStore()
         let branch = block(after: "for outcome in summary.rollbackFailures {", in: text)
         #expect(branch.contains("showStickyBanner("),
                 "REL-02: a failed rollback is a red sticky banner, not a log entry")
@@ -74,7 +82,7 @@ struct UpdateResultHonestyTests {
 
     /// The last phase: the post-upgrade rescan has to agree before anything is announced.
     @Test func theRescanIsPartOfTheResult() throws {
-        #expect(try source("ScanStore.swift").contains("run.applyRescan("),
+        #expect(try scanStore().contains("run.applyRescan("),
                 "REL-02: the post-upgrade rescan must confirm the run")
         #expect(try source("BackgroundUpdater.swift").contains("run.applyRescan("),
                 "REL-02: the unattended path needs the same confirmation")
