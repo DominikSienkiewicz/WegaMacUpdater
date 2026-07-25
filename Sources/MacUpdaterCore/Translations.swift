@@ -29,6 +29,7 @@ public enum Translations {
         // FEAT-04 — watchdog ciągłości Team ID.
         "Uwaga: wydawca %@ zmienił Team ID (%@ → %@). Zweryfikuj, zanim zaufasz.": "Warning: %@'s publisher changed Team ID (%@ → %@). Verify before trusting.",
         "Zmienił się wydawca aplikacji — sprawdź.": "The app's publisher changed — review.",
+        "instalacja %@": "install %@",
         // UX-01 — ujawnienie zakresu Touch ID dla sudo.
         "Działa dla całego sudo w systemie, nie tylko dla Wegi.": "Applies to all sudo on the system, not just Wega.",
         // FEAT-03 — transparentność pobrania (UpdateView).
@@ -39,6 +40,18 @@ public enum Translations {
         // FEAT-07 — gating pobrań.
         "Niekorzystne warunki pobierania (%@) — kontynuuję na żądanie.": "Unfavorable download conditions (%@) — continuing at your request.",
         "Uwaga: kosztowne łącze lub throttling — pobieram mimo to.": "Note: metered link or throttling — downloading anyway.",
+        "Bramka zasobów": "Resource gate",
+        "Wega sprawdza miejsce, łącze, baterię i temperaturę przed snapshotem i pobraniem.": "Wega checks disk space, network, battery and temperature before snapshotting and downloading.",
+        "Duże pobranie": "Large download",
+        "Niska bateria": "Low battery",
+        "Mnożnik rozpakowania": "Unpacking multiplier",
+        "Margines dysku": "Disk safety margin",
+        "Aktualizacja odroczona": "Update postponed",
+        "Aktualizacja odroczona: %@.": "Update postponed: %@.",
+        "Bramka zasobów: %@.": "Resource gate: %@.",
+        "Warunki nie pozwalają teraz bezpiecznie pobrać aktualizacji.": "Current conditions do not allow the update to be downloaded safely.",
+        "Nie udało się utworzyć snapshotu dla: %@.": "Could not create a snapshot for: %@.",
+        "Nie udało się utworzyć wymaganego snapshotu.": "Could not create the required snapshot.",
         // FEAT-05 — rollback casków.
         "%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.": "%@: the new version failed the check — restored the previous one.",
         "Cofnęłam %@ — nowa wersja nie przeszła kontroli.": "Rolled back %@ — the new version failed the check.",
@@ -49,6 +62,10 @@ public enum Translations {
         // FEAT-04 — watchdog (upgrade).
         "Zmiana wydawcy": "Publisher changed",
         "%@: Team ID zmienił się (%@ → %@). Zweryfikuj.": "%@: Team ID changed (%@ → %@). Verify.",
+        "%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.": "%@: Team ID changed (%@ → %@). Restored the previous trusted version.",
+        "%@: Team ID już różnił się od zaufanego baseline (%@ → %@). Aktualizację zablokowano przed uruchomieniem.": "%@: Team ID already differed from the trusted baseline (%@ → %@). The upgrade was blocked before execution.",
+        "%@: zmienił się Team ID wydawcy — przywrócono poprzednią zaufaną wersję.": "%@: the publisher's Team ID changed — restored the previous trusted version.",
+        "Cofnęłam %@ — zmienił się wydawca.": "Rolled back %@ — the publisher changed.",
         // FEAT-06 — AI triage (self-update).
         "możliwa poprawka bezpieczeństwa": "possible security fix",
         // FEAT-01 / SEC-03 — privileged helper + self-update verification.
@@ -188,6 +205,27 @@ public enum Translations {
         "Wszystko porządku. Wega nie znalazła uciekinierów.": "All good. Wega found no runaways.",
         "Instaluję %@ przez Homebrew…": "Installing %@ via Homebrew…",
         "⚠ %@ jest uruchomiony — zamykam przed instalacją…": "⚠ %@ is running — closing it before installation…",
+        "Proszę %@ o łagodne zakończenie…": "Asking %@ to quit gracefully…",
+        "Łagodna prośba o zamknięcie %@ nie powiodła się; sprawdzam stan procesu…":
+            "The graceful quit request for %@ failed; checking the process state…",
+        "Nie można jednoznacznie wskazać działającej aplikacji dla bundle ID %@. Migracja nie została uruchomiona.":
+            "Could not uniquely identify the running app for bundle ID %@. The migration was not started.",
+        "Nie można potwierdzić zatrzymania aplikacji dla bundle ID %@. Migracja nie została uruchomiona.":
+            "Could not confirm that the app for bundle ID %@ stopped. The migration was not started.",
+        "%@ zamknięto łagodnie.": "%@ quit gracefully.",
+        "%@ nadal działa": "%@ is still running",
+        "Nie udało się zamknąć %@ łagodnie. Wymuszone zamknięcie może spowodować utratę niezapisanych danych. Wymusić zamknięcie i kontynuować migrację?":
+            "%@ did not quit gracefully. Force quitting may discard unsaved data. Force quit and continue the migration?",
+        "Wymuś zamknięcie": "Force quit",
+        "Migracja %@ została anulowana — aplikacja pozostała uruchomiona.":
+            "Migration of %@ was cancelled — the app is still running.",
+        "Wymuszam zamknięcie %@ za Twoją zgodą…": "Force quitting %@ with your consent…",
+        "Nie można ponownie potwierdzić działającej aplikacji %@. Migracja nie została uruchomiona.":
+            "Could not re-identify the running %@ app. The migration was not started.",
+        "Nie udało się wymusić zamknięcia %@. Migracja nie została uruchomiona.":
+            "Could not force quit %@. The migration was not started.",
+        "%@ nadal działa po próbie wymuszonego zamknięcia. Migracja nie została uruchomiona.":
+            "%@ is still running after the force-quit attempt. The migration was not started.",
         "%@ pod Homebrew": "%@ under Homebrew",
         "Token: %@": "Token: %@",
         "%@ przejęty! Idziemy dalej.": "%@ taken over! Let's move on.",
@@ -234,6 +272,9 @@ public enum Translations {
         "Odinstalowano %@ aplikacji": "Uninstalled %@ apps",
         "Załatwione — %@ mniej na dysku.": "Done — %@ fewer on the disk.",
         "Nie udało się: %@": "Failed: %@",
+        "Odinstalowanie niepełne — nie usunięto: %@": "Uninstall incomplete — not removed: %@",
+        "Nie uruchomiono --force; wybrane usunięcie wraz z resztkami nie zostało po cichu zmienione.":
+            "--force was not run; the selected app-and-leftovers removal was not silently changed.",
         "Odinstalować %@ %@?": "Uninstall %@ %@?",
         "aplikację": "app",
         "aplikacji": "apps",

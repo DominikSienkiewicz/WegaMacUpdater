@@ -73,15 +73,23 @@ final class BackgroundUpdater {
         let appPaths = await resolveAppPaths(tokens: candidates)
 
         let pathBackedCandidates = BackgroundUpdateSafety.pathBackedTokens(candidates, appPaths: appPaths)
+        let downloadsByToken = Dictionary(
+            downloads.map { ($0.token, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
         let initiallyEligibleTokens = BackgroundUpdatePlanner.eligibleTokens(.init(
             candidates: pathBackedCandidates,
             profiles: Dictionary(profiles.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first }),
-            downloads: Dictionary(downloads.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first }),
+            downloads: downloadsByToken,
             optedIn: optedIn,
             runningProcessTokens: runningTokens(appPaths: appPaths),
             policies: policies
         ))
         guard !initiallyEligibleTokens.isEmpty else { return [] }
+        let downloadSizes = await DownloadResourcePreflight.probe(
+            tokens: initiallyEligibleTokens,
+            downloads: downloadsByToken
+        )
 
         // F3 — the window always wins. If the user is upgrading by hand right now, this
         // round is skipped entirely; the next scheduled check will pick it up.
@@ -95,7 +103,7 @@ final class BackgroundUpdater {
         // the mutex is ours, every mutable veto is sampled again before any mutation.
         let lockedPolicies = UpdatePolicyStore.shared.policiesMap
         let lockedRunningProcessTokens = runningTokens(appPaths: appPaths)
-        let lockedTokens = BackgroundUpdatePlanner.eligibleTokens(.init(
+        let eligibleLockedTokens = BackgroundUpdatePlanner.eligibleTokens(.init(
             candidates: initiallyEligibleTokens,
             profiles: Dictionary(profiles.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first }),
             downloads: Dictionary(downloads.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first }),
@@ -103,12 +111,40 @@ final class BackgroundUpdater {
             runningProcessTokens: lockedRunningProcessTokens,
             policies: lockedPolicies
         ))
-        guard !lockedTokens.isEmpty else { return [] }
+        guard !eligibleLockedTokens.isEmpty else { return [] }
 
+        let resourceDecision = await backgroundResourceDecision(
+            tokens: eligibleLockedTokens,
+            downloadSizes: downloadSizes,
+            appPaths: appPaths
+        )
+        guard case .allow = resourceDecision else {
+            if case .postpone(let reason) = resourceDecision {
+                WegaLog.info(.homebrew, "Aktualizacja w tle odroczona — \(reason).")
+            }
+            return []
+        }
+
+        let publisherVetoes = CaskRollbackGuard.publisherVetoes(
+            tokens: eligibleLockedTokens, appPaths: appPaths
+        )
+        let lockedTokens = eligibleLockedTokens.filter { publisherVetoes[$0] == nil }
         let snapshots = CaskRollbackGuard.snapshot(tokens: lockedTokens, appPaths: appPaths)
         let tokens = BackgroundUpdateSafety.snapshotBackedTokens(lockedTokens, snapshots: snapshots)
+        var run = UpdateRunOutcome()
+        run.recordPublisherVetoes(eligibleLockedTokens.map(Self.caskItem), audits: publisherVetoes)
+        for token in lockedTokens where snapshots[token] == nil {
+            WegaLog.error(
+                .homebrew,
+                "\(token): aktualizacja w tle odroczona — nie udało się utworzyć wymaganego snapshotu."
+            )
+        }
         guard !tokens.isEmpty else {
-            WegaLog.error(.homebrew, "Aktualizacja w tle pominięta — nie udało się utworzyć snapshotu.")
+            if run.summary.isEmpty {
+                WegaLog.error(.homebrew, "Aktualizacja w tle pominięta — nie udało się utworzyć snapshotu.")
+            } else {
+                notify(summary: run.summary)
+            }
             return []
         }
 
@@ -122,7 +158,6 @@ final class BackgroundUpdater {
 
         // REL-02 — the same per-item result type the window builds, filled in by the same
         // phases: execution, validation/rollback, then a rescan that has to agree.
-        var run = UpdateRunOutcome()
         run.recordBackgroundRound(tokens.map(Self.caskItem), outcome: await runBrew(arguments: arguments))
         run.applyValidation(await CaskRollbackGuard.verify(tokens: tokens, appPaths: appPaths, snapshots: snapshots))
         await confirmByRescan(&run)
@@ -174,6 +209,18 @@ final class BackgroundUpdater {
             WegaLog.error(.homebrew, "Aktualizacja w tle — ścieżki aplikacji: \(error.localizedDescription)")
             return [:]
         }
+    }
+
+    private func backgroundResourceDecision(
+        tokens: [String],
+        downloadSizes: [String: DownloadSizeProbeResult],
+        appPaths: [String: URL]
+    ) async -> DownloadGate.Decision {
+        await DownloadResourcePreflight.decision(
+            tokens: tokens,
+            downloadSizes: downloadSizes,
+            appPaths: appPaths
+        )
     }
 
     private func runBrew(arguments: [String]) async -> BrewUpgradeOutcome {

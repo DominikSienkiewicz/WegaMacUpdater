@@ -253,7 +253,7 @@ public enum UpdatePlanner {
             commands.append(UpdateCommand(executable: "brew", arguments: ["upgrade"] + plan.formulaNames))
         }
         if !plan.caskNames.isEmpty {
-            commands.append(UpdateCommand(executable: "brew", arguments: ["upgrade", "--cask"] + plan.caskNames))
+            commands.append(caskUpgradeCommand(tokens: plan.caskNames))
         }
         for pkg in plan.npmNames {
             commands.append(UpdateCommand(executable: "npm", arguments: ["install", "-g", "\(pkg)@latest"]))
@@ -262,6 +262,12 @@ public enum UpdatePlanner {
             commands.append(UpdateCommand(executable: "mas", arguments: ["upgrade"] + plan.masAppStoreIDs))
         }
         return commands
+    }
+
+    /// The standard cask command used by both the preview and the last-moment publisher
+    /// veto, which may safely narrow the original plan immediately before execution.
+    public static func caskUpgradeCommand(tokens: [String]) -> UpdateCommand {
+        UpdateCommand(executable: "brew", arguments: ["upgrade", "--cask"] + tokens)
     }
 
     /// The forced cask-upgrade command the auto-recovery path runs when an interrupted

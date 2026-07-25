@@ -28,13 +28,14 @@ struct P2BackendsTests {
         #expect(TeamIDLedger.classify(stored: "AAA", new: "BBB") == .changed(old: "AAA", new: "BBB"))
     }
 
-    @Test func teamIDLedgerRecordRoundTrip() throws {
+    /// SEC-02: a mismatch is an audit signal, not permission to replace the trusted baseline.
+    @Test func teamIDLedgerPreservesTrustedBaselineOnMismatch() throws {
         let defaults = try #require(UserDefaults(suiteName: "wega-test-\(UUID().uuidString)"))
         let ledger = TeamIDLedger(defaults: defaults)
         #expect(ledger.record(bundleID: "com.x", teamID: "AAA") == .firstSeen(teamID: "AAA"))
         #expect(ledger.record(bundleID: "com.x", teamID: "AAA") == .unchanged(teamID: "AAA"))
         #expect(ledger.record(bundleID: "com.x", teamID: "BBB") == .changed(old: "AAA", new: "BBB"))
-        #expect(ledger.teamID(forBundleID: "com.x") == "BBB")
+        #expect(ledger.teamID(forBundleID: "com.x") == "AAA")
     }
 
     /// I-4 regression: the cask watchdog records publisher history under the

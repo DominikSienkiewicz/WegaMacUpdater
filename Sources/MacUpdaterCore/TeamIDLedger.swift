@@ -56,13 +56,17 @@ public final class TeamIDLedger: @unchecked Sendable {
     }
 
     /// Records `teamID` for `bundleID`, returning the audit vs. the previous value.
-    /// Only concrete (non-nil) IDs are persisted, so an unreadable signature never
-    /// erases a known-good baseline.
+    /// Only a first sighting or the already-trusted value is persisted: a mismatch is
+    /// evidence to report, never permission to replace the known-good baseline. Concrete
+    /// (non-nil) IDs are required, so an unreadable signature cannot erase it either.
     @discardableResult
     public func record(bundleID: String, teamID: String?) -> TeamIDAudit {
         lock.lock(); defer { lock.unlock() }
         var map = (defaults.dictionary(forKey: defaultsKey) as? [String: String]) ?? [:]
         let audit = Self.classify(stored: map[bundleID], new: teamID)
+        if case .changed = audit {
+            return audit
+        }
         if let teamID, !teamID.isEmpty { map[bundleID] = teamID }
         defaults.set(map, forKey: defaultsKey)
         return audit

@@ -312,8 +312,8 @@ struct PackageRow: View {
 ///
 /// It deliberately promises only what happens *during* this upgrade: if the new version
 /// fails its Gatekeeper check, the previous one comes back automatically. It does not offer
-/// a manual "Undo" — the snapshot lives only for the canary window and is deleted right
-/// after, so a button implying otherwise would be a lie.
+/// a manual "Undo" — a healthy upgrade deletes the snapshot after the canary window, so a
+/// button implying longer retention would be a lie.
 private struct RollbackBadge: View {
     let verdict: RollbackProtection.Verdict
 

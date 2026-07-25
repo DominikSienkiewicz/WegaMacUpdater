@@ -40,6 +40,7 @@ extension InfoView {
             VStack(spacing: 14) {
                 appCard
                 languageCard
+                ResourceGateSettingsCard()
                 policiesCard
                 diagnosticsCard
                 catalogCard

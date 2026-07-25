@@ -1,6 +1,18 @@
 import Foundation
 import MacUpdaterCore
 
+private struct ForegroundCaskPreparation {
+    let appPaths: [String: URL]
+    let snapshots: [String: URL]
+    let trustedCaskNames: [String]
+    let publisherVetoes: [String: TeamIDAudit]
+}
+
+private enum ForegroundCaskPreparationResult {
+    case ready(ForegroundCaskPreparation)
+    case blocked(publisherVetoes: [String: TeamIDAudit])
+}
+
 // MARK: - Scan & update actions
 //
 // The half of `ScanStore` that *produces* a result — the scan, the upgrade, and the
@@ -283,7 +295,16 @@ extension ScanStore {
 
     func installManual(token: String) async {
         guard let model, manualBusy == nil else { return }
+        guard UpgradeMutex.shared.acquire() else {
+            showBanner(BannerData(variant: .danger, title: tr("Aktualizacja w toku"),
+                                  message: tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.")))
+            return
+        }
+        defer { UpgradeMutex.shared.release() }
         manualBusy = token
+        defer { manualBusy = nil }
+        let ticket = MutationGuard.shared.begin(trf("instalacja %@", "\(token)"))
+        defer { MutationGuard.shared.end(ticket) }
         emitActivitySignal(.scanning)
         let installArgs = BrewService.adoptCaskArguments(token: token)
         brewLog = ["$ brew " + installArgs.joined(separator: " ")]
@@ -291,9 +312,48 @@ extension ScanStore {
         WegaLog.info(.homebrew, "Uruchamiam: brew \(installArgs.joined(separator: " "))")
         emitWegaState(WegaState(pose: .sniff, line: trf("Instaluję %@ przez Brew…", "\(token)")))
 
+        guard let appURL = manualOutdated.first(where: {
+            if case .cask(let candidate) = $0.source { return candidate == token }
+            return false
+        })?.path else {
+            showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
+                                  message: tr("Nie udało się utworzyć wymaganego snapshotu.")))
+            emitActivitySignal(.error)
+            return
+        }
+
+        let preparation: CaskReplacementSafety.Preparation
+        switch await CaskReplacementSafety.prepare(
+            token: token,
+            appURL: appURL,
+            brewService: model.brewService
+        ) {
+        case .ready(let ready):
+            preparation = ready
+        case .resourcePostponed(let reason):
+            brewLog.append("⏸ " + trf("Aktualizacja odroczona: %@.", "\(reason)"))
+            showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
+                                  message: trf("Bramka zasobów: %@.", "\(reason)")))
+            emitActivitySignal(.error)
+            return
+        case .publisherRejected(let old, let new):
+            let message = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
+                              "\(token)", "\(old)", "\(new ?? "—")")
+            brewLog.append("⏸ " + message)
+            showBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"), message: message))
+            emitActivitySignal(.error)
+            return
+        case .snapshotFailed:
+            showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
+                                  message: tr("Nie udało się utworzyć wymaganego snapshotu.")))
+            emitActivitySignal(.error)
+            return
+        }
+
+        var installError: Error?
+        var exitCode: Int32 = 0
         do {
             let stream = try model.brewService.events(arguments: installArgs)
-            var exitCode: Int32 = 0
             for try await event in stream {
                 switch event {
                 case .stdout(let chunk), .stderr(let chunk):
@@ -303,30 +363,138 @@ extension ScanStore {
                     exitCode = result.exitCode
                 }
             }
-            if exitCode == 0 {
-                manualOutdated.removeAll {
-                    if case .cask(let t) = $0.source { return t == token }
-                    return false
-                }
-                showBanner(BannerData(variant: .success, title: trf("Zaktualizowano %@", "\(token)"), message: tr("Teraz zarządzany przez Homebrew.")))
-                emitActivitySignal(.success)
-                emitWegaState(WegaState(pose: .happy, line: trf("%@ zaktualizowany i pod opieką Brew.", "\(token)")))
-                WegaLog.info(.homebrew, "Zainstalowano \(token) (brew cask)")
-            } else {
-                showBanner(BannerData(variant: .danger, title: trf("Błąd instalacji %@", "\(token)"), message: tr("Sprawdź logi poniżej.")))
-                emitActivitySignal(.error)
-                emitWegaState(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
-                let reason = ScanLog.brewErrorReason(from: brewLog).map { ": \($0)" } ?? ""
-                WegaLog.error(.homebrew, "Instalacja \(token) nieudana (kod \(exitCode))\(reason)")
-            }
         } catch {
             brewLog.append("error: \(error.localizedDescription)")
-            showBanner(BannerData(variant: .danger, title: tr("Błąd instalacji"), message: error.localizedDescription))
+            installError = error
+        }
+
+        let installedAppURL = await CaskReplacementSafety.resolveInstalledAppURL(
+            preparation,
+            brewService: model.brewService
+        )
+        let verification = await CaskReplacementSafety.verify(
+            preparation,
+            installedAppURL: installedAppURL
+        )
+        guard reportManualReplacementVerification(verification, token: token) else { return }
+
+        if let installError {
+            showBanner(BannerData(variant: .danger, title: tr("Błąd instalacji"),
+                                  message: installError.localizedDescription))
             emitActivitySignal(.error)
             emitWegaState(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
-            WegaLog.error(.homebrew, "Instalacja \(token): \(error.localizedDescription)")
+            WegaLog.error(.homebrew, "Instalacja \(token): \(installError.localizedDescription)")
+        } else if exitCode == 0 {
+            manualOutdated.removeAll {
+                if case .cask(let t) = $0.source { return t == token }
+                return false
+            }
+            showBanner(BannerData(variant: .success, title: trf("Zaktualizowano %@", "\(token)"),
+                                  message: tr("Teraz zarządzany przez Homebrew.")))
+            emitActivitySignal(.success)
+            emitWegaState(WegaState(pose: .happy, line: trf("%@ zaktualizowany i pod opieką Brew.", "\(token)")))
+            WegaLog.info(.homebrew, "Zainstalowano \(token) (brew cask)")
+        } else {
+            showBanner(BannerData(variant: .danger, title: trf("Błąd instalacji %@", "\(token)"),
+                                  message: tr("Sprawdź logi poniżej.")))
+            emitActivitySignal(.error)
+            emitWegaState(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
+            let reason = ScanLog.brewErrorReason(from: brewLog).map { ": \($0)" } ?? ""
+            WegaLog.error(.homebrew, "Instalacja \(token) nieudana (kod \(exitCode))\(reason)")
         }
-        manualBusy = nil
+    }
+
+    private func reportManualReplacementVerification(
+        _ verdict: CaskValidationVerdict,
+        token: String
+    ) -> Bool {
+        let title: String
+        let message: String
+        switch verdict {
+        case .healthy:
+            return true
+        case .rolledBack:
+            title = tr("Aktualizacja niekompletna")
+            message = trf("%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.", "\(token)")
+        case .rollbackFailed:
+            title = tr("Rollback się nie powiódł")
+            message = trf(
+                "%@: nowa wersja nie przeszła kontroli, a przywrócenie poprzedniej nie powiodło się. Sprawdź aplikację przed użyciem.",
+                "\(token)"
+            )
+        case .publisherChanged(let old, let new):
+            title = tr("Zmiana wydawcy")
+            message = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
+                          "\(token)", "\(old)", "\(new ?? "—")")
+        case .publisherChangedAndRolledBack(let old, let new):
+            title = tr("Zmiana wydawcy")
+            message = trf("%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
+                          "\(token)", "\(old)", "\(new ?? "—")")
+        }
+        brewLog.append("⚠️ " + message)
+        showBanner(BannerData(variant: .danger, title: title, message: message))
+        emitActivitySignal(.error)
+        emitWegaState(WegaState(pose: .alert, line: trf("Coś poszło nie tak z %@.", "\(token)")))
+        WegaLog.error(.homebrew, message)
+        return false
+    }
+
+    private func prepareForegroundCasks(
+        _ caskNames: [String],
+        targetKeys: Set<String>
+    ) async -> ForegroundCaskPreparationResult {
+        await probeDownloadSizes(targetKeys: targetKeys)
+        let appPaths = await resolveCaskAppPaths(caskNames)
+        let resourceDecision = await foregroundResourceDecision(caskNames, appPaths: appPaths)
+        guard case .allow = resourceDecision else {
+            guard case .postpone(let reason) = resourceDecision else {
+                return .blocked(publisherVetoes: [:])
+            }
+            brewLog.append("⏸ " + trf("Aktualizacja odroczona: %@.", "\(reason)"))
+            WegaLog.info(.homebrew, "Aktualizacja z okna odroczona — \(reason).")
+            showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
+                                  message: trf("Bramka zasobów: %@.", "\(reason)")))
+            emitActivitySignal(.error)
+            emitWegaState(WegaState(pose: .alert, line: tr("Warunki nie pozwalają teraz bezpiecznie pobrać aktualizacji.")))
+            return .blocked(publisherVetoes: [:])
+        }
+
+        let publisherVetoes = CaskRollbackGuard.publisherVetoes(
+            tokens: caskNames, appPaths: appPaths
+        )
+        let caskNames = caskNames.filter { publisherVetoes[$0] == nil }
+        let snapshots = snapshotCasks(caskNames, appPaths: appPaths)
+        let missing = caskNames.filter { appPaths[$0] != nil && snapshots[$0] == nil }
+        guard missing.isEmpty else {
+            for snapshot in snapshots.values { try? FileManager.default.removeItem(at: snapshot) }
+            let names = missing.joined(separator: ", ")
+            brewLog.append("⏸ " + trf("Nie udało się utworzyć snapshotu dla: %@.", "\(names)"))
+            WegaLog.error(.homebrew, "Aktualizacja z okna odroczona — brak snapshotu: \(names).")
+            showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
+                                  message: tr("Nie udało się utworzyć wymaganego snapshotu.")))
+            emitActivitySignal(.error)
+            return .blocked(publisherVetoes: publisherVetoes)
+        }
+        return .ready(ForegroundCaskPreparation(
+            appPaths: appPaths,
+            snapshots: snapshots,
+            trustedCaskNames: caskNames,
+            publisherVetoes: publisherVetoes
+        ))
+    }
+
+    private func foregroundResourceDecision(
+        _ caskNames: [String],
+        appPaths: [String: URL]
+    ) async -> DownloadGate.Decision {
+        let sizes = Dictionary(
+            uniqueKeysWithValues: caskNames.map { ($0, caskSizes[$0] ?? .unknown) }
+        )
+        return await DownloadResourcePreflight.decision(
+            tokens: caskNames,
+            downloadSizes: sizes,
+            appPaths: appPaths
+        )
     }
 
     func runUpdate(targetKeys: Set<String>) async {
@@ -358,42 +526,34 @@ extension ScanStore {
         let formulaArgs   = commands.first { $0.executable == "brew" && !$0.arguments.contains("--cask") }?.arguments
         let caskArgs      = commands.first { $0.executable == "brew" && $0.arguments.contains("--cask") }?.arguments
         let npmCommands   = commands.filter { $0.executable == "npm" }
-        let caskNames     = plan.caskNames
+        let plannedCaskNames = plan.caskNames
         let npmNames      = plan.npmNames
         let masAppStoreIDs = plan.masAppStoreIDs
 
-        // Pre-capture which casks being updated are currently running
-        var candidates: [RestartInfo] = []
-        for token in caskNames {
-            if let info = MacUpdaterConstants.restartMap[token], await isProcessRunning(info.processName) {
-                candidates.append(info)
+        let caskPreparation: ForegroundCaskPreparation?
+        if plannedCaskNames.isEmpty {
+            caskPreparation = nil
+        } else {
+            switch await prepareForegroundCasks(plannedCaskNames, targetKeys: targetKeys) {
+            case .ready(let prepared):
+                caskPreparation = prepared
+            case .blocked(let publisherVetoes):
+                var blockedRun = UpdateRunOutcome()
+                blockedRun.recordPublisherVetoes(
+                    plannedItems.filter { $0.kind == .cask },
+                    audits: publisherVetoes
+                )
+                if !blockedRun.summary.isEmpty { report(run: blockedRun) }
+                updating = false
+                return
             }
         }
 
-        // FEAT-07: dla casków (duże pobrania) doradczo ostrzeż przy złych warunkach
-        // (łącze taryfowe / throttling). Akcja jest user-initiated → kontynuujemy.
-        //
-        // F2 — the gate used to be fed a hard-coded `200MB + 1`, because `brew info --json`
-        // carries no size. It now gets the sum of whatever the HEAD probes could actually
-        // measure. When nothing could be measured we keep the old pessimistic assumption
-        // (a cask is usually large) but say so in the log, rather than pretending to know.
-        if !caskNames.isEmpty {
-            await probeDownloadSizes(targetKeys: targetKeys)
-            let measured = caskNames.compactMap { token -> Int64? in
-                if case .known(let bytes) = caskSizes[token] { return bytes }
-                return nil
-            }
-            let assumedSize: Int64 = 200 * 1024 * 1024 + 1
-            let sizeBytes = measured.isEmpty ? assumedSize : measured.reduce(0, +)
-            if measured.isEmpty {
-                brewLog.append("ℹ️ " + tr("Nie udało się ustalić rozmiaru pobrania — zakładam duży plik."))
-            }
-
-            let (net, pow) = await LiveConditions.snapshot()
-            if case let .postpone(reason) = DownloadGate.decide(
-                sizeBytes: sizeBytes, network: net, power: pow) {
-                brewLog.append("⚠️ " + trf("Niekorzystne warunki pobierania (%@) — kontynuuję na żądanie.", "\(reason)"))
-                emitWegaState(WegaState(pose: .alert, line: tr("Uwaga: kosztowne łącze lub throttling — pobieram mimo to.")))
+        // Pre-capture which casks being updated are currently running
+        var candidates: [RestartInfo] = []
+        for token in plannedCaskNames {
+            if let info = MacUpdaterConstants.restartMap[token], await isProcessRunning(info.processName) {
+                candidates.append(info)
             }
         }
 
@@ -408,32 +568,43 @@ extension ScanStore {
         }
 
         // Brew upgrade — casks (FEAT-05 snapshot przed, canary/rollback + FEAT-04 ledger po)
-        if let caskArgs, !caskNames.isEmpty {
+        if caskArgs != nil, let caskPreparation {
             // REL-03 — resolved here, now, not left to whatever a full scan happened to put
             // in the map: after `restoreLastScan()` it is empty, and an empty map means no
             // snapshot to roll back to and no bundle for the canary to inspect. Both phases
             // are handed this one value, so neither can be given a different answer.
-            let appPaths  = await resolveCaskAppPaths(caskNames)
-            let snapshots = snapshotCasks(caskNames, appPaths: appPaths)
-            var caskOutcome = await runBrewUpgrade(arguments: caskArgs)
+            let appPaths = caskPreparation.appPaths
+            let snapshots = caskPreparation.snapshots
+            run.recordPublisherVetoes(
+                plannedItems.filter { $0.kind == .cask },
+                audits: caskPreparation.publisherVetoes
+            )
+            let caskNames = caskPreparation.trustedCaskNames
+            if !caskNames.isEmpty {
+                let trustedCaskArgs = UpdatePlanner.caskUpgradeCommand(tokens: caskNames).arguments
+                var caskOutcome = await runBrewUpgrade(arguments: trustedCaskArgs)
 
-            // Auto-recover an interrupted upgrade: if a cask bailed because a stale
-            // staged app from a previous, cut-short upgrade is in the way ("already an
-            // App at …"), retry just those casks once with --force, which overwrites
-            // the leftover. Without this they fail on every attempt until cleaned by hand.
-            let retryTokens = caskOutcome.tokensRetryableWithForce
-            if !retryTokens.isEmpty {
-                brewLog.append("↻ " + trf("Przerwana aktualizacja (%@) — ponawiam z --force.", "\(retryTokens.joined(separator: ", "))"))
-                WegaLog.info(.homebrew, "Przerwana aktualizacja casku — ponawiam z --force: \(retryTokens.joined(separator: ", "))")
-                let retryOutcome = await runBrewUpgrade(arguments: UpdatePlanner.forcedCaskCommand(tokens: retryTokens).arguments)
-                caskOutcome = BrewUpgradeOutcome.merging(original: caskOutcome, forcedRetry: retryOutcome, retriedTokens: retryTokens)
+                // Auto-recover an interrupted upgrade: if a cask bailed because a stale
+                // staged app from a previous, cut-short upgrade is in the way ("already an
+                // App at …"), retry just those casks once with --force, which overwrites
+                // the leftover. Without this they fail on every attempt until cleaned by hand.
+                let retryTokens = caskOutcome.tokensRetryableWithForce
+                if !retryTokens.isEmpty {
+                    brewLog.append("↻ " + trf("Przerwana aktualizacja (%@) — ponawiam z --force.", "\(retryTokens.joined(separator: ", "))"))
+                    WegaLog.info(.homebrew, "Przerwana aktualizacja casku — ponawiam z --force: \(retryTokens.joined(separator: ", "))")
+                    let retryOutcome = await runBrewUpgrade(arguments: UpdatePlanner.forcedCaskCommand(tokens: retryTokens).arguments)
+                    caskOutcome = BrewUpgradeOutcome.merging(original: caskOutcome, forcedRetry: retryOutcome, retriedTokens: retryTokens)
+                }
+
+                let trustedItems = plannedItems.filter {
+                    $0.kind == .cask && caskNames.contains($0.name)
+                }
+                run.record(trustedItems, outcome: caskOutcome)
+                // The canary/rollback verdict is a phase of the same result, not an aside: it
+                // used to be raised after the summary had already been computed, so a cask the
+                // guard had just rolled back still counted towards "Zaktualizowano N pakietów".
+                run.applyValidation(await postCaskUpgrade(caskNames, appPaths: appPaths, snapshots: snapshots))
             }
-
-            run.record(plannedItems.filter { $0.kind == .cask }, outcome: caskOutcome)
-            // The canary/rollback verdict is a phase of the same result, not an aside: it
-            // used to be raised after the summary had already been computed, so a cask the
-            // guard had just rolled back still counted towards "Zaktualizowano N pakietów".
-            run.applyValidation(await postCaskUpgrade(caskNames, appPaths: appPaths, snapshots: snapshots))
         }
 
         // npm global upgrade — one package at a time (npm semantics).
@@ -500,9 +671,30 @@ extension ScanStore {
                                         action: .openLogs))
         }
         for outcome in summary.publisherChanges {
-            guard case .publisherChanged(let old, let new) = outcome.verdict else { continue }
+            let old: String
+            let new: String?
+            let message: String
+            switch outcome.verdict {
+            case .publisherChanged(let previous, let current):
+                old = previous
+                new = current
+                message = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
+                              "\(outcome.name)", "\(old)", "\(new ?? "—")")
+            case .publisherChangedAndRolledBack(let previous, let current):
+                old = previous
+                new = current
+                message = trf("%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
+                              "\(outcome.name)", "\(old)", "\(new ?? "—")")
+            case .publisherMismatchBeforeUpgrade(let previous, let current):
+                old = previous
+                new = current
+                message = trf("%@: Team ID już różnił się od zaufanego baseline (%@ → %@). Aktualizację zablokowano przed uruchomieniem.",
+                              "\(outcome.name)", "\(old)", "\(new ?? "—")")
+            default:
+                continue
+            }
             showStickyBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"),
-                                        message: trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.", "\(outcome.name)", "\(old)", "\(new ?? "—")")))
+                                        message: message))
         }
 
         if summary.allItemsUpgraded {
@@ -636,6 +828,10 @@ extension ScanStore {
             switch verdict {
             case .healthy, .publisherChanged:
                 continue
+            case .publisherChangedAndRolledBack:
+                brewLog.append("⚠️ " + trf("%@: zmienił się Team ID wydawcy — przywrócono poprzednią zaufaną wersję.", "\(token)"))
+                emitWegaState(WegaState(pose: .alert,
+                                        line: trf("Cofnęłam %@ — zmienił się wydawca.", "\(token)")))
             case .rolledBack:
                 brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.", "\(token)"))
                 emitWegaState(WegaState(pose: .alert, line: trf("Cofnęłam %@ — nowa wersja nie przeszła kontroli.", "\(token)")))
