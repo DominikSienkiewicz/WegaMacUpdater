@@ -120,6 +120,26 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
         self.isComplete = isComplete ?? sources.isComplete
         self.schemaVersion = schemaVersion
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, scannedAt, brew, mas, npm, manual, sources, isComplete
+    }
+
+    /// Decodes a schema-1 file too — it carries the lists but neither `sources` nor
+    /// `isComplete`. Both default to "we know nothing about how that scan went", which for
+    /// completeness means `false`: a file that cannot say every source answered must not be
+    /// taken to have said so. ``ScanResultStore/load()`` stamps the migrated value.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        scannedAt = try container.decode(Date.self, forKey: .scannedAt)
+        brew = try container.decodeIfPresent(BrewOutdated.self, forKey: .brew)
+        mas = try container.decode([MasOutdatedApp].self, forKey: .mas)
+        npm = try container.decode([NpmGlobalOutdated].self, forKey: .npm)
+        manual = try container.decode([ManualOutdatedApp].self, forKey: .manual)
+        sources = try container.decodeIfPresent(ScanSourceReports.self, forKey: .sources) ?? ScanSourceReports()
+        isComplete = try container.decodeIfPresent(Bool.self, forKey: .isComplete) ?? false
+    }
 }
 
 /// Narrow I/O seam so ``ScanResultStore`` can be unit-tested against an in-memory
@@ -177,11 +197,27 @@ public struct ScanResultStore {
     }
 
     /// Returns the persisted snapshot, or `nil` when nothing usable is on disk.
+    ///
+    /// A schema-1 file (pre-REL-09) is **migrated**, not discarded: its lists are still a
+    /// perfectly good thing to put on screen, and throwing them away would greet the user
+    /// with an empty window for no gain. What it cannot supply is the per-source detail, so
+    /// the migrated snapshot is marked incomplete — the honest reading of a file that has no
+    /// way to say whether every source answered. A file from a *newer* build still fails
+    /// soft: its payload may be a shape this build cannot decode at all.
     public func load() -> ScanSnapshot? {
         guard let data = try? io.read() else { return nil }
-        guard let snapshot = try? JSONDecoder().decode(ScanSnapshot.self, from: data) else { return nil }
-        guard snapshot.schemaVersion == ScanSnapshot.currentSchemaVersion else { return nil }
-        return snapshot
+        guard var snapshot = try? JSONDecoder().decode(ScanSnapshot.self, from: data) else { return nil }
+        switch snapshot.schemaVersion {
+        case ScanSnapshot.currentSchemaVersion:
+            return snapshot
+        case 1:
+            snapshot.schemaVersion = ScanSnapshot.currentSchemaVersion
+            snapshot.sources = ScanSourceReports()
+            snapshot.isComplete = false
+            return snapshot
+        default:
+            return nil
+        }
     }
 
     /// Overwrites the persisted snapshot. Propagates encoding/write failures.

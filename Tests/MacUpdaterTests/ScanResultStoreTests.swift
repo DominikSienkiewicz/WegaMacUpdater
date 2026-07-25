@@ -187,13 +187,45 @@ final class ScanResultStoreTests: XCTestCase {
         XCTAssertEqual(Set(reports.errors), ["no internet", "registry timeout"])
     }
 
-    /// A snapshot from the pre-REL-09 schema carries no per-source result, so it cannot say
-    /// whether it was complete. Reading it as complete is the false reassurance the version
-    /// bump exists to prevent — it fails soft, and the next scan writes a current one.
-    func testAPreREL09SnapshotIsRejected() throws {
+    /// A file written before REL-09, verbatim: the lists and the timestamp, no `sources`
+    /// and no `isComplete` key at all.
+    private func legacyVersion1Data(from snapshot: ScanSnapshot) throws -> Data {
+        let encoded = try JSONEncoder().encode(snapshot)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object["schemaVersion"] = 1
+        object.removeValue(forKey: "sources")
+        object.removeValue(forKey: "isComplete")
+        return try JSONSerialization.data(withJSONObject: object)
+    }
+
+    /// A schema-1 file still holds a perfectly good list — throwing it away would put an
+    /// empty window in front of a user who had one a second ago. It is migrated instead, and
+    /// it comes back as **incomplete**: a scan from before REL-09 cannot say whether every
+    /// source answered, and "we don't know" is exactly what `isComplete == false` means here.
+    func testAPreREL09SnapshotIsMigratedAndMarkedIncomplete() throws {
         let io = InMemoryScanSnapshotIO()
         let store = ScanResultStore(io: io)
-        try store.save(makeSnapshot(scannedAt: Date(), schemaVersion: 1))
+        let original = makeSnapshot(scannedAt: Date(timeIntervalSince1970: 1_749_490_441))
+        io.storedData = try legacyVersion1Data(from: original)
+
+        let loaded = try XCTUnwrap(store.load(), "a version-1 file must be migrated, not discarded")
+
+        XCTAssertEqual(loaded.brew, original.brew)
+        XCTAssertEqual(loaded.mas, original.mas)
+        XCTAssertEqual(loaded.npm, original.npm)
+        XCTAssertEqual(loaded.manual, original.manual)
+        XCTAssertEqual(loaded.scannedAt, original.scannedAt)
+        XCTAssertFalse(loaded.isComplete, "a schema-1 scan cannot claim it heard from every source")
+        XCTAssertEqual(loaded.sources, ScanSourceReports(), "there is no per-source detail to invent")
+        XCTAssertEqual(loaded.schemaVersion, ScanSnapshot.currentSchemaVersion)
+    }
+
+    /// Migrating forwards is not the same as reading anything: a file from a *newer* build
+    /// still fails soft, because its payload may have a shape this one cannot decode.
+    func testAFutureSchemaVersionIsStillRejected() throws {
+        let io = InMemoryScanSnapshotIO()
+        let store = ScanResultStore(io: io)
+        try store.save(makeSnapshot(scannedAt: Date(), schemaVersion: ScanSnapshot.currentSchemaVersion + 1))
 
         XCTAssertNil(store.load())
     }
