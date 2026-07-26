@@ -119,6 +119,49 @@ struct ArchitectureReviewRegressionTests {
         )
     }
 
+    /// ARCH-07a — the brew/npm event-streaming loop and its log-buffer cap live in one
+    /// shared helper. Every upgrade/uninstall path drains its process events through
+    /// `ProcessEventStream.drain` instead of copying the `for try await event in stream`
+    /// loop, and no path hardcodes its own buffer limit (they had drifted to 200 and 500).
+    @Test func brewNpmEventStreamingRunsThroughOneSharedHelper() throws {
+        let root = packageRoot()
+
+        // Every path that used to inline the streaming loop with its own buffer cap.
+        let streamingSites = [
+            "Sources/MacUpdater/ScanStore+Actions.swift",
+            "Sources/MacUpdater/MigrationStore.swift",
+            "Sources/MacUpdater/BackgroundUpdater.swift"
+        ]
+        for path in streamingSites {
+            let site = executableSource(try source(path, root: root))
+            #expect(
+                site.contains("ProcessEventStream.drain("),
+                "\(path) must stream brew/npm events through ProcessEventStream.drain"
+            )
+            #expect(
+                !site.contains("case .finished(let result)"),
+                "\(path) still inlines its own ProcessOutputEvent streaming loop"
+            )
+            #expect(
+                !site.contains(".count > 500") && !site.contains(".count > 200"),
+                "\(path) still hardcodes its own streamed-log buffer limit"
+            )
+        }
+
+        // The loop and the buffer limit each exist exactly once — in the shared helper.
+        let helper = executableSource(
+            try source("Sources/MacUpdater/ProcessEventStream.swift", root: root)
+        )
+        #expect(
+            helper.contains("for try await event in stream"),
+            "the shared streaming loop must live in ProcessEventStream.drain"
+        )
+        #expect(
+            helper.contains("static let logLineLimit ="),
+            "the streamed-log buffer limit must be defined once in ProcessEventStream"
+        )
+    }
+
     @Test func topLevelHomebrewReadRoundsUseTheSharedGate() throws {
         let root = packageRoot()
         let foreground = executableSource(
