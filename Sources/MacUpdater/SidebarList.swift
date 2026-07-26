@@ -76,18 +76,21 @@ struct SidebarList: View {
         isDanger: Bool = false,
         spins: Bool = false
     ) -> some View {
+        let activity: UpdateActivity = spins ? updateActivity : .idle
+        let status = ScanStatusAccessibilitySemantics(activity: activity, baseSymbol: item.systemImage)
         Label {
             Text(item.label)
         } icon: {
             SidebarRowIcon(
-                systemImage: item.systemImage,
-                activity:    spins ? updateActivity : .idle,
+                systemImage: status.symbolName,
+                activity:    activity,
                 isActive:    selection == item
             )
         }
         .badge(count > 0 ? Text(badgeText(count, isDanger: isDanger)) : Text?.none)
         .tag(item)
         .accessibilitySortPriority(SidebarFocusPolicy.accessibilityPriority(for: item))
+        .accessibilityValue(status.accessibilityValue ?? "")
     }
 
     private func badgeText(_ count: Int, isDanger: Bool) -> AttributedString {

@@ -140,6 +140,8 @@ public enum BackgroundUpdateConsentQualification: Equatable, Sendable {
                 return .blocked(.ignored)
             case .pinned(let version):
                 return .blocked(.pinned(version: version))
+            case .skipped(let version):
+                return .blocked(.skipped(version: version))
             }
         }
         guard context.candidateTokens.contains(token) else {
@@ -159,6 +161,7 @@ public enum BackgroundUpdateConsentQualification: Equatable, Sendable {
 public enum BackgroundUpdateConsentBlocker: Equatable, Sendable {
     case ignored
     case pinned(version: String)
+    case skipped(version: String)
     case notCurrentlyOutdated
     case installedAppUnavailable
     case running

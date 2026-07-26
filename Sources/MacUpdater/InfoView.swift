@@ -154,14 +154,18 @@ extension InfoView {
     }
 
     private func policyIcon(_ policy: UpdatePolicy) -> String {
-        if case .ignored = policy { return "bell.slash" }
-        return "pin"
+        switch policy {
+        case .ignored: return "bell.slash"
+        case .pinned:  return "pin"
+        case .skipped: return "forward.end"
+        }
     }
 
     private func policyDescription(_ policy: UpdatePolicy) -> String {
         switch policy {
-        case .ignored:            return tr("Ignorowane")
-        case .pinned(let version): return trf("Przypięte do %@", version)
+        case .ignored:              return tr("Ignorowane")
+        case .pinned(let version):  return trf("Przypięte do %@", version)
+        case .skipped(let version): return trf("Pominięta wersja %@", version)
         }
     }
 

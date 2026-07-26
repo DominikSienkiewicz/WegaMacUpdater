@@ -8,6 +8,10 @@ public enum UpdatePolicy: Codable, Equatable, Sendable {
     /// Surface updates only up to (and including) this version — anything newer is
     /// hidden. Pinning to the currently installed version means "hold here".
     case pinned(version: String)
+    /// Hide only this one specific version; the next release surfaces again. The
+    /// "skip X, show X+1" pattern that `pinned` can't express — a pin to the current
+    /// version also hides every future release.
+    case skipped(version: String)
 }
 
 /// A persisted policy plus the metadata needed to render and manage it.
@@ -57,6 +61,12 @@ extension UpdatePlanner {
             guard let available = availableVersion, !available.isEmpty else { return true }
             // Hide only when the available version is an upgrade *beyond* the pin.
             return isUpgrade(installed: pinnedVersion, latest: available)
+        case .skipped(let skippedVersion):
+            // Skip is deliberately narrow: hide only the exact version the user skipped;
+            // any other (newer) release surfaces again. With no version to match, show it
+            // rather than over-hide — the whole point is not to lose future releases.
+            guard let available = availableVersion, !available.isEmpty else { return false }
+            return versionsEqual(available, skippedVersion)
         }
     }
 

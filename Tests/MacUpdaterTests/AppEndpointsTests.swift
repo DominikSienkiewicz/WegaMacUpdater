@@ -25,6 +25,15 @@ final class AppEndpointsTests: XCTestCase {
                       "catalog source should point at an app-catalog.json document")
     }
 
+    // UX-14: the Inventory "report this app" button opens a prefilled GitHub issue against
+    // this endpoint, so it must be present and point at an `issues/new` document.
+    func testProjectNewIssueEndpointIsConfigured() throws {
+        let e = try AppEndpoints.loadBundled()
+        XCTAssertEqual(e.projectNewIssueURL.scheme, "https")
+        XCTAssertEqual(e.projectNewIssueURL.absoluteString,
+                       "https://github.com/DominikSienkiewicz/WegaMacUpdater/issues/new")
+    }
+
     // MARK: Fixed endpoints keep the exact URLs the checkers used to hard-code
 
     func testFixedEndpointsMatchLegacyValues() throws {

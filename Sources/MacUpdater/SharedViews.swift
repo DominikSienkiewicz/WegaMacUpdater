@@ -231,6 +231,8 @@ struct PackageRow: View {
     /// M5 — the ignore / pin actions, previously reachable only by right-click.
     var onIgnore: (() -> Void)? = nil
     var onPin:    (() -> Void)? = nil
+    /// UX-12 — skip just the version on offer; a later release surfaces again.
+    var onSkip:   (() -> Void)? = nil
     /// F3 — per-app opt-in for unattended background upgrades. Offered only where the
     /// rollback net covers the cask, so the menu never proposes what Wega cannot undo.
     var backgroundUpdateToken: String? = nil
@@ -274,10 +276,13 @@ struct PackageRow: View {
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
             }
-            if onIgnore != nil || onPin != nil {
+            if onIgnore != nil || onPin != nil || onSkip != nil {
                 Menu {
                     if let onIgnore {
                         Button(action: onIgnore) { Label(tr("Nie aktualizuj"), systemImage: "bell.slash") }
+                    }
+                    if let onSkip {
+                        Button(action: onSkip) { Label(tr("Pomiń tę wersję"), systemImage: "forward.end") }
                     }
                     if let onPin {
                         Button(action: onPin) { Label(tr("Przypnij wersję…"), systemImage: "pin") }
