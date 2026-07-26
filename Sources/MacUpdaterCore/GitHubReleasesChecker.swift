@@ -35,7 +35,9 @@ public struct GitHubReleasesChecker: Sendable {
         let installed = app.version ?? ""
         guard !installed.isEmpty else { return .notApplicable }
         let latest = normalizeGitTag(release.tagName)
-        guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
+        // REL-11: GitHub release tags are SemVer — compare under `.semver` so a
+        // prerelease ranks below its release and an unparseable tag never lies.
+        guard isUpgrade(installed: installed, latest: latest, scheme: .semver) else { return .upToDate }
 
         return .outdated(ManualOutdatedApp(
             name: app.name,

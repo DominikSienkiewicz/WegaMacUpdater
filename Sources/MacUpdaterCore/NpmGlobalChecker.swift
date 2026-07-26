@@ -155,8 +155,9 @@ public final class NpmGlobalService: @unchecked Sendable {
             for pkg in installed {
                 group.addTask {
                     guard let latest = try? await self.latestVersion(of: pkg.name) else { return nil }
-                    guard !versionsEqual(latest, pkg.installedVersion),
-                          isUpgrade(installed: pkg.installedVersion, latest: latest) else { return nil }
+                    // REL-11: npm publishes strict SemVer, so compare under `.semver`
+                    // (prerelease ranks below its release; unparseable ⇒ not an upgrade).
+                    guard isUpgrade(installed: pkg.installedVersion, latest: latest, scheme: .semver) else { return nil }
                     return NpmGlobalOutdated(
                         name: pkg.name,
                         installedVersion: pkg.installedVersion,
