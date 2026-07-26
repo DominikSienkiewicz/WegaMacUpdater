@@ -1,6 +1,21 @@
 import Foundation
 import MacUpdaterCore
 
+/// REL-14: the five independent inputs an inventory scan fans out over. Grouped into one
+/// value because each is a separate failure domain — `collect` runs them independently and
+/// records a `ScanSourceFailure` per source rather than letting one outage sink the scan.
+struct InventorySources {
+    let installedCasks: () async throws -> Set<String>
+    let availableCasks: () async throws -> [BrewCask]
+    let scanApplications: (
+        _ directory: URL,
+        _ installedCasks: Set<String>,
+        _ availableCasks: [BrewCask]
+    ) throws -> [ApplicationInfo]
+    let masList: () async throws -> [MasInstalledApp]
+    let npmGlobals: () async throws -> [NpmGlobalPackage]
+}
+
 struct InventorySnapshot: Equatable, Sendable {
     let apps: [ApplicationInfo]
     let npmGlobals: [NpmGlobalPackage]
@@ -24,21 +39,17 @@ struct InventorySnapshot: Equatable, Sendable {
     /// data is missing. Cancellation is not a scan failure, so it is never recorded.
     static func collect(
         directories: [URL],
-        installedCasks: () async throws -> Set<String>,
-        availableCasks: () async throws -> [BrewCask],
-        scanApplications: (_ directory: URL, _ installedCasks: Set<String>, _ availableCasks: [BrewCask]) throws -> [ApplicationInfo],
-        masList: () async throws -> [MasInstalledApp],
-        npmGlobals: () async throws -> [NpmGlobalPackage]
+        sources: InventorySources
     ) async -> InventorySnapshot {
         var failures: [ScanSourceFailure] = []
 
         var installedCaskTokens: Set<String> = []
-        do { installedCaskTokens = try await installedCasks() }
+        do { installedCaskTokens = try await sources.installedCasks() }
         catch is CancellationError {}
         catch { failures.append(ScanSourceFailure(source: .homebrew, message: error.localizedDescription)) }
 
         var availableCaskList: [BrewCask] = []
-        do { availableCaskList = try await availableCasks() }
+        do { availableCaskList = try await sources.availableCasks() }
         catch is CancellationError {}
         catch { failures.append(ScanSourceFailure(source: .caskCatalog, message: error.localizedDescription)) }
 
@@ -46,7 +57,7 @@ struct InventorySnapshot: Equatable, Sendable {
         var applicationsFailure: ScanSourceFailure?
         for directory in directories {
             do {
-                found.append(contentsOf: try scanApplications(directory, installedCaskTokens, availableCaskList))
+                found.append(contentsOf: try sources.scanApplications(directory, installedCaskTokens, availableCaskList))
             } catch is CancellationError {
                 // Navigation cancelled the scan — not a source failure.
             } catch {
@@ -61,7 +72,7 @@ struct InventorySnapshot: Equatable, Sendable {
 
         if apps.contains(where: \.isManagedByMas) {
             do {
-                let masApps = try await masList()
+                let masApps = try await sources.masList()
                 let masIndex = masApps.reduce(into: [:]) { index, app in
                     index[StringNormalizer.normalize(app.name)] = app.appStoreID
                 }
@@ -78,7 +89,7 @@ struct InventorySnapshot: Equatable, Sendable {
         }
 
         var npmPackages: [NpmGlobalPackage] = []
-        do { npmPackages = try await npmGlobals() }
+        do { npmPackages = try await sources.npmGlobals() }
         catch is CancellationError {}
         catch { failures.append(ScanSourceFailure(source: .npm, message: error.localizedDescription)) }
 
@@ -110,19 +121,21 @@ struct LiveInventorySnapshotLoader: InventorySnapshotLoading {
         let scanner = ApplicationScanner()
         return await InventorySnapshot.collect(
             directories: directories,
-            installedCasks: { try await brewService.installedCasks() },
-            availableCasks: {
-                try await CaskDatabaseClient(cache: CaskDatabaseCache(fileURL: cacheURL)).fetchCasks()
-            },
-            scanApplications: { directory, installedCasks, availableCasks in
-                try scanner.scanApplications(
-                    in: directory,
-                    installedCasks: installedCasks,
-                    availableCasks: availableCasks
-                )
-            },
-            masList: { try await masService.list() },
-            npmGlobals: { try await npmService.installedGlobals() }
+            sources: InventorySources(
+                installedCasks: { try await brewService.installedCasks() },
+                availableCasks: {
+                    try await CaskDatabaseClient(cache: CaskDatabaseCache(fileURL: cacheURL)).fetchCasks()
+                },
+                scanApplications: { directory, installedCasks, availableCasks in
+                    try scanner.scanApplications(
+                        in: directory,
+                        installedCasks: installedCasks,
+                        availableCasks: availableCasks
+                    )
+                },
+                masList: { try await masService.list() },
+                npmGlobals: { try await npmService.installedGlobals() }
+            )
         )
     }
 }

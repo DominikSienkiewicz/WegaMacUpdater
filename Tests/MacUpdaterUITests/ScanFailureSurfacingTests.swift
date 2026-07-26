@@ -31,11 +31,13 @@ struct ScanFailureSurfacingTests {
         let dir = URL(fileURLWithPath: "/Applications")
         let snapshot = await InventorySnapshot.collect(
             directories: [dir],
-            installedCasks: { throw ScanBoom() },
-            availableCasks: { [] },
-            scanApplications: { _, _, _ in [self.app(name: "Found")] },
-            masList: { [] },
-            npmGlobals: { [] }
+            sources: InventorySources(
+                installedCasks: { throw ScanBoom() },
+                availableCasks: { [] },
+                scanApplications: { _, _, _ in [self.app(name: "Found")] },
+                masList: { [] },
+                npmGlobals: { [] }
+            )
         )
 
         #expect(snapshot.failures.map(\.source) == [.homebrew])
@@ -45,11 +47,13 @@ struct ScanFailureSurfacingTests {
     @Test func inventoryCollectRecordsApplicationsFailure() async {
         let snapshot = await InventorySnapshot.collect(
             directories: [URL(fileURLWithPath: "/Applications")],
-            installedCasks: { [] },
-            availableCasks: { [] },
-            scanApplications: { _, _, _ in throw ScanBoom() },
-            masList: { [] },
-            npmGlobals: { [] }
+            sources: InventorySources(
+                installedCasks: { [] },
+                availableCasks: { [] },
+                scanApplications: { _, _, _ in throw ScanBoom() },
+                masList: { [] },
+                npmGlobals: { [] }
+            )
         )
 
         #expect(snapshot.failures.map(\.source) == [.applications])
@@ -59,11 +63,13 @@ struct ScanFailureSurfacingTests {
     @Test func inventoryCollectRecordsNpmFailure() async {
         let snapshot = await InventorySnapshot.collect(
             directories: [],
-            installedCasks: { [] },
-            availableCasks: { [] },
-            scanApplications: { _, _, _ in [] },
-            masList: { [] },
-            npmGlobals: { throw ScanBoom() }
+            sources: InventorySources(
+                installedCasks: { [] },
+                availableCasks: { [] },
+                scanApplications: { _, _, _ in [] },
+                masList: { [] },
+                npmGlobals: { throw ScanBoom() }
+            )
         )
 
         #expect(snapshot.failures.map(\.source) == [.npm])
@@ -72,11 +78,13 @@ struct ScanFailureSurfacingTests {
     @Test func inventoryCollectReportsNoFailuresOnACleanEmptyScan() async {
         let snapshot = await InventorySnapshot.collect(
             directories: [URL(fileURLWithPath: "/Applications")],
-            installedCasks: { [] },
-            availableCasks: { [] },
-            scanApplications: { _, _, _ in [] },
-            masList: { [] },
-            npmGlobals: { [] }
+            sources: InventorySources(
+                installedCasks: { [] },
+                availableCasks: { [] },
+                scanApplications: { _, _, _ in [] },
+                masList: { [] },
+                npmGlobals: { [] }
+            )
         )
 
         #expect(snapshot.apps.isEmpty)
