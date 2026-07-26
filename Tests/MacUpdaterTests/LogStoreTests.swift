@@ -48,6 +48,24 @@ final class LogStoreTests: XCTestCase {
                       "expected a temp test dir, got \(LogStore.defaultDirectory.path)")
     }
 
+    /// The redirect target must be unique per test process, not one directory per machine.
+    ///
+    /// The backlog orchestrator runs a `swift test` per card in parallel worktrees. With a
+    /// shared path every run appended to the same `wega.log`, and the store rotates that file
+    /// by size — so concurrent runs truncated each other's log and every assertion that reads
+    /// back a just-written entry failed at random. That misfire cost a whole round: twelve
+    /// cards were reported `blocked` for a defect none of them had.
+    func testDefaultDirectoryIsUniquePerProcess() {
+        let pid = String(ProcessInfo.processInfo.processIdentifier)
+        XCTAssertTrue(
+            LogStore.defaultDirectory.path.contains(pid),
+            """
+            the test log directory must be scoped to this process — got \
+            \(LogStore.defaultDirectory.path), which every concurrent `swift test` would share
+            """
+        )
+    }
+
     @MainActor
     func testSharedStoreDoesNotWriteToRealUserLogDuringTests() {
         XCTAssertFalse(
