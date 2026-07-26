@@ -1,7 +1,7 @@
 import Foundation
 
-public struct SparkleUpdateChecker: Sendable {
-    private let client: HTTPClient
+public struct SparkleUpdateChecker: VendorUpdateChecker {
+    public let client: HTTPClient
     private let feedOverrides: [String: String]
 
     public init(client: HTTPClient = .shared, feedOverrides: [String: String] = SparkleFeedOverrides.defaults) {
@@ -9,33 +9,25 @@ public struct SparkleUpdateChecker: Sendable {
         self.feedOverrides = feedOverrides
     }
 
-    /// Returns the update status for an app that exposes a Sparkle feed.
-    public func check(app: ApplicationInfo) async -> ManualCheckResult {
-        let feedURL = resolveFeedURL(for: app)
-        guard let feedURL else { return .notApplicable }
+    /// Returns the plan for an app that exposes an HTTPS Sparkle feed, or nil when no feed
+    /// resolves (or it isn't HTTPS) — in which case the checker makes no request.
+    public func plan(for app: ApplicationInfo) -> VendorCheckPlan? {
+        guard let feedURL = resolveFeedURL(for: app) else { return nil }
 
         // SEC-09: a version check over plain HTTP is MITM-able (spoofed "outdated"
         // → user nudged to a malicious download page). Trust HTTPS feeds only.
-        guard feedURL.scheme?.lowercased() == "https" else { return .notApplicable }
+        guard feedURL.scheme?.lowercased() == "https" else { return nil }
 
-        guard let response = try? await client.get(feedURL, enableETag: true) else { return .unavailable }
-        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
-        guard let latest = AppcastParser.parse(data: response.data) else { return .failed }
+        return VendorCheckPlan(request: HTTPRequest(url: feedURL, enableETag: true)) { data in
+            guard let latest = AppcastParser.parse(data: data) else { return .decided(.failed) }
 
-        let installed = app.version ?? ""
-        guard !installed.isEmpty else { return .notApplicable }
-        // REL-10: compare versions, not strings. A plain `latest != installed` reports an
-        // update whenever the feed lags behind the installed build, or merely formats the
-        // version differently ("7.0.0" vs "7.0.0 (77593)") — both offer a downgrade.
-        guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
-
-        return .outdated(ManualOutdatedApp(
-            name: app.name,
-            path: app.path,
-            installedVersion: app.version,
-            availableVersion: latest,
-            source: .sparkle
-        ))
+            let installed = app.version ?? ""
+            guard !installed.isEmpty else { return .decided(.notApplicable) }
+            // REL-10: compare versions, not strings. A plain `latest != installed` reports an
+            // update whenever the feed lags behind the installed build, or merely formats the
+            // version differently ("7.0.0" vs "7.0.0 (77593)") — both offer a downgrade.
+            return .candidate(VendorCandidate(latest: latest, installed: installed, recordedInstalled: app.version, source: .sparkle))
+        }
     }
 
     /// Lookup order, first hit wins:

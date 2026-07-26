@@ -45,8 +45,8 @@ public enum SynologyApiParser {
     }
 }
 
-public struct SynologyUpdateChecker: Sendable {
-    private let client: HTTPClient
+public struct SynologyUpdateChecker: VendorUpdateChecker {
+    public let client: HTTPClient
     private let mappings: [String: SynologyCatalogEntry]
 
     public init(
@@ -57,27 +57,27 @@ public struct SynologyUpdateChecker: Sendable {
         self.mappings = mappings
     }
 
-    public func check(app: ApplicationInfo) async -> ManualCheckResult {
+    public func plan(for app: ApplicationInfo) -> VendorCheckPlan? {
         guard let bundleId = app.bundleIdentifier,
-              let mapping = mappings[bundleId] else { return .notApplicable }
+              let mapping = mappings[bundleId] else { return nil }
 
-        guard let installedBuild = installedBuildNumber(for: app) else { return .notApplicable }
+        guard let installedBuild = installedBuildNumber(for: app) else { return nil }
 
-        guard let url = AppEndpoints.shared.synologyChangeLogURL(identify: mapping.identify) else { return .notApplicable }
+        guard let url = AppEndpoints.shared.synologyChangeLogURL(identify: mapping.identify) else { return nil }
 
-        guard let response = try? await client.get(url, enableETag: true) else { return .unavailable }
-        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
-        guard let latest = SynologyApiParser.latestRelease(from: response.data) else { return .failed }
-
-        guard latest.build > installedBuild else { return .upToDate }
-
-        return .outdated(ManualOutdatedApp(
-            name: app.name,
-            path: app.path,
-            installedVersion: app.version,
-            availableVersion: latest.version,
-            source: .synology(downloadPage: mapping.downloadPage)
-        ))
+        // Synology compares build numbers, not version strings, so it decides its own
+        // outcome instead of handing a version candidate to the shared `isUpgrade`.
+        return VendorCheckPlan(request: HTTPRequest(url: url, enableETag: true)) { data in
+            guard let latest = SynologyApiParser.latestRelease(from: data) else { return .decided(.failed) }
+            guard latest.build > installedBuild else { return .decided(.upToDate) }
+            return .decided(.outdated(ManualOutdatedApp(
+                name: app.name,
+                path: app.path,
+                installedVersion: app.version,
+                availableVersion: latest.version,
+                source: .synology(downloadPage: mapping.downloadPage)
+            )))
+        }
     }
 
     private func installedBuildNumber(for app: ApplicationInfo) -> Int? {
