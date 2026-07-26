@@ -144,4 +144,31 @@ final class MenuBarUpdateCheckerTests: XCTestCase {
 
         XCTAssertEqual(result.failedChecks, 1)
     }
+
+    /// UX-15 regression — an available self-update (folded into the manual list by the
+    /// scanner, via `ManualUpdateScanner.selfUpdateApp`) raises the count and badge by one and
+    /// names Wega in the dropdown, exactly like any other app. Uses the real mapping so the
+    /// self-update → `ManualOutdatedApp` wiring is covered, not just a hand-built row.
+    func testAvailableSelfUpdateIncreasesCountAndBadge() async throws {
+        let wega = ManualUpdateScanner.selfUpdateApp(
+            from: .updateAvailable(
+                version: "0.2.0",
+                assetURL: URL(string: "https://example.com/Wega.dmg")!,
+                releaseURL: URL(string: "https://github.com/owner/repo/releases/tag/v0.2.0")!,
+                notes: ""
+            ),
+            appPath: URL(fileURLWithPath: "/Applications/WegaMacUpdater.app"),
+            installedVersion: "0.1.0",
+            bundleIdentifier: "com.wega.WegaMacUpdater"
+        )
+        let unwrapped = try XCTUnwrap(wega)
+
+        // The scanner now returns the self-update alongside the other manual apps; the count
+        // and badge (both `total`) must grow by exactly one and the dropdown must name Wega.
+        let withSelfUpdate = await checker(scanner: FakeScanner(apps: [unwrapped])).availableUpdateCount()
+        let withoutSelfUpdate = await checker(scanner: FakeScanner(apps: [])).availableUpdateCount()
+
+        XCTAssertEqual(withSelfUpdate.total, withoutSelfUpdate.total + 1)
+        XCTAssertTrue(withSelfUpdate.outdatedDisplayNames().contains("Wega"))
+    }
 }

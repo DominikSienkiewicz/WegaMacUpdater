@@ -51,6 +51,7 @@ public extension ManualOutdatedApp.UpdateSource {
         case .signal:               return "Signal"
         case .chrome:               return "Chrome"
         case .obsidian:             return "Obsidian"
+        case .wega:                 return "Wega"
         }
     }
 
@@ -70,6 +71,11 @@ public extension ManualOutdatedApp.UpdateSource {
             return .openURL(URL(string: downloadPage), style: .synologyDownload)
         case .googleDrive:
             return .openURL(AppEndpoints.shared.googleDriveDownloadURL, style: .vendorDownload)
+        case .wega(let releaseURL):
+            // Unlike the self-updating vendors, "launching the app" is Wega itself and would
+            // not apply anything — so the row points at the release page. The full in-app
+            // installer (download + signature verification + helper install) stays in Settings.
+            return .openURL(releaseURL, style: .vendorDownload)
         case .sparkle, .antigravity, .parallels, .chatgpt, .postman, .discord, .signal, .chrome, .obsidian:
             return .launchApp
         }
