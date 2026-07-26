@@ -1,6 +1,9 @@
 import XCTest
 import LocalAuthentication
 @testable import MacUpdaterCore
+// SEC-10: TouchIDSudoConfigurator internals (enableShellCommand, biometryAvailable,
+// TouchIDSudoEnableOutcome) now live in WegaHelperKit.
+@testable import WegaHelperKit
 
 final class TouchIDSudoConfiguratorTests: XCTestCase {
 

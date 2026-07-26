@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 
 /// Stable identity of the concrete app bundle protected by a replacement snapshot.
 ///

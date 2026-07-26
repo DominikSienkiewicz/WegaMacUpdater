@@ -1,7 +1,7 @@
 import Foundation
 
-public struct GitHubReleasesChecker: Sendable {
-    private let client: HTTPClient
+public struct GitHubReleasesChecker: VendorUpdateChecker {
+    public let client: HTTPClient
     private let repos: [String: GitHubCatalogEntry]
 
     public init(
@@ -12,52 +12,36 @@ public struct GitHubReleasesChecker: Sendable {
         self.repos = repos
     }
 
-    public func check(app: ApplicationInfo) async -> ManualCheckResult {
+    public func plan(for app: ApplicationInfo) -> VendorCheckPlan? {
         guard let bundleId = app.bundleIdentifier,
-              let mapping = repos[bundleId] else { return .notApplicable }
+              let mapping = repos[bundleId] else { return nil }
 
-        guard let url = AppEndpoints.shared.githubLatestReleaseURL(repo: mapping.repo) else { return .notApplicable }
+        guard let url = AppEndpoints.shared.githubLatestReleaseURL(repo: mapping.repo) else { return nil }
 
         // ETag-conditional + opcjonalny token (SEC-08). UWAGA: GitHub zwalnia 304
         // z primary rate-limit TYLKO dla żądań autoryzowanych (Bearer). Bez tokenu
         // 304 oszczędza transfer, nie kwotę 60/h — token podnosi limit do 5000/h.
-        guard let response = try? await client.get(url, headers: GitHubAuth.headers(), enableETag: true) else {
-            return .unavailable
+        let request = HTTPRequest(url: url, headers: GitHubAuth.headers(), enableETag: true)
+        return VendorCheckPlan(request: request) { data in
+            guard let release = try? JSONDecoder().decode(GitHubRelease.self, from: data) else {
+                return .decided(.failed)
+            }
+
+            // A draft/prerelease "latest" gives no stable newer build → treat as current.
+            guard !release.draft, !release.prerelease else { return .decided(.upToDate) }
+
+            let installed = app.version ?? ""
+            guard !installed.isEmpty else { return .decided(.notApplicable) }
+            return .candidate(VendorCandidate(
+                latest: normalizeGitTag(release.tagName),
+                installed: installed,
+                recordedInstalled: app.version,
+                source: .github(repo: mapping.repo),
+                releaseNotes: release.body,  // FEAT-06: real notes for triage
+                // REL-11: GitHub release tags are SemVer, so a prerelease must rank
+                // below its own release instead of above it.
+                scheme: .semver
+            ))
         }
-        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
-        guard let release = try? JSONDecoder().decode(GitHubRelease.self, from: response.data) else {
-            return .failed
-        }
-
-        // A draft/prerelease "latest" gives no stable newer build → treat as current.
-        guard !release.draft, !release.prerelease else { return .upToDate }
-
-        let installed = app.version ?? ""
-        guard !installed.isEmpty else { return .notApplicable }
-        let latest = normalizeGitTag(release.tagName)
-        guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
-
-        return .outdated(ManualOutdatedApp(
-            name: app.name,
-            path: app.path,
-            installedVersion: app.version,
-            availableVersion: latest,
-            source: .github(repo: mapping.repo),
-            releaseNotes: release.body   // FEAT-06: real notes for triage
-        ))
-    }
-}
-
-private struct GitHubRelease: Decodable {
-    let tagName: String
-    let draft: Bool
-    let prerelease: Bool
-    let body: String?
-
-    enum CodingKeys: String, CodingKey {
-        case tagName = "tag_name"
-        case draft
-        case prerelease
-        case body
     }
 }

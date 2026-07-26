@@ -76,7 +76,7 @@ public enum ParallelsUpdateParser {
 /// upstream by days/weeks while the app self-updates from
 /// `update.parallels.com`. Queries the vendor's own XML feed for the major
 /// matching the installed bundle and compares the short version.
-public struct ParallelsUpdateChecker: Sendable {
+public struct ParallelsUpdateChecker: VendorUpdateChecker {
     /// Bundle identifier of `/Applications/Parallels Desktop.app`.
     public static let bundleIdentifier = "com.parallels.desktop.console"
 
@@ -90,29 +90,20 @@ public struct ParallelsUpdateChecker: Sendable {
         return AppEndpoints.shared.parallelsUpdatesURL(major: major)
     }
 
-    private let client: HTTPClient
+    public let client: HTTPClient
 
     public init(client: HTTPClient = .shared) {
         self.client = client
     }
 
-    public func check(app: ApplicationInfo) async -> ManualCheckResult {
+    public func plan(for app: ApplicationInfo) -> VendorCheckPlan? {
         guard app.bundleIdentifier == Self.bundleIdentifier,
               let installed = app.version, !installed.isEmpty,
-              let url = Self.updateURL(forShortVersion: installed) else { return .notApplicable }
+              let url = Self.updateURL(forShortVersion: installed) else { return nil }
 
-        guard let response = try? await client.get(url, enableETag: true) else { return .unavailable }
-        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
-        guard let latest = ParallelsUpdateParser.latest(fromUpdatesXML: response.data) else { return .failed }
-
-        guard isUpgrade(installed: installed, latest: latest.shortVersion) else { return .upToDate }
-
-        return .outdated(ManualOutdatedApp(
-            name: app.name,
-            path: app.path,
-            installedVersion: installed,
-            availableVersion: latest.shortVersion,
-            source: .parallels
-        ))
+        return VendorCheckPlan(request: HTTPRequest(url: url, enableETag: true)) { data in
+            guard let latest = ParallelsUpdateParser.latest(fromUpdatesXML: data) else { return .decided(.failed) }
+            return .candidate(VendorCandidate(latest: latest.shortVersion, installed: installed, source: .parallels))
+        }
     }
 }

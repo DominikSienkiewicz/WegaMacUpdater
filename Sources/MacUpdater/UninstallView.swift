@@ -18,6 +18,12 @@ struct UninstallView: View {
     /// REL-14: whether the scan behind `pendingUninstallTargets` was incomplete, frozen
     /// at confirmation time so the dialog can warn that the target list may be partial.
     @State private var pendingScanIncomplete: Bool = false
+    /// UX-13: `~/Library` leftovers found for the non-brew targets, planned via
+    /// `MigrationPlanner` before the confirm sheet opens so it can offer them as checkboxes.
+    @State private var pendingLeftoverGroups: [LeftoverGroup] = []
+    /// UX-13: which leftover paths the user has ticked for the Trash. Defaults to every
+    /// found item; the user opts individual files out.
+    @State private var selectedLeftovers: Set<String> = []
     @State private var errorMessage:   String?
     /// REL-14: the last scan failed to read one or more sources. Distinguishes an empty
     /// machine from a failed scan and drives the incomplete-data warning before uninstall.
@@ -86,10 +92,7 @@ struct UninstallView: View {
                     .disabled(isLoading)
 
                     Button {
-                        guard !targets.isEmpty else { return }
-                        pendingUninstallTargets = targets
-                        pendingScanIncomplete = scanFailed
-                        showDialog = true
+                        Task { await presentUninstallDialog() }
                     } label: {
                         if isUninstalling { ProgressView().controlSize(.small) }
                         else { Label(targets.isEmpty ? tr("Odinstaluj") : trf("Odinstaluj (%@)", "\(targets.count)"), systemImage: "trash") }
@@ -235,6 +238,8 @@ struct UninstallView: View {
                     among: apps
                 ),
                 scanIncomplete: pendingScanIncomplete,
+                leftoverGroups: pendingLeftoverGroups,
+                selectedLeftovers: $selectedLeftovers,
                 onCancel: cancelUninstall,
                 onConfirm: confirmUninstall
             )
@@ -271,18 +276,38 @@ struct UninstallView: View {
         else { selected = Set(filtered.map(\.id)) }
     }
 
+    /// UX-13: freezes the confirmation targets (UX-01), then plans their `~/Library`
+    /// leftovers via the coordinator so the sheet opens with the checkbox list ready.
+    private func presentUninstallDialog() async {
+        let targets = self.targets
+        guard !targets.isEmpty else { return }
+        pendingUninstallTargets = targets
+        pendingScanIncomplete = scanFailed
+        let groups = await operations.scanLeftovers(for: targets)
+        pendingLeftoverGroups = groups
+        selectedLeftovers = Set(groups.flatMap { $0.items.map(\.path) })
+        showDialog = true
+    }
+
     private func cancelUninstall() {
         showDialog = false
         pendingUninstallTargets = []
         pendingScanIncomplete = false
+        pendingLeftoverGroups = []
+        selectedLeftovers = []
     }
 
     private func confirmUninstall(zap: Bool) {
         let targets = pendingUninstallTargets
+        let leftovers = pendingLeftoverGroups
+            .flatMap(\.items)
+            .filter { selectedLeftovers.contains($0.path) }
         showDialog = false
         pendingUninstallTargets = []
         pendingScanIncomplete = false
-        Task { await uninstall(targets: targets, zap: zap) }
+        pendingLeftoverGroups = []
+        selectedLeftovers = []
+        Task { await uninstall(targets: targets, zap: zap, leftovers: leftovers) }
     }
 
     private func scan() async {
@@ -293,7 +318,7 @@ struct UninstallView: View {
         errorMessage = result.failures.scanErrorMessage
     }
 
-    private func uninstall(targets: [ApplicationInfo], zap: Bool) async {
+    private func uninstall(targets: [ApplicationInfo], zap: Bool, leftovers: [URL]) async {
         guard !targets.isEmpty else { return }
         // REL-06 — `brew uninstall --cask` (with `--zap` it also deletes preferences and
         // Application Support) rewrites the Caskroom, and `UpgradeMutex` only covers upgrades.
@@ -308,6 +333,7 @@ struct UninstallView: View {
         let outcome = await operations.uninstall(
             targets: targets,
             zap: zap,
+            leftovers: leftovers,
             using: model.brewService
         )
         let succeeded = outcome.succeeded
@@ -328,6 +354,8 @@ struct UninstallView: View {
         var parts: [String] = []
         if brewSucceeded > 0 { parts.append(trf("%@ przez brew", "\(brewSucceeded)")) }
         if trashSucceeded > 0 { parts.append(trf("%@ do Kosza", "\(trashSucceeded)")) }
+        // UX-13: report the leftovers that reached the Trash alongside the app removals.
+        if outcome.leftoversTrashed > 0 { parts.append(trf("%@ resztek do Kosza", "\(outcome.leftoversTrashed)")) }
         let msg = parts.joined(separator: ", ")
 
         if !succeeded.isEmpty {
@@ -343,6 +371,11 @@ struct UninstallView: View {
                 errorMessage? += " " + tr("Nie uruchomiono --force; wybrane usunięcie wraz z resztkami nie zostało po cichu zmienione.")
             }
         }
+        // UX-13: leftovers that could not be moved are surfaced, not swallowed.
+        if outcome.leftoversFailed > 0 {
+            let note = trf("Nie udało się przenieść %@ resztek do Kosza.", "\(outcome.leftoversFailed)")
+            errorMessage = [errorMessage, note].compactMap { $0 }.joined(separator: " ")
+        }
     }
 }
 
@@ -356,8 +389,32 @@ struct UninstallDialog: View {
     /// REL-14: the scan behind these targets failed to read one or more sources, so the
     /// list may be missing installations. The dialog warns before the destructive action.
     var scanIncomplete: Bool = false
+    /// UX-13: the `~/Library` leftovers planned for the non-brew targets, presented as
+    /// checkboxes so the user reviews exactly what "app + leftovers" removes.
+    var leftoverGroups: [LeftoverGroup] = []
+    /// UX-13: the leftover paths the user has ticked for the Trash. Bound to the caller so
+    /// the confirmed selection survives the sheet dismissal.
+    @Binding var selectedLeftovers: Set<String>
     let onCancel:   () -> Void
     let onConfirm:  (Bool) -> Void
+
+    init(
+        targets: [ApplicationInfo],
+        ambiguities: [AmbiguousBrewUninstall],
+        scanIncomplete: Bool = false,
+        leftoverGroups: [LeftoverGroup] = [],
+        selectedLeftovers: Binding<Set<String>> = .constant([]),
+        onCancel: @escaping () -> Void,
+        onConfirm: @escaping (Bool) -> Void
+    ) {
+        self.targets = targets
+        self.ambiguities = ambiguities
+        self.scanIncomplete = scanIncomplete
+        self.leftoverGroups = leftoverGroups
+        self._selectedLeftovers = selectedLeftovers
+        self.onCancel = onCancel
+        self.onConfirm = onConfirm
+    }
 
     /// M3(e) — the irreversible option is never the default. `--zap` also deletes
     /// preferences, caches and Application Support; the user opts into that deliberately.
@@ -527,6 +584,18 @@ struct UninstallDialog: View {
                         .padding(.horizontal, 22)
                         .padding(.top, brewCount > 0 ? 10 : 0)
                     }
+
+                    // UX-13: "app + leftovers" for non-brew apps — the same `~/Library`
+                    // items brew would clear with `--zap`, presented so the user reviews
+                    // and consents before they go to the (recoverable) Trash.
+                    if !leftoverGroups.isEmpty {
+                        UninstallLeftoverSelection(
+                            groups: leftoverGroups,
+                            selected: $selectedLeftovers
+                        )
+                        .padding(.horizontal, 22)
+                        .padding(.top, 12)
+                    }
                 }
             }
             .frame(minHeight: 240, idealHeight: 480, maxHeight: 560)
@@ -635,5 +704,106 @@ struct UninstallOption: View {
                 .fill(isSelected ? Color.wegaHoney.opacity(0.06) : Color(NSColor.controlBackgroundColor))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(isSelected ? Color.wegaHoney.opacity(0.32) : Color.white.opacity(0.06), lineWidth: 1))
         )
+    }
+}
+
+// MARK: - UX-13 leftover selection
+
+/// The checkbox sheet section listing the `~/Library` leftovers found for the non-brew
+/// targets, grouped per app. Selection is bound to the caller; every item defaults to
+/// checked, and the copy makes clear the files go to the recoverable Trash.
+struct UninstallLeftoverSelection: View {
+    let groups: [LeftoverGroup]
+    @Binding var selected: Set<String>
+
+    private var allPaths: [String] { groups.flatMap { $0.items.map(\.path) } }
+    private var allSelected: Bool { !allPaths.isEmpty && selected.isSuperset(of: allPaths) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "folder.badge.minus")
+                    .foregroundStyle(Color.wegaHoney)
+                    .font(.system(size: 13))
+                Text(tr("Resztki w ~/Library"))
+                    .font(.system(size: 12, weight: .semibold))
+                Text("\(allPaths.count)")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                Button(allSelected ? tr("Odznacz wszystko") : tr("Zaznacz wszystko")) {
+                    if allSelected { selected.subtract(allPaths) }
+                    else { selected.formUnion(allPaths) }
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11))
+                .foregroundStyle(Color.wegaHoney)
+            }
+            Text(tr("Zaznaczone pliki trafią do Kosza — możesz je stamtąd przywrócić."))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ForEach(groups) { group in
+                VStack(alignment: .leading, spacing: 6) {
+                    if groups.count > 1 {
+                        Text(group.app.name)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(group.items, id: \.path) { url in
+                        UninstallLeftoverRow(
+                            url: url,
+                            isOn: selected.contains(url.path),
+                            toggle: { toggle(url.path) }
+                        )
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            Color(NSColor.controlBackgroundColor),
+            in: RoundedRectangle(cornerRadius: 10)
+        )
+    }
+
+    private func toggle(_ path: String) {
+        if selected.contains(path) { selected.remove(path) } else { selected.insert(path) }
+    }
+}
+
+private struct UninstallLeftoverRow: View {
+    let url: URL
+    let isOn: Bool
+    let toggle: () -> Void
+
+    private var displayPath: String {
+        (url.path as NSString).abbreviatingWithTildeInPath
+    }
+
+    var body: some View {
+        Button(action: toggle) {
+            HStack(spacing: 10) {
+                Image(systemName: isOn ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(isOn ? Color.wegaHoney : .secondary)
+                    .font(.system(size: 14))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(url.lastPathComponent)
+                        .font(.system(size: 11, weight: .medium))
+                    Text(displayPath)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(displayPath)
+        .accessibilityValue(selectionAccessibilityValue(isOn))
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }

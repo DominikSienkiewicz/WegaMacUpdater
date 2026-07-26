@@ -5,9 +5,10 @@ final class UpdatePolicyTests: XCTestCase {
     private func item(_ key: String, to: String?) -> OutdatedItem {
         OutdatedItem(key: key, name: key, from: "1.0", to: to, kind: .cask)
     }
-    private func manual(_ name: String, available: String?) -> ManualOutdatedApp {
-        ManualOutdatedApp(name: name, path: URL(fileURLWithPath: "/Applications/\(name).app"),
-                          installedVersion: "1.0", availableVersion: available, source: .parallels)
+    private func manual(_ name: String, available: String?, bundleIdentifier: String? = nil, path: String? = nil) -> ManualOutdatedApp {
+        ManualOutdatedApp(name: name, path: URL(fileURLWithPath: path ?? "/Applications/\(name).app"),
+                          installedVersion: "1.0", availableVersion: available, source: .parallels,
+                          bundleIdentifier: bundleIdentifier)
     }
 
     // MARK: ignore
@@ -52,13 +53,41 @@ final class UpdatePolicyTests: XCTestCase {
     }
 
     func testApplyPoliciesFiltersManualByPin() {
-        let apps = [manual("Parallels Desktop", available: "19.1")]
-        let policies = ["manual:parallels desktop": UpdatePolicy.pinned(version: "18.0")]
-        XCTAssertTrue(UpdatePlanner.applyPolicies(apps, policies: policies).isEmpty)
+        let app = manual("Parallels Desktop", available: "19.1", bundleIdentifier: "com.parallels.desktop.console")
+        let policies = [app.policyKey: UpdatePolicy.pinned(version: "18.0")]
+        XCTAssertTrue(UpdatePlanner.applyPolicies([app], policies: policies).isEmpty)
     }
 
-    func testManualPolicyKeyIsCaseInsensitiveOnName() {
-        XCTAssertEqual(manual("Parallels Desktop", available: "1").policyKey, "manual:parallels desktop")
+    // MARK: REL-11 — manual policies keyed by bundle ID + install path, not display name
+
+    /// The key is the stable installation identity (`bundle ID + path`), not the
+    /// display name — so it survives the vendor renaming the app across versions.
+    func testManualPolicyKeyUsesBundleIDAndPath() {
+        let app = manual("Zoom", available: "2", bundleIdentifier: "us.zoom.xos",
+                         path: "/Applications/zoom.us.app")
+        XCTAssertEqual(app.policyKey, "manual:us.zoom.xos|/Applications/zoom.us.app")
+    }
+
+    /// Regression for the card's verification step: a pin/ignore assigned before a
+    /// display-name change must still match afterwards (same bundle ID + path).
+    func testManualPolicyKeySurvivesDisplayNameChange() {
+        let before = manual("Parallels Desktop", available: "19.0",
+                            bundleIdentifier: "com.parallels.desktop.console",
+                            path: "/Applications/Parallels Desktop.app")
+        let after = manual("Parallels Desktop 19", available: "19.0",
+                           bundleIdentifier: "com.parallels.desktop.console",
+                           path: "/Applications/Parallels Desktop.app")
+        XCTAssertEqual(before.policyKey, after.policyKey)
+    }
+
+    /// Two copies of the same app (same bundle ID, different install path) are
+    /// distinct policy targets — pinning one must not silence the other.
+    func testManualPolicyKeyDistinguishesCopiesByPath() {
+        let system = manual("Firefox", available: "2", bundleIdentifier: "org.mozilla.firefox",
+                            path: "/Applications/Firefox.app")
+        let user = manual("Firefox", available: "2", bundleIdentifier: "org.mozilla.firefox",
+                          path: "\(NSHomeDirectory())/Applications/Firefox.app")
+        XCTAssertNotEqual(system.policyKey, user.policyKey)
     }
 
     // MARK: skip (single version — "skip X, show X+1")

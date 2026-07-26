@@ -51,6 +51,15 @@ struct UninstallScan: Equatable, Sendable {
     }
 }
 
+/// UX-13: the `~/Library` leftovers of one non-brew uninstall target that still exist on
+/// disk, so the confirm sheet can offer them as checkboxes before anything is removed.
+struct LeftoverGroup: Identifiable, Equatable, Sendable {
+    let app: ApplicationInfo
+    let items: [URL]
+
+    var id: String { app.id }
+}
+
 /// Performs application discovery and destructive uninstall I/O outside SwiftUI.
 @MainActor
 final class UninstallCoordinator: ObservableObject {
@@ -63,6 +72,10 @@ final class UninstallCoordinator: ObservableObject {
     struct Outcome {
         let succeeded: Set<String>
         let failedIDs: Set<String>
+        /// UX-13: how many consented `~/Library` leftovers reached the Trash, and how many
+        /// could not be moved, so the result is reported honestly rather than swallowed.
+        var leftoversTrashed: Int = 0
+        var leftoversFailed: Int = 0
     }
 
     @Published private(set) var state: State = .idle
@@ -92,14 +105,41 @@ final class UninstallCoordinator: ObservableObject {
         }
     }
 
+    /// UX-13: plans the `~/Library` leftovers for the non-brew targets, so the confirm
+    /// sheet can present them as checkboxes before the user consents.
+    ///
+    /// Brew casks clean their own `~/Library` via `brew uninstall --zap`, so they are
+    /// excluded here — the "app + leftovers" promise holds for both sources, by two
+    /// mechanisms that never overlap. One group is returned per app that actually has
+    /// leftovers on disk; apps with none (or without a bundle id) are dropped. Planning
+    /// runs off the main actor because it touches the filesystem.
+    func scanLeftovers(
+        for targets: [ApplicationInfo],
+        home: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) async -> [LeftoverGroup] {
+        await Task.detached(priority: .userInitiated) {
+            targets.compactMap { app -> LeftoverGroup? in
+                guard !app.isManagedByBrew, let bundleID = app.bundleIdentifier else { return nil }
+                let items = LeftoverCleanup.plan(bundleID: bundleID, home: home)
+                return items.isEmpty ? nil : LeftoverGroup(app: app, items: items)
+            }
+        }.value
+    }
+
     func uninstall(
         targets: [ApplicationInfo],
         zap: Bool,
+        leftovers: [URL] = [],
         using brewService: BrewService
     ) async -> Outcome {
         do {
             return try await UpgradeCoordinator.shared.performWrite(.uninstall) {
-                await self.uninstallCoordinated(targets: targets, zap: zap, using: brewService)
+                await self.uninstallCoordinated(
+                    targets: targets,
+                    zap: zap,
+                    leftovers: leftovers,
+                    using: brewService
+                )
             }
         } catch {
             return Outcome(succeeded: [], failedIDs: Set(targets.map(\.id)))
@@ -109,6 +149,7 @@ final class UninstallCoordinator: ObservableObject {
     private func uninstallCoordinated(
         targets: [ApplicationInfo],
         zap: Bool,
+        leftovers: [URL],
         using brewService: BrewService
     ) async -> Outcome {
         state = .uninstalling
@@ -133,6 +174,14 @@ final class UninstallCoordinator: ObservableObject {
                 }
             }
         }
-        return Outcome(succeeded: succeeded, failedIDs: failedIDs)
+        // UX-13: with the apps gone, move the consented `~/Library` leftovers to the Trash.
+        // Same planner (`MigrationPlanner`), same recoverable Trash the app already uses.
+        let leftoverResult = LeftoverCleanup.removeToTrash(leftovers)
+        return Outcome(
+            succeeded: succeeded,
+            failedIDs: failedIDs,
+            leftoversTrashed: leftoverResult.removed.count,
+            leftoversFailed: leftoverResult.failed.count
+        )
     }
 }

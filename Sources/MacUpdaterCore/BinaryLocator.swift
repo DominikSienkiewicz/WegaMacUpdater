@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 
 public struct ToolchainLocations: Equatable, Sendable {
     public var brew: URL?

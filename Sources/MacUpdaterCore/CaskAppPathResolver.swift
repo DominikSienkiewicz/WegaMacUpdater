@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 
 /// REL-03 — the one answer to "where is this cask's app bundle **right now**?".
 ///

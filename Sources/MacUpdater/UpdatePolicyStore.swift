@@ -10,10 +10,15 @@ final class UpdatePolicyStore: ObservableObject {
 
     private static let defaultsKey = "wega.updatePolicies"
 
+    private let defaults: UserDefaults
+
     @Published private(set) var entries: [String: UpdatePolicyEntry]
 
-    private init() {
-        if let data = UserDefaults.standard.data(forKey: Self.defaultsKey),
+    /// `defaults` is injectable so tests can drive a throwaway suite instead of the
+    /// process-wide `.standard` domain (QA-01 — unblocking store testability).
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        if let data = defaults.data(forKey: Self.defaultsKey),
            let decoded = try? JSONDecoder().decode([UpdatePolicyEntry].self, from: data) {
             entries = Dictionary(decoded.map { ($0.key, $0) }, uniquingKeysWith: { _, b in b })
         } else {
@@ -60,7 +65,7 @@ final class UpdatePolicyStore: ObservableObject {
 
     private func persist() {
         if let data = try? JSONEncoder().encode(Array(entries.values)) {
-            UserDefaults.standard.set(data, forKey: Self.defaultsKey)
+            defaults.set(data, forKey: Self.defaultsKey)
         }
     }
 }

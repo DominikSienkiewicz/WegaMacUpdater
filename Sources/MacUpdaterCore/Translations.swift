@@ -28,6 +28,11 @@ extension Translations {
         // REL-08 — niska pewność dopasowania blokuje automatyczne przejęcie (`--force`).
         "Dopasowanie %@ → %@ jest zbyt niepewne, aby przepiąć automatycznie. Zweryfikuj je ręcznie przed migracją.":
             "The %@ → %@ match is too uncertain to migrate automatically. Verify it manually before migrating.",
+        // SEC-08 — sygnalizacja nieweryfikowanego overlaya endpoints.json w karcie Info.
+        "Nieweryfikowana konfiguracja endpointów": "Unverified endpoints configuration",
+        "Niezweryfikowany": "Unverified",
+        "W Application Support znaleziono plik endpoints.json bez ważnego podpisu. Wega zastosowała go zgodnie z polityką, ale nie mogła zweryfikować jego pochodzenia — sprawdź, czy to Twoja zmiana.":
+            "An endpoints.json file without a valid signature was found in Application Support. Wega applied it as policy allows, but could not verify its origin — check that this change is yours.",
         // SEC-08 — token GitHub (Keychain).
         "Token GitHub (opcjonalny)": "GitHub token (optional)",
         "Zapisany": "Saved",
@@ -179,6 +184,7 @@ extension Translations {
         "Sprawdź logi poniżej.": "Check the logs below.",
         "Coś poszło nie tak z %@.": "Something went wrong with %@.",
         "Błąd instalacji": "Installation error",
+        "Nie udało się dokończyć instalacji — szczegóły w logu.": "The installation could not be completed — see the log for details.",
         "Aktualizuję, chwila…": "Updating, one moment…",
         "Brew zgłosił błąd — sprawdź log poniżej.": "Brew reported an error — check the log below.",
         "Nie udało się: %@. Szczegóły w logu.": "Failed: %@. Details in the log.",
@@ -232,7 +238,22 @@ extension Translations {
         "Wega uruchomi:\n\n%@\n\nDrugiej kopii (z %@) to nie ruszy.": "Wega will run:\n\n%@\n\nThe other copy (from %@) won't be touched.",
         "Usuń": "Remove",
         "Anuluj": "Cancel",
-        "Tropię intruzów w /Applications i ~/Applications…": "Tracking down intruders in /Applications and ~/Applications…",
+        "Tropię intruzów w Twoich katalogach aplikacji…": "Tracking down intruders in your app folders…",
+        // UX-16 — configurable scan directories, exclusions and recursion depth (Settings).
+        "Katalogi skanowania": "Scan directories",
+        "Wega skanuje /Applications, ~/Applications i ich podfoldery. Dodaj własne katalogi (także na innych wolumenach), pomiń te, których nie chcesz przeszukiwać, i ustaw głębokość zagłębiania.":
+            "Wega scans /Applications, ~/Applications and their subfolders. Add your own directories (including on other volumes), skip the ones you don't want searched, and set how deep to descend.",
+        "Głębokość zagłębiania": "Recursion depth",
+        "0 = tylko sam katalog. 1 = katalog i jego bezpośrednie podfoldery.":
+            "0 = the directory only. 1 = the directory and its immediate subfolders.",
+        "Katalogi użytkownika": "Your directories",
+        "Dodaj katalog…": "Add directory…",
+        "Dodaj do skanowania": "Add to scan",
+        "Brak własnych katalogów.": "No custom directories.",
+        "Wykluczenia": "Exclusions",
+        "Dodaj wykluczenie…": "Add exclusion…",
+        "Wyklucz ze skanowania": "Exclude from scan",
+        "Brak wykluczeń.": "No exclusions.",
         "Zwęszyłam %@ aplikacji do przepięcia.": "I sniffed out %@ apps to migrate.",
         "Wszystko porządku. Wega nie znalazła uciekinierów.": "All good. Wega found no runaways.",
         "Instaluję %@ przez Homebrew…": "Installing %@ via Homebrew…",
@@ -348,6 +369,14 @@ extension Translations {
         "Usuń razem z resztkami": "Remove along with leftovers",
         "Usuń tylko aplikację": "Remove app only",
         "Przenieś do Kosza": "Move to Trash",
+        // UX-13 — "app + leftovers" for non-brew apps: a checkbox list of the ~/Library
+        // items the app left behind, moved to the (recoverable) Trash on consent.
+        "Resztki w ~/Library": "Leftovers in ~/Library",
+        "Zaznaczone pliki trafią do Kosza — możesz je stamtąd przywrócić.":
+            "Checked files will go to the Trash — you can restore them from there.",
+        "Odznacz wszystko": "Deselect all",
+        "%@ resztek do Kosza": "%@ leftovers to Trash",
+        "Nie udało się przenieść %@ resztek do Kosza.": "Could not move %@ leftovers to the Trash.",
         "zalecane": "recommended",
         "cask + formula": "cask + formula",
         "ze sklepu": "from the store",
@@ -357,6 +386,12 @@ extension Translations {
         "wszystkie": "all",
         "Szukaj po nazwie lub bundle ID…": "Search by name or bundle ID…",
         "%@ z %@": "%@ of %@",
+        // UX-11f — eksport spisu aplikacji do Brewfile / CSV.
+        "Eksportuj": "Export",
+        "Inwentarz (CSV)…": "Inventory (CSV)…",
+        "inwentarz": "inventory",
+        "Zapisz spis aplikacji jako Brewfile lub CSV": "Save the app inventory as a Brewfile or CSV",
+        "Nie udało się zapisać pliku: %@": "Could not save the file: %@",
         "Odśwież": "Refresh",
         "Aplikacja": "Application",
         "Wersja": "Version",

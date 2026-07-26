@@ -64,7 +64,7 @@ public enum ChatGPTUpdateParser {
 /// channel by days. The app self-updates via Sparkle from a runtime-resolved
 /// feed, so neither brew nor the generic Sparkle path surfaces the newer build.
 /// Queries OpenAI's public appcast directly and compares the short version.
-public struct ChatGPTUpdateChecker: Sendable {
+public struct ChatGPTUpdateChecker: VendorUpdateChecker {
     /// Bundle identifier of `/Applications/ChatGPT.app`.
     public static let bundleIdentifier = "com.openai.chat"
 
@@ -72,28 +72,19 @@ public struct ChatGPTUpdateChecker: Sendable {
     /// "sidekick"). Same feed Homebrew's `chatgpt` cask uses for livecheck.
     public static let appcastURL = AppEndpoints.shared.chatgptAppcastURL
 
-    private let client: HTTPClient
+    public let client: HTTPClient
 
     public init(client: HTTPClient = .shared) {
         self.client = client
     }
 
-    public func check(app: ApplicationInfo) async -> ManualCheckResult {
+    public func plan(for app: ApplicationInfo) -> VendorCheckPlan? {
         guard app.bundleIdentifier == Self.bundleIdentifier,
-              let installed = app.version, !installed.isEmpty else { return .notApplicable }
+              let installed = app.version, !installed.isEmpty else { return nil }
 
-        guard let response = try? await client.get(Self.appcastURL, enableETag: true) else { return .unavailable }
-        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
-        guard let latest = ChatGPTUpdateParser.latestVersion(fromAppcast: response.data) else { return .failed }
-
-        guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
-
-        return .outdated(ManualOutdatedApp(
-            name: app.name,
-            path: app.path,
-            installedVersion: installed,
-            availableVersion: latest,
-            source: .chatgpt
-        ))
+        return VendorCheckPlan(request: HTTPRequest(url: Self.appcastURL, enableETag: true)) { data in
+            guard let latest = ChatGPTUpdateParser.latestVersion(fromAppcast: data) else { return .decided(.failed) }
+            return .candidate(VendorCandidate(latest: latest, installed: installed, source: .chatgpt))
+        }
     }
 }

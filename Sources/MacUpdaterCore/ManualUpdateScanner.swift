@@ -15,7 +15,7 @@ public struct ManualUpdateScanner: Sendable {
 
     public init(
         brewService: BrewService = BrewService(),
-        scanDirectories: [URL] = AppScanDirectories.all(),
+        scanDirectories: [URL] = AppScanDirectories.all(configuration: ScanConfigurationStore.resolvedConfiguration()),
         caskCacheURL: URL = AppScanDirectories.caskDatabaseCacheURL,
         maxConcurrentChecks: Int = 12
     ) {
@@ -42,6 +42,10 @@ public struct ManualUpdateScanner: Sendable {
         // Homebrew cask like Docker/Postman labelled "Brew" in both windows instead of
         // showing up under "Ręcznie zainstalowane" in one of them.
         let origin = AppOrigin.of(app)
+        // REL-11: stamp the scanned app's bundle identifier onto every outdated result
+        // at the same chokepoint as `origin`, so the policy key (`bundle ID + path`) is
+        // consistent regardless of which checker produced the result.
+        let bundleIdentifier = app.bundleIdentifier
         return {
             let start = Date()
             let result = await run()
@@ -62,6 +66,7 @@ public struct ManualUpdateScanner: Sendable {
             }
             if case .outdated(var item) = result {
                 item.origin = origin
+                item.bundleIdentifier = bundleIdentifier
                 return .outdated(item)
             }
             return result
@@ -69,7 +74,7 @@ public struct ManualUpdateScanner: Sendable {
     }
 
     public func scan(brewOutdatedCasks: Set<String> = []) async -> (apps: [ManualOutdatedApp], failedChecks: Int) {
-        let casks = (try? await CaskDatabaseClient(cache: CaskDatabaseCache(fileURL: caskCacheURL)).fetchCasks()) ?? []
+        let casks = (try? await CaskDatabaseClient.caskCatalog(cacheURL: caskCacheURL).fetchCasks()) ?? []
         let installedCasks = (try? await brewService.installedCasks()) ?? []
         // brew-tracked versions (from `brew list --cask --versions`); used as ground truth
         // for brew-managed apps instead of bundle version to avoid versioning scheme mismatches.

@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 
 public struct NpmGlobalPackage: Equatable, Sendable {
     public var name: String
@@ -155,8 +156,9 @@ public final class NpmGlobalService: @unchecked Sendable {
             for pkg in installed {
                 group.addTask {
                     guard let latest = try? await self.latestVersion(of: pkg.name) else { return nil }
-                    guard !versionsEqual(latest, pkg.installedVersion),
-                          isUpgrade(installed: pkg.installedVersion, latest: latest) else { return nil }
+                    // REL-11: npm publishes strict SemVer, so compare under `.semver`
+                    // (prerelease ranks below its release; unparseable ⇒ not an upgrade).
+                    guard isUpgrade(installed: pkg.installedVersion, latest: latest, scheme: .semver) else { return nil }
                     return NpmGlobalOutdated(
                         name: pkg.name,
                         installedVersion: pkg.installedVersion,
@@ -179,7 +181,8 @@ public final class NpmGlobalService: @unchecked Sendable {
         return runner.events(
             for: ProcessRequest(
                 executableURL: npmURL,
-                arguments: ["install", "-g", "\(name)@latest"],
+                // SEC-10: `--` fences the package name off from npm option parsing.
+                arguments: ["install", "-g", "--", "\(name)@latest"],
                 environment: environment(for: npmURL),
                 timeout: nil
             )
@@ -201,7 +204,8 @@ public final class NpmGlobalService: @unchecked Sendable {
     }
 
     public static func uninstallArguments(for name: String) -> [String] {
-        ["uninstall", "-g", name]
+        // SEC-10: `--` fences the package name off from npm option parsing.
+        ["uninstall", "-g", "--", name]
     }
 
     private func runNpm(_ arguments: [String]) async throws -> ProcessResult {

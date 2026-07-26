@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 @testable import MacUpdaterCore
+// SEC-10: SudoLocalTransactionalWriter / enableShellCommand moved to WegaHelperKit.
+@testable import WegaHelperKit
 
 @Suite("SEC-05 authorization hardening")
 struct SEC05AuthorizationHardeningTests {
@@ -91,8 +93,10 @@ struct SEC05AuthorizationHardeningTests {
     }
 
     @Test func pamWriterIsTransactionalAndManualDetectionIgnoresComments() throws {
-        let source = try contents(of: "Sources/MacUpdaterCore/TouchIDSudoConfigurator.swift")
-            + contents(of: "Sources/MacUpdaterCore/SudoLocalTransactionalWriter.swift")
+        // SEC-10 moved both files into WegaHelperKit so the root helper stops linking all of
+        // MacUpdaterCore. Same code, same guarantee — only the module boundary moved.
+        let source = try contents(of: "Sources/WegaHelperKit/TouchIDSudoConfigurator.swift")
+            + contents(of: "Sources/WegaHelperKit/SudoLocalTransactionalWriter.swift")
 
         #expect(source.contains("SudoLocalTransactionalWriter"))
         #expect(source.contains("writeAtomically"))

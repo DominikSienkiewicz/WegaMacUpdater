@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import WegaHelperKit
 
 public protocol ApplicationTerminating: Sendable {
     @MainActor

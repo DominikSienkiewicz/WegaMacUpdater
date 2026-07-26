@@ -107,12 +107,14 @@ struct ContentView: View {
                 ToolbarItem(placement: .primaryAction) {
                     SettingsLink { Image(systemName: "gearshape") }
                         .help(tr("Ustawienia"))
+                        .accessibilityLabel(tr("Ustawienia"))
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button { showInspector.toggle() } label: {
                         Image(systemName: "sidebar.trailing")
                     }
                     .help(tr("Panel szczegółów"))
+                    .accessibilityLabel(tr("Panel szczegółów"))
                     .disabled(selection.tab != .update)
                 }
             }

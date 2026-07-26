@@ -73,13 +73,17 @@ public enum MigrationPlanner {
     public static func libraryLeftoverCandidates(bundleId: String, home: URL) -> [URL] {
         // SEC-06: refuse to build deletion paths from an unsafe bundle id.
         guard isSafeBundleID(bundleId) else { return [] }
-        let lib = home.appendingPathComponent("Library")
+        // `isDirectory:` is spelled out on every component: the overload without it probes the
+        // filesystem, so the same bundle id yielded a trailing slash once the directory existed
+        // and none before. Deletion paths must not depend on what happens to be on disk when
+        // they are built — the uninstaller compares planned paths against removed ones (UX-13).
+        let lib = home.appendingPathComponent("Library", isDirectory: true)
         return [
-            lib.appendingPathComponent("Application Support/\(bundleId)"),
-            lib.appendingPathComponent("Preferences/\(bundleId).plist"),
-            lib.appendingPathComponent("Caches/\(bundleId)"),
-            lib.appendingPathComponent("Saved Application State/\(bundleId).savedState"),
-            lib.appendingPathComponent("Containers/\(bundleId)"),
+            lib.appendingPathComponent("Application Support/\(bundleId)", isDirectory: true),
+            lib.appendingPathComponent("Preferences/\(bundleId).plist", isDirectory: false),
+            lib.appendingPathComponent("Caches/\(bundleId)", isDirectory: true),
+            lib.appendingPathComponent("Saved Application State/\(bundleId).savedState", isDirectory: true),
+            lib.appendingPathComponent("Containers/\(bundleId)", isDirectory: true),
         ]
     }
 }

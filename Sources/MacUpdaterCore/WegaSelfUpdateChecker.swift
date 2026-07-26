@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 
 /// Checks whether a newer Wega release is available — Wega dogfooding its own machinery.
 ///
@@ -40,7 +41,7 @@ public struct WegaSelfUpdateChecker: Sendable {
             headers: GitHubAuth.headers(),   // SEC-08: dokłada Bearer, jeśli token w Keychain
             enableETag: true
         ), response.statusCode == 200,
-            let release = try? JSONDecoder().decode(Release.self, from: response.data) else {
+            let release = try? JSONDecoder().decode(GitHubRelease.self, from: response.data) else {
             return .failed
         }
 
@@ -48,44 +49,21 @@ public struct WegaSelfUpdateChecker: Sendable {
         guard !release.draft, !release.prerelease else { return .upToDate }
 
         let latest = normalizeGitTag(release.tagName)
-        guard isUpgrade(installed: currentVersion, latest: latest) else { return .upToDate }
+        // REL-11: GitHub release tags are SemVer — compare under `.semver`, matching
+        // `GitHubReleasesChecker`.
+        guard isUpgrade(installed: currentVersion, latest: latest, scheme: .semver) else { return .upToDate }
 
         // Prefer the drag-to-Applications .dmg, fall back to the .pkg installer.
-        let asset = release.assets.first { $0.name.hasSuffix(".dmg") }
-            ?? release.assets.first { $0.name.hasSuffix(".pkg") }
+        let assets = release.assets ?? []
+        let asset = assets.first { $0.name.hasSuffix(".dmg") }
+            ?? assets.first { $0.name.hasSuffix(".pkg") }
         guard let asset,
               let assetURL = URL(string: asset.browserDownloadURL),
-              let releaseURL = URL(string: release.htmlURL) else {
+              let htmlURL = release.htmlURL,
+              let releaseURL = URL(string: htmlURL) else {
             return .failed
         }
 
         return .updateAvailable(version: latest, assetURL: assetURL, releaseURL: releaseURL, notes: release.body ?? "")
-    }
-
-    private struct Release: Decodable {
-        let tagName: String
-        let draft: Bool
-        let prerelease: Bool
-        let htmlURL: String
-        let assets: [Asset]
-        let body: String?
-
-        struct Asset: Decodable {
-            let name: String
-            let browserDownloadURL: String
-            enum CodingKeys: String, CodingKey {
-                case name
-                case browserDownloadURL = "browser_download_url"
-            }
-        }
-
-        enum CodingKeys: String, CodingKey {
-            case tagName = "tag_name"
-            case draft
-            case prerelease
-            case htmlURL = "html_url"
-            case assets
-            case body
-        }
     }
 }

@@ -6,8 +6,6 @@ import Foundation
 ///   build exists — `name` is the version to offer.
 /// - **204 No Content** when the running build is already current.
 public enum PostmanUpdateParser {
-    private struct SquirrelResponse: Decodable { let name: String }
-
     /// Returns the `name` (latest version) from a Squirrel 200 body, or nil when the
     /// body is empty/unparseable or carries no version.
     public static func latestVersion(fromSquirrelJSON data: Data) -> String? {
@@ -24,7 +22,7 @@ public enum PostmanUpdateParser {
 /// `brew outdated` nor the cask-version check surfaces the newer build. Queries
 /// Postman's own Squirrel feed and compares the short version, the same approach used
 /// for ChatGPT and Parallels.
-public struct PostmanUpdateChecker: Sendable {
+public struct PostmanUpdateChecker: VendorUpdateChecker {
     /// Bundle identifier of `/Applications/Postman.app`.
     public static let bundleIdentifier = "com.postmanlabs.mac"
 
@@ -36,32 +34,25 @@ public struct PostmanUpdateChecker: Sendable {
         AppEndpoints.shared.postmanUpdateURL(version: version)
     }
 
-    private let client: HTTPClient
+    public let client: HTTPClient
 
     public init(client: HTTPClient = .shared) {
         self.client = client
     }
 
-    public func check(app: ApplicationInfo) async -> ManualCheckResult {
+    public func plan(for app: ApplicationInfo) -> VendorCheckPlan? {
         guard app.bundleIdentifier == Self.bundleIdentifier,
               let installed = app.version, !installed.isEmpty,
-              let url = Self.updateURL(forVersion: installed) else { return .notApplicable }
+              let url = Self.updateURL(forVersion: installed) else { return nil }
 
-        guard let response = try? await client.get(url, enableETag: true) else { return .unavailable }
         // 204 = Squirrel's "you're current". Any 2xx with no parseable version is also
         // treated as current rather than an error.
-        if response.statusCode == 204 { return .upToDate }
-        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
-        guard let latest = PostmanUpdateParser.latestVersion(fromSquirrelJSON: response.data) else { return .upToDate }
-
-        guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
-
-        return .outdated(ManualOutdatedApp(
-            name: app.name,
-            path: app.path,
-            installedVersion: installed,
-            availableVersion: latest,
-            source: .postman
-        ))
+        return VendorCheckPlan(
+            request: HTTPRequest(url: url, enableETag: true),
+            upToDateStatusCodes: [204]
+        ) { data in
+            guard let latest = PostmanUpdateParser.latestVersion(fromSquirrelJSON: data) else { return .decided(.upToDate) }
+            return .candidate(VendorCandidate(latest: latest, installed: installed, source: .postman))
+        }
     }
 }

@@ -20,7 +20,7 @@ public enum ChromeUpdateParser {
 /// via Keystone (Omaha) while its `google-chrome*` casks are `auto_updates` and lag
 /// (the brew drift filter only hides the stale cask after the fact). Queries Chrome's
 /// public Version History API per channel.
-public struct ChromeUpdateChecker: Sendable {
+public struct ChromeUpdateChecker: VendorUpdateChecker {
     public static let channelsByBundleID: [String: String] = [
         "com.google.Chrome":        "stable",
         "com.google.Chrome.beta":   "beta",
@@ -31,22 +31,18 @@ public struct ChromeUpdateChecker: Sendable {
         AppEndpoints.shared.chromeVersionsURL(channel: channel)
     }
 
-    private let client: HTTPClient
+    public let client: HTTPClient
     public init(client: HTTPClient = .shared) { self.client = client }
 
-    public func check(app: ApplicationInfo) async -> ManualCheckResult {
+    public func plan(for app: ApplicationInfo) -> VendorCheckPlan? {
         guard let bundleID = app.bundleIdentifier,
               let channel = Self.channelsByBundleID[bundleID],
               let installed = app.version, !installed.isEmpty,
-              let url = Self.versionsURL(channel: channel) else { return .notApplicable }
+              let url = Self.versionsURL(channel: channel) else { return nil }
 
-        guard let response = try? await client.get(url, enableETag: true) else { return .unavailable }
-        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
-        guard let latest = ChromeUpdateParser.newestVersion(fromVersionHistoryJSON: response.data) else { return .failed }
-        guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
-
-        return .outdated(ManualOutdatedApp(
-            name: app.name, path: app.path,
-            installedVersion: installed, availableVersion: latest, source: .chrome))
+        return VendorCheckPlan(request: HTTPRequest(url: url, enableETag: true)) { data in
+            guard let latest = ChromeUpdateParser.newestVersion(fromVersionHistoryJSON: data) else { return .decided(.failed) }
+            return .candidate(VendorCandidate(latest: latest, installed: installed, source: .chrome))
+        }
     }
 }

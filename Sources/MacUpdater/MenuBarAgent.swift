@@ -12,7 +12,7 @@ final class MenuBarAgent: ObservableObject {
 
     @Published var interval: CheckInterval {
         didSet {
-            UserDefaults.standard.set(interval.rawValue, forKey: Keys.interval)
+            defaults.set(interval.rawValue, forKey: Keys.interval)
         }
     }
     @Published private(set) var updateCount: Int
@@ -28,11 +28,22 @@ final class MenuBarAgent: ObservableObject {
     /// scratch. Now the window adopts them, which is the whole "instant value" of M2.
     @Published private(set) var lastResult: MenuBarScanResult?
 
+    /// UX-11g — the apps/packages the dropdown names as having updates, derived from the
+    /// last check and filtered by the same ignore/pin rules that produced the badge count,
+    /// so the names and the count agree. Empty until the first check completes.
+    var outdatedNames: [String] {
+        lastResult?.outdatedDisplayNames(policies: UpdatePolicyStore.shared.policiesMap) ?? []
+    }
+
     /// REL-02 — the identity of the update set the user was last told about. It used to be
     /// the *count*: a round in which one update was installed and another appeared has the
     /// same count as the round before it, so the new one was never announced.
     private var lastNotifiedFingerprint: String
     private var loop: Task<Void, Never>?
+
+    /// Injectable so tests can drive a throwaway suite instead of the process-wide
+    /// `.standard` domain (QA-01 — unblocking orchestrator testability).
+    private let defaults: UserDefaults
 
     private enum Keys {
         static let interval = "wega.menubar.interval"
@@ -46,7 +57,7 @@ final class MenuBarAgent: ObservableObject {
     /// comes back. Only `.agreed` may spend the one-shot macOS dialog.
     private var inAppAnswer: NotificationPrompt.InAppAnswer {
         get {
-            switch UserDefaults.standard.string(forKey: Keys.notificationAnswer) {
+            switch defaults.string(forKey: Keys.notificationAnswer) {
             case "agreed":   return .agreed
             case "declined": return .declined
             default:         return .unanswered
@@ -58,12 +69,12 @@ final class MenuBarAgent: ObservableObject {
             case .declined:   "declined"
             case .unanswered: nil
             }
-            UserDefaults.standard.set(raw, forKey: Keys.notificationAnswer)
+            defaults.set(raw, forKey: Keys.notificationAnswer)
         }
     }
 
-    private init() {
-        let defaults = UserDefaults.standard
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         interval = defaults.string(forKey: Keys.interval).flatMap(CheckInterval.init(rawValue:)) ?? .every6Hours
         updateCount = defaults.integer(forKey: Keys.lastCount)
         let stored = defaults.double(forKey: Keys.lastCheck)
@@ -176,11 +187,10 @@ final class MenuBarAgent: ObservableObject {
     /// Move the notification watermark to this exact set of updates.
     private func rememberNotified(_ fingerprint: String) {
         lastNotifiedFingerprint = fingerprint
-        UserDefaults.standard.set(fingerprint, forKey: Keys.lastNotifiedFingerprint)
+        defaults.set(fingerprint, forKey: Keys.lastNotifiedFingerprint)
     }
 
     private func persist() {
-        let defaults = UserDefaults.standard
         defaults.set(updateCount, forKey: Keys.lastCount)
         defaults.set(lastCheck?.timeIntervalSinceReferenceDate ?? 0, forKey: Keys.lastCheck)
     }

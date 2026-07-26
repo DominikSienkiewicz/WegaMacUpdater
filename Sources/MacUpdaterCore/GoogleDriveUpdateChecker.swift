@@ -54,43 +54,39 @@ public enum GoogleDriveUpdateParser {
 /// Detects updates for Google Drive for Desktop by speaking the same Omaha
 /// protocol Keystone uses. Compares the manifest version Omaha returns
 /// against the installed `CFBundleVersion`.
-public struct GoogleDriveUpdateChecker: Sendable {
+public struct GoogleDriveUpdateChecker: VendorUpdateChecker {
     public static let bundleIdentifier = "com.google.drivefs"
 
-    private let client: HTTPClient
+    public let client: HTTPClient
 
     public init(client: HTTPClient = .shared) {
         self.client = client
     }
 
-    public func check(app: ApplicationInfo) async -> ManualCheckResult {
-        guard app.bundleIdentifier == Self.bundleIdentifier else { return .notApplicable }
+    public func plan(for app: ApplicationInfo) -> VendorCheckPlan? {
+        guard app.bundleIdentifier == Self.bundleIdentifier else { return nil }
         // Prefer CFBundleVersion when available (Drive's 4-segment build
         // number, e.g. 126.0.4.0); fall back to CFBundleShortVersionString
         // (`126.0`). Omaha compares lexicographically so the short form
         // would always read as "older" and produce a false positive when
         // Drive is genuinely up to date.
         let installed = bundleVersion(at: app.path) ?? app.version ?? ""
-        guard !installed.isEmpty else { return .notApplicable }
+        guard !installed.isEmpty else { return nil }
+        let recordedInstalled = app.version ?? installed
 
         let body = Data(GoogleDriveUpdateParser.omahaRequestBody(installedVersion: installed).utf8)
-        guard let response = try? await client.post(GoogleDriveUpdateParser.omahaEndpoint, body: body, contentType: "application/xml") else {
-            return .unavailable
+        let request = HTTPRequest(
+            url: GoogleDriveUpdateParser.omahaEndpoint,
+            method: "POST",
+            headers: ["Content-Type": "application/xml"],
+            body: body
+        )
+        return VendorCheckPlan(request: request) { data in
+            // Omaha omits <manifest> when there's no update (status="noupdate"), so a
+            // missing version here means "current", not a failure.
+            guard let latest = GoogleDriveUpdateParser.latestVersion(fromOmahaResponse: data) else { return .decided(.upToDate) }
+            return .candidate(VendorCandidate(latest: latest, installed: installed, recordedInstalled: recordedInstalled, source: .googleDrive))
         }
-        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
-
-        // Omaha omits <manifest> when there's no update (status="noupdate"), so a
-        // missing version here means "current", not a failure.
-        guard let latest = GoogleDriveUpdateParser.latestVersion(fromOmahaResponse: response.data),
-              isUpgrade(installed: installed, latest: latest) else { return .upToDate }
-
-        return .outdated(ManualOutdatedApp(
-            name: app.name,
-            path: app.path,
-            installedVersion: app.version ?? installed,
-            availableVersion: latest,
-            source: .googleDrive
-        ))
     }
 
     private func bundleVersion(at appURL: URL) -> String? {

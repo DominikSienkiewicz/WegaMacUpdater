@@ -213,15 +213,11 @@ final class MigrationStore: ObservableObject {
         npmBrewDuplicates = []
         onWegaState?(WegaState(
             pose: .sniff,
-            line: tr("Tropię intruzów w /Applications i ~/Applications…")
+            line: tr("Tropię intruzów w Twoich katalogach aplikacji…")
         ))
 
         do {
-            let cacheURL = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Caches/\(AppMetadata.bundleIdentifier)/casks.json")
-            let casks = try await CaskDatabaseClient(
-                cache: CaskDatabaseCache(fileURL: cacheURL)
-            ).fetchCasks()
+            let casks = try await CaskDatabaseClient.caskCatalog().fetchCasks()
             let installed = try await model.brewService.installedCasks()
             let npmInstalled = (try? await model.npmService.installedGlobals()) ?? []
             npmBrewDuplicates = NpmBrewDuplicateDetector().detect(
@@ -348,7 +344,8 @@ final class MigrationStore: ObservableObject {
         var exitCode: Int32 = 0
         do {
             let stream = try model.brewService.events(
-                arguments: ["install", "--cask", "--force", token]
+                // SEC-10: `--` fences the token off from Homebrew's option parsing.
+                arguments: ["install", "--cask", "--force", "--", token]
             )
             for try await event in stream {
                 switch event {
@@ -496,7 +493,8 @@ final class MigrationStore: ObservableObject {
             case .brew:
                 title = "$ brew uninstall \(removal.dup.brewToken)"
                 stream = try model.brewService.events(
-                    arguments: ["uninstall", removal.dup.brewToken]
+                    // SEC-10: `--` fences the token off from Homebrew's option parsing.
+                    arguments: ["uninstall", "--", removal.dup.brewToken]
                 )
             }
         } catch {

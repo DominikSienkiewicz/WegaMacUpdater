@@ -175,10 +175,10 @@ final class UpdatePlannerTests: XCTestCase {
         let plan = UpdatePlan(formulaNames: ["wget", "jq"], caskNames: ["firefox"],
                               npmNames: ["@openai/codex", "typescript"], includesMas: true, count: 6)
         XCTAssertEqual(UpdatePlanner.commands(for: plan), [
-            UpdateCommand(executable: "brew", arguments: ["upgrade", "wget", "jq"]),
-            UpdateCommand(executable: "brew", arguments: ["upgrade", "--cask", "firefox"]),
-            UpdateCommand(executable: "npm", arguments: ["install", "-g", "@openai/codex@latest"]),
-            UpdateCommand(executable: "npm", arguments: ["install", "-g", "typescript@latest"]),
+            UpdateCommand(executable: "brew", arguments: ["upgrade", "--", "wget", "jq"]),
+            UpdateCommand(executable: "brew", arguments: ["upgrade", "--cask", "--", "firefox"]),
+            UpdateCommand(executable: "npm", arguments: ["install", "-g", "--", "@openai/codex@latest"]),
+            UpdateCommand(executable: "npm", arguments: ["install", "-g", "--", "typescript@latest"]),
             UpdateCommand(executable: "mas", arguments: ["upgrade"])
         ])
     }
@@ -196,18 +196,18 @@ final class UpdatePlannerTests: XCTestCase {
     func testCommandsForNpmIsOnePerPackage() {
         let plan = UpdatePlan(formulaNames: [], caskNames: [], npmNames: ["a", "b", "c"], includesMas: false, count: 3)
         XCTAssertEqual(UpdatePlanner.commands(for: plan), [
-            UpdateCommand(executable: "npm", arguments: ["install", "-g", "a@latest"]),
-            UpdateCommand(executable: "npm", arguments: ["install", "-g", "b@latest"]),
-            UpdateCommand(executable: "npm", arguments: ["install", "-g", "c@latest"])
+            UpdateCommand(executable: "npm", arguments: ["install", "-g", "--", "a@latest"]),
+            UpdateCommand(executable: "npm", arguments: ["install", "-g", "--", "b@latest"]),
+            UpdateCommand(executable: "npm", arguments: ["install", "-g", "--", "c@latest"])
         ])
     }
 
     /// The auto-recovery retry for an interrupted cask upgrade runs
-    /// `brew upgrade --cask --force <tokens>` — the preview must reflect that verbatim.
+    /// `brew upgrade --cask --force -- <tokens>` — the preview must reflect that verbatim.
     func testForcedCaskCommandMatchesRetryPath() {
         XCTAssertEqual(
             UpdatePlanner.forcedCaskCommand(tokens: ["docker", "postman"]),
-            UpdateCommand(executable: "brew", arguments: ["upgrade", "--cask", "--force", "docker", "postman"])
+            UpdateCommand(executable: "brew", arguments: ["upgrade", "--cask", "--force", "--", "docker", "postman"])
         )
     }
 

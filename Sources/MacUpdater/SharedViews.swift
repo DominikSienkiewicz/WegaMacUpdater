@@ -3,11 +3,13 @@ import MacUpdaterCore
 
 // MARK: - Shared scan-directory helper
 
-/// /Applications, ~/Applications, and their immediate non-.app subdirectories.
-/// Implementation lives in `MacUpdaterCore.AppScanDirectories` so the menu-bar agent
-/// shares it.
+/// The built-in roots (/Applications, ~/Applications), any user-added roots, and their
+/// non-.app subdirectories down to the configured recursion depth, minus exclusions
+/// (UX-16). Implementation lives in `MacUpdaterCore.AppScanDirectories` so the menu-bar
+/// agent shares it; the user's configuration is read from `UserDefaults` on each call so a
+/// change in Settings takes effect on the next scan.
 func buildScanDirs() -> [URL] {
-    AppScanDirectories.all()
+    AppScanDirectories.all(configuration: ScanConfigurationStore.resolvedConfiguration())
 }
 
 struct SectionHeader: View {
@@ -47,6 +49,9 @@ struct ErrorBanner: View {
     var body: some View {
         Label(message, systemImage: "exclamationmark.triangle")
             .foregroundStyle(.red)
+            // UX-07 — same cap as `BannerView`: a raw error message must not stretch the
+            // banner past the window (see the note there).
+            .lineLimit(3)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10)
             .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
@@ -418,7 +423,14 @@ struct BannerView: View {
                 .foregroundStyle(data.variant == .success ? Color.wegaSuccess : Color.wegaDanger)
             VStack(alignment: .leading, spacing: 2) {
                 Text(data.title).font(.system(size: 13, weight: .semibold))
-                Text(data.message).font(.system(size: 12)).foregroundStyle(.secondary)
+                // UX-07 — a failure's full, untranslated `stderr` can be arbitrarily long;
+                // cap the message at three lines so it never grows the banner past the
+                // window. The complete technical output stays in the log (see "Zobacz w
+                // logach").
+                Text(data.message)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
             }
             Spacer()
             if let action = data.action {

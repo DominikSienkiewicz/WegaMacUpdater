@@ -69,6 +69,22 @@ public final class CaskDatabaseClient: @unchecked Sendable {
     }
 }
 
+public extension CaskDatabaseClient {
+    /// The single app-scan prologue: a catalog client backed by the shared on-disk cask
+    /// cache at `AppScanDirectories.caskDatabaseCacheURL`.
+    ///
+    /// Every scan that matches installed apps against Homebrew — the Updates window's manual
+    /// checks, the Inventory window, and the Migration window — acquires the catalog through
+    /// here instead of rebuilding the `Library/Caches/…/casks.json` path and wrapping it in a
+    /// `CaskDatabaseCache` by hand. `cacheURL` is injectable so a test can point the prologue
+    /// at a temporary cache; production always uses the default.
+    static func caskCatalog(
+        cacheURL: URL = AppScanDirectories.caskDatabaseCacheURL
+    ) -> CaskDatabaseClient {
+        CaskDatabaseClient(cache: CaskDatabaseCache(fileURL: cacheURL))
+    }
+}
+
 public enum CaskDatabaseError: Error, Equatable, LocalizedError {
     case downloadFailed
 

@@ -3,10 +3,10 @@ import Foundation
 /// Detects Obsidian's in-app package updates, including the Catalyst insider channel.
 /// Obsidian can load a newer `obsidian-X.Y.Z.asar` from Application Support while its
 /// app bundle and Homebrew cask remain on the last installer release.
-public struct ObsidianUpdateChecker: Sendable {
+public struct ObsidianUpdateChecker: VendorUpdateChecker {
     public static let bundleIdentifier = "md.obsidian"
 
-    private let client: HTTPClient
+    public let client: HTTPClient
     private let releasesURL: URL
     private let applicationSupportDirectory: URL
 
@@ -24,33 +24,24 @@ public struct ObsidianUpdateChecker: Sendable {
         self.applicationSupportDirectory = applicationSupportDirectory
     }
 
-    public func check(app: ApplicationInfo) async -> ManualCheckResult {
+    public func plan(for app: ApplicationInfo) -> VendorCheckPlan? {
         guard app.bundleIdentifier == Self.bundleIdentifier,
               let installed = installedVersion(fallingBackTo: app.version)
-        else { return .notApplicable }
+        else { return nil }
 
-        guard let response = try? await client.get(releasesURL, enableETag: true) else {
-            return .unavailable
-        }
-        guard response.statusCode == 200 else {
-            return response.statusCode >= 500 ? .unavailable : .failed
-        }
-        guard let releases = try? JSONDecoder().decode(ObsidianDesktopReleases.self, from: response.data) else {
-            return .failed
-        }
+        // Resolved from local settings, so it is stable for this check; snapshot it before
+        // the network so the evaluate closure stays free of `self`.
+        let insider = isInsiderEnabled
+        return VendorCheckPlan(request: HTTPRequest(url: releasesURL, enableETag: true)) { data in
+            guard let releases = try? JSONDecoder().decode(ObsidianDesktopReleases.self, from: data) else {
+                return .decided(.failed)
+            }
 
-        let latest = isInsiderEnabled
-            ? releases.beta?.latestVersion ?? releases.latestVersion
-            : releases.latestVersion
-        guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
-
-        return .outdated(ManualOutdatedApp(
-            name: app.name,
-            path: app.path,
-            installedVersion: installed,
-            availableVersion: latest,
-            source: .obsidian
-        ))
+            let latest = insider
+                ? releases.beta?.latestVersion ?? releases.latestVersion
+                : releases.latestVersion
+            return .candidate(VendorCandidate(latest: latest, installed: installed, source: .obsidian))
+        }
     }
 
     private static var defaultApplicationSupportDirectory: URL {
