@@ -9,6 +9,9 @@ struct WegaMacUpdaterApp: App {
     @StateObject private var localization = LocalizationManager.shared
     @StateObject private var policies = UpdatePolicyStore.shared
     @StateObject private var menuBar = MenuBarAgent.shared
+    /// UX-10 — bus for menu commands that must reach a not-yet-mounted view (⌘F → inventory
+    /// search). Held above the language re-key so a ⌘F pending across a switch is not lost.
+    @StateObject private var commandCenter = WegaCommandCenter()
     /// Held here, above `.id(localization.language)`, so a language switch re-keys the
     /// view tree without discarding scan results or a running upgrade.
     @StateObject private var scan = ScanStore()
@@ -28,6 +31,7 @@ struct WegaMacUpdaterApp: App {
                 .environmentObject(policies)
                 .environmentObject(scan)
                 .environmentObject(migration)
+                .environmentObject(commandCenter)
                 // Re-key the whole tree on language change so every tr(...) re-evaluates.
                 .id(localization.language)
                 .tint(Color.wegaHoney)
@@ -43,6 +47,12 @@ struct WegaMacUpdaterApp: App {
         }
         .windowToolbarStyle(.unified)
         .windowStyle(.titleBar)
+        // UX-10 — the app's `CommandMenu` and its keyboard shortcuts (⌘R, ⌘⏎, ⌘1…⌘5, ⌘F).
+        // The menu itself is `WegaCommands`; it reads `@FocusedValue`s the view tree publishes,
+        // which a `Commands` conformer can do and this `.commands` closure cannot.
+        .commands {
+            WegaCommands(commandCenter: commandCenter)
+        }
 
         Settings {
             SettingsView()
