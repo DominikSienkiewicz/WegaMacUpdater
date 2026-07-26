@@ -48,16 +48,6 @@ public final class BrewService: @unchecked Sendable {
         return Set(result.stdout.split(whereSeparator: \.isNewline).map(String.init))
     }
 
-    public func caskVersions() async throws -> [String: String] {
-        let result = try await runBrew(["list", "--cask", "--versions"])
-        try ensureSuccess(result, arguments: ["list", "--cask", "--versions"])
-        return result.stdout.split(whereSeparator: \.isNewline).reduce(into: [:]) { partial, line in
-            let parts = line.split(separator: " ").map(String.init)
-            guard let token = parts.first else { return }
-            partial[token] = parts.dropFirst().last ?? ""
-        }
-    }
-
     public func caskInstallationInfo(tokens: [String]) async throws -> [BrewCaskInstallationInfo] {
         guard !tokens.isEmpty else { return [] }
         let arguments = ["info", "--cask", "--json=v2"] + tokens
@@ -66,9 +56,8 @@ public final class BrewService: @unchecked Sendable {
         return try infoParser.parseCaskInstallations(result.stdout)
     }
 
-    /// DEBT-05: robust installed-cask versions via JSON (alternative to the
-    /// text-parsed `caskVersions()`). Heavier (`--installed` enumerates everything),
-    /// so the scanner keeps the fast text path by default; swap here if drift appears.
+    /// Installed-cask versions (token→version) parsed from `brew info --installed --json=v2`.
+    /// Used by the manual-update scanner as ground truth for brew-managed cask versions.
     public func caskInstalledVersions() async throws -> [String: String] {
         let arguments = ["info", "--installed", "--json=v2"]
         let result = try await runBrew(arguments)
