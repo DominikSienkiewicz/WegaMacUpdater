@@ -213,7 +213,7 @@ final class MigrationStore: ObservableObject {
         npmBrewDuplicates = []
         onWegaState?(WegaState(
             pose: .sniff,
-            line: tr("Tropię intruzów w /Applications i ~/Applications…")
+            line: tr("Tropię intruzów w Twoich katalogach aplikacji…")
         ))
 
         do {
