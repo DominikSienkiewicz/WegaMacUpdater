@@ -85,6 +85,40 @@ struct ArchitectureReviewRegressionTests {
         }
     }
 
+    /// ARCH-07b — the app-scan prologue (loading the Homebrew cask catalog from its on-disk
+    /// cache) lives in one shared implementation, and every scan site sources the cache path
+    /// from `AppScanDirectories.caskDatabaseCacheURL` instead of rebuilding it by hand.
+    @Test func appScanPrologueLoadsTheCaskCatalogThroughOneSharedPath() throws {
+        let root = packageRoot()
+
+        // Every scan site that loads the cask catalog before walking the app directories.
+        let scanSites = [
+            "Sources/MacUpdaterCore/ManualUpdateScanner.swift",
+            "Sources/MacUpdater/InventoryStore.swift",
+            "Sources/MacUpdater/MigrationStore.swift"
+        ]
+        for path in scanSites {
+            let scan = executableSource(try source(path, root: root))
+            #expect(
+                !scan.contains("Library/Caches/"),
+                "\(path) still hand-builds the cask cache path instead of AppScanDirectories.caskDatabaseCacheURL"
+            )
+            #expect(
+                !scan.contains("CaskDatabaseCache(fileURL:"),
+                "\(path) still constructs the catalog client inline instead of the shared CaskDatabaseClient.caskCatalog prologue"
+            )
+        }
+
+        // The shared prologue is the one place the cache path becomes a catalog client.
+        let prologue = executableSource(
+            try source("Sources/MacUpdaterCore/CaskDatabaseClient.swift", root: root)
+        )
+        #expect(
+            prologue.contains("AppScanDirectories.caskDatabaseCacheURL"),
+            "the shared cask-catalog prologue must source its path from AppScanDirectories.caskDatabaseCacheURL"
+        )
+    }
+
     @Test func topLevelHomebrewReadRoundsUseTheSharedGate() throws {
         let root = packageRoot()
         let foreground = executableSource(

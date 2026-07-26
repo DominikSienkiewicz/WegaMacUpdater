@@ -217,11 +217,7 @@ final class MigrationStore: ObservableObject {
         ))
 
         do {
-            let cacheURL = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Caches/\(AppMetadata.bundleIdentifier)/casks.json")
-            let casks = try await CaskDatabaseClient(
-                cache: CaskDatabaseCache(fileURL: cacheURL)
-            ).fetchCasks()
+            let casks = try await CaskDatabaseClient.caskCatalog().fetchCasks()
             let installed = try await model.brewService.installedCasks()
             let npmInstalled = (try? await model.npmService.installedGlobals()) ?? []
             npmBrewDuplicates = NpmBrewDuplicateDetector().detect(

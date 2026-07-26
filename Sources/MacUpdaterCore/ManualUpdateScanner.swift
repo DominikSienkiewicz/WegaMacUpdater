@@ -69,7 +69,7 @@ public struct ManualUpdateScanner: Sendable {
     }
 
     public func scan(brewOutdatedCasks: Set<String> = []) async -> (apps: [ManualOutdatedApp], failedChecks: Int) {
-        let casks = (try? await CaskDatabaseClient(cache: CaskDatabaseCache(fileURL: caskCacheURL)).fetchCasks()) ?? []
+        let casks = (try? await CaskDatabaseClient.caskCatalog(cacheURL: caskCacheURL).fetchCasks()) ?? []
         let installedCasks = (try? await brewService.installedCasks()) ?? []
         // brew-tracked versions (from `brew list --cask --versions`); used as ground truth
         // for brew-managed apps instead of bundle version to avoid versioning scheme mismatches.
