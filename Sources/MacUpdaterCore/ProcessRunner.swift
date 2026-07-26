@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 public struct ProcessRequest: Equatable, Sendable {
     public var executableURL: URL
@@ -99,7 +100,17 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         let operation: @Sendable () throws -> ProcessResult = {
             try Self.runSynchronously(request, onOutput: onOutput)
         }
-        return try await Task.detached(priority: .userInitiated, operation: operation).value
+        // The blocking synchronous body (semaphore waits + pipe drains) runs on a detached
+        // task so it never parks a cooperative-pool thread. A detached task does not inherit
+        // cancellation, so forward it explicitly: without this the `Task.isCancelled` guards
+        // inside `runSynchronously` could never fire and a cancelled caller would leave the
+        // subprocess — and everything it spawned — running (REL-12).
+        let work = Task.detached(priority: .userInitiated, operation: operation)
+        return try await withTaskCancellationHandler {
+            try await work.value
+        } onCancel: {
+            work.cancel()
+        }
     }
 
     private static func runSynchronously(
@@ -179,11 +190,11 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             stderrHandle.readabilityHandler = nil
         }
 
-        // Abandon a still-running process: terminate, let it die, drop the handlers,
-        // discard partial output, and surface `error`. We don't wait on `ioGroup`
+        // Abandon a still-running process: kill the whole tree, let it die, drop the
+        // handlers, discard partial output, and surface `error`. We don't wait on `ioGroup`
         // here — a leaked grandchild could hold the pipe open and EOF would never come.
         let abort: (ProcessRunnerError) throws -> Never = { error in
-            process.terminate()
+            Self.terminateProcessTree(process)
             exitSemaphore.wait()
             detachHandlers()
             WegaLog.error(
@@ -224,6 +235,26 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             )
         }
         return result
+    }
+
+    /// Kills the subprocess *and every descendant it spawned*, not just the immediate
+    /// child. Foundation launches each subprocess as the leader of a fresh process group
+    /// (`pgid == child pid`), and a non-interactive shell keeps its background jobs in that
+    /// same group. `terminate()` signals only the leader, so a spawned grandchild (e.g. a
+    /// backgrounded `sleep`) would be orphaned and outlive the cancellation. Signalling the
+    /// whole process group reaps the entire tree in one shot (REL-12).
+    ///
+    /// The `group != ownGroup` guard makes it impossible to signal our own process group:
+    /// if the platform ever kept the child in the caller's group we fall back to a plain
+    /// `terminate()` rather than taking the updater down with the subprocess.
+    private static func terminateProcessTree(_ process: Process) {
+        let pid = process.processIdentifier
+        let group = getpgid(pid)
+        let ownGroup = getpgid(0)
+        process.terminate()
+        if group > 0 && group != ownGroup {
+            _ = killpg(group, SIGKILL)
+        }
     }
 }
 
