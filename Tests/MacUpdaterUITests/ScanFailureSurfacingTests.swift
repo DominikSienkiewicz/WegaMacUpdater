@@ -176,7 +176,7 @@ struct ScanFailureSurfacingTests {
 
         let message = [ScanSourceFailure(source: .homebrew, message: "x")].scanErrorMessage
         #expect(message != nil)
-        #expect(message?.contains(ScanSource.homebrew.label) == true)
+        #expect(message?.contains(ScanFailureSource.homebrew.label) == true)
     }
 }
 

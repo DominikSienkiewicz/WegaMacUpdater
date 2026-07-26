@@ -5,7 +5,11 @@ import Foundation
 /// table or an empty list indistinguishable from "nothing installed". Collecting the
 /// failure per source lets the UI name what is missing and tell "empty" apart from
 /// "the scan couldn't complete".
-enum ScanSource: Equatable, Sendable {
+/// Named `ScanFailureSource`, not `ScanSource`: `MacUpdaterCore.ScanSource` (UX-06) already
+/// names the update sources a scan CHECKS, while this one names the inputs that can FAIL.
+/// Two different concepts — an unqualified `ScanSource` inside this module would silently
+/// resolve here and hide the Core type.
+enum ScanFailureSource: Equatable, Sendable {
     case homebrew
     case caskCatalog
     case applications
@@ -25,7 +29,7 @@ enum ScanSource: Equatable, Sendable {
 }
 
 struct ScanSourceFailure: Equatable, Sendable {
-    let source: ScanSource
+    let source: ScanFailureSource
     let message: String
 }
 
