@@ -38,9 +38,15 @@ extension OutdatedItem {
 }
 
 extension ManualOutdatedApp {
-    /// Identity used to look up a policy. Manual apps are keyed by name (lowercased)
-    /// so a rule survives even if the detecting source changes.
-    public var policyKey: String { "manual:" + name.lowercased() }
+    /// Identity used to look up a policy. REL-11: keyed by the stable installation
+    /// identity — `bundle ID + path` — not the display name. Keying by name lost the
+    /// user's ignore/pin the moment a vendor renamed the app across versions; the
+    /// bundle identifier and on-disk path both survive that rename. The `path`
+    /// component (an ``InstallationIdentity``) also keeps two copies of one app —
+    /// `/Applications` vs `~/Applications` — as distinct policy targets.
+    public var policyKey: String {
+        "manual:" + (bundleIdentifier ?? "") + "|" + InstallationIdentity(path: path).rawValue
+    }
 }
 
 // MARK: - Filtering

@@ -123,6 +123,48 @@ struct VersionComparisonTests {
         #expect(!isUpgrade(installed: "5.3.1,50301", latest: "5.3.1"))
     }
 
+    // MARK: isUpgrade — build-number symmetry (REL-11, criterion 8)
+
+    /// REL-10 fixed the "installed newer than feed" direction; REL-11 fixes the
+    /// mirror image. A feed that merely re-encodes the same release with a build
+    /// suffix (`"7.0.0"` → `"7.0.0 (77593)"`) must NOT read as an upgrade — today it
+    /// did, offering a phantom update.
+    @Test func noUpgradeWhenLatestOnlyAddsBuildNumber() {
+        #expect(isUpgrade(installed: "7.0.0", latest: "7.0.0 (77593)") == false)
+    }
+
+    @Test func noUpgradeWhenInstalledOnlyAddsBuildNumber() {
+        // The REL-10 direction, kept green: installed build > bare feed ⇒ not an upgrade.
+        #expect(isUpgrade(installed: "7.0.0 (77593)", latest: "7.0.0") == false)
+    }
+
+    @Test func upgradeWhenBothCarryBuildAndBuildIncreases() {
+        #expect(isUpgrade(installed: "7.0.0 (100)", latest: "7.0.0 (200)"))
+    }
+
+    // MARK: isUpgrade — unparseable-input gate (REL-11, criterion 9)
+
+    /// `isUpgrade` must gate unparseable input the way `versionChangeKind` does. A
+    /// git-hash "version" has no numeric components; padding it to `[0,0,0]` used to
+    /// make any real feed version look like a phantom upgrade.
+    @Test func noUpgradeWhenInstalledUnparseable() {
+        #expect(isUpgrade(installed: "89d3ad2bf", latest: "1.2.3") == false)
+    }
+
+    @Test func noUpgradeWhenLatestUnparseable() {
+        #expect(isUpgrade(installed: "1.2.3", latest: "89d3ad2bf") == false)
+    }
+
+    // MARK: isUpgrade — prerelease is not a stable version (REL-11, criterion 3)
+
+    @Test func upgradeFromPrereleaseToStable() {
+        #expect(isUpgrade(installed: "1.0.0-beta", latest: "1.0.0"))
+    }
+
+    @Test func noUpgradeFromStableToPrerelease() {
+        #expect(isUpgrade(installed: "1.0.0", latest: "1.0.0-beta") == false)
+    }
+
     // MARK: normalizeGitTag
 
     @Test func normalizeLowercaseV() {

@@ -199,6 +199,11 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
     /// FEAT-06: release notes (when a source provides them, e.g. GitHub `body`) —
     /// fed to `ReleaseNotesTriage` for the advisory "possible security fix" badge.
     public var releaseNotes: String?
+    /// REL-11: the scanned app's bundle identifier, stamped centrally by
+    /// `ManualUpdateScanner`. Combined with `path` it forms the stable policy key
+    /// (`policyKey`), so an ignore/pin survives the vendor renaming the app across
+    /// versions. `nil` for apps without a bundle identifier — `path` alone still keys them.
+    public var bundleIdentifier: String?
 
     public init(
         name: String,
@@ -207,7 +212,8 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
         availableVersion: String?,
         source: UpdateSource,
         origin: AppOrigin = .manual,
-        releaseNotes: String? = nil
+        releaseNotes: String? = nil,
+        bundleIdentifier: String? = nil
     ) {
         self.name = name
         self.path = path
@@ -216,6 +222,7 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
         self.source = source
         self.origin = origin
         self.releaseNotes = releaseNotes
+        self.bundleIdentifier = bundleIdentifier
     }
 }
 

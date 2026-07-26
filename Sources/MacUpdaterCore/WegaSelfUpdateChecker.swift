@@ -48,7 +48,9 @@ public struct WegaSelfUpdateChecker: Sendable {
         guard !release.draft, !release.prerelease else { return .upToDate }
 
         let latest = normalizeGitTag(release.tagName)
-        guard isUpgrade(installed: currentVersion, latest: latest) else { return .upToDate }
+        // REL-11: GitHub release tags are SemVer — compare under `.semver`, matching
+        // `GitHubReleasesChecker`.
+        guard isUpgrade(installed: currentVersion, latest: latest, scheme: .semver) else { return .upToDate }
 
         // Prefer the drag-to-Applications .dmg, fall back to the .pkg installer.
         let assets = release.assets ?? []
