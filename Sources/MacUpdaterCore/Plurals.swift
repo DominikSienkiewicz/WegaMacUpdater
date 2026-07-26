@@ -71,6 +71,12 @@ public enum Plurals {
             one:  "%@ aktualizacja dostępna",
             few:  "%@ aktualizacje dostępne",
             many: "%@ aktualizacji dostępnych"
+        ),
+        // UX-11g — trailing summary when the dropdown caps the named app list.
+        "i jeszcze %@ aplikacji": PluralForms(
+            one:  "i jeszcze %@ aplikacja",
+            few:  "i jeszcze %@ aplikacje",
+            many: "i jeszcze %@ aplikacji"
         )
     ]
 
@@ -79,6 +85,11 @@ public enum Plurals {
             one:  "%@ update available",
             few:  "%@ updates available",
             many: "%@ updates available"
+        ),
+        "i jeszcze %@ aplikacji": PluralForms(
+            one:  "and %@ more app",
+            few:  "and %@ more apps",
+            many: "and %@ more apps"
         )
     ]
 }

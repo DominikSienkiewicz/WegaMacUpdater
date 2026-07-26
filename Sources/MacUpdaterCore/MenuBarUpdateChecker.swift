@@ -63,6 +63,23 @@ public struct MenuBarScanResult: Equatable, Sendable {
     public var countResult: UpdateCountResult {
         UpdateCountResult(total: total, failedChecks: failedChecks)
     }
+
+    /// UX-11g — the display names of everything this check found outdated, so the menu-bar
+    /// dropdown can say *which* apps have updates instead of only *how many*.
+    ///
+    /// Built from the same two lists, in the same order and under the same ignore/pin
+    /// rules, that produce the badge `total`: the policy-filtered package items (formulae,
+    /// casks, App Store, npm) followed by the policy-filtered manual apps. For a result the
+    /// checker produced this list therefore has exactly `total` entries, so the names can
+    /// never disagree with the count shown beside them.
+    public func outdatedDisplayNames(policies: [String: UpdatePolicy] = [:]) -> [String] {
+        let items = UpdatePlanner.applyPolicies(
+            UpdatePlanner.outdatedItems(brew: brew, mas: mas, npm: npm),
+            policies: policies
+        )
+        let manual = UpdatePlanner.applyPolicies(manualApps, policies: policies)
+        return items.map(\.name) + manual.map(\.name)
+    }
 }
 
 // MARK: - Injection seams

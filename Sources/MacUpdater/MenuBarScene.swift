@@ -26,12 +26,13 @@ struct MenuBarContent: View {
     @ObservedObject var agent: MenuBarAgent
     @Environment(\.openWindow) private var openWindow
 
-    var body: some View {
-        Text(statusText)
+    /// UX-11g — how many app names the dropdown lists before collapsing the rest into a
+    /// „i jeszcze N" summary, so a large backlog can't turn the menu into a wall of rows.
+    /// The full list is one click away behind „Otwórz Wega".
+    private static let maxListedApps = 10
 
-        if let last = agent.lastCheck {
-            Text(trf("Sprawdzono %@", last.formatted(date: .omitted, time: .shortened)))
-        }
+    var body: some View {
+        statusSection
 
         Divider()
 
@@ -57,6 +58,30 @@ struct MenuBarContent: View {
 
         Button(tr("Zakończ Wega")) {
             requestQuit()
+        }
+    }
+
+    /// The informational top of the menu: the one-line status, the last-check time, and —
+    /// since UX-11g — the names of the apps that actually have updates. Naming them is the
+    /// whole point of the card: the dropdown used to say only *how many* updates there were,
+    /// never *which* apps. The names come from the last check under the same ignore/pin
+    /// rules as the badge, so the list can never disagree with the count above it.
+    @ViewBuilder private var statusSection: some View {
+        Text(statusText)
+
+        if let last = agent.lastCheck {
+            Text(trf("Sprawdzono %@", last.formatted(date: .omitted, time: .shortened)))
+        }
+
+        let names = agent.outdatedNames
+        if !names.isEmpty {
+            Divider()
+            ForEach(Array(names.prefix(Self.maxListedApps).enumerated()), id: \.offset) { _, name in
+                Text(name)
+            }
+            if names.count > Self.maxListedApps {
+                Text(trp("i jeszcze %@ aplikacji", names.count - Self.maxListedApps))
+            }
         }
     }
 
