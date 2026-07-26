@@ -515,6 +515,9 @@ public enum Translations {
         "Build": "Build",
         "Architected & Developed by": "Architected & Developed by",
         "Zgłoś błąd": "Report a bug",
+        // UX-14 — Inventory "report this app to the catalog" button (apps with no known source).
+        "Zgłoś aplikację": "Report app",
+        "Zgłoś tę aplikację do katalogu": "Report this app to the catalog",
         "Diagnostyka systemu": "System diagnostics",
         "Katalog aplikacji": "Application catalog",
         "Wega pobiera mapowania aplikacji (repozytoria GitHub, kody IDE JetBrains, feedy Sparkle) z sieci, "
