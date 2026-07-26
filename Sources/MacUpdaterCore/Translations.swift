@@ -346,6 +346,7 @@ public enum Translations {
         "Info": "Info",
         "Język interfejsu": "Interface language",
         "Nie aktualizuj": "Don't update",
+        "Pomiń tę wersję": "Skip this version",
         "Przypnij wersję…": "Pin version…",
         "Przypnij wersję": "Pin version",
         "Przypnij": "Pin",
@@ -354,6 +355,7 @@ public enum Translations {
         "Brak reguł. Kliknij aktualizację prawym przyciskiem, aby ją zignorować lub przypiąć wersję.": "No rules. Right-click an update to ignore it or pin a version.",
         "Ignorowane": "Ignored",
         "Przypięte do %@": "Pinned to %@",
+        "Pominięta wersja %@": "Skipped version %@",
         "Usuń regułę": "Remove rule",
         "Sprawdzam…": "Checking…",
         "Sprawdź teraz": "Check now",
@@ -427,6 +429,7 @@ public enum Translations {
             "The package has an available update, the app is not running, no policy blocks it, and its metadata meets the stable requirements.",
         "Aktualizacje tego pakietu są ignorowane.": "Updates for this package are ignored.",
         "Pakiet jest przypięty do wersji %@.": "The package is pinned to version %@.",
+        "Wersja %@ tego pakietu jest pominięta.": "Version %@ of this package is skipped.",
         "Pakiet nie oczekuje teraz na aktualizację; zgoda pozostaje zapisana.":
             "The package has no update waiting right now; its permission remains saved.",
         "Nie można rozpoznać zainstalowanej aplikacji .app wymaganej do snapshotu i kontroli wyniku.":

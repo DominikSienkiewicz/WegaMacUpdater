@@ -199,6 +199,8 @@ struct BackgroundUpdateConsentSettingsCard: View {
         return tr("Aktualizacje tego pakietu są ignorowane.")
       case .pinned(let version):
         return trf("Pakiet jest przypięty do wersji %@.", version)
+      case .skipped(let version):
+        return trf("Wersja %@ tego pakietu jest pominięta.", version)
       case .notCurrentlyOutdated:
         return tr("Pakiet nie oczekuje teraz na aktualizację; zgoda pozostaje zapisana.")
       case .installedAppUnavailable:

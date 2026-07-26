@@ -61,6 +61,49 @@ final class UpdatePolicyTests: XCTestCase {
         XCTAssertEqual(manual("Parallels Desktop", available: "1").policyKey, "manual:parallels desktop")
     }
 
+    // MARK: skip (single version — "skip X, show X+1")
+
+    func testSkippedVersionIsSuppressedForThatVersion() {
+        let policies = ["c:zoom": UpdatePolicy.skipped(version: "6.1")]
+        XCTAssertTrue(UpdatePlanner.isSuppressed(key: "c:zoom", availableVersion: "6.1", policies: policies))
+    }
+
+    func testSkippedVersionResurfacesForNextVersion() {
+        let policies = ["c:zoom": UpdatePolicy.skipped(version: "6.1")]
+        XCTAssertFalse(UpdatePlanner.isSuppressed(key: "c:zoom", availableVersion: "6.2", policies: policies))
+    }
+
+    func testSkippedVersionMatchesNormalizedVariant() {
+        // "7.0.0 (77593)" and "7.0.0.77593" are the same version in different formats;
+        // a skip stored in one must still hide the other when the next scan reports it.
+        let policies = ["c:app": UpdatePolicy.skipped(version: "7.0.0 (77593)")]
+        XCTAssertTrue(UpdatePlanner.isSuppressed(key: "c:app", availableVersion: "7.0.0.77593", policies: policies))
+    }
+
+    func testSkippedWithoutAvailableVersionIsNotSuppressed() {
+        // Skip is deliberately narrow: with no version to match, show the item rather
+        // than over-hide it (unlike a pin, which conservatively holds).
+        let policies = ["c:app": UpdatePolicy.skipped(version: "6.1")]
+        XCTAssertFalse(UpdatePlanner.isSuppressed(key: "c:app", availableVersion: nil, policies: policies))
+    }
+
+    /// The card's regression check: a `.skipped` item disappears for the skipped
+    /// version and comes back for the next release.
+    func testApplyPoliciesHidesSkippedVersionButShowsNext() {
+        let policies = ["c:zoom": UpdatePolicy.skipped(version: "6.1")]
+        XCTAssertTrue(UpdatePlanner.applyPolicies([item("c:zoom", to: "6.1")], policies: policies).isEmpty)
+        XCTAssertEqual(
+            UpdatePlanner.applyPolicies([item("c:zoom", to: "6.2")], policies: policies).map(\.key),
+            ["c:zoom"]
+        )
+    }
+
+    func testSkippedPolicyEntryCodableRoundTrip() throws {
+        let entries = [UpdatePolicyEntry(key: "c:zoom", displayName: "Zoom", policy: .skipped(version: "6.1"))]
+        let data = try JSONEncoder().encode(entries)
+        XCTAssertEqual(try JSONDecoder().decode([UpdatePolicyEntry].self, from: data), entries)
+    }
+
     // MARK: round-trips through Codable (persistence relies on it)
 
     func testPolicyEntryCodableRoundTrip() throws {
