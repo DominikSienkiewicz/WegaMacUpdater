@@ -179,6 +179,7 @@ extension Translations {
         "Sprawdź logi poniżej.": "Check the logs below.",
         "Coś poszło nie tak z %@.": "Something went wrong with %@.",
         "Błąd instalacji": "Installation error",
+        "Nie udało się dokończyć instalacji — szczegóły w logu.": "The installation could not be completed — see the log for details.",
         "Aktualizuję, chwila…": "Updating, one moment…",
         "Brew zgłosił błąd — sprawdź log poniżej.": "Brew reported an error — check the log below.",
         "Nie udało się: %@. Szczegóły w logu.": "Failed: %@. Details in the log.",
