@@ -34,6 +34,13 @@ struct ConsentCurrentQualificationTests {
       qualification(
         profile: profile,
         download: download,
+        context: context(policies: ["c:iterm2": .skipped(version: "3.5")])
+      ) == .blocked(.skipped(version: "3.5"))
+    )
+    #expect(
+      qualification(
+        profile: profile,
+        download: download,
         context: context(candidates: [])
       ) == .blocked(.notCurrentlyOutdated)
     )
