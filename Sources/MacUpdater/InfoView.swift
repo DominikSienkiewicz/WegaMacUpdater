@@ -37,6 +37,7 @@ extension InfoView {
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
+                unverifiedOverlayCard
                 appCard
                 languageCard
                 ScanDirectoriesSettingsCard()
@@ -527,6 +528,38 @@ extension InfoView {
     private func enableTouchID() async {
         await touchIDController.enable { state in
             onWegaState?(state)
+        }
+    }
+
+    // MARK: - Unverified endpoints overlay (SEC-08)
+
+    /// SEC-08 — an endpoints overlay applied without a valid signature reshapes every URI the app
+    /// talks to. Its use is logged, but a log line is not visible to the user, so its presence is
+    /// surfaced here as a first-class warning. Renders nothing when no unverified overlay is active.
+    @ViewBuilder
+    private var unverifiedOverlayCard: some View {
+        if AppEndpoints.overlayStatus.isUnverifiedOverlayActive {
+            WegaCard {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.shield.fill").foregroundStyle(Color.wegaDanger)
+                        Text(tr("Nieweryfikowana konfiguracja endpointów"))
+                            .font(.system(size: 13, weight: .semibold))
+                        Spacer()
+                        WegaBadge(label: tr("Niezweryfikowany"), variant: .danger)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+
+                    Text(tr("W Application Support znaleziono plik endpoints.json bez ważnego podpisu. Wega zastosowała go zgodnie z polityką, ale nie mogła zweryfikować jego pochodzenia — sprawdź, czy to Twoja zmiana."))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                }
+            }
         }
     }
 

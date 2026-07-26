@@ -28,6 +28,11 @@ extension Translations {
         // REL-08 — niska pewność dopasowania blokuje automatyczne przejęcie (`--force`).
         "Dopasowanie %@ → %@ jest zbyt niepewne, aby przepiąć automatycznie. Zweryfikuj je ręcznie przed migracją.":
             "The %@ → %@ match is too uncertain to migrate automatically. Verify it manually before migrating.",
+        // SEC-08 — sygnalizacja nieweryfikowanego overlaya endpoints.json w karcie Info.
+        "Nieweryfikowana konfiguracja endpointów": "Unverified endpoints configuration",
+        "Niezweryfikowany": "Unverified",
+        "W Application Support znaleziono plik endpoints.json bez ważnego podpisu. Wega zastosowała go zgodnie z polityką, ale nie mogła zweryfikować jego pochodzenia — sprawdź, czy to Twoja zmiana.":
+            "An endpoints.json file without a valid signature was found in Application Support. Wega applied it as policy allows, but could not verify its origin — check that this change is yours.",
         // SEC-08 — token GitHub (Keychain).
         "Token GitHub (opcjonalny)": "GitHub token (optional)",
         "Zapisany": "Saved",
