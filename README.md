@@ -10,6 +10,20 @@ Native macOS app that keeps every application on your Mac up to date — Homebre
 ![Architecture](https://img.shields.io/badge/Architecture-SPM_Modules-purple?style=for-the-badge)
 [![CI](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml/badge.svg)](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml)
 
+## Documentation
+
+Wega's docs are split by audience:
+
+- **Using the app** → **[User Guide](USER_GUIDE.md)** — a task-oriented walkthrough:
+  *installation → first scan → update → diagnostics*. Start here if you just want to keep
+  your Mac up to date.
+- **Contributing code** → **[CONTRIBUTING.md](CONTRIBUTING.md)** — build/test setup, the CI
+  gates, and how to change the app catalog past the **catalog-signature** gate.
+- **Reporting a vulnerability** → **[SECURITY.md](SECURITY.md)** — the private disclosure
+  channel (please don't use public issues for security problems).
+
+The rest of this README is the developer/architecture reference.
+
 ## The Vision: one window, zero terminals
 
 Package managers have proliferated — Homebrew casks, formulae, Mac App Store, Sparkle auto-updaters, JetBrains Toolbox, GitHub Releases. Each lives in a different UI or CLI. Wega centralises all of them: one native SwiftUI window that knows where every app came from and how to update it correctly. No `brew upgrade` in muscle memory, no App Store tab left open, no missed JetBrains IDE because Toolbox uses `auto_updates: true` and `brew outdated` never fires.
