@@ -88,4 +88,17 @@ struct LocalizationCompletenessTests {
             + missing.map { "  • \($0)" }.joined(separator: "\n")
         #expect(missing.isEmpty, "\(report)")
     }
+
+    /// UX-11a regression: the Uninstall view's reload button shipped the raw English base
+    /// string `tr("Reload")`. Because `tr(base)` returns the base verbatim in the default
+    /// Polish language, that surfaced the English word "Reload" in the Polish UI. Guard that
+    /// no UI key is the bare English "Reload" — the reload action uses the Polish "Odśwież",
+    /// matching the identical button in `InventoryView`.
+    @Test func reloadLabelIsNotEnglish() throws {
+        let used = try usedKeys()
+        #expect(
+            !used.contains("Reload"),
+            #"UX-11a: no UI string may use the English base key "Reload"; use the Polish "Odśwież"."#
+        )
+    }
 }

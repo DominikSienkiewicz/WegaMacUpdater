@@ -300,7 +300,6 @@ extension Translations {
         "Odinstaluj aplikacje": "Uninstall apps",
         "Brew casks → brew uninstall  ·  pozostałe → Kosz": "Brew casks → brew uninstall  ·  others → Trash",
         "Szukaj…": "Search…",
-        "Reload": "Reload",
         "Odinstaluj": "Uninstall",
         "Odinstaluj (%@)": "Uninstall (%@)",
         "Dokładne cele": "Exact targets",

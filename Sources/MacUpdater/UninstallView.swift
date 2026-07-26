@@ -87,7 +87,7 @@ struct UninstallView: View {
                     .onTapGesture { searchFocused = true }
 
                     Button { Task { await scan() } } label: {
-                        Label(tr("Reload"), systemImage: "arrow.clockwise")
+                        Label(tr("Odśwież"), systemImage: "arrow.clockwise")
                     }
                     .disabled(isLoading)
 
