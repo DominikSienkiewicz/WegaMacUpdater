@@ -97,6 +97,26 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
         case .outsideApplications:
             HelperAuditLog.logger.error("replaceBundle: błąd")
             reply(false, "Cel poza /Applications — odrzucono."); return
+        case .symlinkedTarget, .identityMismatch:
+            // Not reachable from the lexical gate, which never inspects the filesystem.
+            HelperAuditLog.logger.error("replaceBundle: błąd")
+            reply(false, "Cel odrzucony przez walidację ścieżki."); return
+        case nil:
+            break
+        }
+
+        // SEC-03: everything above is a decision about strings. These are the facts only the
+        // filesystem can answer, gathered as root immediately before the replacement.
+        switch WegaHelper.bundleReplacementRejection(facts: Self.facts(target: target, snapshot: snapshot)) {
+        case .symlinkedTarget:
+            HelperAuditLog.logger.error("replaceBundle: błąd")
+            reply(false, "Cel jest dowiązaniem lub prowadzi przez dowiązanie — odrzucono."); return
+        case .identityMismatch:
+            HelperAuditLog.logger.error("replaceBundle: błąd")
+            reply(false, "Snapshot nie pochodzi z tej samej aplikacji — odrzucono."); return
+        case .notBundle, .outsideApplications:
+            HelperAuditLog.logger.error("replaceBundle: błąd")
+            reply(false, "Cel odrzucony przez walidację ścieżki."); return
         case nil:
             break
         }
@@ -118,5 +138,39 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
             HelperAuditLog.logger.error("replaceBundle: błąd")
             reply(false, error.localizedDescription)
         }
+    }
+
+    /// SEC-03: reads, as root, the filesystem facts the pure gate decides on.
+    ///
+    /// `lstat` rather than `stat` on purpose — `stat` follows the link and would report on
+    /// whatever it points at, which is precisely the substitution being guarded against.
+    private static func facts(target: URL, snapshot: URL) -> WegaHelper.BundleReplacementFacts {
+        var status = stat()
+        let isSymlink = lstat(target.path, &status) == 0 && (status.st_mode & S_IFMT) == S_IFLNK
+
+        // `realpath` resolves every component, so a swapped parent directory shows up here even
+        // when the target itself is an ordinary directory.
+        let resolved = target.resolvingSymlinksInPath().standardizedFileURL.path
+
+        return WegaHelper.BundleReplacementFacts(
+            targetResolvedPath: resolved,
+            targetIsSymlink: isSymlink,
+            targetBundleID: bundleIdentifier(at: target),
+            targetTeamID: CodeSignatureVerifier.teamID(ofAppAt: target),
+            snapshotBundleID: bundleIdentifier(at: snapshot),
+            snapshotTeamID: CodeSignatureVerifier.teamID(ofAppAt: snapshot)
+        )
+    }
+
+    /// `CFBundleIdentifier` straight from `Info.plist`. Returns `nil` when the bundle is
+    /// unreadable or carries no identifier — the gate treats that as a rejection.
+    private static func bundleIdentifier(at bundle: URL) -> String? {
+        let plist = bundle.appendingPathComponent("Contents/Info.plist", isDirectory: false)
+        guard let data = try? Data(contentsOf: plist),
+              let parsed = try? PropertyListSerialization.propertyList(from: data, format: nil),
+              let dictionary = parsed as? [String: Any] else {
+            return nil
+        }
+        return dictionary["CFBundleIdentifier"] as? String
     }
 }

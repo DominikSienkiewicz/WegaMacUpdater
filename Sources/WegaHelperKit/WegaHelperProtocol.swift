@@ -87,6 +87,83 @@ public enum WegaHelper {
         case notBundle
         /// Target escapes the `/Applications/` install root.
         case outsideApplications
+        /// The target is a symlink, or is reached through one — the path the gate approved
+        /// is not the path the filesystem would write to (SEC-03).
+        case symlinkedTarget
+        /// Snapshot and target are not the same application: bundle identifier or signing
+        /// Team ID differ, or either is missing (SEC-03).
+        case identityMismatch
+    }
+
+    /// What the daemon learned about the two bundles from the filesystem, gathered as root
+    /// immediately before the replacement.
+    ///
+    /// Passed in rather than read here so the decision stays testable: `WegaPrivilegedHelper`
+    /// runs only as root and no test target can reach it, which is how the `..` traversal
+    /// survived unnoticed in the first place.
+    public struct BundleReplacementFacts: Equatable, Sendable {
+        /// `realpath` of the target, with every symlink resolved.
+        public var targetResolvedPath: String
+        /// Whether the target itself is a symbolic link (`lstat`, not `stat`).
+        public var targetIsSymlink: Bool
+        public var targetBundleID: String?
+        public var targetTeamID: String?
+        public var snapshotBundleID: String?
+        public var snapshotTeamID: String?
+
+        public init(
+            targetResolvedPath: String,
+            targetIsSymlink: Bool,
+            targetBundleID: String?,
+            targetTeamID: String?,
+            snapshotBundleID: String?,
+            snapshotTeamID: String?
+        ) {
+            self.targetResolvedPath = targetResolvedPath
+            self.targetIsSymlink = targetIsSymlink
+            self.targetBundleID = targetBundleID
+            self.targetTeamID = targetTeamID
+            self.snapshotBundleID = snapshotBundleID
+            self.snapshotTeamID = snapshotTeamID
+        }
+    }
+
+    /// SEC-03: the checks that need the filesystem, kept as a pure function over facts the
+    /// daemon gathers.
+    ///
+    /// Two things the lexical gate cannot see. First, a symlink: `/Applications/Foo.app` may
+    /// point anywhere, so approving the literal path says nothing about what gets written —
+    /// the resolved path has to clear the same gate. Second, identity: without it the helper
+    /// happily restores *any* signed bundle over *any* target, which makes it a generic
+    /// "replace this as root" primitive. Requiring a matching bundle identifier and Team ID
+    /// means a snapshot can only ever overwrite the application it was taken from.
+    ///
+    /// A missing identifier or Team ID is a rejection, not a pass: unsigned or unreadable
+    /// input is exactly the case an attacker controls.
+    public static func bundleReplacementRejection(
+        facts: BundleReplacementFacts
+    ) -> BundleReplacementRejection? {
+        if facts.targetIsSymlink { return .symlinkedTarget }
+
+        // The resolved path must clear the structural gate too — a symlinked *parent*
+        // (`/Applications/Legit.app` under a swapped directory) leaves the target itself an
+        // ordinary directory while still redirecting the write.
+        if bundleReplacementRejection(
+            targetPath: facts.targetResolvedPath,
+            snapshotPath: facts.targetResolvedPath
+        ) != nil {
+            return .symlinkedTarget
+        }
+
+        guard let targetBundleID = facts.targetBundleID,
+              let snapshotBundleID = facts.snapshotBundleID,
+              let targetTeamID = facts.targetTeamID,
+              let snapshotTeamID = facts.snapshotTeamID,
+              targetBundleID == snapshotBundleID,
+              targetTeamID == snapshotTeamID else {
+            return .identityMismatch
+        }
+        return nil
     }
 
     /// The structural path gate for `WegaPrivilegedOps.replaceBundle`, lifted out of the
@@ -94,10 +171,20 @@ public enum WegaHelper {
     /// unit test. Both paths must be `.app` bundles and the target must live under
     /// `/Applications/`; the filesystem and Gatekeeper checks that follow stay in the daemon.
     ///
-    /// This is a *string* gate only: it does not canonicalize `..`, so a traversal such as
-    /// `/Applications/../tmp/evil.app` still clears it. Hardening that is owned by SEC-03 —
-    /// the gate is extracted here (behavior-preserving) precisely so a test can make that
-    /// gap visible instead of leaving it buried in code no target can reach.
+    /// SEC-03: the gate canonicalises before it compares, and compares *path components*
+    /// rather than string prefixes.
+    ///
+    /// It used to be a plain `hasPrefix("/Applications/")`, which admitted
+    /// `/Applications/../tmp/evil.app` — a path that resolves to `/tmp/evil.app` and turned the
+    /// root helper into a primitive for replacing any bundle on the system. Two separate
+    /// mistakes had to be fixed: `..` was never resolved, and a prefix test also accepts
+    /// `/ApplicationsEvil/Foo.app`, which shares the characters but not the directory.
+    ///
+    /// `standardizedFileURL` resolves `.` and `..` lexically, without touching the filesystem,
+    /// so this stays a pure decision a unit test can pin — the daemon it protects is
+    /// root-only and unreachable from any test target. Symlinks, ownership and the
+    /// device/inode identity of the target need the filesystem and are checked separately in
+    /// the daemon; this gate is the part that can be proven.
     public static func bundleReplacementRejection(
         targetPath: String,
         snapshotPath: String
@@ -105,7 +192,17 @@ public enum WegaHelper {
         guard targetPath.hasSuffix(".app"), snapshotPath.hasSuffix(".app") else {
             return .notBundle
         }
-        guard targetPath.hasPrefix("/Applications/") else {
+        // Absolute paths only. A relative path would be resolved against the daemon's working
+        // directory, which is not part of the trust boundary and must never decide the answer.
+        guard targetPath.hasPrefix("/"), snapshotPath.hasPrefix("/") else {
+            return .outsideApplications
+        }
+        let standardized = URL(fileURLWithPath: targetPath).standardizedFileURL
+        let components = standardized.pathComponents
+        guard components.count >= 3,
+              components[0] == "/",
+              components[1] == "Applications",
+              standardized.pathExtension == "app" else {
             return .outsideApplications
         }
         return nil
