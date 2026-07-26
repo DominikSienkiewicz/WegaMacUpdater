@@ -30,12 +30,17 @@ final class ScanControlLayoutTests: XCTestCase {
         process.terminationHandler = { _ in terminated.fulfill() }
         try process.run()
 
-        let result = XCTWaiter.wait(for: [terminated], timeout: 10)
+        let timeout = UITestTimeout.resolved()
+        let result = XCTWaiter.wait(for: [terminated], timeout: timeout)
         if result != .completed, process.isRunning {
             process.terminate()
         }
 
-        XCTAssertEqual(result, .completed, "The layout regression app did not finish within 10 seconds")
+        XCTAssertEqual(
+            result,
+            .completed,
+            "The layout regression app did not finish within \(timeout) seconds"
+        )
         XCTAssertEqual(process.terminationReason, .exit)
         XCTAssertEqual(process.terminationStatus, 0)
     }
