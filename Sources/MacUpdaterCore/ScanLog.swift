@@ -34,6 +34,7 @@ public enum ScanLog {
         case .signal:      return "Signal"
         case .chrome:      return "Google Chrome"
         case .obsidian:    return "Obsidian"
+        case .wega:        return "Wega"
         }
     }
 
