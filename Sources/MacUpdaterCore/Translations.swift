@@ -357,6 +357,12 @@ extension Translations {
         "wszystkie": "all",
         "Szukaj po nazwie lub bundle ID…": "Search by name or bundle ID…",
         "%@ z %@": "%@ of %@",
+        // UX-11f — eksport spisu aplikacji do Brewfile / CSV.
+        "Eksportuj": "Export",
+        "Inwentarz (CSV)…": "Inventory (CSV)…",
+        "inwentarz": "inventory",
+        "Zapisz spis aplikacji jako Brewfile lub CSV": "Save the app inventory as a Brewfile or CSV",
+        "Nie udało się zapisać pliku: %@": "Could not save the file: %@",
         "Odśwież": "Refresh",
         "Aplikacja": "Application",
         "Wersja": "Version",

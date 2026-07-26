@@ -21,6 +21,8 @@ struct InventoryView: View {
     @State private var filter:       SourceFilter      = .all
     @State private var sortKey:      InventorySortKey  = .name
     @State private var sortAsc:      Bool              = true
+    /// UX-11f — set when a chosen export destination cannot be written; shown as a banner.
+    @State private var exportError:  String?           = nil
     @FocusState private var searchFocused: Bool
 
     private var apps: [ApplicationInfo] { inventory.apps }
@@ -93,6 +95,20 @@ struct InventoryView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
 
+                // UX-11f — the whole inventory (not the filtered view) exported as a
+                // `brew bundle` manifest or a CSV.
+                Menu {
+                    Button { export(.brewfile) } label: { Label("Brewfile…", systemImage: "mug") }
+                    Button { export(.csv) } label: { Label(tr("Inwentarz (CSV)…"), systemImage: "tablecells") }
+                } label: {
+                    Label(tr("Eksportuj"), systemImage: "square.and.arrow.up")
+                }
+                .menuStyle(.button)
+                .controlSize(.small)
+                .fixedSize()
+                .disabled(isScanning || (apps.isEmpty && npmGlobals.isEmpty))
+                .help(tr("Zapisz spis aplikacji jako Brewfile lub CSV"))
+
                 Button { Task { await scan() } } label: {
                     Label(tr("Odśwież"), systemImage: "arrow.clockwise")
                 }
@@ -104,6 +120,10 @@ struct InventoryView: View {
 
             if let err = errorMessage {
                 ErrorBanner(message: err).padding(.horizontal, 16).padding(.bottom, 8)
+            }
+
+            if let exportError {
+                ErrorBanner(message: exportError).padding(.horizontal, 16).padding(.bottom, 8)
             }
 
             // Table header
@@ -184,6 +204,44 @@ struct InventoryView: View {
     }
 
     private func setFilter(_ f: SourceFilter) { filter = filter == f ? .all : f }
+
+    /// UX-11f — the export formats offered by the toolbar menu. The pure text is built
+    /// by `InventoryExport` in the core module; this view only picks a destination.
+    private enum ExportFormat {
+        case brewfile
+        case csv
+
+        func content(apps: [ApplicationInfo], npmGlobals: [NpmGlobalPackage]) -> String {
+            switch self {
+            case .brewfile: return InventoryExport.brewfile(apps: apps, npmGlobals: npmGlobals)
+            case .csv:      return InventoryExport.csv(apps: apps, npmGlobals: npmGlobals)
+            }
+        }
+
+        var defaultFileName: String {
+            switch self {
+            case .brewfile: return "Brewfile"
+            case .csv:      return tr("inwentarz") + ".csv"
+            }
+        }
+    }
+
+    private func export(_ format: ExportFormat) {
+        exportError = nil
+        let content = format.content(apps: apps, npmGlobals: npmGlobals)
+
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = format.defaultFileName
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            exportError = trf("Nie udało się zapisać pliku: %@", error.localizedDescription)
+        }
+    }
 
     private func scan() async {
         await inventory.scan(model: model) { state in
