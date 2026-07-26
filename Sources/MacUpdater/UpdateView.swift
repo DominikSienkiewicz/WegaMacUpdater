@@ -109,6 +109,18 @@ struct UpdateView: View {
                 scan.replayLastScan()
                 UpdateFilterInteraction.apply(updateFilter, to: scan)
             }
+            // UX-10 — expose the scan and the "Zaktualizuj…" action to the menu bar (⌘R, ⌘⏎).
+            // `UpdateView` stays mounted for the whole session, so these are the window's
+            // scan hooks regardless of which destination is on screen; the menu itself gates
+            // ⌘⏎ to the Updates destination.
+            .focusedSceneValue(\.startCheckAction, WegaMenuAction(
+                isEnabled: scan.status != .checking && !scan.updating,
+                run: { scan.startCheck() }
+            ))
+            .focusedSceneValue(\.runUpdateAction, WegaMenuAction(
+                isEnabled: scan.status == .results && !scan.updating && !updateTargets.isEmpty,
+                run: { requestUpdate() }
+            ))
     }
 
     @ViewBuilder

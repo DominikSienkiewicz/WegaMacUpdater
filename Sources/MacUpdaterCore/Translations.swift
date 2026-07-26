@@ -357,6 +357,10 @@ public enum Translations {
         "Usuń regułę": "Remove rule",
         "Sprawdzam…": "Checking…",
         "Sprawdź teraz": "Check now",
+        // UX-10 — menu bar i skróty klawiaturowe (WegaCommands).
+        "Aktualizacje": "Updates",
+        "Aktualizuj": "Update",
+        "Znajdź w spisie aplikacji": "Find in inventory",
         "Otwórz Wega": "Open Wega",
         "Sprawdzaj automatycznie": "Check automatically",
         "Zakończ Wega": "Quit Wega",
