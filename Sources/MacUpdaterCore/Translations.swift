@@ -46,6 +46,7 @@ public enum Translations {
         "Pobierz i otwórz instalator": "Download and open the installer",
         "Pobieram nową wersję Wegi…": "Downloading the new version of Wega…",
         "Pobrałam aktualizację i otwieram instalator — dokończ instalację.": "Downloaded the update and opening the installer — finish the installation.",
+        "Nie udało się pobrać aktualizacji — otwieram stronę wydania.": "Couldn't download the update — opening the release page.",
         "Nic nie pasuje do filtra.": "Nothing matches the filter.",
         "Zmień poziom lub frazę wyszukiwania, żeby zobaczyć więcej zdarzeń.": "Change the level or search term to see more events.",
         "Wyczyść filtr": "Clear filter",
