@@ -38,9 +38,28 @@ enforces, plus the pure-bash guard tests:
 ```
 
 `scripts/check.sh` runs, in order: the `sign-catalog.sh` in-repo-key guard, the `merge.sh`
-guard-rail tests, the `clean.sh` guard, then `swift build`, `swift test` and
-`swiftlint lint --strict`. If your machine has no full Xcode toolchain, `check.sh` stops
-early and tells you so — push the branch and let CI run the build/test/lint jobs.
+guard-rail tests, the source-path guard, the `clean.sh` guard, then `swift build`,
+`swift test` and `swiftlint lint --strict`. If your machine has no full Xcode toolchain,
+`check.sh` stops early and tells you so — push the branch and let CI run the
+build/test/lint jobs.
+
+The source-path guard is the one that needs explaining: `swift build`, `swift test` and
+SwiftLint only ever look at Swift code, so a shell script or a CI workflow that reads a
+source file *by path* is invisible to all three. Moving that file between modules then
+leaves a dangling reference the whole gate still reports as green — which is exactly how
+packaging broke once a module boundary moved. The guard checks that every
+`Sources/**.swift` path hard-coded in `scripts/` or `.github/` still resolves.
+
+### Test framework
+
+**New tests are written in Swift Testing** (`@Test` / `@Suite`). The suite currently holds
+both frameworks, and the migration is incremental: move an XCTest file over when you are
+already changing it, never as a separate sweep.
+
+XCTest stays where its features have no Swift Testing equivalent — `XCTWaiter` and the
+tests that spawn and wait on a real process, for example
+`Tests/MacUpdaterUITests/ScanControlLayoutTests.swift`. Those are a deliberate exception,
+not leftovers, so do not "finish the migration" by rewriting them.
 
 ## Making a change
 
