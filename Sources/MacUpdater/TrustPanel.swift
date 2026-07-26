@@ -25,7 +25,10 @@ import MacUpdaterCore
 /// after the user has selected app B.
 struct TrustPanel: View {
     let path: URL?
-    let caskChecksum: Bool?
+    /// The cask's checksum signal (UX-05). `unknown` — a cask whose download info has not been
+    /// fetched yet, e.g. right after a relaunch — renders as "nieznane", never as a warning, so
+    /// missing data is not mistaken for a negative verdict.
+    let caskChecksum: CaskChecksumSignal
     /// The plain cask token when the inspected item's source is `.cask(token)` — lets the probe
     /// reconcile the watchdog's `"cask:<token>"` publisher history with the real bundle id (I-4).
     let caskToken: String?
@@ -60,11 +63,11 @@ struct TrustPanel: View {
 
     // MARK: Probe (no main-thread I/O)
 
-    static func probe(path: URL?, caskChecksum: Bool?, caskToken: String?) async -> TrustProbeResult {
+    static func probe(path: URL?, caskChecksum: CaskChecksumSignal, caskToken: String?) async -> TrustProbeResult {
         guard let path else {
             return TrustProbeResult(
-                verdict: trustLevel(audit: nil, signatureValid: nil, caskChecksumPresent: caskChecksum),
-                teamID: nil, audit: nil, signatureValid: nil, checksumPresent: caskChecksum)
+                verdict: trustLevel(audit: nil, signatureValid: nil, caskChecksumPresent: caskChecksum.checksumPresence),
+                teamID: nil, audit: nil, signatureValid: nil, checksum: caskChecksum)
         }
         return await Task.detached(priority: .userInitiated) {
             let fresh = CodeSignatureVerifier.teamID(ofAppAt: path)
@@ -84,8 +87,8 @@ struct TrustPanel: View {
             }
             let sig = CodeSignatureVerifier.passesGatekeeperForExecution(at: path)
             return TrustProbeResult(
-                verdict: trustLevel(audit: audit, signatureValid: sig, caskChecksumPresent: caskChecksum),
-                teamID: fresh, audit: audit, signatureValid: sig, checksumPresent: caskChecksum)
+                verdict: trustLevel(audit: audit, signatureValid: sig, caskChecksumPresent: caskChecksum.checksumPresence),
+                teamID: fresh, audit: audit, signatureValid: sig, checksum: caskChecksum)
         }.value
     }
 
@@ -110,12 +113,24 @@ struct TrustPanel: View {
                     value: signatureValid ? tr("ważny") : tr("nieważny"),
                     color: signatureValid ? Color.wegaSuccess : Color.wegaDanger)
             }
-            if let checksumPresent = result.checksumPresent {
-                signalRow(
-                    label: tr("Suma kontrolna"),
-                    value: checksumPresent ? tr("obecna") : tr("brak"),
-                    color: checksumPresent ? Color.wegaSuccess : Color.wegaDanger)
-            }
+            checksumRow(result.checksum)
+        }
+    }
+
+    /// The checksum signal, three-state (UX-05): `unknown` (download info not fetched yet, e.g.
+    /// right after a relaunch) reads as a muted "nieznane" rather than a red "brak", so missing
+    /// data is never shown as a negative verdict. `notApplicable` shows no row at all.
+    @ViewBuilder
+    private func checksumRow(_ signal: CaskChecksumSignal) -> some View {
+        switch signal {
+        case .present:
+            signalRow(label: tr("Suma kontrolna"), value: tr("obecna"), color: Color.wegaSuccess)
+        case .absent:
+            signalRow(label: tr("Suma kontrolna"), value: tr("brak"), color: Color.wegaDanger)
+        case .unknown:
+            signalRow(label: tr("Suma kontrolna"), value: tr("nieznane"), color: .secondary)
+        case .notApplicable:
+            EmptyView()
         }
     }
 
@@ -180,7 +195,7 @@ struct TrustProbeResult: Equatable, Sendable {
     var teamID: String?
     var audit: TeamIDAudit?
     var signatureValid: Bool?
-    var checksumPresent: Bool?
+    var checksum: CaskChecksumSignal
 }
 
 enum TrustProbeState: Equatable {

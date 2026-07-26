@@ -168,18 +168,28 @@ struct InspectorPane: View {
 
     // MARK: 3a. Trust (I-4)
 
-    /// Resolves the Trust panel's inputs per case — only a manual app has a real `.app` path,
-    /// so only it gets real signals; an `OutdatedItem` always probes with `path: nil` and
-    /// therefore always renders `.unavailable` (see `TrustPanel.probe`'s honesty guard).
+    /// Resolves the Trust panel's inputs per case. UX-05: a regular cask now gets the **full**
+    /// trust model too — its resolved `.app` bundle (the very path the header's icon uses) and
+    /// its Homebrew download checksum — rather than always probing with `path: nil` and rendering
+    /// `.unavailable`. A non-cask `OutdatedItem` (formula/App Store/npm) has no bundle and no
+    /// checksum, so it still probes empty. When `caskDownloads` has no entry for a cask (e.g.
+    /// right after a relaunch, before the first scan re-populates it) the checksum reads as
+    /// `.unknown`, never a negative verdict — see `caskChecksumSignal`.
     @ViewBuilder
     private func trustSection(for update: InspectedUpdate) -> some View {
         switch update {
-        case .outdated(let item, _):
-            TrustPanel(path: nil, caskChecksum: nil, caskToken: nil, probeKey: item.key)
+        case .outdated(let item, let iconPath):
+            let token: String? = item.kind == .cask ? item.name : nil
+            TrustPanel(
+                path: item.kind == .cask ? iconPath : nil,
+                caskChecksum: caskChecksumSignal(token: token, downloads: caskDownloads),
+                caskToken: token,
+                probeKey: item.key
+            )
         case .manual(let app):
             TrustPanel(
                 path: app.path,
-                caskChecksum: caskChecksumToken(of: app.source).flatMap { caskDownloads[$0]?.hasChecksum },
+                caskChecksum: caskChecksumSignal(of: app.source, downloads: caskDownloads),
                 caskToken: caskChecksumToken(of: app.source),
                 probeKey: "m:" + app.path.path
             )
@@ -247,14 +257,20 @@ struct InspectorPane: View {
 
     @ViewBuilder
     private func whatsNewContent(notes: String?) -> some View {
-        if let notes, !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        // UX-05: share the list's sanitizer (`ReleaseNotesText`) so the inspector never renders
+        // raw HTML from a Sparkle appcast or the JetBrains API. Notes that are pure markup
+        // collapse to empty and fall through to the "no notes" line, exactly as the list's
+        // disclosure does. The security heuristic stays on the raw notes, matching the header
+        // and the list row.
+        let cleaned = notes.map { ReleaseNotesText.plain(fromHTML: $0) } ?? ""
+        if !cleaned.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                if ReleaseNotesTriage.heuristic(notes).isLikelySecurityFix {
+                if let notes, ReleaseNotesTriage.heuristic(notes).isLikelySecurityFix {
                     Label(tr("możliwa poprawka bezpieczeństwa"), systemImage: "shield.lefthalf.filled")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(Color.wegaDanger)
                 }
-                Text(notes)
+                Text(cleaned)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
