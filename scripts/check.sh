@@ -7,7 +7,8 @@ set -euo pipefail
 # Runs, in order (each must pass before the next — `set -e`):
 #   0. test-sign-catalog-guard  — sign-catalog.sh refuses an in-repo private key
 #   0b. test-merge              — merge.sh guard rails (dirty tree, conflicts, gate)
-#   0c. test-clean-script-guard — root clean.sh cannot regain destructive Git actions
+#   0c. test-source-paths-guard  — no script/workflow reads a source path that moved
+#   0d. test-clean-script-guard — root clean.sh cannot regain destructive Git actions
 #   1. swift build              — compiles app + helper + core
 #   2. swift test               — full unit-test suite
 #   3. swiftlint lint --strict  — zero lint violations (warnings fail too)
@@ -37,6 +38,12 @@ echo "→ ./scripts/test-merge.sh"
 # QA-08: a tracked root clean.sh used to be a one-shot code generator that overwrote
 # sources, committed directly to main and could delete a worktree/branch. Keep that
 # misleading destructive entry point out of the repository.
+# Pure bash as well, and deliberately before the toolchain gate: it catches the one
+# class of breakage `swift build`/`test`/`swiftlint` structurally cannot see — a script
+# or workflow reading a source file by a path that a refactor has since moved.
+echo "→ ./scripts/test-source-paths-guard.sh"
+./scripts/test-source-paths-guard.sh
+
 echo "→ ./scripts/test-clean-script-guard.sh"
 ./scripts/test-clean-script-guard.sh
 

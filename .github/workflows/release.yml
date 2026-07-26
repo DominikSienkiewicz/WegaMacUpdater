@@ -47,7 +47,7 @@ jobs:
       - name: Verify tag matches AppMetadata.version
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          VERSION="$(sed -n 's/.*static let version = "\(.*\)".*/\1/p' Sources/MacUpdaterCore/AppMetadata.swift)"
+          VERSION="$(sed -n 's/.*static let version = "\(.*\)".*/\1/p' Sources/WegaHelperKit/AppMetadata.swift)"
           echo "tag=$TAG appVersion=$VERSION"
           if [[ "$TAG" != "$VERSION" ]]; then
             echo "::error::Tag v$TAG does not match AppMetadata.version $VERSION. Bump the version or fix the tag."
