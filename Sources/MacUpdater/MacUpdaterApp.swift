@@ -39,7 +39,6 @@ struct WegaMacUpdaterApp: App {
 #if DEBUG
                     if await scan.runLayoutRegressionScenarioIfRequested() { return }
 #endif
-                    await model.refreshSystemStatus()
                 }
                 .onAppear {
                     NSApplication.shared.activate(ignoringOtherApps: true)
