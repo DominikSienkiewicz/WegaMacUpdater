@@ -42,6 +42,8 @@ struct LogsView: View {
                 .scrollEdgeEffectStyle(.soft, for: .top)
             }
         }
+        // UX-11c — native `.searchable` in place of the toolbar's hand-built search field.
+        .searchable(text: $search, prompt: tr("Szukaj w logach…"))
         .onAppear {
             filter = initialFilter
             onWegaState?(WegaState(pose: .sniff, line: tr("Zaglądam do notatek…")))
@@ -55,10 +57,6 @@ struct LogsView: View {
             }
             .pickerStyle(.segmented)
             .frame(width: 320)
-
-            TextField(tr("Szukaj w logach…"), text: $search)
-                .textFieldStyle(.roundedBorder)
-                .frame(maxWidth: 240)
 
             Spacer()
 
