@@ -15,7 +15,7 @@ public struct ManualUpdateScanner: Sendable {
 
     public init(
         brewService: BrewService = BrewService(),
-        scanDirectories: [URL] = AppScanDirectories.all(),
+        scanDirectories: [URL] = AppScanDirectories.all(configuration: ScanConfigurationStore.resolvedConfiguration()),
         caskCacheURL: URL = AppScanDirectories.caskDatabaseCacheURL,
         maxConcurrentChecks: Int = 12
     ) {

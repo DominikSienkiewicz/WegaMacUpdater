@@ -232,7 +232,22 @@ extension Translations {
         "Wega uruchomi:\n\n%@\n\nDrugiej kopii (z %@) to nie ruszy.": "Wega will run:\n\n%@\n\nThe other copy (from %@) won't be touched.",
         "Usuń": "Remove",
         "Anuluj": "Cancel",
-        "Tropię intruzów w /Applications i ~/Applications…": "Tracking down intruders in /Applications and ~/Applications…",
+        "Tropię intruzów w Twoich katalogach aplikacji…": "Tracking down intruders in your app folders…",
+        // UX-16 — configurable scan directories, exclusions and recursion depth (Settings).
+        "Katalogi skanowania": "Scan directories",
+        "Wega skanuje /Applications, ~/Applications i ich podfoldery. Dodaj własne katalogi (także na innych wolumenach), pomiń te, których nie chcesz przeszukiwać, i ustaw głębokość zagłębiania.":
+            "Wega scans /Applications, ~/Applications and their subfolders. Add your own directories (including on other volumes), skip the ones you don't want searched, and set how deep to descend.",
+        "Głębokość zagłębiania": "Recursion depth",
+        "0 = tylko sam katalog. 1 = katalog i jego bezpośrednie podfoldery.":
+            "0 = the directory only. 1 = the directory and its immediate subfolders.",
+        "Katalogi użytkownika": "Your directories",
+        "Dodaj katalog…": "Add directory…",
+        "Dodaj do skanowania": "Add to scan",
+        "Brak własnych katalogów.": "No custom directories.",
+        "Wykluczenia": "Exclusions",
+        "Dodaj wykluczenie…": "Add exclusion…",
+        "Wyklucz ze skanowania": "Exclude from scan",
+        "Brak wykluczeń.": "No exclusions.",
         "Zwęszyłam %@ aplikacji do przepięcia.": "I sniffed out %@ apps to migrate.",
         "Wszystko porządku. Wega nie znalazła uciekinierów.": "All good. Wega found no runaways.",
         "Instaluję %@ przez Homebrew…": "Installing %@ via Homebrew…",

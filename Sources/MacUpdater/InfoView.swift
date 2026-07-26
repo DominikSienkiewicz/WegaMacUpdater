@@ -39,6 +39,7 @@ extension InfoView {
             VStack(spacing: 14) {
                 appCard
                 languageCard
+                ScanDirectoriesSettingsCard()
                 ResourceGateSettingsCard()
                 BackgroundUpdateConsentSettingsCard()
                 policiesCard

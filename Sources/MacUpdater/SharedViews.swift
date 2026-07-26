@@ -3,11 +3,13 @@ import MacUpdaterCore
 
 // MARK: - Shared scan-directory helper
 
-/// /Applications, ~/Applications, and their immediate non-.app subdirectories.
-/// Implementation lives in `MacUpdaterCore.AppScanDirectories` so the menu-bar agent
-/// shares it.
+/// The built-in roots (/Applications, ~/Applications), any user-added roots, and their
+/// non-.app subdirectories down to the configured recursion depth, minus exclusions
+/// (UX-16). Implementation lives in `MacUpdaterCore.AppScanDirectories` so the menu-bar
+/// agent shares it; the user's configuration is read from `UserDefaults` on each call so a
+/// change in Settings takes effect on the next scan.
 func buildScanDirs() -> [URL] {
-    AppScanDirectories.all()
+    AppScanDirectories.all(configuration: ScanConfigurationStore.resolvedConfiguration())
 }
 
 struct SectionHeader: View {
