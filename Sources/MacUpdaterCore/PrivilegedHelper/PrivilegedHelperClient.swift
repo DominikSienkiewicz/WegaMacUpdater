@@ -183,8 +183,8 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
 
         return try await awaitReplyWithDeadline(
             timeout: deadline,
-            onTimeout: { box.connection.invalidate() }
-        ) { done in
+            onTimeout: { box.connection.invalidate() },
+            body: { done in
             connection.invalidationHandler = { done(.failure(HelperError.connectionFailed)) }
             connection.interruptionHandler = { done(.failure(HelperError.connectionFailed)) }
             connection.resume()
@@ -202,7 +202,7 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
                 done(result)
                 box.connection.invalidate()
             }
-        }
+        })
     }
 }
 
@@ -247,7 +247,7 @@ private final class Once<T>: @unchecked Sendable {
 func awaitReplyWithDeadline<T: Sendable>(
     timeout: Duration,
     onTimeout: @escaping @Sendable () -> Void = {},
-    _ body: (_ done: @escaping @Sendable (sending Result<T, Error>) -> Void) -> Void
+    body: (_ done: @escaping @Sendable (sending Result<T, Error>) -> Void) -> Void
 ) async throws -> T {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<T, Error>) in
         let once = Once(continuation)

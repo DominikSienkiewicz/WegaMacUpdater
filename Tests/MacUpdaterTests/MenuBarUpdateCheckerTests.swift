@@ -107,12 +107,16 @@ final class MenuBarUpdateCheckerTests: XCTestCase {
         )
         let manual = [manualApp("Transmission")]
 
+        // REL-11 keyed manual policies by installation identity (bundle id + path) instead of
+        // the display name, so an ignore survives a vendor rename. The key is taken from the
+        // app itself rather than spelled out, so this test pins the behaviour — an ignore is
+        // honoured in the badge total — and not the key format it happens to use today.
         let result = await checker(
             brew: .success(brew),
             scanner: FakeScanner(apps: manual)
         ).availableUpdateCount(policies: [
             "f:wget": .ignored,
-            "manual:transmission": .ignored
+            manual[0].policyKey: .ignored
         ])
 
         // Both suppressed → badge shows 0, but the raw lists are still carried.

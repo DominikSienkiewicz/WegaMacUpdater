@@ -67,7 +67,28 @@ struct P1BackendsTests {
         )
         let merged = base.overlaying(overlay)
         #expect(merged.caskDatabase == base.caskDatabase)                 // zły URL → baseline (DBT-5)
-        #expect(merged.githubLatestRelease == "https://example.test/{repo}") // szablon → nadpisany
+        // SEC-08 zaostrzyło szablony: nadpisanie musi być https ORAZ trafiać na host, z którym
+        // baseline już rozmawia. `example.test` jest poza allowlistą, więc baseline zostaje —
+        // wcześniej ten sam wpis przechodził, bo sprawdzana była tylko składnia URL-a.
+        #expect(merged.githubLatestRelease == base.githubLatestRelease)
+    }
+
+    /// Druga połowa kontraktu SEC-08: zaostrzenie nie może zabić samego mechanizmu overlaya —
+    /// nadpisanie szablonu na hoście z allowlisty ma nadal działać.
+    @Test func overlayAppliesATemplateOverrideOnAnAllowlistedHost() throws {
+        let base = try AppEndpoints.loadBundled()
+        let onAllowlist = "https://api.github.com/repos/{repo}/releases/latest?per_page=1"
+        let overlay = AppEndpointsOverlay(
+            jetbrainsReleases: nil, chatgptAppcast: nil, googleDriveOmaha: nil,
+            caskDatabase: nil, appCatalog: nil,
+            githubLatestRelease: onAllowlist, synologyChangeLog: nil,
+            antigravityUpdate: nil, parallelsUpdates: nil, postmanUpdate: nil,
+            discordUpdate: nil, signalUpdate: nil, chromeVersions: nil, homebrewWebsite: nil,
+            homebrewInstallCommand: nil, githubReleasesPage: nil, googleDriveDownload: nil,
+            projectRepository: nil, projectIssues: nil, authorLinkedIn: nil, masRepository: nil
+        )
+
+        #expect(base.overlaying(overlay).githubLatestRelease == onAllowlist)
     }
 
     // MARK: FEAT-03 — transparentność (host + checksum vs no_check)

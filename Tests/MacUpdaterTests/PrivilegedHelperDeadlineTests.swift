@@ -15,9 +15,9 @@ struct PrivilegedHelperDeadlineTests {
         let clock = ContinuousClock()
         let start = clock.now
         do {
-            let _: String = try await awaitReplyWithDeadline(timeout: .milliseconds(100)) { _ in
+            let _: String = try await awaitReplyWithDeadline(timeout: .milliseconds(100), body: { _ in
                 // Simulate a dead helper: the reply callback is never invoked.
-            }
+            })
             Issue.record("expected the deadline to fire, not a value")
         } catch let error as PrivilegedHelperClient.HelperError {
             guard case .timedOut = error else {
@@ -35,10 +35,9 @@ struct PrivilegedHelperDeadlineTests {
         let flag = TimeoutFlag()
         let value: Int = try await awaitReplyWithDeadline(
             timeout: .seconds(30),
-            onTimeout: { flag.mark() }
-        ) { done in
-            done(.success(7))
-        }
+            onTimeout: { flag.mark() },
+            body: { done in done(.success(7)) }
+        )
         #expect(value == 7)
         #expect(flag.fired == false)
     }
@@ -46,9 +45,9 @@ struct PrivilegedHelperDeadlineTests {
     @Test func errorReplyPropagatesBeforeDeadline() async {
         struct Boom: Error {}
         do {
-            let _: Int = try await awaitReplyWithDeadline(timeout: .seconds(30)) { done in
+            let _: Int = try await awaitReplyWithDeadline(timeout: .seconds(30), body: { done in
                 done(.failure(Boom()))
-            }
+            })
             Issue.record("expected the error to propagate")
         } catch is Boom {
             // expected
