@@ -364,7 +364,8 @@ public enum Translations {
         "Sprawdzaj automatycznie": "Check automatically",
         "Zakończ Wega": "Quit Wega",
         "Sprawdzam aktualizacje…": "Checking for updates…",
-        "%@ aktualizacji dostępnych": "%@ updates available",
+        // UX-08 — „%@ aktualizacji dostępnych" jest odmieniane przez liczbę: warianty
+        // one/few/many trzyma `Plurals`, a menu bar woła `trp(base, count)` zamiast `trf`.
         "Nie udało się sprawdzić": "Check failed",
         "Jeszcze nie sprawdzano": "Not checked yet",
         "%@ do aktualizacji": "%@ to update",
