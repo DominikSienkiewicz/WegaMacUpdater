@@ -16,7 +16,7 @@ struct MenuBarLabel: View {
             }
         }
         .accessibilityLabel(count > 0
-            ? trf("%@ aktualizacji dostępnych", "\(count)")
+            ? trp("%@ aktualizacji dostępnych", count)
             : tr("Wszystko aktualne"))
     }
 }
@@ -79,7 +79,7 @@ struct MenuBarContent: View {
 
     private var statusText: String {
         if agent.isChecking { return tr("Sprawdzam aktualizacje…") }
-        if agent.updateCount > 0 { return trf("%@ aktualizacji dostępnych", "\(agent.updateCount)") }
+        if agent.updateCount > 0 { return trp("%@ aktualizacji dostępnych", agent.updateCount) }
         if agent.lastCheckFailed { return tr("Nie udało się sprawdzić") }
         if agent.lastCheck == nil { return tr("Jeszcze nie sprawdzano") }
         return tr("Wszystko aktualne")

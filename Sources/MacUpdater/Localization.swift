@@ -39,6 +39,15 @@ public func trf(_ base: String, _ args: CVarArg...) -> String {
     String(format: tr(base), arguments: args)
 }
 
+/// Plural-aware variant of `trf`. `base` is the Polish base string (same key style as
+/// `tr`); `count` picks the grammatically-correct one/few/many form for the active
+/// language — Polish rules: 1 · 2–4 except 12–14 · the rest — and is inserted for the
+/// `%@` placeholder. A base without registered plural forms degrades to `trf(base, count)`.
+public func trp(_ base: String, _ count: Int) -> String {
+    pluralize(base, count: count, language: LocalizedStrings.current)
+        ?? trf(base, "\(count)")
+}
+
 /// Observable language selection, persisted across launches. With nothing persisted the
 /// system locale decides — see `defaultLanguage(preferredLanguages:)`.
 @MainActor
