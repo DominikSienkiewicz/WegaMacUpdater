@@ -1,17 +1,5 @@
 import Foundation
 
-/// A count-only view of a menu-bar check. Kept for callers (and any future ones)
-/// that only need the badge numbers; ``MenuBarScanResult/countResult`` produces it.
-public struct UpdateCountResult: Equatable, Sendable {
-    public var total: Int
-    public var failedChecks: Int
-
-    public init(total: Int, failedChecks: Int) {
-        self.total = total
-        self.failedChecks = failedChecks
-    }
-}
-
 /// The **full** result of a menu-bar background check: the raw per-source outdated
 /// lists (`brew`/`mas`/`npm`) and the manual-scan result (`manualApps` + `failedChecks`),
 /// plus the policy-filtered badge `total` and a `scannedAt` timestamp.
@@ -19,8 +7,7 @@ public struct UpdateCountResult: Equatable, Sendable {
 /// The background check already builds all of these lists to arrive at the count, so
 /// carrying them out (instead of discarding them) lets the app window render the result
 /// immediately rather than re-scanning from zero. `total` and `failedChecks` are stored
-/// so existing count-only callers (`MenuBarAgent`) keep working unchanged, and
-/// ``countResult`` hands back the legacy ``UpdateCountResult`` view.
+/// so existing count-only callers (`MenuBarAgent`) keep working unchanged.
 public struct MenuBarScanResult: Equatable, Sendable {
     /// Raw `brew outdated` result (formulae + casks), or `nil` when brew is not
     /// installed or its check errored.
@@ -57,11 +44,6 @@ public struct MenuBarScanResult: Equatable, Sendable {
         self.failedChecks = failedChecks
         self.scannedAt = scannedAt
         self.total = total
-    }
-
-    /// Count-only projection for callers that only need the badge numbers.
-    public var countResult: UpdateCountResult {
-        UpdateCountResult(total: total, failedChecks: failedChecks)
     }
 
     /// UX-11g — the display names of everything this check found outdated, so the menu-bar
