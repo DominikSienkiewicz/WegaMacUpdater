@@ -441,8 +441,11 @@ extension ScanStore {
         guard reportManualReplacementVerification(verification, token: token) else { return }
 
         if let installError {
+            // UX-07 — the raw, English error text goes to the log below; the banner shows
+            // a short, translated line and points there via "Zobacz w logach".
             showBanner(BannerData(variant: .danger, title: tr("Błąd instalacji"),
-                                  message: installError.localizedDescription))
+                                  message: tr("Nie udało się dokończyć instalacji — szczegóły w logu."),
+                                  action: .openLogs))
             emitActivitySignal(.error)
             emitWegaState(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
             WegaLog.error(.homebrew, "Instalacja \(token): \(installError.localizedDescription)")
