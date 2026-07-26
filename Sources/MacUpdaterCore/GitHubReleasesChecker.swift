@@ -47,17 +47,3 @@ public struct GitHubReleasesChecker: Sendable {
         ))
     }
 }
-
-private struct GitHubRelease: Decodable {
-    let tagName: String
-    let draft: Bool
-    let prerelease: Bool
-    let body: String?
-
-    enum CodingKeys: String, CodingKey {
-        case tagName = "tag_name"
-        case draft
-        case prerelease
-        case body
-    }
-}

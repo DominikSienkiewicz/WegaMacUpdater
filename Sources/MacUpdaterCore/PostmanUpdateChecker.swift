@@ -6,8 +6,6 @@ import Foundation
 ///   build exists — `name` is the version to offer.
 /// - **204 No Content** when the running build is already current.
 public enum PostmanUpdateParser {
-    private struct SquirrelResponse: Decodable { let name: String }
-
     /// Returns the `name` (latest version) from a Squirrel 200 body, or nil when the
     /// body is empty/unparseable or carries no version.
     public static func latestVersion(fromSquirrelJSON data: Data) -> String? {
