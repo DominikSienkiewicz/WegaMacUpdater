@@ -29,7 +29,6 @@ struct UninstallView: View {
     /// machine from a failed scan and drives the incomplete-data warning before uninstall.
     @State private var scanFailed:     Bool              = false
     @State private var banner:         BannerData?
-    @FocusState private var searchFocused: Bool
 
     private var isLoading: Bool { operations.isScanning }
     private var isUninstalling: Bool { operations.isUninstalling }
@@ -72,20 +71,6 @@ struct UninstallView: View {
                             .foregroundStyle(.tertiary)
                     }
                     Spacer()
-                    HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary).font(.system(size: 13))
-                        TextField(tr("Szukaj…"), text: $search)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 12))
-                            .frame(width: 180)
-                            .focused($searchFocused)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(NSColor.controlBackgroundColor), in: RoundedRectangle(cornerRadius: 7))
-                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.white.opacity(0.08), lineWidth: 1))
-                    .onTapGesture { searchFocused = true }
-
                     Button { Task { await scan() } } label: {
                         Label(tr("Odśwież"), systemImage: "arrow.clockwise")
                     }
@@ -230,6 +215,8 @@ struct UninstallView: View {
             }
 
         }
+        // UX-11c — native `.searchable` in place of the header's hand-built search field.
+        .searchable(text: $search, prompt: tr("Szukaj…"))
         .sheet(isPresented: $showDialog) {
             UninstallDialog(
                 targets:     pendingUninstallTargets,

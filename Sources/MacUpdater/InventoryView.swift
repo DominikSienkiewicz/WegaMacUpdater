@@ -12,8 +12,8 @@ struct InventoryView: View {
     var onWegaState: ((WegaState) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
-    /// UX-10 — ⌘F ("Znajdź w spisie aplikacji") asks, through here, for the search field below
-    /// to take focus.
+    /// UX-10 — ⌘F ("Znajdź w spisie aplikacji") asks, through here, for the `.searchable`
+    /// field to take focus.
     @EnvironmentObject private var commandCenter: WegaCommandCenter
 
     @StateObject private var inventory = InventoryStore()
@@ -74,19 +74,6 @@ struct InventoryView: View {
 
             // Toolbar
             HStack(spacing: 10) {
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary).font(.system(size: 13))
-                    TextField(tr("Szukaj po nazwie lub bundle ID…"), text: $search)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12))
-                        .focused($searchFocused)
-                }
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(Color(NSColor.controlBackgroundColor), in: RoundedRectangle(cornerRadius: 7))
-                .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.white.opacity(0.08), lineWidth: 1))
-                .frame(width: 240)
-                .onTapGesture { searchFocused = true }
-
                 FilterPills(selection: $filter)
 
                 Spacer()
@@ -190,6 +177,10 @@ struct InventoryView: View {
                     .padding(.bottom, 16)
             }
         }
+        // UX-11c — native search (`.searchable`) in place of the hand-built toolbar field.
+        // `.searchFocused` keeps UX-10's ⌘F able to move focus into it.
+        .searchable(text: $search, prompt: tr("Szukaj po nazwie lub bundle ID…"))
+        .searchFocused($searchFocused)
         .task { await scan() }
         // UX-10 — ⌘F pressed while already here fires `.onChange`; pressed from another
         // destination it navigates here first, so the request is instead consumed on appear.
