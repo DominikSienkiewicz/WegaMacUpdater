@@ -19,6 +19,9 @@ final class InspectorTrustModelTests: XCTestCase {
         func write(_ data: Data) throws {}
     }
 
+    // `ScanStore` is main-actor isolated, so its factory has to be too — the callers below
+    // already are.
+    @MainActor
     private func store(with snapshot: ScanSnapshot) throws -> ScanStore {
         let data = try JSONEncoder().encode(snapshot)
         return ScanStore(resultStore: ScanResultStore(io: StubIO(data: data)))
