@@ -654,6 +654,10 @@ extension Translations {
         "Szukaj w logach…": "Search logs…",
         "Pokaż w Finderze": "Show in Finder",
         "Kopiuj": "Copy",
+        // UX-11d — uninstall-list row context menu.
+        "Kopiuj ścieżkę": "Copy path",
+        "Zaznacz do odinstalowania": "Select for uninstall",
+        "Odznacz": "Deselect",
         "Wyczyść": "Clear",
         "Wyczyścić logi?": "Clear the logs?",
         "Cicho jak makiem zasiał — żadnych zdarzeń.": "All quiet — no events.",

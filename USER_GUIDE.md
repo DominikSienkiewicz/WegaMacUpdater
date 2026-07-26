@@ -205,7 +205,8 @@ The **Uninstall** screen removes any app regardless of origin (casks via `brew u
 safe **"App only"**; the irreversible **"App + leftovers"** (which also deletes
 preferences, caches and Application Support) is never pre-selected. If a scan couldn't read
 a source, the dialog warns that the target list may be incomplete before anything is
-removed.
+removed. **Right-click any app in the list** to show it in Finder, copy its path, or toggle
+whether it's marked for removal.
 
 ---
 
