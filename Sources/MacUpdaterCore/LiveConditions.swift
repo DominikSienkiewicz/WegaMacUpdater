@@ -6,11 +6,10 @@ import IOKit.ps
 
 /// Live system-condition probes feeding `DownloadGate` (**FEAT-07 / I-4**).
 ///
-/// Scope: thermal state (`ProcessInfo`, cheap+public) and network cost
-/// (`NWPathMonitor.isExpensive`/`isConstrained`). Battery-level probing
-/// (IOKit `IOPowerSources`) is a deliberate follow-up — `DownloadGate` already
-/// supports it (pure + tested); here we report thermal+network only, which are
-/// the primary FinOps signals (metered link, thermal throttle).
+/// Scope: thermal state (`ProcessInfo`, cheap+public), network cost
+/// (`NWPathMonitor.isExpensive`/`isConstrained`), and battery level via IOKit
+/// `IOPowerSources`. Together these are the primary FinOps signals (metered
+/// link, thermal throttle, on-battery draw) that `DownloadGate` consumes.
 public enum LiveConditions {
 
     /// One-shot read of the current network path (expensive/constrained). Falls
