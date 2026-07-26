@@ -275,6 +275,18 @@ public enum Translations {
         "Aport albo zostaw?": "Fetch or leave it?",
         "Brak aplikacji": "No apps",
         "Nie znaleziono żadnych zainstalowanych aplikacji.": "No installed apps were found.",
+        // REL-14 — surfacing swallowed scan failures in Inventory and Uninstall.
+        "Homebrew": "Homebrew",
+        "katalog Homebrew": "Homebrew catalog",
+        "skan aplikacji": "application scan",
+        "pakiety npm": "npm packages",
+        "Część źródeł skanu zawiodła (%@) — lista może być niekompletna.":
+            "Some scan sources failed (%@) — the list may be incomplete.",
+        "Skan się nie powiódł": "Scan failed",
+        "Nie udało się odczytać listy zainstalowanych aplikacji. Spróbuj ponownie.":
+            "Could not read the list of installed apps. Try again.",
+        "Skan aplikacji był niekompletny — lista celów może nie zawierać wszystkich instalacji. Zweryfikuj przed usunięciem.":
+            "The app scan was incomplete — the target list may be missing some installations. Verify before removing.",
         "Aport! Zabieram to z dysku…": "Fetch! Taking it off the disk…",
         "%@ przez brew": "%@ via brew",
         "%@ do Kosza": "%@ to Trash",
