@@ -12,16 +12,9 @@ struct RestartSection: View {
 
     var body: some View {
         WegaCard {
-            HStack(spacing: 8) {
-                Image(systemName: "arrow.clockwise.circle").foregroundStyle(Color.wegaHoney)
-                Text(tr("Do restartu")).font(.system(size: 13, weight: .semibold))
-                Text("\(candidates.count)").font(.system(size: 12, design: .monospaced)).foregroundStyle(.tertiary)
-                Text(tr("były otwarte podczas aktualizacji")).font(.system(size: 11)).foregroundStyle(.tertiary)
-                Spacer()
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+            WegaCardHeader(icon: "arrow.clockwise.circle", title: tr("Do restartu"),
+                           count: candidates.count,
+                           note: tr("były otwarte podczas aktualizacji"))
 
             ForEach(candidates, id: \.processName) { info in
                 HStack(spacing: 12) {
@@ -152,16 +145,7 @@ struct UpdateSection: View {
 
     var body: some View {
         WegaCard {
-            HStack(spacing: 8) {
-                Image(systemName: icon).foregroundStyle(Color.wegaHoney)
-                Text(title).font(.system(size: 13, weight: .semibold))
-                Text("\(items.count)").font(.system(size: 12, design: .monospaced)).foregroundStyle(.tertiary)
-                Text(subtitle).font(.system(size: 11)).foregroundStyle(.tertiary)
-                Spacer()
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+            WegaCardHeader(icon: icon, title: title, count: items.count, note: subtitle)
 
             ForEach(items) { item in
                 PackageRow(
@@ -297,29 +281,8 @@ struct ManualUpdateSection: View {
 
     var body: some View {
         WegaCard {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Image(systemName: icon).foregroundStyle(Color.wegaHoney)
-                    Text(title)
-                        .font(.system(size: 13, weight: .semibold))
-                    Text("\(items.count)")
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-                    if let subtitle {
-                        Text(subtitle).font(.system(size: 11)).foregroundStyle(.tertiary)
-                    }
-                    Spacer()
-                }
-                if let caption {
-                    Text(caption)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+            WegaCardHeader(icon: icon, title: title, count: items.count,
+                           note: subtitle, caption: caption)
 
             ForEach(items, id: \.path) { item in
                 let isInspected = "m:" + item.path.path == inspectedKey

@@ -15,13 +15,8 @@ struct ResourceGateSettingsCard: View {
     var body: some View {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
-                Label(tr("Bramka zasobów"), systemImage: "externaldrive.badge.checkmark")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.wegaHoney)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+                WegaCardHeader(icon: "externaldrive.badge.checkmark", title: tr("Bramka zasobów"),
+                               titleTinted: true)
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text(tr("Wega sprawdza miejsce, łącze, baterię i temperaturę przed snapshotem i pobraniem."))

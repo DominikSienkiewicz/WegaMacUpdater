@@ -71,21 +71,13 @@ struct BackgroundUpdateConsentSettingsCard: View {
   }
 
   private var header: some View {
-    HStack(spacing: 8) {
-      Image(systemName: "clock.arrow.2.circlepath")
-        .foregroundStyle(Color.wegaHoney)
-      Text(tr("Zgody na aktualizacje w tle"))
-        .font(.system(size: 13, weight: .semibold))
-      Spacer()
+    WegaCardHeader(icon: "clock.arrow.2.circlepath", title: tr("Zgody na aktualizacje w tle")) {
       if !store.consents.isEmpty {
         Text("\(store.consents.count)")
           .font(.system(size: 12, design: .monospaced))
           .foregroundStyle(.tertiary)
       }
     }
-    .padding(.horizontal, 14)
-    .padding(.vertical, 10)
-    .overlay(alignment: .bottom) { Divider().opacity(0.5) }
   }
 
   private var emptyState: some View {

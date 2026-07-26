@@ -163,18 +163,8 @@ struct MigrationView: View {
 
                 // Matchable section
                 WegaCard(padded: false) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.wegaSuccess)
-                        Text(tr("Można przepiąć pod Homebrew"))
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("\(matchable.count)")
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(.tertiary)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+                    WegaCardHeader(icon: "checkmark.circle.fill", tint: Color.wegaSuccess,
+                                   title: tr("Można przepiąć pod Homebrew"), count: matchable.count)
 
                     if matchable.isEmpty {
                         Text(tr("Wszystko już przygarnięte. Dobra robota."))
@@ -204,19 +194,11 @@ struct MigrationView: View {
                 // npm ↔ brew duplicates section
                 if !npmBrewDuplicates.isEmpty {
                     WegaCard(padded: false) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.arrow.triangle.2.circlepath").foregroundStyle(Color.wegaDanger)
-                            Text(tr("Te same narzędzia w npm i brew"))
-                                .font(.system(size: 13, weight: .semibold))
-                            Text("\(npmBrewDuplicates.count)")
-                                .font(.system(size: 12, design: .monospaced))
-                                .foregroundStyle(.tertiary)
-                            Text(tr("ryzyko rozjazdu wersji w PATH")).font(.system(size: 11)).foregroundStyle(.tertiary)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+                        WegaCardHeader(icon: "exclamationmark.arrow.triangle.2.circlepath",
+                                       tint: Color.wegaDanger,
+                                       title: tr("Te same narzędzia w npm i brew"),
+                                       count: npmBrewDuplicates.count,
+                                       note: tr("ryzyko rozjazdu wersji w PATH"))
 
                         ForEach(npmBrewDuplicates, id: \.npmPackage) { dup in
                             HStack(spacing: 12) {
@@ -270,18 +252,9 @@ struct MigrationView: View {
                 // App Store candidates section
                 if !masCandidates.isEmpty {
                     WegaCard(padded: false) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "basket.fill").foregroundStyle(Color.wegaInfo)
-                            Text(tr("Można przenieść do App Store"))
-                                .font(.system(size: 13, weight: .semibold))
-                            Text("\(masCandidates.count)")
-                                .font(.system(size: 12, design: .monospaced))
-                                .foregroundStyle(.tertiary)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+                        WegaCardHeader(icon: "basket.fill", tint: Color.wegaInfo,
+                                       title: tr("Można przenieść do App Store"),
+                                       count: masCandidates.count)
 
                         ForEach(masCandidates, id: \.app.id) { item in
                             AppStoreMigrationRow(
@@ -299,19 +272,10 @@ struct MigrationView: View {
                 // Unmatched section
                 if !unmatched.isEmpty {
                     WegaCard(padded: false) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.triangle").foregroundStyle(.tertiary)
-                            Text(tr("Bez odpowiednika w Homebrew"))
-                                .font(.system(size: 13, weight: .semibold))
-                            Text("\(unmatched.count)")
-                                .font(.system(size: 12, design: .monospaced))
-                                .foregroundStyle(.tertiary)
-                            Text(tr("zostaną zarządzane ręcznie")).font(.system(size: 11)).foregroundStyle(.tertiary)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+                        WegaCardHeader(icon: "exclamationmark.triangle", tint: AnyShapeStyle(.tertiary),
+                                       title: tr("Bez odpowiednika w Homebrew"),
+                                       count: unmatched.count,
+                                       note: tr("zostaną zarządzane ręcznie"))
 
                         ForEach(unmatched) { app in
                             HStack(spacing: 12) {

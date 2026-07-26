@@ -149,6 +149,109 @@ struct WegaCard<Content: View>: View {
     }
 }
 
+// MARK: - WegaCardHeader
+
+/// The standard header row for a `WegaCard`: a tinted SF Symbol, a 13-pt semibold title,
+/// an optional inline count and note, an optional caption line, and an optional trailing
+/// accessory. It replaces the ~20 hand-rolled copies of the same
+/// `HStack + padding + bottom divider` chrome, so the card-header layout has a single
+/// definition (ARCH-07g).
+///
+/// Layout, matching the pattern it replaces:
+///
+///     [icon] title [count] [note] ──Spacer── [trailing]
+///
+/// with an optional `caption` rendered on a second line under the row. `count` and `note`
+/// sit on the left next to the title; `trailing` sits on the right, after the spacer.
+struct WegaCardHeader<Trailing: View>: View {
+    let icon: String
+    let tint: AnyShapeStyle
+    let title: String
+    /// Tints the title text with `tint` too — the `Label`-style look the settings cards used.
+    /// Otherwise the title keeps the default primary colour, like every other card.
+    let titleTinted: Bool
+    /// Monospaced count shown right after the title (how many items the card lists).
+    let count: Int?
+    /// Short tertiary note shown after the count (e.g. "ryzyko rozjazdu wersji w PATH").
+    let note: String?
+    /// Optional one-line explanation rendered under the header row.
+    let caption: String?
+    let trailing: Trailing
+
+    init(icon: String, tint: Color = .wegaHoney, title: String, titleTinted: Bool = false,
+         count: Int? = nil, note: String? = nil, caption: String? = nil,
+         @ViewBuilder trailing: () -> Trailing) {
+        self.icon = icon
+        self.tint = AnyShapeStyle(tint)
+        self.title = title
+        self.titleTinted = titleTinted
+        self.count = count
+        self.note = note
+        self.caption = caption
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: icon).foregroundStyle(tint)
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(titleTinted ? tint : AnyShapeStyle(.primary))
+                if let count {
+                    Text("\(count)")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
+                if let note {
+                    Text(note).font(.system(size: 11)).foregroundStyle(.tertiary)
+                }
+                Spacer()
+                trailing
+            }
+            if let caption {
+                Text(caption)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+    }
+}
+
+extension WegaCardHeader {
+    /// A tint that is not one of the palette `Color`s (e.g. `.tertiary` for a muted header).
+    init(icon: String, tint: AnyShapeStyle, title: String, titleTinted: Bool = false,
+         count: Int? = nil, note: String? = nil, caption: String? = nil,
+         @ViewBuilder trailing: () -> Trailing) {
+        self.icon = icon
+        self.tint = tint
+        self.title = title
+        self.titleTinted = titleTinted
+        self.count = count
+        self.note = note
+        self.caption = caption
+        self.trailing = trailing()
+    }
+}
+
+extension WegaCardHeader where Trailing == EmptyView {
+    init(icon: String, tint: Color = .wegaHoney, title: String, titleTinted: Bool = false,
+         count: Int? = nil, note: String? = nil, caption: String? = nil) {
+        self.init(icon: icon, tint: tint, title: title, titleTinted: titleTinted,
+                  count: count, note: note, caption: caption) { EmptyView() }
+    }
+
+    init(icon: String, tint: AnyShapeStyle, title: String, titleTinted: Bool = false,
+         count: Int? = nil, note: String? = nil, caption: String? = nil) {
+        self.init(icon: icon, tint: tint, title: title, titleTinted: titleTinted,
+                  count: count, note: note, caption: caption) { EmptyView() }
+    }
+}
+
 // MARK: - AppIcon
 
 struct AppIcon: View {
