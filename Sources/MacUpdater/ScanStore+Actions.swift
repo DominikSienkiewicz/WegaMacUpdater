@@ -997,18 +997,23 @@ extension ScanStore {
         defer { cleaningStaleCasks = false }
 
         var removed: [String] = []
+        var failed: [String] = []
         for token in staleCasks {
             if (try? await model.brewService.uninstallCask(token: token, force: true)) != nil {
                 removed.append(token)
             } else {
+                failed.append(token)
                 WegaLog.error(.homebrew, "Nie udało się usunąć nieaktualnego casku: \(token)")
             }
         }
         staleCasks.removeAll { removed.contains($0) }
-        WegaLog.info(.homebrew, "Usunięto nieaktualne caski: \(removed.joined(separator: ", "))")
-        showBanner(BannerData(variant: .success,
-                              title: trf("Usunięto %@ nieaktualnych casków", "\(removed.count)"),
-                              message: tr("Homebrew nie śledzi już aplikacji, których nie ma na dysku.")))
+        if !removed.isEmpty {
+            WegaLog.info(.homebrew, "Usunięto nieaktualne caski: \(removed.joined(separator: ", "))")
+        }
+        // REL-13 — the banner reflects the real result: a full failure ("Usunięto 0") is no
+        // longer dressed up as success, and a partial sweep says so.
+        let outcome = StaleCaskCleanupOutcome.classify(removed: removed.count, failed: failed.count)
+        showBanner(StaleCaskCleanupPresentation.banner(for: outcome))
     }
 
     /// The user does not want to clean up now. Drop the card for this scan.

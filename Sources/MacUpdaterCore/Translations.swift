@@ -563,6 +563,13 @@ extension Translations {
         "Usunięto %@ nieaktualnych casków": "Removed %@ stale casks",
         "Homebrew nie śledzi już aplikacji, których nie ma na dysku.":
             "Homebrew no longer tracks apps that are gone from disk.",
+        // REL-13 — czyszczenie stale-casków rozgałęzia komunikat na sukces/częściowy/porażkę.
+        "Usunięto %@ z %@ nieaktualnych casków": "Removed %@ of %@ stale casks",
+        "Reszty nie udało się wyrejestrować — szczegóły są w logach.":
+            "The rest could not be deregistered — see the log for details.",
+        "Nie udało się usunąć nieaktualnych casków": "Could not remove the stale casks",
+        "Homebrew nadal śledzi %@ casków bez aplikacji — szczegóły są w logach.":
+            "Homebrew still tracks %@ casks with no app — see the log for details.",
         "Narzędzia": "Tools",
         // Sidebar taxonomy — update-category filter sections.
         "Do aktualizacji": "To update",
