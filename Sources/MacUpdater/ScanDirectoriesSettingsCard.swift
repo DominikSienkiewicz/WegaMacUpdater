@@ -64,13 +64,8 @@ struct ScanDirectoriesSettingsCard: View {
     var body: some View {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
-                Label(tr("Katalogi skanowania"), systemImage: "folder.badge.gearshape")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.wegaHoney)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+                WegaCardHeader(icon: "folder.badge.gearshape", title: tr("Katalogi skanowania"),
+                               titleTinted: true)
 
                 VStack(alignment: .leading, spacing: 12) {
                     Text(tr("Wega skanuje /Applications, ~/Applications i ich podfoldery. Dodaj własne katalogi (także na innych wolumenach), pomiń te, których nie chcesz przeszukiwać, i ustaw głębokość zagłębiania."))
