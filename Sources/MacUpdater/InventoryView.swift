@@ -12,6 +12,9 @@ struct InventoryView: View {
     var onWegaState: ((WegaState) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
+    /// UX-10 — ⌘F ("Znajdź w spisie aplikacji") asks, through here, for the search field below
+    /// to take focus.
+    @EnvironmentObject private var commandCenter: WegaCommandCenter
 
     @StateObject private var inventory = InventoryStore()
     @State private var search:       String            = ""
@@ -168,6 +171,16 @@ struct InventoryView: View {
             }
         }
         .task { await scan() }
+        // UX-10 — ⌘F pressed while already here fires `.onChange`; pressed from another
+        // destination it navigates here first, so the request is instead consumed on appear.
+        .onAppear { focusSearchIfRequested() }
+        .onChange(of: commandCenter.inventorySearchFocusRequests) { _, _ in focusSearchIfRequested() }
+    }
+
+    private func focusSearchIfRequested() {
+        guard commandCenter.consumePendingInventorySearchFocus() else { return }
+        // A field that is only just appearing needs a runloop tick before it accepts focus.
+        Task { @MainActor in searchFocused = true }
     }
 
     private func setFilter(_ f: SourceFilter) { filter = filter == f ? .all : f }

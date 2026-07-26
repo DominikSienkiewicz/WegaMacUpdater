@@ -18,6 +18,9 @@ public enum Translations {
         "pewne": "confident",
         "sprawdź": "review",
         "niepewne": "uncertain",
+        // REL-08 — niska pewność dopasowania blokuje automatyczne przejęcie (`--force`).
+        "Dopasowanie %@ → %@ jest zbyt niepewne, aby przepiąć automatycznie. Zweryfikuj je ręcznie przed migracją.":
+            "The %@ → %@ match is too uncertain to migrate automatically. Verify it manually before migrating.",
         // SEC-08 — token GitHub (Keychain).
         "Token GitHub (opcjonalny)": "GitHub token (optional)",
         "Zapisany": "Saved",
@@ -116,6 +119,10 @@ public enum Translations {
         "Zaznacz wszystko": "Select all",
         "Zaznaczone": "Selected",
         "Niezaznaczone": "Not selected",
+        // UX-09 — colour-independent VoiceOver status for the Updates sidebar scan icon.
+        "Sprawdzanie w toku": "Checking in progress",
+        "Sprawdzono bez błędów": "Checked, no errors",
+        "Skan nie powiódł się": "Scan failed",
         "Zamknij": "Close",
         "%@ z %@ zaznaczonych": "%@ of %@ selected",
         "Homebrew Formulae": "Homebrew Formulae",
@@ -346,6 +353,7 @@ public enum Translations {
         "Info": "Info",
         "Język interfejsu": "Interface language",
         "Nie aktualizuj": "Don't update",
+        "Pomiń tę wersję": "Skip this version",
         "Przypnij wersję…": "Pin version…",
         "Przypnij wersję": "Pin version",
         "Przypnij": "Pin",
@@ -354,14 +362,20 @@ public enum Translations {
         "Brak reguł. Kliknij aktualizację prawym przyciskiem, aby ją zignorować lub przypiąć wersję.": "No rules. Right-click an update to ignore it or pin a version.",
         "Ignorowane": "Ignored",
         "Przypięte do %@": "Pinned to %@",
+        "Pominięta wersja %@": "Skipped version %@",
         "Usuń regułę": "Remove rule",
         "Sprawdzam…": "Checking…",
         "Sprawdź teraz": "Check now",
+        // UX-10 — menu bar i skróty klawiaturowe (WegaCommands).
+        "Aktualizacje": "Updates",
+        "Aktualizuj": "Update",
+        "Znajdź w spisie aplikacji": "Find in inventory",
         "Otwórz Wega": "Open Wega",
         "Sprawdzaj automatycznie": "Check automatically",
         "Zakończ Wega": "Quit Wega",
         "Sprawdzam aktualizacje…": "Checking for updates…",
-        "%@ aktualizacji dostępnych": "%@ updates available",
+        // UX-08 — „%@ aktualizacji dostępnych" jest odmieniane przez liczbę: warianty
+        // one/few/many trzyma `Plurals`, a menu bar woła `trp(base, count)` zamiast `trf`.
         "Nie udało się sprawdzić": "Check failed",
         "Jeszcze nie sprawdzano": "Not checked yet",
         "%@ do aktualizacji": "%@ to update",
@@ -427,6 +441,7 @@ public enum Translations {
             "The package has an available update, the app is not running, no policy blocks it, and its metadata meets the stable requirements.",
         "Aktualizacje tego pakietu są ignorowane.": "Updates for this package are ignored.",
         "Pakiet jest przypięty do wersji %@.": "The package is pinned to version %@.",
+        "Wersja %@ tego pakietu jest pominięta.": "Version %@ of this package is skipped.",
         "Pakiet nie oczekuje teraz na aktualizację; zgoda pozostaje zapisana.":
             "The package has no update waiting right now; its permission remains saved.",
         "Nie można rozpoznać zainstalowanej aplikacji .app wymaganej do snapshotu i kontroli wyniku.":

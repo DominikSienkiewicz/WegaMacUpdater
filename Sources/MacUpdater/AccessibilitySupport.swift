@@ -6,6 +6,37 @@ func selectionAccessibilityValue(_ isSelected: Bool) -> String {
     isSelected ? tr("Zaznaczone") : tr("Niezaznaczone")
 }
 
+/// UX-09 — colour-independent cues for the Updates sidebar scan status. Success and failure
+/// used to differ only by the icon's colour (green vs red, same glyph) and reached VoiceOver
+/// not at all. A failed scan now swaps the icon's *symbol*, and every observable scan state
+/// carries a spoken `accessibilityValue`, so the status reaches users who cannot tell the
+/// colours apart as well as users on VoiceOver.
+struct ScanStatusAccessibilitySemantics: Equatable {
+    /// The SF Symbol the icon should render — the caller's base symbol, except on failure,
+    /// which substitutes a distinct warning glyph so colour is never the only signal.
+    let symbolName: String
+    /// What VoiceOver announces as the row's value. `nil` while idle: there is no scan status
+    /// to report yet.
+    let accessibilityValue: String?
+
+    init(activity: UpdateActivity, baseSymbol: String) {
+        switch activity {
+        case .idle:
+            symbolName = baseSymbol
+            accessibilityValue = nil
+        case .scanning:
+            symbolName = baseSymbol
+            accessibilityValue = tr("Sprawdzanie w toku")
+        case .success:
+            symbolName = baseSymbol
+            accessibilityValue = tr("Sprawdzono bez błędów")
+        case .error:
+            symbolName = "exclamationmark.triangle.fill"
+            accessibilityValue = tr("Skan nie powiódł się")
+        }
+    }
+}
+
 /// A destructive list may contain two copies with the same display name. Include the
 /// installation location only when the caller has determined that the name is ambiguous.
 func selectionAccessibilityLabel(
