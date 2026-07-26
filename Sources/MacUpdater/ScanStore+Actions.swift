@@ -416,14 +416,8 @@ extension ScanStore {
         var exitCode: Int32 = 0
         do {
             let stream = try model.brewService.events(arguments: installArgs)
-            for try await event in stream {
-                switch event {
-                case .stdout(let chunk), .stderr(let chunk):
-                    let lines = chunk.components(separatedBy: "\n").filter { !$0.isEmpty }
-                    brewLog.append(contentsOf: lines)
-                case .finished(let result):
-                    exitCode = result.exitCode
-                }
+            exitCode = try await ProcessEventStream.drain(stream) { chunk in
+                brewLog = ProcessEventStream.appendingCapped(ProcessEventStream.lines(from: chunk), to: brewLog)
             }
         } catch {
             brewLog.append("error: \(error.localizedDescription)")
@@ -825,16 +819,9 @@ extension ScanStore {
         var exitCode: Int32 = 0
         do {
             let stream = try model.brewService.events(arguments: arguments)
-            for try await event in stream {
-                switch event {
-                case .stdout(let chunk), .stderr(let chunk):
-                    captured += chunk
-                    let lines = chunk.components(separatedBy: "\n").filter { !$0.isEmpty }
-                    brewLog.append(contentsOf: lines)
-                    if brewLog.count > 500 { brewLog.removeFirst(brewLog.count - 500) }
-                case .finished(let result):
-                    exitCode = result.exitCode
-                }
+            exitCode = try await ProcessEventStream.drain(stream) { chunk in
+                captured += chunk
+                brewLog = ProcessEventStream.appendingCapped(ProcessEventStream.lines(from: chunk), to: brewLog)
             }
         } catch {
             brewLog.append("error: \(error.localizedDescription)")
@@ -849,15 +836,8 @@ extension ScanStore {
         var exitCode: Int32 = 0
         do {
             let stream = try model.npmService.upgradeEvents(name: name)
-            for try await event in stream {
-                switch event {
-                case .stdout(let chunk), .stderr(let chunk):
-                    let lines = chunk.components(separatedBy: "\n").filter { !$0.isEmpty }
-                    brewLog.append(contentsOf: lines)
-                    if brewLog.count > 500 { brewLog.removeFirst(brewLog.count - 500) }
-                case .finished(let result):
-                    exitCode = result.exitCode
-                }
+            exitCode = try await ProcessEventStream.drain(stream) { chunk in
+                brewLog = ProcessEventStream.appendingCapped(ProcessEventStream.lines(from: chunk), to: brewLog)
             }
         } catch {
             brewLog.append("error: \(error.localizedDescription)")

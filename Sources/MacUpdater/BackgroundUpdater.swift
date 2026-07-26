@@ -248,15 +248,10 @@ final class BackgroundUpdater {
 
     private func runBrew(arguments: [String]) async -> BrewUpgradeOutcome {
         var captured = ""
-        var exitCode: Int32 = 0
         let brewOutcome: BrewUpgradeOutcome
         do {
-            for try await event in try brewService.events(arguments: arguments) {
-                switch event {
-                case .stdout(let chunk), .stderr(let chunk): captured += chunk
-                case .finished(let result): exitCode = result.exitCode
-                }
-            }
+            let stream = try brewService.events(arguments: arguments)
+            let exitCode = try await ProcessEventStream.drain(stream) { captured += $0 }
             brewOutcome = BrewUpgradeOutcome.analyze(exitCode: exitCode, output: captured)
         } catch {
             brewOutcome = BrewUpgradeOutcome(exitCode: -1, failedTokens: [], errorLines: [error.localizedDescription])

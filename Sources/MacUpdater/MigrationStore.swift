@@ -347,16 +347,10 @@ final class MigrationStore: ObservableObject {
                 // SEC-10: `--` fences the token off from Homebrew's option parsing.
                 arguments: ["install", "--cask", "--force", "--", token]
             )
-            for try await event in stream {
-                switch event {
-                case .stdout(let line), .stderr(let line):
-                    let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmed.isEmpty {
-                        logLines.append(trimmed)
-                        if logLines.count > 200 { logLines.removeFirst() }
-                    }
-                case .finished(let result):
-                    exitCode = result.exitCode
+            exitCode = try await ProcessEventStream.drain(stream) { chunk in
+                let trimmed = chunk.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    logLines = ProcessEventStream.appendingCapped([trimmed], to: logLines)
                 }
             }
         } catch {
@@ -510,19 +504,10 @@ final class MigrationStore: ObservableObject {
 
         var exitCode: Int32 = 0
         do {
-            for try await event in stream {
-                switch event {
-                case .stdout(let chunk), .stderr(let chunk):
-                    for line in chunk.components(separatedBy: "\n") {
-                        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if !trimmed.isEmpty { logLines.append(trimmed) }
-                    }
-                    if logLines.count > 200 {
-                        logLines.removeFirst(logLines.count - 200)
-                    }
-                case .finished(let result):
-                    exitCode = result.exitCode
-                }
+            exitCode = try await ProcessEventStream.drain(stream) { chunk in
+                logLines = ProcessEventStream.appendingCapped(
+                    ProcessEventStream.lines(from: chunk, trimmingWhitespace: true), to: logLines
+                )
             }
         } catch {
             logLines.append("error: \(error.localizedDescription)")
