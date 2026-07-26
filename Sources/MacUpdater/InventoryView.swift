@@ -12,6 +12,9 @@ struct InventoryView: View {
     var onWegaState: ((WegaState) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
+    /// UX-10 — ⌘F ("Znajdź w spisie aplikacji") asks, through here, for the search field below
+    /// to take focus.
+    @EnvironmentObject private var commandCenter: WegaCommandCenter
 
     @StateObject private var inventory = InventoryStore()
     @State private var search:       String            = ""
@@ -168,6 +171,16 @@ struct InventoryView: View {
             }
         }
         .task { await scan() }
+        // UX-10 — ⌘F pressed while already here fires `.onChange`; pressed from another
+        // destination it navigates here first, so the request is instead consumed on appear.
+        .onAppear { focusSearchIfRequested() }
+        .onChange(of: commandCenter.inventorySearchFocusRequests) { _, _ in focusSearchIfRequested() }
+    }
+
+    private func focusSearchIfRequested() {
+        guard commandCenter.consumePendingInventorySearchFocus() else { return }
+        // A field that is only just appearing needs a runloop tick before it accepts focus.
+        Task { @MainActor in searchFocused = true }
     }
 
     private func setFilter(_ f: SourceFilter) { filter = filter == f ? .all : f }
@@ -434,6 +447,12 @@ private struct InventoryRow: View {
                 case .npm, .manual:
                     WegaBadge(label: tr("Ręcznie"), variant: .manual)
                 }
+                // UX-14: an app Wega has no known way to update can be reported to the catalog.
+                // `.manual` provenance alone is not enough — a hand-installed app the catalog
+                // already tracks has a source — so this is gated on `CatalogReporting`, not the badge.
+                if !CatalogReporting.hasKnownUpdateSource(app, catalog: .shared) {
+                    ReportAppButton(app: app)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -445,6 +464,30 @@ private struct InventoryRow: View {
         .padding(.vertical, 8)
         .background(rowBackground)
         .onHover { hovered = $0 }
+    }
+}
+
+/// UX-14 — the Inventory affordance that reports an app Wega has no known way to update. It is the
+/// one and only call site of `CatalogIssueBuilder`: the action builds a prefilled GitHub "new issue"
+/// URL and hands it to `NSWorkspace`, closing the community-catalog loop from the UI.
+private struct ReportAppButton: View {
+    let app: ApplicationInfo
+
+    var body: some View {
+        Button(action: report) {
+            Image(systemName: "plus.bubble")
+                .font(.system(size: 11))
+                .foregroundStyle(Color.wegaHoney)
+        }
+        .buttonStyle(.plain)
+        .help(tr("Zgłoś tę aplikację do katalogu"))
+        .accessibilityLabel(tr("Zgłoś aplikację"))
+    }
+
+    private func report() {
+        let builder = CatalogReporting.issueBuilder(for: app)
+        guard let url = builder.url(newIssueEndpoint: AppEndpoints.shared.projectNewIssueURL) else { return }
+        NSWorkspace.shared.open(url)
     }
 }
 

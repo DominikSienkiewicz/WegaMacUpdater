@@ -42,6 +42,12 @@ final class UpdatePolicyStore: ObservableObject {
         set(UpdatePolicyEntry(key: key, displayName: name, policy: .pinned(version: trimmed)))
     }
 
+    func skip(key: String, name: String, version: String) {
+        let trimmed = version.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        set(UpdatePolicyEntry(key: key, displayName: name, policy: .skipped(version: trimmed)))
+    }
+
     func remove(key: String) {
         entries[key] = nil
         persist()

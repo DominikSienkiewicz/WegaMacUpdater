@@ -35,6 +35,9 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public let googleDriveDownload: String
     public let projectRepository: String
     public let projectIssues: String
+    /// Prefilled "new issue" endpoint the UX-14 Inventory report button targets via
+    /// ``CatalogIssueBuilder``.
+    public let projectNewIssue: String
     public let authorLinkedIn: String
     public let masRepository: String
 
@@ -94,6 +97,7 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public var googleDriveDownloadURL: URL { URL(string: googleDriveDownload)! }
     public var projectRepositoryURL: URL { URL(string: projectRepository)! }
     public var projectIssuesURL: URL { URL(string: projectIssues)! }
+    public var projectNewIssueURL: URL { URL(string: projectNewIssue)! }
     public var authorLinkedInURL: URL { URL(string: authorLinkedIn)! }
     public var masRepositoryURL: URL { URL(string: masRepository)! }
 }
@@ -212,6 +216,7 @@ extension AppEndpoints {
             googleDriveDownload: validURL(other.googleDriveDownload, googleDriveDownload),
             projectRepository: validURL(other.projectRepository, projectRepository),
             projectIssues: validURL(other.projectIssues, projectIssues),
+            projectNewIssue: validURL(other.projectNewIssue, projectNewIssue),
             authorLinkedIn: validURL(other.authorLinkedIn, authorLinkedIn),
             masRepository: validURL(other.masRepository, masRepository)
         )
@@ -246,6 +251,9 @@ public struct AppEndpointsOverlay: Decodable, Sendable, Equatable {
     public let googleDriveDownload: String?
     public let projectRepository: String?
     public let projectIssues: String?
+    // Defaulted (like `obsidianDesktopReleases`) so existing memberwise-init call sites keep
+    // compiling without listing this UX-14 key.
+    public var projectNewIssue: String? = nil
     public let authorLinkedIn: String?
     public let masRepository: String?
 }
