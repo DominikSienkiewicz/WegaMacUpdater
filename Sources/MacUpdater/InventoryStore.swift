@@ -4,6 +4,86 @@ import MacUpdaterCore
 struct InventorySnapshot: Equatable, Sendable {
     let apps: [ApplicationInfo]
     let npmGlobals: [NpmGlobalPackage]
+    /// REL-14: sources that failed during the scan. Empty means the scan was clean;
+    /// a non-empty value means the table is partial and the store raises the banner.
+    let failures: [ScanSourceFailure]
+
+    init(
+        apps: [ApplicationInfo],
+        npmGlobals: [NpmGlobalPackage],
+        failures: [ScanSourceFailure] = []
+    ) {
+        self.apps = apps
+        self.npmGlobals = npmGlobals
+        self.failures = failures
+    }
+
+    /// REL-14: runs every inventory source, recording a `ScanSourceFailure` for each one
+    /// that throws instead of dropping it, and keeps whatever partial data succeeded. A
+    /// brew failure still returns the apps found on disk — it only records that Homebrew
+    /// data is missing. Cancellation is not a scan failure, so it is never recorded.
+    static func collect(
+        directories: [URL],
+        installedCasks: () async throws -> Set<String>,
+        availableCasks: () async throws -> [BrewCask],
+        scanApplications: (_ directory: URL, _ installedCasks: Set<String>, _ availableCasks: [BrewCask]) throws -> [ApplicationInfo],
+        masList: () async throws -> [MasInstalledApp],
+        npmGlobals: () async throws -> [NpmGlobalPackage]
+    ) async -> InventorySnapshot {
+        var failures: [ScanSourceFailure] = []
+
+        var installedCaskTokens: Set<String> = []
+        do { installedCaskTokens = try await installedCasks() }
+        catch is CancellationError {}
+        catch { failures.append(ScanSourceFailure(source: .homebrew, message: error.localizedDescription)) }
+
+        var availableCaskList: [BrewCask] = []
+        do { availableCaskList = try await availableCasks() }
+        catch is CancellationError {}
+        catch { failures.append(ScanSourceFailure(source: .caskCatalog, message: error.localizedDescription)) }
+
+        var found: [ApplicationInfo] = []
+        var applicationsFailure: ScanSourceFailure?
+        for directory in directories {
+            do {
+                found.append(contentsOf: try scanApplications(directory, installedCaskTokens, availableCaskList))
+            } catch is CancellationError {
+                // Navigation cancelled the scan — not a source failure.
+            } catch {
+                applicationsFailure = applicationsFailure
+                    ?? ScanSourceFailure(source: .applications, message: error.localizedDescription)
+            }
+        }
+        if let applicationsFailure { failures.append(applicationsFailure) }
+
+        var apps = InstallationInventory.deduplicated(found)
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+
+        if apps.contains(where: \.isManagedByMas) {
+            do {
+                let masApps = try await masList()
+                let masIndex = masApps.reduce(into: [:]) { index, app in
+                    index[StringNormalizer.normalize(app.name)] = app.appStoreID
+                }
+                apps = apps.map { app in
+                    guard app.isManagedByMas, app.masAppID == nil else { return app }
+                    var updated = app
+                    updated.masAppID = masIndex[StringNormalizer.normalize(app.name)]
+                    return updated
+                }
+            } catch is CancellationError {
+            } catch {
+                failures.append(ScanSourceFailure(source: .appStore, message: error.localizedDescription))
+            }
+        }
+
+        var npmPackages: [NpmGlobalPackage] = []
+        do { npmPackages = try await npmGlobals() }
+        catch is CancellationError {}
+        catch { failures.append(ScanSourceFailure(source: .npm, message: error.localizedDescription)) }
+
+        return InventorySnapshot(apps: apps, npmGlobals: npmPackages, failures: failures)
+    }
 }
 
 protocol InventorySnapshotLoading: Sendable {
@@ -25,39 +105,24 @@ struct LiveInventorySnapshotLoader: InventorySnapshotLoading {
     }
 
     func load() async -> InventorySnapshot {
-        let installedCasks = (try? await brewService.installedCasks()) ?? []
         let cacheURL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Caches/\(AppMetadata.bundleIdentifier)/casks.json")
-        let casks = (try? await CaskDatabaseClient(
-            cache: CaskDatabaseCache(fileURL: cacheURL)
-        ).fetchCasks()) ?? []
         let scanner = ApplicationScanner()
-        let found = directories.flatMap { directory in
-            (try? scanner.scanApplications(
-                in: directory,
-                installedCasks: installedCasks,
-                availableCasks: casks
-            )) ?? []
-        }
-        var apps = InstallationInventory.deduplicated(found)
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-
-        if apps.contains(where: \.isManagedByMas) {
-            let masApps = (try? await masService.list()) ?? []
-            let masIndex = masApps.reduce(into: [:]) { index, app in
-                index[StringNormalizer.normalize(app.name)] = app.appStoreID
-            }
-            apps = apps.map { app in
-                guard app.isManagedByMas, app.masAppID == nil else { return app }
-                var updated = app
-                updated.masAppID = masIndex[StringNormalizer.normalize(app.name)]
-                return updated
-            }
-        }
-
-        return InventorySnapshot(
-            apps: apps,
-            npmGlobals: (try? await npmService.installedGlobals()) ?? []
+        return await InventorySnapshot.collect(
+            directories: directories,
+            installedCasks: { try await brewService.installedCasks() },
+            availableCasks: {
+                try await CaskDatabaseClient(cache: CaskDatabaseCache(fileURL: cacheURL)).fetchCasks()
+            },
+            scanApplications: { directory, installedCasks, availableCasks in
+                try scanner.scanApplications(
+                    in: directory,
+                    installedCasks: installedCasks,
+                    availableCasks: availableCasks
+                )
+            },
+            masList: { try await masService.list() },
+            npmGlobals: { try await npmService.installedGlobals() }
         )
     }
 }
@@ -101,6 +166,7 @@ final class InventoryStore: ObservableObject {
             }
             apps = snapshot.apps
             npmGlobals = snapshot.npmGlobals
+            errorMessage = snapshot.failures.scanErrorMessage
             onWegaState?(WegaState(
                 pose: .happy,
                 line: trf("Obchód skończony — %@ aplikacji pod opieką.", "\(apps.count)")

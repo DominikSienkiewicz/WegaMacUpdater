@@ -15,12 +15,24 @@ struct UninstallView: View {
     /// consumes this frozen collection instead of resolving selection through a filter
     /// for a second time after consent.
     @State private var pendingUninstallTargets: [ApplicationInfo] = []
+    /// REL-14: whether the scan behind `pendingUninstallTargets` was incomplete, frozen
+    /// at confirmation time so the dialog can warn that the target list may be partial.
+    @State private var pendingScanIncomplete: Bool = false
     @State private var errorMessage:   String?
+    /// REL-14: the last scan failed to read one or more sources. Distinguishes an empty
+    /// machine from a failed scan and drives the incomplete-data warning before uninstall.
+    @State private var scanFailed:     Bool              = false
     @State private var banner:         BannerData?
     @FocusState private var searchFocused: Bool
 
     private var isLoading: Bool { operations.isScanning }
     private var isUninstalling: Bool { operations.isUninstalling }
+
+    /// REL-14: resolves the list body between loading, a failed scan, an empty machine
+    /// and populated results, so a scan failure is never shown as "no apps found".
+    private var listState: UninstallListState {
+        UninstallListState.resolve(isLoading: isLoading, appsEmpty: apps.isEmpty, scanFailed: scanFailed)
+    }
 
     private var filtered: [ApplicationInfo] {
         guard !search.isEmpty else { return apps }
@@ -76,6 +88,7 @@ struct UninstallView: View {
                     Button {
                         guard !targets.isEmpty else { return }
                         pendingUninstallTargets = targets
+                        pendingScanIncomplete = scanFailed
                         showDialog = true
                     } label: {
                         if isUninstalling { ProgressView().controlSize(.small) }
@@ -146,7 +159,14 @@ struct UninstallView: View {
                     )
                     .padding(.vertical, 12)
                     Spacer()
-                } else if apps.isEmpty {
+                } else if listState == .scanFailed {
+                    // REL-14: a failed scan must not read as "no apps" — say the scan failed.
+                    EmptyHero(
+                        pose: .idle,
+                        title: tr("Skan się nie powiódł"),
+                        message: tr("Nie udało się odczytać listy zainstalowanych aplikacji. Spróbuj ponownie.")
+                    )
+                } else if listState == .empty {
                     EmptyHero(
                         pose: .idle,
                         title: tr("Brak aplikacji"),
@@ -214,6 +234,7 @@ struct UninstallView: View {
                     selected: pendingUninstallTargets,
                     among: apps
                 ),
+                scanIncomplete: pendingScanIncomplete,
                 onCancel: cancelUninstall,
                 onConfirm: confirmUninstall
             )
@@ -253,18 +274,23 @@ struct UninstallView: View {
     private func cancelUninstall() {
         showDialog = false
         pendingUninstallTargets = []
+        pendingScanIncomplete = false
     }
 
     private func confirmUninstall(zap: Bool) {
         let targets = pendingUninstallTargets
         showDialog = false
         pendingUninstallTargets = []
+        pendingScanIncomplete = false
         Task { await uninstall(targets: targets, zap: zap) }
     }
 
     private func scan() async {
         errorMessage = nil
-        apps = await operations.scan(using: model.brewService)
+        let result = await operations.scan(using: model.brewService)
+        apps = result.apps
+        scanFailed = result.scanFailed
+        errorMessage = result.failures.scanErrorMessage
     }
 
     private func uninstall(targets: [ApplicationInfo], zap: Bool) async {
@@ -327,6 +353,9 @@ struct UninstallDialog: View {
     /// REL-16: casks whose application is installed in more than one place — see
     /// `InstallationInventory.ambiguousBrewUninstalls`.
     let ambiguities: [AmbiguousBrewUninstall]
+    /// REL-14: the scan behind these targets failed to read one or more sources, so the
+    /// list may be missing installations. The dialog warns before the destructive action.
+    var scanIncomplete: Bool = false
     let onCancel:   () -> Void
     let onConfirm:  (Bool) -> Void
 
@@ -376,6 +405,30 @@ struct UninstallDialog: View {
 
             ScrollView {
                 VStack(spacing: 0) {
+                    if scanIncomplete {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(Color.wegaDanger)
+                                .font(.system(size: 13))
+                            Text(tr("Skan aplikacji był niekompletny — lista celów może nie zawierać wszystkich instalacji. Zweryfikuj przed usunięciem."))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(12)
+                        .background(
+                            Color.wegaDanger.opacity(0.06),
+                            in: RoundedRectangle(cornerRadius: 10)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.wegaDanger.opacity(0.28), lineWidth: 1)
+                        )
+                        .padding(.horizontal, 22)
+                        .padding(.bottom, 12)
+                    }
+
                     VStack(alignment: .leading, spacing: 8) {
                         Text(tr("Dokładne cele"))
                             .font(.system(size: 12, weight: .semibold))
