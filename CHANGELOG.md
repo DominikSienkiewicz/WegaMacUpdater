@@ -161,6 +161,15 @@ bump and move its entries under the new version heading when cutting a release.
   after acquiring the upgrade mutex, binary-only casks stay in the user-present flow, and
   any non-zero global brew exit invalidates the whole unattended batch instead of allowing
   the unnamed tokens to be reported as upgraded.
+- **Background rounds silently re-failed an interrupted cask upgrade every time (BG-04).**
+  A cask stranded by a cut-short previous upgrade (`Error: <token>: … already an App at …`)
+  failed on every scheduled background round with no recovery — the one-time `--force` retry
+  the window already performs was missing from the unattended path. The background round now
+  reuses `BrewUpgradeOutcome.tokensRetryableWithForce` to retry exactly those tokens once with
+  `--force`, inside the same coordinated `.backgroundUpgrade` write lease and after the
+  rollback snapshot, so the leftover is overwritten instead of recurring. Whatever still
+  fails is folded into the run outcome and its count reaches the notification, turning a
+  silent per-round loop into a single visible event.
 - **Filtered selections could mutate rows the user could not see (UX-01).** The Updates
   view now derives its button count, select-all state, plan preview and execution targets
   from the active sidebar filter, then names and freezes that exact batch in a confirmation
