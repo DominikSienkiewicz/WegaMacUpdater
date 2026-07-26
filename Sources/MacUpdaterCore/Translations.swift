@@ -9,7 +9,14 @@ import Foundation
 /// Format strings (used via `trf`) keep their `%@` / `%d` placeholders in both
 /// languages so argument order is preserved.
 public enum Translations {
-    public static let en: [String: String] = [
+    /// Composed from two sections so neither declaration grows past the
+    /// `type_body_length` ceiling. Sections are additive — keys never overlap.
+    public static let en: [String: String] = base.merging(operations) { first, _ in first }
+}
+
+/// Settings, inspector, migration, updates — the long-standing UI surface.
+extension Translations {
+    static let base: [String: String] = [
         // UI — natywna scena Settings (⌘,).
         "Ustawienia": "Settings",
         // UI — toolbar toggle for the .inspector() panel.
@@ -291,6 +298,12 @@ public enum Translations {
         "Aport albo zostaw?": "Fetch or leave it?",
         "Brak aplikacji": "No apps",
         "Nie znaleziono żadnych zainstalowanych aplikacji.": "No installed apps were found.",
+    ]
+}
+
+/// Scan failures, uninstall, menu bar and shortcuts — the operational surface.
+extension Translations {
+    static let operations: [String: String] = [
         // REL-14 — surfacing swallowed scan failures in Inventory and Uninstall.
         "Homebrew": "Homebrew",
         "katalog Homebrew": "Homebrew catalog",
