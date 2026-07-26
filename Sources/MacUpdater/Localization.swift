@@ -56,15 +56,20 @@ public final class LocalizationManager: ObservableObject {
 
     private static let defaultsKey = "wega.language"
 
+    private let defaults: UserDefaults
+
     @Published public var language: AppLanguage {
         didSet {
             LocalizedStrings.current = language
-            UserDefaults.standard.set(language.rawValue, forKey: Self.defaultsKey)
+            defaults.set(language.rawValue, forKey: Self.defaultsKey)
         }
     }
 
-    private init() {
-        let stored = UserDefaults.standard.string(forKey: Self.defaultsKey).flatMap(AppLanguage.init(rawValue:))
+    /// `defaults` is injectable so tests can drive a throwaway suite instead of the
+    /// process-wide `.standard` domain (QA-01 — unblocking store testability).
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        let stored = defaults.string(forKey: Self.defaultsKey).flatMap(AppLanguage.init(rawValue:))
         let initial = stored ?? defaultLanguage(preferredLanguages: Locale.preferredLanguages)
         self.language = initial
         LocalizedStrings.current = initial

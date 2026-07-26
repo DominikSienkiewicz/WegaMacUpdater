@@ -78,4 +78,36 @@ public enum WegaHelper {
     /// True once a real Team ID has been configured (guards fail-closed paths in
     /// debug/ad-hoc builds where signing isn't set up yet).
     public static var isTeamIDConfigured: Bool { teamIdentifier != "REPLACE_TEAMID" }
+
+    /// Why the root helper refuses a `replaceBundle` request outright, or `nil` when the
+    /// paths clear the structural gate and the daemon proceeds to its filesystem +
+    /// Gatekeeper checks.
+    public enum BundleReplacementRejection: Equatable, Sendable {
+        /// Target or snapshot is not a `.app` bundle.
+        case notBundle
+        /// Target escapes the `/Applications/` install root.
+        case outsideApplications
+    }
+
+    /// The structural path gate for `WegaPrivilegedOps.replaceBundle`, lifted out of the
+    /// (untestable, root-only) daemon so the decision it makes as root can be pinned by a
+    /// unit test. Both paths must be `.app` bundles and the target must live under
+    /// `/Applications/`; the filesystem and Gatekeeper checks that follow stay in the daemon.
+    ///
+    /// This is a *string* gate only: it does not canonicalize `..`, so a traversal such as
+    /// `/Applications/../tmp/evil.app` still clears it. Hardening that is owned by SEC-03 —
+    /// the gate is extracted here (behavior-preserving) precisely so a test can make that
+    /// gap visible instead of leaving it buried in code no target can reach.
+    public static func bundleReplacementRejection(
+        targetPath: String,
+        snapshotPath: String
+    ) -> BundleReplacementRejection? {
+        guard targetPath.hasSuffix(".app"), snapshotPath.hasSuffix(".app") else {
+            return .notBundle
+        }
+        guard targetPath.hasPrefix("/Applications/") else {
+            return .outsideApplications
+        }
+        return nil
+    }
 }

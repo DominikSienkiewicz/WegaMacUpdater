@@ -88,13 +88,17 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
         let snapshot = URL(fileURLWithPath: snapshotPath)
 
         // Twarda walidacja — to NIE jest generyczne „nadpisz cokolwiek jako root".
-        guard targetPath.hasSuffix(".app"), snapshotPath.hasSuffix(".app") else {
+        // Sama decyzja o ścieżce mieszka w `WegaHelper` (Core), więc jest pokryta testem;
+        // tu zostają tylko efekty uboczne (log + reply) i sprawdzenia stanu FS/Gatekeepera.
+        switch WegaHelper.bundleReplacementRejection(targetPath: targetPath, snapshotPath: snapshotPath) {
+        case .notBundle:
             HelperAuditLog.logger.error("replaceBundle: błąd")
             reply(false, "Dozwolone tylko bundle .app."); return
-        }
-        guard targetPath.hasPrefix("/Applications/") else {
+        case .outsideApplications:
             HelperAuditLog.logger.error("replaceBundle: błąd")
             reply(false, "Cel poza /Applications — odrzucono."); return
+        case nil:
+            break
         }
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: snapshotPath, isDirectory: &isDirectory), isDirectory.boolValue else {

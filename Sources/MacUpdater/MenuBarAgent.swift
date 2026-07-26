@@ -12,7 +12,7 @@ final class MenuBarAgent: ObservableObject {
 
     @Published var interval: CheckInterval {
         didSet {
-            UserDefaults.standard.set(interval.rawValue, forKey: Keys.interval)
+            defaults.set(interval.rawValue, forKey: Keys.interval)
         }
     }
     @Published private(set) var updateCount: Int
@@ -34,6 +34,10 @@ final class MenuBarAgent: ObservableObject {
     private var lastNotifiedFingerprint: String
     private var loop: Task<Void, Never>?
 
+    /// Injectable so tests can drive a throwaway suite instead of the process-wide
+    /// `.standard` domain (QA-01 — unblocking orchestrator testability).
+    private let defaults: UserDefaults
+
     private enum Keys {
         static let interval = "wega.menubar.interval"
         static let lastCheck = "wega.menubar.lastCheck"
@@ -46,7 +50,7 @@ final class MenuBarAgent: ObservableObject {
     /// comes back. Only `.agreed` may spend the one-shot macOS dialog.
     private var inAppAnswer: NotificationPrompt.InAppAnswer {
         get {
-            switch UserDefaults.standard.string(forKey: Keys.notificationAnswer) {
+            switch defaults.string(forKey: Keys.notificationAnswer) {
             case "agreed":   return .agreed
             case "declined": return .declined
             default:         return .unanswered
@@ -58,12 +62,12 @@ final class MenuBarAgent: ObservableObject {
             case .declined:   "declined"
             case .unanswered: nil
             }
-            UserDefaults.standard.set(raw, forKey: Keys.notificationAnswer)
+            defaults.set(raw, forKey: Keys.notificationAnswer)
         }
     }
 
-    private init() {
-        let defaults = UserDefaults.standard
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         interval = defaults.string(forKey: Keys.interval).flatMap(CheckInterval.init(rawValue:)) ?? .every6Hours
         updateCount = defaults.integer(forKey: Keys.lastCount)
         let stored = defaults.double(forKey: Keys.lastCheck)
@@ -176,11 +180,10 @@ final class MenuBarAgent: ObservableObject {
     /// Move the notification watermark to this exact set of updates.
     private func rememberNotified(_ fingerprint: String) {
         lastNotifiedFingerprint = fingerprint
-        UserDefaults.standard.set(fingerprint, forKey: Keys.lastNotifiedFingerprint)
+        defaults.set(fingerprint, forKey: Keys.lastNotifiedFingerprint)
     }
 
     private func persist() {
-        let defaults = UserDefaults.standard
         defaults.set(updateCount, forKey: Keys.lastCount)
         defaults.set(lastCheck?.timeIntervalSinceReferenceDate ?? 0, forKey: Keys.lastCheck)
     }

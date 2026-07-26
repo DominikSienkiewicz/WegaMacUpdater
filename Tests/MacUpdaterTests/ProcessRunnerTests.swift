@@ -70,4 +70,31 @@ struct ProcessRunnerTests {
             _ = try await runner.run(request)
         }
     }
+
+    /// Cancellation propagation (REL-12): a caller whose task is already cancelled must not
+    /// spawn the subprocess at all. `run` opens with `Task.checkCancellation()`, so the call
+    /// throws `CancellationError` before `/bin/sleep` is ever launched.
+    ///
+    /// Determinism: the task suspends on a long `Task.sleep` until the test cancels it, so by
+    /// the time `run` executes its guard `Task.isCancelled` is already true regardless of
+    /// scheduling order. The `timeout` is belt-and-suspenders — if the guard ever regressed,
+    /// the process would surface `.timedOut` in 2s instead of hanging the suite for an hour.
+    @Test func aCancelledCallerNeverLaunchesTheProcess() async {
+        let runner = ProcessRunner()
+        let request = ProcessRequest(
+            executableURL: URL(fileURLWithPath: "/bin/sleep"),
+            arguments: ["3600"],
+            timeout: 2
+        )
+
+        let task = Task { () -> ProcessResult in
+            try? await Task.sleep(for: .seconds(3600))
+            return try await runner.run(request)
+        }
+        task.cancel()
+
+        await #expect(throws: CancellationError.self) {
+            _ = try await task.value
+        }
+    }
 }
