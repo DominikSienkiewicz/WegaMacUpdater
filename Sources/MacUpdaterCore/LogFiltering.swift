@@ -27,3 +27,19 @@ public func filterLogEntries(_ entries: [LogEntry], level: LogLevelFilter, searc
         return e.message.lowercased().contains(q) || e.category.label.lowercased().contains(q)
     }
 }
+
+/// UX-06 — why the log list is empty. An empty log ("nothing has happened") and a filter
+/// that hides every entry ("nothing matches") are different situations, so the LogsView can
+/// show a different state for each instead of one message that fits neither.
+public enum LogEmptyReason: Equatable, Sendable {
+    /// The log holds no entries at all.
+    case noEntries
+    /// Entries exist, but the active level/search filter hides all of them.
+    case noFilterMatches
+}
+
+/// Classifies an empty log list. Returns `nil` when something is visible.
+public func logEmptyReason(totalCount: Int, visibleCount: Int) -> LogEmptyReason? {
+    guard visibleCount == 0 else { return nil }
+    return totalCount == 0 ? .noEntries : .noFilterMatches
+}

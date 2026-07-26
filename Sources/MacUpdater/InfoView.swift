@@ -460,7 +460,10 @@ extension InfoView {
                     Task { await downloadAndOpen(assetURL) }
                 } label: {
                     if downloadingUpdate { ProgressView().controlSize(.small) }
-                    else { Text(tr("Pobierz i zainstaluj")) }
+                    // UX-06 — the label describes the operation that will actually run: a
+                    // headless install of a verified .pkg, or (the common .dmg case) a
+                    // download the user finishes by hand. "Install" no longer covers both.
+                    else { Text(SelfUpdatePresentation.actionLabel(selfUpdateAction(for: assetURL))) }
                 }
                 .disabled(downloadingUpdate)
             case .upToDate:
@@ -492,6 +495,16 @@ extension InfoView {
 
     private func checkSelfUpdate() async {
         await selfUpdateController.check()
+    }
+
+    /// UX-06 — which operation the button is about, from current helper availability and the
+    /// asset kind. Shared with `SelfUpdateController` via `SelfUpdatePlanner`, so the label
+    /// and the code that runs the operation can never disagree.
+    private func selfUpdateAction(for assetURL: URL) -> SelfUpdateAction {
+        SelfUpdatePlanner.action(
+            helperEnabled: PrivilegedHelperClient.shared.isEnabled,
+            assetURL: assetURL
+        )
     }
 
     /// Download the release asset to a temp file and hand it to the system (Installer for
