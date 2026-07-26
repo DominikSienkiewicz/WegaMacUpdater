@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 
 public enum MasServiceError: Error, Equatable, LocalizedError {
     case masNotFound

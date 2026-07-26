@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 
 /// The directories scanned for installed apps: `/Applications`, `~/Applications`,
 /// and each of their immediate non-`.app` subfolders (e.g. `/Applications/JetBrains/`).

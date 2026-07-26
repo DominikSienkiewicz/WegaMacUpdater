@@ -348,7 +348,8 @@ final class MigrationStore: ObservableObject {
         var exitCode: Int32 = 0
         do {
             let stream = try model.brewService.events(
-                arguments: ["install", "--cask", "--force", token]
+                // SEC-10: `--` fences the token off from Homebrew's option parsing.
+                arguments: ["install", "--cask", "--force", "--", token]
             )
             for try await event in stream {
                 switch event {
@@ -496,7 +497,8 @@ final class MigrationStore: ObservableObject {
             case .brew:
                 title = "$ brew uninstall \(removal.dup.brewToken)"
                 stream = try model.brewService.events(
-                    arguments: ["uninstall", removal.dup.brewToken]
+                    // SEC-10: `--` fences the token off from Homebrew's option parsing.
+                    arguments: ["uninstall", "--", removal.dup.brewToken]
                 )
             }
         } catch {

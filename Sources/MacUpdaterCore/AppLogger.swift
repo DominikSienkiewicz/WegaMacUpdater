@@ -1,4 +1,5 @@
 import OSLog
+import WegaHelperKit
 
 public enum AppLogger {
     public static let subsystem = AppMetadata.bundleIdentifier

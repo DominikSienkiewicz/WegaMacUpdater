@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 
 public enum HomebrewEnvironment {
     public static let processPath = SystemPaths.homebrewProcessPath

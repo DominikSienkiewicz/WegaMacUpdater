@@ -1,5 +1,5 @@
 import Foundation
-import MacUpdaterCore
+import WegaHelperKit
 import OSLog
 
 private enum HelperAuditLog {

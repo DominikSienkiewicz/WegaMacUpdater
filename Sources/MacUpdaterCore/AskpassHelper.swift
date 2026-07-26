@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 
 #if DEBUG
 /// Writes a tiny shell script that satisfies sudo's `SUDO_ASKPASS` contract:

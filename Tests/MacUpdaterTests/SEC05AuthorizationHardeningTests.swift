@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 @testable import MacUpdaterCore
+// SEC-10: SudoLocalTransactionalWriter / enableShellCommand moved to WegaHelperKit.
+@testable import WegaHelperKit
 
 @Suite("SEC-05 authorization hardening")
 struct SEC05AuthorizationHardeningTests {

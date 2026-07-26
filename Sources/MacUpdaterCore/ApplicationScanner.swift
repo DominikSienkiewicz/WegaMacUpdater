@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 
 public struct ApplicationScanner {
     private let fileManager: FileManager

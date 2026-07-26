@@ -12,7 +12,8 @@ final class BrewCaskAdoptArgsTests: XCTestCase {
     func testAdoptCaskArgumentsIncludeForce() {
         XCTAssertEqual(
             BrewService.adoptCaskArguments(token: "docker-desktop"),
-            ["install", "--cask", "--force", "docker-desktop"]
+            // SEC-10: `--` fences the token off from Homebrew's option parsing.
+            ["install", "--cask", "--force", "--", "docker-desktop"]
         )
     }
 
