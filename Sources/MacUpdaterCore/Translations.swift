@@ -195,13 +195,12 @@ extension Translations {
         "Wszystko gotowe.": "All done.",
         "Gotowe! %@ pakietów odświeżonych.": "Done! %@ packages refreshed.",
         "Ręcznie zainstalowane": "Manually installed",
-        "Otwórz i zaktualizuj": "Open and update",
+        "Otwórz aplikację": "Open the application",
         "Aktualizuj przez Brew": "Update via Brew",
         "zaktualizuj w App Store": "update in the App Store",
         "GitHub Releases": "GitHub Releases",
         "Otwórz Toolbox": "Open Toolbox",
-        "Pobierz ze strony Synology": "Download from the Synology site",
-        "Pobierz najnowszą wersję": "Download the latest version",
+        "Otwórz stronę pobierania": "Open the download page",
         "Do restartu": "To restart",
         "były otwarte podczas aktualizacji": "were open during the update",
         "Uruchom ponownie": "Restart",
@@ -696,6 +695,7 @@ extension Translations {
         "Suma kontrolna": "Checksum",
         "obecna": "present",
         "brak": "missing",
+        "nieznane": "unknown",
 
         // REL-06 — zamknięcie aplikacji w trakcie mutacji Caskroom.
         "Wega jest w trakcie zmiany": "Wega is in the middle of a change",

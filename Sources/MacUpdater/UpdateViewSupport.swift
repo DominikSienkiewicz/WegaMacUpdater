@@ -433,10 +433,13 @@ struct ManualUpdateActionView: View {
             // owns its own update flow: launching the app triggers the in-app updater. We
             // must never route these through `brew install` — their casks are
             // `auto_updates`/frozen and lag, so brew would reinstall a stale build.
+            // UX-05: the button names its real effect — it opens the app (the vendor's own
+            // updater then applies the staged build) — instead of promising an install Wega
+            // does not perform.
             Button {
                 NSWorkspace.shared.open(item.path)
             } label: {
-                Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
+                Label(tr("Otwórz aplikację"), systemImage: "arrow.up.forward.app")
             }
             .controlSize(.small)
         case .brewInstall(let token):
@@ -461,11 +464,13 @@ struct ManualUpdateActionView: View {
             } label: {
                 switch style {
                 case .githubReleases:
+                    // GitHub Releases is a page name, not an install promise — the external-link
+                    // icon already reads as "opens a page", so it stays as-is.
                     Label(tr("GitHub Releases"), systemImage: "arrow.up.right.square")
-                case .synologyDownload:
-                    Label(tr("Pobierz ze strony Synology"), systemImage: "arrow.up.right.square")
-                case .vendorDownload:
-                    Label(tr("Pobierz najnowszą wersję"), systemImage: "arrow.up.right.square")
+                case .synologyDownload, .vendorDownload:
+                    // UX-05: these merely open the vendor's download page — the button says so,
+                    // rather than "Pobierz…", which suggested Wega performs the download/install.
+                    Label(tr("Otwórz stronę pobierania"), systemImage: "arrow.up.right.square")
                 }
             }
             .controlSize(.small)
