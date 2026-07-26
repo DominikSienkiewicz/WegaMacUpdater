@@ -16,7 +16,7 @@ public enum DiscordUpdateParser {
 /// Squirrel.Mac (no Sparkle `SUFeedURL`) while its `discord*` casks are `auto_updates`
 /// and lag — so neither `brew outdated` nor the cask-version check sees the new build.
 /// Same approach as Postman and ChatGPT.
-public struct DiscordUpdateChecker: Sendable {
+public struct DiscordUpdateChecker: VendorUpdateChecker {
     public static let channelsByBundleID: [String: String] = [
         "com.hnc.Discord":       "stable",
         "com.hnc.DiscordPTB":    "ptb",
@@ -26,23 +26,23 @@ public struct DiscordUpdateChecker: Sendable {
         AppEndpoints.shared.discordUpdateURL(channel: channel, version: version)
     }
 
-    private let client: HTTPClient
+    public let client: HTTPClient
     public init(client: HTTPClient = .shared) { self.client = client }
 
-    public func check(app: ApplicationInfo) async -> ManualCheckResult {
+    public func plan(for app: ApplicationInfo) -> VendorCheckPlan? {
         guard let bundleID = app.bundleIdentifier,
               let channel = Self.channelsByBundleID[bundleID],
               let installed = app.version, !installed.isEmpty,
-              let url = Self.updateURL(channel: channel, version: installed) else { return .notApplicable }
+              let url = Self.updateURL(channel: channel, version: installed) else { return nil }
 
-        guard let response = try? await client.get(url, enableETag: true) else { return .unavailable }
-        if response.statusCode == 204 { return .upToDate }
-        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
-        guard let latest = DiscordUpdateParser.latestVersion(fromSquirrelJSON: response.data) else { return .upToDate }
-        guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
-
-        return .outdated(ManualOutdatedApp(
-            name: app.name, path: app.path,
-            installedVersion: installed, availableVersion: latest, source: .discord))
+        // 204 = Squirrel's "you're current"; any 2xx with no parseable version is also
+        // treated as current rather than an error.
+        return VendorCheckPlan(
+            request: HTTPRequest(url: url, enableETag: true),
+            upToDateStatusCodes: [204]
+        ) { data in
+            guard let latest = DiscordUpdateParser.latestVersion(fromSquirrelJSON: data) else { return .decided(.upToDate) }
+            return .candidate(VendorCandidate(latest: latest, installed: installed, source: .discord))
+        }
     }
 }

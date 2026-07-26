@@ -42,7 +42,7 @@ public enum AntigravityUpdateParser {
 /// itself). Queries Google's own update endpoint — the same one the app uses
 /// to update itself — and compares the latest product version against the
 /// installed bundle's `CFBundleShortVersionString`.
-public struct AntigravityUpdateChecker: Sendable {
+public struct AntigravityUpdateChecker: VendorUpdateChecker {
     /// Bundle identifier of `/Applications/Antigravity IDE.app`.
     ///
     /// Google ships two distinct products: "Antigravity" (`com.google.antigravity`)
@@ -51,15 +51,15 @@ public struct AntigravityUpdateChecker: Sendable {
     /// `com.google.antigravity` app would flag it with the IDE's (unrelated) version.
     public static let bundleIdentifier = "com.google.antigravity-ide"
 
-    private let client: HTTPClient
+    public let client: HTTPClient
 
     public init(client: HTTPClient = .shared) {
         self.client = client
     }
 
-    public func check(app: ApplicationInfo) async -> ManualCheckResult {
+    public func plan(for app: ApplicationInfo) -> VendorCheckPlan? {
         guard app.bundleIdentifier == Self.bundleIdentifier,
-              let installed = app.version, !installed.isEmpty else { return .notApplicable }
+              let installed = app.version, !installed.isEmpty else { return nil }
 
         let platform: String
         #if arch(arm64)
@@ -68,20 +68,11 @@ public struct AntigravityUpdateChecker: Sendable {
         platform = "darwin-x64"
         #endif
 
-        guard let url = AppEndpoints.shared.antigravityUpdateURL(platform: platform) else { return .notApplicable }
+        guard let url = AppEndpoints.shared.antigravityUpdateURL(platform: platform) else { return nil }
 
-        guard let response = try? await client.get(url, enableETag: true) else { return .unavailable }
-        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
-        guard let latest = AntigravityUpdateParser.productVersion(fromUpdateJSON: response.data) else { return .failed }
-
-        guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
-
-        return .outdated(ManualOutdatedApp(
-            name: app.name,
-            path: app.path,
-            installedVersion: app.version,
-            availableVersion: latest,
-            source: .antigravity
-        ))
+        return VendorCheckPlan(request: HTTPRequest(url: url, enableETag: true)) { data in
+            guard let latest = AntigravityUpdateParser.productVersion(fromUpdateJSON: data) else { return .decided(.failed) }
+            return .candidate(VendorCandidate(latest: latest, installed: installed, source: .antigravity))
+        }
     }
 }

@@ -406,205 +406,83 @@ struct ManualUpdateSection: View {
 
 /// The per-source manual-update action control (badge + button/text), shared between
 /// the list row (`ManualUpdateSection`) and the inspector pane so both render the
-/// identical control for a given `ManualOutdatedApp.UpdateSource` — extracted verbatim
-/// from the former `ManualUpdateSection.manualAction(for:)` (I-3), no behavior change.
+/// identical control for a given `ManualOutdatedApp.UpdateSource`.
+///
+/// ARCH-06 — the former 15-case, ~200-line `switch item.source` is gone. Each source now
+/// carries its action as data (`UpdateSource.updateActionKind` / `.badgeLabel`, in Core);
+/// this view renders the small, fixed vocabulary of `UpdateActionKind`s. The nine
+/// self-updating vendors that were nine identical cases collapse into the one `.launchApp`
+/// branch, so a new self-updating vendor needs no change here at all.
 struct ManualUpdateActionView: View {
     let item:      ManualOutdatedApp
     let busyToken: String?
     let onInstall: (String) -> Void
 
     var body: some View {
-        switch item.source {
-        case .sparkle:
-            HStack(spacing: 8) {
-                WegaBadge(label: "Sparkle", color: item.source.provenance.badgeColor)
-                Button {
-                    // Sparkle apps own the update flow. Opening the app brings it to the
-                    // foreground and (for apps with SUEnableAutomaticChecks=1, e.g. Codex)
-                    // triggers the appcast check on launch — the user then accepts in the
-                    // app's own update prompt. We can't drive that prompt from outside
-                    // without an AppleScript that depends on each app's menu wording.
-                    NSWorkspace.shared.open(item.path)
-                } label: {
-                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
+        HStack(spacing: 8) {
+            WegaBadge(label: item.source.badgeLabel, color: item.source.provenance.badgeColor)
+            actionControl
+        }
+    }
+
+    @ViewBuilder
+    private var actionControl: some View {
+        switch item.source.updateActionKind {
+        case .launchApp:
+            // Every self-updating vendor (Sparkle, ChatGPT, Discord, Chrome, Signal, …)
+            // owns its own update flow: launching the app triggers the in-app updater. We
+            // must never route these through `brew install` — their casks are
+            // `auto_updates`/frozen and lag, so brew would reinstall a stale build.
+            Button {
+                NSWorkspace.shared.open(item.path)
+            } label: {
+                Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
+            }
+            .controlSize(.small)
+        case .brewInstall(let token):
+            Button {
+                onInstall(token)
+            } label: {
+                if busyToken == token {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Label(tr("Aktualizuj przez Brew"), systemImage: "arrow.down.circle")
                 }
-                .controlSize(.small)
             }
-        case .cask(let token):
-            HStack(spacing: 8) {
-                WegaBadge(label: token, color: item.source.provenance.badgeColor)
-                Button {
-                    onInstall(token)
-                } label: {
-                    if busyToken == token {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Label(tr("Aktualizuj przez Brew"), systemImage: "arrow.down.circle")
-                    }
-                }
-                .controlSize(.small)
-                .disabled(busyToken != nil)
-            }
-        case .mas(let appStoreID):
-            HStack(spacing: 8) {
-                WegaBadge(label: appStoreID, color: item.source.provenance.badgeColor)
-                Text(tr("zaktualizuj w App Store"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
-            }
-        case .github(let repo):
-            HStack(spacing: 8) {
-                WegaBadge(label: "GitHub", color: item.source.provenance.badgeColor)
-                Button {
-                    if let url = AppEndpoints.shared.githubReleasesPageURL(repo: repo) {
-                        NSWorkspace.shared.open(url)
-                    }
-                } label: {
+            .controlSize(.small)
+            .disabled(busyToken != nil)
+        case .appStore:
+            Text(tr("zaktualizuj w App Store"))
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+        case .openURL(let url, let style):
+            Button {
+                if let url { NSWorkspace.shared.open(url) }
+            } label: {
+                switch style {
+                case .githubReleases:
                     Label(tr("GitHub Releases"), systemImage: "arrow.up.right.square")
-                }
-                .controlSize(.small)
-            }
-        case .jetbrains(let caskToken):
-            HStack(spacing: 8) {
-                WegaBadge(label: caskToken, color: item.source.provenance.badgeColor)
-                Button {
-                    let toolboxPaths = [
-                        SystemPaths.applicationsDirectory.appendingPathComponent("JetBrains Toolbox.app").path,
-                        FileManager.default.homeDirectoryForCurrentUser
-                            .appendingPathComponent("Applications/JetBrains Toolbox.app").path
-                    ]
-                    if let path = toolboxPaths.first(where: { FileManager.default.fileExists(atPath: $0) }) {
-                        NSWorkspace.shared.open(URL(fileURLWithPath: path))
-                    }
-                } label: {
-                    Label(tr("Otwórz Toolbox"), systemImage: "arrow.down.circle")
-                }
-                .controlSize(.small)
-            }
-        case .synology(let downloadPage):
-            HStack(spacing: 8) {
-                WegaBadge(label: "Synology", color: item.source.provenance.badgeColor)
-                Button {
-                    if let url = URL(string: downloadPage) {
-                        NSWorkspace.shared.open(url)
-                    }
-                } label: {
+                case .synologyDownload:
                     Label(tr("Pobierz ze strony Synology"), systemImage: "arrow.up.right.square")
-                }
-                .controlSize(.small)
-            }
-        case .antigravity:
-            HStack(spacing: 8) {
-                WegaBadge(label: "Antigravity", color: item.source.provenance.badgeColor)
-                Button {
-                    // Antigravity owns its own update flow (supportsFastUpdate).
-                    // Launching it triggers the in-app updater — we must never
-                    // route this through `brew install`, because the Homebrew
-                    // cask is frozen at an older version and would downgrade it.
-                    NSWorkspace.shared.open(item.path)
-                } label: {
-                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
-                }
-                .controlSize(.small)
-            }
-        case .parallels:
-            HStack(spacing: 8) {
-                WegaBadge(label: "Parallels", color: item.source.provenance.badgeColor)
-                Button {
-                    // Parallels self-updates via its bundled updater; brew cask
-                    // `parallels` lags upstream and would route through a stale
-                    // installer.
-                    NSWorkspace.shared.open(item.path)
-                } label: {
-                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
-                }
-                .controlSize(.small)
-            }
-        case .googleDrive:
-            HStack(spacing: 8) {
-                WegaBadge(label: "Google Drive", color: item.source.provenance.badgeColor)
-                Button {
-                    NSWorkspace.shared.open(AppEndpoints.shared.googleDriveDownloadURL)
-                } label: {
+                case .vendorDownload:
                     Label(tr("Pobierz najnowszą wersję"), systemImage: "arrow.up.right.square")
                 }
-                .controlSize(.small)
             }
-        case .chatgpt:
-            HStack(spacing: 8) {
-                WegaBadge(label: "ChatGPT", color: item.source.provenance.badgeColor)
-                Button {
-                    // ChatGPT self-updates via Sparkle from a runtime-resolved
-                    // feed; the brew cask `chatgpt` is `auto_updates` and lags.
-                    // Launching the app triggers its own update flow — never
-                    // route through brew, which would reinstall a stale build.
-                    NSWorkspace.shared.open(item.path)
-                } label: {
-                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
+            .controlSize(.small)
+        case .jetBrainsToolbox:
+            Button {
+                let toolboxPaths = [
+                    SystemPaths.applicationsDirectory.appendingPathComponent("JetBrains Toolbox.app").path,
+                    FileManager.default.homeDirectoryForCurrentUser
+                        .appendingPathComponent("Applications/JetBrains Toolbox.app").path
+                ]
+                if let path = toolboxPaths.first(where: { FileManager.default.fileExists(atPath: $0) }) {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: path))
                 }
-                .controlSize(.small)
+            } label: {
+                Label(tr("Otwórz Toolbox"), systemImage: "arrow.down.circle")
             }
-        case .postman:
-            HStack(spacing: 8) {
-                WegaBadge(label: "Postman", color: item.source.provenance.badgeColor)
-                Button {
-                    // Postman self-updates via Squirrel; the brew cask `postman`
-                    // is `auto_updates` and its version lags the real channel, so
-                    // `brew install --cask postman` would (re)install the STALE
-                    // build. Launch the app and let its own updater pull the build
-                    // the Squirrel feed reported.
-                    NSWorkspace.shared.open(item.path)
-                } label: {
-                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
-                }
-                .controlSize(.small)
-            }
-        case .discord:
-            HStack(spacing: 8) {
-                WegaBadge(label: "Discord", color: item.source.provenance.badgeColor)
-                Button {
-                    // Discord self-updates its host via Squirrel; the discord* casks are
-                    // auto_updates and lag, so brew would reinstall a stale build.
-                    NSWorkspace.shared.open(item.path)
-                } label: {
-                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
-                }
-                .controlSize(.small)
-            }
-        case .signal:
-            HStack(spacing: 8) {
-                WegaBadge(label: "Signal", color: item.source.provenance.badgeColor)
-                Button {
-                    // Signal self-updates via electron-updater; the signal cask is
-                    // auto_updates and lags. Launch it so its own updater applies.
-                    NSWorkspace.shared.open(item.path)
-                } label: {
-                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
-                }
-                .controlSize(.small)
-            }
-        case .chrome:
-            HStack(spacing: 8) {
-                WegaBadge(label: "Chrome", color: item.source.provenance.badgeColor)
-                Button {
-                    // Chrome self-updates via Keystone; the google-chrome* casks are
-                    // auto_updates and lag. Relaunch applies the staged update.
-                    NSWorkspace.shared.open(item.path)
-                } label: {
-                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
-                }
-                .controlSize(.small)
-            }
-        case .obsidian:
-            HStack(spacing: 8) {
-                WegaBadge(label: "Obsidian", color: item.source.provenance.badgeColor)
-                Button {
-                    NSWorkspace.shared.open(item.path)
-                } label: {
-                    Label(tr("Otwórz i zaktualizuj"), systemImage: "arrow.up.forward.app")
-                }
-                .controlSize(.small)
-            }
+            .controlSize(.small)
         }
     }
 }

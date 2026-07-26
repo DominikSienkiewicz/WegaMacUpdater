@@ -1,7 +1,7 @@
 import Foundation
 
-public struct JetBrainsUpdateChecker: Sendable {
-    private let client: HTTPClient
+public struct JetBrainsUpdateChecker: VendorUpdateChecker {
+    public let client: HTTPClient
     private let products: [String: JetBrainsCatalogEntry]
 
     public init(
@@ -12,28 +12,25 @@ public struct JetBrainsUpdateChecker: Sendable {
         self.products = products
     }
 
-    public func check(app: ApplicationInfo) async -> ManualCheckResult {
+    public func plan(for app: ApplicationInfo) -> VendorCheckPlan? {
         guard let bundleId = app.bundleIdentifier,
-              let product = products[bundleId] else { return .notApplicable }
+              let product = products[bundleId] else { return nil }
 
-        guard let url = AppEndpoints.shared.jetbrainsReleasesURL(code: product.code) else { return .notApplicable }
+        guard let url = AppEndpoints.shared.jetbrainsReleasesURL(code: product.code) else { return nil }
 
-        guard let response = try? await client.get(url, enableETag: true) else { return .unavailable }
-        guard response.statusCode == 200 else { return response.statusCode >= 500 ? .unavailable : .failed }
-        guard let releases = try? JSONDecoder().decode([String: [JetBrainsRelease]].self, from: response.data),
-              let latest = releases[product.code]?.first?.version else { return .failed }
+        return VendorCheckPlan(request: HTTPRequest(url: url, enableETag: true)) { data in
+            guard let releases = try? JSONDecoder().decode([String: [JetBrainsRelease]].self, from: data),
+                  let latest = releases[product.code]?.first?.version else { return .decided(.failed) }
 
-        let installed = app.version ?? ""
-        guard !installed.isEmpty else { return .notApplicable }
-        guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
-
-        return .outdated(ManualOutdatedApp(
-            name: app.name,
-            path: app.path,
-            installedVersion: app.version,
-            availableVersion: latest,
-            source: .jetbrains(caskToken: product.caskToken)
-        ))
+            let installed = app.version ?? ""
+            guard !installed.isEmpty else { return .decided(.notApplicable) }
+            return .candidate(VendorCandidate(
+                latest: latest,
+                installed: installed,
+                recordedInstalled: app.version,
+                source: .jetbrains(caskToken: product.caskToken)
+            ))
+        }
     }
 }
 

@@ -101,7 +101,7 @@ struct InspectorPane: View {
                     isSecurityFix: isSecurity,
                     requiresForce: false
                 ),
-                sourceBadge: WegaBadge(label: sourceLabel(app.source), color: app.source.provenance.badgeColor)
+                sourceBadge: WegaBadge(label: app.source.badgeLabel, color: app.source.provenance.badgeColor)
             ))
         }
     }
@@ -141,27 +141,6 @@ struct InspectorPane: View {
         case .formula, .cask: return .brew
         case .appStore:       return .appStore
         case .npm:            return .info
-        }
-    }
-
-    /// Readable source label for a manual update's badge.
-    private func sourceLabel(_ source: ManualOutdatedApp.UpdateSource) -> String {
-        switch source {
-        case .sparkle:            return "Sparkle"
-        case .cask(let token):    return token
-        case .mas(let appStoreID): return appStoreID
-        case .jetbrains(let token): return token
-        case .github:             return "GitHub"
-        case .synology:           return "Synology"
-        case .antigravity:        return "Antigravity"
-        case .parallels:          return "Parallels"
-        case .googleDrive:        return "Google Drive"
-        case .chatgpt:            return "ChatGPT"
-        case .postman:            return "Postman"
-        case .discord:            return "Discord"
-        case .signal:             return "Signal"
-        case .chrome:             return "Chrome"
-        case .obsidian:           return "Obsidian"
         }
     }
 
