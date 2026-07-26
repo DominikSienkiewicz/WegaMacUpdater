@@ -65,6 +65,26 @@ final class MigrationStore: ObservableObject {
         onWegaState: (@MainActor (WegaState) -> Void)?
     ) async {
         guard migrating == nil, let token = app.caskToken else { return }
+
+        // REL-08 — the match confidence must gate the takeover before anything runs. A low
+        // score means `brew install --cask --force <token>` could overwrite this app with a
+        // different program, so the automatic takeover is refused (the badge already warned
+        // "niepewne"). This is the production call-site `allowsAutoConfirm` never had.
+        let confidence = CaskMatchScorer.score(
+            applicationName: app.name,
+            caskToken: token,
+            caskNames: [],
+            viaCustomMapping: false
+        )
+        guard MigrationAutoTakeover.decide(confidence) != .blocked else {
+            errorMessage = trf(
+                "Dopasowanie %@ → %@ jest zbyt niepewne, aby przepiąć automatycznie. Zweryfikuj je ręcznie przed migracją.",
+                "\(app.name)",
+                "\(token)"
+            )
+            return
+        }
+
         migrating = token
         errorMessage = nil
         logLines = []

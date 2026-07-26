@@ -18,6 +18,9 @@ public enum Translations {
         "pewne": "confident",
         "sprawdź": "review",
         "niepewne": "uncertain",
+        // REL-08 — niska pewność dopasowania blokuje automatyczne przejęcie (`--force`).
+        "Dopasowanie %@ → %@ jest zbyt niepewne, aby przepiąć automatycznie. Zweryfikuj je ręcznie przed migracją.":
+            "The %@ → %@ match is too uncertain to migrate automatically. Verify it manually before migrating.",
         // SEC-08 — token GitHub (Keychain).
         "Token GitHub (opcjonalny)": "GitHub token (optional)",
         "Zapisany": "Saved",
@@ -116,6 +119,10 @@ public enum Translations {
         "Zaznacz wszystko": "Select all",
         "Zaznaczone": "Selected",
         "Niezaznaczone": "Not selected",
+        // UX-09 — colour-independent VoiceOver status for the Updates sidebar scan icon.
+        "Sprawdzanie w toku": "Checking in progress",
+        "Sprawdzono bez błędów": "Checked, no errors",
+        "Skan nie powiódł się": "Scan failed",
         "Zamknij": "Close",
         "%@ z %@ zaznaczonych": "%@ of %@ selected",
         "Homebrew Formulae": "Homebrew Formulae",
@@ -365,7 +372,8 @@ public enum Translations {
         "Sprawdzaj automatycznie": "Check automatically",
         "Zakończ Wega": "Quit Wega",
         "Sprawdzam aktualizacje…": "Checking for updates…",
-        "%@ aktualizacji dostępnych": "%@ updates available",
+        // UX-08 — „%@ aktualizacji dostępnych" jest odmieniane przez liczbę: warianty
+        // one/few/many trzyma `Plurals`, a menu bar woła `trp(base, count)` zamiast `trf`.
         "Nie udało się sprawdzić": "Check failed",
         "Jeszcze nie sprawdzano": "Not checked yet",
         "%@ do aktualizacji": "%@ to update",
