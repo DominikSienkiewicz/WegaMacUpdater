@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import MacUpdaterCore
 
 struct UninstallView: View {
@@ -29,7 +30,6 @@ struct UninstallView: View {
     /// machine from a failed scan and drives the incomplete-data warning before uninstall.
     @State private var scanFailed:     Bool              = false
     @State private var banner:         BannerData?
-    @FocusState private var searchFocused: Bool
 
     private var isLoading: Bool { operations.isScanning }
     private var isUninstalling: Bool { operations.isUninstalling }
@@ -72,20 +72,6 @@ struct UninstallView: View {
                             .foregroundStyle(.tertiary)
                     }
                     Spacer()
-                    HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary).font(.system(size: 13))
-                        TextField(tr("Szukaj…"), text: $search)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 12))
-                            .frame(width: 180)
-                            .focused($searchFocused)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(NSColor.controlBackgroundColor), in: RoundedRectangle(cornerRadius: 7))
-                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.white.opacity(0.08), lineWidth: 1))
-                    .onTapGesture { searchFocused = true }
-
                     Button { Task { await scan() } } label: {
                         Label(tr("Odśwież"), systemImage: "arrow.clockwise")
                     }
@@ -220,6 +206,10 @@ struct UninstallView: View {
                                 .accessibilityLabel(selectionAccessibilityLabel(for: app, showsLocation: showsLocation(app)))
                                 .accessibilityValue(selectionAccessibilityValue(isSelected))
                                 .accessibilityAddTraits(isSelected ? .isSelected : [])
+                                // UX-11d: right-click gives the row the actions it otherwise
+                                // lacked — reveal it in Finder, copy its path, or toggle its
+                                // removal selection.
+                                .contextMenu { rowContextMenu(for: app, isSelected: isSelected) }
 
                                 Divider().opacity(0.4).padding(.leading, 54)
                             }
@@ -230,6 +220,8 @@ struct UninstallView: View {
             }
 
         }
+        // UX-11c — native `.searchable` in place of the header's hand-built search field.
+        .searchable(text: $search, prompt: tr("Szukaj…"))
         .sheet(isPresented: $showDialog) {
             UninstallDialog(
                 targets:     pendingUninstallTargets,
@@ -248,6 +240,19 @@ struct UninstallView: View {
             selected.formIntersection(filtered.map(\.id))
         }
         .task { await scan() }
+    }
+
+    /// UX-11d: the row's right-click menu. Its contents live in `AppRowContextMenu` so the
+    /// wording and ordering are unit-testable; this renders them and routes each selection.
+    @ViewBuilder
+    private func rowContextMenu(for app: ApplicationInfo, isSelected: Bool) -> some View {
+        ForEach(AppRowContextMenu.items(isSelected: isSelected)) { item in
+            Button {
+                performRowAction(item.action, for: app)
+            } label: {
+                Label(item.title, systemImage: item.systemImage)
+            }
+        }
     }
 
     @ViewBuilder
@@ -269,6 +274,20 @@ struct UninstallView: View {
 
     private func toggle(_ id: String) {
         if selected.contains(id) { selected.remove(id) } else { selected.insert(id) }
+    }
+
+    /// UX-11d: routes a row context-menu selection to its side effect. The menu contents
+    /// live in `AppRowContextMenu`; this keeps the row a thin wiring layer over them.
+    private func performRowAction(_ action: AppRowContextMenuAction, for app: ApplicationInfo) {
+        switch action {
+        case .toggleSelection:
+            toggle(app.id)
+        case .revealInFinder:
+            NSWorkspace.shared.activateFileViewerSelecting([app.path])
+        case .copyPath:
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(AppRowContextMenu.pathToCopy(for: app), forType: .string)
+        }
     }
 
     private func toggleAll() {
