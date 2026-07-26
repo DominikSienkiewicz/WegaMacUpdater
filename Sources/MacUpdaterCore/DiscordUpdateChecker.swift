@@ -4,7 +4,6 @@ import Foundation
 /// through a Squirrel-compatible server: `GET .../updates/{channel}?platform=osx&version={v}`
 /// answers **200** `{"name":"0.0.XXXX", …}` with the version to offer, or **204** when current.
 public enum DiscordUpdateParser {
-    private struct SquirrelResponse: Decodable { let name: String }
     public static func latestVersion(fromSquirrelJSON data: Data) -> String? {
         guard !data.isEmpty,
               let decoded = try? JSONDecoder().decode(SquirrelResponse.self, from: data) else { return nil }
