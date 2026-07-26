@@ -74,9 +74,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var replyToTermination: @MainActor (Bool) -> Void = { NSApplication.shared.reply(toApplicationShouldTerminate: $0) }
 
     func applicationDidFinishLaunching(_: Notification) {
+        guard enforceSingleInstance() else { return }
         registerMutationSources()
         MenuBarAgent.shared.start()
         refreshAppCatalog()
+    }
+
+    /// REL-08 — a second copy of Wega would drive `brew` in parallel with the first and race
+    /// for its lock, exactly the half-written Caskroom the in-process coordinator prevents.
+    /// `UpgradeMutex`/`OperationCoordinator` cannot see another process, so the guard is here,
+    /// at launch: count the other running copies by bundle identifier (this process excluded)
+    /// and, if any exist, stand down before touching any mutation source. Returns `false` when
+    /// this instance must not continue starting up.
+    private func enforceSingleInstance() -> Bool {
+        let others = NSRunningApplication
+            .runningApplications(withBundleIdentifier: AppMetadata.bundleIdentifier)
+            .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
+        switch SingleInstanceGuard.decide(otherInstanceCount: others.count) {
+        case .proceed:
+            return true
+        case .anotherInstanceRunning:
+            WegaLog.warning(.app, "Druga instancja Wega wykryta — kończę, aby nie mutować brew równolegle.")
+            NSApp.terminate(nil)
+            return false
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {

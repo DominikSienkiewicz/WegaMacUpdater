@@ -18,6 +18,9 @@ public enum Translations {
         "pewne": "confident",
         "sprawdź": "review",
         "niepewne": "uncertain",
+        // REL-08 — niska pewność dopasowania blokuje automatyczne przejęcie (`--force`).
+        "Dopasowanie %@ → %@ jest zbyt niepewne, aby przepiąć automatycznie. Zweryfikuj je ręcznie przed migracją.":
+            "The %@ → %@ match is too uncertain to migrate automatically. Verify it manually before migrating.",
         // SEC-08 — token GitHub (Keychain).
         "Token GitHub (opcjonalny)": "GitHub token (optional)",
         "Zapisany": "Saved",
