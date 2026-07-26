@@ -12,17 +12,55 @@ public struct ManualUpdateScanner: Sendable {
     private let scanDirectories: [URL]
     private let caskCacheURL: URL
     private let maxConcurrentChecks: Int
+    private let selfUpdateChecker: WegaSelfUpdateChecker
 
     public init(
         brewService: BrewService = BrewService(),
         scanDirectories: [URL] = AppScanDirectories.all(configuration: ScanConfigurationStore.resolvedConfiguration()),
         caskCacheURL: URL = AppScanDirectories.caskDatabaseCacheURL,
-        maxConcurrentChecks: Int = 12
+        maxConcurrentChecks: Int = 12,
+        selfUpdateChecker: WegaSelfUpdateChecker = WegaSelfUpdateChecker()
     ) {
         self.brewService = brewService
         self.scanDirectories = scanDirectories
         self.caskCacheURL = caskCacheURL
         self.maxConcurrentChecks = maxConcurrentChecks
+        self.selfUpdateChecker = selfUpdateChecker
+    }
+
+    /// UX-15 — Wega dogfoods its own update path. A self-update maps to the same
+    /// ``ManualOutdatedApp`` every vendor produces, so it rides one chokepoint (this scanner)
+    /// into the count, the badge, the notification and the Updates window's manual section —
+    /// "one count, everywhere". Returns `nil` when the app is current or the check failed.
+    ///
+    /// Pure and parameterised (no `Bundle`/network) so the mapping is unit-tested directly;
+    /// `scan()` feeds it the running app's identity.
+    static func selfUpdateApp(
+        from result: WegaSelfUpdateChecker.Result,
+        appPath: URL,
+        installedVersion: String,
+        bundleIdentifier: String?
+    ) -> ManualOutdatedApp? {
+        guard case let .updateAvailable(version, _, releaseURL, notes) = result else { return nil }
+        return ManualOutdatedApp(
+            name: "Wega",
+            path: appPath,
+            installedVersion: installedVersion,
+            availableVersion: version,
+            source: .wega(releaseURL: releaseURL),
+            origin: .manual,
+            releaseNotes: notes,
+            bundleIdentifier: bundleIdentifier
+        )
+    }
+
+    private func selfUpdateOutdatedApp() async -> ManualOutdatedApp? {
+        Self.selfUpdateApp(
+            from: await selfUpdateChecker.check(),
+            appPath: Bundle.main.bundleURL,
+            installedVersion: AppMetadata.version,
+            bundleIdentifier: AppMetadata.bundleIdentifier
+        )
     }
 
     /// Opakowuje check tak, by zalogować, które źródło dla której aplikacji
@@ -195,6 +233,9 @@ public struct ManualUpdateScanner: Sendable {
             case .upToDate, .notApplicable: break
             }
         }
+        // UX-15 — fold Wega's own update in before dedup so it participates in path-based
+        // deduplication like any other app and reaches every surface counting this list.
+        if let selfUpdate = await selfUpdateOutdatedApp() { collected.append(selfUpdate) }
         return (UpdatePlanner.dedupedByPriority(collected), failedChecks)
     }
 }

@@ -163,9 +163,16 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
         /// Obsidian — self-updating ASAR package; may follow the Catalyst insider channel
         /// independently of the app bundle and Homebrew cask versions.
         case obsidian
+        /// UX-15 — Wega updating itself. Surfaced through the same manual path every other
+        /// app uses so the self-update is counted, badged, notified and listed in the Updates
+        /// window ("one count, everywhere"). Carries the release page URL for the row action.
+        case wega(releaseURL: URL)
 
         public var priority: Int {
             switch self {
+            // Highest, so the authoritative self-update entry wins any path collision with a
+            // coincidental scan match of Wega's own bundle.
+            case .wega:        return 6
             case .antigravity: return 5
             case .parallels:   return 5
             case .googleDrive: return 5
