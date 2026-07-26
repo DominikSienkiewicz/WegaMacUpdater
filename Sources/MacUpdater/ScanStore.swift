@@ -92,6 +92,9 @@ final class ScanStore: ObservableObject {
 
     var model: AppViewModel?
     let processes = RunningProcessService()
+    /// REL-15 — the live-application snapshot the restart-after-update detection matches cask
+    /// bundle URLs against. Injectable so the wiring can be exercised without a real workspace.
+    let runningApplicationInspector: any RunningApplicationInspecting
     /// M2(b) — the last scan, on disk. Read once on first appearance, written after each
     /// completed scan, so a relaunch shows the previous list instead of an empty hero.
     private let resultStore: ScanResultStore
@@ -101,8 +104,12 @@ final class ScanStore: ObservableObject {
     /// **Cancel** something to cancel.
     var scanTask: Task<Void, Never>?
 
-    init(resultStore: ScanResultStore = ScanResultStore()) {
+    init(
+        resultStore: ScanResultStore = ScanResultStore(),
+        runningApplicationInspector: any RunningApplicationInspecting = WorkspaceRunningApplicationInspector()
+    ) {
         self.resultStore = resultStore
+        self.runningApplicationInspector = runningApplicationInspector
     }
 
     /// Services are owned by the app-level `AppViewModel`; hand them over on first appearance.

@@ -629,13 +629,16 @@ extension ScanStore {
             }
         }
 
-        // Pre-capture which casks being updated are currently running
-        var candidates: [RestartInfo] = []
-        for token in plannedCaskNames {
-            if let info = MacUpdaterConstants.restartMap[token], await isProcessRunning(info.processName) {
-                candidates.append(info)
-            }
-        }
+        // REL-15 — pre-capture which casks being updated own an app running right now.
+        // Detection is generic: each cask's resolved bundle URL is matched against the live
+        // applications, so it covers the whole catalog, not 16 hardcoded tokens. The restart
+        // map is passed only as an override for casks whose process name is atypical.
+        let candidates = RunningCaskDetector.runningApps(
+            tokens: plannedCaskNames,
+            appPaths: caskPreparation?.appPaths ?? [:],
+            running: runningApplicationInspector.runningApplications(),
+            overrides: MacUpdaterConstants.restartMap
+        )
 
         // REL-02 — one outcome per item and source, filled in phase by phase (execution →
         // validation → rollback → rescan). Nothing announces success before every phase
@@ -920,10 +923,6 @@ extension ScanStore {
             }
         }
         return verdicts
-    }
-
-    private func isProcessRunning(_ name: String) async -> Bool {
-        await processes.isRunning(name)
     }
 
     /// M5 — works out which outdated casks the rollback net actually covers.

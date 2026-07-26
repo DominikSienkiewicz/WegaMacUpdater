@@ -8,6 +8,11 @@ public enum MacUpdaterConstants {
         "Docker": "docker-desktop"
     ]
 
+    /// REL-15 — an **override**, not the detection list. Running-app detection is generic
+    /// (`RunningCaskDetector` matches each cask's bundle URL against the live applications), so
+    /// it covers the whole catalog. This map only supplies the process/app name to quit and
+    /// reopen for the handful of casks whose running process name cannot be read from the app
+    /// itself (e.g. the `zoom` cask runs as `zoom.us`, `visual-studio-code` as `Code`).
     public static let restartMap: [String: RestartInfo] = [
         "claude": RestartInfo(processName: "Claude", appName: "Claude"),
         "visual-studio-code": RestartInfo(processName: "Code", appName: "Visual Studio Code"),
