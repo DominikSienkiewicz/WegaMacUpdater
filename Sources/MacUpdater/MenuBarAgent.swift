@@ -28,6 +28,13 @@ final class MenuBarAgent: ObservableObject {
     /// scratch. Now the window adopts them, which is the whole "instant value" of M2.
     @Published private(set) var lastResult: MenuBarScanResult?
 
+    /// UX-11g — the apps/packages the dropdown names as having updates, derived from the
+    /// last check and filtered by the same ignore/pin rules that produced the badge count,
+    /// so the names and the count agree. Empty until the first check completes.
+    var outdatedNames: [String] {
+        lastResult?.outdatedDisplayNames(policies: UpdatePolicyStore.shared.policiesMap) ?? []
+    }
+
     /// REL-02 — the identity of the update set the user was last told about. It used to be
     /// the *count*: a round in which one update was installed and another appeared has the
     /// same count as the round before it, so the new one was never announced.
