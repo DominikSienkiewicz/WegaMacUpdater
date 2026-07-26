@@ -51,7 +51,7 @@ struct PublisherBaselineProtectionTests {
         let background = try source("Sources/MacUpdater/BackgroundUpdater.swift")
         let backgroundSnapshot = try #require(background.range(of: "CaskRollbackGuard.snapshot("))
         let backgroundMutation = try #require(background.range(
-            of: "outcome: await runBrew(arguments: arguments)"))
+            of: "var caskOutcome = await runBrew(arguments: arguments)"))
         #expect(backgroundSnapshot.lowerBound < backgroundMutation.lowerBound,
                 "SEC-02: the background path must capture the old publisher before brew mutates the app")
     }
@@ -123,7 +123,7 @@ struct PublisherBaselineProtectionTests {
         let backgroundVeto = try #require(background.range(
             of: "let publisherVetoes = CaskRollbackGuard.publisherVetoes("))
         let backgroundMutation = try #require(background.range(
-            of: "outcome: await runBrew(arguments: arguments)"))
+            of: "var caskOutcome = await runBrew(arguments: arguments)"))
         #expect(backgroundVeto.lowerBound < backgroundMutation.lowerBound)
         #expect(background.contains("run.recordPublisherVetoes("),
                 "SEC-02: a background veto needs a critical per-item outcome")
