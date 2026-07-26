@@ -116,15 +116,13 @@ struct LiveInventorySnapshotLoader: InventorySnapshotLoading {
     }
 
     func load() async -> InventorySnapshot {
-        let cacheURL = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Caches/\(AppMetadata.bundleIdentifier)/casks.json")
         let scanner = ApplicationScanner()
         return await InventorySnapshot.collect(
             directories: directories,
             sources: InventorySources(
                 installedCasks: { try await brewService.installedCasks() },
                 availableCasks: {
-                    try await CaskDatabaseClient(cache: CaskDatabaseCache(fileURL: cacheURL)).fetchCasks()
+                    try await CaskDatabaseClient.caskCatalog().fetchCasks()
                 },
                 scanApplications: { directory, installedCasks, availableCasks in
                     try scanner.scanApplications(
