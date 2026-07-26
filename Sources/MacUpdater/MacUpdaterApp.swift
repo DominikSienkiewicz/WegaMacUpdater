@@ -9,6 +9,9 @@ struct WegaMacUpdaterApp: App {
     @StateObject private var localization = LocalizationManager.shared
     @StateObject private var policies = UpdatePolicyStore.shared
     @StateObject private var menuBar = MenuBarAgent.shared
+    /// UX-10 — bus for menu commands that must reach a not-yet-mounted view (⌘F → inventory
+    /// search). Held above the language re-key so a ⌘F pending across a switch is not lost.
+    @StateObject private var commandCenter = WegaCommandCenter()
     /// Held here, above `.id(localization.language)`, so a language switch re-keys the
     /// view tree without discarding scan results or a running upgrade.
     @StateObject private var scan = ScanStore()
@@ -28,6 +31,7 @@ struct WegaMacUpdaterApp: App {
                 .environmentObject(policies)
                 .environmentObject(scan)
                 .environmentObject(migration)
+                .environmentObject(commandCenter)
                 // Re-key the whole tree on language change so every tr(...) re-evaluates.
                 .id(localization.language)
                 .tint(Color.wegaHoney)
@@ -43,6 +47,12 @@ struct WegaMacUpdaterApp: App {
         }
         .windowToolbarStyle(.unified)
         .windowStyle(.titleBar)
+        // UX-10 — the app's `CommandMenu` and its keyboard shortcuts (⌘R, ⌘⏎, ⌘1…⌘5, ⌘F).
+        // The menu itself is `WegaCommands`; it reads `@FocusedValue`s the view tree publishes,
+        // which a `Commands` conformer can do and this `.commands` closure cannot.
+        .commands {
+            WegaCommands(commandCenter: commandCenter)
+        }
 
         Settings {
             SettingsView()
@@ -74,9 +84,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var replyToTermination: @MainActor (Bool) -> Void = { NSApplication.shared.reply(toApplicationShouldTerminate: $0) }
 
     func applicationDidFinishLaunching(_: Notification) {
+        guard enforceSingleInstance() else { return }
         registerMutationSources()
         MenuBarAgent.shared.start()
         refreshAppCatalog()
+    }
+
+    /// REL-08 — a second copy of Wega would drive `brew` in parallel with the first and race
+    /// for its lock, exactly the half-written Caskroom the in-process coordinator prevents.
+    /// `UpgradeMutex`/`OperationCoordinator` cannot see another process, so the guard is here,
+    /// at launch: count the other running copies by bundle identifier (this process excluded)
+    /// and, if any exist, stand down before touching any mutation source. Returns `false` when
+    /// this instance must not continue starting up.
+    private func enforceSingleInstance() -> Bool {
+        let others = NSRunningApplication
+            .runningApplications(withBundleIdentifier: AppMetadata.bundleIdentifier)
+            .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
+        switch SingleInstanceGuard.decide(otherInstanceCount: others.count) {
+        case .proceed:
+            return true
+        case .anotherInstanceRunning:
+            WegaLog.warning(.app, "Druga instancja Wega wykryta — kończę, aby nie mutować brew równolegle.")
+            NSApp.terminate(nil)
+            return false
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
