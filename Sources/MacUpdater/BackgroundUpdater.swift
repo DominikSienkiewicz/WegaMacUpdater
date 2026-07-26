@@ -136,7 +136,29 @@ final class BackgroundUpdater {
 
             // REL-02 — the same per-item result type the window builds, filled in by the same
             // phases: execution, validation/rollback, then a rescan that has to agree.
-            run.recordBackgroundRound(tokens.map(Self.caskItem), outcome: await runBrew(arguments: arguments))
+            var caskOutcome = await runBrew(arguments: arguments)
+
+            // BG-04 — the window's between-phases auto-recovery, now shared with the unattended
+            // round: a cask stranded by a cut-short previous upgrade ("already an App at …")
+            // otherwise fails on *every* scheduled round, silently and forever. Recognize just
+            // those tokens (`tokensRetryableWithForce`), retry them once with `--force` — which
+            // overwrites the leftover — and fold the result back in. The retry runs inside this
+            // same `.backgroundUpgrade` write lease and after the snapshot above, so it goes
+            // through the shared coordinator with a rollback net rather than becoming a side
+            // path without one (REL-08).
+            let retryTokens = caskOutcome.tokensRetryableWithForce
+            if !retryTokens.isEmpty {
+                WegaLog.info(
+                    .homebrew,
+                    "Aktualizacja w tle — przerwana aktualizacja casku, ponawiam z --force: \(retryTokens.joined(separator: ", "))"
+                )
+                let retryOutcome = await runBrew(arguments: UpdatePlanner.forcedCaskCommand(tokens: retryTokens).arguments)
+                caskOutcome = BrewUpgradeOutcome.merging(
+                    original: caskOutcome, forcedRetry: retryOutcome, retriedTokens: retryTokens
+                )
+            }
+
+            run.recordBackgroundRound(tokens.map(Self.caskItem), outcome: caskOutcome)
             run.applyValidation(await CaskRollbackGuard.verify(tokens: tokens, appPaths: appPaths, snapshots: snapshots))
             await confirmByRescan(&run)
 

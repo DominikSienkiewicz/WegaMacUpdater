@@ -255,16 +255,8 @@ private struct NpmGlobalsList: View {
 
     var body: some View {
         WegaCard(padded: false) {
-            HStack(spacing: 8) {
-                Image(systemName: "shippingbox").foregroundStyle(Color.wegaInfo)
-                Text(tr("npm globalne")).font(.system(size: 13, weight: .semibold))
-                Text("\(packages.count)").font(.system(size: 12, design: .monospaced)).foregroundStyle(.tertiary)
-                Text(tr("instalacje przez `npm i -g`")).font(.system(size: 11)).foregroundStyle(.tertiary)
-                Spacer()
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+            WegaCardHeader(icon: "shippingbox", tint: Color.wegaInfo, title: tr("npm globalne"),
+                           count: packages.count, note: tr("instalacje przez `npm i -g`"))
 
             ForEach(packages, id: \.name) { pkg in
                 HStack(spacing: 12) {

@@ -74,15 +74,7 @@ extension InfoView {
     private var languageCard: some View {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    Image(systemName: "globe").foregroundStyle(Color.wegaHoney)
-                    Text(tr("Język interfejsu"))
-                        .font(.system(size: 13, weight: .semibold))
-                    Spacer()
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+                WegaCardHeader(icon: "globe", title: tr("Język interfejsu"))
 
                 Picker("", selection: $localization.language) {
                     ForEach(AppLanguage.allCases) { lang in
@@ -102,20 +94,13 @@ extension InfoView {
     private var policiesCard: some View {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    Image(systemName: "hand.raised").foregroundStyle(Color.wegaHoney)
-                    Text(tr("Ignorowane i przypięte"))
-                        .font(.system(size: 13, weight: .semibold))
-                    Spacer()
+                WegaCardHeader(icon: "hand.raised", title: tr("Ignorowane i przypięte")) {
                     if !policies.isEmpty {
                         Text("\(policies.sortedEntries.count)")
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundStyle(.tertiary)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .overlay(alignment: .bottom) { Divider().opacity(0.5) }
 
                 if policies.isEmpty {
                     Text(tr("Brak reguł. Kliknij aktualizację prawym przyciskiem, aby ją zignorować lub przypiąć wersję."))
@@ -178,16 +163,9 @@ extension InfoView {
         if touchIDState != .notSupported {
             WegaCard {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "touchid").foregroundStyle(Color.wegaHoney)
-                        Text(tr("Touch ID dla Homebrew"))
-                            .font(.system(size: 13, weight: .semibold))
-                        Spacer()
+                    WegaCardHeader(icon: "touchid", title: tr("Touch ID dla Homebrew")) {
                         statusBadge
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .overlay(alignment: .bottom) { Divider().opacity(0.5) }
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text(touchIDDescription)
@@ -236,15 +214,9 @@ extension InfoView {
     private var githubTokenCard: some View {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    Image(systemName: "key.horizontal").foregroundStyle(Color.wegaHoney)
-                    Text(tr("Token GitHub (opcjonalny)")).font(.system(size: 13, weight: .semibold))
-                    Spacer()
+                WegaCardHeader(icon: "key.horizontal", title: tr("Token GitHub (opcjonalny)")) {
                     if githubTokenStored { WegaBadge(label: tr("Zapisany"), variant: .info) }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .overlay(alignment: .bottom) { Divider().opacity(0.5) }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(tr("Podnosi limit GitHub z 60 do 5000 zapytań/h i włącza zwolnienie 304. Trzymany w Keychain."))
@@ -286,16 +258,9 @@ extension InfoView {
     private var privilegedHelperCard: some View {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    Image(systemName: "lock.shield").foregroundStyle(Color.wegaHoney)
-                    Text(tr("Komponent uprzywilejowany"))
-                        .font(.system(size: 13, weight: .semibold))
-                    Spacer()
+                WegaCardHeader(icon: "lock.shield", title: tr("Komponent uprzywilejowany")) {
                     helperStatusBadge
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .overlay(alignment: .bottom) { Divider().opacity(0.5) }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(tr("Pozwala instalować zweryfikowane aktualizacje i konfigurować Touch ID bez wpisywania hasła — przez podpisany helper (XPC) z białą listą operacji."))
@@ -541,16 +506,10 @@ extension InfoView {
         if AppEndpoints.overlayStatus.isUnverifiedOverlayActive {
             WegaCard {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.shield.fill").foregroundStyle(Color.wegaDanger)
-                        Text(tr("Nieweryfikowana konfiguracja endpointów"))
-                            .font(.system(size: 13, weight: .semibold))
-                        Spacer()
+                    WegaCardHeader(icon: "exclamationmark.shield.fill", tint: Color.wegaDanger,
+                                   title: tr("Nieweryfikowana konfiguracja endpointów")) {
                         WegaBadge(label: tr("Niezweryfikowany"), variant: .danger)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .overlay(alignment: .bottom) { Divider().opacity(0.5) }
 
                     Text(tr("W Application Support znaleziono plik endpoints.json bez ważnego podpisu. Wega zastosowała go zgodnie z polityką, ale nie mogła zweryfikować jego pochodzenia — sprawdź, czy to Twoja zmiana."))
                         .font(.system(size: 12))
@@ -627,15 +586,7 @@ extension InfoView {
     private var diagnosticsCard: some View {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    Image(systemName: "stethoscope").foregroundStyle(Color.wegaHoney)
-                    Text(tr("Diagnostyka systemu"))
-                        .font(.system(size: 13, weight: .semibold))
-                    Spacer()
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+                WegaCardHeader(icon: "stethoscope", title: tr("Diagnostyka systemu"))
 
                 if let d = diagnostics {
                     VStack(alignment: .leading, spacing: 0) {
@@ -664,15 +615,7 @@ extension InfoView {
     private var catalogCard: some View {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    Image(systemName: "books.vertical").foregroundStyle(Color.wegaHoney)
-                    Text(tr("Katalog aplikacji"))
-                        .font(.system(size: 13, weight: .semibold))
-                    Spacer()
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+                WegaCardHeader(icon: "books.vertical", title: tr("Katalog aplikacji"))
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(tr("Wega pobiera mapowania aplikacji (repozytoria GitHub, kody IDE JetBrains, feedy Sparkle) z sieci, więc nowe aplikacje są obsługiwane bez aktualizacji Wegi. Zmiany zastosują się po ponownym uruchomieniu."))
@@ -743,15 +686,7 @@ extension InfoView {
     private var licensesCard: some View {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    Image(systemName: "doc.text").foregroundStyle(Color.wegaHoney)
-                    Text(tr("Zewnętrzne narzędzia"))
-                        .font(.system(size: 13, weight: .semibold))
-                    Spacer()
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+                WegaCardHeader(icon: "doc.text", title: tr("Zewnętrzne narzędzia"))
 
                 VStack(alignment: .leading, spacing: 0) {
                     LicenseRow(name: "Homebrew", license: "BSD 2-Clause", url: AppEndpoints.shared.homebrewWebsiteURL)
@@ -769,15 +704,7 @@ extension InfoView {
     private var environmentCard: some View {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    Image(systemName: "cpu").foregroundStyle(Color.wegaHoney)
-                    Text(tr("Środowisko"))
-                        .font(.system(size: 13, weight: .semibold))
-                    Spacer()
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+                WegaCardHeader(icon: "cpu", title: tr("Środowisko"))
 
                 HStack(alignment: .top, spacing: 32) {
                     LabeledValue(

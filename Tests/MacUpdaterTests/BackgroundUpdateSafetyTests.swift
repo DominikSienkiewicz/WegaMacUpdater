@@ -70,7 +70,10 @@ struct BackgroundUpdateSafetyTests {
         let pathVeto = try #require(source.range(of: "BackgroundUpdateSafety.pathBackedTokens("))
         let snapshot = try #require(source.range(of: "CaskRollbackGuard.snapshot("))
         let snapshotVeto = try #require(source.range(of: "BackgroundUpdateSafety.snapshotBackedTokens("))
-        let brew = try #require(source.range(of: "outcome: await runBrew(arguments: arguments)"))
+        // BG-04 split the plain cask upgrade onto its own binding (`var caskOutcome = await
+        // runBrew(...)`) so a between-phases leftover can be force-retried before the outcome
+        // is recorded, so the anchor is the `runBrew` call itself — the same one QA-01c uses.
+        let brew = try #require(source.range(of: "await runBrew(arguments: arguments)"))
 
         #expect(pathVeto.lowerBound < snapshot.lowerBound)
         #expect(snapshot.lowerBound < snapshotVeto.lowerBound)
