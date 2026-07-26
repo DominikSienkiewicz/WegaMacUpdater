@@ -93,10 +93,20 @@ public final class LogStore: ObservableObject {
     /// Where `LogStore.shared` (and any default-constructed store) writes. Under
     /// XCTest this is redirected to a temp directory so the test suite can never
     /// pollute the user's real app log; production always uses `userLogDirectory`.
+    ///
+    /// The redirect is scoped to the **process**, not just to "tests". Several `swift test`
+    /// processes run at once — the backlog orchestrator gives every card its own worktree —
+    /// and a directory shared between them means one shared `wega.log` with size-based
+    /// rotation on it. Concurrent runs then truncate each other mid-assertion, and tests that
+    /// write an entry and read it back fail for reasons that have nothing to do with the code
+    /// under test. Per-process paths make those runs independent by construction.
     public nonisolated static var defaultDirectory: URL {
         isRunningUnderTests
             ? FileManager.default.temporaryDirectory
-                .appendingPathComponent("WegaMacUpdaterTests/Logs", isDirectory: true)
+                .appendingPathComponent(
+                    "WegaMacUpdaterTests/\(ProcessInfo.processInfo.processIdentifier)/Logs",
+                    isDirectory: true
+                )
             : userLogDirectory
     }
 
