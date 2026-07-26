@@ -37,8 +37,12 @@ final class SelfUpdateController: ObservableObject {
                 )
             },
             installOrOpen: { destination in
-                if PrivilegedHelperClient.shared.isEnabled,
-                   destination.pathExtension.lowercased() == "pkg" {
+                // UX-06 — the same decision the button label is built from, so "install" and
+                // "download and open" always describe the operation that actually runs.
+                if SelfUpdatePlanner.action(
+                    helperEnabled: PrivilegedHelperClient.shared.isEnabled,
+                    assetURL: destination
+                ) == .install {
                     do {
                         try await PrivilegedHelperClient.shared.installVerifiedPackage(at: destination.path)
                         return true
@@ -101,11 +105,16 @@ final class SelfUpdateController: ObservableObject {
         state = .downloading(previousResult)
         defer { state = previousResult.map(State.result) ?? .idle }
 
+        // UX-06 — `download` is its own state, distinct from `open`/`install`/`error`.
+        onWegaState(WegaState(pose: .sniff, line: SelfUpdatePresentation.message(for: .downloading)))
+
         let destination: URL
         do {
             destination = try await dependencies.download(source)
         } catch {
+            // The technical error stays in the log; the user sees a localized message (UX-06).
             WegaLog.error(.network, "Self-update — pobieranie: \(error.localizedDescription)")
+            onWegaState(WegaState(pose: .alert, line: SelfUpdatePresentation.message(for: .failed)))
             dependencies.openFallback()
             return
         }
@@ -137,11 +146,11 @@ final class SelfUpdateController: ObservableObject {
             return
         }
 
-        if installed {
-            onWegaState(WegaState(
-                pose: .happy,
-                line: tr("Aktualizacja zainstalowana przez komponent uprzywilejowany.")
-            ))
-        }
+        // UX-06 — `install` (headless, via the helper) and `open` (the user finishes a
+        // downloaded installer) are separate outcomes with separate messages.
+        onWegaState(WegaState(
+            pose: .happy,
+            line: SelfUpdatePresentation.message(for: installed ? .installed : .opened)
+        ))
     }
 }

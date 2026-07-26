@@ -30,8 +30,8 @@ struct LogsView: View {
         VStack(spacing: 0) {
             toolbar
             Divider().opacity(0.5)
-            if visible.isEmpty {
-                emptyState
+            if let reason = logEmptyReason(totalCount: store.entries.count, visibleCount: visible.count) {
+                emptyState(reason)
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
@@ -106,15 +106,39 @@ struct LogsView: View {
         }
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            WegaFull(pose: .idle, size: 120)
-            Text(tr("Cicho jak makiem zasiał — żadnych zdarzeń."))
-                .font(.system(size: 13)).foregroundStyle(.secondary)
-            Spacer()
+    // UX-06 — an empty log and a filter that hides everything are different situations, so
+    // each gets its own state. "Nothing has happened yet" rests; "nothing matches the filter"
+    // sniffs and offers a way back to the full list.
+    @ViewBuilder
+    private func emptyState(_ reason: LogEmptyReason) -> some View {
+        switch reason {
+        case .noEntries:
+            VStack(spacing: 16) {
+                Spacer()
+                WegaFull(pose: .idle, size: 120)
+                Text(tr("Cicho jak makiem zasiał — żadnych zdarzeń."))
+                    .font(.system(size: 13)).foregroundStyle(.secondary)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .noFilterMatches:
+            VStack(spacing: 12) {
+                Spacer()
+                WegaFull(pose: .sniff, size: 120)
+                Text(tr("Nic nie pasuje do filtra."))
+                    .font(.system(size: 13)).foregroundStyle(.secondary)
+                Text(tr("Zmień poziom lub frazę wyszukiwania, żeby zobaczyć więcej zdarzeń."))
+                    .font(.system(size: 12)).foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+                Button(tr("Wyczyść filtr")) {
+                    filter = .all
+                    search = ""
+                }
+                .controlSize(.small)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func revealInFinder() {

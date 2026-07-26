@@ -38,6 +38,22 @@ public enum Translations {
         // FEAT-03 — transparentność pobrania (UpdateView).
         "Bez weryfikacji sumy kontrolnej": "Without checksum verification",
         "Homebrew zainstaluje bez sprawdzenia sumy: %@": "Homebrew will install without checking the checksum: %@",
+        // UX-06 — komunikaty generowane z aktywnych źródeł + rozdzielone stany operacji.
+        "aplikacje sprawdzane ręcznie": "manually-checked apps",
+        "apki": "apps",
+        "Wega zajrzy do %@ i powie, co warto odświeżyć.": "Wega will look through %@ and tell you what's worth refreshing.",
+        "%@ oraz %@": "%@ and %@",
+        "Pobierz i otwórz instalator": "Download and open the installer",
+        "Pobieram nową wersję Wegi…": "Downloading the new version of Wega…",
+        "Pobrałam aktualizację i otwieram instalator — dokończ instalację.": "Downloaded the update and opening the installer — finish the installation.",
+        "Nie udało się pobrać aktualizacji — otwieram stronę wydania.": "Couldn't download the update — opening the release page.",
+        "Nic nie pasuje do filtra.": "Nothing matches the filter.",
+        "Zmień poziom lub frazę wyszukiwania, żeby zobaczyć więcej zdarzeń.": "Change the level or search term to see more events.",
+        "Wyczyść filtr": "Clear filter",
+        "Sprawdzanie aktualizacji nie powiodło się — szczegóły w logu.": "Checking for updates failed — see the log for details.",
+        "Homebrew nie odpowiedział podczas sprawdzania — szczegóły w logu.": "Homebrew did not respond during the check — see the log for details.",
+        "Mac App Store nie odpowiedział podczas sprawdzania — szczegóły w logu.": "The Mac App Store did not respond during the check — see the log for details.",
+        "npm nie odpowiedział podczas sprawdzania — szczegóły w logu.": "npm did not respond during the check — see the log for details.",
         // Auto-recovery przerwanej aktualizacji casku (leftover w Caskroom → retry z --force).
         "Przerwana aktualizacja (%@) — ponawiam z --force.": "Interrupted upgrade (%@) — retrying with --force.",
         // FEAT-07 — gating pobrań.

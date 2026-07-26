@@ -137,7 +137,10 @@ struct UpdateView: View {
         EmptyHero(
             pose: .idle,
             title: tr("Sprawdźmy, co się zestarzało"),
-            message: tr("Wega zajrzy do Homebrew oraz Mac App Store i powie, co warto odświeżyć."),
+            // UX-06 — name every source Wega will check (Homebrew, Mac App Store, npm and the
+            // manually-checked apps), not just the first two. Before a scan we can't know which
+            // are installed, so this lists what the scan covers rather than a frozen subset.
+            message: SourceCommunication.readyMessage(for: ScanSource.allCases),
             action: AnyView(
                 Button { scan.startCheck() } label: {
                     Label(tr("Sprawdź aktualizacje"), systemImage: "arrow.triangle.2.circlepath")
@@ -209,7 +212,7 @@ struct UpdateView: View {
                                  ? trf("Znaleziono %@", "\(d.formatted(date: .abbreviated, time: .shortened))")
                                  : trf("Sprawdzono %@", "\(d.formatted(date: .omitted, time: .shortened))"))
                             Text("·")
-                            Text("brew + mas").font(.system(size: 11, design: .monospaced))
+                            Text(sourceStamp).font(.system(size: 11, design: .monospaced))
                         }
                         .font(.system(size: 11))
                         .foregroundStyle(freshness.needsExplicitTimestamp ? AnyShapeStyle(Color.wegaToffee) : AnyShapeStyle(.tertiary))
@@ -492,6 +495,15 @@ struct UpdateView: View {
             return trf("%@ do ręcznej aktualizacji", "\(count.manual)")
         }
         return trf("%@ do zainstalowania + %@ ręcznych", "\(count.installable)", "\(count.manual)")
+    }
+
+    /// UX-06 — the monospaced stamp naming the sources behind the result on screen, built
+    /// from the sources that were actually active in the scan. A detail-less result (a
+    /// background-agent list or a legacy snapshot) has no per-source picture, so it falls
+    /// back to naming every source Wega checks rather than showing nothing.
+    private var sourceStamp: String {
+        let active = ScanSource.active(in: scan.sourceReports)
+        return SourceCommunication.stamp(for: active.isEmpty ? ScanSource.allCases : active)
     }
 
     private var selectAllSymbol: String {

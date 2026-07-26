@@ -112,10 +112,11 @@ extension ScanStore {
         } catch is CancellationError {
             _ = await bailIfCancelled(at: .brew, emitActivity: emitActivity)
         } catch {
-            errorMessage = error.localizedDescription
+            // UX-06 — the technical detail goes to the log; the user sees a localized message.
+            WegaLog.error(.scanner, "Koordynacja skanu: \(error.localizedDescription)")
+            errorMessage = tr("Sprawdzanie aktualizacji nie powiodło się — szczegóły w logu.")
             status = lastCheck == nil ? .ready : .results
             if emitActivity { emitActivitySignal(.error) }
-            WegaLog.error(.scanner, "Koordynacja skanu: \(error.localizedDescription)")
         }
     }
 
@@ -164,9 +165,11 @@ extension ScanStore {
             brewOutcome = .succeeded
         }
         catch BrewServiceError.brewNotFound { brewOutdated = nil; brewOutcome = .notInstalled }
-        catch { errorMessage = error.localizedDescription; brewOutdated = nil
+        catch { brewOutdated = nil
                 brewOutcome = .failed("brew outdated")
-                WegaLog.error(.homebrew, "brew outdated: \(error.localizedDescription)") }
+                // UX-06 — raw error (incl. brew's stderr) to the log, localized copy to the user.
+                WegaLog.error(.homebrew, "brew outdated: \(error.localizedDescription)")
+                errorMessage = tr("Homebrew nie odpowiedział podczas sprawdzania — szczegóły w logu.") }
         outcomes.append(brewOutcome)
         reports.brew = ScanSourceReport(outcome: brewOutcome, error: errorMessage)
         if brewOutcome == .succeeded { confirmedSourceKinds.formUnion([.formula, .cask]) }
@@ -180,8 +183,9 @@ extension ScanStore {
                 reports.mas = ScanSourceReport(outcome: .notInstalled) }
         catch { masOutdated = []
                 outcomes.append(.failed("Mac App Store"))
-                reports.mas = ScanSourceReport(outcome: .failed("Mac App Store"), error: "mas outdated: \(error.localizedDescription)")
-                WegaLog.error(.app, "mas outdated: \(error.localizedDescription)") }
+                // UX-06 — technical detail stays in the log; the report carries a localized reason.
+                WegaLog.error(.app, "mas outdated: \(error.localizedDescription)")
+                reports.mas = ScanSourceReport(outcome: .failed("Mac App Store"), error: tr("Mac App Store nie odpowiedział podczas sprawdzania — szczegóły w logu.")) }
 
         if await bailIfCancelled(at: .mas, emitActivity: emitActivity) { return }
 
@@ -193,8 +197,9 @@ extension ScanStore {
                 reports.npm = ScanSourceReport(outcome: .notInstalled) }
         catch { npmOutdated = []
                 outcomes.append(.failed("npm"))
-                reports.npm = ScanSourceReport(outcome: .failed("npm"), error: "npm outdated: \(error.localizedDescription)")
-                WegaLog.error(.network, "npm outdated: \(error.localizedDescription)") }
+                // UX-06 — technical detail stays in the log; the report carries a localized reason.
+                WegaLog.error(.network, "npm outdated: \(error.localizedDescription)")
+                reports.npm = ScanSourceReport(outcome: .failed("npm"), error: tr("npm nie odpowiedział podczas sprawdzania — szczegóły w logu.")) }
 
         var failed = UpdatePlanner.failedSourceCount(outcomes)
         // Names of the top-level sources that genuinely went silent, for the scan-end

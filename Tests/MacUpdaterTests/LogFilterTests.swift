@@ -19,4 +19,18 @@ final class LogFilterTests: XCTestCase {
         XCTAssertEqual(filterLogEntries(all, level: .all, search: "network").map(\.message), ["world"])
         XCTAssertEqual(filterLogEntries(all, level: .all, search: "HELLO").map(\.message), ["hello"])
     }
+
+    // UX-06 — an empty log and a filter that hides everything are different situations and
+    // must read differently. This pins the classification the LogsView renders on.
+    func testEmptyReasonIsNilWhenSomethingIsVisible() {
+        XCTAssertNil(logEmptyReason(totalCount: 3, visibleCount: 1))
+    }
+
+    func testEmptyReasonIsNoEntriesWhenTheLogIsGenuinelyEmpty() {
+        XCTAssertEqual(logEmptyReason(totalCount: 0, visibleCount: 0), .noEntries)
+    }
+
+    func testEmptyReasonIsNoMatchesWhenEntriesExistButTheFilterHidesThemAll() {
+        XCTAssertEqual(logEmptyReason(totalCount: 5, visibleCount: 0), .noFilterMatches)
+    }
 }
