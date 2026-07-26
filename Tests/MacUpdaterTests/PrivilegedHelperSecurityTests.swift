@@ -1,6 +1,9 @@
 import Testing
 import Foundation
 @testable import MacUpdaterCore
+// SEC-10: contract + validation moved to WegaHelperKit; these tests reach its
+// internal seams (CodeSignatureVerifier.artifact, …).
+@testable import WegaHelperKit
 
 /// Pure-logic guards for the P0 security work (SEC-03 + FEAT-01). These do not
 /// require the Security/ServiceManagement frameworks at runtime — they pin the

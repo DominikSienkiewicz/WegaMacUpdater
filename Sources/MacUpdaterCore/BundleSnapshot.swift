@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 import Darwin
 
 /// Per-app rollback via APFS copy-on-write clones (**FEAT-05 / Prop#2-alt**).

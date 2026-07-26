@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 @testable import MacUpdaterCore
+// SEC-10: SudoLocalTransactionalWriter now lives in WegaHelperKit (internal type).
+@testable import WegaHelperKit
 
 @Suite("Transactional sudo_local writer")
 struct SudoLocalTransactionalWriterTests {

@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 
 /// The directories scanned for installed apps: the built-in roots `/Applications` and
 /// `~/Applications`, any user-added roots, and their non-`.app` subfolders down to a

@@ -1,5 +1,6 @@
 import Foundation
 import LocalAuthentication
+import WegaHelperKit
 
 /// In-app biometric gate for critical actions (**ICE-01 / D4**).
 ///

@@ -15,8 +15,17 @@ let package = Package(
         .library(name: "MacUpdaterCore", targets: ["MacUpdaterCore"]),
     ],
     targets: [
+        // SEC-10: minimal contract + helper-security module. Holds ONLY the
+        // shared XPC contract and the root-side validation the privileged daemon
+        // needs (code-signature verification, PAM writer, fixed system paths), so
+        // the root process links this instead of the full MacUpdaterCore (HTTP,
+        // parsers, UI helpers) — shrinking the privileged attack surface.
+        .target(
+            name: "WegaHelperKit"
+        ),
         .target(
             name: "MacUpdaterCore",
+            dependencies: ["WegaHelperKit"],
             resources: [
                 .process("Resources")
             ]
@@ -31,7 +40,7 @@ let package = Package(
         // handling (build-pkg.sh copies it into Contents/Library/LaunchDaemons/).
         .executableTarget(
             name: "WegaPrivilegedHelper",
-            dependencies: ["MacUpdaterCore"],
+            dependencies: ["WegaHelperKit"],
             path: "Sources/WegaPrivilegedHelper",
             exclude: ["com.wega.WegaMacUpdater.helper.plist"]
         ),
@@ -46,7 +55,7 @@ let package = Package(
         ),
         .testTarget(
             name: "MacUpdaterTests",
-            dependencies: ["MacUpdaterCore"],
+            dependencies: ["MacUpdaterCore", "WegaHelperKit"],
             resources: [
                 .process("Fixtures")
             ]

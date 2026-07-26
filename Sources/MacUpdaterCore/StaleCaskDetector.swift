@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 
 public struct StaleCaskDetector {
     private let applicationsDirectory: URL

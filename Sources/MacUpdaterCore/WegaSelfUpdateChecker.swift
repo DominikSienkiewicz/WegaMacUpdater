@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 
 /// Checks whether a newer Wega release is available — Wega dogfooding its own machinery.
 ///

@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import WegaHelperKit
 
 struct AuthorizationComponents: Equatable, Sendable {
     let askpassExecutable: URL

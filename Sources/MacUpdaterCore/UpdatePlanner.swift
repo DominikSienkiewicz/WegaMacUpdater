@@ -244,19 +244,22 @@ public enum UpdatePlanner {
     }
 
     /// The exact commands a plan maps to, in the order `runUpdate` executes them:
-    /// formulae (`brew upgrade …`), casks (`brew upgrade --cask …`), npm one-per-package
-    /// (`npm install -g <name>@latest`), then mas (`mas upgrade <app-id> …`). Empty
+    /// formulae (`brew upgrade -- …`), casks (`brew upgrade --cask -- …`), npm one-per-package
+    /// (`npm install -g -- <name>@latest`), then mas (`mas upgrade <app-id> …`). Empty
     /// sections are skipped. This is the single source of truth the dry-run preview renders.
+    ///
+    /// SEC-10: every package name is fenced behind a `--` terminator so a token can never
+    /// be parsed as an option flag. (mas App Store IDs are numeric and need no terminator.)
     public static func commands(for plan: UpdatePlan) -> [UpdateCommand] {
         var commands: [UpdateCommand] = []
         if !plan.formulaNames.isEmpty {
-            commands.append(UpdateCommand(executable: "brew", arguments: ["upgrade"] + plan.formulaNames))
+            commands.append(UpdateCommand(executable: "brew", arguments: ["upgrade", "--"] + plan.formulaNames))
         }
         if !plan.caskNames.isEmpty {
             commands.append(caskUpgradeCommand(tokens: plan.caskNames))
         }
         for pkg in plan.npmNames {
-            commands.append(UpdateCommand(executable: "npm", arguments: ["install", "-g", "\(pkg)@latest"]))
+            commands.append(UpdateCommand(executable: "npm", arguments: ["install", "-g", "--", "\(pkg)@latest"]))
         }
         if plan.includesMas {
             commands.append(UpdateCommand(executable: "mas", arguments: ["upgrade"] + plan.masAppStoreIDs))
@@ -267,13 +270,13 @@ public enum UpdatePlanner {
     /// The standard cask command used by both the preview and the last-moment publisher
     /// veto, which may safely narrow the original plan immediately before execution.
     public static func caskUpgradeCommand(tokens: [String]) -> UpdateCommand {
-        UpdateCommand(executable: "brew", arguments: ["upgrade", "--cask"] + tokens)
+        UpdateCommand(executable: "brew", arguments: ["upgrade", "--cask", "--"] + tokens)
     }
 
     /// The forced cask-upgrade command the auto-recovery path runs when an interrupted
-    /// upgrade left a staged app behind: `brew upgrade --cask --force <tokens>`.
+    /// upgrade left a staged app behind: `brew upgrade --cask --force -- <tokens>`.
     public static func forcedCaskCommand(tokens: [String]) -> UpdateCommand {
-        UpdateCommand(executable: "brew", arguments: ["upgrade", "--cask", "--force"] + tokens)
+        UpdateCommand(executable: "brew", arguments: ["upgrade", "--cask", "--force", "--"] + tokens)
     }
 
     public static func selectAllState(selectedCount: Int, totalCount: Int) -> SelectAllState {

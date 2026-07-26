@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 
 /// Detects Homebrew cask "metadata drift" — casks whose real on-disk app
 /// version already matches (or exceeds) `current_version`, even though brew

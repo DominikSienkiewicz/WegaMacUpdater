@@ -100,6 +100,8 @@ public final class BrewService: @unchecked Sendable {
         if force {
             arguments.append("--force")
         }
+        // SEC-10: `--` fences the token off from Homebrew's option parsing.
+        arguments.append("--")
         arguments.append(token)
         let result = try await runBrew(arguments)
         try ensureSuccess(result, arguments: arguments)
@@ -114,6 +116,8 @@ public final class BrewService: @unchecked Sendable {
         if force {
             arguments.append("--force")
         }
+        // SEC-10: `--` fences the token off from Homebrew's option parsing.
+        arguments.append("--")
         arguments.append(token)
         let result = try await runBrew(arguments)
         try ensureSuccess(result, arguments: arguments)
@@ -128,7 +132,8 @@ public final class BrewService: @unchecked Sendable {
     }
 
     public func installCask(token: String) async throws -> ProcessResult {
-        let arguments = ["install", "--cask", token]
+        // SEC-10: `--` fences the token off from Homebrew's option parsing.
+        let arguments = ["install", "--cask", "--", token]
         let result = try await runBrew(arguments)
         try ensureSuccess(result, arguments: arguments)
         return result
@@ -143,7 +148,8 @@ public final class BrewService: @unchecked Sendable {
     /// same `--force` the batch upgrade path falls back to on this exact error). Streamed
     /// via `events(arguments:)`, so the args live here to stay testable.
     public static func adoptCaskArguments(token: String) -> [String] {
-        ["install", "--cask", "--force", token]
+        // SEC-10: `--` fences the token off from Homebrew's option parsing.
+        ["install", "--cask", "--force", "--", token]
     }
 
     /// Returns the latest version string from the cask database for a given token, or nil on failure.
