@@ -91,21 +91,111 @@ struct PrivilegedHelperSecurityTests {
         )
     }
 
-    /// SEC-03 characterization — KNOWN GAP, pinned deliberately.
-    ///
-    /// The gate is a *string* prefix/suffix check with no `..` canonicalization, so
-    /// `/Applications/../tmp/evil.app` (which resolves to `/tmp/evil.app`) currently clears
-    /// it. This is exactly the case the audit flagged: "a test `/Applications/../tmp/evil.app`
-    /// would expose this gap immediately". Asserting the *current* (permissive) behavior keeps
-    /// the suite green today while making the gap impossible to miss; SEC-03's hardening will
-    /// flip this expectation to `.outsideApplications`, turning this assertion RED until it does.
-    @Test func replaceBundleGateStillAdmitsDotDotTraversal_SEC03() {
+    /// SEC-03 — the traversal the audit named. `/Applications/../tmp/evil.app` resolves to
+    /// `/tmp/evil.app`, so it must not clear the gate. This assertion was deliberately pinned
+    /// the other way round while the gap existed; the hardening flips it, exactly as the
+    /// characterization comment promised it would.
+    @Test func replaceBundleGateRejectsDotDotTraversal_SEC03() {
         #expect(
             WegaHelper.bundleReplacementRejection(
                 targetPath: "/Applications/../tmp/evil.app",
                 snapshotPath: "/tmp/Foo.app"
+            ) == .outsideApplications
+        )
+    }
+
+    /// A `..` that stays inside `/Applications` is legitimate — canonicalisation must not
+    /// turn the gate into a blanket ban on the character sequence.
+    @Test func replaceBundleGateAdmitsDotDotResolvingBackIntoApplications() {
+        #expect(
+            WegaHelper.bundleReplacementRejection(
+                targetPath: "/Applications/Utilities/../Foo.app",
+                snapshotPath: "/tmp/Foo.app"
             ) == nil
         )
+    }
+
+    /// `/Applications` reached through a relative path is not a path the helper accepts:
+    /// the daemon's cwd is not part of the trust boundary.
+    @Test func replaceBundleGateRejectsRelativeTargets() {
+        #expect(
+            WegaHelper.bundleReplacementRejection(
+                targetPath: "Applications/Foo.app",
+                snapshotPath: "/tmp/Foo.app"
+            ) == .outsideApplications
+        )
+    }
+
+    /// A target whose first two components are not `/` + `Applications` is rejected even when
+    /// the string starts with the right characters — `/ApplicationsEvil/Foo.app` must not pass
+    /// a prefix test.
+    @Test func replaceBundleGateComparesPathComponentsNotPrefixes() {
+        #expect(
+            WegaHelper.bundleReplacementRejection(
+                targetPath: "/ApplicationsEvil/Foo.app",
+                snapshotPath: "/tmp/Foo.app"
+            ) == .outsideApplications
+        )
+    }
+
+    // MARK: - SEC-03: filesystem facts (symlinks + snapshot↔target identity)
+
+    private func facts(
+        resolved: String = "/Applications/Foo.app",
+        isSymlink: Bool = false,
+        targetBundleID: String? = "com.acme.foo",
+        targetTeamID: String? = "TEAM123456",
+        snapshotBundleID: String? = "com.acme.foo",
+        snapshotTeamID: String? = "TEAM123456"
+    ) -> WegaHelper.BundleReplacementFacts {
+        .init(
+            targetResolvedPath: resolved,
+            targetIsSymlink: isSymlink,
+            targetBundleID: targetBundleID,
+            targetTeamID: targetTeamID,
+            snapshotBundleID: snapshotBundleID,
+            snapshotTeamID: snapshotTeamID
+        )
+    }
+
+    @Test func matchingIdentityOnARealDirectoryIsAccepted() {
+        #expect(WegaHelper.bundleReplacementRejection(facts: facts()) == nil)
+    }
+
+    @Test func aSymlinkedTargetIsRejected() {
+        #expect(WegaHelper.bundleReplacementRejection(facts: facts(isSymlink: true)) == .symlinkedTarget)
+    }
+
+    /// The target itself is an ordinary directory, but a symlinked parent redirects the write
+    /// outside `/Applications`. Resolving only the final component would miss this.
+    @Test func aTargetReachedThroughASymlinkedParentIsRejected() {
+        #expect(
+            WegaHelper.bundleReplacementRejection(facts: facts(resolved: "/tmp/evil/Foo.app"))
+                == .symlinkedTarget
+        )
+    }
+
+    @Test func aSnapshotOfADifferentApplicationIsRejected() {
+        #expect(
+            WegaHelper.bundleReplacementRejection(facts: facts(snapshotBundleID: "com.evil.other"))
+                == .identityMismatch
+        )
+    }
+
+    /// Same bundle identifier, different publisher — the takeover case SEC-02 tracks, refused
+    /// here as well so a re-signed impostor cannot ride in as a "restore".
+    @Test func aSnapshotSignedByADifferentTeamIsRejected() {
+        #expect(
+            WegaHelper.bundleReplacementRejection(facts: facts(snapshotTeamID: "OTHER99999"))
+                == .identityMismatch
+        )
+    }
+
+    /// Unsigned or unreadable input fails closed: a missing Team ID is exactly what an
+    /// attacker-supplied bundle looks like.
+    @Test func missingIdentityFailsClosed() {
+        #expect(WegaHelper.bundleReplacementRejection(facts: facts(targetTeamID: nil)) == .identityMismatch)
+        #expect(WegaHelper.bundleReplacementRejection(facts: facts(snapshotBundleID: nil)) == .identityMismatch)
     }
 
     // MARK: - FEAT-01: XPC peer requirements
