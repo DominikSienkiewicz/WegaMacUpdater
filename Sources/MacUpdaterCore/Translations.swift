@@ -116,6 +116,10 @@ public enum Translations {
         "Zaznacz wszystko": "Select all",
         "Zaznaczone": "Selected",
         "Niezaznaczone": "Not selected",
+        // UX-09 — colour-independent VoiceOver status for the Updates sidebar scan icon.
+        "Sprawdzanie w toku": "Checking in progress",
+        "Sprawdzono bez błędów": "Checked, no errors",
+        "Skan nie powiódł się": "Scan failed",
         "Zamknij": "Close",
         "%@ z %@ zaznaczonych": "%@ of %@ selected",
         "Homebrew Formulae": "Homebrew Formulae",
