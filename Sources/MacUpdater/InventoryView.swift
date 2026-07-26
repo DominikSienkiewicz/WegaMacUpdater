@@ -447,6 +447,12 @@ private struct InventoryRow: View {
                 case .npm, .manual:
                     WegaBadge(label: tr("Ręcznie"), variant: .manual)
                 }
+                // UX-14: an app Wega has no known way to update can be reported to the catalog.
+                // `.manual` provenance alone is not enough — a hand-installed app the catalog
+                // already tracks has a source — so this is gated on `CatalogReporting`, not the badge.
+                if !CatalogReporting.hasKnownUpdateSource(app, catalog: .shared) {
+                    ReportAppButton(app: app)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -458,6 +464,30 @@ private struct InventoryRow: View {
         .padding(.vertical, 8)
         .background(rowBackground)
         .onHover { hovered = $0 }
+    }
+}
+
+/// UX-14 — the Inventory affordance that reports an app Wega has no known way to update. It is the
+/// one and only call site of `CatalogIssueBuilder`: the action builds a prefilled GitHub "new issue"
+/// URL and hands it to `NSWorkspace`, closing the community-catalog loop from the UI.
+private struct ReportAppButton: View {
+    let app: ApplicationInfo
+
+    var body: some View {
+        Button(action: report) {
+            Image(systemName: "plus.bubble")
+                .font(.system(size: 11))
+                .foregroundStyle(Color.wegaHoney)
+        }
+        .buttonStyle(.plain)
+        .help(tr("Zgłoś tę aplikację do katalogu"))
+        .accessibilityLabel(tr("Zgłoś aplikację"))
+    }
+
+    private func report() {
+        let builder = CatalogReporting.issueBuilder(for: app)
+        guard let url = builder.url(newIssueEndpoint: AppEndpoints.shared.projectNewIssueURL) else { return }
+        NSWorkspace.shared.open(url)
     }
 }
 

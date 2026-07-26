@@ -19,6 +19,7 @@
   "googleDriveDownload": "https://www.google.com/drive/download/",
   "projectRepository": "https://github.com/DominikSienkiewicz/WegaMacUpdater",
   "projectIssues": "https://github.com/DominikSienkiewicz/WegaMacUpdater/issues",
+  "projectNewIssue": "https://github.com/DominikSienkiewicz/WegaMacUpdater/issues/new",
   "authorLinkedIn": "https://www.linkedin.com/in/dominik-sienkiewicz/",
   "masRepository": "https://github.com/mas-cli/mas"
 }
