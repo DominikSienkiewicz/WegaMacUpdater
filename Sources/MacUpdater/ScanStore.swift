@@ -293,6 +293,19 @@ final class ScanStore: ObservableObject {
         UpdatePolicyStore.shared.ignore(key: app.policyKey, name: app.name)
     }
 
+    /// UX-12 — skip just the version currently on offer; a later release surfaces again.
+    /// No-op when the source can't name the available version (nothing concrete to skip).
+    func skipItem(_ item: OutdatedItem) {
+        guard let version = item.to, !version.isEmpty else { return }
+        UpdatePolicyStore.shared.skip(key: item.policyKey, name: item.name, version: version)
+        selected.remove(item.key)
+    }
+
+    func skipManual(_ app: ManualOutdatedApp) {
+        guard let version = app.availableVersion, !version.isEmpty else { return }
+        UpdatePolicyStore.shared.skip(key: app.policyKey, name: app.name, version: version)
+    }
+
     /// The banner currently on screen, if any.
     var banner: BannerData? { banners.current }
 

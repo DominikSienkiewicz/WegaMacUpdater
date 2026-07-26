@@ -303,13 +303,40 @@ struct UpdateView: View {
                         let casks    = visibleItems.filter { $0.kind == .cask }
                         let store    = visibleItems.filter { $0.kind == .appStore }
                         let npmPkgs  = visibleItems.filter { $0.kind == .npm }
-                        if !formulae.isEmpty && updateFilter.allowsCli { UpdateSection(title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"),  icon: "terminal",  items: formulae, selected: $scan.selected, inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreItem, onPin: requestPin, onInspect: { scan.inspectedKey = $0.key }) }
+                        if !formulae.isEmpty && updateFilter.allowsCli {
+                            UpdateSection(
+                                title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"), icon: "terminal",
+                                items: formulae, selected: $scan.selected, inspectedKey: scan.inspectedKey,
+                                onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
+                                onInspect: { scan.inspectedKey = $0.key }
+                            )
+                        }
                         if !casks.isEmpty && updateFilter.allowsApps {
-                            UpdateSection(title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), icon: "app.gift", items: casks, iconPaths: scan.caskIconPaths, rollbackProtection: scan.caskProtection, selected: $scan.selected, inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreItem, onPin: requestPin, onInspect: { scan.inspectedKey = $0.key })
+                            UpdateSection(
+                                title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), icon: "app.gift",
+                                items: casks, iconPaths: scan.caskIconPaths, rollbackProtection: scan.caskProtection,
+                                selected: $scan.selected, inspectedKey: scan.inspectedKey,
+                                onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
+                                onInspect: { scan.inspectedKey = $0.key }
+                            )
                             caskTransparencyNote(casks: casks)
                         }
-                        if !store.isEmpty && updateFilter.allowsApps    { UpdateSection(title: tr("Mac App Store"),     subtitle: tr("via mas-cli"),      icon: "bag",      items: store,    selected: $scan.selected, inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreItem, onPin: requestPin, onInspect: { scan.inspectedKey = $0.key }) }
-                        if !npmPkgs.isEmpty && updateFilter.allowsCli  { UpdateSection(title: tr("npm globalne"),      subtitle: tr("pakiety -g"),       icon: "shippingbox", items: npmPkgs, selected: $scan.selected, inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreItem, onPin: requestPin, onInspect: { scan.inspectedKey = $0.key }) }
+                        if !store.isEmpty && updateFilter.allowsApps {
+                            UpdateSection(
+                                title: tr("Mac App Store"), subtitle: tr("via mas-cli"), icon: "bag",
+                                items: store, selected: $scan.selected, inspectedKey: scan.inspectedKey,
+                                onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
+                                onInspect: { scan.inspectedKey = $0.key }
+                            )
+                        }
+                        if !npmPkgs.isEmpty && updateFilter.allowsCli {
+                            UpdateSection(
+                                title: tr("npm globalne"), subtitle: tr("pakiety -g"), icon: "shippingbox",
+                                items: npmPkgs, selected: $scan.selected, inspectedKey: scan.inspectedKey,
+                                onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
+                                onInspect: { scan.inspectedKey = $0.key }
+                            )
+                        }
                         // Group manual updates by INSTALL ORIGIN (same axis the Inventory
                         // window labels), not by update source. A self-updating Homebrew
                         // cask (Docker, Postman, ChatGPT…) stays under "Homebrew Casks" so
@@ -329,6 +356,7 @@ struct UpdateView: View {
                                 inspectedKey: scan.inspectedKey,
                                 onIgnore: scan.ignoreManual,
                                 onPin: requestPinManual,
+                                onSkip: scan.skipManual,
                                 onInspect: { scan.inspectedKey = "m:" + $0.path.path }
                             )
                         }
@@ -343,6 +371,7 @@ struct UpdateView: View {
                                 inspectedKey: scan.inspectedKey,
                                 onIgnore: scan.ignoreManual,
                                 onPin: requestPinManual,
+                                onSkip: scan.skipManual,
                                 onInspect: { scan.inspectedKey = "m:" + $0.path.path }
                             )
                         }

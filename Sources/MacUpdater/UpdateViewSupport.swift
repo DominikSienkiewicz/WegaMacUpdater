@@ -141,7 +141,14 @@ struct UpdateSection: View {
     var inspectedKey: String? = nil
     var onIgnore: ((OutdatedItem) -> Void)?
     var onPin:    ((OutdatedItem) -> Void)?
+    var onSkip:   ((OutdatedItem) -> Void)? = nil
     var onInspect: ((OutdatedItem) -> Void)? = nil
+
+    /// A skip closure only when there is a concrete version on offer to skip.
+    private func skipAction(for item: OutdatedItem) -> (() -> Void)? {
+        guard let onSkip, let to = item.to, !to.isEmpty else { return nil }
+        return { onSkip(item) }
+    }
 
     var body: some View {
         WegaCard {
@@ -169,10 +176,11 @@ struct UpdateSection: View {
                     onSelect:       { onInspect?(item) },
                     onIgnore:       { onIgnore?(item) },
                     onPin:          { onPin?(item) },
+                    onSkip:         skipAction(for: item),
                     backgroundUpdateToken: item.kind == .cask ? item.name : nil
                 )
                 .contextMenu {
-                    UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) })
+                    UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) }, onSkip: skipAction(for: item))
                 }
                 .overlay(alignment: .bottom) {
                     if item.id != items.last?.id { Divider().opacity(0.4).padding(.leading, 54) }
@@ -186,14 +194,21 @@ struct UpdateSection: View {
     }
 }
 
-/// Shared context-menu content for ignoring or pinning an update.
+/// Shared context-menu content for ignoring, skipping, or pinning an update.
 private struct UpdatePolicyMenu: View {
     let onIgnore: () -> Void
     let onPin:    () -> Void
+    /// UX-12 — nil when there is no concrete version to skip, so the item is hidden.
+    var onSkip:   (() -> Void)? = nil
 
     var body: some View {
         Button(action: onIgnore) {
             Label(tr("Nie aktualizuj"), systemImage: "bell.slash")
+        }
+        if let onSkip {
+            Button(action: onSkip) {
+                Label(tr("Pomiń tę wersję"), systemImage: "forward.end")
+            }
         }
         Button(action: onPin) {
             Label(tr("Przypnij wersję…"), systemImage: "pin")
@@ -271,7 +286,14 @@ struct ManualUpdateSection: View {
     var inspectedKey: String? = nil
     var onIgnore:  ((ManualOutdatedApp) -> Void)?
     var onPin:     ((ManualOutdatedApp) -> Void)?
+    var onSkip:    ((ManualOutdatedApp) -> Void)? = nil
     var onInspect: ((ManualOutdatedApp) -> Void)? = nil
+
+    /// A skip closure only when the source reported a concrete version to skip.
+    private func skipAction(for app: ManualOutdatedApp) -> (() -> Void)? {
+        guard let onSkip, let version = app.availableVersion, !version.isEmpty else { return nil }
+        return { onSkip(app) }
+    }
 
     var body: some View {
         WegaCard {
@@ -372,7 +394,7 @@ struct ManualUpdateSection: View {
                     onInspect?(item)
                 }
                 .contextMenu {
-                    UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) })
+                    UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) }, onSkip: skipAction(for: item))
                 }
                 .overlay(alignment: .bottom) {
                     if item.path != items.last?.path { Divider().opacity(0.4).padding(.leading, 54) }
