@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The version lives in exactly one place — `AppMetadata.version`
 (`Sources/WegaHelperKit/AppMetadata.swift`); the release workflow refuses to publish
 a tag whose version doesn't match it. Keep the `[Unreleased]` section ahead of each
-bump and move its entries under the new version heading when cutting a release.
+bump; `scripts/release.sh` moves its entries under the new version heading when cutting a
+release, so that step is never done by hand — see [RELEASING.md](RELEASING.md).
 
 ## [Unreleased]
 
@@ -23,6 +24,69 @@ bump and move its entries under the new version heading when cutting a release.
   Diagnostyka systemu** so a missing grant is visible before the first upgrade. Unattended
   rounds are held back for 24 h after an observed refusal rather than failing identically
   every interval, and the hold lifts by itself once a round succeeds.
+- A rebuilt window chrome on `NavigationSplitView`: a List-backed sidebar driven by one
+  `SidebarSelection` value instead of two navigation axes, the scan control hoisted into
+  the toolbar so its states can morph, the details pane moved into the native
+  `.inspector()` container, and glass on the floating layer in place of the hand-drawn
+  washes. This is the change that raises the minimum macOS to 26 — see **Changed** below.
+- `DiscordUpdateChecker`, `SignalUpdateChecker` and `ChromeUpdateChecker` — three more
+  self-updating apps whose Homebrew casks are `auto_updates` and lag the real channel, so
+  neither `brew outdated` nor the cask-version check sees the new build. Discord
+  (stable / PTB / Canary) is read from its Squirrel.Mac feed, Signal Desktop from its
+  `electron-updater` `latest-mac.yml`, and Chrome (stable / beta / dev / canary) from
+  Google's public Version History API — taking the **max** version, because that feed's
+  order is not contractually newest-first.
+- `ObsidianUpdateChecker` — Obsidian loads self-updated `obsidian-X.Y.Z.asar` packages from
+  Application Support independently of the installer in `/Applications` and of its
+  `auto_updates` cask. The checker reads the effective ASAR version, follows the `beta`
+  version when `obsidian.json` enables the Catalyst insider channel, and runs even when
+  Brew correctly reports the installer cask as current; the action opens Obsidian so its
+  own signed in-app updater applies the package.
+- Homebrew is now **optional**, behind a soft gate. Without it Wega still checks the Mac
+  App Store, Sparkle, the vendor feeds and npm, and shows an *"install Homebrew to unlock
+  more updates"* card instead of a wall. A tool that is not installed is classified as
+  **not applicable** (`SourceCheckOutcome.notInstalled`) rather than as a failed check — so
+  a machine without brew stops wearing a permanent red *"the list may be incomplete"*
+  banner over a list that is complete.
+- A dry-run plan preview above the update button (**"Show exactly what I will do"**),
+  rendering `UpdatePlanner.commands(for:)` — *the same call the upgrade itself executes*, so
+  the preview cannot drift from what runs — plus, per cask, the download host, whether
+  Homebrew will verify its checksum, whether the rollback net covers it, whether it **may**
+  ask for an admin password, and a `HEAD`-probed download size (**"size unknown"** is a
+  first-class answer shown as itself, and the measured sizes feed `DownloadGate`).
+- One unified update count (`UpdatePlanner.unifiedCount`) shared by the window header, the
+  sidebar badge, the menu-bar badge and the background notification. The header names both
+  halves of it — *"12 to install + 3 manual"* — and the **Update all (N)** button counts
+  only the installable half, so it never promises an upgrade Wega cannot perform.
+- Real scan progress and a working **Cancel**: the scan is strictly sequential
+  (brew → mas → npm → manual) and the bar reports the phase it is genuinely in. The window
+  also opens with the last scan already restored — from `ScanResultStore` on disk or from
+  the menu-bar agent's last background check, whichever is newer — instead of an empty
+  screen followed by a second scan, with `ScanFreshness` marking a day-old result as such
+  rather than letting it pass for fresh.
+- Opt-in unattended upgrades for a deliberately narrow subset of casks, decided by the pure
+  `BackgroundUpdateEligibility` predicate and granted per app from a row's ⋯ menu, with a
+  durable consent audit in the Settings window.
+- Release notes wherever the source publishes them: Sparkle `<description>` and JetBrains
+  `whatsnew` are parsed and shown inline on the row behind a *What's new* disclosure as well
+  as in the inspector. Vendor HTML is untrusted input — `ReleaseNotesText` in Core strips
+  every tag and drops `<script>` / `<style>` bodies whole, without going near WebKit.
+- The interface language now resolves from the system locale on first launch
+  (`AppLanguage.defaultLanguage(preferredLanguages:)` in Core): Polish only when macOS
+  reports it ahead of the other languages Wega ships, **English otherwise** — including for
+  an empty list. Switching the language keeps the current scan results, and a running
+  upgrade, intact.
+- The committed catalog and its detached signature are gated against each other in CI
+  (`scripts/verify-catalog.sh`), so the catalog can no longer change without its signature
+  being regenerated. A catalog's URL-typed fields are validated **while decoding** (absolute
+  https with a non-empty host), so a hostile entry is rejected at decode time rather than
+  opened or fetched later, and `CatalogIssueBuilder` turns an app Wega has no known way to
+  update into a prefilled GitHub issue straight from its Inventory row.
+- The **🛡 rollback badge** on every Homebrew cask row — a shield where snapshot → canary →
+  auto-rollback covers the upgrade, and an honest *"no protection"* slash where it cannot (a
+  cask that installs no `.app` has nothing to clone). Banners now **queue** rather than
+  overwrite, so a *publisher changed* alert survives the upgrade summary that used to
+  clobber it.
 - A hard download resource gate shared by window and unattended cask upgrades. Before
   snapshotting or downloading it vetoes metered/Low Data Mode networking, low battery,
   thermal throttling and insufficient (or unreadable) disk capacity. Required space is
@@ -88,6 +152,14 @@ bump and move its entries under the new version heading when cutting a release.
   button on purpose — a two-state checkbox cannot say "some", so it keeps the spoken count.
   Migration and npm/brew duplicate rows name the app in their action labels, so identical
   buttons are distinguishable without sight.
+- ⚠️ **BREAKING — the minimum supported macOS is now 26 (Tahoe).** The deployment target
+  moved from macOS 14 to macOS 26 (`Package.swift`) because the rebuilt window chrome is
+  built on **Liquid Glass**, which macOS 26 introduces; CI moved to the `macos-26` runner in
+  the same change, because a macOS 15 runner cannot execute the resulting binary. There is
+  no fallback rendering path and no compatibility shim: **on macOS 14 or 15 this build will
+  not install or run.** If your Mac is below macOS 26, do not take this update — it will not
+  leave you with a working app. Building from source correspondingly requires **Xcode 26**
+  (the full app, not the Command Line Tools alone).
 - Hardened the no-TTY sudo path (`SEC-05`). Production no longer writes or executes
   user-modifiable askpass/sudo shell scripts from Application Support. The packaged app
   embeds compiled `WegaAskpass` and `WegaSudoShim` executables, signs them inside-out,
@@ -174,6 +246,12 @@ bump and move its entries under the new version heading when cutting a release.
   post-install target, or the same artifact existing in both application directories, fails
   closed and retains the snapshot. Bundle-identity mismatch rollback now also restores from
   a working copy so the original snapshot survives successful automatic recovery.
+- Three Auto Layout constraint loops the rebuilt window chrome introduced — at startup with
+  the inspector, during a scan, and on scan completion — which logged continuously and could
+  take the toolbar layout down with them. A UI test reproduces the scan-toolbar case. The
+  sidebar also stays steady and inset while a scan runs, the scan button is disabled while an
+  update is installing, and the duplicate scan progress bar and duplicate rescan button the
+  chrome rewrite left behind are gone.
 - **Destructive fallbacks no longer change meaning without consent (UX-04).** A
   migration now identifies every running candidate by its resolved bundle path (or one
   unambiguous bundle ID), asks that exact app to quit normally and waits; only an app that
@@ -342,8 +420,15 @@ bump and move its entries under the new version heading when cutting a release.
 
 ## [0.1.0] — 2026-06-05
 
-First tagged release. One native SwiftUI window that updates every app on a Mac from a
-single place.
+One native SwiftUI window that updates every app on a Mac from a single place.
+
+> **This version was never tagged.** `0.1.0` is the state of the tree on the date above, not
+> a published release: the repository has no `v*` tag and no GitHub Release, so there is no
+> release page to link to and no comparison range to compute against. That is why the heading
+> below carries no link. The first tag this project cuts will be **higher than `0.1.0`** —
+> `scripts/release.sh` refuses a version that is not greater than `AppMetadata.version`, which
+> already reads `0.1.0` — and it will be cut from `[Unreleased]` alone. See
+> [RELEASING.md § 9 — Cutting the first release](RELEASING.md#9-cutting-the-first-release).
 
 ### Added
 - **Update** — Homebrew formulae + casks (greedy), Mac App Store (`mas`), npm globals,
@@ -371,5 +456,11 @@ single place.
 - Swift 6 strict-concurrency build, SwiftLint, universal (arm64 + x86_64) packaging,
   and SonarCloud coverage gate in CI.
 
-[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/releases/tag/v0.1.0
+<!--
+  There are no tags yet, so `compare/v0.1.0...HEAD` and `releases/tag/v0.1.0` both 404 —
+  they are omitted rather than kept as decoration. `[Unreleased]` therefore points at the
+  commit log, and `[0.1.0]` has no reference at all, so its heading renders as plain text.
+  `scripts/release.sh` rewrites the `[Unreleased]:` line and appends the new version's own
+  reference when the first tag is cut; nothing here needs to be remembered by hand.
+-->
+[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/commits/main

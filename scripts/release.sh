@@ -147,9 +147,16 @@ repo_url() {
   echo "${url%.git}"
 }
 
-# The version of the most recent release section already in the changelog, if any.
+# The most recent *released* version already in the changelog, if any. It is used only to
+# build the `compare/vPREV...vNEW` link, and a comparison range against a tag that does not
+# exist is a 404 — so a section heading alone does not qualify. `0.1.0` shipped untagged
+# (QA-06), so it must not become the baseline of the first release's link.
 previous_version() {
-  grep -m1 -o '^## \[[0-9][0-9.]*\]' "$CHANGELOG" 2>/dev/null | tr -d '#[] ' || true
+  local version
+  version="$(grep -m1 -o '^## \[[0-9][0-9.]*\]' "$CHANGELOG" 2>/dev/null | tr -d '#[] ' || true)"
+  [ -n "$version" ] || return 0
+  tag_exists_locally "v$version" || tag_exists_on_origin "v$version" || return 0
+  echo "$version"
 }
 
 # Drops leading and trailing blank lines, keeping the ones in between.
