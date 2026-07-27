@@ -23,6 +23,16 @@ bump and move its entries under the new version heading when cutting a release.
   Diagnostyka systemu** so a missing grant is visible before the first upgrade. Unattended
   rounds are held back for 24 h after an observed refusal rather than failing identically
   every interval, and the hold lifts by itself once a round succeeds.
+- Opt-in crash reporting for Wega itself, through MetricKit. macOS hands the app its own
+  crash and hang reports shortly after the next launch, so a crash no longer has to be
+  reconstructed from a system report dug out and mailed in by hand. The switch lives in
+  Settings and is **off by default**, and the reports never leave the Mac: there is no
+  endpoint and no upload path — collecting is one decision, sending is a separate one the
+  user makes by copying a report out. Locale, Mac model, memory-region dumps and slid runtime
+  addresses are dropped at the parser; every stored string goes through the same redaction as
+  a log line, so no filesystem path or URL query survives. Turning it on collects from that
+  point forward — diagnostics recorded before consent are not swept up — and at most 20
+  reports are kept, for 90 days, owner-only next to `wega.log`.
 - A hard download resource gate shared by window and unattended cask upgrades. Before
   snapshotting or downloading it vetoes metered/Low Data Mode networking, low battery,
   thermal throttling and insufficient (or unreadable) disk capacity. Required space is

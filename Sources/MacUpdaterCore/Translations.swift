@@ -123,6 +123,16 @@ extension Translations {
             "Background mode — the schedule, badge, notifications and silent updates — runs only while Wega is open. Turn this on so macOS launches Wega at login and background mode keeps working after a restart of the Mac.",
         "Element logowania został wyłączony w Ustawieniach systemowych. Włącz go ponownie w Ustawienia → Elementy logowania.":
             "The login item was switched off in System Settings. Turn it back on in Settings → Login Items.",
+        // LT-05 — opt-in na lokalne raporty awarii (MetricKit). Nic nie wychodzi z Maca.
+        "Raportowanie awarii": "Crash reporting",
+        "Zbieraj lokalnie raporty awarii Wegi": "Collect Wega crash reports locally",
+        "Gdy Wega się wysypie albo zawiesi, macOS (MetricKit) przekazuje jej własny raport przy następnym uruchomieniu. Raport zostaje na tym Macu — Wega nigdzie go nie wysyła. Zapisujemy wersję, system, architekturę, powód zakończenia i ślad stosu; ścieżki i adresy są usuwane.":
+            "When Wega crashes or hangs, macOS (MetricKit) hands it its own report on the next launch. The report stays on this Mac — Wega never sends it anywhere. Version, OS, architecture, termination reason and the stack trace are kept; paths and addresses are stripped.",
+        "Brak zapisanych raportów.": "No stored reports.",
+        "Zapisane raporty: %d (do 20, przez 90 dni)": "Stored reports: %d (up to 20, for 90 days)",
+        "Kopiuj raporty": "Copy reports",
+        "Usuń raporty": "Delete reports",
+        "Usunąć zapisane raporty awarii?": "Delete the stored crash reports?",
         "Sprawdźmy, co się zestarzało": "Let's check what's gotten old",
         "Wega zajrzy do Homebrew oraz Mac App Store i powie, co warto odświeżyć.": "Wega will look into Homebrew and the Mac App Store and tell you what's worth refreshing.",
         "Sprawdź aktualizacje": "Check for updates",

@@ -185,6 +185,26 @@ It also has an **App catalog** card that refreshes Wega's list of
 supported apps on demand (it also refreshes on launch); a fetched update applies on the
 next launch.
 
+### Crash reporting (off by default)
+
+The **Crash reporting** card in Settings can collect Wega's own crash and hang reports, so
+that if Wega ever dies on you the evidence is already waiting instead of having to be dug out
+of Console. It is **off until you turn it on**, and everything about it is local:
+
+- macOS (MetricKit) hands Wega its own report shortly after the *next* launch — a crash is
+  never reported by the run that crashed, and an app that crashes on every launch cannot
+  report itself at all.
+- Reports **stay on this Mac**. Wega has nowhere to send them; there is no upload, no
+  "anonymous statistics", not even an opt-out one.
+- What is kept: Wega's version and build, the macOS version, CPU architecture, the
+  termination reason and the stack trace. What is not: your locale, your Mac model, memory
+  contents, and any filesystem path or URL — those are stripped the same way log lines are.
+- Turning it on collects from that moment on. Crashes recorded before you agreed are not
+  swept up.
+- Up to 20 reports are kept for 90 days, in `~/Library/Logs/WegaMacUpdater/`, readable only
+  by you. **Copy reports** puts them on the clipboard so you can attach them to a bug report;
+  **Delete reports** wipes them. Sending one is always your decision.
+
 ### Common situations
 
 - **"Couldn't check — check your connection."** A source was unreachable, so Wega says so

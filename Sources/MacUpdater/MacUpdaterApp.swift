@@ -84,6 +84,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_: Notification) {
         guard enforceSingleInstance() else { return }
+        // LT-05: attach the MetricKit source first thing. A diagnostic recorded by a previous
+        // run is delivered shortly after launch, so a late subscription can miss the very
+        // crash it exists to capture. Attaching does not subscribe — the controller starts
+        // delivery only if the user has opted in.
+        CrashReportingController.shared.attach(source: MetricKitCrashDiagnosticSource())
         registerMutationSources()
         MenuBarAgent.shared.start()
         refreshAppCatalog()
