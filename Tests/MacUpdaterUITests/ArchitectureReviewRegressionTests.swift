@@ -16,7 +16,7 @@ struct ArchitectureReviewRegressionTests {
             dependencies: .init(
                 check: { .upToDate },
                 download: { $0 },
-                verify: { _ in },
+                verify: { _, _ in },
                 installOrOpen: { _ in
                     installProbe.record(
                         mutationLabels: MutationGuard.shared.runningLabels

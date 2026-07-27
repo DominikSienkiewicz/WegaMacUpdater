@@ -330,6 +330,22 @@ bump and move its entries under the new version heading when cutting a release.
   via `SMAppService`, and Team-ID verification of self-update installers. Pinned by
   a new `PrivilegedHelperSecurityTests` case that fails CI on any regression to a
   non-Team-ID-shaped value.
+- **Self-update now pins the publisher, and an unverifiable build can no longer be a stable
+  release.** The update offered the `.dmg` first, and a `.dmg` was accepted on a Gatekeeper
+  verdict alone — but Gatekeeper answers "notarized by *some* Apple developer", never
+  "published by Wega", so any notarized image from any developer could be presented as a Wega
+  update. The `.pkg` is now preferred (it is the channel with a full Team ID pin, and with the
+  privileged helper enabled it installs headlessly), and the `.dmg` fallback is pinned too:
+  the image's own Developer ID Team ID is checked, the image is mounted **read-only** and
+  invisibly, and the single `.app` it carries is verified for Team ID, bundle ID and version
+  before anything is opened. A `.pkg` whose Team ID cannot be read is now **rejected** instead
+  of quietly falling back to the Gatekeeper verdict, and the version the release promised is
+  matched against the payload, so a genuinely signed older build cannot be substituted for the
+  update the user was shown. On the publishing side, a tag is released as **stable** only when
+  the Developer ID, the installer certificate and the notary key are all configured and the
+  artifact gate has confirmed signature, notarization, stapling and Wega's Team ID; anything
+  less is published as a **prerelease**, which the self-update ignores. The pipeline stays
+  fully runnable without an Apple Developer account — it just cannot call the result stable.
 - Hardened the GitHub PAT keychain item (`GitHubCredentialStore`): accessibility moved
   from `AfterFirstUnlock` to **`AfterFirstUnlockThisDeviceOnly`**, so the credential is
   no longer eligible for iCloud Keychain sync or device backups (it can't leak to
