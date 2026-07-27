@@ -178,6 +178,24 @@ struct ArchitectureReviewRegressionTests {
         #expect(background.contains("label: \"background update preflight\""))
     }
 
+    /// ARCH-08d — the 9-lane binary stream measures each lane's glyph text once, at
+    /// construction (inside `BinaryStreamFrameRenderer`), not on every 30 fps Canvas
+    /// frame. The per-frame draw loop must contain no text measurement.
+    @Test func binaryStreamHoistsTextMeasurementOutOfTheFrameLoop() throws {
+        let root = packageRoot()
+        let stream = executableSource(
+            try source("Sources/MacUpdater/BinaryStream.swift", root: root)
+        )
+        #expect(
+            !stream.contains(".measure("),
+            "the per-frame Canvas loop must not re-measure glyph text (ARCH-08d)"
+        )
+        #expect(
+            stream.contains("BinaryStreamFrameRenderer"),
+            "static glyph measurement must live in BinaryStreamFrameRenderer"
+        )
+    }
+
     private func packageRoot(file: String = #filePath) -> URL {
         URL(fileURLWithPath: file)
             .deletingLastPathComponent()

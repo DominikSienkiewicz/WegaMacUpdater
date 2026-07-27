@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -57,6 +58,52 @@ private struct BinaryStreamRandomNumberGenerator: RandomNumberGenerator {
     }
 }
 
+/// Precomputes each lane's glyph size once and produces per-frame draw placements
+/// without re-measuring text. A lane's glyph size depends only on its glyphs and
+/// font size — never on the animation frame — so measurement is hoisted into `init`
+/// instead of running inside the 30-fps Canvas loop (ARCH-08d). Only the cheap
+/// offset arithmetic that actually changes per frame stays in `placements(at:)`.
+struct BinaryStreamFrameRenderer {
+    struct Placement: Equatable {
+        let lane: BinaryStreamLane
+        let primary: CGPoint
+        let secondary: CGPoint?
+    }
+
+    private let lanes: [BinaryStreamLane]
+    private let glyphSizes: [CGSize]
+
+    init(lanes: [BinaryStreamLane], measure: (BinaryStreamLane) -> CGSize) {
+        self.lanes = lanes
+        self.glyphSizes = lanes.map(measure)
+    }
+
+    func placements(at time: TimeInterval, canvasSize: CGSize) -> [Placement] {
+        var placements: [Placement] = []
+        placements.reserveCapacity(lanes.count)
+        for (lane, glyphSize) in zip(lanes, glyphSizes) {
+            guard glyphSize.width > 0 else { continue }
+
+            let travel = glyphSize.width
+            let offset = (time * lane.speed + lane.phase * travel)
+                .truncatingRemainder(dividingBy: travel)
+            let normalized = offset >= 0 ? offset : offset + travel
+
+            let y = lane.yFraction * canvasSize.height - glyphSize.height / 2
+            let x1 = -normalized
+            let x2 = x1 + travel
+            placements.append(
+                Placement(
+                    lane: lane,
+                    primary: CGPoint(x: x1, y: y),
+                    secondary: x2 < canvasSize.width ? CGPoint(x: x2, y: y) : nil
+                )
+            )
+        }
+        return placements
+    }
+}
+
 /// The render schedule is a value so Reduce Motion is both enforceable and unit-testable.
 /// A static mode never creates a `TimelineView`, avoiding hidden 30-fps work as well as motion.
 enum BinaryStreamMotionMode: Equatable {
@@ -91,13 +138,27 @@ struct BinaryStream: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let laneData: [BinaryStreamLane]
+    private let frameRenderer: BinaryStreamFrameRenderer
 
     init(lanes: Int = 9, color: Color = .wegaHoney, baseSpeed: Double = 38) {
         self.lanes = lanes
         self.color = color
         self.baseSpeed = baseSpeed
 
-        self.laneData = BinaryStreamLaneFactory.make(lanes: lanes, baseSpeed: baseSpeed)
+        let laneData = BinaryStreamLaneFactory.make(lanes: lanes, baseSpeed: baseSpeed)
+        self.laneData = laneData
+        self.frameRenderer = BinaryStreamFrameRenderer(
+            lanes: laneData,
+            measure: BinaryStream.measureGlyphs
+        )
+    }
+
+    /// Measures a lane's glyph run from font metrics alone. The size depends only on
+    /// the glyphs and font size, so this runs once at construction (see
+    /// `BinaryStreamFrameRenderer`) rather than on every animation frame.
+    private static func measureGlyphs(_ lane: BinaryStreamLane) -> CGSize {
+        let font = NSFont.monospacedSystemFont(ofSize: lane.fontSize, weight: .regular)
+        return NSAttributedString(string: lane.glyphs, attributes: [.font: font]).size()
     }
 
     var body: some View {
@@ -136,31 +197,16 @@ struct BinaryStream: View {
     private func stream(at date: Date) -> some View {
         Canvas { ctx, size in
             let t = date.timeIntervalSinceReferenceDate
-            for lane in laneData {
+            for placement in frameRenderer.placements(at: t, canvasSize: size) {
+                let lane = placement.lane
                 let font = Font.system(size: lane.fontSize, weight: .regular, design: .monospaced)
                 let text = Text(lane.glyphs).font(font).foregroundStyle(color)
                 let resolved = ctx.resolve(text)
-                let glyphSize = resolved.measure(
-                    in: CGSize(
-                        width: CGFloat.greatestFiniteMagnitude,
-                        height: CGFloat.greatestFiniteMagnitude
-                    )
-                )
-                guard glyphSize.width > 0 else { continue }
-
-                let travel = glyphSize.width
-                let offset = (t * lane.speed + lane.phase * travel)
-                    .truncatingRemainder(dividingBy: travel)
-                let normalized = offset >= 0 ? offset : offset + travel
-
-                let y = lane.yFraction * size.height - glyphSize.height / 2
-                let x1 = -normalized
-                let x2 = x1 + travel
 
                 ctx.opacity = lane.opacity
-                ctx.draw(resolved, at: CGPoint(x: x1, y: y), anchor: .topLeading)
-                if x2 < size.width {
-                    ctx.draw(resolved, at: CGPoint(x: x2, y: y), anchor: .topLeading)
+                ctx.draw(resolved, at: placement.primary, anchor: .topLeading)
+                if let secondary = placement.secondary {
+                    ctx.draw(resolved, at: secondary, anchor: .topLeading)
                 }
             }
         }
