@@ -138,10 +138,16 @@ The range end is `HEAD`. The start is the first of these that resolves:
 
 1. The most recent tag matching `v*`, by commit date.
 2. The most recent commit whose subject starts with `chore(release):`.
-3. The root commit.
 
-Rule 2 exists because `0.1.0` shipped without a tag; without it the first run would replay the
-entire history. The chosen baseline is printed so it is never a guess.
+Rule 2 exists because `0.1.0` shipped without a tag.
+
+**If neither resolves, no commit-derived entries are generated at all** and the notes come
+from `[Unreleased]` alone. Falling back to the root commit was tried and rejected: against the
+real repository it produced 185 entries from 272 commits, which is a history dump, not a
+release note. The changelog already describes the shipped work by hand. Verified on
+`main` @ `6cc035e`.
+
+The chosen baseline — or its absence — is always printed, so it is never a guess.
 
 ## 8. Commit classification
 

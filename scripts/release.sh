@@ -139,8 +139,10 @@ require_in_sync() {
 repo_url() {
   local url
   url="$(git remote get-url origin 2>/dev/null || true)"
+  # git@host:owner/repo -> https://host/owner/repo. The colon must be replaced before the
+  # scheme is prefixed, or the substitution eats the one in "https://".
   case "$url" in
-    git@*:*) url="https://${url#git@}"; url="${url/://}" ;;
+    git@*:*) url="${url#git@}"; url="https://${url/://}" ;;
   esac
   echo "${url%.git}"
 }
@@ -328,21 +330,23 @@ if [ -n "$LAST_TAG" ] && git merge-base --is-ancestor "$LAST_TAG" HEAD 2>/dev/nu
   BASELINE="$LAST_TAG"
   BASELINE_LABEL="$LAST_TAG"
 else
-  # 0.1.0 shipped without a tag, so fall back to the previous release commit; without this
-  # the first run would replay the entire history as release notes.
+  # 0.1.0 shipped without a tag, so fall back to the previous release commit.
   BASELINE="$(git rev-list -1 --grep='^chore(release):' HEAD || true)"
-  if [ -n "$BASELINE" ]; then
-    BASELINE_LABEL="$(git log -1 --format=%s "$BASELINE")"
-  else
-    BASELINE_LABEL="the start of history"
-  fi
+  [ -n "$BASELINE" ] && BASELINE_LABEL="$(git log -1 --format=%s "$BASELINE")"
 fi
-[ -n "$BASELINE" ] && RANGE="$BASELINE..HEAD" || RANGE="HEAD"
 
 # --- collect and classify commits -------------------------------------------------------
 
 mkdir -p "$TMP/gen"
 kept=0; skipped=0; total=0
+
+# With no previous release to measure from, "every commit ever made" is not a release note.
+# The changelog already describes the shipped history by hand, so the notes come from
+# [Unreleased] alone rather than from 272 replayed subjects.
+if [ -z "$BASELINE" ]; then
+  echo ">> no previous release found (no v* tag, no chore(release): commit)"
+  echo "   release notes will come from [Unreleased] only — the full history is not release notes"
+fi
 
 classify() {
   case "$1" in
@@ -379,14 +383,16 @@ while IFS=$'\x1f' read -r sha subj; do
     printf -- '- %s (%s)\n' "$ctext" "$sha" >> "$TMP/gen/$section"
   fi
   kept=$((kept + 1))
-done < <(git log --no-merges --format="%h%x1f%s" "$RANGE")
+done < <(if [ -n "$BASELINE" ]; then git log --no-merges --format="%h%x1f%s" "$BASELINE..HEAD"; fi)
 
-# Naming what was dropped, and why, keeps "skipped" from reading as "lost".
-SKIP_NOTE=""
-if [ "$skipped" -gt 0 ]; then
-  SKIP_NOTE=": $(sort -u "$TMP/skipped" | paste -sd/ -)"
+if [ -n "$BASELINE" ]; then
+  # Naming what was dropped, and why, keeps "skipped" from reading as "lost".
+  SKIP_NOTE=""
+  if [ "$skipped" -gt 0 ]; then
+    SKIP_NOTE=": $(sort -u "$TMP/skipped" | paste -sd/ -)"
+  fi
+  echo ">> collected $total commit(s) since $BASELINE_LABEL ($kept kept, $skipped skipped$SKIP_NOTE)"
 fi
-echo ">> collected $total commits since $BASELINE_LABEL ($kept kept, $skipped skipped$SKIP_NOTE)"
 
 # --- assemble the new CHANGELOG ---------------------------------------------------------
 
@@ -396,8 +402,13 @@ split_sections "$TMP/unreleased" "$TMP/hand"
 
 HAND_COUNT="$(find "$TMP/hand" -type f 2>/dev/null | wc -l | tr -d ' ')"
 if [ "$kept" -eq 0 ] && [ "$HAND_COUNT" -eq 0 ]; then
-  die "nothing to release: [Unreleased] is empty and no commits since $BASELINE_LABEL qualify" \
-    "Add entries under [Unreleased] in $CHANGELOG, or land some feat:/fix:/refactor: work."
+  if [ -n "$BASELINE" ]; then
+    die "nothing to release: [Unreleased] is empty and no commits since $BASELINE_LABEL qualify" \
+      "Add entries under [Unreleased] in $CHANGELOG, or land some feat:/fix:/refactor: work."
+  fi
+  die "nothing to release: [Unreleased] is empty" \
+    "With no previous release to measure from, the notes come from [Unreleased] alone." \
+    "Describe the release there in $CHANGELOG, then re-run."
 fi
 
 DATE="$(date +%Y-%m-%d)"

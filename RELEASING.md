@@ -205,7 +205,17 @@ git tag -d v0.1.6
 
 ## 9. Cutting the first release
 
-The project has no tags yet: `0.1.0` shipped untagged. The script handles this — with no `v*`
-tag to measure from it falls back to the last `chore(release):` commit, and the changelog link
-block gets a `releases/tag/v…` entry instead of a `compare/…` one. The baseline it chose is
-always printed, so it is never a guess.
+The project has no tags yet: `0.1.0` shipped untagged, and without a `chore(release):` commit
+either. So there is no previous release to measure commits from, and the script says so:
+
+```
+>> no previous release found (no v* tag, no chore(release): commit)
+   release notes will come from [Unreleased] only — the full history is not release notes
+```
+
+This is deliberate. Replaying every commit ever made would produce 185 entries, which is not
+a release note. `CHANGELOG.md` already describes the shipped work by hand, so the first
+release is cut from `[Unreleased]` alone; commit-derived entries start appearing from the
+second release onward, measured against the tag this one creates.
+
+The baseline is always printed, so it is never a guess.
