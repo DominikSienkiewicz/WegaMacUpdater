@@ -607,7 +607,6 @@ extension ScanStore {
         let masAppStoreIDs = plan.masAppStoreIDs
         // REL-12 — what each remaining phase would still touch, so a stop can name it.
         let boundaries    = UpgradeBoundaryKeys(planned: plannedItems, npmNames: npmNames)
-
         // REL-12 — zeroth boundary: stopping here also skips the snapshot/preflight work.
         guard !shouldStopUpdate(before: Array(plannedKeys)) else {
             updating = false
@@ -655,8 +654,7 @@ extension ScanStore {
             run.record(plannedItems.filter { $0.kind == .formula }, outcome: await runBrewUpgrade(arguments: formulaArgs))
         }
 
-        // REL-12 — boundary: a stop asked for during the formula batch takes effect here,
-        // before the phase that replaces app bundles begins.
+        // REL-12 — boundary: a stop asked for mid-formulae lands here, before bundles move.
         let stopBeforeCasks = shouldStopUpdate(before: boundaries.afterFormulae)
 
         // Brew upgrade — casks (FEAT-05 snapshot przed, canary/rollback + FEAT-04 ledger po)
@@ -699,8 +697,7 @@ extension ScanStore {
             }
         }
 
-        // npm global upgrade — one package at a time (npm semantics), which also makes every
-        // iteration a boundary "Anuluj" can take effect on (REL-12).
+        // npm upgrades one package at a time, so every iteration is a REL-12 stop boundary.
         for (index, (pkg, command)) in zip(npmNames, npmCommands).enumerated() {
             if shouldStopUpdate(before: boundaries.fromNpmPackage(at: index)) { break }
             let outcome = await runNpmUpgrade(name: pkg, arguments: command.arguments)
@@ -794,7 +791,6 @@ extension ScanStore {
         // REL-12 — a run the user stopped is never announced as a finished one.
         let interrupted = updateInterruption.didSkipWork
         if interrupted { reportInterruptedRun(upgraded: summary.upgraded.count) }
-
         if summary.allItemsUpgraded {
             guard !interrupted else { return }
             let count = summary.upgraded.count
