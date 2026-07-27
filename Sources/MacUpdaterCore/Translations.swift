@@ -247,6 +247,9 @@ extension Translations {
         "Zostaw jedną — usuń duplikat z npm albo z brew.": "Keep one — remove the duplicate from npm or from brew.",
         "Usuń z npm": "Remove from npm",
         "Usuń z brew": "Remove from brew",
+        // UX-02 — the VoiceOver labels for the same two buttons, naming which duplicate they act on.
+        "Usuń %@ z npm": "Remove %@ from npm",
+        "Usuń %@ z brew": "Remove %@ from brew",
         "Można przenieść do App Store": "Can be moved to the App Store",
         "Bez odpowiednika w Homebrew": "No equivalent in Homebrew",
         "zostaną zarządzane ręcznie": "will be managed manually",
@@ -309,6 +312,10 @@ extension Translations {
         "Szczegóły w logu poniżej.": "Details in the log below.",
         "Przepnij": "Migrate",
         "Otwórz w App Store": "Open in App Store",
+        // UX-02 — every migration row carries the identical button above, so the spoken label
+        // has to say which app it belongs to.
+        "Przepnij %@ do Homebrew": "Adopt %@ into Homebrew",
+        "Otwórz %@ w App Store": "Open %@ in the App Store",
         "Migracja do Homebrew": "Migration to Homebrew",
         "Polecenie:": "Command:",
         "Homebrew pobierze najnowszą wersję i zastąpi aktualną instalację w /Applications. Zamknij aplikację przed kontynuowaniem.": "Homebrew will download the latest version and replace the current installation in /Applications. Close the app before continuing.",

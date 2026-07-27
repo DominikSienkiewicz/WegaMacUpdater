@@ -10,7 +10,12 @@ import XCTest
 /// package test target cannot drive `XCUIApplication`, but it can still pin the native
 /// controls, keyboard actions and environment values that make those behaviours possible.
 final class AccessibilityInteractionTests: XCTestCase {
-    func testSelectionControlsExposeButtonRoleLabelAndValue() throws {
+    /// UX-02 narrowed the contract this test pins: a selection control is no longer a
+    /// `Button` that carries a value, it is a `Toggle` — so VoiceOver announces a checkbox
+    /// with a state instead of a button with a value, and the space bar activates it as a
+    /// system control rather than through a hand-rolled key handler. The label still has to
+    /// come from the call site (the row's own name), and the gesture still has to be gone.
+    func testSelectionControlsExposeCheckboxRoleLabelAndValue() throws {
         let sharedViews = try source("Sources/MacUpdater/SharedViews.swift")
         let packageRow = try section(
             in: sharedViews,
@@ -18,18 +23,65 @@ final class AccessibilityInteractionTests: XCTestCase {
             endingAt: "// MARK: - Rollback badge"
         )
 
-        XCTAssertTrue(packageRow.contains("Button(action: onToggle)"))
+        XCTAssertTrue(packageRow.contains("Toggle(isOn: selectionToggleBinding(isOn: isSelected, toggle: onToggle))"))
+        XCTAssertTrue(packageRow.contains(".toggleStyle(WegaCheckboxToggleStyle())"))
         XCTAssertTrue(packageRow.contains(".accessibilityLabel(name)"))
-        XCTAssertTrue(
-            packageRow.contains(".accessibilityValue(selectionAccessibilityValue(isSelected))"))
         XCTAssertFalse(packageRow.contains(".onTapGesture { onToggle?() }"))
 
         let uninstall = try source("Sources/MacUpdater/UninstallView.swift")
+        XCTAssertTrue(uninstall.contains("Toggle(isOn: selectionToggleBinding(isOn: isSelected)"))
         XCTAssertTrue(
             uninstall.contains(".accessibilityLabel(selectionAccessibilityLabel(for: app"))
-        XCTAssertTrue(
-            uninstall.contains(".accessibilityValue(selectionAccessibilityValue(isSelected))"))
         XCTAssertFalse(uninstall.contains(".onTapGesture { toggle(app.id) }"))
+    }
+
+    /// The role and the state live in the style, once, instead of at every call site — which
+    /// is the point of moving to `Toggle` at all. A custom `ToggleStyle` takes over the whole
+    /// rendering, so it has to restate the semantics SwiftUI would otherwise supply.
+    func testCheckboxStyleCarriesRoleAndStateForEveryCallSite() throws {
+        let sharedViews = try source("Sources/MacUpdater/SharedViews.swift")
+        let style = try section(
+            in: sharedViews,
+            startingAt: "struct WegaCheckboxToggleStyle: ToggleStyle",
+            endingAt: "func selectionToggleBinding"
+        )
+
+        XCTAssertTrue(style.contains(".accessibilityAddTraits(configuration.isOn ? [.isToggle, .isSelected] : .isToggle)"),
+                      "a custom style that drops the toggle trait announces itself as a plain button")
+        XCTAssertTrue(style.contains(".accessibilityValue(selectionAccessibilityValue(configuration.isOn))"))
+        XCTAssertTrue(style.contains("configuration.isOn.toggle()"),
+                      "activation must flow through the binding, not a side-channel callback")
+    }
+
+    /// Every migration row carries an identically-labelled action button, so the label alone
+    /// tells a VoiceOver user nothing about which app they are about to act on.
+    func testMigrationActionsNameTheAppTheyActOn() throws {
+        let migration = try source("Sources/MacUpdater/MigrationView.swift")
+
+        XCTAssertTrue(migration.contains(".accessibilityLabel(trf(\"Przepnij %@ do Homebrew\", app.name))"))
+        XCTAssertTrue(migration.contains(".accessibilityLabel(trf(\"Otwórz %@ w App Store\", app.name))"))
+        XCTAssertTrue(migration.contains(".accessibilityLabel(trf(\"Usuń %@ z npm\", dup.npmPackage))"))
+        XCTAssertTrue(migration.contains(".accessibilityLabel(trf(\"Usuń %@ z brew\", dup.brewToken))"))
+    }
+
+    /// The select-all control stays a `Button` on purpose: it has three states (none, some,
+    /// all) and `Toggle` has two. A checkbox that cannot say "some" would misreport a partial
+    /// selection as one of the other two — so it keeps the spoken count instead.
+    func testSelectAllStaysAnActionThatReportsItsPartialState() throws {
+        let update = try source("Sources/MacUpdater/UpdateView.swift")
+        let selectAllRow = try section(
+            in: update,
+            startingAt: "// Select-all row",
+            endingAt: "ScrollView {"
+        )
+
+        XCTAssertTrue(selectAllRow.contains("Button"))
+        XCTAssertFalse(selectAllRow.contains("Toggle("),
+                       "a two-state Toggle cannot represent a partial selection")
+        XCTAssertTrue(selectAllRow.contains("%@ z %@ zaznaczonych"),
+                      "the spoken value must carry the count a mixed checkbox could not")
+        XCTAssertTrue(update.contains("minus.square.fill"),
+                      "the partial state must remain visually distinct too")
     }
 
     func testSelectionAccessibilityValuesDistinguishBothStates() {

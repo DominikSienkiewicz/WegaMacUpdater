@@ -348,15 +348,11 @@ struct PackageRow: View {
     var body: some View {
         HStack(spacing: 12) {
             if let onToggle {
-                Button(action: onToggle) {
-                    Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                        .foregroundStyle(isSelected ? Color.wegaHoney : .secondary)
-                        .font(.body)
+                Toggle(isOn: selectionToggleBinding(isOn: isSelected, toggle: onToggle)) {
+                    EmptyView()
                 }
-                .buttonStyle(.plain)
+                .toggleStyle(WegaCheckboxToggleStyle())
                 .accessibilityLabel(name)
-                .accessibilityValue(selectionAccessibilityValue(isSelected))
-                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
             if let path = iconPath {
                 AppIcon(path: path, size: 28)
@@ -501,6 +497,52 @@ struct EmptyHero: View {
         .padding(compact ? 32 : 48)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+}
+
+// MARK: - Selection checkbox (UX-02)
+
+/// The selection checkbox: Wega's glyph, macOS's semantics.
+///
+/// A `Button` drawing a checkmark reads to VoiceOver as a *button that happens to carry a
+/// value*; the control is a checkbox, and saying so is the difference between "przycisk,
+/// Zaznaczone" and "pole wyboru, zaznaczone". Wrapping the selection in a real `Toggle`
+/// moves the role, the state and the space-bar activation out of each call site and into
+/// the system — the style below exists only so the honey `checkmark.square.fill` survives
+/// the change. It draws; `Toggle` means.
+///
+/// `.toggleStyle(.checkbox)` would give the same semantics without a custom style, at the
+/// cost of replacing that glyph with the system checkbox in every list.
+struct WegaCheckboxToggleStyle: ToggleStyle {
+    /// Matches the glyph to the row it sits in — rows differ in density, and the checkbox
+    /// has to line up with the text beside it.
+    var glyphFont: Font = .body
+    var spacing: CGFloat = 12
+
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            HStack(spacing: spacing) {
+                Image(systemName: configuration.isOn ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(configuration.isOn ? Color.wegaHoney : .secondary)
+                    .font(glyphFont)
+                configuration.label
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // A custom style owns the whole rendering, so it owns the semantics too: without
+        // these the control would go back to announcing itself as a plain button.
+        .accessibilityAddTraits(configuration.isOn ? [.isToggle, .isSelected] : .isToggle)
+        .accessibilityValue(selectionAccessibilityValue(configuration.isOn))
+    }
+}
+
+/// Adapts a "flip it" callback to the two-way binding `Toggle` needs. The new value is
+/// discarded on purpose: the owner of the selection decides what toggling means, and every
+/// call site here already has that decision written down.
+func selectionToggleBinding(isOn: Bool, toggle: @escaping () -> Void) -> Binding<Bool> {
+    Binding(get: { isOn }, set: { _ in toggle() })
 }
 
 // MARK: - BannerData + BannerView
