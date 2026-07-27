@@ -13,11 +13,17 @@ set -euo pipefail
 #   3. universal binary    — the architectures build-pkg.sh was asked to produce,
 #   4. helper signature    — the app and the privileged helper carry a valid signature,
 #   5. notarization+staple — when a Developer ID is configured, artifacts are notarized and the
-#                            ticket is stapled (spctl accepts them offline).
+#                            ticket is stapled (spctl accepts them offline),
+#   6. publisher pin       — the signature belongs to WEGA's Team ID, not merely to *an* Apple
+#                            developer (SEC-04: notarization proves "some developer", never
+#                            "this one").
 #
-# Signing is OPTIONAL end-to-end: ad-hoc/unsigned dev builds pass 1–4 and report step 5 as
-# skipped (like verify-catalog.sh's "not configured" exit). Once the .app is Developer-ID-signed
-# the notarization + stapling checks become mandatory and fail closed.
+# Signing is OPTIONAL for LOCAL/TEST builds: ad-hoc/unsigned dev builds pass 1–4 and report
+# steps 5–6 as skipped (like verify-catalog.sh's "not configured" exit).
+#
+# For a STABLE RELEASE it is not optional. `REQUIRE_SIGNED=1` turns the skips into failures:
+# the artifacts must be Developer-ID-signed, notarized, stapled and carry the expected Team ID
+# before anything may be published as a stable release (SEC-04 / QA-03).
 #
 # Usage:
 #   ./scripts/verify-bundle.sh [APP_BUNDLE] [ARTIFACT ...]
@@ -25,8 +31,14 @@ set -euo pipefail
 #     ARTIFACT     zero or more .pkg/.dmg to validate for notarization + stapling
 #
 # Env:
-#   ARCHS   architectures build-pkg.sh produced (default "arm64 x86_64"); kept in sync so a
-#           single-arch local build (ARCHS="arm64") is validated against what it actually built.
+#   ARCHS             architectures build-pkg.sh produced (default "arm64 x86_64"); kept in sync
+#                     so a single-arch local build (ARCHS="arm64") is validated against what it
+#                     actually built.
+#   REQUIRE_SIGNED    1/true ⇒ fail-closed release mode (see above). Default: off.
+#   EXPECTED_TEAM_ID  Team ID the signature must carry. Defaults to the single source of truth,
+#                     `WegaHelper.teamIdentifier` in
+#                     Sources/WegaHelperKit/WegaHelperProtocol.swift — the same constant the app
+#                     pins its self-update against, so the gate and the client can never drift.
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -41,9 +53,27 @@ read -r -a EXPECTED_ARCHS <<< "${ARCHS:-arm64 x86_64}"
 CONTENTS="$APP_BUNDLE/Contents"
 fail=0
 
+case "${REQUIRE_SIGNED:-0}" in
+    1|true|TRUE|yes) REQUIRE_SIGNED=1 ;;
+    *)               REQUIRE_SIGNED=0 ;;
+esac
+
+TEAM_ID_SOURCE="Sources/WegaHelperKit/WegaHelperProtocol.swift"
+EXPECTED_TEAM_ID="${EXPECTED_TEAM_ID:-$(sed -n 's/.*static let teamIdentifier = "\(.*\)".*/\1/p' "$TEAM_ID_SOURCE")}"
+
 note() { echo "::notice::$*"; }
 bad()  { echo "  ✗ $*" >&2; fail=$((fail + 1)); }
 ok()   { echo "  ✓ $*"; }
+# In release mode an unmet prerequisite is a failure; locally it is a skip note.
+soft() { if [[ "$REQUIRE_SIGNED" -eq 1 ]]; then bad "$*"; else note "$*"; fi; }
+
+if [[ "$REQUIRE_SIGNED" -eq 1 ]]; then
+    echo "→ Tryb wydania stabilnego (REQUIRE_SIGNED=1): podpis, notaryzacja, stapling i Team ID są WYMAGANE."
+fi
+if [[ -z "$EXPECTED_TEAM_ID" || "$EXPECTED_TEAM_ID" == "REPLACE_TEAMID" ]]; then
+    echo "❌ Brak skonfigurowanego Team ID w $TEAM_ID_SOURCE — nie ma czego przypiąć." >&2
+    exit 2
+fi
 
 if [[ ! -d "$APP_BUNDLE" ]]; then
     echo "❌ Nie znaleziono bundla: $APP_BUNDLE" >&2
@@ -128,7 +158,7 @@ if [[ "$CODESIGN_INFO" == *"Authority=Developer ID Application"* ]]; then
     SIGNED_DEVELOPER_ID=1
     ok "tożsamość: Developer ID Application"
 else
-    note "Aplikacja podpisana ad-hoc (bez Developer ID) — kroki notaryzacji/staplingu pominięte."
+    soft "Aplikacja podpisana ad-hoc (bez Developer ID) — kroki notaryzacji/staplingu pominięte."
 fi
 
 # --- 5. Notarization + stapling --------------------------------------------
@@ -137,6 +167,8 @@ fi
 echo "→ 5. Notaryzacja + stapling"
 if [[ "$SIGNED_DEVELOPER_ID" -ne 1 ]]; then
     note "Pominięto: notaryzacja i stapling wymagają Developer ID (ustaw sekrety wydania)."
+elif [[ "${#ARTIFACTS[@]}" -eq 0 ]] && [[ "$REQUIRE_SIGNED" -eq 1 ]]; then
+    bad "wydanie stabilne bez artefaktów .pkg/.dmg do walidacji notaryzacji i staplingu"
 elif [[ "${#ARTIFACTS[@]}" -eq 0 ]]; then
     # Guarded: on macOS bash 3.2, "${arr[@]}" on an empty array under `set -u` aborts.
     note "Podano tylko .app (Developer ID) — brak .pkg/.dmg do walidacji notaryzacji/staplingu."
@@ -161,6 +193,53 @@ else
                 fi
                 ;;
         esac
+    done
+fi
+
+# --- 6. Publisher pin (SEC-04) ---------------------------------------------
+# Notarization answers "signed by an Apple developer"; it never answers "signed by THIS
+# one". Without this step a stable release could carry a perfectly notarized artifact from
+# a foreign Team ID, and the app — which pins WegaHelper.teamIdentifier when it verifies a
+# self-update — would refuse the very release we just published.
+echo "→ 6. Team ID wydawcy (oczekiwano $EXPECTED_TEAM_ID)"
+
+# A .pkg is signed by a "Developer ID Installer" certificate and is invisible to
+# `codesign`; its Team ID lives in the parenthesised suffix of the pkgutil leaf line.
+#
+# Both branches read the tool's whole output into a variable first, then match. Piping
+# straight into a reader that exits early (`grep -q`, `head -1`) kills the producer with
+# SIGPIPE, and under `set -o pipefail` that turns a HIT into a miss — the exact fail-open
+# this gate was already caught doing once (see test-verify-bundle-guard.sh). `sed -n 1p`
+# consumes its input to the end, so it cannot repeat that.
+team_id_of() {
+    local target="$1" info=""
+    case "$target" in
+        *.pkg)
+            info="$(pkgutil --check-signature "$target" 2>/dev/null || true)"
+            printf '%s\n' "$info" | sed -n 's/.*(\([A-Z0-9]\{10\}\)).*/\1/p' | sed -n 1p
+            ;;
+        *)
+            info="$(codesign -dvv "$target" 2>&1 || true)"
+            printf '%s\n' "$info" | sed -n 's/^TeamIdentifier=//p' | sed -n 1p
+            ;;
+    esac
+}
+
+if [[ "$SIGNED_DEVELOPER_ID" -ne 1 ]]; then
+    note "Pominięto: bez Developer ID nie ma Team ID do przypięcia."
+else
+    for target in "$APP_BUNDLE" ${ARTIFACTS[@]+"${ARTIFACTS[@]}"}; do
+        [[ -e "$target" ]] || { bad "brak artefaktu $target"; continue; }
+        label="$(basename "$target")"
+        found="$(team_id_of "$target" || true)"
+        if [[ -z "$found" ]]; then
+            # Fail-closed on purpose: an unreadable pin is not a weaker pin, it is none.
+            bad "nie odczytano Team ID: $label"
+        elif [[ "$found" == "$EXPECTED_TEAM_ID" ]]; then
+            ok "Team ID $found: $label"
+        else
+            bad "Team ID $found ≠ $EXPECTED_TEAM_ID: $label"
+        fi
     done
 fi
 

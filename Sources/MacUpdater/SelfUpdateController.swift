@@ -15,7 +15,9 @@ final class SelfUpdateController: ObservableObject {
     struct Dependencies: Sendable {
         var check: @Sendable () async -> WegaSelfUpdateChecker.Result
         var download: @Sendable (URL) async throws -> URL
-        var verify: @Sendable (URL) throws -> Void
+        /// SEC-04 — the second argument is the version the release promised, so the payload
+        /// is pinned to the update the user was actually shown, not just to a valid signature.
+        var verify: @Sendable (URL, String?) throws -> Void
         var installOrOpen: @MainActor @Sendable (URL) async -> Bool
         var openFallback: @MainActor @Sendable () -> Void
 
@@ -29,11 +31,12 @@ final class SelfUpdateController: ObservableObject {
                 try FileManager.default.moveItem(at: temporary, to: destination)
                 return destination
             },
-            verify: { destination in
+            verify: { destination, expectedVersion in
                 try CodeSignatureVerifier.verify(
                     installerAt: destination,
                     expectedTeamID: WegaHelper.teamIdentifier,
-                    bundleID: AppMetadata.bundleIdentifier
+                    bundleID: AppMetadata.bundleIdentifier,
+                    expectedVersion: expectedVersion
                 )
             },
             installOrOpen: { destination in
@@ -120,7 +123,7 @@ final class SelfUpdateController: ObservableObject {
         }
 
         do {
-            try dependencies.verify(destination)
+            try dependencies.verify(destination, previousResult?.availableVersion)
         } catch {
             WegaLog.error(.app, "Self-update odrzucony: \(error.localizedDescription)")
             try? FileManager.default.removeItem(at: destination)

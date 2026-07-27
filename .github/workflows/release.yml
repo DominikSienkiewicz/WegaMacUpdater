@@ -7,9 +7,14 @@ name: Release
 # the publishing job `needs:` that quality gate, so a Release can never be built on a different
 # toolchain than the one CI proved green, nor published ahead of lint / catalog / bundle checks.
 #
-# Signing + notarization are OPTIONAL and activate automatically once the relevant repo
-# secrets exist. Until then the job still builds and publishes UNSIGNED (ad-hoc) artifacts so
-# the whole pipeline is verifiable end-to-end without an Apple Developer account.
+# SEC-04 — a STABLE release is fail-closed. It requires a Developer ID (app + installer
+# certificates) and a notary key; the artifact gate then runs with REQUIRE_SIGNED=1 and
+# refuses anything unsigned, unnotarized, unstapled or carrying a foreign Team ID.
+#
+# Without those secrets the pipeline still builds and uploads, so it stays verifiable
+# end-to-end without an Apple Developer account — but the result is published as a
+# PRERELEASE, clearly marked. That distinction is what matters: `WegaSelfUpdateChecker`
+# ignores prereleases, so an unsigned build can never be offered to users as an update.
 #
 # Secrets (all optional; see RELEASING.md for how to create each one):
 #   DEVELOPER_ID_IDENTITY           — e.g. "Developer ID Application: Name (TEAMID)"; signs .app/.dmg
@@ -44,6 +49,14 @@ jobs:
       HAS_DEVELOPER_ID: ${{ secrets.DEVELOPER_ID_CERT_P12 != '' }}
       HAS_INSTALLER_ID: ${{ secrets.DEVELOPER_ID_INSTALLER_IDENTITY != '' }}
       HAS_NOTARY_KEY: ${{ secrets.AC_API_KEY_P8 != '' }}
+      # SEC-04 — the one switch that decides "stable release" vs "prerelease build".
+      # All three are needed: the app/dmg certificate, the installer certificate for the
+      # .pkg, and the notary key. Anything less cannot produce a signed+notarized+stapled
+      # set of artifacts, so it must not be published as stable.
+      STABLE_RELEASE: >-
+        ${{ secrets.DEVELOPER_ID_CERT_P12 != ''
+            && secrets.DEVELOPER_ID_INSTALLER_IDENTITY != ''
+            && secrets.AC_API_KEY_P8 != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -61,8 +74,9 @@ jobs:
           echo "Developer ID (code signing):   $HAS_DEVELOPER_ID"
           echo "Developer ID Installer (.pkg): $HAS_INSTALLER_ID"
           echo "notarytool API key:            $HAS_NOTARY_KEY"
-          if [[ "$HAS_DEVELOPER_ID" != "true" ]]; then
-            echo "::warning::No Developer ID configured — building UNSIGNED (Gatekeeper will warn; for local use)."
+          echo "→ stable release:              $STABLE_RELEASE"
+          if [[ "$STABLE_RELEASE" != "true" ]]; then
+            echo "::warning::Incomplete signing/notarization secrets — this tag will be published as a PRERELEASE (unsigned artifacts are never offered as a self-update)."
           fi
 
       # Single source of truth: the tag must equal AppMetadata.version (same extraction
@@ -143,12 +157,17 @@ jobs:
             xcrun stapler staple "$artifact"
           done
 
-      # QA-03 release gate: this is what makes the release verify the artifact, not just the tests.
-      # Runs after notarization so it can also validate the stapled ticket. On an unsigned build it
-      # checks layout, helper signature and required resources and reports notarization/stapling as
-      # skipped; once a Developer ID is configured those two become mandatory and fail closed. It
-      # runs before "Create GitHub Release", so a broken bundle blocks the publish.
-      - name: Verify release artifacts (layout, helper signature, notarization, stapling, resources)
+      # QA-03 + SEC-04 release gate: this is what makes the release verify the artifact, not just
+      # the tests. Runs after notarization so it can also validate the stapled ticket, and before
+      # "Create GitHub Release", so a broken bundle blocks the publish.
+      #
+      # REQUIRE_SIGNED mirrors STABLE_RELEASE: for a stable release the gate demands a Developer
+      # ID signature, a stapled notarization ticket and Wega's own Team ID on every artifact. For
+      # an unsigned build it reports those as skipped and the publish step downgrades the release
+      # to a prerelease.
+      - name: Verify release artifacts (layout, signature, notarization, stapling, Team ID, resources)
+        env:
+          REQUIRE_SIGNED: ${{ env.STABLE_RELEASE }}
         run: |
           ./scripts/verify-bundle.sh \
             .build/pkg-staging/WegaMacUpdater.app \
@@ -158,10 +177,13 @@ jobs:
       # The release description is the changelog section for this version, verbatim — the
       # text a human reviewed before the tag was cut (see RELEASING.md). `--generate-notes`
       # is deliberately not used: it would replace that curated text with a commit dump.
+      #
+      # SEC-04: only a fully signed + notarized + stapled + Team-ID-pinned build is published as
+      # a STABLE release. Anything else is marked `--prerelease`, which `WegaSelfUpdateChecker`
+      # skips — so a build that cannot be verified is never offered to users as an update.
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          SIGNED: ${{ secrets.DEVELOPER_ID_IDENTITY != '' }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           awk -v heading="## [$VERSION]" '
@@ -169,14 +191,21 @@ jobs:
             found && /^## \[/ { exit }
             found { print }
           ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
-          if [[ "$SIGNED" != "true" ]]; then
+          RELEASE_FLAGS=()
+          if [[ "$STABLE_RELEASE" != "true" ]]; then
+            RELEASE_FLAGS+=(--prerelease)
             {
               echo
-              echo "⚠️ These artifacts are **unsigned** (no Developer ID configured yet). macOS Gatekeeper will warn; for local use only."
+              echo "⚠️ **Prerelease — not a stable release.** These artifacts are not fully signed and"
+              echo "notarized (the Developer ID / notarization secrets are not all configured), so they"
+              echo "cannot be verified against Wega's publisher identity. macOS Gatekeeper will warn;"
+              echo "for local use only. Wega's own self-update ignores prereleases and will not offer this."
             } >> "$RUNNER_TEMP/notes.md"
+            echo "::warning::Publishing $GITHUB_REF_NAME as a PRERELEASE — artifacts are not signed+notarized (SEC-04)."
           fi
           gh release create "$GITHUB_REF_NAME" \
             build/WegaMacUpdater.pkg \
             build/WegaMacUpdater.dmg \
             --title "Wega Mac Updater ${GITHUB_REF_NAME}" \
-            --notes-file "$RUNNER_TEMP/notes.md"
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            ${RELEASE_FLAGS[@]+"${RELEASE_FLAGS[@]}"}
