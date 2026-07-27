@@ -40,6 +40,12 @@ struct InventoryView: View {
     private var masCount:    Int { apps.filter(\.isManagedByMas).count }
     private var manualCount: Int { apps.count - brewCount - masCount }
 
+    /// ARCH-05d: liczone raz na render przez `body`, nie przy każdym odwołaniu.
+    ///
+    /// To była własność wyliczana, a `body` sięgało po nią trzy razy — licznik w nagłówku,
+    /// `ForEach` po indeksach i odczyt elementu w wierszu. Filtrowanie i sortowanie całego
+    /// inwentarza biegło więc trzykrotnie na każdą klatkę, przy każdym wpisanym znaku w polu
+    /// wyszukiwania.
     private var filtered: [ApplicationInfo] {
         let matching = apps
             .filter { app in
@@ -59,7 +65,8 @@ struct InventoryView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        let rows = filtered
+        return VStack(spacing: 0) {
             // Stat cards
             HStack(spacing: 10) {
                 InventoryStatCard(label: "Homebrew",  value: brewCount,        sublabel: tr("cask + formula"), color: .wegaHoney,  active: filter == .brew)      { setFilter(.brew) }
@@ -78,7 +85,7 @@ struct InventoryView: View {
 
                 Spacer()
 
-                Text(trf("%@ z %@", "\(filtered.count)", "\(apps.count)"))
+                Text(trf("%@ z %@", "\(rows.count)", "\(apps.count)"))
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
 
@@ -154,8 +161,8 @@ struct InventoryView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(filtered.indices, id: \.self) { i in
-                                let app = filtered[i]
+                            ForEach(rows.indices, id: \.self) { i in
+                                let app = rows[i]
                                 InventoryRow(
                                     app: app,
                                     isAlt: i % 2 == 1,
