@@ -243,6 +243,19 @@ second release onward, measured against the tag this one creates.
 
 The baseline is always printed, so it is never a guess.
 
+Two consequences worth knowing before you run it:
+
+- **The first tag will be higher than `0.1.0`.** An explicit version has to be *greater* than
+  `AppMetadata.version`, which already reads `0.1.0`, so `./scripts/release.sh 0.1.0` is
+  refused. The existing `## [0.1.0] — 2026-06-05` section stays in `CHANGELOG.md` as the
+  untagged history it is, and the release script never rewrites it.
+- **`[0.1.0]` carries no link, on purpose** (QA-06). There is no release page and no
+  comparison range for a version that was never tagged, so the link reference was removed
+  rather than left pointing at a 404. For the same reason `previous_version()` only accepts a
+  version that has a real tag — otherwise the first release would generate
+  `compare/v0.1.0...vX.Y.Z`, a dead link, and `release.sh` copies every older reference
+  forward verbatim, so nothing would ever repair it.
+
 ## 10. Republishing the app catalog
 
 The app catalog is delivered **over the air**, not in the release. Wega fetches it from
