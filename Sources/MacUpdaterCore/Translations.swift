@@ -197,11 +197,6 @@ extension Translations {
         "Nie udało się: %@. Szczegóły w logu.": "Failed: %@. Details in the log.",
         "%@ Cask wymaga hasła administratora — uruchom Wega ponownie, helper askpass zapyta o nie w okienku.": "%@ The cask requires an administrator password — launch Wega again, the askpass helper will ask for it in a window.",
         "Aktualizacja niekompletna": "Update incomplete",
-        // UX-02 — VoiceOver labels naming *which* row an identical action button belongs to.
-        "Przepnij %@ do Homebrew": "Adopt %@ into Homebrew",
-        "Otwórz %@ w App Store": "Open %@ in the App Store",
-        "Usuń %@ z npm": "Remove %@ from npm",
-        "Usuń %@ z brew": "Remove %@ from brew",
         "Część pakietów się nie zaktualizowała.": "Some packages didn't update.",
         "Zaktualizowano %@ pakietów": "Updated %@ packages",
         "Wszystko gotowe.": "All done.",
@@ -243,6 +238,9 @@ extension Translations {
         "Zostaw jedną — usuń duplikat z npm albo z brew.": "Keep one — remove the duplicate from npm or from brew.",
         "Usuń z npm": "Remove from npm",
         "Usuń z brew": "Remove from brew",
+        // UX-02 — the VoiceOver labels for the same two buttons, naming which duplicate they act on.
+        "Usuń %@ z npm": "Remove %@ from npm",
+        "Usuń %@ z brew": "Remove %@ from brew",
         "Można przenieść do App Store": "Can be moved to the App Store",
         "Bez odpowiednika w Homebrew": "No equivalent in Homebrew",
         "zostaną zarządzane ręcznie": "will be managed manually",
@@ -305,6 +303,10 @@ extension Translations {
         "Szczegóły w logu poniżej.": "Details in the log below.",
         "Przepnij": "Migrate",
         "Otwórz w App Store": "Open in App Store",
+        // UX-02 — every migration row carries the identical button above, so the spoken label
+        // has to say which app it belongs to.
+        "Przepnij %@ do Homebrew": "Adopt %@ into Homebrew",
+        "Otwórz %@ w App Store": "Open %@ in the App Store",
         "Migracja do Homebrew": "Migration to Homebrew",
         "Polecenie:": "Command:",
         "Homebrew pobierze najnowszą wersję i zastąpi aktualną instalację w /Applications. Zamknij aplikację przed kontynuowaniem.": "Homebrew will download the latest version and replace the current installation in /Applications. Close the app before continuing.",
