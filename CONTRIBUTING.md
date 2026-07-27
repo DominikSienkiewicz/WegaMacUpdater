@@ -12,8 +12,8 @@ If you are a **user** looking for how to install and use the app, see the
 ## Prerequisites
 
 - **macOS 26 (Tahoe) or newer** and **Xcode 26 / Swift 6.0**.
-  A Command Line Tools–only toolchain is not enough: building requires the full Xcode
-  (it needs the `FoundationModelsMacros` plugin and the SourceKit that SwiftLint loads).
+  A Command Line Tools–only toolchain is not enough: SwiftLint needs a SourceKit that
+  only the full Xcode provides, so `./scripts/check.sh` refuses to run without it.
   Point `xcode-select` at Xcode, not CommandLineTools:
 
   ```bash
