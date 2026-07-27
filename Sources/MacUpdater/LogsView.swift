@@ -20,6 +20,9 @@ struct LogsView: View {
     @State private var filter: LogLevelFilter = .all
     @State private var search: String = ""
     @State private var confirmingClear = false
+    // OBS-02 — "Kopiuj" hands over the 2000 lines currently on screen. The export hands over
+    // both log files plus the environment they were produced in, redacted.
+    @StateObject private var diagnosticsExport = DiagnosticsExportController()
 
     private var visible: [LogEntry] {
         // Najnowsze na górze.
@@ -64,6 +67,14 @@ struct LogsView: View {
                 .buttonStyle(.plain).foregroundStyle(Color.wegaHoney)
             Button { copyVisible() } label: { Label(tr("Kopiuj"), systemImage: "doc.on.doc") }
                 .buttonStyle(.plain).foregroundStyle(Color.wegaHoney)
+            Button {
+                Task { await diagnosticsExport.export() }
+            } label: {
+                Label(tr("Eksportuj diagnostykę"), systemImage: "shippingbox")
+            }
+            .buttonStyle(.plain).foregroundStyle(Color.wegaHoney)
+            .disabled(diagnosticsExport.isExporting)
+            .help(tr("Zapisuje redagowaną paczkę zip z oboma plikami logów i pełnym kontekstem środowiska."))
             Button { confirmingClear = true } label: { Label(tr("Wyczyść"), systemImage: "trash") }
                 .buttonStyle(.plain).foregroundStyle(Color.wegaDanger)
                 .confirmationDialog(tr("Wyczyścić logi?"), isPresented: $confirmingClear) {

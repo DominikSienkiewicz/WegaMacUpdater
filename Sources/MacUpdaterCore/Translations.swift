@@ -640,6 +640,16 @@ extension Translations {
         "Zgłoś aplikację": "Report app",
         "Zgłoś tę aplikację do katalogu": "Report this app to the catalog",
         "Diagnostyka systemu": "System diagnostics",
+        // OBS-02 — redagowana paczka diagnostyczna (karta Info + pasek widoku Logi).
+        "Eksportuj diagnostykę": "Export diagnostics",
+        "Zapisuje paczkę zip z oboma plikami logów, wersjami, wykrytymi menedżerami, statusem harmonogramu i historią aktualizacji. "
+            + "Ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami; nic nie jest nigdzie wysyłane.":
+            "Saves a zip with both log files, versions, detected managers, schedule status and update history. "
+            + "Paths, tokens and account names are replaced with placeholders; nothing is sent anywhere.",
+        "Zapisuje redagowaną paczkę zip z oboma plikami logów i pełnym kontekstem środowiska.":
+            "Saves a redacted zip with both log files and the full environment context.",
+        "Paczka jest redagowana — ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami.":
+            "The bundle is redacted — paths, tokens and account names are replaced with placeholders.",
         "Katalog aplikacji": "Application catalog",
         "Wega pobiera mapowania aplikacji (repozytoria GitHub, kody IDE JetBrains, feedy Sparkle) z sieci, "
             + "więc nowe aplikacje są obsługiwane bez aktualizacji Wegi. Zmiany zastosują się po ponownym uruchomieniu.":

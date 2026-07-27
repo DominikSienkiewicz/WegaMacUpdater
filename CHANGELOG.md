@@ -23,6 +23,21 @@ bump and move its entries under the new version heading when cutting a release.
   Diagnostyka systemu** so a missing grant is visible before the first upgrade. Unattended
   rounds are held back for 24 h after an observed refusal rather than failing identically
   every interval, and the hold lifts by itself once a round succeeds.
+- **Export diagnostics** — one action, in **Settings → System diagnostics** and in the
+  **Logs** toolbar, that saves a redacted `.zip` containing everything a bug report needs:
+  app version and build, macOS version and CPU, detected package managers and their
+  versions, Privileged Helper status and version, schedule status, the last scan's result
+  per source, free disk space, the signature state, and **both** log files — including the
+  rotated `wega.log.1`, which nothing in the app had ever read back. Filesystem paths, URL
+  query strings, credentials, e-mail addresses and account names are replaced with
+  placeholders before anything is written, and nothing is uploaded anywhere: a save panel
+  asks where the file goes, every time.
+- A durable **update → validation → rollback history**. Run verdicts used to live only in
+  the banner they produced, so a background round that rolled an app back left nothing
+  behind once the window closed. The last 40 runs are now recorded — per item, per phase,
+  including rollbacks and publisher changes — and travel in the diagnostics export. The
+  record carries no Team ID values and no verbatim tool output; it says *that* a publisher
+  changed, not who.
 - A hard download resource gate shared by window and unattended cask upgrades. Before
   snapshotting or downloading it vetoes metered/Low Data Mode networking, low battery,
   thermal throttling and insufficient (or unreadable) disk capacity. Required space is
@@ -330,6 +345,13 @@ bump and move its entries under the new version heading when cutting a release.
   via `SMAppService`, and Team-ID verification of self-update installers. Pinned by
   a new `PrivilegedHelperSecurityTests` case that fails CI on any regression to a
   non-Team-ID-shaped value.
+- Log redaction now also strips credentials and e-mail addresses, not just filesystem
+  paths and URL query strings. `Authorization` headers, bearer tokens, labelled secrets
+  (`token=`, `api_key:`, `password=`), PEM private-key blocks, GitHub/Slack/AWS/JWT
+  token shapes and addresses are replaced before a line reaches the unified log — where
+  any process on the machine could otherwise read it back. The diagnostics export applies
+  the same rules **plus** the account's login and display names, which no path-based rule
+  can catch on their own.
 - Hardened the GitHub PAT keychain item (`GitHubCredentialStore`): accessibility moved
   from `AfterFirstUnlock` to **`AfterFirstUnlockThisDeviceOnly`**, so the credential is
   no longer eligible for iCloud Keychain sync or device backups (it can't leak to

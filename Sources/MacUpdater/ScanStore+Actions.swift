@@ -741,6 +741,13 @@ extension ScanStore {
     private func report(run: UpdateRunOutcome) {
         let summary = run.summary
 
+        // OBS-02 — the verdicts below drive banners that vanish with the window. The same
+        // run is also written to the durable journal, so a bug report filed tomorrow can
+        // still say what happened today.
+        UpdateRunJournal().record(
+            UpdateJournalEntry(summary: summary, trigger: .manual, finishedAt: Date())
+        )
+
         for outcome in summary.rollbackFailures {
             showStickyBanner(BannerData(variant: .danger,
                                         title: tr("Rollback się nie powiódł"),

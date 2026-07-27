@@ -10,6 +10,9 @@ struct InfoView: View {
     @StateObject private var operations = InfoOperationsController()
     @StateObject private var selfUpdateController = SelfUpdateController()
     @StateObject private var touchIDController = TouchIDSetupController()
+    // OBS-02 — the diagnostics card is where a user already goes to answer "what does Wega
+    // see?", so it is also where they export that answer.
+    @StateObject var diagnosticsExport = DiagnosticsExportController()
     // SEC-08: opcjonalny token GitHub (Keychain).
     @State private var githubTokenInput: String = ""
 
@@ -619,8 +622,49 @@ extension InfoView {
                     }
                     .padding(14)
                 }
+
+                Divider().opacity(0.5)
+                diagnosticsExportRow
             }
         }
+    }
+
+    /// OBS-02 — one action that packages everything a bug report needs, so filing one stops
+    /// meaning "copy the log, find the version, remember which managers you have".
+    private var diagnosticsExportRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Button {
+                    Task { await diagnosticsExport.export() }
+                } label: {
+                    Label(tr("Eksportuj diagnostykę"), systemImage: "shippingbox")
+                }
+                .disabled(diagnosticsExport.isExporting)
+
+                if diagnosticsExport.isExporting {
+                    ProgressView().controlSize(.small)
+                }
+                Spacer()
+                if diagnosticsExport.lastExportURL != nil {
+                    Button(tr("Pokaż w Finderze")) { diagnosticsExport.revealLastExport() }
+                        .buttonStyle(.link)
+                        .font(.system(size: 11))
+                }
+            }
+
+            Text(tr("Zapisuje paczkę zip z oboma plikami logów, wersjami, wykrytymi menedżerami, statusem harmonogramu i historią aktualizacji. Ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami; nic nie jest nigdzie wysyłane."))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let error = diagnosticsExport.lastError {
+                Text(error)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.wegaDanger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14)
     }
 
     // MARK: - App catalog
