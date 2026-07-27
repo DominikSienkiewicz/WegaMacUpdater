@@ -99,6 +99,35 @@ struct QA03CIReleaseParityTests {
         #expect(script.contains("spctl"))
     }
 
+    // MARK: - The gate scripts CI invokes are actually runnable
+
+    @Test func everyShellScriptKeepsItsExecutableBit() throws {
+        let scriptsDirectory = packageRoot().appendingPathComponent("scripts")
+        let scripts = try FileManager.default
+            .contentsOfDirectory(atPath: scriptsDirectory.path)
+            .filter { $0.hasSuffix(".sh") }
+            .sorted()
+
+        #expect(!scripts.isEmpty)
+        // Workflows run these as `./scripts/<name>.sh`. A file mode committed as 100644 fails the
+        // job with "Permission denied" — a breakage build, test and lint structurally cannot see.
+        // It happened to verify-bundle.sh and turned CI red on main for four consecutive runs.
+        for script in scripts {
+            let path = scriptsDirectory.appendingPathComponent(script).path
+            #expect(FileManager.default.isExecutableFile(atPath: path), "scripts/\(script)")
+        }
+    }
+
+    @Test func artifactGateGuardRunsInBothCheckAndCI() throws {
+        let check = try contents(of: "scripts/check.sh")
+        let reusable = try contents(of: ".github/workflows/build.yml")
+
+        // The guard proves the gate still recognises a Developer ID (and therefore still enforces
+        // notarization). Wire it where the other pure-bash guards run, or it protects nothing.
+        #expect(check.contains("test-verify-bundle-guard.sh"))
+        #expect(reusable.contains("test-verify-bundle-guard.sh"))
+    }
+
     // MARK: - Helpers
 
     private func contents(of relativePath: String) throws -> String {

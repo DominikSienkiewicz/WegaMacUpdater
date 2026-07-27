@@ -38,8 +38,9 @@ enforces, plus the pure-bash guard tests:
 ```
 
 `scripts/check.sh` runs, in order: the `sign-catalog.sh` in-repo-key guard, the `merge.sh`
-guard-rail tests, the source-path guard, the `clean.sh` guard, then `swift build`,
-`swift test` and `swiftlint lint --strict`. If your machine has no full Xcode toolchain,
+guard-rail tests, the source-path guard, the `clean.sh` guard, the artifact-gate guard
+(`verify-bundle.sh` still recognises a Developer ID, and therefore still enforces
+notarization), then `swift build`, `swift test` and `swiftlint lint --strict`. If your machine has no full Xcode toolchain,
 `check.sh` stops early and tells you so — push the branch and let CI run the
 build/test/lint jobs.
 

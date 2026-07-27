@@ -139,6 +139,12 @@ jobs:
         with:
           xcode-version: '26.0'
 
+      # The gate below is exercised here only on an ad-hoc bundle, so its Developer-ID path —
+      # the one that makes notarization mandatory — would never run until a tag is pushed.
+      # This guard stubs `codesign` and covers exactly that branch on every push.
+      - name: Regression test — verify-bundle.sh enforces notarization once signed
+        run: ./scripts/test-verify-bundle-guard.sh
+
       # Ad-hoc signed, universal (arm64 + x86_64) — verifies the whole packaging path
       # composes on every change, not just `swift build`.
       - name: Build .pkg

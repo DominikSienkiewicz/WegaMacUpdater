@@ -118,8 +118,13 @@ for target in "$HELPER" "$APP_BUNDLE"; do
 done
 
 # Developer ID present? Drives whether notarization + stapling are mandatory.
+# Read the whole `codesign` output first, then match: piping it into `grep -q` under
+# `set -o pipefail` reports a HIT as a miss — `grep -q` exits on the first match,
+# `codesign` dies of SIGPIPE (141) and `pipefail` makes that the status of the pipe.
+# That silently skipped step 5 for every signed build (see test-verify-bundle-guard.sh).
 SIGNED_DEVELOPER_ID=0
-if codesign -dvv "$APP_BUNDLE" 2>&1 | grep -q "Authority=Developer ID Application"; then
+CODESIGN_INFO="$(codesign -dvv "$APP_BUNDLE" 2>&1 || true)"
+if [[ "$CODESIGN_INFO" == *"Authority=Developer ID Application"* ]]; then
     SIGNED_DEVELOPER_ID=1
     ok "tożsamość: Developer ID Application"
 else
