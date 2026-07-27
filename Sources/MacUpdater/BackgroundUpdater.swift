@@ -118,7 +118,12 @@ final class BackgroundUpdater {
                 tokens: eligibleLockedTokens, appPaths: appPaths
             )
             let lockedTokens = eligibleLockedTokens.filter { publisherVetoes[$0] == nil }
-            let snapshots = CaskRollbackGuard.snapshot(tokens: lockedTokens, appPaths: appPaths)
+            // LT-01 — the unattended round journals exactly like the windowed one: its
+            // snapshots live in this operation's directory, and a crash mid-round is
+            // recognizable (and recoverable) at the next launch.
+            let operation = UpdateOperationStore.shared.begin(trigger: .background)
+            operation.recordPlanned(tokens: lockedTokens, appPaths: appPaths)
+            let snapshots = CaskRollbackGuard.snapshot(tokens: lockedTokens, appPaths: appPaths, operation: operation)
             let tokens = BackgroundUpdateSafety.snapshotBackedTokens(lockedTokens, snapshots: snapshots)
             var run = UpdateRunOutcome()
             run.recordPublisherVetoes(eligibleLockedTokens.map(Self.caskItem), audits: publisherVetoes)
@@ -129,6 +134,10 @@ final class BackgroundUpdater {
                 )
             }
             guard !tokens.isEmpty else {
+                // Brew never ran: settle the journal and drop the directory — an operation
+                // without snapshots restores nothing.
+                operation.abortUnfinished()
+                UpdateOperationStore.shared.removeOperation(id: operation.operation.id)
                 if run.summary.isEmpty {
                     WegaLog.error(.homebrew, "Aktualizacja w tle pominięta — nie udało się utworzyć snapshotu.")
                 } else {
@@ -147,6 +156,9 @@ final class BackgroundUpdater {
 
             // REL-02 — the same per-item result type the window builds, filled in by the same
             // phases: execution, validation/rollback, then a rescan that has to agree.
+            // LT-01 — `installing` is the last journal write before brew; after a crash it
+            // is what recovery probes.
+            operation.recordInstalling()
             var caskOutcome = await runBrew(arguments: arguments)
 
             // BG-04 — the window's between-phases auto-recovery, now shared with the unattended
@@ -182,7 +194,9 @@ final class BackgroundUpdater {
             }
 
             run.recordBackgroundRound(tokens.map(Self.caskItem), outcome: caskOutcome)
-            run.applyValidation(await CaskRollbackGuard.verify(tokens: tokens, appPaths: appPaths, snapshots: snapshots))
+            run.applyValidation(await CaskRollbackGuard.verify(
+                tokens: tokens, appPaths: appPaths, snapshots: snapshots, operation: operation
+            ))
             await confirmByRescan(&run)
 
             let summary = run.summary

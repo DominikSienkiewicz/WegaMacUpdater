@@ -31,7 +31,7 @@ struct UpdateResultHonestyTests {
     /// that a `!contains` guard still covers the whole type: pinned to one half only, the
     /// pattern it forbids could reappear in the other and the assertion would pass.
     private func scanStore() throws -> String {
-        try source("ScanStore.swift") + "\n" + source("ScanStore+Actions.swift")
+        try source("ScanStore.swift") + "\n" + source("ScanStore+Actions.swift") + "\n" + source("ScanStore+Rollback.swift")
     }
 
     /// The text of the `for`/`switch` block introduced by `header`, up to the line that
@@ -60,9 +60,10 @@ struct UpdateResultHonestyTests {
     @Test func canaryVerdictsReachTheSummary() throws {
         let text = try scanStore()
         // REL-03 added the `appPaths` parameter (the rollback net no longer reads a map only
-        // a full scan filled); the assertion below is unchanged in what it demands — the
+        // a full scan filled), LT-01 the `operation:` one (verdicts are journaled into the
+        // operation's phases); the assertion below is unchanged in what it demands — the
         // verdicts must be *returned* — only the signature it quotes was updated.
-        #expect(text.contains("postCaskUpgrade(_ tokens: [String], appPaths: [String: URL], snapshots: [String: URL]) async -> [String: CaskValidationVerdict]"),
+        #expect(text.contains("func postCaskUpgrade(\n        _ tokens: [String],\n        appPaths: [String: URL],\n        snapshots: [String: URL],\n        operation: UpdateOperationSession\n    ) async -> [String: CaskValidationVerdict]"),
                 "REL-02: the canary/rollback verdicts must be returned, not only narrated")
         #expect(text.contains("run.applyValidation(await postCaskUpgrade("),
                 "REL-02: the verdicts must be folded into the run before it is summarized")

@@ -8,9 +8,12 @@ import MacUpdaterCore
 /// whether or not anyone is watching — and a second copy of this logic is the one thing
 /// that could quietly diverge from the first. So there is one copy, and both callers use it.
 ///
-/// A healthy upgrade consumes no rollback storage: its snapshot is deleted after all checks.
-/// A publisher mismatch preserves the original snapshot even after a successful restoration;
-/// failed restoration also leaves it available for manual recovery.
+/// LT-01 — snapshots live in the calling operation's own unique directory and every phase
+/// is journaled, so a crash mid-upgrade is recognizable (and recoverable) at the next
+/// launch, and a healthy upgrade no longer deletes its snapshot: it is kept for the
+/// retention window, which is what makes a manual "Cofnij aktualizację" possible at all.
+/// A publisher mismatch preserves the original snapshot even after a successful
+/// restoration; failed restoration also leaves it available for manual recovery.
 @MainActor
 enum CaskRollbackGuard {
     /// What happened to one cask after its upgrade.
@@ -53,22 +56,37 @@ enum CaskRollbackGuard {
     /// Copy-on-write clone (`clonefile`) of each cask's app bundle, keyed by token.
     /// Casks with no resolvable `.app` are skipped — see `RollbackProtection`, which is what
     /// tells the user so up front instead of leaving them silently unprotected.
-    static func snapshot(tokens: [String], appPaths: [String: URL]) -> [String: URL] {
-        let base = FileManager.default.temporaryDirectory.appendingPathComponent("wega-rollback", isDirectory: true)
+    ///
+    /// LT-01 — clones land in the operation's own `snapshots/` directory (never the
+    /// predictable shared temp path) and each confirmed clone is journaled before the
+    /// next one starts, so a crash here still leaves a complete record of what exists.
+    static func snapshot(
+        tokens: [String],
+        appPaths: [String: URL],
+        operation: UpdateOperationSession
+    ) -> [String: URL] {
         var snapshots: [String: URL] = [:]
         for token in tokens {
             guard let appURL = appPaths[token] else { continue }
-            let dest = base.appendingPathComponent("\(token).app")
+            let name = UpdateOperationSession.snapshotDirectoryName(for: token)
+            let dest = operation.snapshotsDirectory.appendingPathComponent(name, isDirectory: true)
             if (try? BundleSnapshot.clone(appURL, to: dest)) != nil {
                 snapshots[token] = dest
+                operation.recordSnapshotted(token: token, snapshotName: name)
             }
         }
         return snapshots
     }
 
     /// Runs the Gatekeeper and publisher canaries, restoring the snapshot when either rejects
-    /// the new bundle. Only a fully healthy upgrade deletes its snapshot.
-    static func verify(tokens: [String], appPaths: [String: URL], snapshots: [String: URL]) async -> [String: Outcome] {
+    /// the new bundle. Verdicts are journaled into the operation (`verified → committed`,
+    /// or `rolledBack`); the snapshot itself is owned by the retention sweep.
+    static func verify(
+        tokens: [String],
+        appPaths: [String: URL],
+        snapshots: [String: URL],
+        operation: UpdateOperationSession
+    ) async -> [String: Outcome] {
         var outcomes: [String: Outcome] = [:]
 
         for token in tokens {
@@ -84,6 +102,8 @@ enum CaskRollbackGuard {
             // rolled-back mark: a restored build is remembered so `ManualUpdateScanner` can
             // force it back onto the list, a healthy one clears the mark.
             CaskRollbackLedger.shared.apply(token: token, verdict: outcome)
+            // LT-01 — and the same verdict settles the item's journal phases.
+            operation.recordVerdict(token: token, verdict: outcome)
             outcomes[token] = outcome
         }
         return outcomes
@@ -97,7 +117,8 @@ enum CaskRollbackGuard {
         snapshotURL: URL,
         validationURL: URL,
         expectedTeamID: String?,
-        expectedBundleIdentifier: String?
+        expectedBundleIdentifier: String?,
+        operation: UpdateOperationSession? = nil
     ) async -> Outcome {
         let outcome = await verify(
             token: token,
@@ -110,6 +131,7 @@ enum CaskRollbackGuard {
         // clears the mark (the force-reinstall repaired the Caskroom metadata in the same pass),
         // while a fresh rollback re-arms it. Same ledger chokepoint as the batch canary.
         CaskRollbackLedger.shared.apply(token: token, verdict: outcome)
+        operation?.recordVerdict(token: token, verdict: outcome)
         return outcome
     }
 
@@ -130,8 +152,8 @@ enum CaskRollbackGuard {
                     "\(token): identyfikator bundle zmienił się (\(expectedBundleIdentifier ?? "—") → \(installedBundleIdentifier ?? "—")); przywracam poprzednią wersję."
                 )
                 guard let snapshotURL else { return .rollbackFailed }
-                return await restore(
-                    snapshot: snapshotURL,
+                return await restoreSnapshot(
+                    snapshotURL,
                     to: validationURL,
                     preservingSnapshot: true
                 )
@@ -145,7 +167,7 @@ enum CaskRollbackGuard {
         }.value
         guard healthy else {
             guard let snapshotURL else { return .rollbackFailed }
-            return await restore(snapshot: snapshotURL, to: validationURL) ? .rolledBack : .rollbackFailed
+            return await restoreSnapshot(snapshotURL, to: validationURL) ? .rolledBack : .rollbackFailed
         }
 
         let installedTeamID = await Task.detached {
@@ -171,8 +193,8 @@ enum CaskRollbackGuard {
                 "\(token): Team ID wydawcy zmienił się (\(old) → \(new ?? "—")); przywracam poprzednią wersję."
             )
             guard let snapshotURL else { return .rollbackFailed }
-            return await restore(
-                snapshot: snapshotURL,
+            return await restoreSnapshot(
+                snapshotURL,
                 to: validationURL,
                 preservingSnapshot: true
             )
@@ -182,17 +204,19 @@ enum CaskRollbackGuard {
             if case .expected = publisherBaseline {
                 TeamIDLedger.shared.record(bundleID: TeamIDLedger.caskKey(token), teamID: installedTeamID)
             }
-            if let snapshotURL {
-                try? FileManager.default.removeItem(at: snapshotURL)
-            }
+            // LT-01 — the snapshot deliberately stays: it is the manual undo for the whole
+            // retention window. It used to be deleted here, which is why "Cofnij
+            // aktualizację" could not exist. `UpdateOperationStore.pruneExpired` owns it now.
             return .healthy
         }
     }
 
     /// Restores in place; falls back to the root helper when the destination is protected
-    /// (`/Applications` owned by another user, SIP-adjacent locations).
-    private static func restore(
-        snapshot: URL,
+    /// (`/Applications` owned by another user, SIP-adjacent locations). Internal (not
+    /// private) so the crash-recovery and manual-undo paths restore through the exact same
+    /// code as the canary.
+    static func restoreSnapshot(
+        _ snapshot: URL,
         to appURL: URL,
         preservingSnapshot: Bool = false
     ) async -> Bool {

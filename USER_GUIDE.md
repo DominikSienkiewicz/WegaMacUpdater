@@ -128,12 +128,27 @@ its snapshot → canary → auto-rollback net: it clones the installed app first
 new version's code signature and publisher (Team ID) after Homebrew finishes, and
 **restores the previous version automatically** if the new one fails verification. A cask
 that can't be protected (for example one that installs no `.app`) shows an honest
-**"no protection"** badge instead of a false shield. The badge describes what happens
-*during* the upgrade — there is no general "undo" afterwards.
+**"no protection"** badge instead of a false shield. Sources Wega cannot roll back at
+all — formulae, the Mac App Store, npm and vendor-direct apps — say so under their
+section headers.
 
 > **Publisher-change safety.** If the app's code-signing identity changes to an unexpected
 > publisher, Wega blocks the upgrade and raises a sticky security alert rather than
 > silently trusting it.
+
+### Undo update
+
+For **7 days** after an upgrade, Wega keeps the pre-upgrade copy of each updated app
+(casks only — the sources listed above without a shield have nothing to restore). While
+a copy is retained, the Updates window shows an **„Cofnij aktualizację" (Undo update)**
+section naming the version it would bring back and the date the copy expires. Undoing
+restores the previous app and **pins that version**, so the update you just took back is
+not offered again until you lift the pin in Settings.
+
+Every upgrade also writes a **journal** of its phases, so a crash or power cut in the
+middle does not leave an app half-installed: at the next launch Wega settles what was
+interrupted — finishes or rolls back the landed upgrade, puts back an app that went
+missing, and tells you whenever it restored something.
 
 ### What "updating" means per source
 

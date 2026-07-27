@@ -73,6 +73,11 @@ final class ScanStore: ObservableObject {
     @Published private(set) var lastScanComplete = true
     /// F4 — false when `brew` is absent. Drives the soft "install Homebrew" card.
     @Published var brewAvailable      = true
+    /// LT-01 — committed updates whose pre-upgrade snapshot is still inside the retention
+    /// window, newest first. Drives the "Cofnij aktualizację" section.
+    @Published var undoableUpdates:   [UndoableUpdate] = []
+    /// LT-01 — the token whose undo is currently restoring, so the row can spin.
+    @Published var undoBusy:          String?
 
     /// Rebound on every appearance of the view that owns the backing `@State` — see
     /// `bind(_:)`. Replayed from `replayLastScan()` so a rebuilt tree does not show an

@@ -94,7 +94,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // delivery only if the user has opted in.
         CrashReportingController.shared.attach(source: MetricKitCrashDiagnosticSource())
         registerMutationSources()
-        MenuBarAgent.shared.start()
+        // LT-01 — settle whatever a crash, kill or power loss left mid-upgrade *before*
+        // the background agent starts scheduling new rounds over an unknown disk state.
+        // The agent's start is deferred until recovery is done; a typical launch has
+        // nothing to settle and pays nothing.
+        Task { @MainActor in
+            await UpdateOperationRecovery.shared.recoverInterruptedOperations()
+            MenuBarAgent.shared.start()
+        }
         refreshAppCatalog()
     }
 

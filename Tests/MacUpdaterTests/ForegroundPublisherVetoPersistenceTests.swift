@@ -13,14 +13,21 @@ struct ForegroundPublisherVetoPersistenceTests {
     }
 
     @Test func snapshotFailureStillReportsPublisherVetoBeforeReturning() throws {
-        let source = try String(
+        // The preparation half moved to the Rollback split (file length), the run it
+        // feeds stayed in Actions — the ordering this pins spans both.
+        let rollback = try String(
+            contentsOf: packageRoot().appendingPathComponent("Sources/MacUpdater/ScanStore+Rollback.swift"),
+            encoding: .utf8
+        )
+        let actions = try String(
             contentsOf: packageRoot().appendingPathComponent("Sources/MacUpdater/ScanStore+Actions.swift"),
             encoding: .utf8
         )
+        let source = rollback + "\n" + actions
 
-        let preparationStart = try #require(source.range(of: "private func prepareForegroundCasks("))
+        let preparationStart = try #require(source.range(of: "func prepareForegroundCasks("))
         let preparationEnd = try #require(source.range(
-            of: "private func foregroundResourceDecision(",
+            of: "func foregroundResourceDecision(",
             range: preparationStart.upperBound..<source.endIndex
         ))
         let preparation = source[preparationStart.lowerBound..<preparationEnd.lowerBound]

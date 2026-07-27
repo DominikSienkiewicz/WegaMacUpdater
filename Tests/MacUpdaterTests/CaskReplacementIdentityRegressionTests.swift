@@ -42,7 +42,7 @@ struct CaskReplacementIdentityRegressionTests {
         let manual = try section(
             actions,
             from: "func installManual(token: String) async",
-            to: "private func prepareForegroundCasks("
+            to: "private func reportManualReplacementVerification("
         )
         let migrationSource = try source("Sources/MacUpdater/MigrationView.swift")
         let migration = try section(

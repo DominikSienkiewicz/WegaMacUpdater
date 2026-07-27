@@ -17,7 +17,7 @@ import Testing
 /// | Gatekeeper      | fails     | present  | `.rolledBack` / `.rollbackFailed`        |
 /// | publisher       | changed   | absent   | `.rollbackFailed`                        |
 /// | publisher       | changed   | present  | `.publisherChangedAndRolledBack` / `.rollbackFailed` |
-/// | all pass        | —         | consumed | `.healthy`                               |
+/// | all pass        | —         | retained (LT-01) | `.healthy`                       |
 ///
 /// The verdict this produces is what decides whether the run may announce success, and the
 /// worst cell — a check rejects the new build *and* the restore fails — is the one that must
@@ -122,7 +122,7 @@ struct QA01IRollbackVerifyMatrixTests {
         #expect(gate.contains("guard healthy else {"))
         #expect(gate.contains("guard let snapshotURL else { return .rollbackFailed }"),
                 "matrix: canary fails + no snapshot → .rollbackFailed")
-        #expect(gate.contains("return await restore(snapshot: snapshotURL, to: validationURL) ? .rolledBack : .rollbackFailed"),
+        #expect(gate.contains("return await restoreSnapshot(snapshotURL, to: validationURL) ? .rolledBack : .rollbackFailed"),
                 "matrix: canary fails + snapshot → .rolledBack on success, .rollbackFailed on failure")
         #expect(!gate.contains("preservingSnapshot"),
                 "matrix: a plain canary rollback consumes its snapshot — no baseline to retain")
@@ -130,8 +130,9 @@ struct QA01IRollbackVerifyMatrixTests {
 
     /// The publisher gate. A `.changed` audit rolls back on a preserved working copy to
     /// `.publisherChangedAndRolledBack` (or `.rollbackFailed`), while `.firstSeen` / `.unchanged`
-    /// is the single healthy exit — the only branch that consumes the snapshot and returns
-    /// `.healthy`.
+    /// is the single healthy exit. LT-01 changed what the healthy exit does with the snapshot:
+    /// it used to *delete* it here; now the retention sweep owns it, so a manual undo stays
+    /// possible for the whole window.
     @Test func publisherGateMapsChangedToRollbackAndUnchangedToHealthy() throws {
         let gate = try publisherGate()
         let changed = try slice(String(gate), from: "case let .changed(old, new):", to: "case .firstSeen, .unchanged:")
@@ -145,8 +146,8 @@ struct QA01IRollbackVerifyMatrixTests {
             && changed.contains(": .rollbackFailed"),
                 "matrix: changed + snapshot → .publisherChangedAndRolledBack on success, .rollbackFailed on failure")
 
-        #expect(healthy.contains("removeItem(at: snapshotURL)"),
-                "matrix: only the healthy branch consumes the snapshot")
+        #expect(!healthy.contains("removeItem(at: snapshotURL)"),
+                "LT-01: the healthy branch no longer deletes the snapshot — retention owns it now")
         #expect(healthy.contains("return .healthy"),
                 "matrix: firstSeen / unchanged is the single healthy exit of the whole matrix")
     }
@@ -190,7 +191,7 @@ struct QA01IRollbackVerifyMatrixTests {
 
         let batch = try slice(
             source,
-            from: "static func verify(tokens: [String], appPaths: [String: URL], snapshots: [String: URL])",
+            from: "static func verify(\n        tokens: [String],\n        appPaths: [String: URL],\n        snapshots: [String: URL],\n        operation: UpdateOperationSession\n    )",
             to: "/// Verifies a replacement"
         )
         #expect(batch.contains("publisherBaseline: .ledger,")
@@ -221,7 +222,7 @@ struct QA01IRollbackVerifyMatrixTests {
 
         let batch = try slice(
             source,
-            from: "static func verify(tokens: [String], appPaths: [String: URL], snapshots: [String: URL])",
+            from: "static func verify(\n        tokens: [String],\n        appPaths: [String: URL],\n        snapshots: [String: URL],\n        operation: UpdateOperationSession\n    )",
             to: "/// Verifies a replacement"
         )
         #expect(batch.contains("CaskRollbackLedger.shared.apply(token: token, verdict:"),

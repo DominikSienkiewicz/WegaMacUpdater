@@ -134,10 +134,10 @@ struct DownloadResourceGateWiringTests {
     }
 
     @Test func foregroundHardGateRunsBeforeSnapshot() throws {
-        let text = try source("Sources/MacUpdater/ScanStore+Actions.swift")
+        let text = try source("Sources/MacUpdater/ScanStore+Rollback.swift")
         let gate = try #require(text.range(of: "let resourceDecision = await foregroundResourceDecision("))
         let veto = try #require(text.range(of: "guard case .allow = resourceDecision else"))
-        let snapshot = try #require(text.range(of: "snapshotCasks(caskNames, appPaths: appPaths)"))
+        let snapshot = try #require(text.range(of: "snapshotCasks(caskNames, appPaths: appPaths, operation: operation)"))
 
         #expect(gate.lowerBound < veto.lowerBound)
         #expect(veto.lowerBound < snapshot.lowerBound)

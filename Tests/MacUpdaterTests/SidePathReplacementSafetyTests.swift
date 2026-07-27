@@ -28,7 +28,7 @@ struct SidePathReplacementSafetyTests {
         let body = try section(
             text,
             from: "func installManual(token: String) async",
-            to: "private func prepareForegroundCasks("
+            to: "private func reportManualReplacementVerification("
         )
 
         let mutex = try #require(body.range(of: "UpgradeMutex.shared.acquire()"))

@@ -102,8 +102,9 @@ struct QA01DPublisherMismatchRetentionTests {
     /// The behavioural tests above prove the two mechanisms in isolation; this pins the
     /// actual decision path. In the `.changed` branch of `CaskRollbackGuard.verify` the
     /// rollback must preserve the snapshot and the branch must never record (legalize)
-    /// the new Team ID or delete the snapshot — while the healthy branch, and only it,
-    /// is what drops the snapshot and updates the ledger.
+    /// the new Team ID or delete the snapshot. LT-01 moved the healthy branch's snapshot
+    /// deletion out: the retention sweep owns committed snapshots now, so the healthy
+    /// branch's remaining job here is the ledger update.
     @Test func mismatchBranchOfCaskRollbackGuardRetainsBaselineAndSnapshot() throws {
         let source = try String(
             contentsOf: packageRoot().appendingPathComponent("Sources/MacUpdater/CaskRollbackGuard.swift"),
@@ -123,8 +124,8 @@ struct QA01DPublisherMismatchRetentionTests {
         #expect(!mismatchBranch.contains("TeamIDLedger.shared.record"),
                 "SEC-02: the mismatch branch must not legalize the new publisher")
 
-        #expect(healthyBranch.contains("removeItem(at: snapshotURL)"),
-                "SEC-02: only a healthy upgrade consumes its snapshot")
+        #expect(!healthyBranch.contains("removeItem(at: snapshotURL)"),
+                "LT-01: the healthy branch no longer deletes the snapshot — the retention sweep owns it")
         #expect(healthyBranch.contains("TeamIDLedger.shared.record"),
                 "SEC-02: only a healthy upgrade advances the trusted baseline")
     }

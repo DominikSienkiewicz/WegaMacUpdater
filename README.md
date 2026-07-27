@@ -223,19 +223,35 @@ rollback to its first arbitrary artifact; a missing or ambiguous target fails cl
 retains the snapshot. In particular, the same artifact existing in both `/Applications`
 and `~/Applications` is ambiguous rather than resolved by preferring one directory.
 After a publisher mismatch, the original snapshot remains available even after a
-successful rollback. A bundle-identity mismatch preserves it in the same way; only a fully
-healthy upgrade deletes it after the canary window.
+successful rollback. A bundle-identity mismatch preserves it in the same way.
 
 #### The rollback net
 
 Each Homebrew cask row carries a **🛡 rollback badge**: a shield where snapshot → canary →
 auto-rollback covers the upgrade, and an honest **"no protection"** slash where it cannot (a
 cask that installs no `.app` — a bare `pkg` or `installer` — has nothing to clone; that hole
-is now logged as a warning instead of being skipped silently).
+is now logged as a warning instead of being skipped silently). Sources Wega cannot roll
+back at all — formulae, the Mac App Store, npm and vendor-direct apps — say so under
+their section headers instead of implying the net.
 
-The badge promises only what happens *during* the upgrade; there is no general manual
-"Undo": healthy upgrades delete their snapshots after the canary window, while
-publisher-mismatch snapshots are retained for recovery. The bundles the guard clones are
+**Undo update (LT-01).** Every upgrade runs inside a *journaled operation*: the phases
+`planned → snapshotted → installing → verified → committed/rolledBack` are written to
+disk, per cask, in a unique directory per operation
+(`~/Library/Application Support/WegaMacUpdater/update-operations/<uuid>/`), before the
+mutation they describe. A healthy upgrade no longer deletes its snapshot — it is kept
+for a **7-day retention window**, which is what makes a manual **„Cofnij aktualizację"**
+(Undo update) possible: the Updates window lists committed upgrades whose pre-upgrade
+copy is still retained, and undoing one restores that copy through the same code path as
+the canary (root-helper fallback included) and then **auto-pins the restored version**,
+so the update you just took back is not offered again on the next scan. A crash, kill or
+power loss mid-upgrade is settled at the next launch: operations whose journal stopped
+before `installing` never touched the disk and are swept; one stuck at `installing` is
+probed — an untouched disk settles as aborted, a landed-but-unvalidated upgrade is run
+through the same canary chain (and can roll back), an app missing outright is put back
+from its snapshot — and anything restored this way is announced, never silent. Expired
+snapshots are pruned at launch and after each run.
+
+The bundles the guard clones are
 located **when the upgrade starts** (`CaskAppPathResolver`), not when the scan ran — so the
 net also covers the most ordinary flow there is: open Wega, look at the list it restored from
 disk, press *Update all*. Banners **queue** rather than overwrite, so a *publisher changed*
@@ -340,7 +356,8 @@ WegaMacUpdater (SwiftUI app target)
 ├── CaskReplacementSafety — shared preflight/snapshot/canary transaction for UI paths that replace an existing app with `brew install --cask --force`
 ├── UpgradeCoordinator    — app-side state machine for every Homebrew/app-bundle mutation; routes foreground upgrade, background upgrade, metadata refresh, migration, duplicate cleanup, uninstall and self-update installation/opening through the shared read/write operation boundary
 ├── UpdateView           — multi-source update orchestrator (renders `ScanStore`; owns no scan state itself)
-├── ScanStore            — `@StateObject` held by the `App`, **above** the `.id(localization.language)` re-key: owns the scan/upgrade state and the tasks that write it, so switching language mid-scan neither drops the results nor orphans a running upgrade
+├── ScanStore            — `@StateObject` held by the `App`, **above** the `.id(localization.language)` re-key: owns the scan/upgrade state and the tasks that write it, so switching language mid-scan neither drops the results nor orphans a running upgrade. Split by file length into `ScanStore+Actions` (scan & upgrade), `ScanStore+Rollback` (the snapshot → canary → rollback glue) and `ScanStore+Undo` (LT-01 „Cofnij aktualizację": restore the retained snapshot, then auto-pin the restored version)
+├── UpdateOperationRecovery — LT-01 launch-time settler for operations a crash, kill or power loss cut short: reads each unfinished journal, sweeps operations that never reached `brew`, runs landed-but-unvalidated upgrades through the canary chain (rolling them back when it rejects them), puts back apps missing outright, announces every restore, then applies the snapshot retention window. Runs before the menu-bar agent starts scheduling rounds
 ├── UninstallCoordinator / UninstallView — stateful scan/uninstall boundary plus the all-app-type uninstaller UI; Homebrew and Trash I/O stay in the coordinator
 ├── MigrationStore / MigrationView — app-owned manual→brew/mas migration state machine plus its wizard; all scan, process, network, filesystem and App Store-opening work lives in the store while the view only binds state and sends intents. The store is injected above `.id(localization.language)`, so a language switch preserves a running migration, consent sheet, log and results
 ├── InventoryStore / InventoryView — read-gated Homebrew/MAS/npm/filesystem inventory loader plus its bindings-and-intents UI; the complete snapshot holds one shared read lease, so it cannot observe a half-finished mutation
@@ -365,6 +382,7 @@ MacUpdaterCore (library target — no SwiftUI dependency)
 ├── MenuBarUpdateChecker  — read-only count of available updates (brew/mas/npm + ManualUpdateScanner, with policies applied) for the menu-bar badge and notifications; the complete round holds the shared read lease and never mutates the system
 ├── UpdateRunOutcome     — **one result per item and source**, covering every phase an upgrade has to clear: execution, canary validation, rollback and the post-upgrade rescan (`ItemUpdateVerdict`, plus `CaskValidationVerdict` for the canary's half). Both upgrade paths — the window and the background updater — accumulate into it phase by phase and read one `UpdateRunSummary` from it, so "we updated N packages" is a single computation instead of two hand-rolled inferences that each dropped a different phase. A later phase can only ever make a verdict *worse*, so a `healthy` canary over a bundle brew never replaced cannot talk a failed install back up into a success. It also carries the per-failure **detail lines** — the brew `Error:` block, or a synthesized exit-code note when brew said nothing — written verbatim to the log so a failed cask upgrade explains *why*, not just *that*, plus one line per item naming the phase it fell over in. Success is announced only when every item cleared every phase; `.rollbackFailed` and `.publisherChanged` are marked critical and reach the user as sticky banners and their own notification, never as a line in a collapsed log
 ├── UpdateFingerprint    — the identity of "what is available right now" (the sorted, source-tagged keys of every visible update, SHA-256'd), used as the background notification's watermark. It replaces a count comparison, which stayed silent whenever one update was installed and another appeared between two rounds. Stable across launches, because it is persisted between them
+├── UpdateOperationStore / UpdateOperationSession / UpdateOperationRecoveryPlan — **LT-01** the durable, per-phase journal of an update operation: unique directory per operation under `update-operations/<uuid>/`, phases `planned → snapshotted → installing → verified → committed/rolledBack` (`aborted` for settled-without-mutation) flushed to `operation.json` synchronously *before* each mutation they describe, snapshot directory names sanitized against path traversal, a 7-day retention sweep (`pruneExpired`) replacing the old delete-after-validation, the `undoableUpdates` query behind „Cofnij aktualizację", and the pure crash-recovery decision table (`UpdateOperationRecoveryPlan`) unit-tested without a filesystem full of fake apps
 ├── UpdateSchedule       — pure scheduling decisions (`shouldCheck` / `secondsUntilNextCheck`) + `CheckInterval` (off / hourly / 6h / daily), unit-tested without timers
 ├── UpdatePolicy         — per-app ignore / version-pin rules ("don't update Zoom", "pin Parallels to 18"). `UpdatePlanner.applyPolicies` filters both the brew/mas/npm list and the manual list: `.ignored` hides an item outright, `.pinned(version:)` hides only updates *beyond* the pinned ceiling (via `isUpgrade`). Identity is the source-tagged key for tracked items and `manual:<bundle ID>|<path>` for manual apps — the stable installation identity (REL-11), so a pin/ignore survives the vendor renaming the app across versions and keeps two copies of one app (`/Applications` vs `~/Applications`) as distinct targets. Pure and unit-tested; persisted app-side by `UpdatePolicyStore` (UserDefaults JSON)
 ├── MigrationPlanner     — pure orchestration logic lifted out of MigrationView: partitions scanned apps into matchable / App-Store / unmatched, filters the migration pool, builds `~/Library` leftover paths, and owns `DuplicateRemoval` (npm↔brew command preview) — unit-tested without SwiftUI

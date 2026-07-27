@@ -790,5 +790,43 @@ extension Translations {
         "migracja %@": "migrating %@",
         "usuwanie duplikatu %@": "removing duplicate %@",
         "dezinstalacja %@ aplikacji": "uninstalling %@ app(s)",
+
+        // LT-01 — trwały journal operacji: recovery, ręczne cofanie, uczciwość źródeł bez rollbacku.
+        "Wega naprawiła przerwaną aktualizację": "Wega repaired an interrupted update",
+        "Przerwana aktualizacja: %@ nie udało się naprawić — sprawdź te aplikacje. %@ przywrócono z kopii.":
+            "Interrupted update: %@ could not be repaired — check these apps. Restored from a copy: %@.",
+        "Przerwana aktualizacja dokończona: %@ przywrócono z kopii.":
+            "Interrupted update settled: restored from a copy: %@.",
+        "Cofnij aktualizację": "Undo update",
+        "Kopie sprzed aktualizacji są trzymane przez 7 dni — w tym czasie możesz wrócić do poprzedniej wersji. Wega przypnie przywróconą wersję, żeby nie proponować jej od razu ponownie.":
+            "Pre-update copies are kept for 7 days — during that time you can go back to the previous version. Wega pins the restored version so it is not offered again right away.",
+        "Cofnij": "Undo",
+        "przywróci wersję %@": "restores version %@",
+        "przywróci poprzednią wersję": "restores the previous version",
+        "%@ · zaktualizowano %@ · kopia do %@": "%@ · updated %@ · copy until %@",
+        "Cofnąć aktualizację: %@?": "Undo update: %@?",
+        "Cofnąć aktualizację?": "Undo update?",
+        "Przywróć wersję %@": "Restore version %@",
+        "%@ zostanie zastąpiona kopią sprzed aktualizacji, a przywrócona wersja zostanie przypięta. Kopia jest trzymana do %@.":
+            "%@ will be replaced with the pre-update copy, and the restored version will be pinned. The copy is kept until %@.",
+        "Cofanie przerwane": "Undo aborted",
+        "%@: aplikacja pod %@ to już nie ta sama aplikacja.":
+            "%@: the app at %@ is no longer the same app.",
+        "Cofanie się nie powiodło": "Undo failed",
+        "%@: nie udało się przywrócić poprzedniej wersji — szczegóły w logu.":
+            "%@: could not restore the previous version — details in the log.",
+        "Cofnięto aktualizację: %@": "Update undone: %@",
+        "Przywrócono wersję %@ i przypięto ją — Wega nie zaproponuje nowszej, dopóki nie odepniesz.":
+            "Restored version %@ and pinned it — Wega will not offer a newer one until you unpin.",
+        "Przywrócono poprzednią wersję.": "Restored the previous version.",
+        "Cofnęłam %@ do wersji %@.": "Undid %@ back to version %@.",
+        "Bez automatycznego cofnięcia — Homebrew nie zachowuje poprzednich wersji formuł.":
+            "No automatic undo — Homebrew does not keep previous formula versions.",
+        "Bez automatycznego cofnięcia — App Store nie pozwala wrócić do poprzedniej wersji.":
+            "No automatic undo — the App Store does not allow going back to a previous version.",
+        "Bez automatycznego cofnięcia — npm nie zachowuje poprzednich wersji pakietów.":
+            "No automatic undo — npm does not keep previous package versions.",
+        "Bez automatycznego cofnięcia — poprzednią wersję pobierzesz od wydawcy.":
+            "No automatic undo — download the previous version from the vendor.",
     ]
 }

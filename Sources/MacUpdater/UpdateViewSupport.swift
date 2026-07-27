@@ -144,6 +144,9 @@ struct UpdateSection: View {
     /// M5 — rollback coverage per cask token. Empty for sections where the question does
     /// not apply (formulae, npm, App Store), which leaves the rows unbadged.
     var rollbackProtection: [String: RollbackProtection.Verdict] = [:]
+    /// LT-01 — sources Wega cannot roll back say so under their header, instead of
+    /// letting the cask shield imply a safety net the other sections do not have.
+    var rollbackCaption: String? = nil
     @Binding var selected: Set<String>
     var inspectedKey: String? = nil
     var onIgnore: ((OutdatedItem) -> Void)?
@@ -159,7 +162,8 @@ struct UpdateSection: View {
 
     var body: some View {
         WegaCard {
-            WegaCardHeader(icon: icon, title: title, count: items.count, note: subtitle)
+            WegaCardHeader(icon: icon, title: title, count: items.count, note: subtitle,
+                           caption: rollbackCaption)
 
             ForEach(items) { item in
                 PackageRow(
@@ -267,6 +271,60 @@ struct PinVersionSheet: View {
         }
         .padding(24)
         .frame(width: 380)
+    }
+}
+
+/// LT-01 — the updates the user can still take back: every committed upgrade whose
+/// pre-upgrade snapshot is inside the retention window, newest first. This is the row the
+/// whole journal exists for: "nowa wersja psuje mój workflow" gets a button, not a
+/// support ticket.
+struct UndoUpdateSection: View {
+    let items: [UndoableUpdate]
+    let busyToken: String?
+    let onUndo: (UndoableUpdate) -> Void
+
+    var body: some View {
+        WegaCard {
+            WegaCardHeader(
+                icon: "arrow.uturn.backward.circle",
+                title: tr("Cofnij aktualizację"),
+                count: items.count,
+                caption: tr("Kopie sprzed aktualizacji są trzymane przez 7 dni — w tym czasie możesz wrócić do poprzedniej wersji. Wega przypnie przywróconą wersję, żeby nie proponować jej od razu ponownie.")
+            )
+            ForEach(items) { item in
+                HStack(spacing: 12) {
+                    AppIcon(path: URL(fileURLWithPath: item.appPath), size: 28)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(item.token).fontWeight(.medium)
+                        Text(subtitle(for: item))
+                            .font(.wega(.subheadline))
+                            .foregroundStyle(.tertiary)
+                    }
+                    Spacer()
+                    if busyToken == item.token {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button(tr("Cofnij")) { onUndo(item) }
+                            .disabled(busyToken != nil)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .overlay(alignment: .bottom) {
+                    if item.id != items.last?.id { Divider().opacity(0.4).padding(.leading, 54) }
+                }
+            }
+        }
+        .padding(.top, 12)
+    }
+
+    private func subtitle(for item: UndoableUpdate) -> String {
+        let restored = item.restoredVersion.map { trf("przywróci wersję %@", "\($0)") }
+            ?? tr("przywróci poprzednią wersję")
+        return trf("%@ · zaktualizowano %@ · kopia do %@",
+                   restored,
+                   item.updatedAt.formatted(date: .abbreviated, time: .shortened),
+                   item.expiresAt.formatted(date: .abbreviated, time: .omitted))
     }
 }
 

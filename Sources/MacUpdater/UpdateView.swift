@@ -49,6 +49,9 @@ struct UpdateView: View {
     /// execution one immutable decision.
     @State private var pendingUpdateTargets: [OutdatedItem] = []
     @State private var showUpdateConfirmation = false
+    /// LT-01 — the update the user has asked to take back, pending confirmation.
+    @State private var undoTarget: UndoableUpdate? = nil
+    @State private var showUndoConfirmation = false
 
     private var allItems: [OutdatedItem] { scan.allItems }
     private var visibleItems: [OutdatedItem] { scan.visibleItems(for: updateFilter) }
@@ -83,6 +86,25 @@ struct UpdateView: View {
             .onChange(of: showUpdateConfirmation) { _, isPresented in
                 if !isPresented { pendingUpdateTargets = [] }
             }
+            .confirmationDialog(
+                undoTarget.map { trf("Cofnąć aktualizację: %@?", "\($0.token)") } ?? tr("Cofnąć aktualizację?"),
+                isPresented: $showUndoConfirmation,
+                titleVisibility: .visible
+            ) {
+                if let undoTarget {
+                    Button(trf("Przywróć wersję %@", "\(undoTarget.restoredVersion ?? "—")")) {
+                        self.undoTarget = nil
+                        Task { await scan.undoUpdate(undoTarget) }
+                    }
+                }
+                Button(tr("Anuluj"), role: .cancel) { undoTarget = nil }
+            } message: {
+                if let undoTarget {
+                    Text(trf("%@ zostanie zastąpiona kopią sprzed aktualizacji, a przywrócona wersja zostanie przypięta. Kopia jest trzymana do %@.",
+                             "\(undoTarget.token)",
+                             "\(undoTarget.expiresAt.formatted(date: .abbreviated, time: .omitted))"))
+                }
+            }
             // Switching the sidebar category re-filters the list but not the inspector's
             // resolver, so a selection made in one category would otherwise keep showing in
             // the pane after switching away from it. Clear it so the detail pane never
@@ -108,6 +130,9 @@ struct UpdateView: View {
                 // a no-op after the first appearance and whenever a scan has already run.
                 scan.restoreLastScan()
                 scan.replayLastScan()
+                // LT-01 — surface what can still be undone (incl. whatever launch-time
+                // recovery just settled).
+                scan.refreshUndoableUpdates()
                 UpdateFilterInteraction.apply(updateFilter, to: scan)
             }
             // UX-10 — expose the scan and the "Zaktualizuj…" action to the menu bar (⌘R, ⌘⏎).
@@ -327,7 +352,9 @@ struct UpdateView: View {
                         if !formulae.isEmpty && updateFilter.allowsCli {
                             UpdateSection(
                                 title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"), icon: "terminal",
-                                items: formulae, selected: $scan.selected, inspectedKey: scan.inspectedKey,
+                                items: formulae,
+                                rollbackCaption: tr("Bez automatycznego cofnięcia — Homebrew nie zachowuje poprzednich wersji formuł."),
+                                selected: $scan.selected, inspectedKey: scan.inspectedKey,
                                 onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
                                 onInspect: { scan.inspectedKey = $0.key }
                             )
@@ -345,7 +372,9 @@ struct UpdateView: View {
                         if !store.isEmpty && updateFilter.allowsApps {
                             UpdateSection(
                                 title: tr("Mac App Store"), subtitle: tr("via mas-cli"), icon: "bag",
-                                items: store, selected: $scan.selected, inspectedKey: scan.inspectedKey,
+                                items: store,
+                                rollbackCaption: tr("Bez automatycznego cofnięcia — App Store nie pozwala wrócić do poprzedniej wersji."),
+                                selected: $scan.selected, inspectedKey: scan.inspectedKey,
                                 onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
                                 onInspect: { scan.inspectedKey = $0.key }
                             )
@@ -353,7 +382,9 @@ struct UpdateView: View {
                         if !npmPkgs.isEmpty && updateFilter.allowsCli {
                             UpdateSection(
                                 title: tr("npm globalne"), subtitle: tr("pakiety -g"), icon: "shippingbox",
-                                items: npmPkgs, selected: $scan.selected, inspectedKey: scan.inspectedKey,
+                                items: npmPkgs,
+                                rollbackCaption: tr("Bez automatycznego cofnięcia — npm nie zachowuje poprzednich wersji pakietów."),
+                                selected: $scan.selected, inspectedKey: scan.inspectedKey,
                                 onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
                                 onInspect: { scan.inspectedKey = $0.key }
                             )
@@ -389,12 +420,24 @@ struct UpdateView: View {
                                 onInstall: { token in Task { await scan.installManual(token: token) } },
                                 title: tr("Ręcznie zainstalowane"),
                                 icon: "sparkle",
+                                caption: tr("Bez automatycznego cofnięcia — poprzednią wersję pobierzesz od wydawcy."),
                                 inspectedKey: scan.inspectedKey,
                                 onIgnore: scan.ignoreManual,
                                 onPin: requestPinManual,
                                 onSkip: scan.skipManual,
                                 onInspect: { scan.inspectedKey = "m:" + $0.path.path }
                             )
+                        }
+                        // LT-01 — the manual undo lives where the updates it reverses were
+                        // launched from; visible only while a retained snapshot exists.
+                        if !scan.undoableUpdates.isEmpty {
+                            UndoUpdateSection(
+                                items: scan.undoableUpdates,
+                                busyToken: scan.undoBusy
+                            ) { undoable in
+                                undoTarget = undoable
+                                showUndoConfirmation = true
+                            }
                         }
                         if !scan.restartCandidates.isEmpty {
                             RestartSection(

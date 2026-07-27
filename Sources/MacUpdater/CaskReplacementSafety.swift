@@ -10,6 +10,9 @@ enum CaskReplacementSafety {
         let snapshotURL: URL
         let expectedTeamID: String?
         let identity: CaskReplacementArtifactIdentity
+        /// LT-01 — the journaled operation this adoption runs inside; the caller marks
+        /// `installing` before invoking brew.
+        let operation: UpdateOperationSession
     }
 
     enum PreparationResult {
@@ -69,8 +72,17 @@ enum CaskReplacementSafety {
             ledger.record(bundleID: bundleID, teamID: installedTeamID)
         }
 
-        let snapshots = CaskRollbackGuard.snapshot(tokens: [token], appPaths: appPaths)
-        guard let snapshotURL = snapshots[token] else { return .snapshotFailed }
+        // LT-01 — the adoption runs inside a journaled operation too: its snapshot lives
+        // in the operation's own directory and a crash mid-`brew install --force` is
+        // recoverable, exactly like a batch upgrade.
+        let operation = UpdateOperationStore.shared.begin(trigger: .adoption)
+        operation.recordPlanned(tokens: [token], appPaths: appPaths)
+        let snapshots = CaskRollbackGuard.snapshot(tokens: [token], appPaths: appPaths, operation: operation)
+        guard let snapshotURL = snapshots[token] else {
+            operation.abortUnfinished()
+            UpdateOperationStore.shared.removeOperation(id: operation.operation.id)
+            return .snapshotFailed
+        }
         return .ready(Preparation(
             token: token,
             snapshotURL: snapshotURL,
@@ -78,7 +90,8 @@ enum CaskReplacementSafety {
             identity: CaskReplacementArtifactIdentity(
                 bundleIdentifier: bundleID,
                 appURL: appURL
-            )
+            ),
+            operation: operation
         ))
     }
 
@@ -144,7 +157,8 @@ enum CaskReplacementSafety {
             snapshotURL: preparation.snapshotURL,
             validationURL: installedAppURL,
             expectedTeamID: preparation.expectedTeamID,
-            expectedBundleIdentifier: preparation.identity.bundleIdentifier
+            expectedBundleIdentifier: preparation.identity.bundleIdentifier,
+            operation: preparation.operation
         )
     }
 }

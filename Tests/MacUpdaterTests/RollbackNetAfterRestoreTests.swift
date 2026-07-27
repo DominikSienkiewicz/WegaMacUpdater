@@ -36,7 +36,7 @@ struct RollbackNetAfterRestoreTests {
     /// that a `!contains` guard still covers the whole type: pinned to one half only, the
     /// pattern it forbids could reappear in the other and the assertion would pass.
     private func scanStore() throws -> String {
-        try source("ScanStore.swift") + "\n" + source("ScanStore+Actions.swift")
+        try source("ScanStore.swift") + "\n" + source("ScanStore+Actions.swift") + "\n" + source("ScanStore+Rollback.swift")
     }
 
     /// The bug itself: the chain read a map that was filled somewhere else, at some other
@@ -58,11 +58,11 @@ struct RollbackNetAfterRestoreTests {
         let text = try scanStore()
         #expect(text.contains("await resolveCaskAppPaths(caskNames)"),
                 "REL-03: the upgrade must resolve the `.app` paths itself, in this run")
-        #expect(text.contains("private func snapshotCasks(_ tokens: [String], appPaths: [String: URL])"),
+        #expect(text.contains("func snapshotCasks(\n        _ tokens: [String],\n        appPaths: [String: URL],"),
                 "REL-03: the snapshot cannot be taken without being told which bundles it covers")
-        #expect(text.contains("snapshotCasks(caskNames, appPaths: appPaths)"),
+        #expect(text.contains("snapshotCasks(caskNames, appPaths: appPaths, operation: operation)"),
                 "REL-03: the snapshot takes the freshly resolved paths")
-        #expect(text.contains("postCaskUpgrade(caskNames, appPaths: appPaths, snapshots: snapshots)"),
+        #expect(text.contains("postCaskUpgrade(\n                    caskNames, appPaths: appPaths, snapshots: snapshots,"),
                 "REL-03: the canary verifies against the very same paths, never a second map")
     }
 

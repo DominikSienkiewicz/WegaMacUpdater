@@ -422,6 +422,9 @@ final class MigrationStore: ObservableObject {
 
         var installError: Error?
         var exitCode: Int32 = 0
+        // LT-01 — the journal's last word before brew replaces the bundle: a crash from
+        // here on reads as "disk state unknown" at the next launch.
+        preparation.operation.recordInstalling()
         do {
             let stream = try model.brewService.events(
                 // SEC-10: `--` fences the token off from Homebrew's option parsing.
