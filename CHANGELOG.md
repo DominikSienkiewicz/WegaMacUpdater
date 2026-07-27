@@ -139,6 +139,24 @@ bump and move its entries under the new version heading when cutting a release.
 - The catalog's conditional-GET validator (ETag) is now persisted, so a relaunch
   revalidates instead of re-downloading the whole catalog. The catalog is fetched once per
   launch, which is precisely when a process-lifetime validator is guaranteed to be empty.
+- Text sizes across the window come from a semantic scale instead of ~225 hard-coded point
+  sizes between 8 and 28 pt (`UX-03`). Every call site goes through one alias in `WegaTheme`
+  (`Font.wega(_:weight:monospaced:)`), which resolves to a macOS text style — so the
+  interface follows the system's text-size setting rather than staying frozen at whatever
+  size was typed into each view. Two fixed sizes remain on purpose and say so on the spot:
+  the letter drawn inside a package's fallback tile and the decorative binary rain, both of
+  which are drawings sized by their own container rather than running text.
+- Perpetual animations now answer **Ogranicz ruch** (Reduce Motion) through one shared
+  policy rather than one condition per view (`UX-03`). Wega's bouncing ball, her blink, her
+  idle "tricks" on empty states and the sweeping bar under a running check all stop, and
+  each of them notices the setting being switched on while it is already running instead of
+  only at first appearance. Where a moving element carried information, the information
+  stays: the check-in-progress bar drops its sweep rather than freezing at full width, which
+  would read as "finished", and the spinner and command line beside it still report the
+  state.
+- The **Settings** window (⌘,) is resizable instead of pinned to exactly 640×600
+  (`UX-03`). It still opens at that size; at larger system text sizes it can now grow rather
+  than clipping its own content.
 - Split `ScanStore` across two files along the seam it already had: `ScanStore.swift`
   keeps the published state and the small operations over it, and the scan/upgrade
   actions move to `ScanStore+Actions.swift`. The type, its API and its behaviour are
@@ -255,6 +273,19 @@ bump and move its entries under the new version heading when cutting a release.
   after acquiring the upgrade mutex, binary-only casks stay in the user-present flow, and
   any non-zero global brew exit invalidates the whole unattended batch instead of allowing
   the unnamed tokens to be reported as upgraded.
+- **The palette assumed a dark window (`UX-03`).** The eight brand colours were fixed RGB
+  triples chosen against a dark background, so on a light desktop honey text landed at
+  roughly 1.8:1 against the window — well under the 4.5:1 WCAG asks of text, and effectively
+  unreadable. Each colour now resolves per appearance, with a separate pair for **Increase
+  contrast** in System Settings › Accessibility. Every value clears 4.5:1 twice over: once
+  against the window background and once against the 12 %-tinted badge fill it also has to
+  sit on, with the increased-contrast pair clearing 7:1; the tests grade the components
+  arithmetically, so a future edit cannot quietly reintroduce an unreadable value. Filled
+  controls whose label is Wega's dark ink keep a separate, lighter fill value, since a fill
+  that darkened with the text would have taken its own label down with it. Hairlines and
+  recessed surfaces written as `Color.white.opacity(…)` / `Color.black.opacity(…)` — visible
+  only on a dark background — now use the system's adaptive separator and page colours. The
+  mascot's own coat colours are unchanged: a drawing is not text.
 - **Background rounds silently re-failed an interrupted cask upgrade every time (BG-04).**
   A cask stranded by a cut-short previous upgrade (`Error: <token>: … already an App at …`)
   failed on every scheduled background round with no recovery — the one-time `--force` retry

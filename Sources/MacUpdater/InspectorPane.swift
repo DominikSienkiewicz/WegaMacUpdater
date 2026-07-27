@@ -49,10 +49,10 @@ struct InspectorPane: View {
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "sidebar.trailing")
-                .font(.system(size: 28))
+                .font(.wega(.largeTitle))
                 .foregroundStyle(.tertiary)
             Text(tr("Wybierz aktualizację, aby zobaczyć szczegóły"))
-                .font(.system(size: 12))
+                .font(.wega(.callout))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
@@ -115,7 +115,7 @@ struct InspectorPane: View {
                 PackageLetterIcon(name: info.name, size: 40)
             }
             Text(info.name)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.wega(.title3, weight: .semibold))
                 .fixedSize(horizontal: false, vertical: true)
             VersionArrow(from: info.from, to: info.to, emphasis: info.emphasis)
             info.sourceBadge
@@ -149,7 +149,7 @@ struct InspectorPane: View {
     /// Small consistent heading used by the three body sections below.
     private func sectionHeading(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 11, weight: .semibold))
+            .font(.wega(.subheadline, weight: .semibold))
             .foregroundStyle(.secondary)
     }
 
@@ -157,11 +157,11 @@ struct InspectorPane: View {
     private func detailRow(_ label: String, _ value: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text(label)
-                .font(.system(size: 11))
+                .font(.wega(.subheadline))
                 .foregroundStyle(.secondary)
                 .frame(width: 92, alignment: .leading)
             Text(value)
-                .font(.system(size: 12))
+                .font(.wega(.callout))
                 .foregroundStyle(.primary)
         }
     }
@@ -213,11 +213,11 @@ struct InspectorPane: View {
                 detailRow(tr("Pochodzenie"), originLabel(app.origin))
                 HStack(alignment: .top, spacing: 8) {
                     Text(tr("Ścieżka"))
-                        .font(.system(size: 11))
+                        .font(.wega(.subheadline))
                         .foregroundStyle(.secondary)
                         .frame(width: 92, alignment: .leading)
                     Text(app.path.path)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.wega(.subheadline, monospaced: true))
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -247,7 +247,7 @@ struct InspectorPane: View {
             switch update {
             case .outdated:
                 Text(tr("Informacje o zmianach niedostępne dla tego źródła"))
-                    .font(.system(size: 11))
+                    .font(.wega(.subheadline))
                     .foregroundStyle(.tertiary)
             case .manual(let app):
                 whatsNewContent(notes: app.releaseNotes)
@@ -267,18 +267,18 @@ struct InspectorPane: View {
             VStack(alignment: .leading, spacing: 6) {
                 if let notes, ReleaseNotesTriage.heuristic(notes).isLikelySecurityFix {
                     Label(tr("możliwa poprawka bezpieczeństwa"), systemImage: "shield.lefthalf.filled")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.wega(.footnote, weight: .medium))
                         .foregroundStyle(Color.wegaDanger)
                 }
                 Text(cleaned)
-                    .font(.system(size: 12))
+                    .font(.wega(.callout))
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
         } else {
             Text(tr("Brak informacji o zmianach"))
-                .font(.system(size: 11))
+                .font(.wega(.subheadline))
                 .foregroundStyle(.tertiary)
         }
     }
@@ -292,7 +292,7 @@ struct InspectorPane: View {
             switch update {
             case .outdated:
                 Text(tr("Aktualizowane zbiorczo — zaznacz na liście i użyj „Zaktualizuj wybrane”."))
-                    .font(.system(size: 11))
+                    .font(.wega(.subheadline))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             case .manual(let app):

@@ -66,9 +66,9 @@ struct UninstallView: View {
                 // Header
                 HStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(tr("Odinstaluj aplikacje")).font(.system(size: 18, weight: .semibold))
+                        Text(tr("Odinstaluj aplikacje")).font(.wega(.title2, weight: .semibold))
                         Text(tr("Brew casks → brew uninstall  ·  pozostałe → Kosz"))
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(.wega(.subheadline, monospaced: true))
                             .foregroundStyle(.tertiary)
                     }
                     Spacer()
@@ -103,7 +103,7 @@ struct UninstallView: View {
                         Button(action: toggleAll) {
                             Image(systemName: selectAllSymbol)
                                 .foregroundStyle(targets.isEmpty ? .secondary : Color.wegaHoney)
-                                .font(.system(size: 16))
+                                .font(.wega(.title3))
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(tr("Zaznacz wszystko"))
@@ -113,11 +113,11 @@ struct UninstallView: View {
                         Text(targets.isEmpty
                              ? trf("%@ aplikacji", "\(filtered.count)")
                              : trf("%@ zaznaczonych z %@", "\(targets.count)", "\(filtered.count)"))
-                            .font(.system(size: 12))
+                            .font(.wega(.callout))
                             .foregroundStyle(.secondary)
                         Spacer()
                         Text(tr("NAZWA · WERSJA · ŹRÓDŁO"))
-                            .font(.system(size: 10.5, design: .monospaced))
+                            .font(.wega(.footnote, monospaced: true))
                             .foregroundStyle(.tertiary)
                     }
                     .padding(.horizontal, 14)
@@ -450,22 +450,22 @@ struct UninstallDialog: View {
                         .frame(width: 44, height: 44)
                     Image(systemName: "trash")
                         .foregroundStyle(Color.wegaDanger)
-                        .font(.system(size: 18))
+                        .font(.wega(.title2))
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(trf("Odinstalować %@ %@?", "\(totalCount)", totalCount == 1 ? tr("aplikację") : tr("aplikacji")))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.wega(.title3, weight: .semibold))
                     if hasMixed {
                         Text(trf("%@ przez brew · %@ do Kosza", "\(brewCount)", "\(trashCount)"))
-                            .font(.system(size: 12))
+                            .font(.wega(.callout))
                             .foregroundStyle(.secondary)
                     } else if hasNonBrew {
                         Text(tr("Aplikacje trafią do Kosza"))
-                            .font(.system(size: 12))
+                            .font(.wega(.callout))
                             .foregroundStyle(.secondary)
                     } else {
                         Text(tr("Wybierz, co zostawić"))
-                            .font(.system(size: 12))
+                            .font(.wega(.callout))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -480,9 +480,9 @@ struct UninstallDialog: View {
                         HStack(alignment: .top, spacing: 8) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(Color.wegaDanger)
-                                .font(.system(size: 13))
+                                .font(.wega(.body))
                             Text(tr("Skan aplikacji był niekompletny — lista celów może nie zawierać wszystkich instalacji. Zweryfikuj przed usunięciem."))
-                                .font(.system(size: 11))
+                                .font(.wega(.subheadline))
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 0)
@@ -502,13 +502,13 @@ struct UninstallDialog: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text(tr("Dokładne cele"))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.wega(.callout, weight: .semibold))
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(targets) { app in
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(app.name).font(.system(size: 12, weight: .medium))
+                                    Text(app.name).font(.wega(.callout, weight: .medium))
                                     Text(app.path.path)
-                                        .font(.system(size: 10.5, design: .monospaced))
+                                        .font(.wega(.footnote, monospaced: true))
                                         .foregroundStyle(.secondary)
                                         .textSelection(.enabled)
                                 }
@@ -553,10 +553,10 @@ struct UninstallDialog: View {
                                 HStack(alignment: .top, spacing: 8) {
                                     Image(systemName: "exclamationmark.triangle.fill")
                                         .foregroundStyle(Color.wegaDanger)
-                                        .font(.system(size: 13))
+                                        .font(.wega(.body))
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(tr("Homebrew usunie swoją kopię"))
-                                            .font(.system(size: 12, weight: .semibold))
+                                            .font(.wega(.callout, weight: .semibold))
                                         Text(trf(
                                             "%@ jest zainstalowany w %@ miejscach: %@. Homebrew usunie kopię, którą sam zarządza (brew uninstall %@) — niekoniecznie tę zaznaczoną.",
                                             "\(item.appName)",
@@ -564,7 +564,7 @@ struct UninstallDialog: View {
                                             "\(item.locations.joined(separator: ", "))",
                                             "\(item.caskToken)"
                                         ))
-                                        .font(.system(size: 11))
+                                        .font(.wega(.subheadline))
                                         .foregroundStyle(.secondary)
                                         .fixedSize(horizontal: false, vertical: true)
                                     }
@@ -589,9 +589,9 @@ struct UninstallDialog: View {
                         HStack(spacing: 8) {
                             Image(systemName: "info.circle")
                                 .foregroundStyle(Color.wegaInfo)
-                                .font(.system(size: 13))
+                                .font(.wega(.body))
                             Text(trf("%@ %@ przez brew — trafi do Kosza.", "\(trashCount)", trashCount == 1 ? tr("aplikacja nie jest zarządzana") : tr("aplikacji nie jest zarządzanych")))
-                                .font(.system(size: 12))
+                                .font(.wega(.callout))
                                 .foregroundStyle(.secondary)
                             Spacer()
                         }
@@ -641,11 +641,11 @@ struct UninstallDialog: View {
             .padding(.horizontal, 18)
             .padding(.top, 16)
             .padding(.bottom, 18)
-            .background(Color.black.opacity(0.15))
+            .background(Color.wegaRecessedSurface)
             .overlay(alignment: .top) { Divider().opacity(0.5) }
         }
         .background(Color(NSColor.windowBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.10), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.wegaHairline, lineWidth: 1))
         .shadow(color: .black.opacity(0.5), radius: 40, y: 12)
         .frame(width: 480)
     }
@@ -675,21 +675,21 @@ struct UninstallOption: View {
             HStack(alignment: .top, spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(isSelected ? Color.wegaHoney : Color(NSColor.controlBackgroundColor))
+                        .fill(isSelected ? Color.wegaHoneyFill : Color(NSColor.controlBackgroundColor))
                         .frame(width: 16, height: 16)
                     if isSelected {
                         Circle().fill(Color.wegaInk).frame(width: 6, height: 6)
                     }
                 }
-                .overlay(Circle().stroke(isSelected ? Color.wegaHoney : Color.white.opacity(0.15), lineWidth: 1))
+                .overlay(Circle().stroke(isSelected ? Color.wegaHoney : Color.wegaHairline, lineWidth: 1))
                 .padding(.top, 2)
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text(title).font(.system(size: 13, weight: .semibold))
+                        Text(title).font(.wega(.headline))
                         if recommended {
                             Text(tr("zalecane"))
-                                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                                .font(.wega(.footnote, weight: .medium, monospaced: true))
                                 .foregroundStyle(Color.wegaHoney)
                                 .padding(.horizontal, 6).padding(.vertical, 1)
                                 .background(Color.wegaHoney.opacity(0.10), in: RoundedRectangle(cornerRadius: 4))
@@ -697,11 +697,11 @@ struct UninstallOption: View {
                         }
                     }
                     Text(subtitle)
-                        .font(.system(size: 11))
+                        .font(.wega(.subheadline))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.leading)
                     Text("$ \(command)")
-                        .font(.system(size: 10.5, design: .monospaced))
+                        .font(.wega(.footnote, monospaced: true))
                         .foregroundStyle(.tertiary)
                         .padding(.top, 2)
                 }
@@ -716,7 +716,7 @@ struct UninstallOption: View {
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(isSelected ? Color.wegaHoney.opacity(0.06) : Color(NSColor.controlBackgroundColor))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(isSelected ? Color.wegaHoney.opacity(0.32) : Color.white.opacity(0.06), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(isSelected ? Color.wegaHoney.opacity(0.32) : Color.wegaHairline, lineWidth: 1))
         )
     }
 }
@@ -738,11 +738,11 @@ struct UninstallLeftoverSelection: View {
             HStack(spacing: 8) {
                 Image(systemName: "folder.badge.minus")
                     .foregroundStyle(Color.wegaHoney)
-                    .font(.system(size: 13))
+                    .font(.wega(.body))
                 Text(tr("Resztki w ~/Library"))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.wega(.callout, weight: .semibold))
                 Text("\(allPaths.count)")
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(.wega(.callout, monospaced: true))
                     .foregroundStyle(.tertiary)
                 Spacer()
                 Button(allSelected ? tr("Odznacz wszystko") : tr("Zaznacz wszystko")) {
@@ -750,11 +750,11 @@ struct UninstallLeftoverSelection: View {
                     else { selected.formUnion(allPaths) }
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 11))
+                .font(.wega(.subheadline))
                 .foregroundStyle(Color.wegaHoney)
             }
             Text(tr("Zaznaczone pliki trafią do Kosza — możesz je stamtąd przywrócić."))
-                .font(.system(size: 11))
+                .font(.wega(.subheadline))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -762,7 +762,7 @@ struct UninstallLeftoverSelection: View {
                 VStack(alignment: .leading, spacing: 6) {
                     if groups.count > 1 {
                         Text(group.app.name)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.wega(.subheadline, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
                     ForEach(group.items, id: \.path) { url in
@@ -801,9 +801,9 @@ private struct UninstallLeftoverRow: View {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(url.lastPathComponent)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.wega(.subheadline, weight: .medium))
                     Text(displayPath)
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.wega(.footnote, monospaced: true))
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -812,7 +812,7 @@ private struct UninstallLeftoverRow: View {
             }
             .contentShape(Rectangle())
         }
-        .toggleStyle(WegaCheckboxToggleStyle(glyphFont: .system(size: 14), spacing: 10))
+        .toggleStyle(WegaCheckboxToggleStyle(glyphFont: .wega(.body), spacing: 10))
         .accessibilityLabel(displayPath)
     }
 }

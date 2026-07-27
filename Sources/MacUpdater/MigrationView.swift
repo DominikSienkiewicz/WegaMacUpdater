@@ -101,7 +101,7 @@ struct MigrationView: View {
                     Label(tr("Skanuj /Applications"), systemImage: "sparkle.magnifyingglass")
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(Color.wegaHoney)
+                .tint(Color.wegaHoneyFill)
                 .foregroundStyle(Color.wegaInk)
                 .controlSize(.large)
             )
@@ -114,7 +114,7 @@ struct MigrationView: View {
                 HStack(spacing: 12) {
                     ProgressView().controlSize(.small).tint(Color.wegaHoney)
                     Text(tr("Skanowanie /Applications"))
-                        .font(.system(size: 12, design: .monospaced))
+                        .font(.wega(.callout, monospaced: true))
                         .foregroundStyle(.secondary)
                     Spacer()
                 }
@@ -147,9 +147,9 @@ struct MigrationView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(tr("Kandydaci do migracji"))
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.wega(.title2, weight: .semibold))
                         Text(trf("Zeskanowano /Applications · znalazłam %@ aplikacji poza zarządzaniem", "\(matchable.count + migrated.count + masCandidates.count + unmatched.count)"))
-                            .font(.system(size: 11))
+                            .font(.wega(.subheadline))
                             .foregroundStyle(.tertiary)
                     }
                     Spacer()
@@ -168,7 +168,7 @@ struct MigrationView: View {
 
                     if matchable.isEmpty {
                         Text(tr("Wszystko już przygarnięte. Dobra robota."))
-                            .font(.system(size: 13))
+                            .font(.wega(.body))
                             .foregroundStyle(.tertiary)
                             .padding(28)
                             .frame(maxWidth: .infinity)
@@ -208,12 +208,12 @@ struct MigrationView: View {
                                 Image(systemName: "shippingbox").foregroundStyle(.secondary).frame(width: 22)
                                 VStack(alignment: .leading, spacing: 2) {
                                     HStack(spacing: 8) {
-                                        Text(dup.npmPackage).font(.system(size: 12, weight: .medium))
-                                        Image(systemName: "arrow.left.arrow.right").font(.system(size: 10)).foregroundStyle(.tertiary)
-                                        Text(dup.brewToken).font(.system(size: 12, weight: .medium))
+                                        Text(dup.npmPackage).font(.wega(.callout, weight: .medium))
+                                        Image(systemName: "arrow.left.arrow.right").font(.wega(.footnote)).foregroundStyle(.tertiary)
+                                        Text(dup.brewToken).font(.wega(.callout, weight: .medium))
                                     }
                                     Text(tr("Zostaw jedną — usuń duplikat z npm albo z brew."))
-                                        .font(.system(size: 11))
+                                        .font(.wega(.subheadline))
                                         .foregroundStyle(.tertiary)
                                 }
                                 Spacer()
@@ -286,9 +286,9 @@ struct MigrationView: View {
                             HStack(spacing: 12) {
                                 AppIcon(path: app.path, size: 28)
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text(app.name).font(.system(size: 13, weight: .medium))
+                                    Text(app.name).font(.wega(.body, weight: .medium))
                                     Text(app.path.path)
-                                        .font(.system(size: 11, design: .monospaced))
+                                        .font(.wega(.subheadline, monospaced: true))
                                         .foregroundStyle(.tertiary)
                                         .lineLimit(1).truncationMode(.middle)
                                 }
@@ -428,13 +428,13 @@ private struct MigrationRow: View {
         switch confidence {
         case .high:
             Label(tr("pewne"), systemImage: "checkmark.seal.fill")
-                .font(.system(size: 10, weight: .medium)).foregroundStyle(Color.wegaSuccess)
+                .font(.wega(.footnote, weight: .medium)).foregroundStyle(Color.wegaSuccess)
         case .medium:
             Label(tr("sprawdź"), systemImage: "questionmark.circle")
-                .font(.system(size: 10, weight: .medium)).foregroundStyle(Color.wegaHoney)
+                .font(.wega(.footnote, weight: .medium)).foregroundStyle(Color.wegaHoney)
         case .low:
             Label(tr("niepewne"), systemImage: "exclamationmark.triangle.fill")
-                .font(.system(size: 10, weight: .medium)).foregroundStyle(Color.wegaDanger)
+                .font(.wega(.footnote, weight: .medium)).foregroundStyle(Color.wegaDanger)
         }
     }
 
@@ -443,13 +443,13 @@ private struct MigrationRow: View {
             AppIcon(path: app.path, size: 32)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
-                    Text(app.name).font(.system(size: 13, weight: .medium))
+                    Text(app.name).font(.wega(.body, weight: .medium))
                     if let v = app.version {
-                        Text(v).font(.system(size: 11, design: .monospaced)).foregroundStyle(.tertiary)
+                        Text(v).font(.wega(.subheadline, monospaced: true)).foregroundStyle(.tertiary)
                     }
                 }
                 Text(app.path.path)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.wega(.subheadline, monospaced: true))
                     .foregroundStyle(.tertiary)
                     .lineLimit(1).truncationMode(.middle)
             }
@@ -458,8 +458,8 @@ private struct MigrationRow: View {
                 confidenceBadge
                 if let token = app.caskToken {
                     HStack(spacing: 6) {
-                        Image(systemName: "arrow.right").font(.system(size: 10))
-                        Text(token).font(.system(size: 11, design: .monospaced)).foregroundStyle(Color.wegaHoney)
+                        Image(systemName: "arrow.right").font(.wega(.footnote))
+                        Text(token).font(.wega(.subheadline, monospaced: true)).foregroundStyle(Color.wegaHoney)
                     }
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Color.wegaHoney.opacity(0.06), in: RoundedRectangle(cornerRadius: 7))
@@ -493,15 +493,15 @@ private struct AppStoreMigrationRow: View {
             AppIcon(path: app.path, size: 32)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
-                    Text(app.name).font(.system(size: 13, weight: .medium))
+                    Text(app.name).font(.wega(.body, weight: .medium))
                     if let v = app.version {
                         Text(v)
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(.wega(.subheadline, monospaced: true))
                             .foregroundStyle(.tertiary)
                     }
                 }
                 Text(app.path.path)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.wega(.subheadline, monospaced: true))
                     .foregroundStyle(.tertiary)
                     .lineLimit(1).truncationMode(.middle)
             }
@@ -530,9 +530,9 @@ private struct MigrationConfirmSheet: View {
                 AppIcon(path: app.path, size: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(tr("Migracja do Homebrew"))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.wega(.title3, weight: .bold))
                     Text(app.name)
-                        .font(.system(size: 13))
+                        .font(.wega(.body))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -540,18 +540,18 @@ private struct MigrationConfirmSheet: View {
             if let token = app.caskToken {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(tr("Polecenie:"))
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.wega(.subheadline, weight: .semibold))
                         .foregroundStyle(.tertiary)
                     Text("brew install --cask --force \(token)")
-                        .font(.system(size: 12, design: .monospaced))
+                        .font(.wega(.callout, monospaced: true))
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.black.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
+                        .background(Color.wegaRecessedSurface, in: RoundedRectangle(cornerRadius: 7))
                 }
             }
 
             Text(tr("Homebrew pobierze najnowszą wersję i zastąpi aktualną instalację w /Applications. Zamknij aplikację przed kontynuowaniem."))
-                .font(.system(size: 12))
+                .font(.wega(.callout))
                 .foregroundStyle(.secondary)
 
             HStack {
@@ -564,7 +564,7 @@ private struct MigrationConfirmSheet: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
-                .tint(Color.wegaHoney)
+                .tint(Color.wegaHoneyFill)
                 .foregroundStyle(Color.wegaInk)
             }
         }
@@ -581,7 +581,7 @@ private struct MigrationLogView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Text(tr("Log migracji"))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.wega(.subheadline, weight: .semibold))
                     .foregroundStyle(.secondary)
                 if migrating != nil {
                     ProgressView().controlSize(.mini)
@@ -597,7 +597,7 @@ private struct MigrationLogView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(logLines.enumerated()), id: \.offset) { idx, line in
                             Text(line)
-                                .font(.system(size: 11, design: .monospaced))
+                                .font(.wega(.subheadline, monospaced: true))
                                 .foregroundStyle(Color.white.opacity(0.85))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .id(idx)

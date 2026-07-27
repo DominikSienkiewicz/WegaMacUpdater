@@ -19,13 +19,13 @@ private struct BrewInviteCard: View {
             Image(systemName: "shippingbox").foregroundStyle(Color.wegaHoney)
             VStack(alignment: .leading, spacing: 3) {
                 Text(tr("Zainstaluj Homebrew, żeby odblokować więcej aktualizacji"))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.wega(.callout, weight: .semibold))
                 Text(tr("Wega działa bez niego — sprawdza Mac App Store, Sparkle, feedy producentów i npm. Homebrew dokłada formuły i caski."))
-                    .font(.system(size: 11))
+                    .font(.wega(.subheadline))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(installCommand)
-                    .font(.system(size: 10.5, design: .monospaced))
+                    .font(.wega(.footnote, monospaced: true))
                     .foregroundStyle(.tertiary)
                     .textSelection(.enabled)
                     .lineLimit(1)
@@ -39,7 +39,7 @@ private struct BrewInviteCard: View {
             }
             Button(tr("Sprawdź ponownie"), action: onRecheck)
                 .buttonStyle(.borderedProminent)
-                .tint(Color.wegaHoney)
+                .tint(Color.wegaHoneyFill)
                 .foregroundStyle(Color.wegaInk)
         }
         .padding(12)
@@ -63,9 +63,9 @@ private struct NotificationExplanationCard: View {
                 Image(systemName: "bell.badge").foregroundStyle(Color.wegaHoney)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(tr("Powiadamiać o nowych aktualizacjach?"))
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.wega(.callout, weight: .semibold))
                     Text(tr("Wega sprawdza w tle i może dać znać, gdy pojawi się coś nowego. macOS zapyta o zgodę tylko raz."))
-                        .font(.system(size: 11))
+                        .font(.wega(.subheadline))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -73,7 +73,7 @@ private struct NotificationExplanationCard: View {
                 Button(tr("Nie teraz")) { agent.declineNotifications() }
                 Button(tr("Powiadamiaj")) { Task { await agent.agreeToNotifications() } }
                     .buttonStyle(.borderedProminent)
-                    .tint(Color.wegaHoney)
+                    .tint(Color.wegaHoneyFill)
                     .foregroundStyle(Color.wegaInk)
             }
             .padding(12)
@@ -102,18 +102,18 @@ private struct StatusFooter: View {
         HStack(spacing: 12) {
             PawPrint(size: 11, color: Color.wegaToffee)
             Text(freshnessText)
-                .font(.system(size: 11))
+                .font(.wega(.subheadline))
                 .foregroundStyle(.tertiary)
 
             Spacer()
 
             Text(trf("%@ do aktualizacji", "\(updateCount)"))
-                .font(.system(size: 11))
+                .font(.wega(.subheadline))
                 .foregroundStyle(.tertiary)
 
             if securityCount > 0 {
                 Label(trf("%@ poprawki bezp.", "\(securityCount)"), systemImage: "shield.lefthalf.filled")
-                    .font(.system(size: 11))
+                    .font(.wega(.subheadline))
                     .foregroundStyle(Color.wegaDanger)
             }
         }

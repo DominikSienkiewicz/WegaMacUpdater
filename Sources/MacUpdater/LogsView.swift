@@ -89,18 +89,18 @@ struct LogsView: View {
     private func row(_ e: LogEntry) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Text(Self.timeFormatter.string(from: e.date))
-                .font(.system(size: 11, design: .monospaced)).foregroundStyle(.tertiary)
+                .font(.wega(.subheadline, monospaced: true)).foregroundStyle(.tertiary)
                 .frame(width: 64, alignment: .leading)
             Text(e.level.rawValue.uppercased())
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(.wega(.footnote, weight: .bold, monospaced: true))
                 .foregroundStyle(levelColor(e.level))
                 .frame(width: 64, alignment: .leading)
             Text(e.category.label)
-                .font(.system(size: 10, weight: .medium))
+                .font(.wega(.footnote, weight: .medium))
                 .foregroundStyle(Color.wegaHoney)
                 .frame(width: 84, alignment: .leading)
             Text(e.message)
-                .font(.system(size: 11.5, design: .monospaced))
+                .font(.wega(.subheadline, monospaced: true))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -126,7 +126,7 @@ struct LogsView: View {
                 Spacer()
                 WegaFull(pose: .idle, size: 120)
                 Text(tr("Cicho jak makiem zasiał — żadnych zdarzeń."))
-                    .font(.system(size: 13)).foregroundStyle(.secondary)
+                    .font(.wega(.body)).foregroundStyle(.secondary)
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -135,9 +135,9 @@ struct LogsView: View {
                 Spacer()
                 WegaFull(pose: .sniff, size: 120)
                 Text(tr("Nic nie pasuje do filtra."))
-                    .font(.system(size: 13)).foregroundStyle(.secondary)
+                    .font(.wega(.body)).foregroundStyle(.secondary)
                 Text(tr("Zmień poziom lub frazę wyszukiwania, żeby zobaczyć więcej zdarzeń."))
-                    .font(.system(size: 12)).foregroundStyle(.tertiary)
+                    .font(.wega(.callout)).foregroundStyle(.tertiary)
                     .multilineTextAlignment(.center)
                 Button(tr("Wyczyść filtr")) {
                     filter = .all

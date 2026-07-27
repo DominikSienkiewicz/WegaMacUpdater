@@ -34,7 +34,7 @@ struct WegaMacUpdaterApp: App {
                 .environmentObject(commandCenter)
                 // Re-key the whole tree on language change so every tr(...) re-evaluates.
                 .id(localization.language)
-                .tint(Color.wegaHoney)
+                .tint(Color.wegaHoneyFill)
                 .task {
 #if DEBUG
                     if await scan.runLayoutRegressionScenarioIfRequested() { return }
@@ -60,6 +60,10 @@ struct WegaMacUpdaterApp: App {
                 .environmentObject(policies)
                 .id(localization.language)
         }
+        // UX-03 — a Settings window whose content is fixed-size cannot be resized at all.
+        // `.contentSize` lets the frame's ideal size open the window and its min/max let the
+        // user (or a larger system text size) grow it.
+        .windowResizability(.contentSize)
 
         MenuBarExtra {
             MenuBarContent(agent: menuBar)
