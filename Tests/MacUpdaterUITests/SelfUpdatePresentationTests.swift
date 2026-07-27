@@ -8,16 +8,20 @@ import MacUpdaterCore
 /// actually run: a headless `install` versus a `download`-and-`open` handoff, and a distinct
 /// `error` when neither happens.
 final class SelfUpdatePresentationTests: XCTestCase {
+    // Task 2 gave `SelfUpdateAction` cases an associated `ReleaseAsset`; the asset's contents are
+    // irrelevant to these label-copy assertions, so one placeholder covers both cases.
+    private let asset = ReleaseAsset(name: "Wega.pkg", url: URL(string: "https://example.com/Wega.pkg")!)
+
     func testInstallActionIsLabelledAsInstall() {
-        let label = SelfUpdatePresentation.actionLabel(.install)
+        let label = SelfUpdatePresentation.actionLabel(.install(pkg: asset))
         XCTAssertTrue(label.contains(tr("Pobierz i zainstaluj")), label)
     }
 
     /// The bug the card names: "Pobierz i zainstaluj" over an operation that only downloads
     /// and opens an installer. The download-and-open label must not promise an install.
     func testDownloadAndOpenActionDoesNotClaimToInstall() {
-        let label = SelfUpdatePresentation.actionLabel(.downloadAndOpen)
-        XCTAssertNotEqual(label, SelfUpdatePresentation.actionLabel(.install))
+        let label = SelfUpdatePresentation.actionLabel(.downloadAndOpen(asset: asset))
+        XCTAssertNotEqual(label, SelfUpdatePresentation.actionLabel(.install(pkg: asset)))
         XCTAssertFalse(label.contains("zainstaluj"),
                        "a download-and-open handoff must not be labelled as an install: \(label)")
     }

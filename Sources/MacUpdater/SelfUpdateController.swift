@@ -39,10 +39,13 @@ final class SelfUpdateController: ObservableObject {
             installOrOpen: { destination in
                 // UX-06 — the same decision the button label is built from, so "install" and
                 // "download and open" always describe the operation that actually runs.
-                if SelfUpdatePlanner.action(
+                // Wraps the already-downloaded file back into a `ReleaseAsset` for the planner's
+                // new asset-list signature; Task 3 threads the real `ReleaseAsset` through here.
+                let downloaded = ReleaseAsset(name: destination.lastPathComponent, url: destination)
+                if case .install = SelfUpdatePlanner.action(
                     helperEnabled: PrivilegedHelperClient.shared.isEnabled,
-                    assetURL: destination
-                ) == .install {
+                    assets: [downloaded]
+                ) {
                     do {
                         try await PrivilegedHelperClient.shared.installVerifiedPackage(at: destination.path)
                         return true

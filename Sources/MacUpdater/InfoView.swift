@@ -435,7 +435,7 @@ extension InfoView {
                     // UX-06 — the label describes the operation that will actually run: a
                     // headless install of a verified .pkg, or (the common .dmg case) a
                     // download the user finishes by hand. "Install" no longer covers both.
-                    else { Text(SelfUpdatePresentation.actionLabel(selfUpdateAction(for: assets[0].url))) }
+                    else { Text(SelfUpdatePresentation.actionLabel(selfUpdateAction(for: assets))) }
                 }
                 .disabled(downloadingUpdate)
             case .upToDate:
@@ -470,13 +470,17 @@ extension InfoView {
     }
 
     /// UX-06 — which operation the button is about, from current helper availability and the
-    /// asset kind. Shared with `SelfUpdateController` via `SelfUpdatePlanner`, so the label
-    /// and the code that runs the operation can never disagree.
-    private func selfUpdateAction(for assetURL: URL) -> SelfUpdateAction {
+    /// published assets. Shared with `SelfUpdateController` via `SelfUpdatePlanner`, so the
+    /// label and the code that runs the operation can never disagree.
+    ///
+    /// Force-unwrapped: this is only ever called from the `.updateAvailable` branch above, whose
+    /// `assets` is guaranteed non-empty by `WegaSelfUpdateChecker`, and the planner only returns
+    /// `nil` for an empty list. Task 4 owns rendering the "no plan" state properly.
+    private func selfUpdateAction(for assets: [ReleaseAsset]) -> SelfUpdateAction {
         SelfUpdatePlanner.action(
             helperEnabled: PrivilegedHelperClient.shared.isEnabled,
-            assetURL: assetURL
-        )
+            assets: assets
+        )!
     }
 
     /// Download the release asset to a temp file and hand it to the system (Installer for

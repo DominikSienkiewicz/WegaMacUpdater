@@ -1,23 +1,34 @@
 import Foundation
 
-/// UX-06 — what "Pobierz i zainstaluj" is actually about, decided before the click.
-///
-/// Wega either hands a verified `.pkg` to the privileged helper for a headless install, or
-/// downloads the asset and opens it for the user to finish (mount a `.dmg`, run an installer).
-/// The old button labelled both as "download and install", which was a lie for the second —
-/// the common case, since the checker prefers the drag-to-Applications `.dmg`.
+/// UX-06 — what the self-update button is actually about, decided before the click.
 public enum SelfUpdateAction: Equatable, Sendable {
     /// Helper-driven, headless install of a verified `.pkg`.
-    case install
+    case install(pkg: ReleaseAsset)
     /// Download the asset and hand it to the system installer/mounter the user drives.
-    case downloadAndOpen
+    case downloadAndOpen(asset: ReleaseAsset)
+
+    /// The artifact this action downloads, whichever branch it took.
+    public var asset: ReleaseAsset {
+        switch self {
+        case .install(let pkg):         return pkg
+        case .downloadAndOpen(let any): return any
+        }
+    }
 }
 
 public enum SelfUpdatePlanner {
-    /// The single source of truth for the install-vs-open decision, shared by the button
-    /// label and the code that performs the operation so the two can never disagree.
-    public static func action(helperEnabled: Bool, assetURL: URL) -> SelfUpdateAction {
-        let isPackage = assetURL.pathExtension.lowercased() == "pkg"
-        return (helperEnabled && isPackage) ? .install : .downloadAndOpen
+    /// The single source of truth for the install-vs-open decision, shared by the button label
+    /// and the code that performs the operation.
+    ///
+    /// Returns `nil` when the release published nothing usable — the caller renders no button
+    /// rather than one that cannot act.
+    public static func action(helperEnabled: Bool, assets: [ReleaseAsset]) -> SelfUpdateAction? {
+        let package = assets.first { $0.kind == "pkg" }
+        if helperEnabled, let package { return .install(pkg: package) }
+
+        guard let openable = assets.first(where: { $0.kind == "dmg" }) ?? package ?? assets.first else {
+            return nil
+        }
+        return .downloadAndOpen(asset: openable)
     }
 }
