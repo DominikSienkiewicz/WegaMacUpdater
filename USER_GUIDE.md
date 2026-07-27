@@ -185,6 +185,20 @@ It also has an **App catalog** card that refreshes Wega's list of
 supported apps on demand (it also refreshes on launch); a fetched update applies on the
 next launch.
 
+### Common situations
+
+- **"Couldn't check — check your connection."** A source was unreachable, so Wega says so
+  instead of falsely reporting *"everything up to date."* This state survives a restart.
+- **"App Management permission missing."** Since macOS 13, replacing an app in
+  `/Applications` requires the **App Management** permission, and it covers the tools Wega
+  runs — so without it `brew` fails with `ditto: /Applications/X.app: Operation not
+  permitted` and nothing is updated. Click **Open privacy settings** on the banner (or the
+  link in Settings diagnostics), enable **Wega** under **Privacy & Security → App
+  Management**, then run the update again. Until it is granted, background updates pause
+  for 24 hours at a time instead of retrying — and failing — on every scheduled check.
+- **An incomplete scan banner.** If a scan finished but some sources stayed silent, Wega
+  marks the list as partial rather than passing it off as complete. Open **Logs** (filtered
+  to errors) to see which source failed.
 ### Crash reporting (off by default)
 
 The **Crash reporting** card in Settings can collect Wega's own crash and hang reports, so
@@ -205,20 +219,6 @@ of Console. It is **off until you turn it on**, and everything about it is local
   by you. **Copy reports** puts them on the clipboard so you can attach them to a bug report;
   **Delete reports** wipes them. Sending one is always your decision.
 
-### Common situations
-
-- **"Couldn't check — check your connection."** A source was unreachable, so Wega says so
-  instead of falsely reporting *"everything up to date."* This state survives a restart.
-- **"App Management permission missing."** Since macOS 13, replacing an app in
-  `/Applications` requires the **App Management** permission, and it covers the tools Wega
-  runs — so without it `brew` fails with `ditto: /Applications/X.app: Operation not
-  permitted` and nothing is updated. Click **Open privacy settings** on the banner (or the
-  link in Settings diagnostics), enable **Wega** under **Privacy & Security → App
-  Management**, then run the update again. Until it is granted, background updates pause
-  for 24 hours at a time instead of retrying — and failing — on every scheduled check.
-- **An incomplete scan banner.** If a scan finished but some sources stayed silent, Wega
-  marks the list as partial rather than passing it off as complete. Open **Logs** (filtered
-  to errors) to see which source failed.
 - **Homebrew results are missing / an "install Homebrew" card shows.** Homebrew isn't
   installed (or isn't at `/opt/homebrew/bin/brew` or `/usr/local/bin/brew`). Install it to
   unlock cask and formula updates; everything else keeps working without it.
