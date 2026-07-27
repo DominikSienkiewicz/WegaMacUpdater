@@ -79,8 +79,16 @@ bump and move its entries under the new version heading when cutting a release.
   install/upgrade (not just `kod 1`) plus the command that was run, and **per-checker
   DEBUG lines** with timing for the checks that engaged a source.
 - This `CHANGELOG.md`.
+- **A headless self-update ends with a restart, not silently.** Installing the `.pkg` swaps
+  the bundle under the running process; the app now says so and offers a restart button,
+  disabled while any mutating operation holds the write gate. It never restarts on its own.
 
 ### Changed
+- **Self-update picks the asset from capability, not from a fixed preference.** The checker
+  reported one asset — always the `.dmg` — and the planner could only comment on a decision
+  already made, so a user with a working privileged helper was sent to drag an icon when a
+  one-click `.pkg` install was published in the same release. The checker now reports every
+  asset and `SelfUpdatePlanner` chooses.
 - Selection checkboxes in the update and uninstall lists, and in the leftover picker, are
   real `Toggle`s behind a custom style that keeps Wega's honey glyph. VoiceOver now
   announces them as a checkbox with a state instead of a button carrying a value, and the
