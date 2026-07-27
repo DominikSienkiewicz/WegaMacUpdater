@@ -247,7 +247,7 @@ Two edits, both in `.github/workflows/release.yml`.
 
 - the two-phase procedure, end to end;
 - what happens after the push, and how to read the workflow run;
-- how to create each of the seven optional signing and notarization secrets;
+- how to create each of the eight optional signing and notarization secrets;
 - the unsigned fallback and what it means for users;
 - troubleshooting: tag/version mismatch, a missing changelog section, and withdrawing a
   published release.

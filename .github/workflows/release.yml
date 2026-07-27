@@ -1,6 +1,7 @@
 name: Release
 
-# Cuts a GitHub Release when a version tag is pushed (e.g. `git tag v0.1.0 && git push --tags`).
+# Cuts a GitHub Release when a version tag is pushed. Tags are produced by
+# `./scripts/release.sh <major|minor|patch|X.Y.Z>` — see RELEASING.md.
 #
 # QA-03 — the release runs on the SAME reusable workflow, runner and pinned toolchain as CI, and
 # the publishing job `needs:` that quality gate, so a Release can never be built on a different
@@ -66,13 +67,21 @@ jobs:
 
       # Single source of truth: the tag must equal AppMetadata.version (same extraction
       # build-pkg.sh uses). A mismatch fails fast before anything is built or published.
-      - name: Verify tag matches AppMetadata.version
+      #
+      # The changelog section is checked here too, not at publish time: it is the source of
+      # the release notes, so a missing one must fail in seconds rather than after the full
+      # build and notarization.
+      - name: Verify tag matches AppMetadata.version and the changelog has its section
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           VERSION="$(sed -n 's/.*static let version = "\(.*\)".*/\1/p' Sources/WegaHelperKit/AppMetadata.swift)"
           echo "tag=$TAG appVersion=$VERSION"
           if [[ "$TAG" != "$VERSION" ]]; then
             echo "::error::Tag v$TAG does not match AppMetadata.version $VERSION. Bump the version or fix the tag."
+            exit 1
+          fi
+          if ! grep -q "^## \[$VERSION\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [$VERSION]' section. The release notes are read from it — cut releases with ./scripts/release.sh (see RELEASING.md)."
             exit 1
           fi
 
@@ -146,18 +155,28 @@ jobs:
             build/WegaMacUpdater.pkg \
             build/WegaMacUpdater.dmg
 
+      # The release description is the changelog section for this version, verbatim — the
+      # text a human reviewed before the tag was cut (see RELEASING.md). `--generate-notes`
+      # is deliberately not used: it would replace that curated text with a commit dump.
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           SIGNED: ${{ secrets.DEVELOPER_ID_IDENTITY != '' }}
         run: |
-          NOTES="Automated release for ${GITHUB_REF_NAME}."
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v heading="## [$VERSION]" '
+            index($0, heading) == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
           if [[ "$SIGNED" != "true" ]]; then
-            NOTES="$NOTES"$'\n\n'"⚠️ These artifacts are **unsigned** (no Developer ID configured yet). macOS Gatekeeper will warn; for local use only."
+            {
+              echo
+              echo "⚠️ These artifacts are **unsigned** (no Developer ID configured yet). macOS Gatekeeper will warn; for local use only."
+            } >> "$RUNNER_TEMP/notes.md"
           fi
           gh release create "$GITHUB_REF_NAME" \
             build/WegaMacUpdater.pkg \
             build/WegaMacUpdater.dmg \
             --title "Wega Mac Updater ${GITHUB_REF_NAME}" \
-            --generate-notes \
-            --notes "$NOTES"
+            --notes-file "$RUNNER_TEMP/notes.md"
