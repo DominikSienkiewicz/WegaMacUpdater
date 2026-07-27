@@ -59,7 +59,7 @@ enum CaskReplacementSafety {
         let ledger = TeamIDLedger.shared
         let publisherAudit = TeamIDLedger.classifyCask(
             storedByBundleID: bundleID.flatMap { ledger.teamID(forBundleID: $0) },
-            storedByCaskKey: ledger.teamID(forBundleID: "cask:\(token)"),
+            storedByCaskKey: ledger.teamID(forBundleID: TeamIDLedger.caskKey(token)),
             new: installedTeamID
         )
         if case let .changed(old, new) = publisherAudit {
