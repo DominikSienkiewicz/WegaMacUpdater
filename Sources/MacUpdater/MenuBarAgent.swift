@@ -13,6 +13,10 @@ final class MenuBarAgent: ObservableObject {
     @Published var interval: CheckInterval {
         didSet {
             defaults.set(interval.rawValue, forKey: Keys.interval)
+            // ARCH-08b: the loop is driven by this setting, not by a timer that outlives it.
+            // Turning checks off has to actually stop the wake-ups, and turning them back on
+            // has to start them again without waiting for the next tick.
+            restartLoop()
         }
     }
     @Published private(set) var updateCount: Int
@@ -107,9 +111,16 @@ final class MenuBarAgent: ObservableObject {
         }
     }
 
-    /// Starts the background polling loop (idempotent).
+    /// Whether a polling loop should exist at all for a given setting.
+    ///
+    /// ARCH-08b: with checks disabled the loop used to keep waking the process every five
+    /// minutes only to call `isDue()`, get `false`, and go back to sleep — 288 wake-ups a day
+    /// to decide, every time, to do nothing. A disabled setting means no loop.
+    nonisolated static func shouldPoll(for interval: CheckInterval) -> Bool { interval.seconds != nil }
+
+    /// Starts the background polling loop (idempotent, and a no-op while checks are off).
     func start() {
-        guard loop == nil else { return }
+        guard loop == nil, Self.shouldPoll(for: interval) else { return }
         loop = Task { [weak self] in
             while !Task.isCancelled {
                 if let self, self.isDue() {
@@ -118,6 +129,14 @@ final class MenuBarAgent: ObservableObject {
                 try? await Task.sleep(for: .seconds(300))
             }
         }
+    }
+
+    /// Brings the loop in line with the current setting: stopped when checks are off,
+    /// running otherwise.
+    private func restartLoop() {
+        loop?.cancel()
+        loop = nil
+        start()
     }
 
     private func isDue() -> Bool {
