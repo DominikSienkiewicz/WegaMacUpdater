@@ -174,6 +174,16 @@ bump and move its entries under the new version heading when cutting a release.
   post-install target, or the same artifact existing in both application directories, fails
   closed and retains the snapshot. Bundle-identity mismatch rollback now also restores from
   a working copy so the original snapshot survives successful automatic recovery.
+- **The publisher check on a migration match was computed but never asked (LT-03).** The
+  match scorer's strongest signal — does the installed app's signing Team ID agree with the
+  publisher Wega has recorded for that cask? — accepted both identities and was handed
+  neither, so whether `brew install --cask --force <token>` overwrote the right program came
+  down to how similar two names looked. The publisher history the cask watchdog already
+  keeps is now correlated with the installed bundle's Developer ID: a mismatch drops the
+  match to the lowest confidence, refuses the automatic takeover, and says which publisher
+  was found versus expected; agreement lifts a match too fuzzy to trust by name alone. The
+  ledger is consulted before the signature, so a scan opens only the bundles whose cask has
+  a recorded publisher and the confidence badge still costs the view no I/O.
 - **Destructive fallbacks no longer change meaning without consent (UX-04).** A
   migration now identifies every running candidate by its resolved bundle path (or one
   unambiguous bundle ID), asks that exact app to quit normally and waits; only an app that

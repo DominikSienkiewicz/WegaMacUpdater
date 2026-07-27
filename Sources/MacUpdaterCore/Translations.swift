@@ -28,6 +28,10 @@ extension Translations {
         // REL-08 — niska pewność dopasowania blokuje automatyczne przejęcie (`--force`).
         "Dopasowanie %@ → %@ jest zbyt niepewne, aby przepiąć automatycznie. Zweryfikuj je ręcznie przed migracją.":
             "The %@ → %@ match is too uncertain to migrate automatically. Verify it manually before migrating.",
+        // LT-03 — korelacja Team ID: zainstalowana aplikacja podpisana przez innego wydawcę
+        // niż ten zapamiętany dla caska.
+        "Zainstalowana aplikacja %@ jest podpisana przez innego wydawcę (%@) niż wydawca znany dla caska %@ (%@). Wega nie przepnie jej automatycznie.":
+            "The installed %@ is signed by a different publisher (%@) than the one known for the %@ cask (%@). Wega will not migrate it automatically.",
         // SEC-08 — sygnalizacja nieweryfikowanego overlaya endpoints.json w karcie Info.
         "Nieweryfikowana konfiguracja endpointów": "Unverified endpoints configuration",
         "Niezweryfikowany": "Unverified",

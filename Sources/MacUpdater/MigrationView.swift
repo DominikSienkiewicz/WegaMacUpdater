@@ -177,6 +177,9 @@ struct MigrationView: View {
                             MigrationRow(
                                 app:      app,
                                 isBusy:   migrating == app.caskToken,
+                                // LT-03: measured once per scan by the store — the badge
+                                // reads a value, the view never touches a signature.
+                                correlation: migration.publisherCorrelations[app.id] ?? .unknown,
                                 onMigrate: { confirmingApp = app }
                             )
                             if app.id != matchable.last?.id {
@@ -400,20 +403,24 @@ struct MigrationView: View {
 }
 
 private struct MigrationRow: View {
-    let app:       ApplicationInfo
-    let isBusy:    Bool
-    let onMigrate: () -> Void
+    let app:         ApplicationInfo
+    let isBusy:      Bool
+    let correlation: CaskPublisherCorrelation
+    let onMigrate:   () -> Void
 
-    /// FEAT-02: jak pewne jest dopasowanie .app → cask (czysta heurystyka po
-    /// nazwie/tokenie; bez I/O). Słabe dopasowania dostają wyraźny sygnał, bo
-    /// `brew install --cask --force` nadpisuje aplikację.
+    /// FEAT-02: jak pewne jest dopasowanie .app → cask. Słabe dopasowania dostają wyraźny
+    /// sygnał, bo `brew install --cask --force` nadpisuje aplikację. LT-03 dokłada
+    /// najmocniejszy sygnał — korelację Team ID wydawcy — ale wyliczoną wcześniej przez
+    /// `MigrationStore`, więc sam widok nadal jest czystą heurystyką bez I/O.
     private var confidence: CaskMatchConfidence {
         guard let token = app.caskToken else { return .low }
         return CaskMatchScorer.score(
             applicationName: app.name,
             caskToken: token,
             caskNames: [],
-            viaCustomMapping: false
+            viaCustomMapping: false,
+            installedAppTeamID: correlation.installedAppTeamID,
+            caskExpectedTeamID: correlation.caskExpectedTeamID
         )
     }
 
