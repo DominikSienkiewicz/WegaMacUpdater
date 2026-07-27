@@ -73,13 +73,18 @@ enum CaskRollbackGuard {
 
         for token in tokens {
             guard let appURL = appPaths[token] else { continue }
-            outcomes[token] = await verify(
+            let outcome = await verify(
                 token: token,
                 snapshotURL: snapshots[token],
                 validationURL: appURL,
                 publisherBaseline: .ledger,
                 bundleIdentityBaseline: .unchecked
             )
+            // REL-07 — the decision matrix that produced this verdict also drives the durable
+            // rolled-back mark: a restored build is remembered so `ManualUpdateScanner` can
+            // force it back onto the list, a healthy one clears the mark.
+            CaskRollbackLedger.shared.apply(token: token, verdict: outcome)
+            outcomes[token] = outcome
         }
         return outcomes
     }
@@ -94,13 +99,18 @@ enum CaskRollbackGuard {
         expectedTeamID: String?,
         expectedBundleIdentifier: String?
     ) async -> Outcome {
-        await verify(
+        let outcome = await verify(
             token: token,
             snapshotURL: snapshotURL,
             validationURL: validationURL,
             publisherBaseline: .expected(expectedTeamID),
             bundleIdentityBaseline: .expected(expectedBundleIdentifier)
         )
+        // REL-07 — the conscious "Aktualizuj przez Brew" retry lands here: a healthy result
+        // clears the mark (the force-reinstall repaired the Caskroom metadata in the same pass),
+        // while a fresh rollback re-arms it. Same ledger chokepoint as the batch canary.
+        CaskRollbackLedger.shared.apply(token: token, verdict: outcome)
+        return outcome
     }
 
     private static func verify(

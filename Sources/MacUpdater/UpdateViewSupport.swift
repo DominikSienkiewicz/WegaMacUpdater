@@ -384,6 +384,12 @@ struct ManualUpdateActionView: View {
     var body: some View {
         HStack(spacing: 8) {
             WegaBadge(label: item.source.badgeLabel, color: item.source.provenance.badgeColor)
+            // REL-07 — a cask a prior auto-rollback reverted is forced back onto the list with
+            // this label so the user sees it is not current; the Brew action below is the retry
+            // (a force-reinstall that repairs Homebrew's metadata on a healthy result).
+            if item.rolledBack {
+                WegaBadge(label: tr("cofnięto — ponów próbę"), variant: .danger)
+            }
             actionControl
         }
     }

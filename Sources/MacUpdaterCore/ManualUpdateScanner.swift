@@ -13,19 +13,22 @@ public struct ManualUpdateScanner: Sendable {
     private let caskCacheURL: URL
     private let maxConcurrentChecks: Int
     private let selfUpdateChecker: WegaSelfUpdateChecker
+    private let rollbackLedger: CaskRollbackLedger
 
     public init(
         brewService: BrewService = BrewService(),
         scanDirectories: [URL] = AppScanDirectories.all(configuration: ScanConfigurationStore.resolvedConfiguration()),
         caskCacheURL: URL = AppScanDirectories.caskDatabaseCacheURL,
         maxConcurrentChecks: Int = 12,
-        selfUpdateChecker: WegaSelfUpdateChecker = WegaSelfUpdateChecker()
+        selfUpdateChecker: WegaSelfUpdateChecker = WegaSelfUpdateChecker(),
+        rollbackLedger: CaskRollbackLedger = .shared
     ) {
         self.brewService = brewService
         self.scanDirectories = scanDirectories
         self.caskCacheURL = caskCacheURL
         self.maxConcurrentChecks = maxConcurrentChecks
         self.selfUpdateChecker = selfUpdateChecker
+        self.rollbackLedger = rollbackLedger
     }
 
     /// UX-15 — Wega dogfoods its own update path. A self-update maps to the same
@@ -236,6 +239,57 @@ public struct ManualUpdateScanner: Sendable {
         // UX-15 — fold Wega's own update in before dedup so it participates in path-based
         // deduplication like any other app and reaches every surface counting this list.
         if let selfUpdate = await selfUpdateOutdatedApp() { collected.append(selfUpdate) }
+        // REL-07 — force any auto-rolled-back cask back onto the list. `brew outdated` no longer
+        // reports it (its Caskroom records the new version) and it is brew-managed, so both the
+        // brew list and the cask-version check above skip it; without this the reverted version
+        // silently vanishes from every scan until upstream ships something newer.
+        let listedCaskTokens = collected.compactMap { app -> String? in
+            if case .cask(let token) = app.source { return token }
+            return nil
+        }
+        collected.append(contentsOf: Self.rolledBackRows(
+            rolledBackTokens: rollbackLedger.rolledBackTokens(),
+            installedApps: appsToCheck,
+            brewCaskVersions: brewCaskVersions,
+            alreadyListedTokens: brewOutdatedCasks.union(listedCaskTokens)
+        ))
         return (UpdatePlanner.dedupedByPriority(collected), failedChecks)
+    }
+
+    /// REL-07 — synthesises the forced list rows for casks a prior auto-rollback reverted.
+    ///
+    /// `brew outdated` no longer reports these (its Caskroom records the new version), so the
+    /// normal path drops them. For each still-installed rolled-back token brew isn't already
+    /// listing, this produces one `.cask` row marked `rolledBack` — showing the version actually
+    /// on disk against the one brew's metadata claims — so a scan can never present the reverted
+    /// app as current. The `.cask` source routes the row's Brew action through the ordinary
+    /// force-reinstall path, which is the conscious retry that repairs the metadata. Pure and
+    /// deterministically ordered so the list does not reshuffle between scans.
+    public static func rolledBackRows(
+        rolledBackTokens: Set<String>,
+        installedApps: [ApplicationInfo],
+        brewCaskVersions: [String: String],
+        alreadyListedTokens: Set<String>
+    ) -> [ManualOutdatedApp] {
+        let appByToken = Dictionary(
+            installedApps.compactMap { app in app.caskToken.map { ($0, app) } },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return rolledBackTokens
+            .subtracting(alreadyListedTokens)
+            .sorted()
+            .compactMap { token in
+                guard let app = appByToken[token] else { return nil }
+                return ManualOutdatedApp(
+                    name: app.name,
+                    path: app.path,
+                    installedVersion: app.version,
+                    availableVersion: brewCaskVersions[token],
+                    source: .cask(token: token),
+                    origin: AppOrigin.of(app),
+                    bundleIdentifier: app.bundleIdentifier,
+                    rolledBack: true
+                )
+            }
     }
 }
