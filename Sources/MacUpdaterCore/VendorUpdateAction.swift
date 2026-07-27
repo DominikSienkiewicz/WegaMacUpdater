@@ -20,6 +20,10 @@ public enum UpdateActionKind: Equatable, Sendable {
     case openURL(URL?, style: OpenURLStyle)
     /// Open JetBrains Toolbox, resolved on disk at tap time.
     case jetBrainsToolbox
+    /// Wega's own update. The row opens the Settings self-update screen, which owns the
+    /// download, the signature verification, the helper install and the restart; `releaseURL`
+    /// is carried for the secondary "see the release" link.
+    case openSelfUpdate(releaseURL: URL)
 }
 
 /// Which labelled variant of the "open a URL" action a source uses. The label text stays
@@ -72,10 +76,10 @@ public extension ManualOutdatedApp.UpdateSource {
         case .googleDrive:
             return .openURL(AppEndpoints.shared.googleDriveDownloadURL, style: .vendorDownload)
         case .wega(let releaseURL):
-            // Unlike the self-updating vendors, "launching the app" is Wega itself and would
-            // not apply anything — so the row points at the release page. The full in-app
-            // installer (download + signature verification + helper install) stays in Settings.
-            return .openURL(releaseURL, style: .vendorDownload)
+            // "Launching the app" would be Wega itself and would apply nothing; the browser
+            // would step around signature verification and the helper install. So the row
+            // leads to the in-app installer.
+            return .openSelfUpdate(releaseURL: releaseURL)
         case .sparkle, .antigravity, .parallels, .chatgpt, .postman, .discord, .signal, .chrome, .obsidian:
             return .launchApp
         }

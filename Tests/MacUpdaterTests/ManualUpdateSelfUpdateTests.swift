@@ -36,14 +36,15 @@ struct ManualUpdateSelfUpdateTests {
         #expect(app?.bundleIdentifier == "com.wega.WegaMacUpdater")
     }
 
-    /// The Updates-window row action resolves to opening the release page — never `.launchApp`,
-    /// which would relaunch Wega itself and apply nothing.
-    @Test func wegaRowActionOpensReleasePage() {
+    /// The Updates-window row action resolves to opening the in-app self-update screen — never
+    /// `.launchApp`, which would relaunch Wega itself and apply nothing, and never a plain
+    /// `.openURL`, which would step around signature verification and the helper install.
+    @Test func wegaRowActionOpensTheSelfUpdateScreen() {
         let source: ManualOutdatedApp.UpdateSource = .wega(releaseURL: releaseURL)
 
         #expect(source.badgeLabel == "Wega")
         #expect(source.provenance == .vendorDirect)
-        #expect(source.updateActionKind == .openURL(releaseURL, style: .vendorDownload))
+        #expect(source.updateActionKind == .openSelfUpdate(releaseURL: releaseURL))
     }
 
     @Test func upToDateProducesNoRow() {

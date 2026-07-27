@@ -381,6 +381,8 @@ struct ManualUpdateActionView: View {
     let busyToken: String?
     let onInstall: (String) -> Void
 
+    @Environment(\.openSettings) private var openSettings
+
     var body: some View {
         HStack(spacing: 8) {
             WegaBadge(label: item.source.badgeLabel, color: item.source.provenance.badgeColor)
@@ -455,6 +457,15 @@ struct ManualUpdateActionView: View {
                 }
             } label: {
                 Label(tr("Otwórz Toolbox"), systemImage: "arrow.down.circle")
+            }
+            .controlSize(.small)
+        case .openSelfUpdate:
+            // The row leads to the in-app installer in Settings — signature verification,
+            // the headless helper install and the restart all live there. Never a browser.
+            Button {
+                openSettings()
+            } label: {
+                Label(tr("Aktualizuj Wegę"), systemImage: "arrow.down.circle")
             }
             .controlSize(.small)
         }
