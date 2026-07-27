@@ -13,16 +13,31 @@ public struct BrewUpgradeOutcome: Equatable, Sendable {
     /// Wega runs without a controlling terminal. UI should surface this as
     /// an actionable hint (configure askpass), not a generic failure.
     public let requiresSudoPassword: Bool
+    /// True when the failure is macOS refusing to let Wega replace an application
+    /// bundle — the TCC permission "App Management" (REL-05). brew runs as Wega's
+    /// child process, so the refusal surfaces as `ditto: /Applications/X.app:
+    /// Operation not permitted` deep inside a generic "Failure while executing"
+    /// block, with no cask token brew would name. Without this flag that stderr
+    /// reaches the user verbatim and the round retries into the same wall every
+    /// interval.
+    public let requiresAppManagementPermission: Bool
 
     public var isSuccessful: Bool {
         exitCode == 0 && errorLines.isEmpty
     }
 
-    public init(exitCode: Int32, failedTokens: [String], errorLines: [String], requiresSudoPassword: Bool = false) {
+    public init(
+        exitCode: Int32,
+        failedTokens: [String],
+        errorLines: [String],
+        requiresSudoPassword: Bool = false,
+        requiresAppManagementPermission: Bool = false
+    ) {
         self.exitCode = exitCode
         self.failedTokens = failedTokens
         self.errorLines = errorLines
         self.requiresSudoPassword = requiresSudoPassword
+        self.requiresAppManagementPermission = requiresAppManagementPermission
     }
 
     /// Parses merged stdout+stderr output for "Error:" lines and extracts the
@@ -38,10 +53,16 @@ public struct BrewUpgradeOutcome: Equatable, Sendable {
         var tokens: [String] = []
         var seen = Set<String>()
         var sudoPasswordRequired = false
+        var appManagementRequired = false
         var capturingContinuation = false
 
         for rawLine in output.split(whereSeparator: \.isNewline) {
             let line = String(rawLine).trimmingCharacters(in: .whitespaces)
+
+            // Checked on every line, not just the captured error block: the refusal is
+            // printed by the tool brew shelled out to (`ditto`, `cp`, `rm`), which has no
+            // idea it is inside an "Error:" section and may print before the headline.
+            if isAppManagementDenial(line) { appManagementRequired = true }
 
             if line.contains("sudo: a password is required") ||
                line.contains("sudo: a terminal is required to read the password") {
@@ -79,8 +100,20 @@ public struct BrewUpgradeOutcome: Equatable, Sendable {
             exitCode: exitCode,
             failedTokens: tokens,
             errorLines: errors,
-            requiresSudoPassword: sudoPasswordRequired
+            requiresSudoPassword: sudoPasswordRequired,
+            requiresAppManagementPermission: appManagementRequired
         )
+    }
+
+    /// Recognizes the "App Management" refusal: `Operation not permitted` reported
+    /// *against an application bundle*. Both halves are required — the errno text alone
+    /// also covers a plain permission problem on an ordinary file, which is a different
+    /// failure with a different fix.
+    static func isAppManagementDenial(_ line: String) -> Bool {
+        guard line.contains("Operation not permitted") else { return false }
+        return line.contains(".app/") || line.contains(".app:") ||
+               line.contains(".app'") || line.contains(".app\"") ||
+               line.contains(".app ") || line.hasSuffix(".app")
     }
 
     /// Safety cap so a pathological error block can't grow the log unbounded.
@@ -140,7 +173,9 @@ public struct BrewUpgradeOutcome: Equatable, Sendable {
             exitCode: exitCode,
             failedTokens: failedTokens,
             errorLines: errorLines,
-            requiresSudoPassword: original.requiresSudoPassword || forcedRetry.requiresSudoPassword
+            requiresSudoPassword: original.requiresSudoPassword || forcedRetry.requiresSudoPassword,
+            requiresAppManagementPermission: original.requiresAppManagementPermission
+                || forcedRetry.requiresAppManagementPermission
         )
     }
 

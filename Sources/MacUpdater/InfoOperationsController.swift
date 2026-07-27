@@ -104,7 +104,7 @@ final class InfoOperationsController: ObservableObject {
                 await Self.readDiagnostics()
             }
         } catch {
-            diagnostics = DiagnosticsResult(brewVersion: nil, masVersion: nil)
+            diagnostics = DiagnosticsResult(brewVersion: nil, masVersion: nil, appManagement: .unknown)
         }
     }
 
@@ -135,11 +135,20 @@ final class InfoOperationsController: ObservableObject {
             masVersion = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        return DiagnosticsResult(brewVersion: brewVersion, masVersion: masVersion)
+        // REL-05 — the optional preflight: ask now whether macOS will let Wega replace an app
+        // bundle, instead of finding out from the first upgrade that fails. Read-only and
+        // non-destructive (see `AppManagementPermissionProbe.liveProbe`), and only ever
+        // *indicative* — an upgrade that actually hits the refusal still has the last word.
+        return DiagnosticsResult(
+            brewVersion: brewVersion,
+            masVersion: masVersion,
+            appManagement: AppManagementPermissionProbe.liveStatus()
+        )
     }
 }
 
 struct DiagnosticsResult: Sendable {
     var brewVersion: String?
     var masVersion: String?
+    var appManagement: AppManagementPermission = .unknown
 }

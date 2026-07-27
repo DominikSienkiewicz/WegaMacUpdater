@@ -35,6 +35,17 @@ final class BackgroundUpdater {
         let optedIn = BackgroundUpdateOptInStore.shared.tokens
         guard !candidates.isEmpty, !optedIn.isEmpty else { return [] }
 
+        // REL-05 — a refused "App Management" grant fails every cask identically, so a round
+        // started while it stands produces nothing but another notification. Hold back until
+        // the cooldown lets one round through to find out whether the grant arrived.
+        guard AppManagementDenialStore.shared.allowsRound() else {
+            WegaLog.info(
+                .homebrew,
+                "Aktualizacja w tle wstrzymana — brak uprawnienia „Zarządzanie aplikacjami”. Przyznaj je w Ustawieniach systemowych → Prywatność i bezpieczeństwo."
+            )
+            return []
+        }
+
         let preflight: BackgroundUpdatePreflight
         do {
             preflight = try await OperationCoordinator.shared.withReadLease(
@@ -156,6 +167,18 @@ final class BackgroundUpdater {
                 caskOutcome = BrewUpgradeOutcome.merging(
                     original: caskOutcome, forcedRetry: retryOutcome, retriedTokens: retryTokens
                 )
+            }
+
+            // REL-05 — record or lift the denial from what the round actually observed, before
+            // the verdicts are folded in. The permission is a property of Wega, not of a cask.
+            if caskOutcome.requiresAppManagementPermission {
+                AppManagementDenialStore.shared.recordDenial()
+                WegaLog.error(
+                    .homebrew,
+                    "Aktualizacja w tle — macOS odmówił podmiany aplikacji (uprawnienie „Zarządzanie aplikacjami”). Kolejne rundy wstrzymane do czasu przyznania uprawnienia."
+                )
+            } else {
+                AppManagementDenialStore.shared.clear()
             }
 
             run.recordBackgroundRound(tokens.map(Self.caskItem), outcome: caskOutcome)
@@ -305,6 +328,11 @@ final class BackgroundUpdater {
         }
         if !failed.isEmpty {
             clauses.append(trf("%@ nie udało się zaktualizować.", "\(failed.count)"))
+        }
+        // REL-05 — name the cause the user can actually fix, instead of leaving them with a
+        // count and a `ditto` line in the log.
+        if summary.needsAppManagementPermission {
+            clauses.append(tr("Brak uprawnienia „Zarządzanie aplikacjami” — przyznaj je w Ustawieniach systemowych."))
         }
         return clauses.joined(separator: " · ")
     }

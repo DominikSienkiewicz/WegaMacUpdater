@@ -13,6 +13,16 @@ bump and move its entries under the new version heading when cutting a release.
 ## [Unreleased]
 
 ### Added
+- macOS's **App Management** permission is now a recognized failure mode instead of raw
+  `stderr`. Since macOS 13, replacing a bundle in `/Applications` needs that grant — and it
+  applies to child processes, so a missing grant makes the `ditto` inside `brew upgrade`
+  fail with `ditto: /Applications/X.app: Operation not permitted`, naming no cask. Wega now
+  detects that refusal, shows a banner that names the permission with a button opening
+  **System Settings → Privacy & Security → App Management**, says the same in the
+  background-update notification, and adds an optional preflight row to **Info →
+  Diagnostyka systemu** so a missing grant is visible before the first upgrade. Unattended
+  rounds are held back for 24 h after an observed refusal rather than failing identically
+  every interval, and the hold lifts by itself once a round succeeds.
 - A hard download resource gate shared by window and unattended cask upgrades. Before
   snapshotting or downloading it vetoes metered/Low Data Mode networking, low battery,
   thermal throttling and insufficient (or unreadable) disk capacity. Required space is

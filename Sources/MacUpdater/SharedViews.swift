@@ -505,7 +505,7 @@ struct EmptyHero: View {
 
 // MARK: - BannerData + BannerView
 
-enum BannerAction: Equatable { case openLogs, openSettings }
+enum BannerAction: Equatable { case openLogs, openSettings, openAppManagementSettings }
 
 struct BannerData: Equatable {
     enum Variant { case success, danger }
@@ -541,6 +541,7 @@ struct BannerView: View {
                     switch action {
                     case .openLogs:     return tr("Zobacz w logach")
                     case .openSettings: return tr("Włącz Touch ID")
+                    case .openAppManagementSettings: return tr("Otwórz ustawienia prywatności")
                     }
                 }()
                 Button { onAction?(action) } label: {

@@ -187,6 +187,10 @@ public struct UpdateRunOutcome: Equatable, Sendable {
     /// Verbatim tool output explaining the failures, written to the log as-is.
     public private(set) var diagnostics: [String] = []
     public private(set) var needsSudoPassword = false
+    /// REL-05 — macOS refused to let Wega replace an app bundle. Carried separately from
+    /// the diagnostics text because it has a one-click fix, and a fix is not something to
+    /// leave buried in `stderr`.
+    public private(set) var needsAppManagementPermission = false
 
     public init() {}
 
@@ -228,6 +232,7 @@ public struct UpdateRunOutcome: Equatable, Sendable {
                 : outcome.errorLines)
         }
         needsSudoPassword = needsSudoPassword || outcome.requiresSudoPassword
+        needsAppManagementPermission = needsAppManagementPermission || outcome.requiresAppManagementPermission
     }
 
     /// Records an unattended batch, where a non-zero process exit invalidates the whole
@@ -243,7 +248,8 @@ public struct UpdateRunOutcome: Equatable, Sendable {
             exitCode: outcome.exitCode,
             failedTokens: covered.map(\.name),
             errorLines: outcome.errorLines,
-            requiresSudoPassword: outcome.requiresSudoPassword
+            requiresSudoPassword: outcome.requiresSudoPassword,
+            requiresAppManagementPermission: outcome.requiresAppManagementPermission
         ))
     }
 
@@ -295,7 +301,8 @@ public struct UpdateRunOutcome: Equatable, Sendable {
         UpdateRunSummary(
             items: items,
             diagnostics: diagnostics,
-            needsSudoPassword: needsSudoPassword
+            needsSudoPassword: needsSudoPassword,
+            needsAppManagementPermission: needsAppManagementPermission
         )
     }
 }
@@ -305,11 +312,18 @@ public struct UpdateRunSummary: Equatable, Sendable {
     public let items: [ItemUpdateOutcome]
     public let diagnostics: [String]
     public let needsSudoPassword: Bool
+    public let needsAppManagementPermission: Bool
 
-    public init(items: [ItemUpdateOutcome], diagnostics: [String], needsSudoPassword: Bool) {
+    public init(
+        items: [ItemUpdateOutcome],
+        diagnostics: [String],
+        needsSudoPassword: Bool,
+        needsAppManagementPermission: Bool = false
+    ) {
         self.items = items
         self.diagnostics = diagnostics
         self.needsSudoPassword = needsSudoPassword
+        self.needsAppManagementPermission = needsAppManagementPermission
     }
 
     public var attempted: Int { items.count }

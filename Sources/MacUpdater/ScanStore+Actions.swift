@@ -789,13 +789,28 @@ extension ScanStore {
         let baseDetail = failedNames.isEmpty
             ? tr("Brew zgłosił błąd — sprawdź log poniżej.")
             : trf("Nie udało się: %@. Szczegóły w logu.", "\(failedNames.joined(separator: ", "))")
-        let detail = summary.needsSudoPassword
-            ? trf("%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła.", "\(baseDetail)")
-            : baseDetail
-        showBanner(BannerData(variant: .danger,
-                              title: tr("Aktualizacja niekompletna"),
-                              message: detail,
-                              action: summary.needsSudoPassword ? .openSettings : nil))
+        // REL-05 — a missing "App Management" grant outranks the sudo hint: it explains the
+        // whole failure, and its `stderr` ("ditto: …: Operation not permitted") is exactly the
+        // line a user cannot act on. One named permission, one button that grants it.
+        if summary.needsAppManagementPermission {
+            // The permission is Wega's, not this run's: teach the unattended round about it
+            // too, so it stops walking into the same wall every interval.
+            AppManagementDenialStore.shared.recordDenial()
+            showBanner(BannerData(
+                variant: .danger,
+                title: tr("Brak uprawnienia „Zarządzanie aplikacjami”"),
+                message: trf("%@ macOS nie pozwolił Wedze podmienić aplikacji w /Applications. Przyznaj uprawnienie „Zarządzanie aplikacjami” w Ustawieniach systemowych → Prywatność i bezpieczeństwo.", "\(baseDetail)"),
+                action: .openAppManagementSettings
+            ))
+        } else {
+            let detail = summary.needsSudoPassword
+                ? trf("%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła.", "\(baseDetail)")
+                : baseDetail
+            showBanner(BannerData(variant: .danger,
+                                  title: tr("Aktualizacja niekompletna"),
+                                  message: detail,
+                                  action: summary.needsSudoPassword ? .openSettings : nil))
+        }
         emitActivitySignal(.error)
         emitWegaState(WegaState(pose: .alert, line: tr("Część pakietów się nie zaktualizowała.")))
         WegaLog.error(.homebrew, "Aktualizacja niekompletna: \(failedNames.isEmpty ? "Brew zgłosił błąd" : failedNames.joined(separator: ", "))")
