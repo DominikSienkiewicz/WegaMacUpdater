@@ -174,6 +174,15 @@ bump and move its entries under the new version heading when cutting a release.
   post-install target, or the same artifact existing in both application directories, fails
   closed and retains the snapshot. Bundle-identity mismatch rollback now also restores from
   a working copy so the original snapshot survives successful automatic recovery.
+- **Destructive fallbacks no longer change meaning without consent (UX-04).** A
+  migration now identifies every running candidate by its resolved bundle path (or one
+  unambiguous bundle ID), asks that exact app to quit normally and waits; only an app that
+  remains open produces a separate unsaved-data warning. After explicit approval Wega
+  resolves the target again, sends `SIGKILL` only to that PID, and confirms it stopped
+  before Homebrew starts. Ambiguous duplicate bundle IDs fail closed.
+  A failed `brew uninstall --zap` is no longer retried silently as `--force` without
+  zap or counted as success: it stays selected and is reported as an incomplete
+  uninstall.
 - **The publisher check on a migration match was computed but never asked (LT-03).** The
   match scorer's strongest signal — does the installed app's signing Team ID agree with the
   publisher Wega has recorded for that cask? — accepted both identities and was handed
@@ -184,15 +193,6 @@ bump and move its entries under the new version heading when cutting a release.
   was found versus expected; agreement lifts a match too fuzzy to trust by name alone. The
   ledger is consulted before the signature, so a scan opens only the bundles whose cask has
   a recorded publisher and the confidence badge still costs the view no I/O.
-- **Destructive fallbacks no longer change meaning without consent (UX-04).** A
-  migration now identifies every running candidate by its resolved bundle path (or one
-  unambiguous bundle ID), asks that exact app to quit normally and waits; only an app that
-  remains open produces a separate unsaved-data warning. After explicit approval Wega
-  resolves the target again, sends `SIGKILL` only to that PID, and confirms it stopped
-  before Homebrew starts. Ambiguous duplicate bundle IDs fail closed.
-  A failed `brew uninstall --zap` is no longer retried silently as `--force` without
-  zap or counted as success: it stays selected and is reported as an incomplete
-  uninstall.
 - **A publisher change legalized itself as the new trusted baseline (SEC-02).** The cask
   guard now reads and records the installed app's Team ID before `brew` can mutate it.
   `TeamIDLedger` never replaces a known-good value when classification returns `.changed`;
