@@ -185,6 +185,12 @@ It also has an **App catalog** card that refreshes Wega's list of
 supported apps on demand (it also refreshes on launch); a fetched update applies on the
 next launch.
 
+When a newer Wega is available, the same window lists **every release since the one you
+have** — not just the latest — so three versions behind reads as three change-lists, not
+one. Each is collapsed to its version and date; expand any to read its notes. If GitHub
+can't be reached, it says so plainly instead of showing nothing — either way, this never
+holds up the update itself.
+
 ### Common situations
 
 - **"Couldn't check — check your connection."** A source was unreachable, so Wega says so

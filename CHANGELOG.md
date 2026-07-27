@@ -23,6 +23,9 @@ bump and move its entries under the new version heading when cutting a release.
   Diagnostyka systemu** so a missing grant is visible before the first upgrade. Unattended
   rounds are held back for 24 h after an observed refusal rather than failing identically
   every interval, and the hold lifts by itself once a round succeeds.
+- **The self-update shows every release you are behind, not just the newest.** Three versions
+  behind used to mean reading one third of the change. The card now lists each release between
+  the installed version and the newest one, newest first, with markup stripped in Core.
 - A hard download resource gate shared by window and unattended cask upgrades. Before
   snapshotting or downloading it vetoes metered/Low Data Mode networking, low battery,
   thermal throttling and insufficient (or unreadable) disk capacity. Required space is
