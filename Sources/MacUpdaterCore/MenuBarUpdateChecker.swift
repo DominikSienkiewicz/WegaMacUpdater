@@ -62,6 +62,37 @@ public struct MenuBarScanResult: Equatable, Sendable {
         let manual = UpdatePlanner.applyPolicies(manualApps, policies: policies)
         return items.map(\.name) + manual.map(\.name)
     }
+
+    /// ARCH-08c: the same result with the casks a background round upgraded taken out, and the
+    /// badge recounted from what is left.
+    ///
+    /// The agent used to run a *second* full scan after a background upgrade — brew, mas, npm
+    /// and every manual checker — purely to refresh the badge, even though the only thing that
+    /// had changed was a handful of casks it had just upgraded itself. On a menu-bar app that
+    /// stays resident, that is a second fan-out of processes and network probes per round, for
+    /// information already in hand.
+    ///
+    /// Only the cask list is touched: upgrading a cask cannot change what `mas`, `npm` or the
+    /// vendor checkers would report, so re-deriving those would only reproduce what is here.
+    public func removingUpgradedCasks(
+        _ upgraded: [String],
+        policies: [String: UpdatePolicy] = [:]
+    ) -> MenuBarScanResult {
+        guard !upgraded.isEmpty, let brew else { return self }
+        let done = Set(upgraded)
+        var trimmed = self
+        trimmed.brew = BrewOutdated(
+            formulae: brew.formulae,
+            casks: brew.casks.filter { !done.contains($0.name) }
+        )
+        let items = UpdatePlanner.applyPolicies(
+            UpdatePlanner.outdatedItems(brew: trimmed.brew, mas: mas, npm: npm),
+            policies: policies
+        )
+        let visibleManual = UpdatePlanner.applyPolicies(manualApps, policies: policies)
+        trimmed.total = items.count + visibleManual.count
+        return trimmed
+    }
 }
 
 // MARK: - Injection seams
