@@ -2,14 +2,19 @@
 # ---------------------------------------------------------------------------
 # test-catalog-envelope-guard.sh — koperta katalogu OTA (SEC-07), czysty bash
 #
-# Sprawdza trzy rzeczy, których `swift test` nie widzi, bo mieszkają w skryptach:
+# Sprawdza cztery rzeczy, których `swift test` nie widzi, bo mieszkają w skryptach:
 #   1. verify-catalog.sh przyjmuje kopertę zbudowaną z ZAKOMITOWANEGO katalogu i jego
 #      podpisu — czyli z prawdziwym kluczem produkcyjnym, nie z atrapą;
 #   2. odrzuca kopertę, w której payload podmieniono, zostawiając podpis;
-#   3. `sign-catalog.sh --unwrap` odtwarza płaski katalog bajt w bajt.
+#   3. `sign-catalog.sh --unwrap` odtwarza płaski katalog bajt w bajt;
+#   4. `--bump` wstawia i podnosi `generation`, nie ruszając `schemaVersion`.
 #
 # Punkt 2 jest tym, po co ta koperta w ogóle istnieje: podpis ma dotyczyć payloadu,
 # a nie dokumentu, który go otacza.
+#
+# Działa niezależnie od tego, w której z dwóch postaci leży katalog w repo — koperty
+# albo płaskiego JSON-a z odłączonym `.sig`. Obie sprowadzamy do jednej pary
+# (płaskie bajty, podpis) i dopiero na niej budujemy przypadki.
 #
 # Klucza prywatnego nie wymaga — podpis pochodzi z repo.
 # ---------------------------------------------------------------------------
@@ -25,8 +30,8 @@ FAILURES=0
 fail() { echo "  ✗ $1" >&2; FAILURES=$((FAILURES + 1)); }
 pass() { echo "  ✓ $1"; }
 
-if [[ ! -r "$CATALOG" || ! -r "$SIGNATURE" ]]; then
-    echo "błąd: brak katalogu albo podpisu w repo — nie mam z czego zbudować koperty." >&2
+if [[ ! -r "$CATALOG" ]]; then
+    echo "błąd: brak katalogu w repo — nie mam z czego zbudować koperty." >&2
     exit 2
 fi
 
@@ -48,17 +53,46 @@ fi
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+# Katalog w repo bywa w JEDNEJ z DWÓCH postaci i test musi działać w obu — to jest cała
+# treść migracji, którą ta karta wprowadziła. Sprowadzamy więc obie do tej samej pary
+# (płaskie bajty, podpis nad nimi) i dopiero na niej budujemy przypadki testowe.
+#
+# Wersja tego guardu sprzed migracji wymagała odłączonego pliku `.sig`, więc w dniu, w
+# którym katalog stał się kopertą — czyli dokładnie wtedy, gdy zaczął testować to, po co
+# powstał — przewracała całą bramkę na `exit 2`.
+FLAT="$WORK/flat.json"
+SIG="$WORK/detached.b64"
+if grep -q '"wegaCatalogEnvelope"' "$CATALOG"; then
+    sed -n 's/.*"payload"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CATALOG" | head -1 |
+        base64 -d > "$FLAT"
+    sed -n 's/.*"signature"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CATALOG" | head -1 \
+        | tr -d '\n' > "$SIG"
+    SHAPE="koperta"
+elif [[ -r "$SIGNATURE" ]]; then
+    cat "$CATALOG" > "$FLAT"
+    tr -d '\n' < "$SIGNATURE" > "$SIG"
+    SHAPE="płaski katalog + .sig"
+else
+    echo "błąd: katalog nie jest kopertą, a odłączonego podpisu brak — nie ma czego testować." >&2
+    exit 2
+fi
+
+if [[ ! -s "$FLAT" || ! -s "$SIG" ]]; then
+    echo "błąd: nie udało się wyłuskać bajtów katalogu i podpisu z postaci: $SHAPE" >&2
+    exit 1
+fi
+
 build_envelope() {
     local payload_file="$1" out="$2"
     printf '{\n  "wegaCatalogEnvelope": 1,\n  "payload": "%s",\n  "signature": "%s"\n}\n' \
         "$(base64 < "$payload_file" | tr -d '\n')" \
-        "$(tr -d '\n' < "$SIGNATURE")" > "$out"
+        "$(cat "$SIG")" > "$out"
 }
 
-echo "→ koperta katalogu OTA (SEC-07)"
+echo "→ koperta katalogu OTA (SEC-07) — postać w repo: $SHAPE"
 
 # 1. Koperta nad prawdziwymi bajtami + prawdziwym podpisem musi przejść.
-build_envelope "$CATALOG" "$WORK/envelope.json"
+build_envelope "$FLAT" "$WORK/envelope.json"
 if "$VERIFY" "$WORK/envelope.json" >/dev/null 2>&1; then
     pass "verify-catalog.sh przyjmuje poprawną kopertę"
 else
@@ -66,8 +100,8 @@ else
 fi
 
 # 2. Ten sam podpis nad PODMIENIONYM payloadem musi polec — inaczej koperta niczego nie chroni.
-sed 's/"github"/"gitHUB"/' "$CATALOG" > "$WORK/tampered.json"
-if ! cmp -s "$CATALOG" "$WORK/tampered.json"; then
+sed 's/"github"/"gitHUB"/' "$FLAT" > "$WORK/tampered.json"
+if ! cmp -s "$FLAT" "$WORK/tampered.json"; then
     build_envelope "$WORK/tampered.json" "$WORK/tampered-envelope.json"
     if "$VERIFY" "$WORK/tampered-envelope.json" >/dev/null 2>&1; then
         fail "verify-catalog.sh przyjął kopertę z podmienionym payloadem"
@@ -84,7 +118,7 @@ mkdir -p "$WORK/repo/scripts" "$WORK/repo/Sources/MacUpdaterCore/Resources"
 cp "$SIGN" "$WORK/repo/scripts/sign-catalog.sh"
 cp "$WORK/envelope.json" "$WORK/repo/Sources/MacUpdaterCore/Resources/app-catalog.json"
 if "$WORK/repo/scripts/sign-catalog.sh" --unwrap >/dev/null 2>&1 &&
-   cmp -s "$CATALOG" "$WORK/repo/Sources/MacUpdaterCore/Resources/app-catalog.json"; then
+   cmp -s "$FLAT" "$WORK/repo/Sources/MacUpdaterCore/Resources/app-catalog.json"; then
     pass "sign-catalog.sh --unwrap odtwarza płaski katalog bajt w bajt"
 else
     fail "sign-catalog.sh --unwrap nie odtworzył pierwotnych bajtów katalogu"
