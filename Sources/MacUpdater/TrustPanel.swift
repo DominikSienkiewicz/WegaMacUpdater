@@ -78,7 +78,7 @@ struct TrustPanel: View {
                 // there) OR the watchdog's "cask:<token>" namespace — reconcile both on read, and
                 // withhold the rows entirely when neither the signature nor any history is known.
                 let byBundle = bundleID.flatMap { TeamIDLedger.shared.teamID(forBundleID: $0) }
-                let byCask = TeamIDLedger.shared.teamID(forBundleID: "cask:\(caskToken)")
+                let byCask = TeamIDLedger.shared.teamID(forBundleID: TeamIDLedger.caskKey(caskToken))
                 audit = TeamIDLedger.classifyCaskOrNil(storedByBundleID: byBundle, storedByCaskKey: byCask, new: fresh)
             } else {
                 audit = bundleID.map {

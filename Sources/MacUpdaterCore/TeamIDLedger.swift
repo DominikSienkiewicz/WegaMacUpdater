@@ -28,6 +28,16 @@ public final class TeamIDLedger: @unchecked Sendable {
 
     public init(defaults: UserDefaults = .standard) { self.defaults = defaults }
 
+    /// Ledger key for a Homebrew cask's publisher history — the cask watchdog's namespace (**I-4**).
+    ///
+    /// The watchdog records a publisher before the installed bundle identifier is known (the
+    /// pre-flight veto runs ahead of any mutation, when the cask token is the only stable handle),
+    /// so cask history lives under a `"cask:<token>"` prefix that cannot collide with a real bundle
+    /// id. Every producer and consumer of that namespace — the pre-flight veto, the post-install
+    /// canary, the replacement pre-check and the inspector's Trust panel — goes through here, so the
+    /// spelling is defined in one place and the writing and reading sides cannot drift apart.
+    public static func caskKey(_ token: String) -> String { "cask:\(token)" }
+
     /// Pure decision — classify a new Team ID against the stored one. Unit-tested.
     public static func classify(stored: String?, new: String?) -> TeamIDAudit {
         guard let stored else { return .firstSeen(teamID: new) }
@@ -35,7 +45,7 @@ public final class TeamIDLedger: @unchecked Sendable {
     }
 
     /// Cask-aware classification (**I-4**). The cask watchdog keys publisher history under
-    /// `"cask:<token>"` (see `postCaskUpgrade`), while the inspector looks apps up by their
+    /// `caskKey(_:)` (see `postCaskUpgrade`), while the inspector looks apps up by their
     /// REAL bundle identifier — two namespaces that never intersect, so a tracked cask read
     /// as `.firstSeen`. This reconciles both baselines on read: prefer the real-bundle-id
     /// history (e.g. one a migration seeded under the real id), and fall back to the cask-key

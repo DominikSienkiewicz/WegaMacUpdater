@@ -38,6 +38,15 @@ struct P2BackendsTests {
         #expect(ledger.teamID(forBundleID: "com.x") == "AAA")
     }
 
+    /// `caskKey` names the namespace the watchdog's publisher history is PERSISTED under, so its
+    /// spelling is on-disk format: changing it would orphan every user's existing baseline and
+    /// silently downgrade a tracked cask back to `.firstSeen`. Pinned against the literal here so
+    /// the accessor can be moved or reworded but never respelled by accident.
+    @Test func caskKeyIsTheStablePersistedNamespace() {
+        #expect(TeamIDLedger.caskKey("firefox") == "cask:firefox")
+        #expect(TeamIDLedger.caskKey("figma") == "cask:figma")
+    }
+
     /// I-4 regression: the cask watchdog records publisher history under the
     /// `"cask:<token>"` namespace (see `postCaskUpgrade`), but the inspector's Trust
     /// panel used to look apps up by their REAL bundle identifier only. The two keys
