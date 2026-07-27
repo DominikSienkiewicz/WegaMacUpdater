@@ -278,8 +278,7 @@ final class MigrationStore: ObservableObject {
         _ directories: [URL],
         installedCasks: Set<String>,
         availableCasks: [BrewCask],
-        scan: @Sendable (URL, Set<String>, [BrewCask]) throws -> [ApplicationInfo] = {
-            directory, installed, available in
+        scan: @Sendable (URL, Set<String>, [BrewCask]) throws -> [ApplicationInfo] = { directory, installed, available in
             try ApplicationScanner().scanApplications(
                 in: directory,
                 installedCasks: installed,
