@@ -652,6 +652,10 @@ extension Translations {
         // F5(d) — podpis nie pasuje do treści: nie wiemy, czy to podmiana czy nieświeży CDN.
         "Podpis nie pasuje do katalogu — zachowano poprzedni.":
             "The signature does not match the catalog — kept the previous one.",
+        // SEC-07 — replay/downgrade i nieobsługiwany format katalogu.
+        "Serwer podał starszy katalog niż zainstalowany — odrzucono.":
+            "The server offered an older catalog than the installed one — rejected.",
+        "Katalog w nowszym formacie — zaktualizuj Wegę.": "The catalog uses a newer format — update Wega.",
         "Nie udało się pobrać katalogu — sprawdź połączenie.": "Couldn't fetch the catalog — check your connection.",
         "Zewnętrzne narzędzia": "External tools",
         "Środowisko": "Environment",

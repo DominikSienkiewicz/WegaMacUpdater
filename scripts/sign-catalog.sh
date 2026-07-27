@@ -41,7 +41,40 @@ require_openssl3() {
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 CATALOG="$ROOT/Sources/MacUpdaterCore/Resources/app-catalog.json"
 SIGNATURE="$CATALOG.sig"
+
+# SEC-07 — dwa formaty wyjściowe. Domyślnie odłączony podpis (jak dotąd). `--envelope`
+# zapisuje katalog jako kopertę: payload + podpis w JEDNYM dokumencie, więc raw.github
+# nie ma już dwóch wpisów cache, które mogą się rozjechać. `--unwrap` wraca do postaci
+# płaskiej, żeby katalog dało się edytować ręcznie; klucza nie wymaga.
+MODE="detached"
+case "${1:-}" in
+    --envelope) MODE="envelope"; shift ;;
+    --unwrap)   MODE="unwrap";   shift ;;
+esac
+
 KEY="${1:-${WEGA_CATALOG_KEY:-}}"
+
+# Zwraca base64 payloadu, gdy plik jest kopertą; pusty łańcuch dla płaskiego katalogu.
+envelope_payload_base64() {
+    grep -q '"wegaCatalogEnvelope"' "$1" || return 0
+    sed -n 's/.*"payload"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1" | head -1
+}
+
+if [[ "$MODE" == "unwrap" ]]; then
+    PAYLOAD="$(envelope_payload_base64 "$CATALOG")"
+    if [[ -z "$PAYLOAD" ]]; then
+        echo "→ katalog już jest w postaci płaskiej — nic do zrobienia."
+        exit 0
+    fi
+    TMP_FLAT="$(mktemp)"
+    trap 'rm -f "$TMP_FLAT"' EXIT
+    printf '%s' "$PAYLOAD" | base64 -d > "$TMP_FLAT"
+    mv "$TMP_FLAT" "$CATALOG"
+    trap - EXIT
+    echo "✓ rozpakowano kopertę: ${CATALOG#"$ROOT/"}"
+    echo "  Podpis wygasł razem z kopertą — uruchom ./scripts/sign-catalog.sh przed commitem."
+    exit 0
+fi
 
 # --- Guard: klucz prywatny nie może leżeć w drzewie roboczym repozytorium (SEC-06) ---
 #
@@ -172,16 +205,48 @@ if [[ ! -r "$CATALOG" ]]; then
 fi
 
 TMP="$(mktemp)"
-trap 'rm -f "$TMP"' EXIT
+PAYLOAD_FILE="$(mktemp)"
+TMP_ENVELOPE="$(mktemp)"
+trap 'rm -f "$TMP" "$PAYLOAD_FILE" "$TMP_ENVELOPE"' EXIT
 
-"$OPENSSL_BIN" pkeyutl -sign -inkey "$KEY" -rawin -in "$CATALOG" | base64 > "$TMP"
+# Podpisujemy ZAWSZE płaskie bajty katalogu, także wtedy, gdy plik jest już kopertą —
+# inaczej ponowne podpisanie zagnieżdżałoby koperty w kopertach, a podpis przestałby
+# dotyczyć tego, co aplikacja dekoduje.
+EXISTING_PAYLOAD="$(envelope_payload_base64 "$CATALOG")"
+if [[ -n "$EXISTING_PAYLOAD" ]]; then
+    printf '%s' "$EXISTING_PAYLOAD" | base64 -d > "$PAYLOAD_FILE"
+else
+    cat "$CATALOG" > "$PAYLOAD_FILE"
+fi
+
+"$OPENSSL_BIN" pkeyutl -sign -inkey "$KEY" -rawin -in "$PAYLOAD_FILE" | base64 | tr -d '\n' > "$TMP"
 
 # Sprawdź własną robotę tym samym kluczem publicznym, który wkompilowany jest w aplikację —
 # podpis, którego apka nie przyjmie, jest gorszy niż brak podpisu (cicho wyłącza katalog OTA).
-if ! "$ROOT/scripts/verify-catalog.sh" "$CATALOG" "$TMP" >/dev/null; then
+if ! "$ROOT/scripts/verify-catalog.sh" "$PAYLOAD_FILE" "$TMP" >/dev/null; then
     echo "błąd: świeżo wygenerowany podpis nie weryfikuje się kluczem publicznym z CatalogSignature.swift." >&2
-    echo "      Czy to na pewno para do wkompilowanego klucza? Plik .sig NIE został zapisany." >&2
+    echo "      Czy to na pewno para do wkompilowanego klucza? Nic NIE zostało zapisane." >&2
     exit 1
+fi
+
+if [[ "$MODE" == "envelope" ]]; then
+    # Payload i podpis są base64, więc w JSON-ie nie ma czego escapować.
+    printf '{\n  "wegaCatalogEnvelope": 1,\n  "payload": "%s",\n  "signature": "%s"\n}\n' \
+        "$(base64 < "$PAYLOAD_FILE" | tr -d '\n')" "$(cat "$TMP")" > "$TMP_ENVELOPE"
+    mv "$TMP_ENVELOPE" "$CATALOG"
+    # Odłączony podpis przestaje cokolwiek znaczyć — zostawiony wprowadzałby w błąd
+    # i ręczyłby za bajty, których już nie ma pod tą ścieżką.
+    rm -f "$SIGNATURE"
+    trap - EXIT
+    echo "✓ podpisano jako koperta: ${CATALOG#"$ROOT/"}"
+    echo
+    echo "Jeden dokument — koniec z rozjazdem cache dwóch plików na raw.githubusercontent."
+    echo "Żeby wrócić do edytowalnej postaci płaskiej: ./scripts/sign-catalog.sh --unwrap"
+    echo
+    echo "Zacommituj katalog (usunięty .sig też należy do tej zmiany):"
+    echo "  git add -A Sources/MacUpdaterCore/Resources/"
+    echo "  git commit -m 'chore(catalog): publish the catalog as a signed envelope'"
+    exit 0
 fi
 
 mv "$TMP" "$SIGNATURE"

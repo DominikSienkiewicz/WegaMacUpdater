@@ -55,14 +55,33 @@ if [[ "$PUBKEY" == "$PLACEHOLDER" ]]; then
     echo "→ podpisywanie katalogu nieskonfigurowane (placeholder) — pomijam weryfikację."
     exit 3
 fi
+TMPDIR_="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR_"' EXIT
+
+# SEC-07 — koperta niesie payload i podpis w jednym dokumencie, więc nie ma pliku .sig
+# do sprawdzenia: rozpakuj oba pola i weryfikuj podpis nad DOKŁADNYMI bajtami payloadu,
+# czyli nad tym, co dekoduje aplikacja.
+if grep -q '"wegaCatalogEnvelope"' "$CATALOG" 2>/dev/null; then
+    sed -n 's/.*"payload"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CATALOG" | head -1 |
+        base64 -d > "$TMPDIR_/payload.json" 2>/dev/null || {
+        echo "✗ koperta ma nieczytelny payload: $CATALOG" >&2
+        exit 1
+    }
+    sed -n 's/.*"signature"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CATALOG" | head -1 \
+        > "$TMPDIR_/signature.b64"
+    if [[ ! -s "$TMPDIR_/payload.json" || ! -s "$TMPDIR_/signature.b64" ]]; then
+        echo "✗ koperta jest niekompletna (brak payloadu albo podpisu): $CATALOG" >&2
+        exit 1
+    fi
+    CATALOG="$TMPDIR_/payload.json"
+    SIGNATURE="$TMPDIR_/signature.b64"
+fi
+
 if [[ ! -r "$SIGNATURE" ]]; then
     echo "błąd: brak podpisu: $SIGNATURE" >&2
     echo "      Uruchom ./scripts/sign-catalog.sh i zacommituj oba pliki razem." >&2
     exit 1
 fi
-
-TMPDIR_="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_"' EXIT
 
 # CryptoKit oczekuje SUROWYCH 32 bajtów; openssl potrzebuje SPKI DER.
 # Prefiks SPKI dla Ed25519 jest stały (12 bajtów): 302a300506032b6570032100

@@ -108,17 +108,35 @@ func isValidCatalogURL(_ string: String) -> Bool {
 /// refreshed out-of-band (e.g. fetched remotely) without a new app build. Overlay entries
 /// win over bundled ones on a `bundleId` collision and may introduce brand-new apps.
 public struct AppCatalog: Decodable, Sendable, Equatable {
+    /// The only catalog schema this build knows how to read.
+    public static let supportedSchemaVersion = 1
+
+    /// SEC-07 — the format the document declares itself to be in. `schemaVersion` was in the
+    /// file from the start and read by nothing: every section decodes `decodeIfPresent`, so a
+    /// future v2 catalog whose sections were renamed would have decoded as a *valid, empty*
+    /// catalog and silently switched every checker off. It is now a hard gate.
+    public let schemaVersion: Int
+    /// SEC-07 — monotonic publication counter, inside the signed bytes. Without it an old
+    /// catalog with its own old, perfectly valid signature is valid forever, and anyone able
+    /// to choose which bytes a client receives can roll it back to a version that predates a
+    /// fix. Absent means `0`: catalogs published before this field existed still load, and
+    /// the guard starts biting from the first one that carries a generation.
+    public let generation: Int
     public let github: [GitHubCatalogEntry]
     public let jetbrains: [JetBrainsCatalogEntry]
     public let synology: [SynologyCatalogEntry]
     public let sparkleFeedOverrides: [SparkleFeedOverrideEntry]
 
     public init(
+        schemaVersion: Int = AppCatalog.supportedSchemaVersion,
+        generation: Int = 0,
         github: [GitHubCatalogEntry] = [],
         jetbrains: [JetBrainsCatalogEntry] = [],
         synology: [SynologyCatalogEntry] = [],
         sparkleFeedOverrides: [SparkleFeedOverrideEntry] = []
     ) {
+        self.schemaVersion = schemaVersion
+        self.generation = generation
         self.github = github
         self.jetbrains = jetbrains
         self.synology = synology
@@ -126,11 +144,25 @@ public struct AppCatalog: Decodable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case github, jetbrains, synology, sparkleFeedOverrides
+        case schemaVersion, generation, github, jetbrains, synology, sparkleFeedOverrides
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        // A document that omits the version is one written before the field was enforced;
+        // treat it as the schema this build reads. A document that *declares* a version we
+        // do not implement is refused outright — decoding it would produce a catalog whose
+        // emptiness is indistinguishable from "nothing to configure".
+        let declaredSchema = try container.decodeIfPresent(Int.self, forKey: .schemaVersion)
+            ?? Self.supportedSchemaVersion
+        guard declaredSchema == Self.supportedSchemaVersion else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .schemaVersion, in: container,
+                debugDescription: "unsupported catalog schemaVersion \(declaredSchema); this build reads \(Self.supportedSchemaVersion)"
+            )
+        }
+        schemaVersion = declaredSchema
+        generation = try container.decodeIfPresent(Int.self, forKey: .generation) ?? 0
         // Every section is optional so an overlay file may carry just one of them.
         github = try container.decodeIfPresent([GitHubCatalogEntry].self, forKey: .github) ?? []
         jetbrains = try container.decodeIfPresent([JetBrainsCatalogEntry].self, forKey: .jetbrains) ?? []
@@ -160,6 +192,9 @@ public struct AppCatalog: Decodable, Sendable, Equatable {
     /// `other` (the overlay) wins on `bundleId` collisions in the lookup dictionaries.
     public func overlaying(_ other: AppCatalog) -> AppCatalog {
         AppCatalog(
+            schemaVersion: schemaVersion,
+            // The merged catalog is as new as the newest document that fed it.
+            generation: max(generation, other.generation),
             github: github + other.github,
             jetbrains: jetbrains + other.jetbrains,
             synology: synology + other.synology,
@@ -231,7 +266,22 @@ extension AppCatalog {
     }
 
     static func decode(contentsOf url: URL) throws -> AppCatalog {
-        let data = try Data(contentsOf: url)
-        return try JSONDecoder().decode(AppCatalog.self, from: data)
+        try decode(try Data(contentsOf: url))
+    }
+
+    /// Decodes a catalog document in either supported shape: a bare catalog, or one wrapped
+    /// in a ``CatalogEnvelope`` (SEC-07).
+    ///
+    /// The envelope is tried **first**, and that order is load-bearing: every catalog section
+    /// is optional, so an envelope handed to the bare decoder would decode cleanly as an
+    /// *empty* catalog — the exact silent failure this card exists to remove.
+    public static func decode(_ data: Data) throws -> AppCatalog {
+        guard let envelope = CatalogEnvelope.decode(data) else {
+            return try JSONDecoder().decode(AppCatalog.self, from: data)
+        }
+        guard envelope.isSupportedVersion, let payload = envelope.payload else {
+            throw CocoaError(.propertyListReadCorrupt)
+        }
+        return try JSONDecoder().decode(AppCatalog.self, from: payload)
     }
 }

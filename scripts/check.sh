@@ -10,6 +10,8 @@ set -euo pipefail
 #   0c. test-source-paths-guard  — no script/workflow reads a source path that moved
 #   0d. test-clean-script-guard — root clean.sh cannot regain destructive Git actions
 #   0e. test-verify-bundle-guard — artifact gate still enforces notarization once signed
+#   0f. test-catalog-envelope-guard — the OTA envelope verifies, refuses a swapped payload
+#                                     and unwraps byte-for-byte
 #   1. swift build              — compiles app + helper + core
 #   2. swift test               — full unit-test suite
 #   3. swiftlint lint --strict  — zero lint violations (warnings fail too)
@@ -53,6 +55,13 @@ echo "→ ./scripts/test-clean-script-guard.sh"
 # as a miss — passing signed-but-unnotarized artifacts on green.
 echo "→ ./scripts/test-verify-bundle-guard.sh"
 ./scripts/test-verify-bundle-guard.sh
+
+# SEC-07: the envelope's whole promise is that the signature covers the payload rather
+# than the document around it. That promise lives in two shell scripts, so `swift test`
+# cannot see it — this exercises it against the committed catalog and the real key.
+# Skips itself when signing is unconfigured; needs no secret.
+echo "→ ./scripts/test-catalog-envelope-guard.sh"
+./scripts/test-catalog-envelope-guard.sh
 
 # Fail fast on a CommandLineTools-only toolchain: it lacks the FoundationModelsMacros
 # plugin (ReleaseNotesTriage's @Generable/@Guide won't expand) and a SourceKit that
