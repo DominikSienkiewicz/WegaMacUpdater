@@ -61,7 +61,40 @@ public protocol ProcessRunning: Sendable {
 }
 
 public final class ProcessRunner: ProcessRunning, Sendable {
-    public init() { /* stateless; explicit so the initializer is public across the module boundary */ }
+    /// Process-wide ceiling on how many external processes may run at once. A large
+    /// `/Applications` scan fans out ~12 checks, several of which shell out to
+    /// `brew`/`npm`/`mas`; without a shared ceiling their subprocesses could all pile up
+    /// at once. Bound to the core count (with a small floor) so heavy subprocesses never
+    /// outnumber the cores that back them, while staying generous enough not to serialise
+    /// an ordinary scan (ARCH-02).
+    static let defaultMaxConcurrentProcesses = max(4, ProcessInfo.processInfo.activeProcessorCount)
+
+    /// Per-stream cap on captured output. `stdout`/`stderr` roll to keep the most recent
+    /// bytes rather than growing without bound, so a runaway process printing gigabytes
+    /// cannot exhaust memory. Sized far above any real `brew`/`npm`/`mas` output, so
+    /// ordinary command output is captured in full and only pathological output is
+    /// trimmed (ARCH-02).
+    static let defaultMaxCapturedBytesPerStream = 8 * 1024 * 1024
+
+    /// Shared so that every ad-hoc `ProcessRunner()` (each service defaults to its own)
+    /// draws from ONE process-wide budget — a per-instance gate would not bound the total.
+    private static let sharedLimiter = ProcessLimiter(limit: ProcessRunner.defaultMaxConcurrentProcesses)
+
+    private let limiter: ProcessLimiter
+    private let maxCapturedBytesPerStream: Int
+
+    public init() {
+        self.limiter = Self.sharedLimiter
+        self.maxCapturedBytesPerStream = Self.defaultMaxCapturedBytesPerStream
+    }
+
+    /// Test/inspection seam: an isolated concurrency gate and a small capture cap so a
+    /// bound can be observed without generating megabytes or contending with the shared
+    /// process-wide limiter.
+    init(limiter: ProcessLimiter, maxCapturedBytesPerStream: Int = ProcessRunner.defaultMaxCapturedBytesPerStream) {
+        self.limiter = limiter
+        self.maxCapturedBytesPerStream = maxCapturedBytesPerStream
+    }
 
     public func run(_ request: ProcessRequest) async throws -> ProcessResult {
         try await run(request, onOutput: nil)
@@ -97,26 +130,28 @@ public final class ProcessRunner: ProcessRunning, Sendable {
     ) async throws -> ProcessResult {
         try Task.checkCancellation()
 
-        let operation: @Sendable () throws -> ProcessResult = {
-            try Self.runSynchronously(request, onOutput: onOutput)
-        }
-        // The blocking synchronous body (semaphore waits + pipe drains) runs on a detached
-        // task so it never parks a cooperative-pool thread. A detached task does not inherit
-        // cancellation, so forward it explicitly: without this the `Task.isCancelled` guards
-        // inside `runSynchronously` could never fire and a cancelled caller would leave the
-        // subprocess — and everything it spawned — running (REL-12).
-        let work = Task.detached(priority: .userInitiated, operation: operation)
-        return try await withTaskCancellationHandler {
-            try await work.value
-        } onCancel: {
-            work.cancel()
-        }
+        // Bounded concurrency: hold a permit for the process's whole lifetime. Because the
+        // wait below suspends on a continuation (never a blocked thread), a held permit
+        // parks no pool thread — the gate throttles process count without starving the
+        // async runtime (ARCH-02).
+        await limiter.acquire()
+        defer { limiter.release() }
+
+        // We may have queued for a permit; a caller cancelled meanwhile never launches.
+        try Task.checkCancellation()
+
+        return try await Self.runProcess(
+            request,
+            onOutput: onOutput,
+            maxCapturedBytesPerStream: maxCapturedBytesPerStream
+        )
     }
 
-    private static func runSynchronously(
+    private static func runProcess(
         _ request: ProcessRequest,
-        onOutput: (@Sendable (ProcessOutputEvent) -> Void)?
-    ) throws -> ProcessResult {
+        onOutput: (@Sendable (ProcessOutputEvent) -> Void)?,
+        maxCapturedBytesPerStream: Int
+    ) async throws -> ProcessResult {
         let process = Process()
         process.executableURL = request.executableURL
         process.arguments = request.arguments
@@ -136,8 +171,11 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
-        let stdoutBuffer = LockedData()
-        let stderrBuffer = LockedData()
+        // Rolling buffers: every chunk is streamed live through `onOutput`, but the
+        // accumulated capture keeps only the most recent `maxCapturedBytesPerStream`
+        // bytes, so a huge output never grows the captured buffer without bound (ARCH-02).
+        let stdoutBuffer = RollingBuffer(capacity: maxCapturedBytesPerStream)
+        let stderrBuffer = RollingBuffer(capacity: maxCapturedBytesPerStream)
         let stdoutHandle = stdoutPipe.fileHandleForReading
         let stderrHandle = stderrPipe.fileHandleForReading
 
@@ -176,12 +214,10 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             }
         }
 
-        // Wake instantly when the process exits instead of polling `isRunning` on a
-        // sleep loop.
-        let exitSemaphore = DispatchSemaphore(value: 0)
-        process.terminationHandler = { _ in
-            exitSemaphore.signal()
-        }
+        // Resume the async wait the instant the process exits, from the termination
+        // handler — no polling, no thread parked on a semaphore.
+        let termination = TerminationSignal()
+        process.terminationHandler = { _ in termination.signal() }
 
         try process.run()
 
@@ -190,41 +226,43 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             stderrHandle.readabilityHandler = nil
         }
 
-        // Abandon a still-running process: kill the whole tree, let it die, drop the
-        // handlers, discard partial output, and surface `error`. We don't wait on `ioGroup`
-        // here — a leaked grandchild could hold the pipe open and EOF would never come.
-        let abort: (ProcessRunnerError) throws -> Never = { error in
-            Self.terminateProcessTree(process)
-            exitSemaphore.wait()
+        let outcome = await Self.awaitExit(
+            process: process,
+            termination: termination,
+            timeout: request.timeout
+        )
+
+        // Abandon a still-running process: the tree is already killed by `awaitExit`, so
+        // drop the handlers, discard partial output, and surface the error. We don't wait
+        // on `ioGroup` here — a leaked grandchild could hold the pipe open and EOF would
+        // never come.
+        switch outcome {
+        case .cancelled:
             detachHandlers()
             WegaLog.error(
                 .process,
-                "\(request.executableURL.lastPathComponent) aborted: \(error.localizedDescription)"
+                "\(request.executableURL.lastPathComponent) aborted: \(ProcessRunnerError.cancelled.localizedDescription)"
             )
-            throw error
+            throw ProcessRunnerError.cancelled
+        case .timedOut(let seconds):
+            detachHandlers()
+            WegaLog.error(
+                .process,
+                "\(request.executableURL.lastPathComponent) aborted: \(ProcessRunnerError.timedOut(seconds: seconds).localizedDescription)"
+            )
+            throw ProcessRunnerError.timedOut(seconds: seconds)
+        case .completed:
+            break
         }
 
-        let startedAt = Date()
-        // Block on the exit semaphore in short slices so cancellation and timeout are
-        // still observed; the slice is a watchdog interval, not a busy-wait — a normal
-        // exit unblocks immediately via `terminationHandler`.
-        while exitSemaphore.wait(timeout: .now() + 0.1) == .timedOut {
-            if Task.isCancelled {
-                try abort(.cancelled)
-            }
-            if let timeout = request.timeout, Date().timeIntervalSince(startedAt) >= timeout {
-                try abort(.timedOut(seconds: timeout))
-            }
-        }
-
-        // Process has exited; wait for both handlers to observe EOF so every buffered
-        // byte is captured before we read the buffers.
-        ioGroup.wait()
+        // Process has exited; wait — without blocking a thread — for both handlers to
+        // observe EOF so every buffered byte is captured before we read the buffers.
+        await Self.waitForIO(ioGroup)
 
         let result = ProcessResult(
             exitCode: process.terminationStatus,
-            stdout: String(decoding: stdoutBuffer.data, as: UTF8.self),
-            stderr: String(decoding: stderrBuffer.data, as: UTF8.self)
+            stdout: stdoutBuffer.string(),
+            stderr: stderrBuffer.string()
         )
         // Non-zero is often domain-meaningful (handled by callers), so keep it at
         // debug — available for diagnosis without escalating it to a warning/error.
@@ -235,6 +273,64 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             )
         }
         return result
+    }
+
+    private enum ExitOutcome: Sendable {
+        case completed
+        case timedOut(TimeInterval)
+        case cancelled
+    }
+
+    /// Awaits the process exit, racing an async `Task.sleep` timeout and cooperative
+    /// cancellation. On timeout or cancellation the whole process tree is killed so the
+    /// termination signal fires and the wait can always unwind — a checked continuation
+    /// ignores cancellation, so the subprocess is what releases it.
+    private static func awaitExit(
+        process: Process,
+        termination: TerminationSignal,
+        timeout: TimeInterval?
+    ) async -> ExitOutcome {
+        // `Process` is not `Sendable`; the only operations the cancellation handler runs on
+        // it (terminate/kill) are individually thread-safe, so cross the boundary explicitly.
+        let box = UncheckedSendableBox(process)
+        return await withTaskCancellationHandler {
+            await withTaskGroup(of: ExitOutcome.self) { group in
+                group.addTask {
+                    await termination.wait()
+                    return .completed
+                }
+                if let timeout {
+                    group.addTask {
+                        // A thrown (nil) sleep means the process already exited and we were
+                        // cancelled out of the group — that value is discarded below.
+                        if (try? await Task.sleep(for: .seconds(timeout))) == nil {
+                            return .completed
+                        }
+                        return .timedOut(timeout)
+                    }
+                }
+
+                let winner = await group.next() ?? .completed
+                if case .timedOut = winner {
+                    Self.terminateProcessTree(box.value)
+                }
+                group.cancelAll()
+                await group.waitForAll()
+
+                // A cancellation request outranks a natural finish: the caller asked to stop.
+                if Task.isCancelled { return .cancelled }
+                return winner
+            }
+        } onCancel: {
+            Self.terminateProcessTree(box.value)
+        }
+    }
+
+    /// Suspends until both pipe readers have observed EOF, without blocking a thread.
+    private static func waitForIO(_ group: DispatchGroup) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            group.notify(queue: .global(qos: .userInitiated)) { continuation.resume() }
+        }
     }
 
     /// Kills the subprocess *and every descendant it spawned*, not just the immediate
@@ -258,20 +354,112 @@ public final class ProcessRunner: ProcessRunning, Sendable {
     }
 }
 
-private final class LockedData: @unchecked Sendable {
+/// A wrapper that lets a value cross into a `@Sendable` closure when the programmer, not
+/// the compiler, is responsible for the safety of the operations performed on it.
+private struct UncheckedSendableBox<Value>: @unchecked Sendable {
+    let value: Value
+    init(_ value: Value) { self.value = value }
+}
+
+/// One-shot async signal: `wait()` suspends on a checked continuation that `signal()`
+/// resumes exactly once, whichever happens first. Used to await a process's
+/// `terminationHandler` without parking a pool thread.
+private final class TerminationSignal: @unchecked Sendable {
     private let lock = NSLock()
+    private var hasFired = false
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func signal() {
+        lock.lock()
+        if hasFired {
+            lock.unlock()
+            return
+        }
+        hasFired = true
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+        pending?.resume()
+    }
+
+    func wait() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            lock.lock()
+            if hasFired {
+                lock.unlock()
+                continuation.resume()
+            } else {
+                self.continuation = continuation
+                lock.unlock()
+            }
+        }
+    }
+}
+
+/// An async counting semaphore. `acquire()` suspends on a continuation when no permit is
+/// free (parking no thread); `release()` hands the permit to the next waiter or returns
+/// it to the pool. Bounds how many external processes `ProcessRunner` runs at once.
+final class ProcessLimiter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var available: Int
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(limit: Int) {
+        self.available = max(1, limit)
+    }
+
+    func acquire() async {
+        lock.lock()
+        if available > 0 {
+            available -= 1
+            lock.unlock()
+            return
+        }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            waiters.append(continuation)
+            lock.unlock()
+        }
+    }
+
+    func release() {
+        lock.lock()
+        if waiters.isEmpty {
+            available += 1
+            lock.unlock()
+        } else {
+            let next = waiters.removeFirst()
+            lock.unlock()
+            next.resume()
+        }
+    }
+}
+
+/// A fixed-capacity capture buffer that keeps the most recent `capacity` bytes. Appends
+/// are amortised O(1): the backing store is trimmed only after it grows past twice the
+/// capacity, so the live footprint never exceeds `2 * capacity`.
+private final class RollingBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private let capacity: Int
     private var storage = Data()
 
-    var data: Data {
-        lock.lock()
-        defer { lock.unlock() }
-        return storage
+    init(capacity: Int) {
+        self.capacity = max(0, capacity)
     }
 
     func append(_ data: Data) {
-        guard !data.isEmpty else { return }
+        guard !data.isEmpty, capacity > 0 else { return }
         lock.lock()
         storage.append(data)
+        if storage.count > capacity * 2 {
+            storage.removeFirst(storage.count - capacity)
+        }
         lock.unlock()
+    }
+
+    func string() -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        let tail = storage.count > capacity ? storage.suffix(capacity) : storage[...]
+        return String(decoding: tail, as: UTF8.self)
     }
 }
