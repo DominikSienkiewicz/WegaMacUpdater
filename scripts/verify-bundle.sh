@@ -64,8 +64,6 @@ EXPECTED_TEAM_ID="${EXPECTED_TEAM_ID:-$(sed -n 's/.*static let teamIdentifier = 
 note() { echo "::notice::$*"; }
 bad()  { echo "  ✗ $*" >&2; fail=$((fail + 1)); }
 ok()   { echo "  ✓ $*"; }
-# In release mode an unmet prerequisite is a failure; locally it is a skip note.
-soft() { if [[ "$REQUIRE_SIGNED" -eq 1 ]]; then bad "$*"; else note "$*"; fi; }
 
 if [[ "$REQUIRE_SIGNED" -eq 1 ]]; then
     echo "→ Tryb wydania stabilnego (REQUIRE_SIGNED=1): podpis, notaryzacja, stapling i Team ID są WYMAGANE."
@@ -158,7 +156,11 @@ if [[ "$CODESIGN_INFO" == *"Authority=Developer ID Application"* ]]; then
     SIGNED_DEVELOPER_ID=1
     ok "tożsamość: Developer ID Application"
 else
-    soft "Aplikacja podpisana ad-hoc (bez Developer ID) — kroki notaryzacji/staplingu pominięte."
+    if [[ "$REQUIRE_SIGNED" -eq 1 ]]; then
+        bad "brak podpisu Developer ID — wydanie stabilne wymaga podpisanych artefaktów"
+    else
+        note "Aplikacja podpisana ad-hoc (bez Developer ID) — kroki notaryzacji/staplingu pominięte."
+    fi
 fi
 
 # --- 5. Notarization + stapling --------------------------------------------
