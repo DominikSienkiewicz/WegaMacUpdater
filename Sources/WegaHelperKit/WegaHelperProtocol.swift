@@ -93,6 +93,11 @@ public enum WegaHelper {
         /// Snapshot and target are not the same application: bundle identifier or signing
         /// Team ID differ, or either is missing (SEC-03).
         case identityMismatch
+        /// The target belongs to neither root nor the console user — replacing another
+        /// account's application is not something this helper does (SEC-03).
+        case foreignOwner
+        /// The target changed between validation and the replacement itself (SEC-03).
+        case targetSwapped
     }
 
     /// What the daemon learned about the two bundles from the filesystem, gathered as root
@@ -110,6 +115,10 @@ public enum WegaHelper {
         public var targetTeamID: String?
         public var snapshotBundleID: String?
         public var snapshotTeamID: String?
+        /// Owner of the target bundle.
+        public var targetOwnerUID: UInt32
+        /// Owner of the current console session, or `nil` when nobody is logged in.
+        public var consoleUserUID: UInt32?
 
         public init(
             targetResolvedPath: String,
@@ -117,7 +126,9 @@ public enum WegaHelper {
             targetBundleID: String?,
             targetTeamID: String?,
             snapshotBundleID: String?,
-            snapshotTeamID: String?
+            snapshotTeamID: String?,
+            targetOwnerUID: UInt32,
+            consoleUserUID: UInt32?
         ) {
             self.targetResolvedPath = targetResolvedPath
             self.targetIsSymlink = targetIsSymlink
@@ -125,6 +136,8 @@ public enum WegaHelper {
             self.targetTeamID = targetTeamID
             self.snapshotBundleID = snapshotBundleID
             self.snapshotTeamID = snapshotTeamID
+            self.targetOwnerUID = targetOwnerUID
+            self.consoleUserUID = consoleUserUID
         }
     }
 
@@ -153,6 +166,16 @@ public enum WegaHelper {
             snapshotPath: facts.targetResolvedPath
         ) != nil {
             return .symlinkedTarget
+        }
+
+        // Ownership, measured rather than assumed: on a real system most of `/Applications`
+        // belongs to the logged-in user, not to root — 29 of 42 bundles on the machine this
+        // was written against. Demanding root ownership would refuse rollback for two thirds
+        // of the installed applications, a regression larger than the hole it closes. What is
+        // worth refusing is a bundle owned by some *other* account: replacing another user's
+        // application is not something this helper has any business doing.
+        if facts.targetOwnerUID != 0, facts.targetOwnerUID != facts.consoleUserUID {
+            return .foreignOwner
         }
 
         guard let targetBundleID = facts.targetBundleID,
@@ -206,5 +229,19 @@ public enum WegaHelper {
             return .outsideApplications
         }
         return nil
+    }
+
+    /// SEC-03: the target validated must be the target replaced.
+    ///
+    /// Everything above decides on a path; between that decision and `replaceItemAt` the entry
+    /// could be exchanged for another. Comparing the filesystem identity across that span turns
+    /// the substitution into a refusal instead of a root-privileged overwrite of the wrong
+    /// bundle. `PackageStaging.ArtifactIdentity` is reused deliberately — a device/inode pair
+    /// means the same thing here as it does for a staged package.
+    public static func bundleReplacementRejection(
+        validated: PackageStaging.ArtifactIdentity,
+        replacing: PackageStaging.ArtifactIdentity
+    ) -> BundleReplacementRejection? {
+        validated == replacing ? nil : .targetSwapped
     }
 }

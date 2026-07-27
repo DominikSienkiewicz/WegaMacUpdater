@@ -1,4 +1,5 @@
 import Foundation
+import SystemConfiguration
 import WegaHelperKit
 import OSLog
 
@@ -133,7 +134,7 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
         case .outsideApplications:
             HelperAuditLog.logger.error("replaceBundle: błąd")
             reply(false, "Cel poza /Applications — odrzucono."); return
-        case .symlinkedTarget, .identityMismatch:
+        case .symlinkedTarget, .identityMismatch, .foreignOwner, .targetSwapped:
             // Not reachable from the lexical gate, which never inspects the filesystem.
             HelperAuditLog.logger.error("replaceBundle: błąd")
             reply(false, "Cel odrzucony przez walidację ścieżki."); return
@@ -150,12 +151,19 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
         case .identityMismatch:
             HelperAuditLog.logger.error("replaceBundle: błąd")
             reply(false, "Snapshot nie pochodzi z tej samej aplikacji — odrzucono."); return
-        case .notBundle, .outsideApplications:
+        case .foreignOwner:
+            HelperAuditLog.logger.error("replaceBundle: błąd")
+            reply(false, "Cel należy do innego konta — odrzucono."); return
+        case .notBundle, .outsideApplications, .targetSwapped:
             HelperAuditLog.logger.error("replaceBundle: błąd")
             reply(false, "Cel odrzucony przez walidację ścieżki."); return
         case nil:
             break
         }
+
+        // SEC-03: tożsamość celu zapamiętana po walidacji, sprawdzona ponownie tuż przed
+        // zapisem — między jednym a drugim wpis w katalogu mógłby zostać podmieniony.
+        let validatedTarget = Self.identity(of: target)
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: snapshotPath, isDirectory: &isDirectory), isDirectory.boolValue else {
             HelperAuditLog.logger.error("replaceBundle: błąd")
@@ -166,6 +174,14 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
             HelperAuditLog.logger.error("replaceBundle: błąd")
             reply(false, "Snapshot nie przeszedł oceny Gatekeeper."); return
         }
+        guard let validatedTarget, let beforeWrite = Self.identity(of: target),
+              WegaHelper.bundleReplacementRejection(
+                  validated: validatedTarget, replacing: beforeWrite
+              ) == nil else {
+            HelperAuditLog.logger.error("replaceBundle: błąd")
+            reply(false, "Cel zmienił się po walidacji — odrzucono."); return
+        }
+
         do {
             _ = try fileManager.replaceItemAt(target, withItemAt: snapshot)
             HelperAuditLog.logger.info("replaceBundle: sukces")
@@ -261,8 +277,33 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
             targetBundleID: bundleIdentifier(at: target),
             targetTeamID: CodeSignatureVerifier.teamID(ofAppAt: target),
             snapshotBundleID: bundleIdentifier(at: snapshot),
-            snapshotTeamID: CodeSignatureVerifier.teamID(ofAppAt: snapshot)
+            snapshotTeamID: CodeSignatureVerifier.teamID(ofAppAt: snapshot),
+            // Nieodczytany właściciel to nie „root" — sentinel, który nie pasuje ani do 0,
+            // ani do UID konsoli, więc taki cel zostaje odrzucony.
+            targetOwnerUID: ownerUID(of: target) ?? 0xFFFF_FFFF,
+            consoleUserUID: consoleUserUID()
         )
+    }
+
+    /// Owner of a path, or `nil` when it cannot be read.
+    private static func ownerUID(of url: URL) -> UInt32? {
+        var status = stat()
+        guard lstat(url.path, &status) == 0 else { return nil }
+        return status.st_uid
+    }
+
+    /// UID of the console session, or `nil` when nobody is logged in.
+    ///
+    /// `SCDynamicStoreCopyConsoleUser` is the supported way to ask; the helper runs as root
+    /// outside any session, so it cannot simply look at its own identity.
+    private static func consoleUserUID() -> UInt32? {
+        var uid: uid_t = 0
+        var gid: gid_t = 0
+        guard let name = SCDynamicStoreCopyConsoleUser(nil, &uid, &gid) as String?,
+              !name.isEmpty, name != "loginwindow" else {
+            return nil
+        }
+        return uid
     }
 
     /// `CFBundleIdentifier` straight from `Info.plist`. Returns `nil` when the bundle is
