@@ -22,7 +22,7 @@ struct SelfUpdateRestartTests {
             check: { .upToDate },
             download: { $0 },
             verify: { _ in },
-            installOrOpen: { _ in installed },
+            installOrOpen: { _, _ in installed },
             openFallback: {},
             relaunch: relaunched,
             isBusy: { busy }

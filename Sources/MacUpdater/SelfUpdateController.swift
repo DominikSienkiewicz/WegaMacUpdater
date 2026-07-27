@@ -19,7 +19,7 @@ final class SelfUpdateController: ObservableObject {
         var check: @Sendable () async -> WegaSelfUpdateChecker.Result
         var download: @Sendable (URL) async throws -> URL
         var verify: @Sendable (URL) throws -> Void
-        var installOrOpen: @MainActor @Sendable (URL) async -> Bool
+        var installOrOpen: @MainActor @Sendable (SelfUpdateAction, URL) async -> Bool
         var openFallback: @MainActor @Sendable () -> Void
         /// Quit and come back on the freshly installed bundle.
         var relaunch: @MainActor @Sendable () -> Void
@@ -44,22 +44,24 @@ final class SelfUpdateController: ObservableObject {
                     bundleID: AppMetadata.bundleIdentifier
                 )
             },
-            installOrOpen: { destination in
+            installOrOpen: { action, destination in
                 // UX-06 — the same decision the button label is built from, so "install" and
                 // "download and open" always describe the operation that actually runs. The
-                // caller already planned this from the real `ReleaseAsset` and its kind; this
-                // only re-reads the same kind off the downloaded file's extension — no
-                // `ReleaseAsset` reconstruction, no second `SelfUpdatePlanner` call.
-                if PrivilegedHelperClient.shared.isEnabled, destination.pathExtension.lowercased() == "pkg" {
-                    do {
-                        try await PrivilegedHelperClient.shared.installVerifiedPackage(at: destination.path)
-                        return true
-                    } catch {
-                        WegaLog.error(
-                            .helper,
-                            "Instalacja przez helper nie powiodła się: \(error.localizedDescription)"
-                        )
-                    }
+                // decision itself is made exactly once, by the caller that planned `action`;
+                // this only executes it — no re-deriving install-vs-open from the file or from
+                // `PrivilegedHelperClient.shared.isEnabled` a second time.
+                guard case .install = action else {
+                    NSWorkspace.shared.open(destination)
+                    return false
+                }
+                do {
+                    try await PrivilegedHelperClient.shared.installVerifiedPackage(at: destination.path)
+                    return true
+                } catch {
+                    WegaLog.error(
+                        .helper,
+                        "Instalacja przez helper nie powiodła się: \(error.localizedDescription)"
+                    )
                 }
                 NSWorkspace.shared.open(destination)
                 return false
@@ -176,7 +178,7 @@ final class SelfUpdateController: ObservableObject {
             installed = try await upgrades.performWrite(.selfUpdate) {
                 let ticket = MutationGuard.shared.begin("self-update")
                 defer { MutationGuard.shared.end(ticket) }
-                return await self.dependencies.installOrOpen(destination)
+                return await self.dependencies.installOrOpen(action, destination)
             }
         } catch is CancellationError {
             return

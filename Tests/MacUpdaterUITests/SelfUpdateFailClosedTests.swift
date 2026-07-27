@@ -42,7 +42,7 @@ struct SelfUpdateFailClosedTests {
             check: { .upToDate },
             download: { _ in stagedPayload },
             verify: { _ in throw SignatureRejected() },
-            installOrOpen: { _ in
+            installOrOpen: { _, _ in
                 installProbe.record()
                 return true
             },

@@ -17,7 +17,7 @@ struct ArchitectureReviewRegressionTests {
                 check: { .upToDate },
                 download: { $0 },
                 verify: { _ in },
-                installOrOpen: { _ in
+                installOrOpen: { _, _ in
                     installProbe.record(
                         mutationLabels: MutationGuard.shared.runningLabels
                     )

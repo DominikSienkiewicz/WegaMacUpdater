@@ -20,7 +20,7 @@ struct SelfUpdateFailureMessagingTests {
                 check: { .upToDate },
                 download: { _ in throw URLError(.notConnectedToInternet) },
                 verify: { _ in },
-                installOrOpen: { _ in false },
+                installOrOpen: { _, _ in false },
                 openFallback: { log.record(.openedBrowser) },
                 relaunch: {},
                 isBusy: { false }
