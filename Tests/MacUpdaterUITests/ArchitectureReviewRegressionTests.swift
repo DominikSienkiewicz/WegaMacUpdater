@@ -119,6 +119,32 @@ struct ArchitectureReviewRegressionTests {
         )
     }
 
+    /// ARCH-05c — the synchronous `/Applications` walk (directory enumeration plus each app's
+    /// `Info.plist` read) must not run on the MainActor. `MigrationStore` still mutates its
+    /// `@Published` scan state on the MainActor, but the filesystem walk is delegated to the
+    /// nonisolated `scanApplicationDirectories` helper, which runs off the MainActor — the same
+    /// boundary the Inventory (`LiveInventorySnapshotLoader.load`) and Uninstall
+    /// (`UninstallScan.collect`) scans already sit behind.
+    @Test func migrationApplicationScanIsDelegatedOffTheMainActor() throws {
+        let root = packageRoot()
+        let migration = executableSource(
+            try source("Sources/MacUpdater/MigrationStore.swift", root: root)
+        )
+
+        #expect(
+            migration.contains("nonisolated static func scanApplicationDirectories"),
+            "MigrationStore must own a nonisolated scanApplicationDirectories helper so the /Applications walk runs off the MainActor"
+        )
+        #expect(
+            migration.contains("await Self.scanApplicationDirectories("),
+            "MigrationStore.scanCoordinated must delegate the /Applications walk to the off-actor helper"
+        )
+        #expect(
+            !migration.contains("buildScanDirs().flatMap"),
+            "MigrationStore still walks the scan directories inline on the MainActor"
+        )
+    }
+
     /// ARCH-07a — the brew/npm event-streaming loop and its log-buffer cap live in one
     /// shared helper. Every upgrade/uninstall path drains its process events through
     /// `ProcessEventStream.drain` instead of copying the `for try await event in stream`
