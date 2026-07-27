@@ -5,6 +5,19 @@ protocol BackgroundUpdateConsentMetadataProviding: Sendable {
     func caskDownloadInfo(tokens: [String]) async throws -> [CaskDownloadInfo]
     func outdatedGreedy() async throws -> BrewOutdated
     func caskInstallationInfo(tokens: [String]) async throws -> [BrewCaskInstallationInfo]
+    /// ARCH-04: wszystkie trzy widoki z jednego przebiegu `brew info`.
+    func caskInfo(tokens: [String]) async throws -> BrewCaskInfo
+}
+
+extension BackgroundUpdateConsentMetadataProviding {
+    /// Domyślna implementacja dla atrap w testach: składa widoki z trzech osobnych zapytań.
+    /// `BrewService` nadpisuje ją jednym przebiegiem — to właśnie jest sedno ARCH-04.
+    func caskInfo(tokens: [String]) async throws -> BrewCaskInfo {
+        async let profiles = caskArtifactProfiles(tokens: tokens)
+        async let downloads = caskDownloadInfo(tokens: tokens)
+        async let installations = caskInstallationInfo(tokens: tokens)
+        return try await BrewCaskInfo(profiles: profiles, downloads: downloads, installations: installations)
+    }
 }
 
 extension BrewService: BackgroundUpdateConsentMetadataProviding {}
@@ -49,15 +62,16 @@ struct BackgroundUpdateConsentMetadataReader: Sendable {
     }
 
     private func load(tokens: [String]) async throws -> BackgroundUpdateConsentMetadata {
-        async let profileRequest = provider.caskArtifactProfiles(tokens: tokens)
-        async let downloadRequest = provider.caskDownloadInfo(tokens: tokens)
+        // ARCH-04: jedno zapytanie o cask info zamiast trzech identycznych. `outdatedGreedy`
+        // to inna komenda brew i zostaje osobno — nadal równolegle.
+        async let infoRequest = provider.caskInfo(tokens: tokens)
         async let outdatedRequest = provider.outdatedGreedy()
-        async let installationRequest = provider.caskInstallationInfo(tokens: tokens)
+        let info = try await infoRequest
         return try await BackgroundUpdateConsentMetadata(
-            profiles: profileRequest,
-            downloads: downloadRequest,
+            profiles: info.profiles,
+            downloads: info.downloads,
             outdated: outdatedRequest,
-            installations: installationRequest
+            installations: info.installations
         )
     }
 }

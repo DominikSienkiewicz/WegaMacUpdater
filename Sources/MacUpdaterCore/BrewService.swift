@@ -48,6 +48,28 @@ public final class BrewService: @unchecked Sendable {
         return Set(result.stdout.split(whereSeparator: \.isNewline).map(String.init))
     }
 
+    /// ARCH-04: all three cask views from **one** `brew info` run.
+    ///
+    /// `caskInstallationInfo`, `caskArtifactProfiles` and `caskDownloadInfo` spawn the identical
+    /// `brew info --cask --json=v2 <tokens>` and differ only in which parser they run over the
+    /// same `stdout`. The consent metadata reader asked for all three concurrently with the same
+    /// token list, so a single scan launched the same process three times and paid three times
+    /// for Homebrew to read and serialise its cask database.
+    ///
+    /// The three single-view methods stay for callers that genuinely need one; this is for the
+    /// callers that need more than one and would otherwise duplicate the work.
+    public func caskInfo(tokens: [String]) async throws -> BrewCaskInfo {
+        guard !tokens.isEmpty else { return BrewCaskInfo() }
+        let arguments = ["info", "--cask", "--json=v2"] + tokens
+        let result = try await runBrew(arguments)
+        try ensureSuccess(result, arguments: arguments)
+        return BrewCaskInfo(
+            profiles: try infoParser.parseCaskArtifactProfiles(result.stdout),
+            downloads: try infoParser.parseDownloadInfo(result.stdout),
+            installations: try infoParser.parseCaskInstallations(result.stdout)
+        )
+    }
+
     public func caskInstallationInfo(tokens: [String]) async throws -> [BrewCaskInstallationInfo] {
         guard !tokens.isEmpty else { return [] }
         let arguments = ["info", "--cask", "--json=v2"] + tokens
