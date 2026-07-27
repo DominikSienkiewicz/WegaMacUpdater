@@ -2,11 +2,15 @@ name: Release
 
 # Cuts a GitHub Release when a version tag is pushed (e.g. `git tag v0.1.0 && git push --tags`).
 #
+# QA-03 — the release runs on the SAME reusable workflow, runner and pinned toolchain as CI, and
+# the publishing job `needs:` that quality gate, so a Release can never be built on a different
+# toolchain than the one CI proved green, nor published ahead of lint / catalog / bundle checks.
+#
 # Signing + notarization are OPTIONAL and activate automatically once the relevant repo
 # secrets exist. Until then the job still builds and publishes UNSIGNED (ad-hoc) artifacts so
 # the whole pipeline is verifiable end-to-end without an Apple Developer account.
 #
-# Secrets (all optional):
+# Secrets (all optional; see RELEASING.md for how to create each one):
 #   DEVELOPER_ID_IDENTITY           — e.g. "Developer ID Application: Name (TEAMID)"; signs .app/.dmg
 #   DEVELOPER_ID_INSTALLER_IDENTITY — e.g. "Developer ID Installer: Name (TEAMID)"; signs the .pkg
 #                                     (pkgbuild refuses "Application" certs — it's a distinct cert type)
@@ -24,9 +28,15 @@ permissions:
   contents: write   # required to create the release and upload assets
 
 jobs:
+  # Quality gate: the exact build/test/lint/catalog/package/bundle-verify workflow CI runs, on the
+  # same runner and pinned toolchain. `release` needs this, so publishing can never outrun it.
+  build:
+    uses: ./.github/workflows/build.yml
+
   release:
     name: Build & publish release
-    runs-on: macos-15
+    needs: build
+    runs-on: macos-26
     # The `secrets` context can't be used in step `if:` conditions, so map presence to
     # job-level booleans here (job `env` may read `secrets`) and gate steps on `env`.
     env:
@@ -37,10 +47,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Select latest stable Xcode
+      - name: Select pinned Xcode
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
-          xcode-version: latest-stable
+          xcode-version: '26.0'
+
+      # Makes the "secrets configured" state observable in every release run without leaking
+      # any value: a maintainer can see at a glance whether this will be a signed+notarized or
+      # an unsigned build.
+      - name: Preflight — signing/notary secret status
+        run: |
+          echo "Developer ID (code signing):   $HAS_DEVELOPER_ID"
+          echo "Developer ID Installer (.pkg): $HAS_INSTALLER_ID"
+          echo "notarytool API key:            $HAS_NOTARY_KEY"
+          if [[ "$HAS_DEVELOPER_ID" != "true" ]]; then
+            echo "::warning::No Developer ID configured — building UNSIGNED (Gatekeeper will warn; for local use)."
+          fi
 
       # Single source of truth: the tag must equal AppMetadata.version (same extraction
       # build-pkg.sh uses). A mismatch fails fast before anything is built or published.
@@ -53,9 +75,6 @@ jobs:
             echo "::error::Tag v$TAG does not match AppMetadata.version $VERSION. Bump the version or fix the tag."
             exit 1
           fi
-
-      - name: Build & test
-        run: swift test
 
       - name: Import Developer ID certificate
         if: ${{ env.HAS_DEVELOPER_ID == 'true' }}
@@ -114,6 +133,18 @@ jobs:
               --wait
             xcrun stapler staple "$artifact"
           done
+
+      # QA-03 release gate: this is what makes the release verify the artifact, not just the tests.
+      # Runs after notarization so it can also validate the stapled ticket. On an unsigned build it
+      # checks layout, helper signature and required resources and reports notarization/stapling as
+      # skipped; once a Developer ID is configured those two become mandatory and fail closed. It
+      # runs before "Create GitHub Release", so a broken bundle blocks the publish.
+      - name: Verify release artifacts (layout, helper signature, notarization, stapling, resources)
+        run: |
+          ./scripts/verify-bundle.sh \
+            .build/pkg-staging/WegaMacUpdater.app \
+            build/WegaMacUpdater.pkg \
+            build/WegaMacUpdater.dmg
 
       - name: Create GitHub Release
         env:
