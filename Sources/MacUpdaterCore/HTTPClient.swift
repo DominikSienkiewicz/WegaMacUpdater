@@ -87,7 +87,7 @@ public final class HTTPClient: @unchecked Sendable {
     private let etagStore = ETagStore()
 
     public init(
-        transport: HTTPTransport = HTTPClient.makeDefaultSession(),
+        transport: HTTPTransport = HTTPClient.sharedSession,
         userAgent: String = HTTPClient.defaultUserAgent,
         maxRetries: Int = 2,
         retryBaseDelay: TimeInterval = 0.4
@@ -99,6 +99,16 @@ public final class HTTPClient: @unchecked Sendable {
     }
 
     public static var defaultUserAgent: String { "WegaMacUpdater/\(AppMetadata.version)" }
+
+    /// ARCH-08e: one session for the whole process.
+    ///
+    /// `makeDefaultSession()` used to be the default argument of both `HTTPClient` and
+    /// `DownloadSizeProbe`, and default arguments are evaluated per call — so every probe got
+    /// its own `URLSession`, and with it its own connection pool. A scan that probes a dozen
+    /// download hosts opened a dozen sessions and reused no connection between them, which is
+    /// the opposite of what the pooling is for. The factory stays for tests that deliberately
+    /// want an isolated session.
+    public static let sharedSession: URLSession = makeDefaultSession()
 
     public static func makeDefaultSession() -> URLSession {
         let config = URLSessionConfiguration.default

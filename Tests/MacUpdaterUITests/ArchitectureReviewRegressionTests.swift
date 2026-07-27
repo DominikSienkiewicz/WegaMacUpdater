@@ -332,6 +332,30 @@ struct ArchitectureReviewRegressionTests {
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
             .joined(separator: "\n")
     }
+
+    /// ARCH-05d — `InventoryView` liczy przefiltrowaną i posortowaną listę raz na render.
+    ///
+    /// `filtered` było własnością wyliczaną, a `body` sięgało po nią trzykrotnie: licznik w
+    /// nagłówku, `ForEach` po indeksach i odczyt elementu wiersza. Cały inwentarz był więc
+    /// filtrowany i sortowany trzy razy na klatkę, przy każdym znaku wpisanym w wyszukiwarce.
+    @Test func inventoryComputesItsFilteredListOncePerRender() throws {
+        let root = packageRoot()
+        let view = try source("Sources/MacUpdater/InventoryView.swift", root: root)
+
+        // Liczymy wyłącznie linie kodu: komentarz wspominający „filtered view" nie jest
+        // odczytem i nie może przewrócić testu. Zostają dwie linie — deklaracja własności
+        // i jedno wiązanie; każda kolejna to ponowne filtrowanie i sortowanie na render.
+        let reads = view
+            .components(separatedBy: "\n")
+            .filter { $0.contains("filtered") }
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .count
+        #expect(
+            reads <= 2,
+            "`filtered` may be declared and bound once — found \(reads) code lines reading it"
+        )
+        #expect(view.contains("let rows = filtered"))
+    }
 }
 
 @MainActor
@@ -364,4 +388,6 @@ private final class SelfUpdateInstallProbe {
         didRun = true
         self.mutationLabels = mutationLabels
     }
+
+
 }

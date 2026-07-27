@@ -28,7 +28,7 @@ public struct DownloadSizeProbe: Sendable {
     private let userAgent: String
 
     public init(
-        transport: HTTPTransport = HTTPClient.makeDefaultSession(),
+        transport: HTTPTransport = HTTPClient.sharedSession,
         userAgent: String = HTTPClient.defaultUserAgent
     ) {
         self.transport = transport
