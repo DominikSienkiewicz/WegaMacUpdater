@@ -23,19 +23,18 @@ public struct ApplicationScanner {
         .filter { $0.pathExtension == "app" }
         .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
 
+        // ARCH-05b: build the cask matching index once per scan and reuse it for
+        // every application, instead of re-scanning the whole cask database per app.
+        let caskIndex = matcher.makeIndex(installedCasks: installedCasks, availableCasks: availableCasks)
+
         return appURLs.map { url in
-            appInfo(
-                for: url,
-                installedCasks: installedCasks,
-                availableCasks: availableCasks
-            )
+            appInfo(for: url, caskIndex: caskIndex)
         }
     }
 
     private func appInfo(
         for appURL: URL,
-        installedCasks: Set<String>,
-        availableCasks: [BrewCask]
+        caskIndex: CaskMatcher.Index
     ) -> ApplicationInfo {
         // Read Info.plist directly to avoid NSBundle's per-path cache, which causes
         // stale version strings after in-place app updates (e.g. JetBrains Toolbox).
@@ -53,7 +52,7 @@ public struct ApplicationScanner {
 
         var isManagedByBrew = false
         var caskToken: String?
-        switch matcher.match(applicationName: appName, installedCasks: installedCasks, availableCasks: availableCasks) {
+        switch matcher.match(applicationName: appName, using: caskIndex) {
         case .managed(let token):
             isManagedByBrew = true
             caskToken = token
