@@ -80,6 +80,12 @@ jobs:
       - name: Regression test — sign-catalog.sh refuses an in-repo key
         run: ./scripts/test-sign-catalog-guard.sh
 
+      # QA-03 — the artifact gate must still RECOGNISE a Developer ID, or it skips the
+      # notarization/stapling checks on exactly the builds they exist for. `codesign` is
+      # stubbed, so this needs no certificate and runs on the cheap Linux runner.
+      - name: Regression test — verify-bundle.sh enforces notarization once signed
+        run: ./scripts/test-verify-bundle-guard.sh
+
       # Exit 3 means signing is not configured yet (placeholder key) — not a failure.
       - name: Verify app-catalog.json.sig matches app-catalog.json
         run: |

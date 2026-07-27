@@ -9,6 +9,7 @@ set -euo pipefail
 #   0b. test-merge              — merge.sh guard rails (dirty tree, conflicts, gate)
 #   0c. test-source-paths-guard  — no script/workflow reads a source path that moved
 #   0d. test-clean-script-guard — root clean.sh cannot regain destructive Git actions
+#   0e. test-verify-bundle-guard — artifact gate still enforces notarization once signed
 #   1. swift build              — compiles app + helper + core
 #   2. swift test               — full unit-test suite
 #   3. swiftlint lint --strict  — zero lint violations (warnings fail too)
@@ -46,6 +47,12 @@ echo "→ ./scripts/test-source-paths-guard.sh"
 
 echo "→ ./scripts/test-clean-script-guard.sh"
 ./scripts/test-clean-script-guard.sh
+
+# Pure bash as well (codesign is stubbed): the artifact gate is the only check that a
+# release was notarized and stapled, and its Developer-ID detection once reported a hit
+# as a miss — passing signed-but-unnotarized artifacts on green.
+echo "→ ./scripts/test-verify-bundle-guard.sh"
+./scripts/test-verify-bundle-guard.sh
 
 # Fail fast on a CommandLineTools-only toolchain: it lacks the FoundationModelsMacros
 # plugin (ReleaseNotesTriage's @Generable/@Guide won't expand) and a SourceKit that
