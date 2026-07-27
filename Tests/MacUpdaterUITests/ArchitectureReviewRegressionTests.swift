@@ -178,6 +178,40 @@ struct ArchitectureReviewRegressionTests {
         #expect(background.contains("label: \"background update preflight\""))
     }
 
+    /// ARCH-08a — `HomebrewEnvironment.environment` memoises its result instead of
+    /// re-reading `sudo_local`, re-probing biometry and re-verifying the signed helper
+    /// Mach-Os on every brew/mas spawn. The cache is dropped only when the app re-checks
+    /// Touch ID, so a mid-session enable is still honoured.
+    @Test func homebrewEnvironmentIsResolvedOnceAndCachedBetweenSpawns() throws {
+        let root = packageRoot()
+
+        let environment = executableSource(
+            try source("Sources/MacUpdaterCore/HomebrewEnvironment.swift", root: root)
+        )
+        #expect(
+            environment.contains("cachedEnvironment"),
+            "HomebrewEnvironment must memoise the resolved environment between spawns"
+        )
+        #expect(
+            environment.contains("resolveEnvironment("),
+            "the sudo_local/biometry/signature resolution must sit behind the cache, not run per read"
+        )
+        #expect(
+            environment.contains("func invalidateCache("),
+            "the cache must expose an invalidation hook for the mid-session Touch ID flip"
+        )
+
+        // The one mid-session change (Touch ID enabled) must drop the cache, or a freshly
+        // enabled Touch ID would keep hitting the stale shim/askpass wiring.
+        let touchID = executableSource(
+            try source("Sources/MacUpdater/TouchIDSetupController.swift", root: root)
+        )
+        #expect(
+            touchID.contains("HomebrewEnvironment.invalidateCache()"),
+            "re-checking Touch ID must invalidate the cached brew environment"
+        )
+    }
+
     private func packageRoot(file: String = #filePath) -> URL {
         URL(fileURLWithPath: file)
             .deletingLastPathComponent()
