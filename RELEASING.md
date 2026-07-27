@@ -24,6 +24,10 @@ Nothing is published until that last line.
   Never edit it by hand — the script owns it, and the workflow refuses any tag that
   disagrees with it.
 
+- **If the app catalog changed since the last release**, republish it *before* tagging — see
+  [Republishing the app catalog](#10-republishing-the-app-catalog). It is a separate key and
+  a separate artifact from the release signing, and nothing in the pipeline reminds you.
+
 ## 2. Phase 1 — prepare
 
 ```bash
@@ -219,3 +223,54 @@ release is cut from `[Unreleased]` alone; commit-derived entries start appearing
 second release onward, measured against the tag this one creates.
 
 The baseline is always printed, so it is never a guess.
+
+## 10. Republishing the app catalog
+
+The app catalog is delivered **over the air**, not in the release. Wega fetches it from
+`raw.githubusercontent` at launch, so a catalog change reaches users without a new build —
+and, symmetrically, cutting a release does nothing for the catalog. They are two independent
+publications with two independent keys:
+
+| | signs | key lives in | driven by |
+|---|---|---|---|
+| Release artifacts | `.app`, `.dmg`, `.pkg` | GitHub Actions secrets (Developer ID) | `release.yml` |
+| App catalog | `app-catalog.json` | your machine, outside the repo (Ed25519) | `scripts/sign-catalog.sh` |
+
+Only the second one is yours to run by hand, and only you can run it — `sign-catalog.sh`
+refuses a key that lives inside the working tree (SEC-06).
+
+### Publishing a catalog change
+
+```bash
+WEGA_CATALOG_KEY=~/.secrets/wega-catalog.pem ./scripts/sign-catalog.sh --envelope --bump
+```
+
+```bash
+./scripts/verify-catalog.sh
+```
+
+`--bump` raises `generation`, the monotonic publication counter **inside** the signed bytes.
+Wega remembers the highest generation it has accepted, across relaunches, and refuses
+anything lower — which is what stops an old but perfectly-signed catalog from being replayed
+at a client forever. Skipping the bump leaves that protection inert, so it is a flag rather
+than a step to remember.
+
+`--envelope` publishes the catalog as one document carrying its own signature, instead of a
+JSON beside a `.sig`. Those were two separate CDN entries, so a client could fetch a fresh
+catalog next to a cached signature and get a mismatch indistinguishable from tampering. One
+document cannot skew against itself.
+
+To edit the catalog by hand afterwards, unwrap it first (no key needed), edit, then publish
+again with the command above:
+
+```bash
+./scripts/sign-catalog.sh --unwrap
+```
+
+### Do the envelope switch before the first tag
+
+A build without envelope support that is served an envelope decodes it as an *empty* catalog,
+then fails closed on the missing `.sig` and keeps its built-in catalog. Safe, but that build
+stops receiving catalog updates until its user upgrades. Before the first release that costs
+nothing, because nothing is installed yet; afterwards it strands every older build. Both
+formats are read, so the switch itself is a one-time, one-command decision.

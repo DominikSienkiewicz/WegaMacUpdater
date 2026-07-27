@@ -90,6 +90,30 @@ else
     fail "sign-catalog.sh --unwrap nie odtworzył pierwotnych bajtów katalogu"
 fi
 
+# 4. `--bump` musi podnieść `generation` — także wtedy, gdy pola jeszcze nie ma. Bez tego
+#    ochrona przed cofnięciem katalogu leży odłogiem: licznik zostaje na zerze na zawsze.
+#    Sprawdzamy sam efekt na pliku, bez podpisywania (klucza tu nie ma).
+BUMP_SRC="$WORK/bump.json"
+cat > "$BUMP_SRC" <<'JSON'
+{
+  "schemaVersion": 1,
+  "github": []
+}
+JSON
+(
+    # shellcheck disable=SC1090
+    BUMP_TARGET="$BUMP_SRC"
+    # Wyciągamy samą funkcję: uruchomienie całego skryptu wymagałoby klucza prywatnego.
+    eval "$(sed -n '/^catalog_generation()/,/^}/p;/^bump_generation()/,/^}/p' "$SIGN")"
+    bump_generation "$BUMP_TARGET" >/dev/null
+    bump_generation "$BUMP_TARGET" >/dev/null
+)
+if grep -q '"generation": 2' "$BUMP_SRC" && grep -q '"schemaVersion": 1' "$BUMP_SRC"; then
+    pass "--bump wstawia i podnosi generation, nie ruszając schemaVersion"
+else
+    fail "--bump nie podniósł generation do 2 (plik: $(tr -d '\n' < "$BUMP_SRC"))"
+fi
+
 if [[ "$FAILURES" -gt 0 ]]; then
     echo "✗ koperta katalogu: $FAILURES niepowodzeń" >&2
     exit 1
