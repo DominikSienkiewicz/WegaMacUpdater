@@ -293,8 +293,9 @@ sections:
   **checksum-verified**. Batch items with no inspectable bundle (formulae, npm, App Store)
   honestly read *"weryfikacja niedostępna"* rather than a faked verdict.
 - **Szczegóły** lists versions, install origin and path.
-- **Co nowego** shows real release notes when the source provides them (with the AI-triaged
-  "possible security fix" advisory) and says so plainly when it doesn't; the same notes are
+- **Co nowego** shows real release notes when the source provides them (with the advisory
+  "possible security fix" badge a deterministic keyword scan raises — advisory only, it
+  never gates or auto-applies anything) and says so plainly when it doesn't; the same notes are
   now also **inline on the row**, behind a *What's new* disclosure, for every manually-checked
   app whose source publishes them (GitHub release bodies, Sparkle `<description>`, JetBrains
   `whatsnew`). Vendor HTML is untrusted input — `ReleaseNotesText` in Core strips every tag
