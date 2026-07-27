@@ -146,7 +146,9 @@ struct PrivilegedHelperSecurityTests {
         targetBundleID: String? = "com.acme.foo",
         targetTeamID: String? = "TEAM123456",
         snapshotBundleID: String? = "com.acme.foo",
-        snapshotTeamID: String? = "TEAM123456"
+        snapshotTeamID: String? = "TEAM123456",
+        targetOwnerUID: UInt32 = 501,
+        consoleUserUID: UInt32? = 501
     ) -> WegaHelper.BundleReplacementFacts {
         .init(
             targetResolvedPath: resolved,
@@ -154,7 +156,9 @@ struct PrivilegedHelperSecurityTests {
             targetBundleID: targetBundleID,
             targetTeamID: targetTeamID,
             snapshotBundleID: snapshotBundleID,
-            snapshotTeamID: snapshotTeamID
+            snapshotTeamID: snapshotTeamID,
+            targetOwnerUID: targetOwnerUID,
+            consoleUserUID: consoleUserUID
         )
     }
 
@@ -241,5 +245,46 @@ struct PrivilegedHelperSecurityTests {
         let result = TouchIDSudoConfigurator.contentsEnablingTouchID(current: existing)
         #expect(result.contains("pam_smartcard.so")) // never clobber other lines
         #expect(result.contains("pam_tid.so"))
+    }
+
+    // MARK: - SEC-03 część 3: właściciel celu i podmiana między walidacją a zapisem
+
+    /// Zmierzone na realnym systemie: 29 z 42 aplikacji w `/Applications` należy do
+    /// zalogowanego użytkownika, nie do roota. Reguła wymagająca roota odebrałaby rollback
+    /// dwóm trzecim zainstalowanych aplikacji.
+    @Test func anApplicationOwnedByTheConsoleUserIsAccepted() {
+        #expect(WegaHelper.bundleReplacementRejection(
+            facts: facts(targetOwnerUID: 501, consoleUserUID: 501)) == nil)
+    }
+
+    @Test func anApplicationOwnedByRootIsAccepted() {
+        #expect(WegaHelper.bundleReplacementRejection(
+            facts: facts(targetOwnerUID: 0, consoleUserUID: 501)) == nil)
+    }
+
+    /// Podmiana aplikacji należącej do innego konta to nie jest nic, co ten helper ma robić.
+    @Test func anApplicationOwnedByAnotherAccountIsRejected() {
+        #expect(WegaHelper.bundleReplacementRejection(
+            facts: facts(targetOwnerUID: 502, consoleUserUID: 501)) == .foreignOwner)
+    }
+
+    /// Brak sesji konsoli: zostaje sam root jako dopuszczalny właściciel.
+    @Test func withNobodyLoggedInOnlyRootOwnedTargetsAreAccepted() {
+        #expect(WegaHelper.bundleReplacementRejection(
+            facts: facts(targetOwnerUID: 0, consoleUserUID: nil)) == nil)
+        #expect(WegaHelper.bundleReplacementRejection(
+            facts: facts(targetOwnerUID: 501, consoleUserUID: nil)) == .foreignOwner)
+    }
+
+    /// Ścieżka zwalidowana i ścieżka nadpisana muszą wskazywać ten sam obiekt na dysku.
+    @Test func aTargetUnchangedBetweenValidationAndWriteIsAccepted() {
+        let identity = PackageStaging.ArtifactIdentity(device: 16_777_233, inode: 4_242)
+        #expect(WegaHelper.bundleReplacementRejection(validated: identity, replacing: identity) == nil)
+    }
+
+    @Test func aTargetExchangedBetweenValidationAndWriteIsRejected() {
+        let validated = PackageStaging.ArtifactIdentity(device: 16_777_233, inode: 4_242)
+        let swapped = PackageStaging.ArtifactIdentity(device: 16_777_233, inode: 7_777)
+        #expect(WegaHelper.bundleReplacementRejection(validated: validated, replacing: swapped) == .targetSwapped)
     }
 }
