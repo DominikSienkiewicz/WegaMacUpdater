@@ -13,6 +13,12 @@ bump and move its entries under the new version heading when cutting a release.
 ## [Unreleased]
 
 ### Added
+- A hard download resource gate shared by window and unattended cask upgrades. Before
+  snapshotting or downloading it vetoes metered/Low Data Mode networking, low battery,
+  thermal throttling and insufficient (or unreadable) disk capacity. Required space is
+  budgeted as download + unpacked payload + rollback snapshot + safety margin; the
+  thresholds and estimates are persisted and configurable in the native Settings window.
+  Background deferrals retain their reason in the activity log.
 - Replay and downgrade protection for the over-the-air app catalog. A signature answers
   "did the publisher write this?", never "is this the current one" — so an old catalog with
   its own old, perfectly valid signature used to be valid forever, and anyone able to choose
@@ -28,12 +34,6 @@ bump and move its entries under the new version heading when cutting a release.
   cryptographically identical to tampering; one document cannot skew against itself. Wega
   reads both formats, so publishing can switch over at any time with
   `./scripts/sign-catalog.sh --envelope`.
-- A hard download resource gate shared by window and unattended cask upgrades. Before
-  snapshotting or downloading it vetoes metered/Low Data Mode networking, low battery,
-  thermal throttling and insufficient (or unreadable) disk capacity. Required space is
-  budgeted as download + unpacked payload + rollback snapshot + safety margin; the
-  thresholds and estimates are persisted and configurable in the native Settings window.
-  Background deferrals retain their reason in the activity log.
 - Unit tests for `JetBrainsUpdateChecker` and `SparkleUpdateChecker` — the two manual
   checkers that previously had no dedicated coverage despite driving 14 JetBrains IDEs
   and every generic Sparkle app. Both are exercised through the injected `HTTPClient`
@@ -71,9 +71,6 @@ bump and move its entries under the new version heading when cutting a release.
 - This `CHANGELOG.md`.
 
 ### Changed
-- The catalog's conditional-GET validator (ETag) is now persisted, so a relaunch
-  revalidates instead of re-downloading the whole catalog. The catalog is fetched once per
-  launch, which is precisely when a process-lifetime validator is guaranteed to be empty.
 - Hardened the no-TTY sudo path (`SEC-05`). Production no longer writes or executes
   user-modifiable askpass/sudo shell scripts from Application Support. The packaged app
   embeds compiled `WegaAskpass` and `WegaSudoShim` executables, signs them inside-out,
@@ -90,6 +87,9 @@ bump and move its entries under the new version heading when cutting a release.
   The PAM writer uses backup → atomic replacement → readback verification → rollback;
   without the signed helper the UI fails closed and offers a transactional Terminal command
   whose active-directive check ignores commented `pam_tid.so` lines.
+- The catalog's conditional-GET validator (ETag) is now persisted, so a relaunch
+  revalidates instead of re-downloading the whole catalog. The catalog is fetched once per
+  launch, which is precisely when a process-lifetime validator is guaranteed to be empty.
 - Split `ScanStore` across two files along the seam it already had: `ScanStore.swift`
   keeps the published state and the small operations over it, and the scan/upgrade
   actions move to `ScanStore+Actions.swift`. The type, its API and its behaviour are
