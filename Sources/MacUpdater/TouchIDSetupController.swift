@@ -80,6 +80,10 @@ final class TouchIDSetupController: ObservableObject {
   }
 
   func refresh() {
+    // ARCH-08a: re-checking Touch ID is the one moment the sudo/askpass wiring can
+    // change mid-session, so drop the memoised brew environment. The next spawn then
+    // rebuilds it and a freshly enabled Touch ID is respected immediately.
+    HomebrewEnvironment.invalidateCache()
     state = .idle(dependencies.currentState())
   }
 

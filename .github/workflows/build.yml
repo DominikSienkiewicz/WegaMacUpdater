@@ -1,0 +1,158 @@
+name: Build
+
+# QA-03 — reusable build/quality workflow shared by CI (ci.yml) and Release (release.yml).
+#
+# One runner, one pinned toolchain, one set of quality gates. Because the release workflow
+# `uses:` this same file, a release can never be built on a different runner or toolchain than
+# the one CI proved green, and can never outrun the lint / catalog / bundle gates.
+#
+# Pinned toolchain — single source of truth, bump here:
+#   Xcode 26 / Swift 6.0  → CONTRIBUTING.md, README.md ("Xcode 26 or Swift 6.0 toolchain")
+#   SwiftLint 0.65.0      → .swiftlint.yml
+# `latest-stable` / bare `brew install swiftlint` are deliberately avoided: with a `--strict`
+# lint gate, a new SwiftLint release promoting a new rule to an error would break the build the
+# day it ships, on a toolchain no commit ever chose.
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  SWIFTLINT_VERSION: '0.65.0'
+
+jobs:
+  build-test:
+    name: Build & Test
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Select pinned Xcode
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: '26.0'
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build (incl. tests)
+        run: swift build --build-tests --enable-code-coverage
+
+      - name: Test
+        run: swift test --skip-build --enable-code-coverage
+
+      # Convert SwiftPM's llvm-cov coverage into the SonarQube generic report the
+      # SonarCloud job consumes. SonarCloud runs on Linux and can't run our macOS
+      # tests, so the report must be produced here and handed over as an artifact.
+      - name: Generate coverage report (SonarQube generic XML)
+        run: ./scripts/coverage-sonarqube.sh
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-report
+          path: sonarqube-generic-coverage.xml
+          if-no-files-found: error
+
+  # F5(d) — `app-catalog.json` and `app-catalog.json.sig` are served as two separate
+  # raw.githubusercontent cache entries, so a client can fetch a fresh catalog beside a stale
+  # signature. The only place their consistency can be enforced is the commit: this gate goes
+  # red whenever the catalog changes without the signature being regenerated.
+  #
+  # No secret and no write access: verification uses the public key already committed in
+  # `CatalogSignature.swift`. Ed25519 is deterministic, so verifying proves exactly what
+  # re-signing would, without ever handing CI the private key.
+  catalog-signature:
+    name: Catalog signature
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      # SEC-06 — the signing key must live outside the working tree (~/.secrets/). A key
+      # sitting in this public repo is one `git add -f`, one .gitignore edit or one folder
+      # backup away from disclosure and a forced rotation of the OTA catalog signature.
+      # `.gitignore` cannot enforce that; sign-catalog.sh refuses such a key, and this
+      # keeps the refusal from silently rotting.
+      - name: Regression test — sign-catalog.sh refuses an in-repo key
+        run: ./scripts/test-sign-catalog-guard.sh
+
+      # Exit 3 means signing is not configured yet (placeholder key) — not a failure.
+      - name: Verify app-catalog.json.sig matches app-catalog.json
+        run: |
+          set +e
+          ./scripts/verify-catalog.sh
+          status=$?
+          set -e
+          if [ "$status" -eq 3 ]; then
+            echo "::notice::Catalog signing is not configured (placeholder key) — skipping."
+            exit 0
+          fi
+          exit "$status"
+
+  lint:
+    name: SwiftLint
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      # SwiftLint loads SourceKit from the active toolchain, so pin Xcode here too — otherwise
+      # the lint rules run against whatever SourceKit the runner defaults to.
+      - name: Select pinned Xcode
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: '26.0'
+
+      # Pinned SwiftLint (SWIFTLINT_VERSION), not `brew install swiftlint`: brew installs
+      # whatever is current, and under `--strict` a newer rule set turns green into red with
+      # no code change. The official portable binary at a fixed tag is fully reproducible.
+      - name: Install pinned SwiftLint
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/swiftlint.zip" \
+            "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/portable_swiftlint.zip"
+          mkdir -p "$RUNNER_TEMP/swiftlint"
+          unzip -o -q "$RUNNER_TEMP/swiftlint.zip" -d "$RUNNER_TEMP/swiftlint"
+          chmod +x "$RUNNER_TEMP/swiftlint/swiftlint"
+          echo "$RUNNER_TEMP/swiftlint" >> "$GITHUB_PATH"
+
+      - name: SwiftLint version
+        run: swiftlint version
+
+      # --strict promotes warnings to errors: any new violation fails the job.
+      - name: Lint
+        run: swiftlint lint --strict
+
+  package:
+    name: Package (.pkg, universal)
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Select pinned Xcode
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: '26.0'
+
+      # Ad-hoc signed, universal (arm64 + x86_64) — verifies the whole packaging path
+      # composes on every change, not just `swift build`.
+      - name: Build .pkg
+        run: ./scripts/build-pkg.sh
+
+      # Same artifact gate the release job runs (QA-03). On CI the bundle is ad-hoc-signed, so
+      # verify-bundle.sh checks layout, helper signature and required resources, and reports the
+      # notarization/stapling checks as skipped — exercising the gate on every push.
+      - name: Verify bundle (layout, helper signature, resources)
+        run: ./scripts/verify-bundle.sh
+
+      - name: Upload .pkg artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: WegaMacUpdater-pkg
+          path: build/WegaMacUpdater.pkg
+          if-no-files-found: error

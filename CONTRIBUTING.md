@@ -19,7 +19,7 @@ If you are a **user** looking for how to install and use the app, see the
   ```bash
   sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
   ```
-- **[SwiftLint](https://github.com/realm/SwiftLint)** — `brew install swiftlint`.
+- **[SwiftLint](https://github.com/realm/SwiftLint)** — `brew install swiftlint` locally. CI pins **0.65.0** (`SWIFTLINT_VERSION` in `.github/workflows/build.yml`); if `--strict` disagrees between your machine and CI, match that version.
 - **Homebrew** and **`mas`** are optional at build time but useful for exercising the app.
 
 ## Build and test
@@ -85,15 +85,15 @@ not leftovers, so do not "finish the migration" by rewriting them.
 
 ## Continuous integration
 
-Every pull request to `main` runs the jobs in [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
+Every pull request to `main` runs the jobs defined in the **reusable workflow** [`.github/workflows/build.yml`](.github/workflows/build.yml), invoked by [`.github/workflows/ci.yml`](.github/workflows/ci.yml). The release pipeline (`release.yml`) `uses:` the same reusable workflow, on the same `macos-26` runner and pinned Xcode 26 / SwiftLint 0.65.0 toolchain, so CI and release can never drift:
 
 | Job | What it checks |
 | --- | --- |
 | **Build & Test** | `swift build --build-tests` + `swift test`, with coverage |
-| **SwiftLint** | `swiftlint lint --strict` (warnings fail) |
-| **Package** | `scripts/build-pkg.sh` builds a universal `.pkg`; asserts bundled resources |
+| **SwiftLint** | `swiftlint lint --strict` (warnings fail), pinned SwiftLint 0.65.0 |
+| **Package** | `scripts/build-pkg.sh` builds a universal `.pkg`, then `scripts/verify-bundle.sh` gates bundle layout, helper signature and required resources (notarization/stapling on signed release builds) |
 | **Catalog signature** | verifies `app-catalog.json.sig` matches `app-catalog.json` — see below |
-| **SonarCloud** | static analysis + coverage gate (skipped until `SONAR_TOKEN` is set) |
+| **SonarCloud** | static analysis + coverage gate (skipped until `SONAR_TOKEN` is set); defined in `ci.yml` |
 
 ## The catalog signature gate
 
@@ -116,8 +116,8 @@ their consistency can be enforced is the commit — which is what the CI gate do
 
 ### What the gate does
 
-The **Catalog signature** job (`.github/workflows/ci.yml`, the `catalog-signature:` job
-at line 56) runs on every push and pull request. It:
+The **Catalog signature** job (the `catalog-signature:` job in the reusable
+`.github/workflows/build.yml`) runs on every push and pull request. It:
 
 1. runs `scripts/test-sign-catalog-guard.sh` — a regression test proving
    `sign-catalog.sh` refuses a private key that lives inside the repository (SEC-06); and

@@ -11,138 +11,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-test:
-    name: Build & Test
-    runs-on: macos-26
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Select latest stable Xcode
-        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
-        with:
-          xcode-version: latest-stable
-
-      - name: Swift version
-        run: swift --version
-
-      - name: Build (incl. tests)
-        run: swift build --build-tests --enable-code-coverage
-
-      - name: Test
-        run: swift test --skip-build --enable-code-coverage
-
-      # Convert SwiftPM's llvm-cov coverage into the SonarQube generic report the
-      # SonarCloud job consumes. SonarCloud runs on Linux and can't run our macOS
-      # tests, so the report must be produced here and handed over as an artifact.
-      - name: Generate coverage report (SonarQube generic XML)
-        run: ./scripts/coverage-sonarqube.sh
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: coverage-report
-          path: sonarqube-generic-coverage.xml
-          if-no-files-found: error
-
-  # F5(d) — `app-catalog.json` and `app-catalog.json.sig` are served as two separate
-  # raw.githubusercontent cache entries, so a client can fetch a fresh catalog beside a stale
-  # signature. The only place their consistency can be enforced is the commit: this gate goes
-  # red whenever the catalog changes without the signature being regenerated.
-  #
-  # No secret and no write access: verification uses the public key already committed in
-  # `CatalogSignature.swift`. Ed25519 is deterministic, so verifying proves exactly what
-  # re-signing would, without ever handing CI the private key.
-  catalog-signature:
-    name: Catalog signature
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      # SEC-06 — the signing key must live outside the working tree (~/.secrets/). A key
-      # sitting in this public repo is one `git add -f`, one .gitignore edit or one folder
-      # backup away from disclosure and a forced rotation of the OTA catalog signature.
-      # `.gitignore` cannot enforce that; sign-catalog.sh refuses such a key, and this
-      # keeps the refusal from silently rotting.
-      - name: Regression test — sign-catalog.sh refuses an in-repo key
-        run: ./scripts/test-sign-catalog-guard.sh
-
-      # Exit 3 means signing is not configured yet (placeholder key) — not a failure.
-      - name: Verify app-catalog.json.sig matches app-catalog.json
-        run: |
-          set +e
-          ./scripts/verify-catalog.sh
-          status=$?
-          set -e
-          if [ "$status" -eq 3 ]; then
-            echo "::notice::Catalog signing is not configured (placeholder key) — skipping."
-            exit 0
-          fi
-          exit "$status"
-
-  lint:
-    name: SwiftLint
-    runs-on: macos-26
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Install SwiftLint
-        run: brew install swiftlint
-
-      - name: SwiftLint version
-        run: swiftlint version
-
-      # --strict promotes warnings to errors: any new violation fails the job.
-      - name: Lint
-        run: swiftlint lint --strict
-
-  package:
-    name: Package (.pkg, universal)
-    runs-on: macos-26
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Select latest stable Xcode
-        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
-        with:
-          xcode-version: latest-stable
-
-      # Ad-hoc signed, universal (arm64 + x86_64) — verifies the whole packaging path
-      # composes on every change, not just `swift build`.
-      - name: Build .pkg
-        run: ./scripts/build-pkg.sh
-
-      - name: Verify universal binary (arm64 + x86_64)
-        run: |
-          BIN=".build/pkg-staging/WegaMacUpdater.app/Contents/MacOS/WegaMacUpdater"
-          ARCHS="$(lipo -archs "$BIN")"
-          echo "archs: $ARCHS"
-          echo "$ARCHS" | grep -qw arm64
-          echo "$ARCHS" | grep -qw x86_64
-
-      - name: Verify bundled resources are present
-        run: |
-          BUNDLE=".build/pkg-staging/WegaMacUpdater.app/Contents/Resources/WegaMacUpdater_MacUpdaterCore.bundle"
-          # AppEndpoints.shared fatal-errors at launch without endpoints.json, so a
-          # missing resource must fail the build here, not crash the shipped app.
-          test -n "$(find "$BUNDLE" -name app-catalog.json)"
-          test -n "$(find "$BUNDLE" -name endpoints.json)"
-
-      - name: Upload .pkg artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: WegaMacUpdater-pkg
-          path: build/WegaMacUpdater.pkg
-          if-no-files-found: error
+  # QA-03 — single source of truth for build, test, lint, catalog verification, packaging and
+  # the bundle gate. release.yml `uses:` this same reusable workflow, so CI and release can never
+  # drift on runner or toolchain.
+  build:
+    uses: ./.github/workflows/build.yml
 
   sonarcloud:
     name: SonarCloud
     runs-on: ubuntu-latest
-    # Waits for build-test so the coverage report (uploaded there) is available.
-    needs: build-test
+    # Waits for the reusable build (which uploads the coverage report artifact in this run).
+    needs: build
     # Reads sonar-project.properties (keys, sources/tests split, S1075 exclusions,
     # sonar.coverageReportPaths → the downloaded coverage report).
     # Prerequisites, one-time:

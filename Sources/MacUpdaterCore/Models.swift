@@ -211,6 +211,12 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
     /// (`policyKey`), so an ignore/pin survives the vendor renaming the app across
     /// versions. `nil` for apps without a bundle identifier — `path` alone still keys them.
     public var bundleIdentifier: String?
+    /// REL-07: set when this row was *forced* onto the list because a prior auto-rollback left
+    /// the app on its previous version while Homebrew's Caskroom still records the new one — so
+    /// `brew outdated` stays silent about it (see ``CaskRollbackLedger``). The row is labelled
+    /// "cofnięto — ponów próbę", and its Brew action force-reinstalls (repairing the Caskroom
+    /// metadata) through the safe canary/rollback path. `false` for every ordinary result.
+    public var rolledBack: Bool
 
     public init(
         name: String,
@@ -220,7 +226,8 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
         source: UpdateSource,
         origin: AppOrigin = .manual,
         releaseNotes: String? = nil,
-        bundleIdentifier: String? = nil
+        bundleIdentifier: String? = nil,
+        rolledBack: Bool = false
     ) {
         self.name = name
         self.path = path
@@ -230,6 +237,7 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
         self.origin = origin
         self.releaseNotes = releaseNotes
         self.bundleIdentifier = bundleIdentifier
+        self.rolledBack = rolledBack
     }
 }
 

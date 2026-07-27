@@ -61,16 +61,87 @@ public struct NpmListParser {
     }
 }
 
+/// Parses the map emitted by `npm outdated -g --json` into the outdated globals worth
+/// surfacing. Keys are package names; each value carries `current`/`wanted`/`latest`.
+/// `npm` and `corepack` are dropped (upgraded via brew/installer, not user-actionable),
+/// as are entries without a concrete installed **and** latest version. npm's
+/// "nothing outdated" payload (`{}`) yields an empty list.
+public struct NpmOutdatedParser {
+    public init() { /* stateless; explicit so the initializer is public across the module boundary */ }
+
+    public func parse(_ data: Data) throws -> [NpmGlobalOutdated] {
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
+        return parse(object)
+    }
+
+    public func parse(_ object: [String: Any]) -> [NpmGlobalOutdated] {
+        var out: [NpmGlobalOutdated] = []
+        for (name, raw) in object {
+            // npm itself is upgraded via brew/installer, not user-actionable here.
+            if name == "npm" || name == "corepack" { continue }
+            guard let entry = raw as? [String: Any],
+                  let current = entry["current"] as? String,
+                  let latest = entry["latest"] as? String,
+                  !current.isEmpty, !latest.isEmpty,
+                  // npm marks a declared-but-uninstalled global as "MISSING": not an installed version.
+                  current != "MISSING" else { continue }
+            // REL-11: npm publishes strict SemVer, so compare under `.semver`
+            // (prerelease ranks below its release; unparseable ⇒ not an upgrade).
+            guard isUpgrade(installed: current, latest: latest, scheme: .semver) else { continue }
+            out.append(NpmGlobalOutdated(name: name, installedVersion: current, latestVersion: latest))
+        }
+        return out.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    public func parse(_ json: String) throws -> [NpmGlobalOutdated] {
+        try parse(Data(json.utf8))
+    }
+}
+
 public final class NpmLocator: @unchecked Sendable {
     private let fileManager: FileManager
     private let extraCandidates: [URL]
+    private let cacheLock = NSLock()
+    private var cachedURL: URL?
 
     public init(fileManager: FileManager = .default, extraCandidates: [URL] = []) {
         self.fileManager = fileManager
         self.extraCandidates = extraCandidates
     }
 
+    /// ARCH-03: resolve npm once and reuse it. A scan calls `locate()` for every npm
+    /// operation; without a cache each call re-ran the nvm/fnm directory globs and
+    /// spawned a login shell (`$SHELL -lc "command -v npm"`) from scratch. Only a
+    /// positive result is memoised — so an npm installed later is still discovered —
+    /// and the cached path is re-validated as executable on each hit, so a moved or
+    /// removed binary forces a fresh resolve rather than returning a stale location.
     public func locate() -> URL? {
+        if let cached = validatedCachedURL() { return cached }
+        let resolved = resolveUncached()
+        cache(resolved)
+        return resolved
+    }
+
+    private func validatedCachedURL() -> URL? {
+        cacheLock.lock()
+        let cached = cachedURL
+        cacheLock.unlock()
+        guard let cached else { return nil }
+        if fileManager.isExecutableFile(atPath: cached.path) { return cached }
+        cacheLock.lock()
+        cachedURL = nil
+        cacheLock.unlock()
+        return nil
+    }
+
+    private func cache(_ url: URL?) {
+        guard let url else { return }
+        cacheLock.lock()
+        cachedURL = url
+        cacheLock.unlock()
+    }
+
+    private func resolveUncached() -> URL? {
         for url in candidates() where fileManager.isExecutableFile(atPath: url.path) {
             return url
         }
@@ -123,15 +194,18 @@ public final class NpmGlobalService: @unchecked Sendable {
     private let locator: NpmLocator
     private let runner: ProcessRunning
     private let listParser: NpmListParser
+    private let outdatedParser: NpmOutdatedParser
 
     public init(
         locator: NpmLocator = NpmLocator(),
         runner: ProcessRunning = ProcessRunner(),
-        listParser: NpmListParser = NpmListParser()
+        listParser: NpmListParser = NpmListParser(),
+        outdatedParser: NpmOutdatedParser = NpmOutdatedParser()
     ) {
         self.locator = locator
         self.runner = runner
         self.listParser = listParser
+        self.outdatedParser = outdatedParser
     }
 
     public func installedGlobals() async throws -> [NpmGlobalPackage] {
@@ -142,36 +216,43 @@ public final class NpmGlobalService: @unchecked Sendable {
         return (try? listParser.parse(data)) ?? []
     }
 
-    public func latestVersion(of name: String) async throws -> String? {
-        let arguments = ["view", name, "version"]
+    public func outdated() async throws -> [NpmGlobalOutdated] {
+        // ARCH-03: one `npm outdated -g --json` process replaces the per-package
+        // `npm view` fan-out (one unbounded Node process per installed global).
+        // `npm outdated` exits non-zero (1) simply *because* packages are outdated,
+        // so the exit code alone cannot flag failure — the JSON body decides.
+        let arguments = ["outdated", "-g", "--json"]
         let result = try await runNpm(arguments)
-        guard result.exitCode == 0 else { return nil }
-        let version = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-        return version.isEmpty ? nil : version
+        guard let object = Self.jsonObject(from: result.stdout) else {
+            // No parseable JSON. Exit 0 is npm's "nothing outdated / empty output";
+            // any other exit means npm failed without emitting a usable report — surface
+            // it as an error rather than reporting a falsely-successful empty scan.
+            if result.exitCode == 0 { return [] }
+            throw NpmServiceError.commandFailed(arguments: arguments, result: result)
+        }
+        // ARCH-03: npm reports registry/network trouble as `{"error": {...}}`. Treat it
+        // as a (possibly partial) failure and signal an incomplete scan instead of
+        // swallowing it into an empty — or truncated — list of upgrades.
+        if Self.isNpmError(object) {
+            throw NpmServiceError.commandFailed(arguments: arguments, result: result)
+        }
+        return outdatedParser.parse(object)
     }
 
-    public func outdated() async throws -> [NpmGlobalOutdated] {
-        let installed = try await installedGlobals()
-        return await withTaskGroup(of: NpmGlobalOutdated?.self) { group in
-            for pkg in installed {
-                group.addTask {
-                    guard let latest = try? await self.latestVersion(of: pkg.name) else { return nil }
-                    // REL-11: npm publishes strict SemVer, so compare under `.semver`
-                    // (prerelease ranks below its release; unparseable ⇒ not an upgrade).
-                    guard isUpgrade(installed: pkg.installedVersion, latest: latest, scheme: .semver) else { return nil }
-                    return NpmGlobalOutdated(
-                        name: pkg.name,
-                        installedVersion: pkg.installedVersion,
-                        latestVersion: latest
-                    )
-                }
-            }
-            var collected: [NpmGlobalOutdated] = []
-            for await item in group {
-                if let item { collected.append(item) }
-            }
-            return collected.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        }
+    /// The JSON object npm printed to stdout, or `nil` when stdout was empty or not a
+    /// JSON object (npm printed a bare error line, or nothing at all).
+    private static func jsonObject(from stdout: String) -> [String: Any]? {
+        let data = Data(stdout.utf8)
+        guard !data.isEmpty else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    }
+
+    /// npm surfaces a failed run as a top-level `error` object (`code`/`summary`/`detail`).
+    /// A package literally named "error" instead carries version fields, so the shape —
+    /// not merely the key — is what tells the two apart.
+    private static func isNpmError(_ object: [String: Any]) -> Bool {
+        guard let error = object["error"] as? [String: Any] else { return false }
+        return error["current"] == nil && error["latest"] == nil
     }
 
     public func upgradeEvents(name: String) throws -> AsyncThrowingStream<ProcessOutputEvent, Error> {

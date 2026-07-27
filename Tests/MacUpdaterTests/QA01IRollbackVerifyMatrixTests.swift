@@ -207,6 +207,35 @@ struct QA01IRollbackVerifyMatrixTests {
                 "matrix: the direct replacement entry checks both the expected publisher and identifier")
     }
 
+    // MARK: REL-07 — the decision matrix drives the durable rolled-back mark
+
+    /// REL-07 extends the matrix with a side effect: every terminal verdict is fed to the
+    /// persistent `CaskRollbackLedger` at *both* public entry points — the batch canary and
+    /// the direct replacement/retry entry — so foreground, background and a conscious retry
+    /// all share one rolled-back memory (a rejected build is recorded; a healthy one clears
+    /// it). Asserted at source level for the same reason the gates are: `CaskRollbackGuard`
+    /// lives in the app target this bundle cannot import. The verdict → mark mapping itself is
+    /// pinned behaviourally in `CaskRollbackLedgerTests`.
+    @Test func bothPublicEntryPointsDriveTheRollbackLedger() throws {
+        let source = try guardSource()
+
+        let batch = try slice(
+            source,
+            from: "static func verify(tokens: [String], appPaths: [String: URL], snapshots: [String: URL])",
+            to: "/// Verifies a replacement"
+        )
+        #expect(batch.contains("CaskRollbackLedger.shared.apply(token: token, verdict:"),
+                "REL-07: the batch canary records/clears the rolled-back mark for every token it verifies")
+
+        let direct = try slice(
+            source,
+            from: "expectedTeamID: String?,",
+            to: "private static func verify("
+        )
+        #expect(direct.contains("CaskRollbackLedger.shared.apply(token: token, verdict:"),
+                "REL-07: the direct replacement/retry entry records a fresh rollback and clears on a healthy retry")
+    }
+
     // MARK: Behavioural helpers
 
     /// One cask that brew reported as upgraded, then folded through a canary verdict — the exact

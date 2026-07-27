@@ -119,6 +119,32 @@ struct ArchitectureReviewRegressionTests {
         )
     }
 
+    /// ARCH-05c — the synchronous `/Applications` walk (directory enumeration plus each app's
+    /// `Info.plist` read) must not run on the MainActor. `MigrationStore` still mutates its
+    /// `@Published` scan state on the MainActor, but the filesystem walk is delegated to the
+    /// nonisolated `scanApplicationDirectories` helper, which runs off the MainActor — the same
+    /// boundary the Inventory (`LiveInventorySnapshotLoader.load`) and Uninstall
+    /// (`UninstallScan.collect`) scans already sit behind.
+    @Test func migrationApplicationScanIsDelegatedOffTheMainActor() throws {
+        let root = packageRoot()
+        let migration = executableSource(
+            try source("Sources/MacUpdater/MigrationStore.swift", root: root)
+        )
+
+        #expect(
+            migration.contains("nonisolated static func scanApplicationDirectories"),
+            "MigrationStore must own a nonisolated scanApplicationDirectories helper so the /Applications walk runs off the MainActor"
+        )
+        #expect(
+            migration.contains("await Self.scanApplicationDirectories("),
+            "MigrationStore.scanCoordinated must delegate the /Applications walk to the off-actor helper"
+        )
+        #expect(
+            !migration.contains("buildScanDirs().flatMap"),
+            "MigrationStore still walks the scan directories inline on the MainActor"
+        )
+    }
+
     /// ARCH-07a — the brew/npm event-streaming loop and its log-buffer cap live in one
     /// shared helper. Every upgrade/uninstall path drains its process events through
     /// `ProcessEventStream.drain` instead of copying the `for try await event in stream`
@@ -162,6 +188,65 @@ struct ArchitectureReviewRegressionTests {
         )
     }
 
+    /// ARCH-02 — `ProcessRunner` must await a subprocess with a continuation resumed from
+    /// the `terminationHandler`, never by blocking a semaphore on a pool thread; its timeout
+    /// must be an async `Task.sleep`. Guarding at the source level (not just behaviourally)
+    /// keeps a future refactor from quietly reintroducing the blocking wait.
+    @Test func processRunnerAwaitsTerminationWithoutBlockingASemaphore() throws {
+        let root = packageRoot()
+        let runner = executableSource(
+            try source("Sources/MacUpdaterCore/ProcessRunner.swift", root: root)
+        )
+
+        for blocking in ["DispatchSemaphore", "semaphore.wait", ".wait(timeout:"] {
+            #expect(
+                !runner.contains(blocking),
+                "ProcessRunner still blocks a pool thread on `\(blocking)` instead of awaiting termination"
+            )
+        }
+
+        #expect(
+            runner.contains("terminationHandler"),
+            "ProcessRunner must resume its wait from the process terminationHandler"
+        )
+        #expect(
+            runner.contains("withCheckedContinuation"),
+            "ProcessRunner must await termination on a checked continuation, not a blocking wait"
+        )
+        #expect(
+            runner.contains("Task.sleep"),
+            "ProcessRunner must enforce its timeout with an async Task.sleep"
+        )
+    }
+
+    /// ARCH-03 — the npm global-update scan runs one `npm outdated -g --json` process
+    /// instead of a `npm view` fan-out (one Node per package), and caches the resolved
+    /// npm location so a scan's repeated lookups don't re-glob nvm/fnm or respawn a
+    /// login shell.
+    @Test func npmGlobalScanUsesOneOutdatedProcessAndCachesLocation() throws {
+        let root = packageRoot()
+        let checker = executableSource(
+            try source("Sources/MacUpdaterCore/NpmGlobalChecker.swift", root: root)
+        )
+
+        #expect(
+            checker.contains("\"outdated\", \"-g\", \"--json\""),
+            "the npm outdated scan must run `npm outdated -g --json`"
+        )
+        #expect(
+            !checker.contains("\"view\""),
+            "the npm outdated scan must not shell out to `npm view` per package"
+        )
+        #expect(
+            !checker.contains("withTaskGroup"),
+            "the npm outdated scan must not fan out one process per package"
+        )
+        #expect(
+            checker.contains("cachedURL"),
+            "NpmLocator must cache the resolved npm location for the scan"
+        )
+    }
+
     @Test func topLevelHomebrewReadRoundsUseTheSharedGate() throws {
         let root = packageRoot()
         let foreground = executableSource(
@@ -176,6 +261,58 @@ struct ArchitectureReviewRegressionTests {
         #expect(foreground.contains("holding: operationLease"))
         #expect(background.contains("OperationCoordinator.shared.withReadLease("))
         #expect(background.contains("label: \"background update preflight\""))
+    }
+
+    /// ARCH-08a — `HomebrewEnvironment.environment` memoises its result instead of
+    /// re-reading `sudo_local`, re-probing biometry and re-verifying the signed helper
+    /// Mach-Os on every brew/mas spawn. The cache is dropped only when the app re-checks
+    /// Touch ID, so a mid-session enable is still honoured.
+    @Test func homebrewEnvironmentIsResolvedOnceAndCachedBetweenSpawns() throws {
+        let root = packageRoot()
+
+        let environment = executableSource(
+            try source("Sources/MacUpdaterCore/HomebrewEnvironment.swift", root: root)
+        )
+        #expect(
+            environment.contains("cachedEnvironment"),
+            "HomebrewEnvironment must memoise the resolved environment between spawns"
+        )
+        #expect(
+            environment.contains("resolveEnvironment("),
+            "the sudo_local/biometry/signature resolution must sit behind the cache, not run per read"
+        )
+        #expect(
+            environment.contains("func invalidateCache("),
+            "the cache must expose an invalidation hook for the mid-session Touch ID flip"
+        )
+
+        // The one mid-session change (Touch ID enabled) must drop the cache, or a freshly
+        // enabled Touch ID would keep hitting the stale shim/askpass wiring.
+        let touchID = executableSource(
+            try source("Sources/MacUpdater/TouchIDSetupController.swift", root: root)
+        )
+        #expect(
+            touchID.contains("HomebrewEnvironment.invalidateCache()"),
+            "re-checking Touch ID must invalidate the cached brew environment"
+        )
+    }
+
+    /// ARCH-08d — the 9-lane binary stream measures each lane's glyph text once, at
+    /// construction (inside `BinaryStreamFrameRenderer`), not on every 30 fps Canvas
+    /// frame. The per-frame draw loop must contain no text measurement.
+    @Test func binaryStreamHoistsTextMeasurementOutOfTheFrameLoop() throws {
+        let root = packageRoot()
+        let stream = executableSource(
+            try source("Sources/MacUpdater/BinaryStream.swift", root: root)
+        )
+        #expect(
+            !stream.contains(".measure("),
+            "the per-frame Canvas loop must not re-measure glyph text (ARCH-08d)"
+        )
+        #expect(
+            stream.contains("BinaryStreamFrameRenderer"),
+            "static glyph measurement must live in BinaryStreamFrameRenderer"
+        )
     }
 
     private func packageRoot(file: String = #filePath) -> URL {
