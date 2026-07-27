@@ -181,6 +181,14 @@ public struct ManualUpdateScanner: Sendable {
             )
         }
 
+        // ARCH-05a: one `brew info` for every adoption candidate, resolved before the fan-out,
+        // instead of one process per app inside it. Each of those calls re-read the same cask
+        // database to answer about a single token.
+        let candidateTokens = appsToCheck
+            .filter { !isBrewManaged($0) }
+            .compactMap(\.caskToken)
+        let latestCaskVersions = await brew.caskLatestVersions(tokens: Array(Set(candidateTokens)))
+
         var work: [@Sendable () async -> ManualCheckResult] = []
         for app in appsToCheck {
             if !isBrewManaged(app) {
@@ -189,7 +197,7 @@ public struct ManualUpdateScanner: Sendable {
                 if let token = app.caskToken {
                     let brewTracked = brewCaskVersions[token]
                     work.append(Self.logged("Cask", app) {
-                        guard let latest = await brew.caskLatestVersion(token: token) else { return .upToDate }
+                        guard let latest = latestCaskVersions[token] else { return .upToDate }
                         let reference = brewTracked ?? app.version
                         guard let installed = reference,
                               !versionsEqual(latest, installed),
