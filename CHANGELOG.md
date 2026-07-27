@@ -94,6 +94,10 @@ bump and move its entries under the new version heading when cutting a release.
   button on purpose — a two-state checkbox cannot say "some", so it keeps the spoken count.
   Migration and npm/brew duplicate rows name the app in their action labels, so identical
   buttons are distinguishable without sight.
+- **Wega's own update row leads to the in-app installer, not to a browser.** The row used to
+  open the release page, stepping around the signature verification and helper install that
+  the Settings screen performs. *Check for Wega Updates…* is now in the app menu as well,
+  where macOS users look for it.
 - **Self-update picks the asset from capability, not from a fixed preference.** The checker
   reported one asset — always the `.dmg` — and the planner could only comment on a decision
   already made, so a user with a working privileged helper was sent to drag an icon when a
