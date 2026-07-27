@@ -87,6 +87,7 @@ struct WegaCommands: Commands {
     @AppStorage("wega.sidebarSelection") private var selection: SidebarSelection = .default
     @FocusedValue(\.startCheckAction) private var startCheck
     @FocusedValue(\.runUpdateAction) private var runUpdate
+    @Environment(\.openSettings) private var openSettings
 
     // Explicit initializer: the synthesized memberwise one inherits the `private` of the
     // property wrappers above and so cannot be called from `MacUpdaterApp`.
@@ -95,6 +96,12 @@ struct WegaCommands: Commands {
     }
 
     var body: some Commands {
+        // macOS convention: an app's own update check lives in the app menu, right under About.
+        // The item opens the Settings window, where the self-update screen owns the operation.
+        CommandGroup(after: .appInfo) {
+            Button(tr("Sprawdź aktualizacje Wegi…")) { openSettings() }
+        }
+
         CommandMenu(tr("Aktualizacje")) {
             Button(tr("Sprawdź teraz")) { startCheck?.run() }
                 .keyboardShortcut("r", modifiers: .command)

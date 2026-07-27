@@ -444,6 +444,7 @@ extension Translations {
         "Brew": "Brew",
         "App Store": "App Store",
         "Sprawdź aktualizacje Wegi": "Check for Wega updates",
+        "Sprawdź aktualizacje Wegi…": "Check for Wega Updates…",
         "Masz najnowszą wersję Wegi": "You have the latest version of Wega",
         "Dostępna wersja %@": "Version %@ available",
         "Pobierz i zainstaluj": "Download and install",
