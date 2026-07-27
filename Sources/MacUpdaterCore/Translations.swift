@@ -57,7 +57,10 @@ extension Translations {
         "%@ oraz %@": "%@ and %@",
         "Pobierz i otwórz instalator": "Download and open the installer",
         "Pobieram nową wersję Wegi…": "Downloading the new version of Wega…",
-        "Pobrałam aktualizację i otwieram instalator — dokończ instalację.": "Downloaded the update and opening the installer — finish the installation.",
+        "Pobrałam aktualizację — zamknij Wegę, zanim ją zastąpisz.":
+            "Update downloaded — quit Wega before replacing it.",
+        "Aktualizacja zainstalowana — uruchom Wegę ponownie, żeby jej użyć.":
+            "Update installed — restart Wega to use it.",
         "Nie udało się pobrać aktualizacji — otwieram stronę wydania.": "Couldn't download the update — opening the release page.",
         "Nic nie pasuje do filtra.": "Nothing matches the filter.",
         "Zmień poziom lub frazę wyszukiwania, żeby zobaczyć więcej zdarzeń.": "Change the level or search term to see more events.",
@@ -115,7 +118,6 @@ extension Translations {
         "Brak skonfigurowanego Team ID — helper zadziała dopiero w podpisanym buildzie.": "No Team ID configured — the helper works only in a signed build.",
         "Zatwierdź komponent w Ustawieniach → Elementy logowania.": "Approve the component in Settings → Login Items.",
         "Komponent uprzywilejowany gotowy.": "Privileged component ready.",
-        "Aktualizacja zainstalowana przez komponent uprzywilejowany.": "Update installed via the privileged component.",
         // BG-02 — „Uruchamiaj przy logowaniu" (SMAppService.mainApp): tryb tła po restarcie Maca.
         "Uruchamiaj przy logowaniu": "Launch at login",
         "Uruchamiaj Wegę przy logowaniu": "Launch Wega at login",
@@ -444,6 +446,8 @@ extension Translations {
         "Masz najnowszą wersję Wegi": "You have the latest version of Wega",
         "Dostępna wersja %@": "Version %@ available",
         "Pobierz i zainstaluj": "Download and install",
+        "Zainstalowano wersję %@": "Installed version %@",
+        "Uruchom Wegę ponownie": "Restart Wega",
         "Zobacz wydanie": "View release",
         "Zobacz w logach": "View in logs",
         "Włącz Touch ID": "Enable Touch ID",
