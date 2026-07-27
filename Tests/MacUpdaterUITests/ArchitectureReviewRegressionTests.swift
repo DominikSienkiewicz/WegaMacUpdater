@@ -216,6 +216,9 @@ struct ArchitectureReviewRegressionTests {
         #expect(
             runner.contains("Task.sleep"),
             "ProcessRunner must enforce its timeout with an async Task.sleep"
+        )
+    }
+
     /// ARCH-03 — the npm global-update scan runs one `npm outdated -g --json` process
     /// instead of a `npm view` fan-out (one Node per package), and caches the resolved
     /// npm location so a scan's repeated lookups don't re-glob nvm/fnm or respawn a
@@ -291,6 +294,9 @@ struct ArchitectureReviewRegressionTests {
         #expect(
             touchID.contains("HomebrewEnvironment.invalidateCache()"),
             "re-checking Touch ID must invalidate the cached brew environment"
+        )
+    }
+
     /// ARCH-08d — the 9-lane binary stream measures each lane's glyph text once, at
     /// construction (inside `BinaryStreamFrameRenderer`), not on every 30 fps Canvas
     /// frame. The per-frame draw loop must contain no text measurement.
