@@ -59,7 +59,7 @@ struct ProcessRunnerBoundsTests {
                     await meter.enter()
                     try? await Task.sleep(for: .milliseconds(2))
                     await meter.leave()
-                    limiter.release()
+                    await limiter.release()
                 }
             }
         }

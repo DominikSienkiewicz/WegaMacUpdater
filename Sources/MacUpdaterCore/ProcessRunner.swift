@@ -135,7 +135,7 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         // parks no pool thread — the gate throttles process count without starving the
         // async runtime (ARCH-02).
         await limiter.acquire()
-        defer { limiter.release() }
+        defer { Task { await limiter.release() } }
 
         // We may have queued for a permit; a caller cancelled meanwhile never launches.
         try Task.checkCancellation()
@@ -399,8 +399,11 @@ private final class TerminationSignal: @unchecked Sendable {
 /// An async counting semaphore. `acquire()` suspends on a continuation when no permit is
 /// free (parking no thread); `release()` hands the permit to the next waiter or returns
 /// it to the pool. Bounds how many external processes `ProcessRunner` runs at once.
-final class ProcessLimiter: @unchecked Sendable {
-    private let lock = NSLock()
+/// An `actor` rather than a lock-guarded class: `NSLock.lock()` is unavailable from async
+/// contexts under Swift 6 strict concurrency, because blocking a cooperative-pool thread is
+/// exactly what this type exists to avoid. Actor isolation gives the same mutual exclusion
+/// without parking a thread, and the continuation bookkeeping stays serialised for free.
+actor ProcessLimiter {
     private var available: Int
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
@@ -409,27 +412,24 @@ final class ProcessLimiter: @unchecked Sendable {
     }
 
     func acquire() async {
-        lock.lock()
         if available > 0 {
             available -= 1
-            lock.unlock()
             return
         }
+        // The closure runs synchronously, still inside the actor, before this task suspends —
+        // so a permit released in the meantime cannot be missed.
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             waiters.append(continuation)
-            lock.unlock()
         }
     }
 
+    /// Hands the permit straight to the next waiter instead of returning it to the pool, so a
+    /// queued caller cannot be overtaken by one arriving later.
     func release() {
-        lock.lock()
         if waiters.isEmpty {
             available += 1
-            lock.unlock()
         } else {
-            let next = waiters.removeFirst()
-            lock.unlock()
-            next.resume()
+            waiters.removeFirst().resume()
         }
     }
 }
