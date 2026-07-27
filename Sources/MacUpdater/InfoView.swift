@@ -494,15 +494,15 @@ extension InfoView {
                 ForEach(history.notes) { note in
                     DisclosureGroup {
                         Text(note.body.isEmpty ? tr("Brak opublikowanych notatek") : note.body)
-                            .font(.system(size: 11))
+                            .font(.wega(.subheadline))
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
                     } label: {
                         HStack(spacing: 6) {
-                            Text(note.version).font(.system(size: 12, weight: .medium))
+                            Text(note.version).font(.wega(.callout, weight: .medium))
                             if let published = note.publishedAt {
                                 Text(published, style: .date)
-                                    .font(.system(size: 11))
+                                    .font(.wega(.subheadline))
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -510,13 +510,13 @@ extension InfoView {
                 }
                 if history.omitted > 0 {
                     Text(trf("…i %@ wcześniejszych wydań", String(history.omitted)))
-                        .font(.system(size: 11))
+                        .font(.wega(.subheadline))
                         .foregroundStyle(.secondary)
                 }
             }
         case .unavailable:
             Text(tr("Nie udało się pobrać notatek wydania"))
-                .font(.system(size: 11))
+                .font(.wega(.subheadline))
                 .foregroundStyle(.secondary)
         case .history, .none:
             EmptyView()
@@ -541,9 +541,6 @@ extension InfoView {
     /// `.pkg`, DiskImageMounter for `.dmg`). On any failure, fall back to opening the asset
     /// URL in the browser so the user can still grab it.
     private func applySelfUpdate(_ action: SelfUpdateAction, version: String) async {
-        // Persistent audit moved with the operation to SelfUpdateController:
-        // WegaLog.error(.app, "Self-update odrzucony przez weryfikację podpisu")
-        // WegaLog.error(.helper, "Instalacja przez helper nie powiodła się")
         await selfUpdateController.apply(action, version: version) { state in
             onWegaState?(state)
         }

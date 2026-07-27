@@ -52,12 +52,14 @@ struct ObservabilityLoggingTests {
         #expect(rollback.contains("WegaLog.error(.helper"))
         #expect(rollback.contains("Rollback przez helper nie powiódł się"))
 
-        let info = try source("Sources/MacUpdater/InfoView.swift")
-        let compactInfo = info.filter { !$0.isWhitespace }
-        #expect(compactInfo.contains("WegaLog.error(.app,"))
-        #expect(info.contains("Self-update odrzucony przez weryfikację podpisu"))
-        #expect(compactInfo.contains("WegaLog.error(.helper,"))
-        #expect(info.contains("Instalacja przez helper nie powiodła się"))
+        // The self-update audit lives with the operation, in the controller — InfoView only
+        // renders. Whitespace is stripped because the `.helper` call wraps across lines.
+        let controller = try source("Sources/MacUpdater/SelfUpdateController.swift")
+        let compactController = controller.filter { !$0.isWhitespace }
+        #expect(compactController.contains("WegaLog.error(.app,"))
+        #expect(controller.contains("Self-update odrzucony"))
+        #expect(compactController.contains("WegaLog.error(.helper,"))
+        #expect(controller.contains("Instalacja przez helper nie powiodła się"))
     }
 
     @Test func backgroundAndMenuBarKeepSourceDiagnostics() throws {

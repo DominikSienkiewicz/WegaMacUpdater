@@ -392,6 +392,4 @@ private final class SelfUpdateInstallProbe {
         didRun = true
         self.mutationLabels = mutationLabels
     }
-
-
 }
