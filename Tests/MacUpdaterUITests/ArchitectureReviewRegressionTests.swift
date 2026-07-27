@@ -162,6 +162,37 @@ struct ArchitectureReviewRegressionTests {
         )
     }
 
+    /// ARCH-02 — `ProcessRunner` must await a subprocess with a continuation resumed from
+    /// the `terminationHandler`, never by blocking a semaphore on a pool thread; its timeout
+    /// must be an async `Task.sleep`. Guarding at the source level (not just behaviourally)
+    /// keeps a future refactor from quietly reintroducing the blocking wait.
+    @Test func processRunnerAwaitsTerminationWithoutBlockingASemaphore() throws {
+        let root = packageRoot()
+        let runner = executableSource(
+            try source("Sources/MacUpdaterCore/ProcessRunner.swift", root: root)
+        )
+
+        for blocking in ["DispatchSemaphore", "semaphore.wait", ".wait(timeout:"] {
+            #expect(
+                !runner.contains(blocking),
+                "ProcessRunner still blocks a pool thread on `\(blocking)` instead of awaiting termination"
+            )
+        }
+
+        #expect(
+            runner.contains("terminationHandler"),
+            "ProcessRunner must resume its wait from the process terminationHandler"
+        )
+        #expect(
+            runner.contains("withCheckedContinuation"),
+            "ProcessRunner must await termination on a checked continuation, not a blocking wait"
+        )
+        #expect(
+            runner.contains("Task.sleep"),
+            "ProcessRunner must enforce its timeout with an async Task.sleep"
+        )
+    }
+
     @Test func topLevelHomebrewReadRoundsUseTheSharedGate() throws {
         let root = packageRoot()
         let foreground = executableSource(
