@@ -1,24 +1,28 @@
 import Foundation
 
-/// Advisory triage of release notes (**FEAT-06 / Prop#3**): summarize and flag a
-/// likely *security* fix so power users can prioritize. **Advisory only** — it
-/// never gates or auto-applies an update (the classification can be wrong).
+/// Advisory triage of release notes (**FEAT-06 / Prop#3**): flag a likely *security*
+/// fix so power users can prioritize. **Advisory only** — it never gates or
+/// auto-applies an update (the classification can be wrong).
 ///
-/// Two tiers, by capability:
-/// - **Heuristic** (always, macOS 14+): keyword/regex scan. Cheap, deterministic.
-/// - **On-device LLM** (macOS 26+, Apple Intelligence): Apple's Foundation Models
-///   with guided generation — behind `#if canImport(FoundationModels)` so the app
-///   still builds on older SDKs, and `@available` so it only runs where supported.
+/// One tier: a deterministic keyword scan, always available and synchronous. Its
+/// callers are SwiftUI view bodies and the "security only" list filter, both of
+/// which need an answer in the same turn they render.
+///
+/// `LT-04` removed a second, never-called tier built on Apple's Foundation Models
+/// guided-generation macros. It had no call site, its natural-language summary was
+/// never displayed, and the only thing it reliably produced was a build-time
+/// dependency on the `FoundationModelsMacros` plugin — which ships with the full
+/// Xcode only. Reintroducing an on-device model tier is a product decision, not a
+/// refactor: such a tier is asynchronous and Apple-Intelligence gated, so every
+/// call site above has to grow cached state first.
+/// `ReleaseNotesTriageTests` guards the layer against drifting back.
 public struct ReleaseTriageResult: Equatable, Sendable {
     public var isLikelySecurityFix: Bool
     public var matchedSignals: [String]
-    /// Natural-language summary — only populated by the on-device model tier.
-    public var summary: String?
 
-    public init(isLikelySecurityFix: Bool, matchedSignals: [String], summary: String? = nil) {
+    public init(isLikelySecurityFix: Bool, matchedSignals: [String]) {
         self.isLikelySecurityFix = isLikelySecurityFix
         self.matchedSignals = matchedSignals
-        self.summary = summary
     }
 }
 
@@ -37,37 +41,3 @@ public enum ReleaseNotesTriage {
         return ReleaseTriageResult(isLikelySecurityFix: !hits.isEmpty, matchedSignals: hits)
     }
 }
-
-#if canImport(FoundationModels)
-import FoundationModels
-
-// NOTE: API surface per WWDC25 (Foundation Models framework). If the shipping SDK
-// renames anything, adjust here only — the heuristic tier above is unaffected.
-@available(macOS 26, *)
-extension ReleaseNotesTriage {
-    @Generable
-    public struct Triage {
-        @Guide(description: "true only if the notes describe a security fix or vulnerability patch")
-        public var isSecurityFix: Bool
-        @Guide(description: "one neutral sentence summarizing what changed")
-        public var summary: String
-    }
-
-    /// On-device, privacy-preserving triage with guided (typed) output. Falls back
-    /// to the heuristic on any model error so a result is always returned.
-    public static func onDevice(_ notes: String) async -> ReleaseTriageResult {
-        do {
-            let session = LanguageModelSession()
-            let response = try await session.respond(to: notes, generating: Triage.self)
-            let triage = response.content
-            return ReleaseTriageResult(
-                isLikelySecurityFix: triage.isSecurityFix,
-                matchedSignals: heuristic(notes).matchedSignals,
-                summary: triage.summary
-            )
-        } catch {
-            return heuristic(notes)
-        }
-    }
-}
-#endif

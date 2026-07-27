@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The version lives in exactly one place — `AppMetadata.version`
 (`Sources/WegaHelperKit/AppMetadata.swift`); the release workflow refuses to publish
 a tag whose version doesn't match it. Keep the `[Unreleased]` section ahead of each
-bump and move its entries under the new version heading when cutting a release.
+bump; `scripts/release.sh` moves its entries under the new version heading when cutting a
+release, so that step is never done by hand — see [RELEASING.md](RELEASING.md).
 
 ## [Unreleased]
 
@@ -23,12 +24,90 @@ bump and move its entries under the new version heading when cutting a release.
   Diagnostyka systemu** so a missing grant is visible before the first upgrade. Unattended
   rounds are held back for 24 h after an observed refusal rather than failing identically
   every interval, and the hold lifts by itself once a round succeeds.
+- A rebuilt window chrome on `NavigationSplitView`: a List-backed sidebar driven by one
+  `SidebarSelection` value instead of two navigation axes, the scan control hoisted into
+  the toolbar so its states can morph, the details pane moved into the native
+  `.inspector()` container, and glass on the floating layer in place of the hand-drawn
+  washes. This is the change that raises the minimum macOS to 26 — see **Changed** below.
+- `DiscordUpdateChecker`, `SignalUpdateChecker` and `ChromeUpdateChecker` — three more
+  self-updating apps whose Homebrew casks are `auto_updates` and lag the real channel, so
+  neither `brew outdated` nor the cask-version check sees the new build. Discord
+  (stable / PTB / Canary) is read from its Squirrel.Mac feed, Signal Desktop from its
+  `electron-updater` `latest-mac.yml`, and Chrome (stable / beta / dev / canary) from
+  Google's public Version History API — taking the **max** version, because that feed's
+  order is not contractually newest-first.
+- `ObsidianUpdateChecker` — Obsidian loads self-updated `obsidian-X.Y.Z.asar` packages from
+  Application Support independently of the installer in `/Applications` and of its
+  `auto_updates` cask. The checker reads the effective ASAR version, follows the `beta`
+  version when `obsidian.json` enables the Catalyst insider channel, and runs even when
+  Brew correctly reports the installer cask as current; the action opens Obsidian so its
+  own signed in-app updater applies the package.
+- Homebrew is now **optional**, behind a soft gate. Without it Wega still checks the Mac
+  App Store, Sparkle, the vendor feeds and npm, and shows an *"install Homebrew to unlock
+  more updates"* card instead of a wall. A tool that is not installed is classified as
+  **not applicable** (`SourceCheckOutcome.notInstalled`) rather than as a failed check — so
+  a machine without brew stops wearing a permanent red *"the list may be incomplete"*
+  banner over a list that is complete.
+- A dry-run plan preview above the update button (**"Show exactly what I will do"**),
+  rendering `UpdatePlanner.commands(for:)` — *the same call the upgrade itself executes*, so
+  the preview cannot drift from what runs — plus, per cask, the download host, whether
+  Homebrew will verify its checksum, whether the rollback net covers it, whether it **may**
+  ask for an admin password, and a `HEAD`-probed download size (**"size unknown"** is a
+  first-class answer shown as itself, and the measured sizes feed `DownloadGate`).
+- One unified update count (`UpdatePlanner.unifiedCount`) shared by the window header, the
+  sidebar badge, the menu-bar badge and the background notification. The header names both
+  halves of it — *"12 to install + 3 manual"* — and the **Update all (N)** button counts
+  only the installable half, so it never promises an upgrade Wega cannot perform.
+- Real scan progress and a working **Cancel**: the scan is strictly sequential
+  (brew → mas → npm → manual) and the bar reports the phase it is genuinely in. The window
+  also opens with the last scan already restored — from `ScanResultStore` on disk or from
+  the menu-bar agent's last background check, whichever is newer — instead of an empty
+  screen followed by a second scan, with `ScanFreshness` marking a day-old result as such
+  rather than letting it pass for fresh.
+- Opt-in unattended upgrades for a deliberately narrow subset of casks, decided by the pure
+  `BackgroundUpdateEligibility` predicate and granted per app from a row's ⋯ menu, with a
+  durable consent audit in the Settings window.
+- Release notes wherever the source publishes them: Sparkle `<description>` and JetBrains
+  `whatsnew` are parsed and shown inline on the row behind a *What's new* disclosure as well
+  as in the inspector. Vendor HTML is untrusted input — `ReleaseNotesText` in Core strips
+  every tag and drops `<script>` / `<style>` bodies whole, without going near WebKit.
+- The interface language now resolves from the system locale on first launch
+  (`AppLanguage.defaultLanguage(preferredLanguages:)` in Core): Polish only when macOS
+  reports it ahead of the other languages Wega ships, **English otherwise** — including for
+  an empty list. Switching the language keeps the current scan results, and a running
+  upgrade, intact.
+- The committed catalog and its detached signature are gated against each other in CI
+  (`scripts/verify-catalog.sh`), so the catalog can no longer change without its signature
+  being regenerated. A catalog's URL-typed fields are validated **while decoding** (absolute
+  https with a non-empty host), so a hostile entry is rejected at decode time rather than
+  opened or fetched later, and `CatalogIssueBuilder` turns an app Wega has no known way to
+  update into a prefilled GitHub issue straight from its Inventory row.
+- The **🛡 rollback badge** on every Homebrew cask row — a shield where snapshot → canary →
+  auto-rollback covers the upgrade, and an honest *"no protection"* slash where it cannot (a
+  cask that installs no `.app` has nothing to clone). Banners now **queue** rather than
+  overwrite, so a *publisher changed* alert survives the upgrade summary that used to
+  clobber it.
 - A hard download resource gate shared by window and unattended cask upgrades. Before
   snapshotting or downloading it vetoes metered/Low Data Mode networking, low battery,
   thermal throttling and insufficient (or unreadable) disk capacity. Required space is
   budgeted as download + unpacked payload + rollback snapshot + safety margin; the
   thresholds and estimates are persisted and configurable in the native Settings window.
   Background deferrals retain their reason in the activity log.
+- **Export diagnostics** — one action, in **Settings → System diagnostics** and in the
+  **Logs** toolbar, that saves a redacted `.zip` containing everything a bug report needs:
+  app version and build, macOS version and CPU, detected package managers and their
+  versions, Privileged Helper status and version, schedule status, the last scan's result
+  per source, free disk space, the signature state, and **both** log files — including the
+  rotated `wega.log.1`, which nothing in the app had ever read back. Filesystem paths, URL
+  query strings, credentials, e-mail addresses and account names are replaced with
+  placeholders before anything is written, and nothing is uploaded anywhere: a save panel
+  asks where the file goes, every time.
+- A durable **update → validation → rollback history**. Run verdicts used to live only in
+  the banner they produced, so a background round that rolled an app back left nothing
+  behind once the window closed. The last 40 runs are now recorded — per item, per phase,
+  including rollbacks and publisher changes — and travel in the diagnostics export. The
+  record carries no Team ID values and no verbatim tool output; it says *that* a publisher
+  changed, not who.
 - Replay and downgrade protection for the over-the-air app catalog. A signature answers
   "did the publisher write this?", never "is this the current one" — so an old catalog with
   its own old, perfectly valid signature used to be valid forever, and anyone able to choose
@@ -44,10 +123,27 @@ bump and move its entries under the new version heading when cutting a release.
   cryptographically identical to tampering; one document cannot skew against itself. Wega
   reads both formats, so publishing can switch over at any time with
   `./scripts/sign-catalog.sh --envelope`.
+- Opt-in crash reporting for Wega itself, through MetricKit. macOS hands the app its own
+  crash and hang reports shortly after the next launch, so a crash no longer has to be
+  reconstructed from a system report dug out and mailed in by hand. The switch lives in
+  Settings and is **off by default**, and the reports never leave the Mac: there is no
+  endpoint and no upload path — collecting is one decision, sending is a separate one the
+  user makes by copying a report out. Locale, Mac model, memory-region dumps and slid runtime
+  addresses are dropped at the parser; every stored string goes through the same redaction as
+  a log line, so no filesystem path or URL query survives. Turning it on collects from that
+  point forward — diagnostics recorded before consent are not swept up — and at most 20
+  reports are kept, for 90 days, owner-only next to `wega.log`.
 - Unit tests for `JetBrainsUpdateChecker` and `SparkleUpdateChecker` — the two manual
   checkers that previously had no dedicated coverage despite driving 14 JetBrains IDEs
   and every generic Sparkle app. Both are exercised through the injected `HTTPClient`
   seam with a fake transport (no network).
+- **Anuluj for a running update (REL-12).** The Updates screen's longest operation — a
+  multi-gigabyte, multi-minute upgrade — used to turn its button into a spinner with no way
+  out. It now offers a stop button that takes effect at the next package boundary: the
+  install already running is never cut in half, everything after it is skipped, and the
+  report says how many packages were updated and how many were left untouched instead of
+  announcing a finished run. An upgrade still queued behind another operation is dropped
+  outright, since it has changed nothing yet.
 - Shared `FakeHTTPTransport` test double in `TestDoubles.swift` for HTTP-level checker
   tests.
 - Diagnostic logging through `WegaLog` (OSLog, the in-app Logs tab and the rotating
@@ -88,6 +184,14 @@ bump and move its entries under the new version heading when cutting a release.
   button on purpose — a two-state checkbox cannot say "some", so it keeps the spoken count.
   Migration and npm/brew duplicate rows name the app in their action labels, so identical
   buttons are distinguishable without sight.
+- ⚠️ **BREAKING — the minimum supported macOS is now 26 (Tahoe).** The deployment target
+  moved from macOS 14 to macOS 26 (`Package.swift`) because the rebuilt window chrome is
+  built on **Liquid Glass**, which macOS 26 introduces; CI moved to the `macos-26` runner in
+  the same change, because a macOS 15 runner cannot execute the resulting binary. There is
+  no fallback rendering path and no compatibility shim: **on macOS 14 or 15 this build will
+  not install or run.** If your Mac is below macOS 26, do not take this update — it will not
+  leave you with a working app. Building from source correspondingly requires **Xcode 26**
+  (the full app, not the Command Line Tools alone).
 - Hardened the no-TTY sudo path (`SEC-05`). Production no longer writes or executes
   user-modifiable askpass/sudo shell scripts from Application Support. The packaged app
   embeds compiled `WegaAskpass` and `WegaSudoShim` executables, signs them inside-out,
@@ -107,6 +211,24 @@ bump and move its entries under the new version heading when cutting a release.
 - The catalog's conditional-GET validator (ETag) is now persisted, so a relaunch
   revalidates instead of re-downloading the whole catalog. The catalog is fetched once per
   launch, which is precisely when a process-lifetime validator is guaranteed to be empty.
+- Text sizes across the window come from a semantic scale instead of ~225 hard-coded point
+  sizes between 8 and 28 pt (`UX-03`). Every call site goes through one alias in `WegaTheme`
+  (`Font.wega(_:weight:monospaced:)`), which resolves to a macOS text style — so the
+  interface follows the system's text-size setting rather than staying frozen at whatever
+  size was typed into each view. Two fixed sizes remain on purpose and say so on the spot:
+  the letter drawn inside a package's fallback tile and the decorative binary rain, both of
+  which are drawings sized by their own container rather than running text.
+- Perpetual animations now answer **Ogranicz ruch** (Reduce Motion) through one shared
+  policy rather than one condition per view (`UX-03`). Wega's bouncing ball, her blink, her
+  idle "tricks" on empty states and the sweeping bar under a running check all stop, and
+  each of them notices the setting being switched on while it is already running instead of
+  only at first appearance. Where a moving element carried information, the information
+  stays: the check-in-progress bar drops its sweep rather than freezing at full width, which
+  would read as "finished", and the spinner and command line beside it still report the
+  state.
+- The **Settings** window (⌘,) is resizable instead of pinned to exactly 640×600
+  (`UX-03`). It still opens at that size; at larger system text sizes it can now grow rather
+  than clipping its own content.
 - Split `ScanStore` across two files along the seam it already had: `ScanStore.swift`
   keeps the published state and the small operations over it, and the scan/upgrade
   actions move to `ScanStore+Actions.swift`. The type, its API and its behaviour are
@@ -146,6 +268,15 @@ bump and move its entries under the new version heading when cutting a release.
   name, it overwrote application sources, staged the whole repository, committed
   directly to `main`, and could delete a worktree and branch. A regression guard in
   `scripts/check.sh` prevents this destructive entry point from returning.
+- The unreachable **on-device model tier** of release-notes triage (`LT-04`). Wega shipped
+  a second triage path built on Apple's Foundation Models, meant to produce a
+  natural-language summary beside the "possible security fix" badge. Nothing ever called
+  it and no screen ever displayed that summary, but it still made the `FoundationModelsMacros`
+  plugin a hard build requirement — so contributors needed the full Xcode for a feature no
+  user could reach, and the documentation described the app as doing on-device AI triage
+  that never ran. The badge is unchanged: it has always come from the deterministic keyword
+  scan, which stays and is now covered by `ReleaseNotesTriageTests`. `README.md` and
+  `CONTRIBUTING.md` now describe the badge and the toolchain requirement accurately.
 - The post-migration **"clean leftovers"** step (`SEC-01`). After a successful
   `brew install --cask` the Migration screen scanned `~/Library` for the app's bundle id
   and offered every hit as a leftover of the old installation. A migration doesn't change
@@ -174,6 +305,12 @@ bump and move its entries under the new version heading when cutting a release.
   post-install target, or the same artifact existing in both application directories, fails
   closed and retains the snapshot. Bundle-identity mismatch rollback now also restores from
   a working copy so the original snapshot survives successful automatic recovery.
+- Three Auto Layout constraint loops the rebuilt window chrome introduced — at startup with
+  the inspector, during a scan, and on scan completion — which logged continuously and could
+  take the toolbar layout down with them. A UI test reproduces the scan-toolbar case. The
+  sidebar also stays steady and inset while a scan runs, the scan button is disabled while an
+  update is installing, and the duplicate scan progress bar and duplicate rescan button the
+  chrome rewrite left behind are gone.
 - **Destructive fallbacks no longer change meaning without consent (UX-04).** A
   migration now identifies every running candidate by its resolved bundle path (or one
   unambiguous bundle ID), asks that exact app to quit normally and waits; only an app that
@@ -183,6 +320,16 @@ bump and move its entries under the new version heading when cutting a release.
   A failed `brew uninstall --zap` is no longer retried silently as `--force` without
   zap or counted as success: it stays selected and is reported as an incomplete
   uninstall.
+- **The publisher check on a migration match was computed but never asked (LT-03).** The
+  match scorer's strongest signal — does the installed app's signing Team ID agree with the
+  publisher Wega has recorded for that cask? — accepted both identities and was handed
+  neither, so whether `brew install --cask --force <token>` overwrote the right program came
+  down to how similar two names looked. The publisher history the cask watchdog already
+  keeps is now correlated with the installed bundle's Developer ID: a mismatch drops the
+  match to the lowest confidence, refuses the automatic takeover, and says which publisher
+  was found versus expected; agreement lifts a match too fuzzy to trust by name alone. The
+  ledger is consulted before the signature, so a scan opens only the bundles whose cask has
+  a recorded publisher and the confidence badge still costs the view no I/O.
 - **A publisher change legalized itself as the new trusted baseline (SEC-02).** The cask
   guard now reads and records the installed app's Team ID before `brew` can mutate it.
   `TeamIDLedger` never replaces a known-good value when classification returns `.changed`;
@@ -190,12 +337,33 @@ bump and move its entries under the new version heading when cutting a release.
   leaves the snapshot in place instead of deleting the only recovery copy. A foreground
   publisher veto also remains a critical visible result when snapshotting a different cask
   later fails; the whole batch stops before `brew` without discarding the security alert.
+- **Cancelling or timing out an operation now really stops the process (REL-12).**
+  Stopping a subprocess is a sequence rather than a single blow: SIGTERM to the whole
+  process group, a short grace period so the package manager can release its lock and clean
+  up a half-written staging directory, then SIGKILL — which still fires for a process that
+  ignores the polite signal, so cancelling can no longer hang on a stubborn CLI. Every
+  external command is also bounded twice: a wall-clock deadline *and* an inactivity timeout,
+  the limit that actually catches a `brew`/`mas`/`npm` that is alive, silent and holding the
+  UI. The streamed brew, MAS and npm commands ran with no limit at all until now.
 - **Unattended upgrades could run without a rollback snapshot (BG-01).** Background
   candidates now require a resolved `.app` and a successfully created copy-on-write
   snapshot before `brew` may start. Policy and running-process vetoes are sampled again
   after acquiring the upgrade mutex, binary-only casks stay in the user-present flow, and
   any non-zero global brew exit invalidates the whole unattended batch instead of allowing
   the unnamed tokens to be reported as upgraded.
+- **The palette assumed a dark window (`UX-03`).** The eight brand colours were fixed RGB
+  triples chosen against a dark background, so on a light desktop honey text landed at
+  roughly 1.8:1 against the window — well under the 4.5:1 WCAG asks of text, and effectively
+  unreadable. Each colour now resolves per appearance, with a separate pair for **Increase
+  contrast** in System Settings › Accessibility. Every value clears 4.5:1 twice over: once
+  against the window background and once against the 12 %-tinted badge fill it also has to
+  sit on, with the increased-contrast pair clearing 7:1; the tests grade the components
+  arithmetically, so a future edit cannot quietly reintroduce an unreadable value. Filled
+  controls whose label is Wega's dark ink keep a separate, lighter fill value, since a fill
+  that darkened with the text would have taken its own label down with it. Hairlines and
+  recessed surfaces written as `Color.white.opacity(…)` / `Color.black.opacity(…)` — visible
+  only on a dark background — now use the system's adaptive separator and page colours. The
+  mascot's own coat colours are unchanged: a drawing is not text.
 - **Background rounds silently re-failed an interrupted cask upgrade every time (BG-04).**
   A cask stranded by a cut-short previous upgrade (`Error: <token>: … already an App at …`)
   failed on every scheduled background round with no recovery — the one-time `--force` retry
@@ -330,6 +498,22 @@ bump and move its entries under the new version heading when cutting a release.
   via `SMAppService`, and Team-ID verification of self-update installers. Pinned by
   a new `PrivilegedHelperSecurityTests` case that fails CI on any regression to a
   non-Team-ID-shaped value.
+- **Self-update now pins the publisher, and an unverifiable build can no longer be a stable
+  release.** The update offered the `.dmg` first, and a `.dmg` was accepted on a Gatekeeper
+  verdict alone — but Gatekeeper answers "notarized by *some* Apple developer", never
+  "published by Wega", so any notarized image from any developer could be presented as a Wega
+  update. The `.pkg` is now preferred (it is the channel with a full Team ID pin, and with the
+  privileged helper enabled it installs headlessly), and the `.dmg` fallback is pinned too:
+  the image's own Developer ID Team ID is checked, the image is mounted **read-only** and
+  invisibly, and the single `.app` it carries is verified for Team ID, bundle ID and version
+  before anything is opened. A `.pkg` whose Team ID cannot be read is now **rejected** instead
+  of quietly falling back to the Gatekeeper verdict, and the version the release promised is
+  matched against the payload, so a genuinely signed older build cannot be substituted for the
+  update the user was shown. On the publishing side, a tag is released as **stable** only when
+  the Developer ID, the installer certificate and the notary key are all configured and the
+  artifact gate has confirmed signature, notarization, stapling and Wega's Team ID; anything
+  less is published as a **prerelease**, which the self-update ignores. The pipeline stays
+  fully runnable without an Apple Developer account — it just cannot call the result stable.
 - Hardened the GitHub PAT keychain item (`GitHubCredentialStore`): accessibility moved
   from `AfterFirstUnlock` to **`AfterFirstUnlockThisDeviceOnly`**, so the credential is
   no longer eligible for iCloud Keychain sync or device backups (it can't leak to
@@ -342,10 +526,24 @@ bump and move its entries under the new version heading when cutting a release.
 
 ## [0.1.0] — 2026-06-05
 
-First tagged release. One native SwiftUI window that updates every app on a Mac from a
-single place.
+One native SwiftUI window that updates every app on a Mac from a single place.
+
+> **This version was never tagged.** `0.1.0` is the state of the tree on the date above, not
+> a published release: the repository has no `v*` tag and no GitHub Release, so there is no
+> release page to link to and no comparison range to compute against. That is why the heading
+> below carries no link. The first tag this project cuts will be **higher than `0.1.0`** —
+> `scripts/release.sh` refuses a version that is not greater than `AppMetadata.version`, which
+> already reads `0.1.0` — and it will be cut from `[Unreleased]` alone. See
+> [RELEASING.md § 9 — Cutting the first release](RELEASING.md#9-cutting-the-first-release).
 
 ### Added
+- Log redaction now also strips credentials and e-mail addresses, not just filesystem
+  paths and URL query strings. `Authorization` headers, bearer tokens, labelled secrets
+  (`token=`, `api_key:`, `password=`), PEM private-key blocks, GitHub/Slack/AWS/JWT
+  token shapes and addresses are replaced before a line reaches the unified log — where
+  any process on the machine could otherwise read it back. The diagnostics export applies
+  the same rules **plus** the account's login and display names, which no path-based rule
+  can catch on their own.
 - **Update** — Homebrew formulae + casks (greedy), Mac App Store (`mas`), npm globals,
   and nine manual-app checkers (JetBrains, GitHub Releases, Synology, Antigravity,
   Parallels, Google Drive Omaha, ChatGPT appcast, Sparkle) deduplicated by source
@@ -371,5 +569,11 @@ single place.
 - Swift 6 strict-concurrency build, SwiftLint, universal (arm64 + x86_64) packaging,
   and SonarCloud coverage gate in CI.
 
-[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/releases/tag/v0.1.0
+<!--
+  There are no tags yet, so `compare/v0.1.0...HEAD` and `releases/tag/v0.1.0` both 404 —
+  they are omitted rather than kept as decoration. `[Unreleased]` therefore points at the
+  commit log, and `[0.1.0]` has no reference at all, so its heading renders as plain text.
+  `scripts/release.sh` rewrites the `[Unreleased]:` line and appends the new version's own
+  reference when the first tag is cut; nothing here needs to be remembered by hand.
+-->
+[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/commits/main

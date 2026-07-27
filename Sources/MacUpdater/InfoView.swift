@@ -10,6 +10,9 @@ struct InfoView: View {
     @StateObject private var operations = InfoOperationsController()
     @StateObject private var selfUpdateController = SelfUpdateController()
     @StateObject private var touchIDController = TouchIDSetupController()
+    // OBS-02 — the diagnostics card is where a user already goes to answer "what does Wega
+    // see?", so it is also where they export that answer.
+    @StateObject var diagnosticsExport = DiagnosticsExportController()
     // SEC-08: opcjonalny token GitHub (Keychain).
     @State private var githubTokenInput: String = ""
 
@@ -44,6 +47,7 @@ extension InfoView {
                 ResourceGateSettingsCard()
                 LaunchAtLoginSettingsCard()
                 BackgroundUpdateConsentSettingsCard()
+                CrashReportingSettingsCard()
                 policiesCard
                 diagnosticsCard
                 catalogCard
@@ -98,14 +102,14 @@ extension InfoView {
                 WegaCardHeader(icon: "hand.raised", title: tr("Ignorowane i przypięte")) {
                     if !policies.isEmpty {
                         Text("\(policies.sortedEntries.count)")
-                            .font(.system(size: 12, design: .monospaced))
+                            .font(.wega(.callout, monospaced: true))
                             .foregroundStyle(.tertiary)
                     }
                 }
 
                 if policies.isEmpty {
                     Text(tr("Brak reguł. Kliknij aktualizację prawym przyciskiem, aby ją zignorować lub przypiąć wersję."))
-                        .font(.system(size: 12))
+                        .font(.wega(.callout))
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -117,14 +121,14 @@ extension InfoView {
                                 .foregroundStyle(.secondary)
                                 .frame(width: 18)
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(entry.displayName).font(.system(size: 13, weight: .medium))
+                                Text(entry.displayName).font(.wega(.body, weight: .medium))
                                 Text(policyDescription(entry.policy))
-                                    .font(.system(size: 11))
+                                    .font(.wega(.subheadline))
                                     .foregroundStyle(.tertiary)
                             }
                             Spacer()
                             Button { policies.remove(key: entry.key) } label: {
-                                Image(systemName: "trash").font(.system(size: 12))
+                                Image(systemName: "trash").font(.wega(.callout))
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
@@ -170,19 +174,19 @@ extension InfoView {
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text(touchIDDescription)
-                            .font(.system(size: 12))
+                            .font(.wega(.callout))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
 
                         // UX-01: jawne ujawnienie zakresu zmiany.
                         Text(tr("Działa dla całego sudo w systemie, nie tylko dla Wegi."))
-                            .font(.system(size: 10))
+                            .font(.wega(.footnote))
                             .foregroundStyle(.tertiary)
                             .fixedSize(horizontal: false, vertical: true)
 
                         if let err = touchIDError {
                             Text(err)
-                                .font(.system(size: 11))
+                                .font(.wega(.subheadline))
                                 .foregroundStyle(.red)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -221,14 +225,14 @@ extension InfoView {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(tr("Podnosi limit GitHub z 60 do 5000 zapytań/h i włącza zwolnienie 304. Trzymany w Keychain."))
-                        .font(.system(size: 12))
+                        .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
                     HStack(spacing: 8) {
                         SecureField("ghp_…", text: $githubTokenInput)
                             .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 12, design: .monospaced))
+                            .font(.wega(.callout, monospaced: true))
                         Button(tr("Zapisz token")) {
                             operations.saveGitHubToken(githubTokenInput)
                             githubTokenInput = ""
@@ -245,7 +249,7 @@ extension InfoView {
                     }
 
                     if let status = githubTokenStatus {
-                        Text(status).font(.system(size: 11)).foregroundStyle(.tertiary)
+                        Text(status).font(.wega(.subheadline)).foregroundStyle(.tertiary)
                     }
                 }
                 .padding(14)
@@ -265,13 +269,13 @@ extension InfoView {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(tr("Pozwala instalować zweryfikowane aktualizacje i konfigurować Touch ID bez wpisywania hasła — przez podpisany helper (XPC) z białą listą operacji."))
-                        .font(.system(size: 12))
+                        .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
                     if let err = helperError {
                         Text(err)
-                            .font(.system(size: 11))
+                            .font(.wega(.subheadline))
                             .foregroundStyle(.red)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -367,16 +371,16 @@ extension InfoView {
     private var manualEnableFallback: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(tr("Bezpieczny zapis PAM wymaga podpisanego helpera. Jeśli jest niedostępny, uruchom poniższą transakcyjną komendę w Terminalu — wystarczy raz:"))
-                .font(.system(size: 11))
+                .font(.wega(.subheadline))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(TouchIDSudoConfigurator.manualEnableTerminalCommand)
-                .font(.system(size: 11, design: .monospaced))
+                .font(.wega(.subheadline, monospaced: true))
                 .textSelection(.enabled)
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 6))
+                .background(Color.wegaRecessedSurface, in: RoundedRectangle(cornerRadius: 6))
 
             HStack(spacing: 8) {
                 Button {
@@ -419,15 +423,15 @@ extension InfoView {
             switch selfUpdate {
             case .updateAvailable(let version, let assetURL, let releaseURL, let notes):
                 Image(systemName: "arrow.down.circle.fill").foregroundStyle(Color.wegaHoney)
-                Text(trf("Dostępna wersja %@", version)).font(.system(size: 12, weight: .semibold))
+                Text(trf("Dostępna wersja %@", version)).font(.wega(.callout, weight: .semibold))
                 // FEAT-06: doradczy badge, jeśli notatki wydania wyglądają na poprawkę bezpieczeństwa.
                 if ReleaseNotesTriage.heuristic(notes).isLikelySecurityFix {
                     Label(tr("możliwa poprawka bezpieczeństwa"), systemImage: "shield.lefthalf.filled")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.wega(.footnote, weight: .medium))
                         .foregroundStyle(Color.wegaDanger)
                 }
                 Spacer()
-                Link(tr("Zobacz wydanie"), destination: releaseURL).font(.system(size: 12))
+                Link(tr("Zobacz wydanie"), destination: releaseURL).font(.wega(.callout))
                 Button {
                     Task { await downloadAndOpen(assetURL) }
                 } label: {
@@ -440,12 +444,12 @@ extension InfoView {
                 .disabled(downloadingUpdate)
             case .upToDate:
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                Text(tr("Masz najnowszą wersję Wegi")).font(.system(size: 12)).foregroundStyle(.secondary)
+                Text(tr("Masz najnowszą wersję Wegi")).font(.wega(.callout)).foregroundStyle(.secondary)
                 Spacer()
                 selfUpdateCheckButton
             case .failed:
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                Text(tr("Nie udało się sprawdzić aktualizacji")).font(.system(size: 12)).foregroundStyle(.secondary)
+                Text(tr("Nie udało się sprawdzić aktualizacji")).font(.wega(.callout)).foregroundStyle(.secondary)
                 Spacer()
                 selfUpdateCheckButton
             case nil:
@@ -513,7 +517,7 @@ extension InfoView {
                     }
 
                     Text(tr("W Application Support znaleziono plik endpoints.json bez ważnego podpisu. Wega zastosowała go zgodnie z polityką, ale nie mogła zweryfikować jego pochodzenia — sprawdź, czy to Twoja zmiana."))
-                        .font(.system(size: 12))
+                        .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -532,7 +536,7 @@ extension InfoView {
                     WegaIcon(size: 56, radius: 14)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("WegaMacUpdater")
-                            .font(.system(size: 20, weight: .bold))
+                            .font(.wega(.title, weight: .bold))
                         HStack(spacing: 16) {
                             LabeledValue(label: tr("Wersja"), value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? AppMetadata.version)
                             LabeledValue(label: tr("Build"), value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—")
@@ -552,10 +556,10 @@ extension InfoView {
 
                 HStack(spacing: 8) {
                     Text(tr("Architected & Developed by"))
-                        .font(.system(size: 12))
+                        .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                     Link("Dominik Sienkiewicz", destination: AppEndpoints.shared.authorLinkedInURL)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.wega(.callout, weight: .semibold))
                     Spacer()
                 }
                 .padding(.horizontal, 14)
@@ -563,7 +567,7 @@ extension InfoView {
                 .padding(.bottom, 2)
 
                 Text("Principal AI Engineer · Full Stack Architect")
-                    .font(.system(size: 11))
+                    .font(.wega(.subheadline))
                     .foregroundStyle(.tertiary)
                     .padding(.horizontal, 14)
                     .padding(.bottom, 10)
@@ -572,9 +576,9 @@ extension InfoView {
 
                 HStack(spacing: 16) {
                     Link("GitHub", destination: AppEndpoints.shared.projectRepositoryURL)
-                        .font(.system(size: 13))
+                        .font(.wega(.body))
                     Link(tr("Zgłoś błąd"), destination: AppEndpoints.shared.projectIssuesURL)
-                        .font(.system(size: 13))
+                        .font(.wega(.body))
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -606,7 +610,7 @@ extension InfoView {
                                 NSWorkspace.shared.open(AppManagementSettings.paneURL)
                             }
                             .buttonStyle(.link)
-                            .font(.system(size: 11))
+                            .font(.wega(.subheadline))
                             .padding(.top, 4)
                         }
                     }
@@ -619,8 +623,49 @@ extension InfoView {
                     }
                     .padding(14)
                 }
+
+                Divider().opacity(0.5)
+                diagnosticsExportRow
             }
         }
+    }
+
+    /// OBS-02 — one action that packages everything a bug report needs, so filing one stops
+    /// meaning "copy the log, find the version, remember which managers you have".
+    private var diagnosticsExportRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Button {
+                    Task { await diagnosticsExport.export() }
+                } label: {
+                    Label(tr("Eksportuj diagnostykę"), systemImage: "shippingbox")
+                }
+                .disabled(diagnosticsExport.isExporting)
+
+                if diagnosticsExport.isExporting {
+                    ProgressView().controlSize(.small)
+                }
+                Spacer()
+                if diagnosticsExport.lastExportURL != nil {
+                    Button(tr("Pokaż w Finderze")) { diagnosticsExport.revealLastExport() }
+                        .buttonStyle(.link)
+                        .font(.wega(.subheadline))
+                }
+            }
+
+            Text(tr("Zapisuje paczkę zip z oboma plikami logów, wersjami, wykrytymi menedżerami, statusem harmonogramu i historią aktualizacji. Ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami; nic nie jest nigdzie wysyłane."))
+                .font(.wega(.subheadline))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let error = diagnosticsExport.lastError {
+                Text(error)
+                    .font(.wega(.subheadline))
+                    .foregroundStyle(Color.wegaDanger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14)
     }
 
     // MARK: - App catalog
@@ -635,7 +680,7 @@ extension InfoView {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(tr("Wega pobiera mapowania aplikacji (repozytoria GitHub, kody IDE JetBrains, feedy Sparkle) z sieci, więc nowe aplikacje są obsługiwane bez aktualizacji Wegi. Zmiany zastosują się po ponownym uruchomieniu."))
-                        .font(.system(size: 12))
+                        .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -697,7 +742,7 @@ extension InfoView {
 
     private func catalogStatusLabel(_ text: String, icon: String, color: Color) -> some View {
         Label(text, systemImage: icon)
-            .font(.system(size: 11))
+            .font(.wega(.subheadline))
             .foregroundStyle(color)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -783,12 +828,12 @@ private struct LabeledValue: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(label)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.wega(.footnote, weight: .semibold))
                 .foregroundStyle(.tertiary)
                 .textCase(.uppercase)
                 .tracking(0.5)
             Text(value)
-                .font(.system(size: 12, design: .monospaced))
+                .font(.wega(.callout, monospaced: true))
         }
     }
 }
@@ -819,10 +864,10 @@ private struct DiagRow: View {
     var body: some View {
         HStack(spacing: 8) {
             Circle().fill(statusColor).frame(width: 8, height: 8)
-            Text(label).font(.system(size: 12))
+            Text(label).font(.wega(.callout))
             Spacer()
             Text(statusText)
-                .font(.system(size: 11, design: .monospaced))
+                .font(.wega(.subheadline, monospaced: true))
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 5)
@@ -836,13 +881,13 @@ private struct LicenseRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(name).font(.system(size: 12, weight: .medium))
+            Text(name).font(.wega(.callout, weight: .medium))
             Text(license)
-                .font(.system(size: 11))
+                .font(.wega(.subheadline))
                 .foregroundStyle(.secondary)
             Spacer()
             Link("↗", destination: url)
-                .font(.system(size: 12))
+                .font(.wega(.callout))
         }
         .padding(.vertical, 5)
     }

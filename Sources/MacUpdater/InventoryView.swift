@@ -86,7 +86,7 @@ struct InventoryView: View {
                 Spacer()
 
                 Text(trf("%@ z %@", "\(rows.count)", "\(apps.count)"))
-                    .font(.system(size: 11))
+                    .font(.wega(.subheadline))
                     .foregroundStyle(.tertiary)
 
                 // UX-11f — the whole inventory (not the filtered view) exported as a
@@ -260,10 +260,10 @@ private struct NpmGlobalsList: View {
                 HStack(spacing: 12) {
                     Image(systemName: "terminal").foregroundStyle(.secondary).frame(width: 22)
                     Text(pkg.name)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.wega(.callout, weight: .medium))
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Text(pkg.installedVersion)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(.wega(.subheadline, monospaced: true))
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 14)
@@ -305,15 +305,15 @@ private struct UpdateDateCell: View {
         if let date {
             VStack(alignment: .leading, spacing: 1) {
                 Text(Self.dateFmt.string(from: date))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.wega(.subheadline, monospaced: true))
                     .foregroundStyle(color(for: date))
                 Text(label(for: date))
-                    .font(.system(size: 10))
+                    .font(.wega(.footnote))
                     .foregroundStyle(color(for: date).opacity(0.7))
             }
         } else {
             Text("—")
-                .font(.system(size: 11, design: .monospaced))
+                .font(.wega(.subheadline, monospaced: true))
                 .foregroundStyle(.quaternary)
         }
     }
@@ -333,15 +333,15 @@ private struct InventoryStatCard: View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.system(size: 10.5, weight: .semibold))
+                    .font(.wega(.footnote, weight: .semibold))
                     .foregroundStyle(.tertiary)
                     .textCase(.uppercase)
                     .tracking(0.8)
                 Text("\(value)")
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.wega(.largeTitle, weight: .bold))
                     .foregroundStyle(active ? color : .primary)
                 Text(sublabel)
-                    .font(.system(size: 10.5))
+                    .font(.wega(.footnote))
                     .foregroundStyle(.tertiary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -349,7 +349,7 @@ private struct InventoryStatCard: View {
             .background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(active ? color.opacity(0.06) : Color(NSColor.controlBackgroundColor))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(active ? color.opacity(0.30) : Color.white.opacity(0.06), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(active ? color.opacity(0.30) : Color.wegaHairline, lineWidth: 1))
             )
             .overlay(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 2)
@@ -373,7 +373,7 @@ private struct FilterPills: View {
                 let active = selection == opt
                 Button { selection = opt } label: {
                     Text(tr(opt.rawValue))
-                        .font(.system(size: 11.5, weight: active ? .semibold : .regular))
+                        .font(.wega(.subheadline, weight: active ? .semibold : .regular))
                         .foregroundStyle(active ? .primary : .secondary)
                         .padding(.horizontal, 9)
                         .frame(height: 22)
@@ -385,7 +385,7 @@ private struct FilterPills: View {
         }
         .padding(2)
         .background(Color(NSColor.controlBackgroundColor).opacity(0.5), in: RoundedRectangle(cornerRadius: 7))
-        .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.white.opacity(0.06), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.wegaHairline, lineWidth: 1))
     }
 }
 
@@ -402,13 +402,13 @@ private struct SortHeaderCell: View {
         } label: {
             HStack(spacing: 4) {
                 Text(label)
-                    .font(.system(size: 10.5, weight: .semibold))
+                    .font(.wega(.footnote, weight: .semibold))
                     .foregroundStyle(sortKey == key ? Color.wegaHoney : Color.secondary)
                     .textCase(.uppercase)
                     .tracking(0.6)
                 if sortKey == key {
                     Image(systemName: sortAsc ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 8))
+                        .font(.wega(.caption2))
                         .foregroundStyle(Color.wegaHoney)
                 }
             }
@@ -434,7 +434,7 @@ private struct InventoryRow: View {
     /// Row background: hover wins, otherwise alternating rows get a faint tint.
     private var rowBackground: Color {
         if hovered { return Color.wegaHoney.opacity(0.04) }
-        return isAlt ? Color.white.opacity(0.012) : Color.clear
+        return isAlt ? Color.primary.opacity(0.03) : Color.clear
     }
 
     var body: some View {
@@ -444,11 +444,11 @@ private struct InventoryRow: View {
                 AppIcon(path: app.path, size: 22)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(app.name)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.wega(.callout, weight: .medium))
                         .lineLimit(1)
                     if showsLocation {
                         Text(app.locationLabel)
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(.wega(.footnote, monospaced: true))
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
                             .truncationMode(.middle)
@@ -459,14 +459,14 @@ private struct InventoryRow: View {
 
             // Version
             Text(app.version ?? "—")
-                .font(.system(size: 11, design: .monospaced))
+                .font(.wega(.subheadline, monospaced: true))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             // Bundle ID
             Text(app.bundleIdentifier ?? "—")
-                .font(.system(size: 11, design: .monospaced))
+                .font(.wega(.subheadline, monospaced: true))
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -480,7 +480,7 @@ private struct InventoryRow: View {
                     WegaBadge(label: "Brew", variant: .brew)
                     if let token = app.caskToken {
                         Text(token)
-                            .font(.system(size: 10.5, design: .monospaced))
+                            .font(.wega(.footnote, monospaced: true))
                             .foregroundStyle(.quaternary)
                             .lineLimit(1)
                     }
@@ -488,7 +488,7 @@ private struct InventoryRow: View {
                     WegaBadge(label: "App Store", variant: .appStore)
                     if let id = app.masAppID {
                         Text(id)
-                            .font(.system(size: 10.5, design: .monospaced))
+                            .font(.wega(.footnote, monospaced: true))
                             .foregroundStyle(.quaternary)
                             .lineLimit(1)
                     }
@@ -524,7 +524,7 @@ private struct ReportAppButton: View {
     var body: some View {
         Button(action: report) {
             Image(systemName: "plus.bubble")
-                .font(.system(size: 11))
+                .font(.wega(.subheadline))
                 .foregroundStyle(Color.wegaHoney)
         }
         .buttonStyle(.plain)

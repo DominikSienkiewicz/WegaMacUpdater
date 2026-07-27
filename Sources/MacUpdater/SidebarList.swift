@@ -119,10 +119,17 @@ private struct SidebarRowIcon: View {
         }
     }
 
-    /// Continuous spin while scanning; ease back to rest otherwise.
+    /// Continuous spin while scanning; ease back to rest otherwise. UX-03 routes the endless
+    /// half through `ContinuousMotion`, so every never-ending animation in the app answers
+    /// "Ogranicz ruch" through one policy rather than one condition per view.
     private func spin(for activity: UpdateActivity) {
-        if activity == .scanning && !reduceMotion {
-            withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) { rotation = 360 }
+        let spinAnimation = ContinuousMotion.forever(
+            .linear(duration: 1),
+            autoreverses: false,
+            reduceMotion: reduceMotion
+        )
+        if activity == .scanning && !reduceMotion, let spinAnimation {
+            withAnimation(spinAnimation) { rotation = 360 }
         } else {
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) { rotation = 0 }
         }

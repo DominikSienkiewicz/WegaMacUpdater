@@ -69,7 +69,7 @@ struct ScanDirectoriesSettingsCard: View {
 
                 VStack(alignment: .leading, spacing: 12) {
                     Text(tr("Wega skanuje /Applications, ~/Applications i ich podfoldery. Dodaj własne katalogi (także na innych wolumenach), pomiń te, których nie chcesz przeszukiwać, i ustaw głębokość zagłębiania."))
-                        .font(.system(size: 12))
+                        .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -89,14 +89,14 @@ struct ScanDirectoriesSettingsCard: View {
     private var depthRow: some View {
         HStack {
             VStack(alignment: .leading, spacing: 1) {
-                Text(tr("Głębokość zagłębiania")).font(.system(size: 12))
+                Text(tr("Głębokość zagłębiania")).font(.wega(.callout))
                 Text(tr("0 = tylko sam katalog. 1 = katalog i jego bezpośrednie podfoldery."))
-                    .font(.system(size: 10))
+                    .font(.wega(.footnote))
                     .foregroundStyle(.tertiary)
             }
             Spacer()
             Text("\(model.recursionDepth)")
-                .font(.system(size: 12, design: .monospaced))
+                .font(.wega(.callout, monospaced: true))
                 .foregroundStyle(.secondary)
             Stepper("", value: depthBinding, in: 0...ScanConfiguration.maximumRecursionDepth)
                 .labelsHidden()
@@ -108,7 +108,7 @@ struct ScanDirectoriesSettingsCard: View {
     private var directoriesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(tr("Katalogi użytkownika")).font(.system(size: 12, weight: .medium))
+                Text(tr("Katalogi użytkownika")).font(.wega(.callout, weight: .medium))
                 Spacer()
                 Button {
                     if let url = chooseDirectory(prompt: tr("Dodaj do skanowania")) {
@@ -120,7 +120,7 @@ struct ScanDirectoriesSettingsCard: View {
 
             if model.userDirectories.isEmpty {
                 Text(tr("Brak własnych katalogów."))
-                    .font(.system(size: 11))
+                    .font(.wega(.subheadline))
                     .foregroundStyle(.tertiary)
             } else {
                 ForEach(model.userDirectories, id: \.self) { url in
@@ -135,7 +135,7 @@ struct ScanDirectoriesSettingsCard: View {
     private var exclusionsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(tr("Wykluczenia")).font(.system(size: 12, weight: .medium))
+                Text(tr("Wykluczenia")).font(.wega(.callout, weight: .medium))
                 Spacer()
                 Button {
                     if let url = chooseDirectory(prompt: tr("Wyklucz ze skanowania")) {
@@ -147,7 +147,7 @@ struct ScanDirectoriesSettingsCard: View {
 
             if model.exclusions.isEmpty {
                 Text(tr("Brak wykluczeń."))
-                    .font(.system(size: 11))
+                    .font(.wega(.subheadline))
                     .foregroundStyle(.tertiary)
             } else {
                 ForEach(model.exclusions, id: \.self) { url in
@@ -163,12 +163,12 @@ struct ScanDirectoriesSettingsCard: View {
         HStack(spacing: 10) {
             Image(systemName: icon).foregroundStyle(.secondary).frame(width: 16)
             Text((url.path as NSString).abbreviatingWithTildeInPath)
-                .font(.system(size: 11, design: .monospaced))
+                .font(.wega(.subheadline, monospaced: true))
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer()
             Button(action: remove) {
-                Image(systemName: "trash").font(.system(size: 11))
+                Image(systemName: "trash").font(.wega(.subheadline))
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)

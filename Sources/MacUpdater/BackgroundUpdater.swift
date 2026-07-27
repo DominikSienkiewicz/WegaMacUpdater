@@ -290,7 +290,14 @@ final class BackgroundUpdater {
     /// round whose *only* result was a changed publisher or a failed rollback used to post
     /// no notification at all.
     private func notify(summary: UpdateRunSummary) {
-        guard Bundle.main.bundleIdentifier != nil, !summary.isEmpty else { return }
+        guard !summary.isEmpty else { return }
+        // OBS-02 — an unattended round happens with nobody watching, so its verdicts are
+        // recorded before anything else: the notification may be suppressed, dismissed or
+        // never authorized, and the journal is then the only account of what ran.
+        UpdateRunJournal().record(
+            UpdateJournalEntry(summary: summary, trigger: .background, finishedAt: Date())
+        )
+        guard Bundle.main.bundleIdentifier != nil else { return }
         let title = summary.critical.isEmpty
             ? tr("Aktualizacje w tle")
             : tr("Aktualizacje w tle — wymagają uwagi")

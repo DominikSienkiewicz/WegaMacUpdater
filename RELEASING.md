@@ -117,18 +117,35 @@ The tag triggers [`release.yml`](.github/workflows/release.yml):
 3. **Build** — `./scripts/build-pkg.sh` produces a universal `.pkg` and `.dmg`.
 4. **Notarize & staple** — only when both a Developer ID and a notary key are configured.
 5. **Artifact gate** — `./scripts/verify-bundle.sh` checks bundle layout, helper signature,
-   notarization, stapling and required resources. A broken bundle blocks the publish.
+   notarization, stapling, the publisher **Team ID** and required resources. A broken bundle
+   blocks the publish. For a stable release it runs with `REQUIRE_SIGNED=1`, which turns every
+   "skipped because unsigned" note into a failure.
 6. **Publish** — `gh release create` uploads both artifacts and uses your changelog section
-   as the release description.
+   as the release description. A build that is not fully signed + notarized + stapled +
+   Team-ID-pinned is published as a **prerelease** — see below.
+
+### Stable release vs prerelease (SEC-04)
+
+A tag is published as a **stable release** only when all three of `DEVELOPER_ID_CERT_P12`,
+`DEVELOPER_ID_INSTALLER_IDENTITY` and `AC_API_KEY_P8` are configured. Anything less is
+published with `--prerelease` and a warning banner in the notes.
+
+That is a security boundary, not a label: Gatekeeper only ever answers *"notarized by some
+Apple developer"*, so an artifact Wega cannot pin to its own Team ID must not be presented as
+an update. `WegaSelfUpdateChecker` skips draft and prerelease tags, so an unsigned build is
+never offered to anyone as a self-update — while the pipeline itself stays fully runnable
+without an Apple Developer account.
 
 Watch it under the repository's **Actions** tab. If the run fails, nothing is published; fix
 the cause, delete the tag locally and on the remote, and cut the release again.
 
 ## 7. Signing and notarization secrets
 
-All eight are **optional**. Until they exist the pipeline still builds and publishes
-**unsigned** (ad-hoc) artifacts, so the whole thing is verifiable end to end without an Apple
-Developer account. Each secret is set under **Settings → Secrets and variables → Actions**.
+All eight are **optional for running the pipeline** — until they exist it still builds and
+uploads **unsigned** (ad-hoc) artifacts, so the whole thing is verifiable end to end without
+an Apple Developer account. They are **not optional for a stable release**: without them the
+tag is published as a prerelease (see above). Each secret is set under **Settings → Secrets
+and variables → Actions**.
 
 Signing needs **two different certificates**. `pkgbuild` refuses an "Application" cert — a
 `.pkg` can only be signed by a "Developer ID Installer" cert.
@@ -154,12 +171,14 @@ notarytool API key:            true
 
 ### Partial configurations
 
-The pipeline degrades on purpose rather than failing:
+The pipeline degrades on purpose rather than failing — but every degraded state produces a
+**prerelease**, never a stable release:
 
 - **No `DEVELOPER_ID_IDENTITY`** — everything is ad-hoc signed. Gatekeeper will refuse the
   app on other Macs. The release notes get an explicit unsigned warning appended.
 - **App cert but no installer cert** — the `.dmg` is signed, the `.pkg` is not, and the
   `.pkg` is excluded from notarization (the notary service rejects unsigned packages).
+  A release whose preferred self-update channel is unsigned is not a stable release.
 - **Notary key but no Developer ID** — notarization is skipped entirely. Every submission
   would come back `Invalid`, because ad-hoc signatures cannot be notarized.
 
@@ -223,6 +242,19 @@ release is cut from `[Unreleased]` alone; commit-derived entries start appearing
 second release onward, measured against the tag this one creates.
 
 The baseline is always printed, so it is never a guess.
+
+Two consequences worth knowing before you run it:
+
+- **The first tag will be higher than `0.1.0`.** An explicit version has to be *greater* than
+  `AppMetadata.version`, which already reads `0.1.0`, so `./scripts/release.sh 0.1.0` is
+  refused. The existing `## [0.1.0] — 2026-06-05` section stays in `CHANGELOG.md` as the
+  untagged history it is, and the release script never rewrites it.
+- **`[0.1.0]` carries no link, on purpose** (QA-06). There is no release page and no
+  comparison range for a version that was never tagged, so the link reference was removed
+  rather than left pointing at a 404. For the same reason `previous_version()` only accepts a
+  version that has a real tag — otherwise the first release would generate
+  `compare/v0.1.0...vX.Y.Z`, a dead link, and `release.sh` copies every older reference
+  forward verbatim, so nothing would ever repair it.
 
 ## 10. Republishing the app catalog
 

@@ -265,7 +265,7 @@ public final class NpmGlobalService: @unchecked Sendable {
                 // SEC-10: `--` fences the package name off from npm option parsing.
                 arguments: ["install", "-g", "--", "\(name)@latest"],
                 environment: environment(for: npmURL),
-                timeout: nil
+                timeouts: .download
             )
         )
     }
@@ -279,7 +279,7 @@ public final class NpmGlobalService: @unchecked Sendable {
                 executableURL: npmURL,
                 arguments: Self.uninstallArguments(for: name),
                 environment: environment(for: npmURL),
-                timeout: nil
+                timeouts: .download
             )
         )
     }
@@ -298,7 +298,8 @@ public final class NpmGlobalService: @unchecked Sendable {
                 executableURL: npmURL,
                 arguments: arguments,
                 environment: environment(for: npmURL),
-                timeout: 30
+                timeout: 30,
+                idleTimeout: 30
             )
         )
     }

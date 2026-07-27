@@ -74,7 +74,7 @@ struct BackgroundUpdateConsentSettingsCard: View {
     WegaCardHeader(icon: "clock.arrow.2.circlepath", title: tr("Zgody na aktualizacje w tle")) {
       if !store.consents.isEmpty {
         Text("\(store.consents.count)")
-          .font(.system(size: 12, design: .monospaced))
+          .font(.wega(.callout, monospaced: true))
           .foregroundStyle(.tertiary)
       }
     }
@@ -84,7 +84,7 @@ struct BackgroundUpdateConsentSettingsCard: View {
     Text(
       tr("Brak zgód. Możesz je nadać z menu ⋯ przy chronionym casku na liście aktualizacji.")
     )
-    .font(.system(size: 12))
+    .font(.wega(.callout))
     .foregroundStyle(.tertiary)
     .fixedSize(horizontal: false, vertical: true)
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -100,17 +100,17 @@ struct BackgroundUpdateConsentSettingsCard: View {
       VStack(alignment: .leading, spacing: 3) {
         HStack(spacing: 8) {
           Text(consent.token)
-            .font(.system(size: 13, weight: .medium, design: .monospaced))
+            .font(.wega(.body, weight: .medium, monospaced: true))
           WegaBadge(
             label: qualificationLabel(qualifications[consent.token]),
             variant: qualificationVariant(qualifications[consent.token])
           )
         }
         Text(trf("Zgoda udzielona: %@", formatted(consent.grantedAt)))
-          .font(.system(size: 11))
+          .font(.wega(.subheadline))
           .foregroundStyle(.tertiary)
         Text(qualificationMessage(qualifications[consent.token]))
-          .font(.system(size: 11))
+          .font(.wega(.subheadline))
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -135,7 +135,7 @@ struct BackgroundUpdateConsentSettingsCard: View {
         "Status każdego pakietu uwzględnia bieżącą aktualizację, reguły i uruchomioną aplikację. Snapshot, zasoby i bezpieczeństwo wydawcy są sprawdzane dopiero bezpośrednio przed aktualizacją."
       )
     )
-    .font(.system(size: 10))
+    .font(.wega(.footnote))
     .foregroundStyle(.tertiary)
     .fixedSize(horizontal: false, vertical: true)
     .padding(.horizontal, 14)

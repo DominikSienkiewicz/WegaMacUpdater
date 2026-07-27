@@ -13,7 +13,13 @@ set -euo pipefail
 # jako BRAK Developer ID. Podpisany build przechodził bramkę na zielono z
 # pominiętą notaryzacją: fail-open dokładnie w kroku, który ma być fail-closed.
 #
-# `codesign` jest tu podmieniony na stub w PATH, więc test nie potrzebuje ani
+# SEC-04 dokłada dwie rzeczy, które ten guard też pilnuje:
+#   * bramka przypina Team ID wydawcy — notaryzacja mówi „podpisał JAKIŚ deweloper
+#     Apple", nigdy „podpisała Wega", więc obcy notaryzowany artefakt musi odpaść;
+#   * REQUIRE_SIGNED=1 (tryb wydania stabilnego) zamienia pominięcia w błędy —
+#     build ad-hoc nie może przejść bramki wydania na zielono.
+#
+# `codesign`/`pkgutil` są tu podmienione na stuby w PATH, więc test nie potrzebuje ani
 # certyfikatu Developer ID, ani sieci — działa tak samo lokalnie i w CI.
 # ---------------------------------------------------------------------------
 
@@ -74,12 +80,23 @@ CodeDirectory v=20500 size=19395 flags=0x10000(runtime)
 Authority=Developer ID Application: Wega Test (TEAMIDTEST)
 HEAD
 sleep 0.2
-cat >&2 <<'TAIL'
+cat >&2 <<TAIL
 Authority=Developer ID Certification Authority
 Authority=Apple Root CA
-TeamIdentifier=TEAMIDTEST
+TeamIdentifier=${WEGA_TEST_TEAM_ID:-TEAMIDTEST}
 Sealed Resources version=2 rules=13 files=9
 TAIL
+STUB
+
+# `.pkg` nie jest widoczny dla codesign — Team ID czytamy z pkgutil.
+cat > "$STUB_BIN/pkgutil" <<'STUB'
+#!/usr/bin/env bash
+cat <<OUT
+Package "WegaMacUpdater.pkg":
+   Status: signed by a certificate trusted by macOS
+   Certificate Chain:
+    1. Developer ID Installer: Wega Test (${WEGA_TEST_TEAM_ID:-TEAMIDTEST})
+OUT
 STUB
 
 cat > "$STUB_BIN/lipo" <<'STUB'
@@ -87,13 +104,17 @@ cat > "$STUB_BIN/lipo" <<'STUB'
 echo "x86_64 arm64"
 STUB
 
-# Brak biletu notaryzacji: `stapler validate` i `spctl` odrzucają artefakt.
+# Domyślnie brak biletu notaryzacji: `stapler validate` i `spctl` odrzucają artefakt.
+# `WEGA_TEST_NOTARIZED=1` udaje artefakt notaryzowany i ostemplowany — potrzebne, żeby
+# przetestować krok 6 (Team ID) niezależnie od kroku 5.
 cat > "$STUB_BIN/xcrun" <<'STUB'
 #!/usr/bin/env bash
+[[ "${WEGA_TEST_NOTARIZED:-0}" == "1" ]] && exit 0
 exit 1
 STUB
 cat > "$STUB_BIN/spctl" <<'STUB'
 #!/usr/bin/env bash
+[[ "${WEGA_TEST_NOTARIZED:-0}" == "1" ]] && exit 0
 exit 1
 STUB
 
@@ -147,6 +168,65 @@ if grep -q "Pominięto: notaryzacja i stapling" <<< "$adhoc_out"; then
     pass "notaryzacja raportowana jako pominięta"
 else
     fail "brak informacji o pominiętej notaryzacji dla builda ad-hoc"
+fi
+
+# --- 3. SEC-04: Team ID zgodny ⇒ bramka przechodzi --------------------------
+echo "→ notaryzowany artefakt z oczekiwanym Team ID ⇒ bramka przechodzi"
+set +e
+match_out="$(WEGA_TEST_SIGN_MODE=developer-id WEGA_TEST_NOTARIZED=1 \
+             WEGA_TEST_TEAM_ID=TEAMIDTEST EXPECTED_TEAM_ID=TEAMIDTEST \
+             bash "$REPO_ROOT/scripts/verify-bundle.sh" "$APP" "$PKG" 2>&1)"
+match_rc=$?
+set -e
+
+if [[ "$match_rc" -eq 0 ]]; then
+    pass "zgodny Team ID przechodzi (exit 0)"
+else
+    fail "zgodny Team ID odrzucony (exit $match_rc): $match_out"
+fi
+if grep -q "Team ID TEAMIDTEST" <<< "$match_out"; then
+    pass "Team ID został faktycznie odczytany i porównany"
+else
+    fail "bramka nie raportuje odczytanego Team ID — krok 6 nie działa"
+fi
+
+# --- 4. SEC-04: obcy Team ID ⇒ bramka odrzuca (sedno wpisu) -----------------
+echo "→ obcy (ale notaryzowany) artefakt ⇒ bramka odrzuca"
+set +e
+foreign_out="$(WEGA_TEST_SIGN_MODE=developer-id WEGA_TEST_NOTARIZED=1 \
+               WEGA_TEST_TEAM_ID=FOREIGN123 EXPECTED_TEAM_ID=TEAMIDTEST \
+               bash "$REPO_ROOT/scripts/verify-bundle.sh" "$APP" "$PKG" 2>&1)"
+foreign_rc=$?
+set -e
+
+if [[ "$foreign_rc" -ne 0 ]]; then
+    pass "obcy Team ID odrzucony (exit $foreign_rc)"
+else
+    fail "bramka przepuściła notaryzowany artefakt OBCEGO wydawcy — dokładnie luka SEC-04"
+fi
+if grep -q "Team ID FOREIGN123 ≠ TEAMIDTEST" <<< "$foreign_out"; then
+    pass "powód odrzucenia nazwany wprost"
+else
+    fail "brak komunikatu o niezgodnym Team ID"
+fi
+
+# --- 5. SEC-04: REQUIRE_SIGNED=1 ⇒ build ad-hoc nie jest wydaniem stabilnym -
+echo "→ REQUIRE_SIGNED=1 + build ad-hoc ⇒ bramka odrzuca"
+set +e
+require_out="$(WEGA_TEST_SIGN_MODE=adhoc REQUIRE_SIGNED=1 \
+               bash "$REPO_ROOT/scripts/verify-bundle.sh" "$APP" "$PKG" 2>&1)"
+require_rc=$?
+set -e
+
+if [[ "$require_rc" -ne 0 ]]; then
+    pass "tryb wydania stabilnego odrzuca build bez Developer ID (exit $require_rc)"
+else
+    fail "REQUIRE_SIGNED=1 przepuścił build ad-hoc — wydanie stabilne pozostaje fail-open"
+fi
+if grep -q "Tryb wydania stabilnego" <<< "$require_out"; then
+    pass "tryb wydania stabilnego jest sygnalizowany w logu"
+else
+    fail "brak informacji o trybie wydania stabilnego"
 fi
 
 echo

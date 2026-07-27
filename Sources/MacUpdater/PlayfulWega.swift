@@ -22,6 +22,8 @@ struct PlayfulWega: View {
     @State private var scaleX:   CGFloat = 1
     @State private var scaleY:   CGFloat = 1
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     init(restPose: WegaPose = .idle, size: CGFloat = 170) {
         self.restPose = restPose
         self.size = size
@@ -36,7 +38,25 @@ struct PlayfulWega: View {
             .rotationEffect(.degrees(rotation), anchor: .bottom)
             .scaleEffect(x: scaleX, y: scaleY, anchor: .bottom)
             .offset(x: offsetX, y: offsetY)
-            .task { await playLoop() }
+            // UX-03 — the trick schedule never ends, so "Ogranicz ruch" cancels it rather
+            // than slowing it down: Wega holds her resting pose. Keyed on the setting so
+            // turning it on interrupts a trick already under way.
+            .task(id: reduceMotion) {
+                guard ContinuousMotion.loopsIdleAnimations(reduceMotion: reduceMotion) else {
+                    rest()
+                    return
+                }
+                await playLoop()
+            }
+    }
+
+    /// The resting frame, applied without animation — what Reduce Motion gets instead of
+    /// the trick loop.
+    private func rest() {
+        withAnimation(nil) {
+            pose = restPose
+            rotation = 0; offsetX = 0; offsetY = 0; scaleX = 1; scaleY = 1
+        }
     }
 
     // MARK: - Loop

@@ -12,6 +12,8 @@ struct WegaHead: View {
     @State private var tilt:     Double =  0
     @State private var blinking: Bool   = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         Canvas { ctx, cs in
             let s = cs.width / 100
@@ -24,7 +26,13 @@ struct WegaHead: View {
         .onChange(of: pose) { _, p in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { applyPose(p) }
         }
-        .task {
+        // UX-03 — the blink is an endless idle loop, so "Ogranicz ruch" stops it outright and
+        // leaves Wega's eyes open. Keyed on the setting so flipping it takes effect at once.
+        .task(id: reduceMotion) {
+            guard ContinuousMotion.loopsIdleAnimations(reduceMotion: reduceMotion) else {
+                blinking = false
+                return
+            }
             while !Task.isCancelled {
                 let wait = Double.random(in: 4...12)
                 try? await Task.sleep(for: .seconds(wait))
@@ -316,7 +324,7 @@ struct WegaSpeechBubble: View {
         HStack(spacing: 6) {
             PawPrint(size: 10, color: Color.wegaHoney)
             Text(text)
-                .font(.system(size: 11.5).italic())
+                .font(.wega(.subheadline).italic())
                 .foregroundStyle(.primary)
                 .lineLimit(1)
         }
@@ -354,7 +362,7 @@ struct HelperChip: View {
         HStack(spacing: 5) {
             Circle().fill(color).frame(width: 5, height: 5)
             Text(label)
-                .font(.system(size: 10.5))
+                .font(.wega(.footnote))
                 .foregroundStyle(.tertiary)
         }
         .contentShape(Rectangle())
@@ -397,6 +405,7 @@ struct WegaFull: View {
     var size: CGFloat   = 180
     var showBall: Bool  = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var ballBounce = false
 
     var body: some View {
@@ -440,12 +449,20 @@ struct WegaFull: View {
             }
         }
         .frame(width: size, height: size * 200 / 220)
-        .onAppear {
-            guard showBall else { return }
-            withAnimation(.easeInOut(duration: 0.65).repeatForever(autoreverses: true)) {
-                ballBounce = true
-            }
-        }
+        .onAppear { updateBallBounce() }
+        .onChange(of: reduceMotion) { _, _ in updateBallBounce() }
+    }
+
+    /// UX-03 — the ball rests on the ground instead of bouncing when the system asks for
+    /// reduced motion, and drops back to the ground if the setting is turned on mid-bounce.
+    private func updateBallBounce() {
+        guard showBall else { return }
+        let animation = ContinuousMotion.forever(
+            .easeInOut(duration: 0.65),
+            autoreverses: true,
+            reduceMotion: reduceMotion
+        )
+        withAnimation(animation) { ballBounce = animation != nil }
     }
 
     static func drawBody(ctx: GraphicsContext, s: CGFloat, pose _: WegaPose) {
