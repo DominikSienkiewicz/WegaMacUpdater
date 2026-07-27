@@ -173,28 +173,47 @@ final class UpdatePlannerTests: XCTestCase {
     /// order: formulae, then casks, then npm (one per package), then mas.
     func testCommandsForMixedPlanMatchesExecutionOrder() {
         let plan = UpdatePlan(formulaNames: ["wget", "jq"], caskNames: ["firefox"],
-                              npmNames: ["@openai/codex", "typescript"], includesMas: true, count: 6)
+                              npmNames: ["@openai/codex", "typescript"], count: 6,
+                              masAppStoreIDs: ["497799835"])
         XCTAssertEqual(UpdatePlanner.commands(for: plan), [
             UpdateCommand(executable: "brew", arguments: ["upgrade", "--", "wget", "jq"]),
             UpdateCommand(executable: "brew", arguments: ["upgrade", "--cask", "--", "firefox"]),
             UpdateCommand(executable: "npm", arguments: ["install", "-g", "--", "@openai/codex@latest"]),
             UpdateCommand(executable: "npm", arguments: ["install", "-g", "--", "typescript@latest"]),
-            UpdateCommand(executable: "mas", arguments: ["upgrade"])
+            UpdateCommand(executable: "mas", arguments: ["upgrade", "497799835"])
         ])
     }
 
     func testCommandsForEmptyPlanProducesNoCommands() {
-        let plan = UpdatePlan(formulaNames: [], caskNames: [], npmNames: [], includesMas: false, count: 0)
+        let plan = UpdatePlan(formulaNames: [], caskNames: [], npmNames: [], count: 0)
         XCTAssertTrue(UpdatePlanner.commands(for: plan).isEmpty)
     }
 
     func testCommandsForMasOnly() {
-        let plan = UpdatePlan(formulaNames: [], caskNames: [], npmNames: [], includesMas: true, count: 1)
-        XCTAssertEqual(UpdatePlanner.commands(for: plan), [UpdateCommand(executable: "mas", arguments: ["upgrade"])])
+        let plan = UpdatePlan(formulaNames: [], caskNames: [], npmNames: [], count: 1,
+                              masAppStoreIDs: ["497799835"])
+        XCTAssertEqual(UpdatePlanner.commands(for: plan),
+                       [UpdateCommand(executable: "mas", arguments: ["upgrade", "497799835"])])
+    }
+
+    /// REL-01 — the guarantee this card exists for. A bare `mas upgrade` upgrades every
+    /// outdated App Store app, ignored and pinned ones included, so a plan that carries no
+    /// identifiers must emit no App Store command at all rather than fall back to "all".
+    func testAPlanWithoutAppStoreIDsEmitsNoMasCommand() {
+        let plan = UpdatePlan(formulaNames: [], caskNames: [], npmNames: [], count: 1)
+        XCTAssertTrue(UpdatePlanner.commands(for: plan).filter { $0.executable == "mas" }.isEmpty)
+        XCTAssertFalse(plan.includesMas)
+    }
+
+    /// A key built from the display name instead of the numeric ID must not reach the command.
+    func testANonNumericAppStoreKeyIsDroppedFromThePlan() {
+        let plan = UpdatePlanner.plan(selectedKeys: ["a:Xcode"], allKeys: ["a:Xcode"])
+        XCTAssertTrue(plan.masAppStoreIDs.isEmpty)
+        XCTAssertTrue(UpdatePlanner.commands(for: plan).isEmpty)
     }
 
     func testCommandsForNpmIsOnePerPackage() {
-        let plan = UpdatePlan(formulaNames: [], caskNames: [], npmNames: ["a", "b", "c"], includesMas: false, count: 3)
+        let plan = UpdatePlan(formulaNames: [], caskNames: [], npmNames: ["a", "b", "c"], count: 3)
         XCTAssertEqual(UpdatePlanner.commands(for: plan), [
             UpdateCommand(executable: "npm", arguments: ["install", "-g", "--", "a@latest"]),
             UpdateCommand(executable: "npm", arguments: ["install", "-g", "--", "b@latest"]),
