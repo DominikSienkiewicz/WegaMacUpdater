@@ -179,8 +179,9 @@ Every scan, source response, install result and error is recorded in the **Logs*
 
 - filter by severity (**All / Warnings+ / Errors only**),
 - search the text,
-- copy entries to the clipboard, or
-- **Reveal in Finder** the underlying log file.
+- copy entries to the clipboard,
+- **Reveal in Finder** the underlying log file, or
+- **Export diagnostics** — the whole troubleshooting package in one file (below).
 
 The log also lives on disk at
 `~/Library/Logs/WegaMacUpdater/wega.log` (it rotates to `wega.log.1` past ~5 MB). When a
@@ -199,6 +200,32 @@ verdict — an upgrade that actually hits the refusal has the last word.
 It also has an **App catalog** card that refreshes Wega's list of
 supported apps on demand (it also refreshes on launch); a fetched update applies on the
 next launch.
+
+### Export diagnostics
+
+**Settings → System diagnostics → Export diagnostics** (also in the **Logs** toolbar)
+saves a single `.zip` with everything a bug report needs, so filing one never means
+collecting it by hand:
+
+| In the zip | What it holds |
+| --- | --- |
+| `report.txt` | App version and build, macOS version and CPU, detected package managers and their versions, Privileged Helper status and version, schedule status, the last scan's result per source, free disk space and the signature state. |
+| `update-history.txt` | The last 40 upgrade runs, item by item: update → validation → rollback, including which apps were rolled back and where a publisher's Team ID changed. |
+| `logs/wega.log`, `logs/wega.log.1` | **Both** log files — the current one and the rotated one. |
+
+Two things about this file are deliberate:
+
+- **It is redacted.** Filesystem paths, URL query strings, credentials (API keys, bearer
+  tokens, `Authorization` headers, private keys), e-mail addresses and your account names
+  are replaced with `[path]`, `[query]`, `[secret]`, `[email]` and `[user]` before anything
+  is written. The failure itself survives; the identity behind it does not. Team ID values
+  are not exported either — the history records *that* a publisher changed, not who.
+- **Nothing is sent anywhere.** Wega has no upload, no share sheet and no default
+  destination. A save panel asks where to put the file, and the file goes exactly there.
+  Attaching it to an issue is your decision, separately.
+
+Open the zip and read `report.txt` before attaching it if you want to see precisely what
+you are sharing.
 
 ### Common situations
 
