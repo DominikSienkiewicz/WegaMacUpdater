@@ -70,9 +70,11 @@ not leftovers, so do not "finish the migration" by rewriting them.
   history and the `CHANGELOG.md` convention.
 - **Changelog**: add user-visible changes under the `[Unreleased]` section of
   [`CHANGELOG.md`](CHANGELOG.md).
-- **Version**: never hard-code a version string. The version lives in exactly one place,
-  `AppMetadata.version` (`Sources/MacUpdaterCore/AppMetadata.swift`); the release
-  workflow refuses a tag that disagrees with it.
+- **Version**: never hard-code a version string, and never bump it by hand. The version
+  lives in exactly one place, `AppMetadata.version`
+  (`Sources/WegaHelperKit/AppMetadata.swift`); the release workflow refuses a tag that
+  disagrees with it. Releases are cut with `./scripts/release.sh` — see
+  [`RELEASING.md`](RELEASING.md).
 - **Tests**: cover new behaviour. Coverage is measured on the `MacUpdaterCore` library,
   and SonarCloud's gate expects ≥ 80% coverage on new code there. Keep logic testable by
   putting it in Core (pure, no SwiftUI) rather than in the View layer.
