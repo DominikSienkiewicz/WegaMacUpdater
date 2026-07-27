@@ -224,14 +224,11 @@ final class MigrationStore: ObservableObject {
                 npmPackages: npmInstalled,
                 brewTokens: installed
             )
-            let scanner = ApplicationScanner()
-            let all = buildScanDirs().flatMap { directory in
-                (try? scanner.scanApplications(
-                    in: directory,
-                    installedCasks: installed,
-                    availableCasks: casks
-                )) ?? []
-            }
+            let all = await Self.scanApplicationDirectories(
+                buildScanDirs(),
+                installedCasks: installed,
+                availableCasks: casks
+            )
             let migrationPool = MigrationPlanner.migrationPool(
                 InstallationInventory.deduplicated(all)
             )
@@ -268,6 +265,31 @@ final class MigrationStore: ObservableObject {
                 ? trf("Zwęszyłam %@ aplikacji do przepięcia.", "\(total)")
                 : tr("Wszystko porządku. Wega nie znalazła uciekinierów.")
         ))
+    }
+
+    /// ARCH-05c — the `/Applications` walk (directory enumeration plus each app's `Info.plist`
+    /// read) is synchronous filesystem I/O. It runs here, off the MainActor, so
+    /// `scanCoordinated` can keep mutating its `@Published` state on the main thread without the
+    /// scan blocking it. `nonisolated` is what moves the work off the MainActor: an `async`
+    /// nonisolated member suspends the caller and resumes on the generic executor. The injected
+    /// `scan` seam mirrors `InventorySources.scanApplications` / `UninstallScan.collect`, so a
+    /// test can observe the executor without touching the disk.
+    nonisolated static func scanApplicationDirectories(
+        _ directories: [URL],
+        installedCasks: Set<String>,
+        availableCasks: [BrewCask],
+        scan: @Sendable (URL, Set<String>, [BrewCask]) throws -> [ApplicationInfo] = {
+            directory, installed, available in
+            try ApplicationScanner().scanApplications(
+                in: directory,
+                installedCasks: installed,
+                availableCasks: available
+            )
+        }
+    ) async -> [ApplicationInfo] {
+        directories.flatMap { directory in
+            (try? scan(directory, installedCasks, availableCasks)) ?? []
+        }
     }
 
     private func performMigration(
