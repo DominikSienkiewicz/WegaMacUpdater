@@ -23,7 +23,7 @@ struct CrashReportingSettingsCard: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(tr("Gdy Wega się wysypie albo zawiesi, macOS (MetricKit) przekazuje jej własny raport przy następnym uruchomieniu. Raport zostaje na tym Macu — Wega nigdzie go nie wysyła. Zapisujemy wersję, system, architekturę, powód zakończenia i ślad stosu; ścieżki i adresy są usuwane."))
-                        .font(.system(size: 12))
+                        .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -31,7 +31,7 @@ struct CrashReportingSettingsCard: View {
                         get: { controller.isEnabled },
                         set: { controller.setEnabled($0) }
                     )) {
-                        Text(tr("Zbieraj lokalnie raporty awarii Wegi")).font(.system(size: 12))
+                        Text(tr("Zbieraj lokalnie raporty awarii Wegi")).font(.wega(.callout))
                     }
                     .toggleStyle(.switch)
 
@@ -46,16 +46,16 @@ struct CrashReportingSettingsCard: View {
     private var storedReports: some View {
         if controller.records.isEmpty {
             Text(tr("Brak zapisanych raportów."))
-                .font(.system(size: 11))
+                .font(.wega(.subheadline))
                 .foregroundStyle(.secondary)
         } else {
             Text(trf("Zapisane raporty: %d (do 20, przez 90 dni)", controller.records.count))
-                .font(.system(size: 11))
+                .font(.wega(.subheadline))
                 .foregroundStyle(.secondary)
 
             if let latest = controller.records.first {
                 Text(latest.headline)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.wega(.subheadline, monospaced: true))
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)

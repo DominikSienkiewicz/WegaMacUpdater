@@ -649,18 +649,18 @@ extension InfoView {
                 if diagnosticsExport.lastExportURL != nil {
                     Button(tr("Pokaż w Finderze")) { diagnosticsExport.revealLastExport() }
                         .buttonStyle(.link)
-                        .font(.system(size: 11))
+                        .font(.wega(.subheadline))
                 }
             }
 
             Text(tr("Zapisuje paczkę zip z oboma plikami logów, wersjami, wykrytymi menedżerami, statusem harmonogramu i historią aktualizacji. Ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami; nic nie jest nigdzie wysyłane."))
-                .font(.system(size: 11))
+                .font(.wega(.subheadline))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             if let error = diagnosticsExport.lastError {
                 Text(error)
-                    .font(.system(size: 11))
+                    .font(.wega(.subheadline))
                     .foregroundStyle(Color.wegaDanger)
                     .fixedSize(horizontal: false, vertical: true)
             }
