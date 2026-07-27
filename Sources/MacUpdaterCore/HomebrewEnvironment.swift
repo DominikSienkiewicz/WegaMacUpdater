@@ -12,6 +12,14 @@ public enum HomebrewEnvironment {
         var askpassPath: String?
         var sudoShimDirectory: String?
         var touchIDStateOverride: TouchIDSudoConfigurator.State?
+        /// ARCH-08a: last fully-resolved environment. Populated on the first spawn
+        /// and reused verbatim by every later spawn, so the sudo_local read, the
+        /// biometry probe and the Mach-O signature verification happen once per
+        /// session instead of once per process launch.
+        var cachedEnvironment: [String: String]?
+        /// Counts cache-miss recomputations. Exposed as a test seam so the
+        /// regression can prove a series of spawns computes the environment once.
+        var computeCount = 0
     }
     private static let storage = Storage()
 
@@ -21,7 +29,7 @@ public enum HomebrewEnvironment {
     /// terminal-less GUI process.
     static var askpassPath: String? {
         get { storage.lock.withLock { storage.askpassPath } }
-        set { storage.lock.withLock { storage.askpassPath = newValue } }
+        set { storage.lock.withLock { storage.askpassPath = newValue; storage.cachedEnvironment = nil } }
     }
 
     /// Directory containing the compiled `sudo` PATH-shim that injects `-A`.
@@ -30,17 +38,32 @@ public enum HomebrewEnvironment {
     /// askpass dialog instead of failing on a missing TTY.
     static var sudoShimDirectory: String? {
         get { storage.lock.withLock { storage.sudoShimDirectory } }
-        set { storage.lock.withLock { storage.sudoShimDirectory = newValue } }
+        set { storage.lock.withLock { storage.sudoShimDirectory = newValue; storage.cachedEnvironment = nil } }
     }
 
     /// Test seam — when non-nil, `environment` uses this instead of probing
     /// the real `/etc/pam.d/sudo_local` + biometry hardware. Production code
-    /// must leave this nil so the live state is consulted on every read
-    /// (state can flip mid-session when the user enables Touch ID from
-    /// InfoView, and the next brew call must immediately respect that).
+    /// must leave this nil so the live state is consulted the first time the
+    /// environment is built (state can flip mid-session when the user enables
+    /// Touch ID from InfoView; `invalidateCache()` then drops the cached copy so
+    /// the next brew call rebuilds it and immediately respects the new state).
     static var touchIDStateOverride: TouchIDSudoConfigurator.State? {
         get { storage.lock.withLock { storage.touchIDStateOverride } }
-        set { storage.lock.withLock { storage.touchIDStateOverride = newValue } }
+        set { storage.lock.withLock { storage.touchIDStateOverride = newValue; storage.cachedEnvironment = nil } }
+    }
+
+    /// Test seam (ARCH-08a): number of times `environment` was rebuilt from
+    /// scratch. Reused reads never advance it; a cache miss does.
+    static var environmentComputeCount: Int {
+        get { storage.lock.withLock { storage.computeCount } }
+        set { storage.lock.withLock { storage.computeCount = newValue } }
+    }
+
+    /// Drops the memoised environment so the next spawn re-reads the live state.
+    /// The app calls this whenever it re-checks Touch ID (`TouchIDSetupController`),
+    /// which is the one moment the sudo/askpass wiring can change mid-session.
+    public static func invalidateCache() {
+        storage.lock.withLock { storage.cachedEnvironment = nil }
     }
 
     /// Why this is dynamic, not bootstrap-time: the sudo shim doesn't merely
@@ -58,12 +81,34 @@ public enum HomebrewEnvironment {
         touchIDState != .enabled
     }
 
+    /// ARCH-08a: environment inherited by every brew/mas child process. The first
+    /// spawn resolves it (reading `sudo_local`, probing biometry and verifying the
+    /// signed Mach-O helpers); subsequent spawns reuse that result with no disk I/O.
+    /// The signature check still runs before the *first* attachment, and the
+    /// resolved helpers sit at a root-owned, non-writable path
+    /// (`AuthorizationPathTrustValidator`) that a same-user process cannot swap for
+    /// the rest of the session — so caching does not lower the trust boundary.
+    /// `invalidateCache()` rebuilds it after the only mid-session change (Touch ID
+    /// being enabled).
     public static var environment: [String: String] {
+        if let cached = storage.lock.withLock({ storage.cachedEnvironment }) {
+            return cached
+        }
+        let computed = resolveEnvironment()
+        storage.lock.withLock {
+            storage.cachedEnvironment = computed
+            storage.computeCount += 1
+        }
+        return computed
+    }
+
+    private static func resolveEnvironment() -> [String: String] {
         let state = touchIDStateOverride ?? TouchIDSudoConfigurator.currentState()
         let useAskpassFallback = shouldBootstrapAskpass(touchIDState: state)
 
-        // Resolve and cryptographically revalidate both Mach-O files immediately before
-        // every attachment. The test seam keeps existing unit tests off the real bundle.
+        // Resolve and cryptographically revalidate both Mach-O files before the
+        // environment is first attached. The test seam keeps existing unit tests
+        // off the real bundle.
         if useAskpassFallback && touchIDStateOverride == nil {
             bootstrapAskpass()
         }
