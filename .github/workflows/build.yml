@@ -80,12 +80,6 @@ jobs:
       - name: Regression test — sign-catalog.sh refuses an in-repo key
         run: ./scripts/test-sign-catalog-guard.sh
 
-      # QA-03 — the artifact gate must still RECOGNISE a Developer ID, or it skips the
-      # notarization/stapling checks on exactly the builds they exist for. `codesign` is
-      # stubbed, so this needs no certificate and runs on the cheap Linux runner.
-      - name: Regression test — verify-bundle.sh enforces notarization once signed
-        run: ./scripts/test-verify-bundle-guard.sh
-
       # Exit 3 means signing is not configured yet (placeholder key) — not a failure.
       - name: Verify app-catalog.json.sig matches app-catalog.json
         run: |
@@ -144,6 +138,12 @@ jobs:
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: '26.0'
+
+      # The gate below is exercised here only on an ad-hoc bundle, so its Developer-ID path —
+      # the one that makes notarization mandatory — would never run until a tag is pushed.
+      # This guard stubs `codesign` and covers exactly that branch on every push.
+      - name: Regression test — verify-bundle.sh enforces notarization once signed
+        run: ./scripts/test-verify-bundle-guard.sh
 
       # Ad-hoc signed, universal (arm64 + x86_64) — verifies the whole packaging path
       # composes on every change, not just `swift build`.
