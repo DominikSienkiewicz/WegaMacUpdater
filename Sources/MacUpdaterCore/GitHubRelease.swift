@@ -14,6 +14,9 @@ struct GitHubRelease: Decodable {
     let body: String?
     let htmlURL: String?
     let assets: [Asset]?
+    /// ISO 8601 publication timestamp. Optional so fixtures that omit it (the plain
+    /// "is there a newer tag?" checkers) still decode; only `ReleaseHistoryFetcher` reads it.
+    let publishedAt: String?
 
     struct Asset: Decodable {
         let name: String
@@ -32,5 +35,6 @@ struct GitHubRelease: Decodable {
         case body
         case htmlURL = "html_url"
         case assets
+        case publishedAt = "published_at"
     }
 }
