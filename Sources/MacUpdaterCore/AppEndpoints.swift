@@ -21,6 +21,10 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     /// Canonical remote source for the `AppCatalog` overlay (`CatalogRefresher`).
     public let appCatalog: String
     public let githubLatestRelease: String
+    /// The releases *list*, for the cumulative "what's new" between the installed version and
+    /// the newest one. `githubLatestRelease` answers "is there an update"; this answers "what
+    /// is in it".
+    public let githubReleases: String
     public let synologyChangeLog: String
     public let antigravityUpdate: String
     public let parallelsUpdates: String
@@ -55,6 +59,10 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
 
     public func githubLatestReleaseURL(repo: String) -> URL? {
         URL(string: Self.fill(githubLatestRelease, ["repo": repo]))
+    }
+
+    public func githubReleasesURL(repo: String) -> URL? {
+        URL(string: Self.fill(githubReleases, ["repo": repo]))
     }
 
     public func synologyChangeLogURL(identify: String) -> URL? {
@@ -295,6 +303,7 @@ extension AppEndpoints {
             caskDatabase: validURL(other.caskDatabase, caskDatabase),
             appCatalog: validURL(other.appCatalog, appCatalog),
             githubLatestRelease: templateURL(other.githubLatestRelease, githubLatestRelease),
+            githubReleases: templateURL(other.githubReleases, githubReleases),
             synologyChangeLog: templateURL(other.synologyChangeLog, synologyChangeLog),
             antigravityUpdate: templateURL(other.antigravityUpdate, antigravityUpdate),
             parallelsUpdates: templateURL(other.parallelsUpdates, parallelsUpdates),
@@ -347,6 +356,7 @@ public struct AppEndpointsOverlay: Decodable, Sendable, Equatable {
     public let caskDatabase: String?
     public let appCatalog: String?
     public let githubLatestRelease: String?
+    public var githubReleases: String? = nil
     public let synologyChangeLog: String?
     public let antigravityUpdate: String?
     public let parallelsUpdates: String?
