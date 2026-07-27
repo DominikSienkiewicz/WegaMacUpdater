@@ -59,6 +59,16 @@ bump and move its entries under the new version heading when cutting a release.
   cryptographically identical to tampering; one document cannot skew against itself. Wega
   reads both formats, so publishing can switch over at any time with
   `./scripts/sign-catalog.sh --envelope`.
+- Opt-in crash reporting for Wega itself, through MetricKit. macOS hands the app its own
+  crash and hang reports shortly after the next launch, so a crash no longer has to be
+  reconstructed from a system report dug out and mailed in by hand. The switch lives in
+  Settings and is **off by default**, and the reports never leave the Mac: there is no
+  endpoint and no upload path — collecting is one decision, sending is a separate one the
+  user makes by copying a report out. Locale, Mac model, memory-region dumps and slid runtime
+  addresses are dropped at the parser; every stored string goes through the same redaction as
+  a log line, so no filesystem path or URL query survives. Turning it on collects from that
+  point forward — diagnostics recorded before consent are not swept up — and at most 20
+  reports are kept, for 90 days, owner-only next to `wega.log`.
 - Unit tests for `JetBrainsUpdateChecker` and `SparkleUpdateChecker` — the two manual
   checkers that previously had no dedicated coverage despite driving 14 JetBrains IDEs
   and every generic Sparkle app. Both are exercised through the injected `HTTPClient`

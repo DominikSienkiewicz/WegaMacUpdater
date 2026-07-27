@@ -241,6 +241,26 @@ you are sharing.
 - **An incomplete scan banner.** If a scan finished but some sources stayed silent, Wega
   marks the list as partial rather than passing it off as complete. Open **Logs** (filtered
   to errors) to see which source failed.
+### Crash reporting (off by default)
+
+The **Crash reporting** card in Settings can collect Wega's own crash and hang reports, so
+that if Wega ever dies on you the evidence is already waiting instead of having to be dug out
+of Console. It is **off until you turn it on**, and everything about it is local:
+
+- macOS (MetricKit) hands Wega its own report shortly after the *next* launch — a crash is
+  never reported by the run that crashed, and an app that crashes on every launch cannot
+  report itself at all.
+- Reports **stay on this Mac**. Wega has nowhere to send them; there is no upload, no
+  "anonymous statistics", not even an opt-out one.
+- What is kept: Wega's version and build, the macOS version, CPU architecture, the
+  termination reason and the stack trace. What is not: your locale, your Mac model, memory
+  contents, and any filesystem path or URL — those are stripped the same way log lines are.
+- Turning it on collects from that moment on. Crashes recorded before you agreed are not
+  swept up.
+- Up to 20 reports are kept for 90 days, in `~/Library/Logs/WegaMacUpdater/`, readable only
+  by you. **Copy reports** puts them on the clipboard so you can attach them to a bug report;
+  **Delete reports** wipes them. Sending one is always your decision.
+
 - **Homebrew results are missing / an "install Homebrew" card shows.** Homebrew isn't
   installed (or isn't at `/opt/homebrew/bin/brew` or `/usr/local/bin/brew`). Install it to
   unlock cask and formula updates; everything else keeps working without it.

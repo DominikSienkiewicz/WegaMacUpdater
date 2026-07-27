@@ -47,6 +47,7 @@ extension InfoView {
                 ResourceGateSettingsCard()
                 LaunchAtLoginSettingsCard()
                 BackgroundUpdateConsentSettingsCard()
+                CrashReportingSettingsCard()
                 policiesCard
                 diagnosticsCard
                 catalogCard
