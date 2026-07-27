@@ -165,10 +165,50 @@ Re-sign after editing the catalog, and commit both files together:
 
 ```bash
 WEGA_CATALOG_KEY=~/.secrets/wega-catalog.pem ./scripts/sign-catalog.sh
-./scripts/verify-catalog.sh          # confirm it matches (no secret needed)
-git add Sources/MacUpdaterCore/Resources/app-catalog.json \
-        Sources/MacUpdaterCore/Resources/app-catalog.json.sig
 ```
+
+```bash
+./scripts/verify-catalog.sh
+```
+
+```bash
+git add Sources/MacUpdaterCore/Resources/app-catalog.json Sources/MacUpdaterCore/Resources/app-catalog.json.sig
+```
+
+### The envelope: one document instead of two (SEC-07)
+
+The two-file layout has a flaw no amount of care at signing time removes — the JSON and
+the `.sig` are separate CDN entries, so a client can still fetch a fresh catalog beside a
+cached signature and see a mismatch that is indistinguishable from tampering. The
+**envelope** carries the payload and its signature in one document, and one document
+cannot skew against itself:
+
+```json
+{ "wegaCatalogEnvelope": 1, "payload": "<base64 of the catalog JSON>", "signature": "<base64 Ed25519 over those bytes>" }
+```
+
+The envelope's own fields are untrusted. Everything a decision rests on — `schemaVersion`
+and the monotonic `generation` that makes a replay detectable — lives **inside** the
+payload, which is exactly what the signature covers.
+
+Wega reads both formats, so the switch is one command whenever you choose to make it:
+
+```bash
+WEGA_CATALOG_KEY=~/.secrets/wega-catalog.pem ./scripts/sign-catalog.sh --envelope
+```
+
+That rewrites `app-catalog.json` as an envelope and deletes the now-meaningless `.sig`.
+To edit the catalog by hand again, unwrap it first (no key needed), edit, then re-sign:
+
+```bash
+./scripts/sign-catalog.sh --unwrap
+```
+
+Bump `"generation"` in the catalog on every publication. Wega remembers the highest
+generation it has accepted and refuses anything lower, which is what stops an old but
+perfectly-signed catalog from being replayed at a client forever. `verify-catalog.sh`
+checks either format, and `scripts/test-catalog-envelope-guard.sh` (part of `check.sh`
+and CI) proves the signature covers the payload rather than the wrapper.
 
 ## Integrating a branch
 

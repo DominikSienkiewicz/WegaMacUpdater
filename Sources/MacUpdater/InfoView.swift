@@ -665,6 +665,15 @@ extension InfoView {
             // wording describes what happened, not who to blame, and the old catalog stays.
             catalogStatusLabel(tr("Podpis nie pasuje do katalogu — zachowano poprzedni."),
                                icon: "exclamationmark.shield.fill", color: .orange)
+        case .replayRejected:
+            // SEC-07 — correctly signed, but older than what this Mac already trusts. That is
+            // what a rollback attack looks like from here, and also what a mis-published
+            // catalog looks like; the wording states the fact and keeps the newer catalog.
+            catalogStatusLabel(tr("Serwer podał starszy katalog niż zainstalowany — odrzucono."),
+                               icon: "exclamationmark.shield.fill", color: .orange)
+        case .unsupportedSchema:
+            catalogStatusLabel(tr("Katalog w nowszym formacie — zaktualizuj Wegę."),
+                               icon: "arrow.up.circle.fill", color: .orange)
         case .failed:
             catalogStatusLabel(tr("Nie udało się pobrać katalogu — sprawdź połączenie."),
                                icon: "exclamationmark.triangle.fill", color: .orange)

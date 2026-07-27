@@ -13,6 +13,21 @@ bump and move its entries under the new version heading when cutting a release.
 ## [Unreleased]
 
 ### Added
+- Replay and downgrade protection for the over-the-air app catalog. A signature answers
+  "did the publisher write this?", never "is this the current one" — so an old catalog with
+  its own old, perfectly valid signature used to be valid forever, and anyone able to choose
+  which bytes reached a client could pin it to a catalog published before a fix. The catalog
+  now carries a monotonic `generation` inside the signed bytes; Wega remembers the highest it
+  has accepted, across relaunches, and refuses anything lower. `schemaVersion` is enforced
+  instead of ignored: a catalog in a format this build does not implement is refused with
+  "update Wega" rather than decoding as a valid, empty catalog that would have switched every
+  catalog-driven checker off in silence.
+- A one-document envelope format for the published catalog (`payload` + `signature` in one
+  file). The old layout served the JSON and its `.sig` as two separate CDN entries, so a
+  client could fetch a fresh catalog beside a cached signature and see a mismatch that is
+  cryptographically identical to tampering; one document cannot skew against itself. Wega
+  reads both formats, so publishing can switch over at any time with
+  `./scripts/sign-catalog.sh --envelope`.
 - A hard download resource gate shared by window and unattended cask upgrades. Before
   snapshotting or downloading it vetoes metered/Low Data Mode networking, low battery,
   thermal throttling and insufficient (or unreadable) disk capacity. Required space is
@@ -56,6 +71,9 @@ bump and move its entries under the new version heading when cutting a release.
 - This `CHANGELOG.md`.
 
 ### Changed
+- The catalog's conditional-GET validator (ETag) is now persisted, so a relaunch
+  revalidates instead of re-downloading the whole catalog. The catalog is fetched once per
+  launch, which is precisely when a process-lifetime validator is guaranteed to be empty.
 - Hardened the no-TTY sudo path (`SEC-05`). Production no longer writes or executes
   user-modifiable askpass/sudo shell scripts from Application Support. The packaged app
   embeds compiled `WegaAskpass` and `WegaSudoShim` executables, signs them inside-out,

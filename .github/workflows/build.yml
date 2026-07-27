@@ -93,6 +93,14 @@ jobs:
           fi
           exit "$status"
 
+      # SEC-07 — the envelope carries the payload and its signature in one document, so the
+      # two-file skew above stops being possible. Its promise is that the signature covers
+      # the *payload*, not the wrapper: this proves that against the committed catalog and
+      # the real public key, and proves the unwrap path is lossless. Skips itself when
+      # signing is unconfigured.
+      - name: Regression test — the OTA catalog envelope
+        run: ./scripts/test-catalog-envelope-guard.sh
+
   lint:
     name: SwiftLint
     runs-on: macos-26

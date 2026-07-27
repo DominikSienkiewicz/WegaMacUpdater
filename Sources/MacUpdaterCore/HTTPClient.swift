@@ -54,21 +54,55 @@ extension URLSession: HTTPTransport {}
 
 // MARK: - ETag store
 
-/// Process-lifetime store of `(ETag, body)` per URL. In-memory by design: the wins
-/// (conditional GETs across repeated "Sprawdź" passes in one session) don't need to
-/// survive relaunches, and keeping it off disk avoids stale-cache headaches.
+/// Store of `(ETag, body)` per URL, optionally backed by a file on disk.
+///
+/// SEC-07 — it used to be process-lifetime only, which made the OTA catalog's conditional
+/// GET worthless: the one request that would benefit happens *once per launch*, so the
+/// validator was always empty when it mattered and every start re-downloaded the whole
+/// catalog. Only requests that opt in (`enableETag`) reach this store at all, and today that
+/// is the catalog refresh alone, so the file stays small by construction.
+///
+/// The cached body is a cache, not a trust anchor: on a 304 it is handed back for
+/// convenience, and every consumer that cares about authenticity — the catalog refresher —
+/// re-verifies a signature before anything reaches disk or the app.
 final class ETagStore: @unchecked Sendable {
-    struct Entry: Sendable { let etag: String; let data: Data }
+    struct Entry: Sendable, Codable { let etag: String; let data: Data }
 
     private let lock = NSLock()
     private var storage: [String: Entry] = [:]
+    /// `nil` keeps the store in memory, which is what every test and every non-catalog
+    /// caller wants.
+    private let fileURL: URL?
+
+    init(persistingTo fileURL: URL? = nil) {
+        self.fileURL = fileURL
+        guard let fileURL,
+              let data = try? Data(contentsOf: fileURL),
+              let decoded = try? JSONDecoder().decode([String: Entry].self, from: data)
+        else { return }
+        storage = decoded
+    }
 
     func entry(for url: URL) -> Entry? {
         lock.withLock { storage[url.absoluteString] }
     }
 
     func store(_ entry: Entry, for url: URL) {
-        lock.withLock { storage[url.absoluteString] = entry }
+        let snapshot: [String: Entry] = lock.withLock {
+            storage[url.absoluteString] = entry
+            return storage
+        }
+        persist(snapshot)
+    }
+
+    /// Best-effort: a cache that cannot be written is still a working cache for this run.
+    private func persist(_ snapshot: [String: Entry]) {
+        guard let fileURL, let encoded = try? JSONEncoder().encode(snapshot) else { return }
+        try? FileManager.default.createDirectory(
+            at: fileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try? encoded.write(to: fileURL, options: .atomic)
     }
 }
 
@@ -78,24 +112,39 @@ final class ETagStore: @unchecked Sendable {
 /// `User-Agent`, transient-failure retry with exponential backoff, and ETag-based
 /// conditional requests. Replaces nine ad-hoc `URLSession` call sites.
 public final class HTTPClient: @unchecked Sendable {
-    public static let shared = HTTPClient()
+    /// The app's client. Its ETag cache is the only one that persists — a shared process-wide
+    /// client is the only place where surviving a relaunch means anything.
+    public static let shared = HTTPClient(etagCacheURL: HTTPClient.defaultETagCacheURL)
 
     private let transport: HTTPTransport
     private let userAgent: String
     private let maxRetries: Int
     private let retryBaseDelay: TimeInterval
-    private let etagStore = ETagStore()
+    private let etagStore: ETagStore
 
     public init(
         transport: HTTPTransport = HTTPClient.sharedSession,
         userAgent: String = HTTPClient.defaultUserAgent,
         maxRetries: Int = 2,
-        retryBaseDelay: TimeInterval = 0.4
+        retryBaseDelay: TimeInterval = 0.4,
+        etagCacheURL: URL? = nil
     ) {
         self.transport = transport
         self.userAgent = userAgent
         self.maxRetries = maxRetries
         self.retryBaseDelay = retryBaseDelay
+        self.etagStore = ETagStore(persistingTo: etagCacheURL)
+    }
+
+    /// Caches, not Application Support: losing this file costs one extra download, so the
+    /// system is welcome to reclaim it.
+    public static var defaultETagCacheURL: URL {
+        let base = FileManager.default
+            .urls(for: .cachesDirectory, in: .userDomainMask)
+            .first ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Caches")
+        return base
+            .appendingPathComponent("WegaMacUpdater", isDirectory: true)
+            .appendingPathComponent("etag-cache.json", isDirectory: false)
     }
 
     public static var defaultUserAgent: String { "WegaMacUpdater/\(AppMetadata.version)" }
