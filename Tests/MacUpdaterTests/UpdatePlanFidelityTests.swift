@@ -51,8 +51,11 @@ struct UpdatePlanFidelityTests {
     /// Nothing brew-related may be executed for a plan that contains no Homebrew item —
     /// the property the hidden cleanup broke for every npm-only and App-Store-only run.
     @Test func anNpmAndMasOnlyPlanInvokesNoBrewCommand() {
+        // REL-01: a plan reaches the App Store through its identifiers, never through a flag.
+        // This used to pass `includesMas: true` with no IDs, which emitted a bare
+        // `mas upgrade` — the upgrade-everything path the card removed.
         let plan = UpdatePlan(formulaNames: [], caskNames: [], npmNames: ["typescript"],
-                              includesMas: true, count: 2)
+                              count: 2, masAppStoreIDs: ["497799835"])
 
         let executables = UpdatePlanner.commands(for: plan).map(\.executable)
 

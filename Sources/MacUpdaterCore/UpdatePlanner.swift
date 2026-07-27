@@ -51,10 +51,18 @@ public struct UpdatePlan: Equatable, Sendable {
     public var formulaNames: [String]
     public var caskNames: [String]
     public var npmNames: [String]
-    /// App Store IDs selected for this run. Empty only for legacy callers that request
-    /// an intentionally global `mas upgrade` through `includesMas`.
+    /// REL-01: the App Store IDs selected for this run, and the *only* thing that decides
+    /// whether a mas command is emitted at all.
+    ///
+    /// There used to be a separate `includesMas: Bool` beside this. Two sources of truth for
+    /// one decision is one too many: with the flag set and the list empty — reachable whenever
+    /// an item carries no usable App Store ID — the emitted command degraded to a bare
+    /// `mas upgrade`, which upgrades *every* outdated App Store app, ignored and pinned ones
+    /// included. Selecting one application silently updated all of them.
     public var masAppStoreIDs: [String]
-    public var includesMas: Bool
+
+    /// Whether this plan touches the App Store at all. Derived, never stored.
+    public var includesMas: Bool { !masAppStoreIDs.isEmpty }
 
     public var count: Int
 
@@ -62,7 +70,6 @@ public struct UpdatePlan: Equatable, Sendable {
         formulaNames: [String],
         caskNames: [String],
         npmNames: [String],
-        includesMas: Bool,
         count: Int,
         masAppStoreIDs: [String] = []
     ) {
@@ -70,7 +77,6 @@ public struct UpdatePlan: Equatable, Sendable {
         self.caskNames = caskNames
         self.npmNames = npmNames
         self.masAppStoreIDs = masAppStoreIDs
-        self.includesMas = includesMas
         self.count = count
     }
 }
@@ -233,9 +239,15 @@ public enum UpdatePlanner {
             formulaNames: keys.compactMap { name(of: $0, prefix: formulaPrefix) }.sorted(),
             caskNames:    keys.compactMap { name(of: $0, prefix: caskPrefix) }.sorted(),
             npmNames:     keys.compactMap { name(of: $0, prefix: npmPrefix) }.sorted(),
-            includesMas:  keys.contains { $0.hasPrefix(masPrefix) },
             count:        keys.count,
-            masAppStoreIDs: keys.compactMap { name(of: $0, prefix: masPrefix) }.sorted()
+            // Only numeric identifiers reach the command. `key(name:kind:)` builds an
+            // App Store key from the display *name*, so a key can carry something `mas`
+            // would never accept; dropping those here keeps a malformed key from turning
+            // into an upgrade of the wrong thing.
+            masAppStoreIDs: keys
+                .compactMap { name(of: $0, prefix: masPrefix) }
+                .filter { !$0.isEmpty && $0.allSatisfy(\.isNumber) }
+                .sorted()
         )
     }
 
@@ -261,7 +273,9 @@ public enum UpdatePlanner {
         for pkg in plan.npmNames {
             commands.append(UpdateCommand(executable: "npm", arguments: ["install", "-g", "--", "\(pkg)@latest"]))
         }
-        if plan.includesMas {
+        // Never a bare `mas upgrade`: without identifiers there is nothing selective to run,
+        // and running it anyway would upgrade every outdated App Store app (REL-01).
+        if !plan.masAppStoreIDs.isEmpty {
             commands.append(UpdateCommand(executable: "mas", arguments: ["upgrade"] + plan.masAppStoreIDs))
         }
         return commands
