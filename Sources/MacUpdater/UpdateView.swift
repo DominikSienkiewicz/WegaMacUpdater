@@ -234,6 +234,19 @@ struct UpdateView: View {
                     .tint(Color.wegaHoney)
                     .foregroundStyle(Color.wegaInk)
                     .disabled(scan.updating)
+
+                    // REL-12 — the longest operation in the app finally has a stop button.
+                    // It does not kill the package manager mid-install; it stops the run at
+                    // the next package boundary, which is the only safe place to stop.
+                    if scan.updating {
+                        Button(scan.updateInterruption.isRequested
+                               ? tr("Przerywam…")
+                               : tr("Anuluj")) {
+                            scan.cancelUpdate()
+                        }
+                        .disabled(scan.updateInterruption.isRequested)
+                        .help(tr("Zatrzymam po bieżącym pakiecie — trwającej instalacji nie przerywam w połowie."))
+                    }
                 }
             }
             .padding(.horizontal, 16)

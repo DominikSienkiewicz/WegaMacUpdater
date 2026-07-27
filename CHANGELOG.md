@@ -48,6 +48,13 @@ bump and move its entries under the new version heading when cutting a release.
   checkers that previously had no dedicated coverage despite driving 14 JetBrains IDEs
   and every generic Sparkle app. Both are exercised through the injected `HTTPClient`
   seam with a fake transport (no network).
+- **Anuluj for a running update (REL-12).** The Updates screen's longest operation — a
+  multi-gigabyte, multi-minute upgrade — used to turn its button into a spinner with no way
+  out. It now offers a stop button that takes effect at the next package boundary: the
+  install already running is never cut in half, everything after it is skipped, and the
+  report says how many packages were updated and how many were left untouched instead of
+  announcing a finished run. An upgrade still queued behind another operation is dropped
+  outright, since it has changed nothing yet.
 - Shared `FakeHTTPTransport` test double in `TestDoubles.swift` for HTTP-level checker
   tests.
 - Diagnostic logging through `WegaLog` (OSLog, the in-app Logs tab and the rotating
@@ -190,6 +197,14 @@ bump and move its entries under the new version heading when cutting a release.
   leaves the snapshot in place instead of deleting the only recovery copy. A foreground
   publisher veto also remains a critical visible result when snapshotting a different cask
   later fails; the whole batch stops before `brew` without discarding the security alert.
+- **Cancelling or timing out an operation now really stops the process (REL-12).**
+  Stopping a subprocess is a sequence rather than a single blow: SIGTERM to the whole
+  process group, a short grace period so the package manager can release its lock and clean
+  up a half-written staging directory, then SIGKILL — which still fires for a process that
+  ignores the polite signal, so cancelling can no longer hang on a stubborn CLI. Every
+  external command is also bounded twice: a wall-clock deadline *and* an inactivity timeout,
+  the limit that actually catches a `brew`/`mas`/`npm` that is alive, silent and holding the
+  UI. The streamed brew, MAS and npm commands ran with no limit at all until now.
 - **Unattended upgrades could run without a rollback snapshot (BG-01).** Background
   candidates now require a resolved `.app` and a successfully created copy-on-write
   snapshot before `brew` may start. Policy and running-process vetoes are sampled again

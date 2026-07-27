@@ -6,20 +6,45 @@ public struct ProcessRequest: Equatable, Sendable {
     public var arguments: [String]
     public var environment: [String: String]
     public var inheritParentEnvironment: Bool
+    /// Wall-clock budget from launch to exit. Defaults to a bounded value (REL-12): an
+    /// operation with no deadline at all is what let a stuck CLI hold the app forever.
     public var timeout: TimeInterval?
+    /// How long the process may produce no output before it counts as hung (REL-12).
+    public var idleTimeout: TimeInterval?
 
     public init(
         executableURL: URL,
         arguments: [String] = [],
         environment: [String: String] = [:],
         inheritParentEnvironment: Bool = true,
-        timeout: TimeInterval? = nil
+        timeout: TimeInterval? = ProcessTimeoutPolicy.default.deadline,
+        idleTimeout: TimeInterval? = ProcessTimeoutPolicy.default.idle
     ) {
         self.executableURL = executableURL
         self.arguments = arguments
         self.environment = environment
         self.inheritParentEnvironment = inheritParentEnvironment
         self.timeout = timeout
+        self.idleTimeout = idleTimeout
+    }
+
+    /// Preferred spelling at the call sites: name the *kind* of operation and let the
+    /// policy supply both limits, so a new command cannot be added with only one of them.
+    public init(
+        executableURL: URL,
+        arguments: [String] = [],
+        environment: [String: String] = [:],
+        inheritParentEnvironment: Bool = true,
+        timeouts: ProcessTimeoutPolicy
+    ) {
+        self.init(
+            executableURL: executableURL,
+            arguments: arguments,
+            environment: environment,
+            inheritParentEnvironment: inheritParentEnvironment,
+            timeout: timeouts.deadline,
+            idleTimeout: timeouts.idle
+        )
     }
 }
 
@@ -43,12 +68,17 @@ public enum ProcessOutputEvent: Equatable, Sendable {
 
 public enum ProcessRunnerError: Error, Equatable, LocalizedError {
     case timedOut(seconds: TimeInterval)
+    /// The process was still alive but had produced no output for `seconds` (REL-12).
+    /// Told apart from `timedOut` on purpose: one means "too slow", the other "stuck".
+    case idleTimedOut(seconds: TimeInterval)
     case cancelled
 
     public var errorDescription: String? {
         switch self {
         case .timedOut(let seconds):
             return "Process timed out after \(seconds) seconds."
+        case .idleTimedOut(let seconds):
+            return "Process produced no output for \(seconds) seconds."
         case .cancelled:
             return "Process was cancelled."
         }
@@ -75,6 +105,11 @@ public final class ProcessRunner: ProcessRunning, Sendable {
     /// ordinary command output is captured in full and only pathological output is
     /// trimmed (ARCH-02).
     static let defaultMaxCapturedBytesPerStream = 8 * 1024 * 1024
+
+    /// How long a process gets between the polite SIGTERM and the unconditional SIGKILL
+    /// (REL-12). Long enough for `brew` to unwind — release its lock, remove a half-written
+    /// staging directory — and short enough that "Anuluj" still feels immediate.
+    static let terminationGracePeriod: TimeInterval = 2
 
     /// Shared so that every ad-hoc `ProcessRunner()` (each service defaults to its own)
     /// draws from ONE process-wide budget — a per-instance gate would not bound the total.
@@ -178,6 +213,9 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         let stderrBuffer = RollingBuffer(capacity: maxCapturedBytesPerStream)
         let stdoutHandle = stdoutPipe.fileHandleForReading
         let stderrHandle = stderrPipe.fileHandleForReading
+        // REL-12 — every chunk on either stream rearms the inactivity timer. Started now,
+        // before `run()`, so a process that never prints anything is measured from launch.
+        let activity = OutputActivity()
 
         // Each pipe is drained exclusively by its readability handler, all the way to
         // EOF (an empty `availableData`). The descriptor is never read from a second
@@ -195,6 +233,7 @@ public final class ProcessRunner: ProcessRunning, Sendable {
                 ioGroup.leave()
                 return
             }
+            activity.touch()
             stdoutBuffer.append(data)
             if let chunk = String(data: data, encoding: .utf8) {
                 onOutput?(.stdout(chunk))
@@ -208,6 +247,7 @@ public final class ProcessRunner: ProcessRunning, Sendable {
                 ioGroup.leave()
                 return
             }
+            activity.touch()
             stderrBuffer.append(data)
             if let chunk = String(data: data, encoding: .utf8) {
                 onOutput?(.stderr(chunk))
@@ -229,7 +269,9 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         let outcome = await Self.awaitExit(
             process: process,
             termination: termination,
-            timeout: request.timeout
+            activity: activity,
+            timeout: request.timeout,
+            idleTimeout: request.idleTimeout
         )
 
         // Abandon a still-running process: the tree is already killed by `awaitExit`, so
@@ -251,6 +293,13 @@ public final class ProcessRunner: ProcessRunning, Sendable {
                 "\(request.executableURL.lastPathComponent) aborted: \(ProcessRunnerError.timedOut(seconds: seconds).localizedDescription)"
             )
             throw ProcessRunnerError.timedOut(seconds: seconds)
+        case .idleTimedOut(let seconds):
+            detachHandlers()
+            WegaLog.error(
+                .process,
+                "\(request.executableURL.lastPathComponent) aborted: \(ProcessRunnerError.idleTimedOut(seconds: seconds).localizedDescription)"
+            )
+            throw ProcessRunnerError.idleTimedOut(seconds: seconds)
         case .completed:
             break
         }
@@ -278,17 +327,20 @@ public final class ProcessRunner: ProcessRunning, Sendable {
     private enum ExitOutcome: Sendable {
         case completed
         case timedOut(TimeInterval)
+        case idleTimedOut(TimeInterval)
         case cancelled
     }
 
-    /// Awaits the process exit, racing an async `Task.sleep` timeout and cooperative
-    /// cancellation. On timeout or cancellation the whole process tree is killed so the
-    /// termination signal fires and the wait can always unwind — a checked continuation
+    /// Awaits the process exit, racing the wall-clock deadline, the inactivity timeout and
+    /// cooperative cancellation. Whichever fires first kills the whole process tree so the
+    /// termination signal arrives and the wait can always unwind — a checked continuation
     /// ignores cancellation, so the subprocess is what releases it.
     private static func awaitExit(
         process: Process,
         termination: TerminationSignal,
-        timeout: TimeInterval?
+        activity: OutputActivity,
+        timeout: TimeInterval?,
+        idleTimeout: TimeInterval?
     ) async -> ExitOutcome {
         // `Process` is not `Sendable`; the only operations the cancellation handler runs on
         // it (terminate/kill) are individually thread-safe, so cross the boundary explicitly.
@@ -309,10 +361,16 @@ public final class ProcessRunner: ProcessRunning, Sendable {
                         return .timedOut(timeout)
                     }
                 }
+                if let idleTimeout {
+                    group.addTask { await Self.awaitSilence(activity: activity, limit: idleTimeout) }
+                }
 
                 let winner = await group.next() ?? .completed
-                if case .timedOut = winner {
+                switch winner {
+                case .timedOut, .idleTimedOut:
                     Self.terminateProcessTree(box.value)
+                case .completed, .cancelled:
+                    break
                 }
                 group.cancelAll()
                 await group.waitForAll()
@@ -326,6 +384,18 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         }
     }
 
+    /// Resolves once the process has been quiet for `limit` seconds. Sleeps exactly as long
+    /// as the *current* silence still has to run, so each new chunk of output effectively
+    /// rearms the timer without a polling loop that wakes up for nothing.
+    private static func awaitSilence(activity: OutputActivity, limit: TimeInterval) async -> ExitOutcome {
+        while true {
+            let remaining = limit - activity.secondsSinceLastOutput()
+            if remaining <= 0 { return .idleTimedOut(limit) }
+            // A thrown (nil) sleep means the process exited and the group cancelled us.
+            if (try? await Task.sleep(for: .seconds(remaining))) == nil { return .completed }
+        }
+    }
+
     /// Suspends until both pipe readers have observed EOF, without blocking a thread.
     private static func waitForIO(_ group: DispatchGroup) async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -333,24 +403,70 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         }
     }
 
-    /// Kills the subprocess *and every descendant it spawned*, not just the immediate
-    /// child. Foundation launches each subprocess as the leader of a fresh process group
-    /// (`pgid == child pid`), and a non-interactive shell keeps its background jobs in that
-    /// same group. `terminate()` signals only the leader, so a spawned grandchild (e.g. a
-    /// backgrounded `sleep`) would be orphaned and outlive the cancellation. Signalling the
-    /// whole process group reaps the entire tree in one shot (REL-12).
+    /// Stops the subprocess *and every descendant it spawned*, not just the immediate child,
+    /// as a two-phase sequence: **SIGTERM → grace period → SIGKILL** (REL-12).
+    ///
+    /// Why the whole group: Foundation launches each subprocess as the leader of a fresh
+    /// process group (`pgid == child pid`), and a non-interactive shell keeps its background
+    /// jobs in that same group. Signalling only the leader orphans a spawned grandchild
+    /// (e.g. a backgrounded `sleep`), which then outlives the cancellation.
+    ///
+    /// Why the grace period: an immediate SIGKILL gives `brew` no chance to release its
+    /// lock or clean up a half-written staging directory, and a signal handler in the tool
+    /// never runs. The escalation is what keeps that politeness bounded — a process that
+    /// ignores SIGTERM is killed anyway once the grace period expires, so "Anuluj" cannot
+    /// hang on a stubborn CLI.
     ///
     /// The `group != ownGroup` guard makes it impossible to signal our own process group:
-    /// if the platform ever kept the child in the caller's group we fall back to a plain
-    /// `terminate()` rather than taking the updater down with the subprocess.
+    /// if the platform ever kept the child in the caller's group we fall back to signalling
+    /// the child alone rather than taking the updater down with the subprocess.
     private static func terminateProcessTree(_ process: Process) {
         let pid = process.processIdentifier
+        guard pid > 0 else { return }
         let group = getpgid(pid)
-        let ownGroup = getpgid(0)
-        process.terminate()
-        if group > 0 && group != ownGroup {
-            _ = killpg(group, SIGKILL)
+        let signalsWholeGroup = group > 0 && group != getpgid(0)
+
+        if signalsWholeGroup {
+            _ = killpg(group, SIGTERM)
+        } else {
+            process.terminate()
         }
+
+        // Detached on purpose: the escalation has to outlive this call, which returns
+        // immediately (it is also invoked from a synchronous cancellation handler).
+        let box = UncheckedSendableBox(process)
+        Task.detached(priority: .utility) {
+            try? await Task.sleep(for: .seconds(Self.terminationGracePeriod))
+            guard signalsWholeGroup else {
+                if box.value.isRunning { _ = kill(pid, SIGKILL) }
+                return
+            }
+            // `killpg(_, 0)` asks whether *anything* in the tree is still alive — the leader
+            // may well have honoured SIGTERM while a descendant ignored it.
+            if killpg(group, 0) == 0 { _ = killpg(group, SIGKILL) }
+        }
+    }
+}
+
+/// Tracks when a process last produced output, so the inactivity timeout measures silence
+/// rather than total runtime (REL-12). Monotonic (`DispatchTime`) so a clock adjustment —
+/// or the machine sleeping mid-download — cannot make a healthy process look hung.
+private final class OutputActivity: @unchecked Sendable {
+    private let lock = NSLock()
+    private var lastOutput = DispatchTime.now()
+
+    func touch() {
+        lock.lock()
+        lastOutput = DispatchTime.now()
+        lock.unlock()
+    }
+
+    func secondsSinceLastOutput() -> TimeInterval {
+        lock.lock()
+        let last = lastOutput
+        lock.unlock()
+        let elapsed = DispatchTime.now().uptimeNanoseconds &- last.uptimeNanoseconds
+        return TimeInterval(elapsed) / 1_000_000_000
     }
 }
 

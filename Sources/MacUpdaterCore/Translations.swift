@@ -684,6 +684,14 @@ extension Translations {
         "Skan rozpoczęty": "Scan started",
         // M2(c) — anulowanie skanu ma swój komunikat; skan nie udaje, że się skończył.
         "Przerwałam skanowanie.": "I stopped scanning.",
+        // REL-12 — anulowanie aktualizacji: zatrzymanie na granicy pakietu, nie w połowie instalacji.
+        "Przerywam…": "Stopping…",
+        "Zatrzymam po bieżącym pakiecie — trwającej instalacji nie przerywam w połowie.":
+            "I'll stop after the current package — an install already running is never cut in half.",
+        "Aktualizacja przerwana": "Update stopped",
+        "Zatrzymano po bieżącym pakiecie: zaktualizowano %@, pominięto %@. Nic nie zostało przerwane w połowie.":
+            "Stopped after the current package: %@ updated, %@ skipped. Nothing was cut off halfway.",
+        "Przerwałam aktualizację.": "I stopped the update.",
         "Zaglądam do notatek…": "Checking my notes…",
         "Ostrzeżenia+": "Warnings+",
         "Tylko błędy": "Errors only",

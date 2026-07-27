@@ -57,7 +57,7 @@ public final class MasService: @unchecked Sendable {
     }
 
     private func runUpgrade(arguments: [String]) async throws -> ProcessResult {
-        let first = try await runMas(arguments)
+        let first = try await runMas(arguments, timeouts: .download)
         if first.exitCode == 0 {
             return first
         }
@@ -71,7 +71,7 @@ public final class MasService: @unchecked Sendable {
             return first
         }
         try await prewarmSudoTimestamp()
-        let retry = try await runMas(arguments)
+        let retry = try await runMas(arguments, timeouts: .download)
         try ensureSuccess(retry, arguments: arguments)
         return retry
     }
@@ -107,7 +107,8 @@ public final class MasService: @unchecked Sendable {
                 arguments: args,
                 environment: HomebrewEnvironment.environment,
                 inheritParentEnvironment: false,
-                timeout: 120
+                timeout: 120,
+                idleTimeout: 120
             )
         )
     }
@@ -130,7 +131,8 @@ public final class MasService: @unchecked Sendable {
                 arguments: arguments,
                 environment: HomebrewEnvironment.environment,
                 inheritParentEnvironment: false,
-                timeout: 15
+                timeout: 15,
+                idleTimeout: 15
             )
         )
         // mas search exits 1 when no results — treat as empty, not an error
@@ -144,7 +146,13 @@ public final class MasService: @unchecked Sendable {
             .appStoreID
     }
 
-    private func runMas(_ arguments: [String]) async throws -> ProcessResult {
+    /// REL-12 — `mas` used to run with no limit at all, which is how an App Store download
+    /// that stalls holds the upgrade mutex indefinitely. Queries (`list`, `outdated`) get the
+    /// short `.query` policy; `upgrade` asks for `.download`, where gigabytes are expected.
+    private func runMas(
+        _ arguments: [String],
+        timeouts: ProcessTimeoutPolicy = .query
+    ) async throws -> ProcessResult {
         guard let masURL = locator.locateMas() else {
             throw MasServiceError.masNotFound
         }
@@ -155,7 +163,7 @@ public final class MasService: @unchecked Sendable {
                 arguments: arguments,
                 environment: HomebrewEnvironment.environment,
                 inheritParentEnvironment: false,
-                timeout: nil
+                timeouts: timeouts
             )
         )
     }

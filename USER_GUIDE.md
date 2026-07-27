@@ -106,6 +106,21 @@ Closing the main window keeps this agent running; use **Quit** in its dropdown t
   checksum, whether rollback protection covers it, whether it **may** ask for an admin
   password, and the download size (shown as **"size unknown"** when the server won't say).
 
+### Stopping an update
+
+An update in progress can be stopped: while it runs, the **Update** button is joined by
+**Cancel**. Wega stops at the **next package boundary** — the install already running is
+allowed to finish, because a package manager killed halfway through a download or an app
+replacement is exactly how a broken app happens. Everything after that package is skipped,
+and the summary says how many packages were updated and how many were left untouched, so a
+stopped run is never reported as a finished one. An update still waiting for another
+operation to release the system is dropped immediately, since it has changed nothing yet.
+
+Cancelling — and every timeout — now really stops the tool Wega started, together with any
+helper process it spawned: Wega asks it to quit, gives it a moment to unwind, and kills it
+if it refuses. Every command also has both a maximum runtime and an inactivity limit, so a
+package manager that hangs silently can no longer hold the window forever.
+
 ### The rollback shield
 
 Each Homebrew cask row carries a **🛡 shield badge** when Wega can protect the upgrade with
