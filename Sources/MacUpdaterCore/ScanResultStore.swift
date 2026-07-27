@@ -176,11 +176,22 @@ public struct FileScanSnapshotIO: ScanSnapshotIO {
     }
 
     public func write(_ data: Data) throws {
+        let directory = fileURL.deletingLastPathComponent()
+        // SEC-09: create the snapshot directory 0700 and the file 0600, explicitly, rather
+        // than at the mercy of the process umask. The atomic write lands a fresh file whose
+        // mode would otherwise be the umask default, so it is tightened straight afterwards.
         try FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: NSNumber(value: 0o700)]
+        )
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o700)], ofItemAtPath: directory.path
         )
         try data.write(to: fileURL, options: .atomic)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o600)], ofItemAtPath: fileURL.path
+        )
     }
 }
 

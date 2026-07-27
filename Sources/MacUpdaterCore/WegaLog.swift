@@ -9,12 +9,19 @@ public enum WegaLog {
     public static func log(_ level: LogLevel, _ category: LogCategory, _ message: String) {
         let entry = LogEntry(date: Date(), level: level, category: category, message: message)
 
+        // SEC-09: privacy is set per field. The category is structural, not user data,
+        // so it stays `.public`; the message is user data and is `.private` by default —
+        // OSLog renders it `<private>` to any other process reading the unified log. The
+        // message is additionally redacted (paths and query strings stripped) so that even
+        // a build configured to show private data cannot reconstruct the user's app profile
+        // from the system log. The full, un-redacted line still reaches the `0600` `wega.log`.
         let logger = osLogger(for: category)
+        let redacted = LogRedaction.redact(message)
         switch level {
-        case .debug:   logger.debug("\(message, privacy: .public)")
-        case .info:    logger.info("\(message, privacy: .public)")
-        case .warning: logger.notice("\(message, privacy: .public)")
-        case .error:   logger.error("\(message, privacy: .public)")
+        case .debug:   logger.debug("\(category.label, privacy: .public): \(redacted, privacy: .private)")
+        case .info:    logger.info("\(category.label, privacy: .public): \(redacted, privacy: .private)")
+        case .warning: logger.notice("\(category.label, privacy: .public): \(redacted, privacy: .private)")
+        case .error:   logger.error("\(category.label, privacy: .public): \(redacted, privacy: .private)")
         }
 
         Task { @MainActor in LogStore.shared.append(entry) }

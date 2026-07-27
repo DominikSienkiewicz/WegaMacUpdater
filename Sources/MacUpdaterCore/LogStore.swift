@@ -83,6 +83,20 @@ public final class LogStore: ObservableObject {
     private let loadTailLines: Int
     private let fileQueue = DispatchQueue(label: "wega.logstore.file")
 
+    /// SEC-09 — where a failed background file write lands so it is signalled rather
+    /// than swallowed. `nonisolated` and thread-safe: the writer records into it off the
+    /// main actor, and ``writeFailureCount`` / ``lastWriteError`` read it back.
+    private nonisolated let writeFailures = LogWriteFailureLog()
+
+    /// SEC-09 — how many times persisting a log line to disk has failed. `0` on a healthy
+    /// store; a non-zero value means the on-disk log is incomplete and the UI/diagnostics
+    /// can say so instead of the failure disappearing behind a `try?`.
+    public nonisolated var writeFailureCount: Int { writeFailures.count }
+
+    /// SEC-09 — the most recent log-write failure, in the filesystem's own words, or `nil`
+    /// while every write has succeeded.
+    public nonisolated var lastWriteError: String? { writeFailures.last }
+
     public var logFileURL: URL { directory.appendingPathComponent("wega.log") }
     private var backupURL: URL { directory.appendingPathComponent("wega.log.1") }
 
@@ -141,11 +155,18 @@ public final class LogStore: ObservableObject {
         let fileURL = logFileURL
         let backup = backupURL
         let maxBytes = fileMaxBytes
+        let failures = writeFailures
         fileQueue.async {
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            Self.rotateIfNeeded(fileURL: fileURL, backup: backup, maxBytes: maxBytes,
-                                incoming: line.utf8.count + 1)
-            Self.appendLine(line, to: fileURL)
+            do {
+                try Self.ensureDirectory(dir)
+                Self.rotateIfNeeded(fileURL: fileURL, backup: backup, maxBytes: maxBytes,
+                                    incoming: line.utf8.count + 1)
+                try Self.appendLine(line, to: fileURL)
+            } catch {
+                // SEC-09: a write failure is signalled, not ignored — it lands in the
+                // failure log where `writeFailureCount` / `lastWriteError` surface it.
+                failures.record(error.localizedDescription)
+            }
         }
     }
 
@@ -179,14 +200,62 @@ public final class LogStore: ObservableObject {
         try? FileManager.default.moveItem(at: fileURL, to: backup)
     }
 
-    private static nonisolated func appendLine(_ line: String, to fileURL: URL) {
+    /// SEC-09 — creates the log directory `0700` (owner-only), explicitly rather than at the
+    /// mercy of the process `umask`. `setAttributes` runs even when the directory already
+    /// existed, so a directory created before this guard is tightened on the next write.
+    private static nonisolated func ensureDirectory(_ dir: URL) throws {
+        try FileManager.default.createDirectory(
+            at: dir, withIntermediateDirectories: true,
+            attributes: [.posixPermissions: NSNumber(value: 0o700)]
+        )
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: 0o700)], ofItemAtPath: dir.path
+        )
+    }
+
+    /// SEC-09 — appends one line, creating the file `0600` (owner-only) when it does not yet
+    /// exist. Throws on any failure so the caller can signal it instead of dropping the line.
+    private static nonisolated func appendLine(_ line: String, to fileURL: URL) throws {
         let data = Data((line + "\n").utf8)
-        if let handle = try? FileHandle(forWritingTo: fileURL) {
-            defer { try? handle.close() }
-            _ = try? handle.seekToEnd()
-            try? handle.write(contentsOf: data)
-        } else {
-            try? data.write(to: fileURL)
+        if !FileManager.default.fileExists(atPath: fileURL.path) {
+            guard FileManager.default.createFile(
+                atPath: fileURL.path, contents: nil,
+                attributes: [.posixPermissions: NSNumber(value: 0o600)]
+            ) else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+            try FileManager.default.setAttributes(
+                [.posixPermissions: NSNumber(value: 0o600)], ofItemAtPath: fileURL.path
+            )
         }
+        let handle = try FileHandle(forWritingTo: fileURL)
+        defer { try? handle.close() }
+        _ = try handle.seekToEnd()
+        try handle.write(contentsOf: data)
+    }
+}
+
+/// SEC-09 — a thread-safe tally of log-write failures. ``LogStore/append(_:)`` does its file
+/// I/O on a background queue; a failure there used to vanish behind `try?`. This gives the
+/// failure somewhere to land, off the main actor, so it can be signalled rather than ignored.
+final class LogWriteFailureLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _count = 0
+    private var _last: String?
+
+    func record(_ message: String) {
+        lock.lock(); defer { lock.unlock() }
+        _count += 1
+        _last = message
+    }
+
+    var count: Int {
+        lock.lock(); defer { lock.unlock() }
+        return _count
+    }
+
+    var last: String? {
+        lock.lock(); defer { lock.unlock() }
+        return _last
     }
 }
