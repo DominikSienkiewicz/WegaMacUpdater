@@ -6,6 +6,11 @@
 #   WEGA_CATALOG_KEY=~/.secrets/wega-catalog.pem ./scripts/sign-catalog.sh
 #   ./scripts/sign-catalog.sh /ścieżka/do/klucza.pem
 #
+# Flagi (SEC-07):
+#   --envelope  zapisuje katalog jako kopertę (payload + podpis w jednym dokumencie)
+#   --bump      podbija `generation` przed podpisaniem — rób to przy KAŻDEJ publikacji
+#   --unwrap    rozpakowuje kopertę z powrotem do edytowalnego JSON-a; klucza nie wymaga
+#
 # Zapisuje `<katalog>.sig` — base64 odłączonego podpisu nad DOKŁADNYMI bajtami pliku.
 # Po podpisaniu weryfikuje własny wynik kluczem publicznym wkompilowanym w aplikację;
 # przy niezgodności nie zostawia pliku .sig.
@@ -47,10 +52,15 @@ SIGNATURE="$CATALOG.sig"
 # nie ma już dwóch wpisów cache, które mogą się rozjechać. `--unwrap` wraca do postaci
 # płaskiej, żeby katalog dało się edytować ręcznie; klucza nie wymaga.
 MODE="detached"
-case "${1:-}" in
-    --envelope) MODE="envelope"; shift ;;
-    --unwrap)   MODE="unwrap";   shift ;;
-esac
+BUMP=0
+while true; do
+    case "${1:-}" in
+        --envelope) MODE="envelope"; shift ;;
+        --unwrap)   MODE="unwrap";   shift ;;
+        --bump)     BUMP=1;          shift ;;
+        *) break ;;
+    esac
+done
 
 KEY="${1:-${WEGA_CATALOG_KEY:-}}"
 
@@ -58,6 +68,47 @@ KEY="${1:-${WEGA_CATALOG_KEY:-}}"
 envelope_payload_base64() {
     grep -q '"wegaCatalogEnvelope"' "$1" || return 0
     sed -n 's/.*"payload"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1" | head -1
+}
+
+# Bieżąca generacja publikacji; 0, gdy pola jeszcze nie ma (katalogi sprzed SEC-07).
+catalog_generation() {
+    local value
+    value="$(sed -n 's/.*"generation"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$1" | head -1)"
+    printf '%s\n' "${value:-0}"
+}
+
+# Podnosi `generation` o jeden, wstawiając pole tuż za `schemaVersion`, jeśli go nie było.
+#
+# To jest licznik, przez który stary — i wciąż poprawnie podpisany — katalog przestaje być
+# ważny wiecznie. Podbicie go przy KAŻDEJ publikacji jest warunkiem, żeby ochrona przed
+# cofnięciem cokolwiek znaczyła, więc jest flagą skryptu, a nie punktem do zapamiętania.
+bump_generation() {
+    local file="$1" next tmp
+    next=$(( $(catalog_generation "$file") + 1 ))
+    tmp="$(mktemp)"
+    if grep -q '"generation"' "$file"; then
+        sed 's/"generation"[[:space:]]*:[[:space:]]*[0-9][0-9]*/"generation": '"$next"'/' "$file" > "$tmp"
+    else
+        # awk, nie sed: `\n` w prawej stronie podstawienia to rozszerzenie GNU, którego
+        # BSD-owy sed z macOS nie zna — wstawiłby dosłowne "n" zamiast nowej linii.
+        awk -v gen="$next" '
+            !inserted && /"schemaVersion"[[:space:]]*:/ {
+                print
+                match($0, /^[[:space:]]*/)
+                printf "%s\"generation\": %s,\n", substr($0, RSTART, RLENGTH), gen
+                inserted = 1
+                next
+            }
+            { print }
+        ' "$file" > "$tmp"
+    fi
+    if ! grep -q '"generation"[[:space:]]*:[[:space:]]*'"$next" "$tmp"; then
+        rm -f "$tmp"
+        echo "błąd: nie udało się podbić 'generation' — czy katalog ma pole \"schemaVersion\"?" >&2
+        exit 1
+    fi
+    mv "$tmp" "$file"
+    echo "→ generation: $next"
 }
 
 if [[ "$MODE" == "unwrap" ]]; then
@@ -217,6 +268,15 @@ if [[ -n "$EXISTING_PAYLOAD" ]]; then
     printf '%s' "$EXISTING_PAYLOAD" | base64 -d > "$PAYLOAD_FILE"
 else
     cat "$CATALOG" > "$PAYLOAD_FILE"
+fi
+
+if [[ "$BUMP" -eq 1 ]]; then
+    bump_generation "$PAYLOAD_FILE"
+    # W trybie odłączonym podpis obejmuje plik na dysku, więc podbity payload musi tam
+    # wylądować ZANIM go podpiszemy. W trybie koperty zapis niżej i tak niesie ten payload.
+    if [[ "$MODE" == "detached" ]]; then
+        cat "$PAYLOAD_FILE" > "$CATALOG"
+    fi
 fi
 
 "$OPENSSL_BIN" pkeyutl -sign -inkey "$KEY" -rawin -in "$PAYLOAD_FILE" | base64 | tr -d '\n' > "$TMP"
