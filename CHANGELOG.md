@@ -44,6 +44,10 @@ bump and move its entries under the new version heading when cutting a release.
   cryptographically identical to tampering; one document cannot skew against itself. Wega
   reads both formats, so publishing can switch over at any time with
   `./scripts/sign-catalog.sh --envelope`.
+- Unit tests for `JetBrainsUpdateChecker` and `SparkleUpdateChecker` — the two manual
+  checkers that previously had no dedicated coverage despite driving 14 JetBrains IDEs
+  and every generic Sparkle app. Both are exercised through the injected `HTTPClient`
+  seam with a fake transport (no network).
 - **Anuluj for a running update (REL-12).** The Updates screen's longest operation — a
   multi-gigabyte, multi-minute upgrade — used to turn its button into a spinner with no way
   out. It now offers a stop button that takes effect at the next package boundary: the
@@ -51,10 +55,6 @@ bump and move its entries under the new version heading when cutting a release.
   report says how many packages were updated and how many were left untouched instead of
   announcing a finished run. An upgrade still queued behind another operation is dropped
   outright, since it has changed nothing yet.
-- Unit tests for `JetBrainsUpdateChecker` and `SparkleUpdateChecker` — the two manual
-  checkers that previously had no dedicated coverage despite driving 14 JetBrains IDEs
-  and every generic Sparkle app. Both are exercised through the injected `HTTPClient`
-  seam with a fake transport (no network).
 - Shared `FakeHTTPTransport` test double in `TestDoubles.swift` for HTTP-level checker
   tests.
 - Diagnostic logging through `WegaLog` (OSLog, the in-app Logs tab and the rotating
