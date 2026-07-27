@@ -56,6 +56,13 @@ bump and move its entries under the new version heading when cutting a release.
 - This `CHANGELOG.md`.
 
 ### Changed
+- Selection checkboxes in the update and uninstall lists, and in the leftover picker, are
+  real `Toggle`s behind a custom style that keeps Wega's honey glyph. VoiceOver now
+  announces them as a checkbox with a state instead of a button carrying a value, and the
+  space bar activates them as a system control. The tri-state "select all" control stays a
+  button on purpose — a two-state checkbox cannot say "some", so it keeps the spoken count.
+  Migration and npm/brew duplicate rows name the app in their action labels, so identical
+  buttons are distinguishable without sight.
 - Hardened the no-TTY sudo path (`SEC-05`). Production no longer writes or executes
   user-modifiable askpass/sudo shell scripts from Application Support. The packaged app
   embeds compiled `WegaAskpass` and `WegaSudoShim` executables, signs them inside-out,

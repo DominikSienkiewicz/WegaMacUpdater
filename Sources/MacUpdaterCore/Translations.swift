@@ -197,6 +197,11 @@ extension Translations {
         "Nie udało się: %@. Szczegóły w logu.": "Failed: %@. Details in the log.",
         "%@ Cask wymaga hasła administratora — uruchom Wega ponownie, helper askpass zapyta o nie w okienku.": "%@ The cask requires an administrator password — launch Wega again, the askpass helper will ask for it in a window.",
         "Aktualizacja niekompletna": "Update incomplete",
+        // UX-02 — VoiceOver labels naming *which* row an identical action button belongs to.
+        "Przepnij %@ do Homebrew": "Adopt %@ into Homebrew",
+        "Otwórz %@ w App Store": "Open %@ in the App Store",
+        "Usuń %@ z npm": "Remove %@ from npm",
+        "Usuń %@ z brew": "Remove %@ from brew",
         "Część pakietów się nie zaktualizowała.": "Some packages didn't update.",
         "Zaktualizowano %@ pakietów": "Updated %@ packages",
         "Wszystko gotowe.": "All done.",

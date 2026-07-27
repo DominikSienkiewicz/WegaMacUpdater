@@ -226,6 +226,7 @@ struct MigrationView: View {
                                     }
                                     .controlSize(.small)
                                     .disabled(dupBusy != nil)
+                                    .accessibilityLabel(trf("Usuń %@ z npm", dup.npmPackage))
 
                                     Button {
                                         dupConfirm = .init(dup: dup, side: .brew)
@@ -238,6 +239,7 @@ struct MigrationView: View {
                                     }
                                     .controlSize(.small)
                                     .disabled(dupBusy != nil)
+                                    .accessibilityLabel(trf("Usuń %@ z brew", dup.brewToken))
                                 }
                             }
                             .padding(.horizontal, 14)
@@ -465,6 +467,9 @@ private struct MigrationRow: View {
             }
             .controlSize(.small)
             .disabled(isBusy)
+            // UX-02 — every row carries the same button, so "Przepnij" alone tells a
+            // VoiceOver user which of them they are on: nothing.
+            .accessibilityLabel(trf("Przepnij %@ do Homebrew", app.name))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -499,6 +504,7 @@ private struct AppStoreMigrationRow: View {
                 Label(tr("Otwórz w App Store"), systemImage: "basket")
             }
             .controlSize(.small)
+            .accessibilityLabel(trf("Otwórz %@ w App Store", app.name))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)

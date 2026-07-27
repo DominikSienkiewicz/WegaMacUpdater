@@ -166,13 +166,10 @@ struct UninstallView: View {
                         LazyVStack(spacing: 0) {
                             ForEach(filtered) { app in
                                 let isSelected = selected.contains(app.id)
-                                Button {
-                                    toggle(app.id)
-                                } label: {
+                                // UX-02 — a real `Toggle`, so the row announces itself as a
+                                // checkbox with a state rather than as a button with a value.
+                                Toggle(isOn: selectionToggleBinding(isOn: isSelected) { toggle(app.id) }) {
                                     HStack(spacing: 12) {
-                                        Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                                            .foregroundStyle(isSelected ? Color.wegaHoney : .secondary)
-                                            .font(.body)
                                         AppIcon(path: app.path, size: 26)
                                         VStack(alignment: .leading, spacing: 1) {
                                             Text(app.name).font(.body.weight(.medium))
@@ -199,13 +196,11 @@ struct UninstallView: View {
                                     }
                                     .contentShape(Rectangle())
                                 }
-                                .buttonStyle(.plain)
+                                .toggleStyle(WegaCheckboxToggleStyle())
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 9)
                                 .background(isSelected ? Color.wegaDanger.opacity(0.06) : Color.clear)
                                 .accessibilityLabel(selectionAccessibilityLabel(for: app, showsLocation: showsLocation(app)))
-                                .accessibilityValue(selectionAccessibilityValue(isSelected))
-                                .accessibilityAddTraits(isSelected ? .isSelected : [])
                                 // UX-11d: right-click gives the row the actions it otherwise
                                 // lacked — reveal it in Finder, copy its path, or toggle its
                                 // removal selection.
@@ -802,11 +797,8 @@ private struct UninstallLeftoverRow: View {
     }
 
     var body: some View {
-        Button(action: toggle) {
+        Toggle(isOn: selectionToggleBinding(isOn: isOn, toggle: toggle)) {
             HStack(spacing: 10) {
-                Image(systemName: isOn ? "checkmark.square.fill" : "square")
-                    .foregroundStyle(isOn ? Color.wegaHoney : .secondary)
-                    .font(.system(size: 14))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(url.lastPathComponent)
                         .font(.system(size: 11, weight: .medium))
@@ -820,9 +812,7 @@ private struct UninstallLeftoverRow: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .toggleStyle(WegaCheckboxToggleStyle(glyphFont: .system(size: 14), spacing: 10))
         .accessibilityLabel(displayPath)
-        .accessibilityValue(selectionAccessibilityValue(isOn))
-        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }
