@@ -2,8 +2,17 @@ import Testing
 import Foundation
 @testable import MacUpdaterCore
 
-/// Two properties the self-update design leans on, held today by construction and therefore
-/// one refactor away from being lost silently.
+/// The ignore/pin/skip policy design leans on reaching Wega's own row exactly like any other
+/// app's, held today by construction and therefore one refactor away from being lost silently.
+///
+/// A second property — Wega's entry is counted as manual, never installable — used to have a
+/// test here too, but that test only exercised `UnifiedUpdateCount`'s pass-through arithmetic
+/// (feeding `unifiedCount(installable: 0, manual: 1)` literals and asserting they came back
+/// unchanged) without ever constructing a `ManualOutdatedApp` with `source: .wega(...)`. It
+/// could never turn red if a refactor actually moved Wega into the installable count. The real
+/// installable/manual split is decided in the app target, by `ScanStore.updateCount`
+/// (`Sources/MacUpdater/ScanStore.swift`), not in `MacUpdaterCore` — see
+/// `SelfUpdateManualSplitTests` in `Tests/MacUpdaterUITests` for the test that actually reaches it.
 @Suite("Self-update policy")
 struct SelfUpdatePolicyTests {
     private func wega(version: String = "1.2.0") -> ManualOutdatedApp {
@@ -17,14 +26,6 @@ struct SelfUpdatePolicyTests {
             releaseNotes: "",
             bundleIdentifier: "com.wega.macupdater"
         )
-    }
-
-    /// "Update all" must never try to replace the app that is running the update: Wega's entry
-    /// is manual, and the button counts only the installable half.
-    @Test func theWegaEntryIsCountedAsManualNotInstallable() {
-        let count = UpdatePlanner.unifiedCount(installable: 0, manual: 1)
-        #expect(count.installable == 0)
-        #expect(count.manual == 1)
     }
 
     /// The menu's "don't update this" reaches Wega's own row like any other app's.
