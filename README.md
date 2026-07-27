@@ -219,9 +219,9 @@ Privileged operations beyond that go through a signed XPC helper with typed, all
 ## Requirements
 
 - macOS 26 (Tahoe) or newer
-- Xcode 26 — the full app, not the Command Line Tools alone: the build needs the
-  `FoundationModelsMacros` plugin, which ships only with Xcode (`scripts/check.sh` stops
-  early and says so when `xcode-select -p` points elsewhere)
+- Xcode 26 — the full app, not the Command Line Tools alone: SwiftLint needs a SourceKit
+  that ships only with Xcode (`scripts/check.sh` stops early and says so when
+  `xcode-select -p` points elsewhere)
 - Optional: Homebrew at `/opt/homebrew/bin/brew` or `/usr/local/bin/brew` — without it Wega
   still checks the Mac App Store, npm and every vendor feed, and says so instead of failing
 - Optional: `mas` at `/opt/homebrew/bin/mas` or `/usr/local/bin/mas` (App Store features degrade gracefully without it)

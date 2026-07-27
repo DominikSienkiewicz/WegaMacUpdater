@@ -178,6 +178,15 @@ bump and move its entries under the new version heading when cutting a release.
   name, it overwrote application sources, staged the whole repository, committed
   directly to `main`, and could delete a worktree and branch. A regression guard in
   `scripts/check.sh` prevents this destructive entry point from returning.
+- The unreachable **on-device model tier** of release-notes triage (`LT-04`). Wega shipped
+  a second triage path built on Apple's Foundation Models, meant to produce a
+  natural-language summary beside the "possible security fix" badge. Nothing ever called
+  it and no screen ever displayed that summary, but it still made the `FoundationModelsMacros`
+  plugin a hard build requirement — so contributors needed the full Xcode for a feature no
+  user could reach, and the documentation described the app as doing on-device AI triage
+  that never ran. The badge is unchanged: it has always come from the deterministic keyword
+  scan, which stays and is now covered by `ReleaseNotesTriageTests`. `README.md` and
+  `CONTRIBUTING.md` now describe the badge and the toolchain requirement accurately.
 - The post-migration **"clean leftovers"** step (`SEC-01`). After a successful
   `brew install --cask` the Migration screen scanned `~/Library` for the app's bundle id
   and offered every hit as a leftover of the old installation. A migration doesn't change
