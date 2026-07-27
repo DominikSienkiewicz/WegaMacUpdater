@@ -16,10 +16,11 @@ set -euo pipefail
 #   2. swift test               — full unit-test suite
 #   3. swiftlint lint --strict  — zero lint violations (warnings fail too)
 #
-# Note: building requires a full Xcode toolchain — Command Line Tools alone
-# lack the FoundationModelsMacros plugin, so ReleaseNotesTriage.swift won't
-# compile (xcode-select -p must point at Xcode.app, not /Library/Developer/
-# CommandLineTools).
+# Note: this gate requires a full Xcode toolchain — Command Line Tools alone do
+# not carry a SourceKit SwiftLint can load (xcode-select -p must point at
+# Xcode.app, not /Library/Developer/CommandLineTools). LT-04 removed the second
+# reason, the FoundationModelsMacros plugin, along with the dead on-device
+# release-notes triage tier that needed it.
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -63,13 +64,13 @@ echo "→ ./scripts/test-verify-bundle-guard.sh"
 echo "→ ./scripts/test-catalog-envelope-guard.sh"
 ./scripts/test-catalog-envelope-guard.sh
 
-# Fail fast on a CommandLineTools-only toolchain: it lacks the FoundationModelsMacros
-# plugin (ReleaseNotesTriage's @Generable/@Guide won't expand) and a SourceKit that
-# SwiftLint can load — so build, test AND lint all break with confusing errors.
+# Fail fast on a CommandLineTools-only toolchain: it lacks a SourceKit that SwiftLint
+# can load, so the lint step breaks with confusing errors after build and test have
+# already spent their minutes.
 DEV="$(xcode-select -p 2>/dev/null || true)"
 if [[ "$DEV" == *"CommandLineTools"* || -z "$DEV" ]]; then
   echo "❌ Aktywny toolchain to '$DEV' — brak pełnego Xcode." >&2
-  echo "   Ten projekt wymaga Xcode (plugin FoundationModelsMacros + SourceKit dla SwiftLint)." >&2
+  echo "   Ten projekt wymaga Xcode (SourceKit dla SwiftLint)." >&2
   echo "   → Zainstaluj Xcode i przełącz:  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer" >&2
   echo "   → Albo weryfikuj w CI (GitHub Actions ma Xcode): zrób push i sprawdź workflow." >&2
   exit 2

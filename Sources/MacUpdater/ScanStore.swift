@@ -103,6 +103,9 @@ final class ScanStore: ObservableObject {
     /// with the view tree; this one outlives a language re-key and a tab switch, and gives
     /// **Cancel** something to cancel.
     var scanTask: Task<Void, Never>?
+    /// REL-12 — whether the running upgrade has been asked to stop, and what stopping it
+    /// cost. Written only through the three operations below.
+    @Published private(set) var updateInterruption = UpdateInterruption()
 
     init(
         resultStore: ScanResultStore = ScanResultStore(),
@@ -115,6 +118,47 @@ final class ScanStore: ObservableObject {
     /// Services are owned by the app-level `AppViewModel`; hand them over on first appearance.
     func attach(model: AppViewModel) {
         self.model = model
+    }
+
+    // MARK: - REL-12: stopping a running update
+
+    /// "Anuluj" for the longest operation in the app.
+    ///
+    /// An upgrade already under way is *not* killed: `brew` is replacing an app bundle, and a
+    /// process shot mid-write leaves one behind half-replaced. The request is recorded and
+    /// honoured at the next package boundary — the package running finishes, nothing after it
+    /// starts.
+    func cancelUpdate() {
+        guard updating, !updateInterruption.isRequested else { return }
+        updateInterruption.request()
+        WegaLog.info(.homebrew, "Anulowanie aktualizacji — zatrzymam po bieżącym pakiecie")
+    }
+
+    /// Called by the upgrade at every package boundary. `remaining` is everything the run
+    /// would still have attempted, recorded as skipped so the report can say so.
+    func shouldStopUpdate(before remaining: [String]) -> Bool {
+        updateInterruption.shouldStop(before: remaining)
+    }
+
+    /// A new run starts with a clean stop switch — a previous cancellation may not leak into
+    /// the next upgrade.
+    func resetUpdateInterruption() {
+        updateInterruption = UpdateInterruption()
+    }
+
+    /// What a stopped run says: how much it managed and how much it left untouched. The
+    /// packages it never reached are not "up to date", so this never reads as a finished run.
+    func reportInterruptedRun(upgraded: Int) {
+        let skipped = updateInterruption.skippedKeys.count
+        showBanner(BannerData(
+            variant: .danger,
+            title: tr("Aktualizacja przerwana"),
+            message: trf("Zatrzymano po bieżącym pakiecie: zaktualizowano %@, pominięto %@. Nic nie zostało przerwane w połowie.",
+                         "\(upgraded)", "\(skipped)")
+        ))
+        emitActivitySignal(.idle)
+        emitWegaState(WegaState(pose: .idle, line: tr("Przerwałam aktualizację.")))
+        WegaLog.info(.homebrew, "Aktualizacja przerwana na granicy pakietu: zaktualizowano \(upgraded), pominięto \(skipped)")
     }
 
     /// M2(a)+(b) — put a result on screen **now**, before any scanning starts.

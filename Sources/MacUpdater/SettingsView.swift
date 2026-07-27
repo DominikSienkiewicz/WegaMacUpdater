@@ -8,6 +8,13 @@ import MacUpdaterCore
 struct SettingsView: View {
     var body: some View {
         InfoView(onWegaState: { _ in })
-            .frame(width: 640, height: 600)
+            .frame(
+                minWidth: WegaLayout.settingsMinWidth,
+                idealWidth: WegaLayout.settingsIdealWidth,
+                maxWidth: .infinity,
+                minHeight: WegaLayout.settingsMinHeight,
+                idealHeight: WegaLayout.settingsIdealHeight,
+                maxHeight: .infinity
+            )
     }
 }

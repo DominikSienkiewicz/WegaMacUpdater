@@ -28,6 +28,10 @@ extension Translations {
         // REL-08 — niska pewność dopasowania blokuje automatyczne przejęcie (`--force`).
         "Dopasowanie %@ → %@ jest zbyt niepewne, aby przepiąć automatycznie. Zweryfikuj je ręcznie przed migracją.":
             "The %@ → %@ match is too uncertain to migrate automatically. Verify it manually before migrating.",
+        // LT-03 — korelacja Team ID: zainstalowana aplikacja podpisana przez innego wydawcę
+        // niż ten zapamiętany dla caska.
+        "Zainstalowana aplikacja %@ jest podpisana przez innego wydawcę (%@) niż wydawca znany dla caska %@ (%@). Wega nie przepnie jej automatycznie.":
+            "The installed %@ is signed by a different publisher (%@) than the one known for the %@ cask (%@). Wega will not migrate it automatically.",
         // SEC-08 — sygnalizacja nieweryfikowanego overlaya endpoints.json w karcie Info.
         "Nieweryfikowana konfiguracja endpointów": "Unverified endpoints configuration",
         "Niezweryfikowany": "Unverified",
@@ -125,6 +129,16 @@ extension Translations {
             "Background mode — the schedule, badge, notifications and silent updates — runs only while Wega is open. Turn this on so macOS launches Wega at login and background mode keeps working after a restart of the Mac.",
         "Element logowania został wyłączony w Ustawieniach systemowych. Włącz go ponownie w Ustawienia → Elementy logowania.":
             "The login item was switched off in System Settings. Turn it back on in Settings → Login Items.",
+        // LT-05 — opt-in na lokalne raporty awarii (MetricKit). Nic nie wychodzi z Maca.
+        "Raportowanie awarii": "Crash reporting",
+        "Zbieraj lokalnie raporty awarii Wegi": "Collect Wega crash reports locally",
+        "Gdy Wega się wysypie albo zawiesi, macOS (MetricKit) przekazuje jej własny raport przy następnym uruchomieniu. Raport zostaje na tym Macu — Wega nigdzie go nie wysyła. Zapisujemy wersję, system, architekturę, powód zakończenia i ślad stosu; ścieżki i adresy są usuwane.":
+            "When Wega crashes or hangs, macOS (MetricKit) hands it its own report on the next launch. The report stays on this Mac — Wega never sends it anywhere. Version, OS, architecture, termination reason and the stack trace are kept; paths and addresses are stripped.",
+        "Brak zapisanych raportów.": "No stored reports.",
+        "Zapisane raporty: %d (do 20, przez 90 dni)": "Stored reports: %d (up to 20, for 90 days)",
+        "Kopiuj raporty": "Copy reports",
+        "Usuń raporty": "Delete reports",
+        "Usunąć zapisane raporty awarii?": "Delete the stored crash reports?",
         "Sprawdźmy, co się zestarzało": "Let's check what's gotten old",
         "Wega zajrzy do Homebrew oraz Mac App Store i powie, co warto odświeżyć.": "Wega will look into Homebrew and the Mac App Store and tell you what's worth refreshing.",
         "Sprawdź aktualizacje": "Check for updates",
@@ -649,6 +663,16 @@ extension Translations {
         "Zgłoś aplikację": "Report app",
         "Zgłoś tę aplikację do katalogu": "Report this app to the catalog",
         "Diagnostyka systemu": "System diagnostics",
+        // OBS-02 — redagowana paczka diagnostyczna (karta Info + pasek widoku Logi).
+        "Eksportuj diagnostykę": "Export diagnostics",
+        "Zapisuje paczkę zip z oboma plikami logów, wersjami, wykrytymi menedżerami, statusem harmonogramu i historią aktualizacji. "
+            + "Ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami; nic nie jest nigdzie wysyłane.":
+            "Saves a zip with both log files, versions, detected managers, schedule status and update history. "
+            + "Paths, tokens and account names are replaced with placeholders; nothing is sent anywhere.",
+        "Zapisuje redagowaną paczkę zip z oboma plikami logów i pełnym kontekstem środowiska.":
+            "Saves a redacted zip with both log files and the full environment context.",
+        "Paczka jest redagowana — ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami.":
+            "The bundle is redacted — paths, tokens and account names are replaced with placeholders.",
         "Katalog aplikacji": "Application catalog",
         "Wega pobiera mapowania aplikacji (repozytoria GitHub, kody IDE JetBrains, feedy Sparkle) z sieci, "
             + "więc nowe aplikacje są obsługiwane bez aktualizacji Wegi. Zmiany zastosują się po ponownym uruchomieniu.":
@@ -693,6 +717,14 @@ extension Translations {
         "Skan rozpoczęty": "Scan started",
         // M2(c) — anulowanie skanu ma swój komunikat; skan nie udaje, że się skończył.
         "Przerwałam skanowanie.": "I stopped scanning.",
+        // REL-12 — anulowanie aktualizacji: zatrzymanie na granicy pakietu, nie w połowie instalacji.
+        "Przerywam…": "Stopping…",
+        "Zatrzymam po bieżącym pakiecie — trwającej instalacji nie przerywam w połowie.":
+            "I'll stop after the current package — an install already running is never cut in half.",
+        "Aktualizacja przerwana": "Update stopped",
+        "Zatrzymano po bieżącym pakiecie: zaktualizowano %@, pominięto %@. Nic nie zostało przerwane w połowie.":
+            "Stopped after the current package: %@ updated, %@ skipped. Nothing was cut off halfway.",
+        "Przerwałam aktualizację.": "I stopped the update.",
         "Zaglądam do notatek…": "Checking my notes…",
         "Ostrzeżenia+": "Warnings+",
         "Tylko błędy": "Errors only",

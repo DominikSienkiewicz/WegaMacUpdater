@@ -21,7 +21,7 @@ struct SelfUpdateRestartTests {
         SelfUpdateController.Dependencies(
             check: { .upToDate },
             download: { $0 },
-            verify: { _ in },
+            verify: { _, _ in },
             installOrOpen: { _, _ in installed },
             openFallback: {},
             relaunch: relaunched,

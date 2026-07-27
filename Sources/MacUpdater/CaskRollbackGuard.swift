@@ -39,7 +39,7 @@ enum CaskRollbackGuard {
         for token in tokens {
             guard let appURL = appPaths[token] else { continue }
             let currentTeamID = CodeSignatureVerifier.teamID(ofAppAt: appURL)
-            let audit = TeamIDLedger.shared.record(bundleID: "cask:\(token)", teamID: currentTeamID)
+            let audit = TeamIDLedger.shared.record(bundleID: TeamIDLedger.caskKey(token), teamID: currentTeamID)
             guard case let .changed(old, new) = audit else { continue }
             vetoes[token] = audit
             WegaLog.error(
@@ -155,7 +155,7 @@ enum CaskRollbackGuard {
         switch publisherBaseline {
         case .ledger:
             publisherAudit = TeamIDLedger.shared.record(
-                bundleID: "cask:\(token)",
+                bundleID: TeamIDLedger.caskKey(token),
                 teamID: installedTeamID
             )
         case .expected(let expectedTeamID):
@@ -180,7 +180,7 @@ enum CaskRollbackGuard {
                 : .rollbackFailed
         case .firstSeen, .unchanged:
             if case .expected = publisherBaseline {
-                TeamIDLedger.shared.record(bundleID: "cask:\(token)", teamID: installedTeamID)
+                TeamIDLedger.shared.record(bundleID: TeamIDLedger.caskKey(token), teamID: installedTeamID)
             }
             if let snapshotURL {
                 try? FileManager.default.removeItem(at: snapshotURL)

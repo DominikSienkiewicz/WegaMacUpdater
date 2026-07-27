@@ -19,7 +19,7 @@ struct RestartSection: View {
             ForEach(candidates, id: \.processName) { info in
                 HStack(spacing: 12) {
                     PackageLetterIcon(name: info.appName, size: 32)
-                    Text(info.appName).font(.system(size: 13, weight: .medium))
+                    Text(info.appName).font(.wega(.body, weight: .medium))
                     Spacer()
                     Button { onRestart(info) } label: {
                         if busyProcess == info.processName {
@@ -52,12 +52,12 @@ struct BrewLogPanel: View {
             HStack(spacing: 8) {
                 Circle().fill(Color.wegaSuccess).frame(width: 6, height: 6)
                 Text("brew log")
-                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    .font(.wega(.footnote, weight: .semibold, monospaced: true))
                     .foregroundStyle(.tertiary)
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.wega(.caption, weight: .semibold))
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -72,7 +72,7 @@ struct BrewLogPanel: View {
                     VStack(alignment: .leading, spacing: 1) {
                         ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
                             Text(line)
-                                .font(.system(size: 10.5, design: .monospaced))
+                                .font(.wega(.footnote, monospaced: true))
                                 .foregroundStyle(line.hasPrefix("$") ? Color.wegaHoney : Color.primary.opacity(0.75))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .id(i)
@@ -94,23 +94,37 @@ struct CheckingBar: View {
     let command: String
     let delay:   Double
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visible = false
 
     var body: some View {
         HStack(spacing: 12) {
             ProgressView().controlSize(.small).tint(Color.wegaHoney)
             Text("$ \(command)")
-                .font(.system(size: 12, design: .monospaced))
+                .font(.wega(.callout, monospaced: true))
                 .foregroundStyle(.secondary)
             Spacer()
             RoundedRectangle(cornerRadius: 2)
                 .fill(Color.wegaHoney.opacity(0.15))
                 .frame(height: 4)
                 .overlay(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(LinearGradient(colors: [Color.wegaToffee, Color.wegaHoney], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: visible ? .infinity : 0)
-                        .animation(.linear(duration: 2).repeatForever(autoreverses: false), value: visible)
+                    // UX-03 — the sweeping fill is decoration: it reports no progress the
+                    // spinner and the command line beside it do not already report. With
+                    // "Ogranicz ruch" on it is dropped rather than frozen at full width,
+                    // which would read as "finished".
+                    if !reduceMotion {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(LinearGradient(colors: [Color.wegaToffee, Color.wegaHoney], startPoint: .leading, endPoint: .trailing))
+                            .frame(width: visible ? .infinity : 0)
+                            .animation(
+                                ContinuousMotion.forever(
+                                    .linear(duration: 2),
+                                    autoreverses: false,
+                                    reduceMotion: reduceMotion
+                                ),
+                                value: visible
+                            )
+                    }
                 }
                 .frame(width: 160)
         }
@@ -223,18 +237,18 @@ struct PinVersionSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(tr("Przypnij wersję")).font(.system(size: 16, weight: .bold))
-                Text(request.name).font(.system(size: 13)).foregroundStyle(.secondary)
+                Text(tr("Przypnij wersję")).font(.wega(.title3, weight: .bold))
+                Text(request.name).font(.wega(.body)).foregroundStyle(.secondary)
             }
 
             Text(tr("Wega nie pokaże aktualizacji nowszych niż podana wersja. Zostaw bieżącą, żeby zatrzymać aplikację tu, gdzie jest."))
-                .font(.system(size: 12))
+                .font(.wega(.callout))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             TextField(tr("Wersja"), text: $version)
                 .textFieldStyle(.roundedBorder)
-                .font(.system(size: 13, design: .monospaced))
+                .font(.wega(.body, monospaced: true))
 
             HStack {
                 Spacer()
@@ -246,7 +260,7 @@ struct PinVersionSheet: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
-                .tint(Color.wegaHoney)
+                .tint(Color.wegaHoneyFill)
                 .foregroundStyle(Color.wegaInk)
                 .disabled(version.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -290,7 +304,7 @@ struct ManualUpdateSection: View {
                 HStack(spacing: 12) {
                     AppIcon(path: item.path, size: 32)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(item.name).font(.system(size: 13, weight: .medium))
+                        Text(item.name).font(.wega(.body, weight: .medium))
                         let isSecurity = item.releaseNotes.map { ReleaseNotesTriage.heuristic($0).isLikelySecurityFix } ?? false
                         VersionArrow(
                             from: item.installedVersion ?? "—",
@@ -305,7 +319,7 @@ struct ManualUpdateSection: View {
                         // FEAT-06: doradczy badge z triage notatek wydania (np. GitHub).
                         if isSecurity {
                             Label(tr("możliwa poprawka bezpieczeństwa"), systemImage: "shield.lefthalf.filled")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.wega(.footnote, weight: .medium))
                                 .foregroundStyle(Color.wegaDanger)
                         }
                     }
@@ -427,7 +441,7 @@ struct ManualUpdateActionView: View {
             .disabled(busyToken != nil)
         case .appStore:
             Text(tr("zaktualizuj w App Store"))
-                .font(.system(size: 11))
+                .font(.wega(.subheadline))
                 .foregroundStyle(.tertiary)
         case .openURL(let url, let style):
             Button {
@@ -490,7 +504,7 @@ private struct ReleaseNotesDisclosure: View {
             DisclosureGroup(isExpanded: $expanded) {
                 ScrollView {
                     Text(text)
-                        .font(.system(size: 11))
+                        .font(.wega(.subheadline))
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -499,7 +513,7 @@ private struct ReleaseNotesDisclosure: View {
                 .frame(maxHeight: 160)
             } label: {
                 Text(tr("Co nowego"))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.wega(.subheadline, weight: .medium))
                     .foregroundStyle(.tertiary)
             }
         }

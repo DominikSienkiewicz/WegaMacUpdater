@@ -34,7 +34,7 @@ struct WegaMacUpdaterApp: App {
                 .environmentObject(commandCenter)
                 // Re-key the whole tree on language change so every tr(...) re-evaluates.
                 .id(localization.language)
-                .tint(Color.wegaHoney)
+                .tint(Color.wegaHoneyFill)
                 .task {
 #if DEBUG
                     if await scan.runLayoutRegressionScenarioIfRequested() { return }
@@ -60,6 +60,10 @@ struct WegaMacUpdaterApp: App {
                 .environmentObject(policies)
                 .id(localization.language)
         }
+        // UX-03 — a Settings window whose content is fixed-size cannot be resized at all.
+        // `.contentSize` lets the frame's ideal size open the window and its min/max let the
+        // user (or a larger system text size) grow it.
+        .windowResizability(.contentSize)
 
         MenuBarExtra {
             MenuBarContent(agent: menuBar)
@@ -84,6 +88,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_: Notification) {
         guard enforceSingleInstance() else { return }
+        // LT-05: attach the MetricKit source first thing. A diagnostic recorded by a previous
+        // run is delivered shortly after launch, so a late subscription can miss the very
+        // crash it exists to capture. Attaching does not subscribe — the controller starts
+        // delivery only if the user has opted in.
+        CrashReportingController.shared.attach(source: MetricKitCrashDiagnosticSource())
         registerMutationSources()
         MenuBarAgent.shared.start()
         refreshAppCatalog()

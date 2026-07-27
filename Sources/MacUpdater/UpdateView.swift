@@ -168,7 +168,7 @@ struct UpdateView: View {
                 .frame(minWidth: 0, maxWidth: .infinity)
             if case .running(let phase) = scan.progress {
                 Text(phase.commandLabel)
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.wega(.subheadline, monospaced: true))
                     .foregroundStyle(.tertiary)
             }
             SniffingScene(
@@ -202,7 +202,7 @@ struct UpdateView: View {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(headline)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.wega(.title2, weight: .semibold))
                     if let d = scan.lastCheck {
                         // M2 — a restored list must never pass for a fresh one. Anything
                         // older than a quarter of an hour carries its date, and a day-old
@@ -213,9 +213,9 @@ struct UpdateView: View {
                                  ? trf("Znaleziono %@", "\(d.formatted(date: .abbreviated, time: .shortened))")
                                  : trf("Sprawdzono %@", "\(d.formatted(date: .omitted, time: .shortened))"))
                             Text("·")
-                            Text(sourceStamp).font(.system(size: 11, design: .monospaced))
+                            Text(sourceStamp).font(.wega(.subheadline, monospaced: true))
                         }
-                        .font(.system(size: 11))
+                        .font(.wega(.subheadline))
                         .foregroundStyle(freshness.needsExplicitTimestamp ? AnyShapeStyle(Color.wegaToffee) : AnyShapeStyle(.tertiary))
                     }
                 }
@@ -231,9 +231,22 @@ struct UpdateView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(Color.wegaHoney)
+                    .tint(Color.wegaHoneyFill)
                     .foregroundStyle(Color.wegaInk)
                     .disabled(scan.updating)
+
+                    // REL-12 — the longest operation in the app finally has a stop button.
+                    // It does not kill the package manager mid-install; it stops the run at
+                    // the next package boundary, which is the only safe place to stop.
+                    if scan.updating {
+                        Button(scan.updateInterruption.isRequested
+                               ? tr("Przerywam…")
+                               : tr("Anuluj")) {
+                            scan.cancelUpdate()
+                        }
+                        .disabled(scan.updateInterruption.isRequested)
+                        .help(tr("Zatrzymam po bieżącym pakiecie — trwającej instalacji nie przerywam w połowie."))
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -291,7 +304,7 @@ struct UpdateView: View {
                     } label: {
                         Image(systemName: selectAllSymbol)
                             .foregroundStyle(selectedVisibleCount == 0 ? .secondary : Color.wegaHoney)
-                            .font(.system(size: 16))
+                            .font(.wega(.title3))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(tr("Zaznacz wszystko"))
@@ -299,7 +312,7 @@ struct UpdateView: View {
                         trf("%@ z %@ zaznaczonych", "\(selectedVisibleCount)", "\(visibleItems.count)")
                     )
                     Text(selectedVisibleCount == 0 ? tr("Zaznacz wszystko") : trf("%@ z %@ zaznaczonych", "\(selectedVisibleCount)", "\(visibleItems.count)"))
-                        .font(.system(size: 12))
+                        .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 20)
@@ -422,7 +435,7 @@ struct UpdateView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(scan.plannedCommands(targetKeys: updateTargetKeys).enumerated()), id: \.offset) { _, command in
                         Text("$ \(command.executable) \(command.arguments.joined(separator: " "))")
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(.wega(.subheadline, monospaced: true))
                             .textSelection(.enabled)
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -441,7 +454,7 @@ struct UpdateView: View {
                         if scan.probingSizes {
                             HStack(spacing: 6) {
                                 ProgressView().controlSize(.small)
-                                Text(tr("Sprawdzam rozmiary pobrań…")).font(.system(size: 11)).foregroundStyle(.tertiary)
+                                Text(tr("Sprawdzam rozmiary pobrań…")).font(.wega(.subheadline)).foregroundStyle(.tertiary)
                             }
                         }
                     }
@@ -449,7 +462,7 @@ struct UpdateView: View {
                 .padding(.top, 8)
             } label: {
                 Text(tr("Pokaż, co dokładnie zrobię"))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.wega(.callout, weight: .medium))
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
@@ -470,9 +483,9 @@ struct UpdateView: View {
                     Image(systemName: "trash").foregroundStyle(Color.wegaToffee)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(trf("%@ casków bez aplikacji", "\(scan.staleCasks.count)"))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.wega(.callout, weight: .semibold))
                         Text(trf("Homebrew wciąż śledzi: %@. Aplikacji nie ma na dysku — możesz je wyrejestrować.", "\(scan.staleCasks.joined(separator: ", "))"))
-                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                            .font(.wega(.subheadline)).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
@@ -565,9 +578,9 @@ struct UpdateView: View {
                     Image(systemName: "exclamationmark.shield").foregroundStyle(Color.wegaDanger)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(tr("Bez weryfikacji sumy kontrolnej"))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.wega(.callout, weight: .semibold))
                         Text(trf("Homebrew zainstaluje bez sprawdzenia sumy: %@", "\(noCheck.map(\.name).joined(separator: ", "))"))
-                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                            .font(.wega(.subheadline)).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
@@ -609,10 +622,10 @@ private struct PlanPreviewCaskRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(token)
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .font(.wega(.subheadline, weight: .medium, monospaced: true))
                 .frame(width: 150, alignment: .leading)
             Text(host)
-                .font(.system(size: 10.5))
+                .font(.wega(.footnote))
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
             Spacer(minLength: 6)
@@ -639,10 +652,10 @@ private struct PlanPreviewCaskRow: View {
                     .help(tr("Może poprosić o hasło administratora."))
             }
             Text(sizeLabel)
-                .font(.system(size: 10.5, design: .monospaced))
+                .font(.wega(.footnote, monospaced: true))
                 .foregroundStyle(.tertiary)
                 .frame(width: 96, alignment: .trailing)
         }
-        .font(.system(size: 11))
+        .font(.wega(.subheadline))
     }
 }

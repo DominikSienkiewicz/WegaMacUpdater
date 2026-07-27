@@ -25,7 +25,7 @@ struct ScanControl: View {
                     Label(tr("Sprawdź teraz"), systemImage: "arrow.triangle.2.circlepath")
                 }
                 .buttonStyle(.glassProminent)
-                .tint(Color.wegaHoney)
+                .tint(Color.wegaHoneyFill)
                 .foregroundStyle(Color.wegaInk)
                 .glassEffectID("scan", in: namespace)
                 // A rescan during an install would race the upgrade it is meant to describe.

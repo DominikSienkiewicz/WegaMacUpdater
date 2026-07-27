@@ -10,6 +10,40 @@ Native macOS app that keeps every application on your Mac up to date — Homebre
 ![Architecture](https://img.shields.io/badge/Architecture-SPM_Modules-purple?style=for-the-badge)
 [![CI](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml/badge.svg)](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml)
 
+## Contents
+
+- [Documentation](#documentation) — which file answers which question
+- [The Vision: one window, zero terminals](#the-vision-one-window-zero-terminals)
+- [How it works](#how-it-works) — scan → classify → check → compare → act
+  - [npm globals (third package manager)](#npm-globals-third-package-manager)
+- [Features](#features)
+  - [Update](#update) — [what it checks](#what-it-checks) ·
+    [dry-run panel](#before-anything-runs--the-dry-run-panel) ·
+    [one count](#one-count-everywhere) ·
+    [restored scans](#the-window-opens-with-a-result-not-an-empty-screen) ·
+    [running the update](#running-the-update) ·
+    [failed checks](#when-a-check-cant-complete) ·
+    [publisher baseline](#publisher-baseline-safety) ·
+    [rollback net](#the-rollback-net) ·
+    [green banners](#what-a-green-banner-means) ·
+    [per-row control](#per-row-control) ·
+    [inspector](#the-detail-inspector)
+  - [Accessibility](#accessibility)
+  - [Uninstall](#uninstall)
+  - [Migration](#migration)
+  - [Inventory](#inventory)
+  - [Settings](#settings)
+  - [Logs](#logs)
+  - [Menu-bar agent](#menu-bar-agent)
+- [Architecture](#architecture) — module tree and the sudo/helper boundary
+- [Requirements](#requirements)
+- [Build and test](#build-and-test)
+  - [Version — single source of truth](#version--single-source-of-truth)
+- [Distribution](#distribution)
+  - [Cutting a release](#cutting-a-release)
+  - [Self-update](#self-update)
+- [License](#license)
+
 ## Documentation
 
 Wega's docs are split by audience:
@@ -21,6 +55,9 @@ Wega's docs are split by audience:
   gates, and how to change the app catalog past the **catalog-signature** gate.
 - **Reporting a vulnerability** → **[SECURITY.md](SECURITY.md)** — the private disclosure
   channel (please don't use public issues for security problems).
+- **Cutting a release** → **[RELEASING.md](RELEASING.md)** — the two-phase `release.sh` flow,
+  the optional signing/notarization secrets, and how the *first* release is cut from a
+  repository that has no tags yet.
 
 The rest of this README is the developer/architecture reference.
 
@@ -52,11 +89,15 @@ npm globals (npm outdated -g --json) ──────────────�
 
 | Priority | Source | When it fires |
 |----------|--------|---------------|
+| 6 | Wega self-update | Wega's own pending release (UX-15). Highest on purpose, so the authoritative self-update entry wins any path collision with a coincidental scan match of Wega's own bundle |
 | 5 | Antigravity update API | Google's Antigravity IDE (`com.google.antigravity-ide`, a distinct product from plain "Antigravity" `com.google.antigravity`). Its Homebrew cask is frozen at an old version while the app self-updates, so brew/cask comparison never fires; the product version is read from Google's own update endpoint (the `X.Y.Z` segment of the download URL, since the JSON's `name`/`productVersion` carry the VS Code base version instead) |
 | 5 | Parallels update XML | Parallels Desktop (`com.parallels.desktop.console`). The Homebrew cask `parallels` lags upstream by days/weeks while the app self-updates from `update.parallels.com/desktop/v<major>/parallels/parallels_updates.xml`; the checker derives `<major>` from the installed `CFBundleShortVersionString`, reads `<Major>.<Minor>.<SubMinor>` from the feed, and routes the update through the app's own updater (never brew, which would downgrade) |
 | 5 | Google Drive Omaha (canary) | Google Drive for desktop (`com.google.drivefs`). Drive ships via GoogleSoftwareUpdate (Omaha) and the public release-notes page never lists patches (only majors like `Version 126.0`). The checker POSTs an Omaha v3 request to `tools.google.com/service/update2` pinning `appid="com.google.drivefs" ap="canary"` — Stable / 50-percent / 5-percent cohorts return the staged-rollout version which is usually *older* than what's actually installed, while canary tracks the head and reveals patches like `126.0.4 → 126.0.5` that no other public source advertises. Installed version is read from `CFBundleVersion` (4-segment, what Omaha compares against), not `CFBundleShortVersionString` (`126.0`, which would always look outdated) |
 | 5 | ChatGPT public appcast | OpenAI's ChatGPT desktop app (`com.openai.chat`). The Homebrew cask `chatgpt` is `auto_updates` and its metadata trails OpenAI's release channel; the app self-updates via Sparkle but resolves its feed URL programmatically at runtime (no `SUFeedURL` in `Info.plist` or the prefs domain), so the generic Sparkle checker can't find it. The checker queries OpenAI's public appcast (`persistent.oaistatic.com/sidekick/public/sparkle_public_appcast.xml`, the same feed the cask's livecheck uses) and picks the **max** `sparkle:shortVersionString` across all items — feed items are not reliably ordered (older builds can carry a more recent `pubDate`). Routes the update through the app's own updater, never brew |
 | 5 | Postman Squirrel feed | Postman (`com.postmanlabs.mac`). Self-updates via Squirrel.Mac (ships **no** Sparkle `SUFeedURL`, so the generic Sparkle path can't see it) while the Homebrew cask `postman` is `auto_updates` and its version lags the real channel — so `brew outdated` and the cask-version check both report it current (the exact case MacUpdater catches but `brew` misses). The checker GETs Postman's own Squirrel feed `dl.pstmn.io/update/osx_64/<installed>` and reads the `name` field (200 = newer build available; 204 = current). Uses the `osx_64` channel deliberately — it carries the live universal build even on Apple Silicon, where `osx_arm64` is stale. Routes the update through the app's own updater, never brew (the cask would reinstall the older build) |
+| 5 | Discord Squirrel feed | Discord stable / PTB / Canary (`com.hnc.Discord`, `…PTB`, `…Canary`). The desktop host self-updates through a Squirrel.Mac server and ships **no** Sparkle `SUFeedURL`, while the `discord*` casks are `auto_updates` and lag — so neither `brew outdated` nor the cask-version check sees the new build. The checker GETs `.../updates/<channel>?platform=osx&version=<installed>` and reads `name` (200 = newer build, 204 = current), the same vendor-feed pattern as Postman and ChatGPT |
+| 5 | Signal release feed | Signal Desktop (`org.whispersystems.signal-desktop`). Self-updates via electron-updater with no Sparkle feed, while the `signal` cask is `auto_updates` and lags. The checker reads the first top-level `version:` line of Signal's `latest-mac.yml` electron-updater feed |
+| 5 | Chrome Version History API | Google Chrome stable / beta / dev / canary (`com.google.Chrome`, `…beta`, `…dev`, `…canary`). Chrome bumps its own bundle through Keystone outside Homebrew, so the `google-chrome*` casks' metadata goes stale (`BrewCaskDriftFilter` only hides that after the fact). The checker queries Chrome's public Version History API per channel and takes the **max** version, because the feed order is not contractually newest-first |
 | 5 | Obsidian desktop releases feed | Obsidian (`md.obsidian`) loads self-updated `obsidian-X.Y.Z.asar` packages from Application Support independently of the installer in `/Applications` and the `auto_updates` Homebrew cask. The checker reads the effective ASAR version, follows the `beta` version when `obsidian.json` enables the Catalyst insider channel, and runs even when Brew correctly reports the installer cask as current. The action opens Obsidian so its signed in-app updater downloads and applies the package |
 | 4 | JetBrains Data Services | IntelliJ IDEA, PyCharm, WebStorm, GoLand, CLion, Rider, DataGrip, RubyMine, PHPStorm, DataSpell, Aqua, RustRover (14 IDEs) |
 | 3 | GitHub Releases API | VS Code, Rectangle, AltTab, Stats, Maccy, MonitorControl, LinearMouse, IINA, HandBrake, Keka, GitHub Desktop |
@@ -76,7 +117,100 @@ Before any of this, `runCheck()` calls `brew update` so a freshly-published cask
 
 ### Update
 
-**Publisher baseline safety:** immediately before a cask upgrade, Wega reads the installed
+One screen that checks every source in one pass, shows the exact commands before running
+them, and reports one honest outcome per item afterwards.
+
+#### What it checks
+
+Homebrew formulae + casks (greedy), Mac App Store, npm globals, and every manual-app
+checker, in one pass.
+
+- **Homebrew is optional.** Without it Wega still checks the Mac App Store, Sparkle, the 13
+  vendor feeds and npm, and shows an *"install Homebrew to unlock more updates"* card
+  instead of a wall.
+- **A missing tool is not a failure.** A tool that is not installed is classified as **not
+  applicable** (`SourceCheckOutcome.notInstalled`), never as a failed check — so a machine
+  without brew no longer wears a permanent red "the list may be incomplete" banner over a
+  list that is complete.
+- **Grouped by install origin.** Updates are grouped by the same `AppOrigin` the Inventory
+  window badges by, so a self-updating Homebrew cask like Docker or Postman appears under
+  **Homebrew Casks** — never "Manually installed" — keeping the two windows in agreement.
+- Selectable list — update all or pick individually.
+
+#### Before anything runs — the dry-run panel
+
+**"Show exactly what I will do"** expands a **dry-run panel** above the update button. It
+shows the literal commands (`brew upgrade --cask -- a b`, `npm install -g -- x@latest`, …,
+where the `--` fences package names off from option parsing — SEC-10) read from
+`UpdatePlanner.commands(for:)` — *the same call the upgrade itself executes*, so the preview
+cannot drift from reality, and **nothing outside that list runs**: an update no longer ends
+with a global `brew cleanup` (it used to, even after an npm-only or App-Store-only run and
+after a failed one, wiping the cached previous versions a recovery would reinstall from).
+
+Per cask it also shows:
+
+- the download host;
+- whether Homebrew will verify its checksum;
+- whether the rollback net covers it;
+- whether it **may** ask for an admin password (a `pkg`/`installer`/`preflight` stanza is
+  visible in the JSON; its contents are not, hence *may*);
+- the download size from a `HEAD` probe. Homebrew's JSON carries no size, and a CDN may
+  withhold `Content-Length`, so **"size unknown"** is a first-class answer shown as itself.
+  The same measured sizes feed `DownloadGate` instead of the hard-coded 200 MB it used to
+  assume.
+
+#### One count, everywhere
+
+The window header, the sidebar badge, the menu-bar badge and the background notification all
+read the same `UpdatePlanner.unifiedCount`, and the header names both halves of it — *"12 to
+install + 3 manual"* — because they behave differently. The **Update all (N)** button counts
+only the installable half, so it never promises an upgrade Wega cannot perform. A scan run
+from the window reports its result to the menu-bar agent, which is the single owner of the
+dock badge.
+
+#### The window opens with a result, not an empty screen
+
+The last scan is restored the moment the window appears — from disk (`ScanResultStore`, a
+`Codable` snapshot) or from the lists the menu-bar agent already built during its last
+background check, whichever is newer. An old result never passes for a fresh one:
+`ScanFreshness` decides, and anything a day old reads *"Found 12 Jul, 21:14"* in a warning
+tint instead of a bare time. Progress during a scan is **real** — the scan is strictly
+sequential (brew → mas → npm → manual), the bar reports the phase it is genuinely in, and
+**Cancel** stops it where it stands. Live log streamed into an inline panel.
+
+#### Running the update
+
+- **Checking never mutates your system.** `brew update` runs before the outdated check — but
+  **not** on the post-upgrade re-query, which is a plain `brew outdated` with no second
+  metadata refresh and no second stale-cask sweep. Casks Homebrew still tracks but whose app
+  is gone are *detected*, excluded from the list (so the count never offers an upgrade for an
+  app you don't have), and offered as a **"Deregister"** card — Wega does not run
+  `brew uninstall --force` behind a button labelled "check for updates".
+- **An interrupted previous upgrade recovers itself.** A cask upgrade that fails because
+  brew bails with "already an App at '…/Caskroom/…'" — the leftover staged app from a
+  cut-short upgrade (the tell-tale `…upgrading` version) blocking it — is **automatically
+  retried once with `--force`**, which overwrites the leftover and completes; without that it
+  would fail on every attempt until cleaned by hand.
+- **Restart after update.** Any running app whose bundle the upgrade just replaced is
+  detected **by bundle URL — across the whole catalog, not a 16-app hardcoded list** — and
+  offered a one-click restart (`RunningCaskDetector` matches each upgraded cask's resolved
+  bundle against the live applications; the restart map only *overrides* the process/app name
+  to quit and reopen for apps whose running process is named unusually, e.g. the `zoom` cask
+  running as `zoom.us`).
+
+#### When a check can't complete
+
+Offline or with a source down, the screen says **"couldn't check — check your connection"**
+instead of falsely reporting "everything up to date" — **and it stays said across a
+restart**: the snapshot records what each source answered, its error and whether the scan was
+complete (`ScanSourceReports`), a Brew result that never arrived is stored as *absent* rather
+than as an empty list, and a failed `brew update` counts as a silent source instead of being
+discarded. A restored scan that was incomplete raises its own banner, and an empty list from
+one reads *"I can't tell whether everything is up to date"*.
+
+#### Publisher baseline safety
+
+Immediately before a cask upgrade, Wega reads the installed
 bundle's Team ID and compares it with the known-good publisher. If the installed bundle
 already differs, Wega blocks that cask before snapshotting or running `brew` and raises a
 sticky security alert. A different post-upgrade Team ID never replaces the baseline: Wega
@@ -92,12 +226,88 @@ After a publisher mismatch, the original snapshot remains available even after a
 successful rollback. A bundle-identity mismatch preserves it in the same way; only a fully
 healthy upgrade deletes it after the canary window.
 
-Checks Homebrew formulae + casks (greedy), Mac App Store, npm globals, and every manual-app checker in one pass. **Homebrew is optional**: without it Wega still checks the Mac App Store, Sparkle, the 13 vendor feeds and npm, and shows an *"install Homebrew to unlock more updates"* card instead of a wall. A tool that is not installed is classified as **not applicable** (`SourceCheckOutcome.notInstalled`), never as a failed check — so a machine without brew no longer wears a permanent red "the list may be incomplete" banner over a list that is complete. Updates are grouped by **install origin** (the same `AppOrigin` the Inventory window badges by), so a self-updating Homebrew cask like Docker or Postman appears under **Homebrew Casks** — never "Manually installed" — keeping the two windows in agreement. Selectable list — update all or pick individually. **"Show exactly what I will do"** expands a **dry-run panel** above the update button: the literal commands (`brew upgrade --cask -- a b`, `npm install -g -- x@latest`, …, where the `--` fences package names off from option parsing — SEC-10) read from `UpdatePlanner.commands(for:)` — *the same call the upgrade itself executes*, so the preview cannot drift from reality, and **nothing outside that list runs**: an update no longer ends with a global `brew cleanup` (it used to, even after an npm-only or App-Store-only run and after a failed one, wiping the cached previous versions a recovery would reinstall from) — plus, per cask, the download host, whether Homebrew will verify its checksum, whether the rollback net covers it, whether it **may** ask for an admin password (a `pkg`/`installer`/`preflight` stanza is visible in the JSON; its contents are not, hence *may*), and the download size from a `HEAD` probe. Homebrew's JSON carries no size, and a CDN may withhold `Content-Length`, so **"size unknown"** is a first-class answer shown as itself. The same measured sizes feed `DownloadGate` instead of the hard-coded 200 MB it used to assume. **One count, everywhere**: the window header, the sidebar badge, the menu-bar badge and the background notification all read the same `UpdatePlanner.unifiedCount`, and the header names both halves of it — *"12 to install + 3 manual"* — because they behave differently. The **Update all (N)** button counts only the installable half, so it never promises an upgrade Wega cannot perform. A scan run from the window reports its result to the menu-bar agent, which is the single owner of the dock badge. **The window opens with a result, not an empty screen**: the last scan is restored the moment it appears — from disk (`ScanResultStore`, a `Codable` snapshot) or from the lists the menu-bar agent already built during its last background check, whichever is newer. An old result never passes for a fresh one: `ScanFreshness` decides, and anything a day old reads *"Found 12 Jul, 21:14"* in a warning tint instead of a bare time. Progress during a scan is **real** — the scan is strictly sequential (brew → mas → npm → manual), the bar reports the phase it is genuinely in, and **Cancel** stops it where it stands. Live log streamed into an inline panel. After update, any running app whose bundle the upgrade just replaced is detected **by bundle URL — across the whole catalog, not a 16-app hardcoded list** — and offered a one-click restart (`RunningCaskDetector` matches each upgraded cask's resolved bundle against the live applications; the restart map only *overrides* the process/app name to quit and reopen for apps whose running process is named unusually, e.g. the `zoom` cask running as `zoom.us`). `brew update` runs before the outdated check — but **not** on the post-upgrade re-query, which is a plain `brew outdated` with no second metadata refresh and no second stale-cask sweep. **Checking never mutates your system**: casks Homebrew still tracks but whose app is gone are *detected*, excluded from the list (so the count never offers an upgrade for an app you don't have), and offered as a **"Deregister"** card — Wega does not run `brew uninstall --force` behind a button labelled "check for updates". A cask upgrade that fails because a **previous one was interrupted** — brew bails with "already an App at '…/Caskroom/…'", the leftover staged app from a cut-short upgrade (the tell-tale `…upgrading` version) blocking it — is **automatically retried once with `--force`**, which overwrites the leftover and completes; without that it would fail on every attempt until cleaned by hand. When a check can't complete (offline, source down), the screen says **"couldn't check — check your connection"** instead of falsely reporting "everything up to date" — **and it stays said across a restart**: the snapshot records what each source answered, its error and whether the scan was complete (`ScanSourceReports`), a Brew result that never arrived is stored as *absent* rather than as an empty list, and a failed `brew update` counts as a silent source instead of being discarded. A restored scan that was incomplete raises its own banner, and an empty list from one reads *"I can't tell whether everything is up to date"*. Each Homebrew cask row carries a **🛡 rollback badge**: a shield where snapshot → canary → auto-rollback covers the upgrade, and an honest **"no protection"** slash where it cannot (a cask that installs no `.app` — a bare `pkg` or `installer` — has nothing to clone; that hole is now logged as a warning instead of being skipped silently). The badge promises only what happens *during* the upgrade; there is no general manual "Undo": healthy upgrades delete their snapshots after the canary window, while publisher-mismatch snapshots are retained for recovery. The bundles the guard clones are located **when the upgrade starts** (`CaskAppPathResolver`), not when the scan ran — so the net also covers the most ordinary flow there is: open Wega, look at the list it restored from disk, press *Update all*. Banners **queue** rather than overwrite, so a *publisher changed* alert is sticky and survives the upgrade summary that used to clobber it. **A green banner means every phase succeeded.** An upgrade is one result per item (`UpdateRunOutcome`) built from all four phases — the package manager's own verdict, the Gatekeeper canary, the rollback, and the post-upgrade rescan — and *"Zaktualizowano N pakietów"* appears only when every item cleared all of them. So a `mas upgrade` that failed, a cask the canary rolled back, and an item the fresh scan still lists all read as **"Aktualizacja niekompletna"**, naming what did not make it; an upgrade the rescan could not confirm (its source went silent) says so instead of passing as verified. A **rollback that failed** — the new version rejected *and* the old one not restored — raises its own **red sticky banner** telling you to check that app before using it, rather than a line in the collapsible log under a green headline. **Use the ⋯ menu on any row** — or right-click it — to **ignore** an update ("don't update Zoom") or **pin a version** ("pin Parallels to 18" — only updates up to that ceiling are shown); rules are managed from the Settings window (⌘,) and persist across launches. The version target in each row is colour-coded by change kind: **honey** (normal bump), **caramel** (major version bump), **toffee** (forced/`--force` update), **red** (security fix). Each row's source badge is colour-coded by **provenance family** (`Provenance`, unit-tested in Core) rather than one flat blue: Homebrew (honey), App Store (blue/info), JetBrains (coral), GitHub (lavender), Sparkle (lavender), Synology (blue/info), and the self-updating vendor-direct apps — Antigravity, Parallels, Google Drive, ChatGPT, Postman, Discord, Signal, Chrome — share **success green**, so the 16 update sources — 13 vendor checkers plus Homebrew, the Mac App Store and npm — read as 7 visually distinct families at a glance.
+#### The rollback net
 
-The inspector starts collapsed so the main window can complete its initial layout safely, then opens automatically when you **select any update** — click its row (the checkbox still toggles it for batch update independently). The toolbar button can show or hide it at any time. The **detail inspector** on the right contains the app icon, name and version arrow up top, then four sections. **Zaufanie (Trust)** is the differentiator — for a real installed `.app` it verifies, **off the main thread**, the code signature (Gatekeeper), the signing **Team ID against a local ledger** (a *changed publisher* is flagged loudly as a possible takeover — a supply-chain signal no competitor surfaces, reusing the same `TeamIDLedger` the post-update watchdog writes — for a Homebrew cask it reconciles the watchdog's `cask:<token>` key with the app's real bundle id, so a cask whose publisher the watchdog has been tracking correlates as *unchanged/changed* instead of falsely reading as a first sighting — but **read-only** so inspecting never mutates the baseline), and, for Homebrew casks, whether the download is **checksum-verified**; batch items with no inspectable bundle (formulae, npm, App Store) honestly read *"weryfikacja niedostępna"* rather than a faked verdict. **Szczegóły** lists versions, install origin and path; **Co nowego** shows real release notes when the source provides them (with the AI-triaged "possible security fix" advisory) and says so plainly when it doesn't; the same notes are now also **inline on the row**, behind a *What's new* disclosure, for every manually-checked app whose source publishes them (GitHub release bodies, Sparkle `<description>`, JetBrains `whatsnew`). Vendor HTML is untrusted input — `ReleaseNotesText` in Core strips every tag and drops `<script>` / `<style>` bodies whole before anything reaches the window, without going near WebKit; **Akcje** reuses the row's own per-source update control. The probe runs in a `.task(id:)` that **cancels and restarts** as you change selection, so it never blocks the list or shows a stale verdict.
+Each Homebrew cask row carries a **🛡 rollback badge**: a shield where snapshot → canary →
+auto-rollback covers the upgrade, and an honest **"no protection"** slash where it cannot (a
+cask that installs no `.app` — a bare `pkg` or `installer` — has nothing to clone; that hole
+is now logged as a warning instead of being skipped silently).
+
+The badge promises only what happens *during* the upgrade; there is no general manual
+"Undo": healthy upgrades delete their snapshots after the canary window, while
+publisher-mismatch snapshots are retained for recovery. The bundles the guard clones are
+located **when the upgrade starts** (`CaskAppPathResolver`), not when the scan ran — so the
+net also covers the most ordinary flow there is: open Wega, look at the list it restored from
+disk, press *Update all*. Banners **queue** rather than overwrite, so a *publisher changed*
+alert is sticky and survives the upgrade summary that used to clobber it.
+
+#### What a green banner means
+
+**A green banner means every phase succeeded.** An upgrade is one result per item
+(`UpdateRunOutcome`) built from all four phases — the package manager's own verdict, the
+Gatekeeper canary, the rollback, and the post-upgrade rescan — and *"Zaktualizowano N
+pakietów"* appears only when every item cleared all of them.
+
+- A `mas upgrade` that failed, a cask the canary rolled back, and an item the fresh scan
+  still lists all read as **"Aktualizacja niekompletna"**, naming what did not make it.
+- An upgrade the rescan could not confirm (its source went silent) says so instead of passing
+  as verified.
+- A **rollback that failed** — the new version rejected *and* the old one not restored —
+  raises its own **red sticky banner** telling you to check that app before using it, rather
+  than a line in the collapsible log under a green headline.
+
+#### Per-row control
+
+**Use the ⋯ menu on any row** — or right-click it — to **ignore** an update ("don't update
+Zoom") or **pin a version** ("pin Parallels to 18" — only updates up to that ceiling are
+shown); rules are managed from the Settings window (⌘,) and persist across launches.
+
+Two colour codings carry meaning:
+
+- **The version target** is coded by change kind: **honey** (normal bump), **caramel** (major
+  version bump), **toffee** (forced/`--force` update), **red** (security fix).
+- **The source badge** is coded by **provenance family** (`Provenance`, unit-tested in Core)
+  rather than one flat blue: Homebrew (honey), App Store (blue/info), JetBrains (coral),
+  GitHub (lavender), Sparkle (lavender), Synology (blue/info), and the self-updating
+  vendor-direct apps — Antigravity, Parallels, Google Drive, ChatGPT, Postman, Discord,
+  Signal, Chrome — share **success green**. So the 16 update sources — 13 vendor checkers
+  plus Homebrew, the Mac App Store and npm — read as 7 visually distinct families at a
+  glance.
+
+#### The detail inspector
+
+The inspector starts collapsed so the main window can complete its initial layout safely,
+then opens automatically when you **select any update** — click its row (the checkbox still
+toggles it for batch update independently). The toolbar button can show or hide it at any
+time. On the right it carries the app icon, name and version arrow up top, then four
+sections:
+
+- **Zaufanie (Trust)** is the differentiator — for a real installed `.app` it verifies, **off
+  the main thread**, the code signature (Gatekeeper), the signing **Team ID against a local
+  ledger** (a *changed publisher* is flagged loudly as a possible takeover — a supply-chain
+  signal no competitor surfaces, reusing the same `TeamIDLedger` the post-update watchdog
+  writes — for a Homebrew cask it reconciles the watchdog's `cask:<token>` key with the app's
+  real bundle id, so a cask whose publisher the watchdog has been tracking correlates as
+  *unchanged/changed* instead of falsely reading as a first sighting — but **read-only** so
+  inspecting never mutates the baseline), and, for Homebrew casks, whether the download is
+  **checksum-verified**. Batch items with no inspectable bundle (formulae, npm, App Store)
+  honestly read *"weryfikacja niedostępna"* rather than a faked verdict.
+- **Szczegóły** lists versions, install origin and path.
+- **Co nowego** shows real release notes when the source provides them (with the advisory
+  "possible security fix" badge a deterministic keyword scan raises — advisory only, it
+  never gates or auto-applies anything) and says so plainly when it doesn't; the same notes are
+  now also **inline on the row**, behind a *What's new* disclosure, for every manually-checked
+  app whose source publishes them (GitHub release bodies, Sparkle `<description>`, JetBrains
+  `whatsnew`). Vendor HTML is untrusted input — `ReleaseNotesText` in Core strips every tag
+  and drops `<script>` / `<style>` bodies whole before anything reaches the window, without
+  going near WebKit.
+- **Akcje** reuses the row's own per-source update control.
+
+The probe runs in a `.task(id:)` that **cancels and restarts** as you change selection, so it
+never blocks the list or shows a stale verdict.
 
 ### Accessibility
-Update and uninstall selections are native keyboard-focusable controls with VoiceOver labels and explicit selected/not-selected values. In the package-manager update list, **Return** opens the focused row in the inspector and **Space** toggles its batch selection; on manual-update rows either key opens details because those rows have no batch-selection checkbox. Select-all controls are buttons rather than pointer-only gestures. The uninstall confirmation is a correctly sized native sheet with destructive/cancel roles, **Enter** and **Esc** shortcuts, and the exact frozen targets shown before execution; long target and ambiguity lists scroll while the action buttons remain pinned, including at large text sizes. Its **App only** / **App + leftovers** choice also announces the selected state to VoiceOver. Selection rows use semantic fonts so large environment text can reflow. The **Updates scan status on the sidebar icon** no longer relies on colour alone: a failed scan swaps the icon's **symbol** (a warning glyph, not just a red tint), and every scan state — checking, checked-clean, failed — is announced to VoiceOver as the row's value, so the outcome reaches users who cannot distinguish the colours. With **Reduce Motion** enabled, the rotating sidebar artwork, cycling thought bubble, Wega motion and binary stream all render without continuous movement; rebuilding its parent does not replace the static binary frame. An **Aktualizacje** menu carries the app's keyboard shortcuts, macOS-conventional: **⌘R** *Sprawdź teraz* (start a scan), **⌘⏎** *Aktualizuj* (opens the same update confirmation the toolbar button does, on the Updates destination), **⌘1…⌘5** to jump to the five sidebar sections in order (Updates, To reattach, Inventory, Uninstall, Logs), and **⌘F** *Find in inventory*, which opens the Inventory list and focuses its search field. Each shortcut is greyed out exactly when its on-screen control is unavailable. The app menu, under **About Wega Mac Updater**, adds **Sprawdź aktualizacje Wegi…** — the macOS-conventional place for an app's own update check — which opens the Settings window, where the self-update screen owns the operation.
+Update and uninstall selections are native keyboard-focusable controls with VoiceOver labels and explicit selected/not-selected values. In the package-manager update list, **Return** opens the focused row in the inspector and **Space** toggles its batch selection; on manual-update rows either key opens details because those rows have no batch-selection checkbox. Select-all controls are buttons rather than pointer-only gestures. The uninstall confirmation is a correctly sized native sheet with destructive/cancel roles, **Enter** and **Esc** shortcuts, and the exact frozen targets shown before execution; long target and ambiguity lists scroll while the action buttons remain pinned, including at large text sizes. Its **App only** / **App + leftovers** choice also announces the selected state to VoiceOver. Selection rows use semantic fonts so large environment text can reflow. The **Updates scan status on the sidebar icon** no longer relies on colour alone: a failed scan swaps the icon's **symbol** (a warning glyph, not just a red tint), and every scan state — checking, checked-clean, failed — is announced to VoiceOver as the row's value, so the outcome reaches users who cannot distinguish the colours. With **Reduce Motion** enabled, the rotating sidebar artwork, cycling thought bubble, Wega motion and binary stream all render without continuous movement; rebuilding its parent does not replace the static binary frame. That coverage is now complete and centralized: Wega's bouncing ball, her blink and her idle *tricks* on empty states, and the sweeping bar under a running check, all stop as well, and each notices the setting being switched on **while it is already running** rather than only at first appearance — one `ContinuousMotion` policy decides for every never-ending animation in the app, and a regression test refuses a `repeatForever` that does not go through it. Where a moving element carried information, the information stays: the check-in-progress bar drops its sweep instead of freezing at full width, which would read as *finished*. **Text sizes** across the whole window come from a semantic scale (`Font.wega(…)`, one alias in `WegaTheme`) rather than ~225 hard-coded point sizes, so the interface follows the system text-size setting; the only two fixed sizes left are drawings sized by their own container, and they say so on the spot. The **palette is appearance-adaptive**: the eight brand colours were tuned against a dark window and read at roughly 1.8:1 on a light desktop, and now resolve per appearance — with a separate pair for **Increase contrast** — clearing 4.5:1 both on the window background and on the 12 %-tinted badge fill they also sit on (7:1 for the increased-contrast pair), graded arithmetically in tests rather than by eye. Filled controls whose label is Wega's dark ink keep a separate, lighter fill value, and the mascot's own coat colours stay fixed — a drawing is not text. The **Settings** window (⌘,) is resizable instead of pinned to 640×600, so it can grow at large text sizes instead of clipping. An **Aktualizacje** menu carries the app's keyboard shortcuts, macOS-conventional: **⌘R** *Sprawdź teraz* (start a scan), **⌘⏎** *Aktualizuj* (opens the same update confirmation the toolbar button does, on the Updates destination), **⌘1…⌘5** to jump to the five sidebar sections in order (Updates, To reattach, Inventory, Uninstall, Logs), and **⌘F** *Find in inventory*, which opens the Inventory list and focuses its search field. Each shortcut is greyed out exactly when its on-screen control is unavailable. The app menu, under **About Wega Mac Updater**, adds **Sprawdź aktualizacje Wegi…** — the macOS-conventional place for an app's own update check — which opens the Settings window, where the self-update screen owns the operation.
 
 ### Uninstall
 Scans every app on the system regardless of origin. Brew casks are removed with `brew uninstall --cask`; App Store and manually installed apps are moved to Trash. The confirmation dialog offers **"App only"** (the default, and the recommended one) or **"App + leftovers"** (`--zap`, which also deletes preferences, caches and Application Support) — the irreversible option is a deliberate choice, never the preselected one. It shows exact counts: how many casks are affected, how many go to Trash. If the selected `--zap` operation fails, Wega reports that item as incomplete and leaves it selected; it never silently retries without zap using `--force` or counts that changed operation as success. **"App + leftovers" is no longer brew-only** (UX-13): for App Store and manually installed apps the dialog lists the `~/Library` items the app left behind — built by the same `MigrationPlanner` per-bundle-id planner Wega already trusts (`LeftoverCleanup`) — as checkboxes, each ticked by default, and moves the ones you keep ticked to the **Trash** (recoverable, never a permanent delete). So the "app + leftovers" promise now holds whatever the app was installed from; leftover moves that fail are reported, not swallowed. **A scan that can't read a source is never shown as an empty machine**: when it finds nothing it says *"the scan failed"* rather than *"no apps found"*, and when it still found some apps the confirmation dialog warns that the target list may be incomplete before anything is removed — a destructive choice is never made on silently partial data. **Right-click any row** to reveal it in Finder, copy its path, or toggle whether it is marked for removal — the same per-row context menu the update list already offers.
@@ -111,7 +321,7 @@ Full list of every `.app` on the system with source badge (Brew / App Store / Ma
 ### Settings
 App settings live in the **native macOS Settings window**, opened with **⌘,** or the **gear button** in the window toolbar — not a sidebar tab (macOS users expect app settings there). Real-time diagnostics: Homebrew version, mas-cli version, Privileged Helper status, macOS version, CPU architecture. App version, build, links. License block for bundled open-source tools. **Language card** — switch the interface between **Polski** and **English**; the choice is persisted and applies live, and switching it keeps the current scan results (and a running upgrade) intact. Until you pick one, the language follows the system locale — Polish only when macOS reports it ahead of the other languages Wega ships, **English otherwise**. **Scan directories card (UX-16)** — add your own scan roots via a directory picker (stored as **security-scoped bookmarks**, so apps on other volumes and in non-standard locations are found), list **exclusions** that are never searched, and set the **recursion depth** (how many sub-levels below each root to descend, default 1). The scan seams read these keys from `UserDefaults` on every scan, so a change takes effect on the next scan. **Resource gate card** — configures the large/unknown download estimate, low-battery threshold, unpacked-size multiplier, and free-disk safety margin used by both window and unattended preflights. **Ignored & pinned card** — lists every ignore / version-pin rule with a one-click remove. **Touch ID for sudo card** — on Macs with biometry hardware, shows whether `pam_tid.so` is wired into `/etc/pam.d/sudo_local` and offers a one-click enable. **App catalog card** — pulls the latest `AppCatalog` overlay from its canonical source on demand (the app also refreshes it on launch); reports the outcome and notes that a fetched update applies on the next launch.. **Unverified endpoints configuration card (SEC-08)** — appears only when an `endpoints.json` overlay is applied without a valid signature, surfacing the presence of that unverified configuration to the user rather than leaving it in the log.
 
-### Logi
+### Logs
 Full activity log covering scans, source responses, install results, and errors — newest entry first. It retains menu-bar and background-source failures (including Brew stderr), exhausted HTTP retries, process aborts, rejected self-update signatures, helper installation failures, and failed rollbacks, so **"Zobacz w logach"** leads to the underlying cause rather than only a summary. Filter by severity (All / Warnings+ / Errors only), search by text, copy entries to the clipboard, or reveal the log file in Finder. When a source fails to respond and the Updates screen shows the "list may be incomplete" warning, the button jumps straight to this tab pre-filtered to errors. The log is also written to `~/Library/Logs/WegaMacUpdater/wega.log`; once the file exceeds ~5 MB it rotates to `wega.log.1`, keeping one backup. The privileged root helper separately writes rejected XPC connections and per-operation audit results to macOS Unified Logging.
 
 ### Menu-bar agent
@@ -165,12 +375,12 @@ MacUpdaterCore (library target — no SwiftUI dependency)
 ├── CatalogIssueBuilder  — pure builder for a prefilled GitHub *new issue* URL that asks maintainers to add an app the catalog does not know (inputs: app name, bundle ID, optional detected `SUFeedURL`, optional version format). Percent-encodes title and body down to the RFC 3986 unreserved set and enforces a hard ~8000-char URL cap by truncating the body (never the title) on whole-character boundaries. Zero I/O, no `NSWorkspace` — the caller injects the repo's `issues/new` endpoint and opens the result
 ├── CatalogSignature    — Ed25519 (`CryptoKit`) verification of the signed config overlays. The publisher key is **injected**, not read from a `static let` inside `verify` — that is what makes the fail-closed branch testable, and it is how a find-and-replace that once pasted a real key over the placeholder sentinel *and* over the comparison it was compared against (reducing `isConfigured` to `key != key`, permanently false, every signature check silently off) is now caught by a test rather than by a reader
 ├── ConfigOverlayTrust  — the two overlays are trusted differently on purpose. `app-catalog.json` arrives from a repository that accepts pull requests and is **fail-closed**: no valid detached signature, no overlay. `endpoints.json` is a file the user places on their own disk to follow a moved feed, where a signature would protect nothing (whoever can write it can already do worse) — so it stays usable **unsigned** and each unsigned use is logged. Both refuse a signature that is present and *wrong*: that is tampering, not convenience
-├── CatalogRefresher     — fetches the overlay catalog from a remote JSON source over the shared `HTTPClient` (ETag-conditional), **validates it by decoding before writing**, verifies its detached Ed25519 signature (`<source>.sig`), then writes **both** the catalog and the signature it verified. A body that is a valid catalog but whose signature does not match it reports **`signatureMismatch`**, distinct from `invalid` — the two are cryptographically indistinguishable causes (a tampered catalog, or a CDN that paired a fresh JSON with a cached `.sig`), and the UI says what happened rather than guessing who to blame. The previous overlay survives either way — `AppCatalog.loadOverlay` checks the signature again on the next launch, so the window between *written* and *read* is guarded too. The JSON lands first: a crash between the two writes leaves a catalog with no signature, which is rejected on read (falling back to the bundled catalog) rather than a signature vouching for the previous bytes — so a malformed or hostile body can never clobber a good overlay. The source URL is injected from `AppEndpoints` (the `appCatalog` endpoint, raw-hosted on GitHub) and the refresh is triggered both on app launch (fire-and-forget, ETag-conditional) and on demand from the Settings window's **App catalog** card
+├── CatalogRefresher     — fetches the overlay catalog from a remote JSON source over the shared `HTTPClient` (ETag-conditional), **validates it by decoding before writing**, verifies its Ed25519 signature — read from the signed envelope when the source serves one, otherwise from the detached `<source>.sig` — then writes **both** the catalog and the signature it verified. The unwrapped bytes and a detached signature are what land on disk whichever shape was fetched: the envelope solves a CDN cache-skew problem, and the local overlay has no CDN. A body that is a valid catalog but whose signature does not match it reports **`signatureMismatch`**, distinct from `invalid` — the two are cryptographically indistinguishable causes (a tampered catalog, or a CDN that paired a fresh JSON with a cached `.sig`), and the UI says what happened rather than guessing who to blame. The previous overlay survives either way — `AppCatalog.loadOverlay` checks the signature again on the next launch, so the window between *written* and *read* is guarded too. The JSON lands first: a crash between the two writes leaves a catalog with no signature, which is rejected on read (falling back to the bundled catalog) rather than a signature vouching for the previous bytes — so a malformed or hostile body can never clobber a good overlay. The source URL is injected from `AppEndpoints` (the `appCatalog` endpoint, raw-hosted on GitHub) and the refresh is triggered both on app launch (fire-and-forget, ETag-conditional) and on demand from the Settings window's **App catalog** card
 ├── AppEndpoints         — single source of truth for every outbound URL (update feeds, GitHub/Synology/Parallels/Antigravity APIs, the `AppCatalog` overlay source, the Homebrew install command, UI links); decoded from the bundled `Resources/endpoints.json` as `{placeholder}` templates and overlaid (if present) by a user-writable `~/Library/Application Support/WegaMacUpdater/endpoints.json`, so a vendor that moves a feed can be followed without a new build. That overlay is applied **unsigned** by policy; an overlay carrying an *invalid* signature is refused. **SEC-08 keeps the whole config channel fail-closed, not just the catalog:** every overlaid field is validated or dropped before it can take effect — fixed endpoints must be absolute http(s) URLs with a host, **templated endpoints additionally require https and a host on the allowlist the bundled baseline already talks to** (an override that leaves that set or downgrades to http silently falls back to the baseline), and the **Homebrew install command is a shell string excluded from the overlay entirely** (always taken from the bundled baseline, never overridable). An applied unsigned overlay is **surfaced in the Info window** as a first-class warning (`overlayStatus`), not signalled by a log line alone. Keeping the literal URIs out of Swift is what lets each call site read its endpoint from a customizable parameter. Fixed macOS/Homebrew paths live separately in `SystemPaths` (deliberately hard-coded — routing e.g. `/usr/bin/sudo` through a writable file would be a security hole)
 ├── JetBrainsUpdateChecker — data.services.jetbrains.com, 14 IDE mappings (from AppCatalog)
 ├── GitHubReleasesChecker  — api.github.com/releases/latest, app mappings from AppCatalog
 ├── ObsidianUpdateChecker  — reads Obsidian's effective ASAR version and stable/Catalyst channel from its official desktop-releases feed; runs even for a Brew-managed cask
-├── WegaSelfUpdateChecker  — Wega's own update check: latest GitHub Release tag vs `AppMetadata.version`, reporting **every** published asset rather than picking one. `SelfUpdatePlanner` then chooses from actual capability — a verified `.pkg` installed headlessly by the privileged helper when it is enabled, otherwise the `.dmg` the user finishes by hand — so a helper-equipped user is never sent to drag an icon. A headless install ends in an explicit *installed, restart to use it* state with a restart button that stays disabled while any mutating operation holds the write gate; nothing restarts the app on its own. Pure, HTTPClient-injectable, unit-tested
+├── WegaSelfUpdateChecker  — Wega's own update check: latest GitHub Release tag vs `AppMetadata.version`, reporting **every** published asset rather than picking one. `SelfUpdatePlanner` then makes the single decision: the artifact is always the **`.pkg`**, falling back to the `.dmg` only when no package was published (SEC-04 — the `.pkg` is the one channel with a full publisher pin, so the ordering is a security property and the helper gets no vote in it), and `helperEnabled` decides only whether that artifact is installed headlessly or handed to the user to finish. A release publishing neither yields no plan and no button. A headless install ends in an explicit *installed, restart to use it* state with a restart button that stays disabled while any mutating operation holds the write gate; nothing restarts the app on its own. Pure, HTTPClient-injectable, unit-tested
 ├── ReleaseHistoryFetcher  — the cumulative *what's new* for Wega's own update: the releases list (not just `latest`), drafts and prereleases dropped, only versions newer than the installed one, newest first, capped at 10 with the number of omitted releases **reported rather than truncated silently**. Every body passes through `ReleaseNotesText` — release bodies are untrusted input and never reach WebKit. A history that cannot be fetched is its own answer (`.unavailable`), distinct from an empty one, and never blocks the update itself
 ├── VendorUpdateAction     — ARCH-06: maps each `UpdateSource` to the small, fixed `UpdateActionKind` the Updates window renders — action as data in Core, not another per-vendor `switch` in the view. `.wega` resolves to `.openSelfUpdate`, so Wega's own row leads to the in-app installer (download, signature verification, headless helper install, gated restart) rather than a browser that would step around all of it
 ├── SynologyUpdateChecker  — synology.com/api/releaseNote/findChangeLog, compares build number from versionString (`4.0.3-17892` → `17892`) against CFBundleVersion
@@ -221,9 +431,9 @@ Privileged operations beyond that go through a signed XPC helper with typed, all
 ## Requirements
 
 - macOS 26 (Tahoe) or newer
-- Xcode 26 — the full app, not the Command Line Tools alone: the build needs the
-  `FoundationModelsMacros` plugin, which ships only with Xcode (`scripts/check.sh` stops
-  early and says so when `xcode-select -p` points elsewhere)
+- Xcode 26 — the full app, not the Command Line Tools alone: SwiftLint needs a SourceKit
+  that ships only with Xcode (`scripts/check.sh` stops early and says so when
+  `xcode-select -p` points elsewhere)
 - Optional: Homebrew at `/opt/homebrew/bin/brew` or `/usr/local/bin/brew` — without it Wega
   still checks the Mac App Store, npm and every vendor feed, and says so instead of failing
 - Optional: `mas` at `/opt/homebrew/bin/mas` or `/usr/local/bin/mas` (App Store features degrade gracefully without it)
@@ -235,8 +445,9 @@ GUI apps do not inherit an interactive shell environment. Wega resolves all tool
 ```bash
 swift build               # compile all targets
 swift test                # run all tests
-./scripts/verify-catalog.sh   # check app-catalog.json.sig matches the catalog (no secret needed)
-WEGA_CATALOG_KEY=~/.secrets/wega-catalog.pem ./scripts/sign-catalog.sh   # re-sign after editing the catalog
+./scripts/verify-catalog.sh   # verify the catalog's Ed25519 signature (no secret needed)
+./scripts/sign-catalog.sh --unwrap   # unwrap the signed envelope into editable JSON (no secret needed)
+WEGA_CATALOG_KEY=~/.secrets/wega-catalog.pem ./scripts/sign-catalog.sh --envelope --bump   # re-sign after editing the catalog
 swift run WegaMacUpdater  # launch app
 ```
 
@@ -255,7 +466,7 @@ The package targets the **Swift 6 language mode** (`swift-tools-version: 6.0`), 
 - **Build & Test** — `swift build --build-tests` + `swift test`, both with `--enable-code-coverage`. `scripts/coverage-sonarqube.sh` then converts SwiftPM's llvm-cov output into a SonarQube generic coverage report (`sonarqube-generic-coverage.xml`) that is uploaded as an artifact for the SonarCloud job (which runs on Linux and can't run the macOS tests itself).
 - **SwiftLint** — `swiftlint lint --strict` against `.swiftlint.yml` (warnings fail the job). The config keeps the high-signal correctness rules and metric guardrails while disabling the purely-cosmetic rules that conflict with the codebase's house style, so it gates regressions without reformatting.
 - **Package** — runs `scripts/build-pkg.sh` to prove the whole packaging path composes, then runs `scripts/verify-bundle.sh` — the **same artifact gate the release uses** — over the built `.app`: bundle layout, a **universal** binary (arm64 + x86_64), a valid helper/app signature, and that both `app-catalog.json` and `endpoints.json` are bundled (the latter is required at launch — `AppEndpoints.shared` fatal-errors without it). On the ad-hoc-signed CI build the notarization and stapling checks are reported as skipped. It then uploads the resulting `.pkg` as an artifact.
-- **Catalog signature** — `scripts/verify-catalog.sh` checks that `app-catalog.json.sig` verifies against `app-catalog.json`, using the public key already committed in `CatalogSignature.swift`. **No secret and no write access**: Ed25519 is deterministic, so verifying proves exactly what re-signing would, without ever handing CI the private key. `raw.githubusercontent` serves the catalog and its signature as two separate cache entries, so the commit is the only place their consistency can be enforced — this gate goes red the moment the catalog changes without the signature being regenerated. Skipped (exit 3) while the key is still the placeholder.
+- **Catalog signature** — `scripts/verify-catalog.sh` checks the catalog's Ed25519 signature against the public key already committed in `CatalogSignature.swift`. It accepts either shape: the **signed envelope**, which carries payload and signature in one document and is what this repository publishes today (the signature is verified over the exact payload bytes the app decodes), or the legacy **detached pair**, a flat `app-catalog.json` next to `app-catalog.json.sig`. **No secret and no write access**: Ed25519 is deterministic, so verifying proves exactly what re-signing would, without ever handing CI the private key. The envelope exists precisely because `raw.githubusercontent` serves a detached pair as two separate cache entries that can skew, leaving the commit as the only place their consistency can be enforced. Either way, this gate goes red the moment the catalog changes without its signature being regenerated. Skipped (exit 3) while the key is still the placeholder.
 - **SonarCloud** — runs the SonarQube/SonarCloud scanner against `sonar-project.properties` (after **Build & Test**, whose coverage report it downloads and feeds via `sonar.coverageReportPaths`). Skipped until a `SONAR_TOKEN` secret is configured, so it never blocks CI before setup. Outbound URLs are sourced from `endpoints.json` via `AppEndpoints`, so `S1075` ("hard-coded URI") only fires on genuinely configurable endpoints; tests and the fixed-system-path files are excluded in the properties file. Coverage is measured on `MacUpdaterCore` **and** the reachable parts of the `WegaMacUpdater` app: the `MacUpdaterUITests` bundle depends on the app target and `@testable import`s it, so the app's orchestrators (`ScanStore`, `BackgroundUpdater`, `MenuBarAgent`, the `*Store`/`*Controller`/`*Coordinator` types) and the I/O services with a tested pure core are all counted. `sonar.coverage.exclusions` is deliberately narrow — only files with no unit-testable branch logic (the SwiftUI `View`/`Scene`/`App`/`Commands` layer, the constant-only `SystemPaths.swift`, and the XPC/root/network glue whose decisions live in Core) are excluded (the gate requires ≥ 80% coverage on new code).
 
 `scripts/build-pkg.sh` builds a universal binary by default (override with `ARCHS="arm64"`) and copies the SPM resource bundle (`app-catalog.json`) into the `.app`, so `Bundle.module` resolves at runtime.
@@ -282,14 +493,20 @@ self-update verification only trust binaries signed by that team, so release sig
 
 ### Cutting a release
 
-`scripts/build-pkg.sh` builds a universal, ad-hoc-or-signed `.pkg` **and** a drag-to-Applications `.dmg`. Pushing a version tag drives the rest:
+`scripts/build-pkg.sh` builds a universal, ad-hoc-or-signed `.pkg` **and** a drag-to-Applications `.dmg`. Pushing a version tag drives the rest, and `scripts/release.sh` is what creates that tag — in two phases, with a review gate in between:
 
 ```bash
-# bump AppMetadata.version first, then:
-git tag v0.1.0 && git push origin v0.1.0
+./scripts/release.sh patch      # prepare: bump AppMetadata.version, draft notes, stage
+# review CHANGELOG.md, edit until the notes read well
+./scripts/release.sh --continue # finalise: commit + annotated tag
+git push origin main --follow-tags
 ```
 
-Move the `[Unreleased]` entries in [`CHANGELOG.md`](CHANGELOG.md) under the new version heading as part of the bump.
+Never edit `AppMetadata.version` or move the `[Unreleased]` entries by hand — the script owns
+both, and the workflow refuses any tag that disagrees with the version. The full procedure,
+the signing secrets and the first-release case (**the project has no tags yet**, so the first
+release is cut from `[Unreleased]` alone and its version must be higher than `0.1.0`) are in
+**[RELEASING.md](RELEASING.md)**.
 
 `.github/workflows/release.yml` (on `push: tags: v*`) first runs the **same reusable quality workflow CI runs** — build, test, lint, catalog verification, packaging and the bundle gate, on the same pinned `macos-26`/Xcode 26 toolchain. The publishing job `needs:` it, so a release can never be built on a different toolchain than CI proved green, nor published ahead of the quality gates. It then verifies tag == `AppMetadata.version`, builds the artifacts, notarizes and staples them, and runs `scripts/verify-bundle.sh` over the result — bundle layout, helper signature, notarization, stapling and required resources — as a final gate before it publishes a GitHub Release with the `.pkg` + `.dmg`. **Signing and notarization are optional and activate automatically once the secrets exist** — until then the job still publishes *unsigned* artifacts so the pipeline is verifiable end-to-end without an Apple Developer account (the **Preflight** step in each run prints which signing/notary secrets are configured).
 
@@ -306,7 +523,7 @@ Secrets (all optional):
 
 ### Self-update
 
-Wega updates **itself** by dogfooding the same machinery it uses for everyone else. `WegaSelfUpdateChecker` (MacUpdaterCore) asks the GitHub Releases API for the latest tag, compares it against `AppMetadata.version` with the shared `VersionComparison` logic, and reports **every** published asset rather than picking one; `SelfUpdatePlanner` then chooses from actual capability — a verified `.pkg` installed headlessly by the privileged helper when it is enabled, otherwise the `.dmg` the user finishes by hand — so a helper-equipped user is never sent to drag an icon. The **Settings window** surfaces the full install flow through `SelfUpdateController`: it auto-checks once when the window opens (ETag-conditional, so revisits are free) and offers a manual re-check; when a newer release exists, it shows the version and a button honestly labeled for the chosen path — "Pobierz i zainstaluj" for a headless helper install, "Pobierz i otwórz instalator" when the user must finish it by hand — that downloads the asset, verifies its code signature against the pinned release-signing team ID before anything touches it, and fails closed (payload deleted, release page opened instead) the moment that verification misses; plus the cumulative release notes for every version between the installed one and the newest — each collapsible, capped at 10 with any omitted releases counted rather than dropped silently — and a link to see the release itself on GitHub. A completed headless install ends in an explicit *installed, restart to use it* state with a restart button that stays disabled while any mutating operation holds the write gate — nothing restarts the app on its own. No embedded framework, no appcast to host. (Sparkle-style silent background updates remain a possible later upgrade; the runtime cost — embedding the framework in the hand-rolled bundle, EdDSA-signed appcast hosting — isn't worth it for a tool you open deliberately.)
+Wega updates **itself** by dogfooding the same machinery it uses for everyone else. `WegaSelfUpdateChecker` (MacUpdaterCore) asks the GitHub Releases API for the latest tag, compares it against `AppMetadata.version` with the shared `VersionComparison` logic, and reports **every** published asset rather than picking one; `SelfUpdatePlanner` then makes the single install-vs-open decision. The **artifact** is chosen on security grounds and never from capability: the `.pkg` always wins, the `.dmg` is the fallback for releases that ship no package, and anything else is refused outright — the `.pkg` is the only channel Wega can pin end to end (a Gatekeeper *install* assessment **plus** the Developer Team ID read from the package signature), whereas a `.dmg` is validated by Gatekeeper alone, which attests "notarized by *some* Apple developer", not "published by Wega" (SEC-04). What the privileged helper decides is only *how* that artifact is applied — headless install when it is enabled, otherwise the same file handed to the user to finish. The **Settings window** surfaces the full install flow through `SelfUpdateController`: it auto-checks once when the window opens (ETag-conditional, so revisits are free) and offers a manual re-check; when a newer release exists, it shows the version and a button honestly labeled for the chosen path — "Pobierz i zainstaluj" for a headless helper install, "Pobierz i otwórz instalator" when the user must finish it by hand — that downloads the asset, verifies its code signature against the pinned release-signing team ID before anything touches it, and fails closed (payload deleted, release page opened instead) the moment that verification misses; plus the cumulative release notes for every version between the installed one and the newest — each collapsible, capped at 10 with any omitted releases counted rather than dropped silently — and a link to see the release itself on GitHub. A completed headless install ends in an explicit *installed, restart to use it* state with a restart button that stays disabled while any mutating operation holds the write gate — nothing restarts the app on its own. No embedded framework, no appcast to host. (Sparkle-style silent background updates remain a possible later upgrade; the runtime cost — embedding the framework in the hand-rolled bundle, EdDSA-signed appcast hosting — isn't worth it for a tool you open deliberately.)
 
 **One count, everywhere applies to Wega too (UX-15).** The self-update no longer hides in Settings: `ManualUpdateScanner` runs the same check on every background and window scan and folds an available release into its results as an ordinary `ManualOutdatedApp` (a `.wega` update source). So a pending Wega update is **counted in the badge, named in the background notification, and listed as a "Wega" row under "Ręcznie zainstalowane" in the Updates window** — exactly like any other manually-updated app. Its row action opens **Settings**, where the in-app installer lives — download, signature verification, headless helper install and the gated restart — rather than opening the release page in a browser and stepping around all of it; the row still carries the version arrow, release notes and the security-fix badge like every vendor row.
 

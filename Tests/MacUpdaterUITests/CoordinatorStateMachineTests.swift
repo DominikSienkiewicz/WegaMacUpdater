@@ -11,7 +11,7 @@ struct CoordinatorStateMachineTests {
         let controller = SelfUpdateController(dependencies: .init(
             check: { expected },
             download: { $0 },
-            verify: { _ in },
+            verify: { _, _ in },
             installOrOpen: { _, _ in false },
             openFallback: {},
             relaunch: {},

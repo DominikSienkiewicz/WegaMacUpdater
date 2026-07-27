@@ -12,8 +12,8 @@ If you are a **user** looking for how to install and use the app, see the
 ## Prerequisites
 
 - **macOS 26 (Tahoe) or newer** and **Xcode 26 / Swift 6.0**.
-  A Command Line Tools–only toolchain is not enough: building requires the full Xcode
-  (it needs the `FoundationModelsMacros` plugin and the SourceKit that SwiftLint loads).
+  A Command Line Tools–only toolchain is not enough: SwiftLint needs a SourceKit that
+  only the full Xcode provides, so `./scripts/check.sh` refuses to run without it.
   Point `xcode-select` at Xcode, not CommandLineTools:
 
   ```bash
@@ -95,7 +95,7 @@ Every pull request to `main` runs the jobs defined in the **reusable workflow** 
 | **Build & Test** | `swift build --build-tests` + `swift test`, with coverage |
 | **SwiftLint** | `swiftlint lint --strict` (warnings fail), pinned SwiftLint 0.65.0 |
 | **Package** | `scripts/build-pkg.sh` builds a universal `.pkg`, then `scripts/verify-bundle.sh` gates bundle layout, helper signature and required resources (notarization/stapling on signed release builds) |
-| **Catalog signature** | verifies `app-catalog.json.sig` matches `app-catalog.json` — see below |
+| **Catalog signature** | verifies the catalog's Ed25519 signature, in whichever shape it ships — see below |
 | **SonarCloud** | static analysis + coverage gate (skipped until `SONAR_TOKEN` is set); defined in `ci.yml` |
 
 ## The catalog signature gate
@@ -109,13 +109,23 @@ and it is working as designed.** Here is why, and what to do about it.
 updates it (GitHub repos, JetBrains IDE codes, Synology identifiers, Sparkle feed
 overrides…). Wega can refresh this catalog **over the air** without shipping a new
 build, by fetching a newer `app-catalog.json` from `raw.githubusercontent`. To stop a
-tampered catalog from redirecting update sources, the catalog ships with a **detached
-Ed25519 signature**, `app-catalog.json.sig`, and the app verifies the signature before
-trusting an overlay (`CatalogSignature`, fail-closed).
+tampered catalog from redirecting update sources, the catalog carries an **Ed25519
+signature**, and the app verifies it before trusting an overlay (`CatalogSignature`,
+fail-closed).
 
-`raw.githubusercontent` caches the JSON and the `.sig` as **two separate entries**, so a
-client could otherwise fetch a fresh catalog next to a stale signature. The only place
-their consistency can be enforced is the commit — which is what the CI gate does.
+That signature ships in one of two shapes, and Wega, `sign-catalog.sh` and
+`verify-catalog.sh` all handle both:
+
+- the **signed envelope** — payload and signature in a single document. This is the
+  format the repository publishes today; see
+  [The envelope](#the-envelope-one-document-instead-of-two-sec-07) below;
+- the **detached pair** — a flat `app-catalog.json` next to `app-catalog.json.sig`. This
+  is the legacy shape: still accepted, no longer what ships.
+
+The detached pair is what motivated the envelope. `raw.githubusercontent` caches the JSON
+and the `.sig` as **two separate entries**, so a client can fetch a fresh catalog next to
+a stale signature; with two files the only place their consistency can be enforced is the
+commit — which is what the CI gate does. One document cannot skew against itself.
 
 ### What the gate does
 
@@ -124,20 +134,22 @@ The **Catalog signature** job (the `catalog-signature:` job in the reusable
 
 1. runs `scripts/test-sign-catalog-guard.sh` — a regression test proving
    `sign-catalog.sh` refuses a private key that lives inside the repository (SEC-06); and
-2. runs `scripts/verify-catalog.sh`, which checks that `app-catalog.json.sig` verifies
-   against `app-catalog.json` using the **public** key committed in
-   `Sources/MacUpdaterCore/Security/CatalogSignature.swift`.
+2. runs `scripts/verify-catalog.sh`, which checks the catalog's signature against the
+   **public** key committed in `Sources/MacUpdaterCore/Security/CatalogSignature.swift`.
+   It detects the shape itself: for an envelope it verifies the embedded signature over
+   the exact payload bytes the app decodes; for a flat catalog it verifies the detached
+   `app-catalog.json.sig` against the file.
 
 Verification needs **no secret and no write access**: Ed25519 is deterministic, so
 verifying with the public key proves exactly what re-signing would. The gate **goes red
-the moment `app-catalog.json` changes without `app-catalog.json.sig` being regenerated to
-match** (exit 1). It is skipped (exit 3, reported as a neutral notice) only while the
+the moment `app-catalog.json` changes without its signature being regenerated to match**
+(exit 1). It is skipped (exit 3, reported as a neutral notice) only while the
 committed public key is still the `REPLACE_ED25519_PUBKEY` placeholder — i.e. before
 signing has been configured for the project.
 
 ### Why your PR can't regenerate the signature
 
-Regenerating `app-catalog.json.sig` requires the **private** signing key, and by policy
+Regenerating the catalog signature requires the **private** signing key, and by policy
 (SEC-06) that key never enters the repository — `scripts/sign-catalog.sh` refuses any key
 that resolves to a path inside the working tree, and the maintainer keeps it outside the
 repo (e.g. `~/.secrets/wega-catalog.pem`). **Only a maintainer can produce a valid
@@ -148,7 +160,17 @@ is expected; it is not a defect in your PR.
 
 ### How to contribute a catalog change
 
-Pick whichever fits:
+The published catalog is an envelope, so its payload is base64 rather than editable JSON.
+Unwrap it first — this needs no key:
+
+```bash
+./scripts/sign-catalog.sh --unwrap
+```
+
+Your branch then carries the catalog in flat form. That is expected and not a regression of
+the envelope: the maintainer who re-signs your change publishes it as an envelope again.
+
+Then pick whichever fits:
 
 1. **Ask for the app to be added (no CI friction).** Open an issue requesting the
    catalog entry. Wega even builds this for you: in the **Inventory** window, an app Wega
@@ -156,17 +178,22 @@ Pick whichever fits:
    "add update support" issue. A maintainer adds the entry and regenerates the signature
    in one commit.
 2. **Open a pull request with the `app-catalog.json` change.** Expect the **Catalog
-   signature** job to go red — say so in the PR description. A maintainer will regenerate
-   `app-catalog.json.sig` with `scripts/sign-catalog.sh` and commit it **together with**
-   your catalog change (the JSON and its `.sig` must land in a single commit) before the
-   branch merges. Do not attempt to hand-edit or fake the `.sig`.
+   signature** job to go red — say so in the PR description. A maintainer will re-sign
+   with `scripts/sign-catalog.sh` and land the result **in the same commit as** your
+   catalog change before the branch merges: for the envelope that is the single rewritten
+   file, for the legacy detached pair the JSON and its `.sig` together. Do not attempt to
+   hand-edit or fake a signature.
 
 ### For maintainers
 
-Re-sign after editing the catalog, and commit both files together:
+Unwrap the published envelope, edit the flat JSON, then re-sign it as an envelope:
 
 ```bash
-WEGA_CATALOG_KEY=~/.secrets/wega-catalog.pem ./scripts/sign-catalog.sh
+./scripts/sign-catalog.sh --unwrap
+```
+
+```bash
+WEGA_CATALOG_KEY=~/.secrets/wega-catalog.pem ./scripts/sign-catalog.sh --envelope --bump
 ```
 
 ```bash
@@ -174,12 +201,17 @@ WEGA_CATALOG_KEY=~/.secrets/wega-catalog.pem ./scripts/sign-catalog.sh
 ```
 
 ```bash
-git add Sources/MacUpdaterCore/Resources/app-catalog.json Sources/MacUpdaterCore/Resources/app-catalog.json.sig
+git add -A Sources/MacUpdaterCore/Resources/
 ```
+
+`--bump` raises `generation`, which belongs in **every** publication. `--envelope` is what
+keeps the catalog in the shipped shape: without it `sign-catalog.sh` writes the legacy
+detached pair instead, and then `app-catalog.json` and `app-catalog.json.sig` must land in
+a single commit together.
 
 ### The envelope: one document instead of two (SEC-07)
 
-The two-file layout has a flaw no amount of care at signing time removes — the JSON and
+The detached two-file layout has a flaw no amount of care at signing time removes — the JSON and
 the `.sig` are separate CDN entries, so a client can still fetch a fresh catalog beside a
 cached signature and see a mismatch that is indistinguishable from tampering. The
 **envelope** carries the payload and its signature in one document, and one document
@@ -193,14 +225,16 @@ The envelope's own fields are untrusted. Everything a decision rests on — `sch
 and the monotonic `generation` that makes a replay detectable — lives **inside** the
 payload, which is exactly what the signature covers.
 
-Wega reads both formats, so the switch is one command whenever you choose to make it:
+This repository has made that switch: `app-catalog.json` is an envelope, and the detached
+`app-catalog.json.sig` no longer exists here. Wega reads both formats, so the legacy shape
+keeps working — but the envelope is the published one, and re-signing keeps it that way:
 
 ```bash
 WEGA_CATALOG_KEY=~/.secrets/wega-catalog.pem ./scripts/sign-catalog.sh --envelope
 ```
 
-That rewrites `app-catalog.json` as an envelope and deletes the now-meaningless `.sig`.
-To edit the catalog by hand again, unwrap it first (no key needed), edit, then re-sign:
+That rewrites `app-catalog.json` as an envelope and deletes any now-meaningless `.sig`.
+To edit the catalog by hand, unwrap it first (no key needed), edit, then re-sign:
 
 ```bash
 ./scripts/sign-catalog.sh --unwrap

@@ -3,10 +3,10 @@ import WegaHelperKit
 
 /// One downloadable artifact of a published release.
 ///
-/// The checker reports every asset a release carries; deciding *which* one to use belongs to
-/// ``SelfUpdatePlanner``, which is the only place that knows whether a headless install is
-/// possible. Splitting the two is what stopped a helper-equipped user being sent to drag a
-/// `.dmg` because the checker had already discarded the `.pkg`.
+/// The checker reports every asset a release carries; deciding *which* one to use, and how
+/// to apply it, belongs to ``SelfUpdatePlanner``. Splitting the two is what lets the UI show
+/// the whole release while a single function states the security ordering (SEC-04) and the
+/// install-vs-open decision.
 public struct ReleaseAsset: Equatable, Sendable {
     public let name: String
     public let url: URL
@@ -25,8 +25,10 @@ public struct ReleaseAsset: Equatable, Sendable {
 /// Instead of embedding Sparkle, Wega self-updates the same way it tracks other
 /// GitHub-released apps: it asks the GitHub Releases API for the latest tag, compares it
 /// against `AppMetadata.version` with the shared `VersionComparison` logic, and reports every
-/// asset the release published. The UI surfaces this in the Info tab; no extra infrastructure,
-/// no appcast to host.
+/// asset the release published. A release carrying nothing Wega can pin — no `.pkg` and no
+/// `.dmg` — is reported as `.failed` rather than offered (SEC-04; the ordering itself lives
+/// in `SelfUpdatePlanner.preferredAsset`). The UI surfaces this in the Info tab; no extra
+/// infrastructure, no appcast to host.
 public struct WegaSelfUpdateChecker: Sendable {
     public enum Result: Equatable, Sendable {
         case upToDate
@@ -34,6 +36,14 @@ public struct WegaSelfUpdateChecker: Sendable {
         /// the release published, in publication order; the planner picks one.
         case updateAvailable(version: String, assets: [ReleaseAsset], releaseURL: URL, notes: String)
         case failed
+
+        /// The version the offered asset claims to be, or `nil` when nothing is offered.
+        /// SEC-04 — the downloaded payload is verified against it, so a signed-but-stale
+        /// artifact cannot be served in place of the release the user was shown.
+        public var availableVersion: String? {
+            if case .updateAvailable(let version, _, _, _) = self { return version }
+            return nil
+        }
     }
 
     private let repo: String
@@ -76,7 +86,10 @@ public struct WegaSelfUpdateChecker: Sendable {
             guard let url = URL(string: asset.browserDownloadURL) else { return nil }
             return ReleaseAsset(name: asset.name, url: url)
         }
-        guard !assets.isEmpty,
+        // SEC-04: a release that published nothing pinnable is not an update target. The
+        // full asset list still travels to the UI; what is refused here is *offering* a
+        // release Wega could not verify. The ordering is asked for, never restated.
+        guard SelfUpdatePlanner.preferredAsset(from: assets) != nil,
               let htmlURL = release.htmlURL,
               let releaseURL = URL(string: htmlURL) else {
             return .failed

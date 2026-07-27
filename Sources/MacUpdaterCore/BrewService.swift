@@ -198,6 +198,10 @@ public final class BrewService: @unchecked Sendable {
         return version
     }
 
+    /// REL-12 — the streamed upgrade is the app's longest operation, so it is bounded by the
+    /// `.download` policy (hours of deadline, minutes of permitted silence) instead of the
+    /// unbounded wait it used to run under. Brew prints progress throughout a download, so
+    /// the inactivity limit is what actually catches a hang.
     public func events(arguments: [String]) throws -> AsyncThrowingStream<ProcessOutputEvent, Error> {
         guard let brewURL = locator.locateBrew() else {
             throw BrewServiceError.brewNotFound
@@ -208,12 +212,15 @@ public final class BrewService: @unchecked Sendable {
                 arguments: arguments,
                 environment: HomebrewEnvironment.environment,
                 inheritParentEnvironment: false,
-                timeout: nil
+                timeouts: .download
             )
         )
     }
 
-    private func runBrew(_ arguments: [String], timeout: TimeInterval? = nil) async throws -> ProcessResult {
+    private func runBrew(
+        _ arguments: [String],
+        timeouts: ProcessTimeoutPolicy = .query
+    ) async throws -> ProcessResult {
         guard let brewURL = locator.locateBrew() else {
             throw BrewServiceError.brewNotFound
         }
@@ -224,7 +231,7 @@ public final class BrewService: @unchecked Sendable {
                 arguments: arguments,
                 environment: HomebrewEnvironment.environment,
                 inheritParentEnvironment: false,
-                timeout: timeout
+                timeouts: timeouts
             )
         )
     }

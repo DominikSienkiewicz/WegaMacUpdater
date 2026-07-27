@@ -23,7 +23,8 @@ The path is not new. Today it already:
   Gatekeeper assessment via `CodeSignatureVerifier` — and deletes the file and opens the
   release page if that fails;
 - installs a `.pkg` headlessly through the privileged helper when the helper is enabled,
-  and otherwise opens the downloaded asset for the user to finish;
+  and otherwise opens the same downloaded asset for the user to finish — the helper changes
+  who completes the install, never which artifact was fetched;
 - carries the release body along as `releaseNotes`, which the inspector renders after
   `ReleaseNotesText` has stripped its markup.
 
@@ -33,7 +34,7 @@ Four things are missing, and this design addresses exactly those.
 
 | # | Gap | Consequence |
 |---|---|---|
-| 1 | The checker always prefers the `.dmg` and only then asks whether a headless install was possible | A user with a working helper is sent to drag an icon, for no reason |
+| 1 | The checker pre-selects a single asset, so the planner can only comment on a decision already made | Install-vs-open is re-derived downstream from the file, and the choice cannot be stated in one place |
 | 2 | Nothing restarts the app after a headless install | The bundle is swapped under a running process, and nobody says so |
 | 3 | Only the newest release body is available | Three versions behind means seeing one third of the change |
 | 4 | No way to silence a specific version | An unwanted release sits in the count permanently |
@@ -60,6 +61,9 @@ case updateAvailable(version: String, assets: [Asset], releaseURL: URL, notes: S
 ```
 
 The checker no longer chooses among assets; it reports the ones the release published.
+Which asset is *preferred* remains a fixed security ordering — `.pkg`, then `.dmg`, then
+nothing — expressed exactly once, in `SelfUpdatePlanner.preferredAsset`. `helperEnabled`
+selects the install **method**, never the artifact.
 `ManualUpdateScanner.selfUpdateApp` maps the result as before, and the Wega row's action
 opens the self-update screen instead of a browser.
 
@@ -118,8 +122,9 @@ itself installable — notes are informative, not a gate.
 Written as part of the work, not executed here (per the project's verification policy —
 the formatter and linter are the gate, test runs are opt-in).
 
-- **Planner** — pkg + helper → install; pkg without helper → open; only a dmg despite a
-  helper → open; no assets → failed.
+- **Planner** — pkg + helper → install; **pkg without helper → open *the pkg*, never the
+  dmg** (SEC-04: the missing helper must not downgrade the channel); only a dmg despite a
+  helper → open; neither pkg nor dmg → no plan at all; no assets → no plan.
 - **`ReleaseHistory`** — version filtering, prerelease exclusion, markup stripping, the cap
   and its omission count, empty result vs. transport error.
 - **Controller** — reaching `installedPendingRestart`; the restart refused while the
@@ -137,7 +142,7 @@ four gaps.
 
 | Stage | Content | Standalone value |
 |---|---|---|
-| E1 | Asset selection by capability, `installedPendingRestart`, restart button | One-click update for helper users; no more swapped bundle under a live process |
+| E1 | One decision site for install-vs-open (asset preference stays `.pkg` → `.dmg`, SEC-04), `installedPendingRestart`, restart button | One-click update for helper users; no more swapped bundle under a live process |
 | E2 | `ReleaseHistory` and the cumulative notes screen | See the whole change before installing it |
 | E3 | *Check for Updates…* in the app menu; the Wega row routes to the screen | Discovery where macOS users look for it |
 

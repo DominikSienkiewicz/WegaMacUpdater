@@ -41,7 +41,7 @@ struct SelfUpdateFailClosedTests {
         let controller = SelfUpdateController(dependencies: .init(
             check: { .upToDate },
             download: { _ in stagedPayload },
-            verify: { _ in throw SignatureRejected() },
+            verify: { _, _ in throw SignatureRejected() },
             installOrOpen: { _, _ in
                 installProbe.record()
                 return true

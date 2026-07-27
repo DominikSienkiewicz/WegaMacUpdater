@@ -106,6 +106,21 @@ Closing the main window keeps this agent running; use **Quit** in its dropdown t
   checksum, whether rollback protection covers it, whether it **may** ask for an admin
   password, and the download size (shown as **"size unknown"** when the server won't say).
 
+### Stopping an update
+
+An update in progress can be stopped: while it runs, the **Update** button is joined by
+**Cancel**. Wega stops at the **next package boundary** — the install already running is
+allowed to finish, because a package manager killed halfway through a download or an app
+replacement is exactly how a broken app happens. Everything after that package is skipped,
+and the summary says how many packages were updated and how many were left untouched, so a
+stopped run is never reported as a finished one. An update still waiting for another
+operation to release the system is dropped immediately, since it has changed nothing yet.
+
+Cancelling — and every timeout — now really stops the tool Wega started, together with any
+helper process it spawned: Wega asks it to quit, gives it a moment to unwind, and kills it
+if it refuses. Every command also has both a maximum runtime and an inactivity limit, so a
+package manager that hangs silently can no longer hold the window forever.
+
 ### The rollback shield
 
 Each Homebrew cask row carries a **🛡 shield badge** when Wega can protect the upgrade with
@@ -164,8 +179,9 @@ Every scan, source response, install result and error is recorded in the **Logs*
 
 - filter by severity (**All / Warnings+ / Errors only**),
 - search the text,
-- copy entries to the clipboard, or
-- **Reveal in Finder** the underlying log file.
+- copy entries to the clipboard,
+- **Reveal in Finder** the underlying log file, or
+- **Export diagnostics** — the whole troubleshooting package in one file (below).
 
 The log also lives on disk at
 `~/Library/Logs/WegaMacUpdater/wega.log` (it rotates to `wega.log.1` past ~5 MB). When a
@@ -191,6 +207,40 @@ one. Each is collapsed to its version and date; expand any to read its notes. If
 can't be reached, it says so plainly instead of showing nothing — either way, this never
 holds up the update itself.
 
+Wega always downloads the **`.pkg`** when a release publishes one, and falls back to the
+`.dmg` only when it does not. That is a security choice, not a convenience one: the `.pkg`
+is the only artifact Wega can check all the way back to its own developer certificate. What
+changes when the privileged helper is switched on is only *who finishes the job* — with the
+helper, Wega installs it for you and then asks you to restart; without it, the same file is
+handed to you to run yourself. A release that publishes neither offers no update button at
+all rather than something Wega cannot verify.
+
+### Export diagnostics
+
+**Settings → System diagnostics → Export diagnostics** (also in the **Logs** toolbar)
+saves a single `.zip` with everything a bug report needs, so filing one never means
+collecting it by hand:
+
+| In the zip | What it holds |
+| --- | --- |
+| `report.txt` | App version and build, macOS version and CPU, detected package managers and their versions, Privileged Helper status and version, schedule status, the last scan's result per source, free disk space and the signature state. |
+| `update-history.txt` | The last 40 upgrade runs, item by item: update → validation → rollback, including which apps were rolled back and where a publisher's Team ID changed. |
+| `logs/wega.log`, `logs/wega.log.1` | **Both** log files — the current one and the rotated one. |
+
+Two things about this file are deliberate:
+
+- **It is redacted.** Filesystem paths, URL query strings, credentials (API keys, bearer
+  tokens, `Authorization` headers, private keys), e-mail addresses and your account names
+  are replaced with `[path]`, `[query]`, `[secret]`, `[email]` and `[user]` before anything
+  is written. The failure itself survives; the identity behind it does not. Team ID values
+  are not exported either — the history records *that* a publisher changed, not who.
+- **Nothing is sent anywhere.** Wega has no upload, no share sheet and no default
+  destination. A save panel asks where to put the file, and the file goes exactly there.
+  Attaching it to an issue is your decision, separately.
+
+Open the zip and read `report.txt` before attaching it if you want to see precisely what
+you are sharing.
+
 ### Common situations
 
 - **"Couldn't check — check your connection."** A source was unreachable, so Wega says so
@@ -205,6 +255,26 @@ holds up the update itself.
 - **An incomplete scan banner.** If a scan finished but some sources stayed silent, Wega
   marks the list as partial rather than passing it off as complete. Open **Logs** (filtered
   to errors) to see which source failed.
+### Crash reporting (off by default)
+
+The **Crash reporting** card in Settings can collect Wega's own crash and hang reports, so
+that if Wega ever dies on you the evidence is already waiting instead of having to be dug out
+of Console. It is **off until you turn it on**, and everything about it is local:
+
+- macOS (MetricKit) hands Wega its own report shortly after the *next* launch — a crash is
+  never reported by the run that crashed, and an app that crashes on every launch cannot
+  report itself at all.
+- Reports **stay on this Mac**. Wega has nowhere to send them; there is no upload, no
+  "anonymous statistics", not even an opt-out one.
+- What is kept: Wega's version and build, the macOS version, CPU architecture, the
+  termination reason and the stack trace. What is not: your locale, your Mac model, memory
+  contents, and any filesystem path or URL — those are stripped the same way log lines are.
+- Turning it on collects from that moment on. Crashes recorded before you agreed are not
+  swept up.
+- Up to 20 reports are kept for 90 days, in `~/Library/Logs/WegaMacUpdater/`, readable only
+  by you. **Copy reports** puts them on the clipboard so you can attach them to a bug report;
+  **Delete reports** wipes them. Sending one is always your decision.
+
 - **Homebrew results are missing / an "install Homebrew" card shows.** Homebrew isn't
   installed (or isn't at `/opt/homebrew/bin/brew` or `/usr/local/bin/brew`). Install it to
   unlock cask and formula updates; everything else keeps working without it.

@@ -45,7 +45,7 @@ struct TrustPanel: View {
                     ProgressView()
                         .controlSize(.small)
                     Text(tr("Weryfikowanie…"))
-                        .font(.system(size: 11))
+                        .font(.wega(.subheadline))
                         .foregroundStyle(.tertiary)
                 }
             case .loaded(let result):
@@ -78,7 +78,7 @@ struct TrustPanel: View {
                 // there) OR the watchdog's "cask:<token>" namespace — reconcile both on read, and
                 // withhold the rows entirely when neither the signature nor any history is known.
                 let byBundle = bundleID.flatMap { TeamIDLedger.shared.teamID(forBundleID: $0) }
-                let byCask = TeamIDLedger.shared.teamID(forBundleID: "cask:\(caskToken)")
+                let byCask = TeamIDLedger.shared.teamID(forBundleID: TeamIDLedger.caskKey(caskToken))
                 audit = TeamIDLedger.classifyCaskOrNil(storedByBundleID: byBundle, storedByCaskKey: byCask, new: fresh)
             } else {
                 audit = bundleID.map {
@@ -96,7 +96,7 @@ struct TrustPanel: View {
 
     private func sectionHeading(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 11, weight: .semibold))
+            .font(.wega(.subheadline, weight: .semibold))
             .foregroundStyle(.secondary)
     }
 
@@ -139,15 +139,15 @@ struct TrustPanel: View {
         switch verdict {
         case .ok:
             Label(tr("Zweryfikowano"), systemImage: "checkmark.seal.fill")
-                .font(.system(size: 12, weight: .medium))
+                .font(.wega(.callout, weight: .medium))
                 .foregroundStyle(Color.wegaSuccess)
         case .warning:
             Label(tr("Wykryto ostrzeżenie"), systemImage: "exclamationmark.triangle.fill")
-                .font(.system(size: 12, weight: .medium))
+                .font(.wega(.callout, weight: .medium))
                 .foregroundStyle(Color.wegaDanger)
         case .unavailable:
             Label(tr("Weryfikacja niedostępna"), systemImage: "questionmark.circle")
-                .font(.system(size: 12, weight: .medium))
+                .font(.wega(.callout, weight: .medium))
                 .foregroundStyle(.tertiary)
         }
     }
@@ -159,15 +159,15 @@ struct TrustPanel: View {
             switch audit {
             case .changed(let old, let new):
                 Text(tr("Wydawca się zmienił:") + " \(old) → \(new ?? "—")")
-                    .font(.system(size: 10))
+                    .font(.wega(.footnote))
                     .foregroundStyle(Color.wegaDanger)
             case .firstSeen:
                 Text(tr("pierwsze sprawdzenie wydawcy"))
-                    .font(.system(size: 10))
+                    .font(.wega(.footnote))
                     .foregroundStyle(.tertiary)
             case .unchanged:
                 Text(tr("wydawca bez zmian"))
-                    .font(.system(size: 10))
+                    .font(.wega(.footnote))
                     .foregroundStyle(.tertiary)
             }
         }
@@ -178,11 +178,11 @@ struct TrustPanel: View {
     private func signalRow(label: String, value: String, color: Color = .primary, monospaced: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text(label)
-                .font(.system(size: 11))
+                .font(.wega(.subheadline))
                 .foregroundStyle(.secondary)
                 .frame(width: 92, alignment: .leading)
             Text(value)
-                .font(.system(size: monospaced ? 11 : 12, design: monospaced ? .monospaced : .default))
+                .font(.wega(monospaced ? .subheadline : .callout, monospaced: monospaced))
                 .foregroundStyle(color)
         }
     }

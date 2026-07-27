@@ -33,21 +33,28 @@ final class MigrationStore: ObservableObject {
     @Published var duplicateConfirmation: DuplicateRemoval?
     @Published var duplicateBusyKey: String?
     @Published var pendingForceTermination: PendingForceTermination?
+    /// LT-03 — publisher corroboration per candidate, computed once per scan (see
+    /// `publisherCorrelations(for:using:)`) so the confidence badge can consult the
+    /// strongest signal without any view doing I/O.
+    @Published private(set) var publisherCorrelations: [String: CaskPublisherCorrelation] = [:]
 
     private let processes: RunningProcessService
     private let runningApplicationInspector: any RunningApplicationInspecting
     private let runningApplicationTerminator: any RunningApplicationTargetTerminating
+    private let publisherCorrelator: CaskPublisherCorrelator
 
     init(
         processes: RunningProcessService = RunningProcessService(),
         runningApplicationInspector: any RunningApplicationInspecting =
             WorkspaceRunningApplicationInspector(),
         runningApplicationTerminator: any RunningApplicationTargetTerminating =
-            WorkspaceTargetTerminator()
+            WorkspaceTargetTerminator(),
+        publisherCorrelator: CaskPublisherCorrelator = .live
     ) {
         self.processes = processes
         self.runningApplicationInspector = runningApplicationInspector
         self.runningApplicationTerminator = runningApplicationTerminator
+        self.publisherCorrelator = publisherCorrelator
     }
 
     func scan(
@@ -65,6 +72,23 @@ final class MigrationStore: ObservableObject {
         onWegaState: (@MainActor (WegaState) -> Void)?
     ) async {
         guard migrating == nil, let token = app.caskToken else { return }
+        // Claimed before the first suspension point so two overlapping requests cannot both
+        // pass the guard while the publisher correlation is being measured.
+        migrating = token
+        errorMessage = nil
+        logLines = []
+
+        // LT-03 — the strongest signal the scorer knows, finally supplied. `TeamIDLedger`
+        // already records which publisher signs each cask; correlating it with the installed
+        // bundle's Developer ID turns "the names look alike" into evidence, and turns a
+        // publisher mismatch into a hard `.low`. Measured for this one app rather than read
+        // from the scan cache: it gates an in-place `--force` overwrite, and one signature
+        // read is nothing beside the install it guards. It runs off the MainActor.
+        let correlation = await Self.publisherCorrelation(
+            for: app,
+            token: token,
+            using: publisherCorrelator
+        )
 
         // REL-08 — the match confidence must gate the takeover before anything runs. A low
         // score means `brew install --cask --force <token>` could overwrite this app with a
@@ -74,20 +98,27 @@ final class MigrationStore: ObservableObject {
             applicationName: app.name,
             caskToken: token,
             caskNames: [],
-            viaCustomMapping: false
+            viaCustomMapping: false,
+            installedAppTeamID: correlation.installedAppTeamID,
+            caskExpectedTeamID: correlation.caskExpectedTeamID
         )
         guard MigrationAutoTakeover.decide(confidence) != .blocked else {
-            errorMessage = trf(
-                "Dopasowanie %@ → %@ jest zbyt niepewne, aby przepiąć automatycznie. Zweryfikuj je ręcznie przed migracją.",
-                "\(app.name)",
-                "\(token)"
-            )
+            migrating = nil
+            errorMessage = correlation.isPublisherMismatch
+                ? trf(
+                    "Zainstalowana aplikacja %@ jest podpisana przez innego wydawcę (%@) niż wydawca znany dla caska %@ (%@). Wega nie przepnie jej automatycznie.",
+                    "\(app.name)",
+                    "\(correlation.installedAppTeamID ?? "—")",
+                    "\(token)",
+                    "\(correlation.caskExpectedTeamID ?? "—")"
+                )
+                : trf(
+                    "Dopasowanie %@ → %@ jest zbyt niepewne, aby przepiąć automatycznie. Zweryfikuj je ręcznie przed migracją.",
+                    "\(app.name)",
+                    "\(token)"
+                )
             return
         }
-
-        migrating = token
-        errorMessage = nil
-        logLines = []
 
         switch resolveRunningTarget(for: app) {
         case .notRunning:
@@ -233,6 +264,10 @@ final class MigrationStore: ObservableObject {
                 InstallationInventory.deduplicated(all)
             )
             candidates = migrationPool
+            publisherCorrelations = await Self.publisherCorrelations(
+                for: migrationPool,
+                using: publisherCorrelator
+            )
 
             let toSearch = migrationPool.filter { $0.caskToken == nil }
             if !toSearch.isEmpty {
@@ -253,6 +288,7 @@ final class MigrationStore: ObservableObject {
             }
         } catch {
             candidates = []
+            publisherCorrelations = [:]
             errorMessage = error.localizedDescription
         }
 
@@ -289,6 +325,29 @@ final class MigrationStore: ObservableObject {
         directories.flatMap { directory in
             (try? scan(directory, installedCasks, availableCasks)) ?? []
         }
+    }
+
+    /// LT-03 — publisher corroboration for the whole candidate list, in one pass, off the
+    /// MainActor (`nonisolated` + `async`, the same boundary `scanApplicationDirectories`
+    /// uses): reading a bundle's code signature is filesystem and Security-framework work.
+    /// Doing it here, once per scan, is what lets `MigrationRow` render the confidence badge
+    /// from a stored value instead of signature-checking on every SwiftUI body evaluation.
+    /// The correlator itself only opens the bundles whose cask has a recorded publisher, so
+    /// the common scan pays nothing at all.
+    nonisolated static func publisherCorrelations(
+        for applications: [ApplicationInfo],
+        using correlator: CaskPublisherCorrelator
+    ) async -> [String: CaskPublisherCorrelation] {
+        correlator.correlations(for: applications)
+    }
+
+    /// The same correlation for a single app, measured fresh at the moment of takeover.
+    nonisolated static func publisherCorrelation(
+        for app: ApplicationInfo,
+        token: String,
+        using correlator: CaskPublisherCorrelator
+    ) async -> CaskPublisherCorrelation {
+        correlator.correlate(caskToken: token, appPath: app.path)
     }
 
     private func performMigration(

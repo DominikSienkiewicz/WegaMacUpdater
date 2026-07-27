@@ -199,6 +199,9 @@ struct BinaryStream: View {
             let t = date.timeIntervalSinceReferenceDate
             for placement in frameRenderer.placements(at: t, canvasSize: size) {
                 let lane = placement.lane
+                // UX-03-fixed-size: decorative glyph rain drawn into a `Canvas`, sized per
+                // lane by the animation model to fake depth. It carries no information and
+                // is measured once per lane, so it must not move with the text setting.
                 let font = Font.system(size: lane.fontSize, weight: .regular, design: .monospaced)
                 let text = Text(lane.glyphs).font(font).foregroundStyle(color)
                 let resolved = ctx.resolve(text)

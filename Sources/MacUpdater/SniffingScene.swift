@@ -29,7 +29,7 @@ struct SniffingScene: View {
 
             if let caption {
                 Text(caption)
-                    .font(.system(size: 13).italic())
+                    .font(.wega(.body).italic())
                     .foregroundStyle(.secondary)
             }
         }
@@ -68,21 +68,24 @@ struct WigglyWega: View {
         WegaFull(pose: .sniff, size: size)
             .rotationEffect(.degrees(reduceMotion ? 0 : (wiggle ? 2.4 : -2.4)), anchor: .bottom)
             .offset(y: reduceMotion ? 0 : (wiggle ? -1 : 1))
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 0.22).repeatForever(autoreverses: true)) {
-                    wiggle = true
-                }
-            }
-            .onChange(of: reduceMotion) { _, shouldReduceMotion in
-                guard !shouldReduceMotion else {
-                    wiggle = false
-                    return
-                }
-                withAnimation(.easeInOut(duration: 0.22).repeatForever(autoreverses: true)) {
-                    wiggle = true
-                }
-            }
+            .onAppear { startWiggle() }
+            .onChange(of: reduceMotion) { _, _ in startWiggle() }
+    }
+
+    /// UX-03 — the head-bob never ends, so it goes through `ContinuousMotion` like every
+    /// other perpetual animation: with the setting on Wega holds her head still, including
+    /// when the setting is switched on mid-bob.
+    private func startWiggle() {
+        guard !reduceMotion else {
+            wiggle = false
+            return
+        }
+        let bob = ContinuousMotion.forever(
+            .easeInOut(duration: 0.22),
+            autoreverses: true,
+            reduceMotion: reduceMotion
+        )
+        withAnimation(bob) { wiggle = true }
     }
 }
 
@@ -108,7 +111,7 @@ struct ThoughtBubble: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.wegaHoney)
+                    .fill(Color.wegaHoneyFill)
                     .shadow(color: .black.opacity(0.18), radius: 4, x: 0, y: 2)
             )
             .opacity(reduceMotion || visible ? 1 : 0)
@@ -116,13 +119,13 @@ struct ThoughtBubble: View {
 
             HStack(spacing: 4) {
                 Circle()
-                    .fill(Color.wegaHoney)
+                    .fill(Color.wegaHoneyFill)
                     .frame(width: 8, height: 8)
                 Circle()
-                    .fill(Color.wegaHoney)
+                    .fill(Color.wegaHoneyFill)
                     .frame(width: 5, height: 5)
                 Circle()
-                    .fill(Color.wegaHoney)
+                    .fill(Color.wegaHoneyFill)
                     .frame(width: 3, height: 3)
             }
             .padding(.leading, 6)

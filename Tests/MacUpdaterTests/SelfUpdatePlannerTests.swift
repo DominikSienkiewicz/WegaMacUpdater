@@ -3,8 +3,11 @@ import Foundation
 @testable import MacUpdaterCore
 
 /// UX-06 / the self-update design: the plan decides which published asset the click is about,
-/// so the button label and the code that runs can never disagree — and a user whose helper
-/// *can* install headlessly is never sent to drag an icon instead.
+/// so the button label and the code that runs can never disagree.
+///
+/// The asset itself is chosen on security grounds (SEC-04, `preferredAsset`) and the helper
+/// does not get a vote; what `helperEnabled` decides is only whether that asset is installed
+/// headlessly or handed to the user.
 @Suite("SelfUpdatePlanner")
 struct SelfUpdatePlannerTests {
     private func asset(_ name: String) -> ReleaseAsset {
@@ -19,11 +22,16 @@ struct SelfUpdatePlannerTests {
         )
     }
 
-    @Test func fallsBackToTheDiskImageWithoutAHelper() {
-        let dmg = asset("Wega.dmg")
+    /// SEC-04 — **the missing helper does not downgrade the channel.** This assertion was
+    /// inverted before the merge: the planner used to fall back to the `.dmg` whenever it
+    /// could not install headlessly, which put the most common self-update path back on a
+    /// Gatekeeper-only check ("notarized by some Apple developer", not "published by Wega").
+    /// Without the helper the `.pkg` is still what gets downloaded — the user simply runs it.
+    @Test func withoutAHelperTheOfferedAssetIsStillThePackage() {
+        let pkg = asset("Wega.pkg")
         #expect(
-            SelfUpdatePlanner.action(helperEnabled: false, assets: [asset("Wega.pkg"), dmg])
-                == .downloadAndOpen(asset: dmg)
+            SelfUpdatePlanner.action(helperEnabled: false, assets: [asset("Wega.dmg"), pkg])
+                == .downloadAndOpen(asset: pkg)
         )
     }
 

@@ -15,7 +15,7 @@ struct SelfUpdateHistoryTests {
         SelfUpdateController(dependencies: SelfUpdateController.Dependencies(
             check: { check },
             download: { $0 },
-            verify: { _ in },
+            verify: { _, _ in },
             installOrOpen: { _, _ in true },
             openFallback: {},
             relaunch: {},

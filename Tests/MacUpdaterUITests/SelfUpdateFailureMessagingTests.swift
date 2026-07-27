@@ -19,7 +19,7 @@ struct SelfUpdateFailureMessagingTests {
             dependencies: .init(
                 check: { .upToDate },
                 download: { _ in throw URLError(.notConnectedToInternet) },
-                verify: { _ in },
+                verify: { _, _ in },
                 installOrOpen: { _, _ in false },
                 openFallback: { log.record(.openedBrowser) },
                 relaunch: {},
