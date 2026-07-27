@@ -42,6 +42,7 @@ extension InfoView {
                 languageCard
                 ScanDirectoriesSettingsCard()
                 ResourceGateSettingsCard()
+                LaunchAtLoginSettingsCard()
                 BackgroundUpdateConsentSettingsCard()
                 policiesCard
                 diagnosticsCard

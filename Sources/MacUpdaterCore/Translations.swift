@@ -116,6 +116,13 @@ extension Translations {
         "Zatwierdź komponent w Ustawieniach → Elementy logowania.": "Approve the component in Settings → Login Items.",
         "Komponent uprzywilejowany gotowy.": "Privileged component ready.",
         "Aktualizacja zainstalowana przez komponent uprzywilejowany.": "Update installed via the privileged component.",
+        // BG-02 — „Uruchamiaj przy logowaniu" (SMAppService.mainApp): tryb tła po restarcie Maca.
+        "Uruchamiaj przy logowaniu": "Launch at login",
+        "Uruchamiaj Wegę przy logowaniu": "Launch Wega at login",
+        "Tryb tła — harmonogram, licznik, powiadomienia i ciche aktualizacje — działa tylko, gdy Wega jest uruchomiona. Włącz tę opcję, aby macOS uruchamiał Wegę przy logowaniu i tło działało również po restarcie Maca.":
+            "Background mode — the schedule, badge, notifications and silent updates — runs only while Wega is open. Turn this on so macOS launches Wega at login and background mode keeps working after a restart of the Mac.",
+        "Element logowania został wyłączony w Ustawieniach systemowych. Włącz go ponownie w Ustawienia → Elementy logowania.":
+            "The login item was switched off in System Settings. Turn it back on in Settings → Login Items.",
         "Sprawdźmy, co się zestarzało": "Let's check what's gotten old",
         "Wega zajrzy do Homebrew oraz Mac App Store i powie, co warto odświeżyć.": "Wega will look into Homebrew and the Mac App Store and tell you what's worth refreshing.",
         "Sprawdź aktualizacje": "Check for updates",
