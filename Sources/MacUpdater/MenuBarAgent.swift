@@ -167,9 +167,11 @@ final class MenuBarAgent: ObservableObject {
             policies: policies
         )
         if !upgraded.isEmpty {
-            // Those casks are no longer outdated; re-check so neither the badge nor the
-            // notification keeps offering upgrades that have already happened.
-            current = await MenuBarUpdateChecker().availableUpdateCount(policies: policies)
+            // ARCH-08c: those casks are no longer outdated, so take them out of the result we
+            // already have instead of scanning everything a second time. The background round
+            // upgraded them and confirmed it by rescanning brew — a full fan-out over mas, npm
+            // and every vendor checker would only re-derive what is unchanged.
+            current = current.removingUpgradedCasks(upgraded, policies: policies)
         }
 
         lastResult = current
