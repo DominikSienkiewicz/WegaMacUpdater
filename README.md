@@ -42,7 +42,7 @@ ChatGPT public appcast ───────────────────
 Postman Squirrel feed ──────────────────────────────────────────────────────────────── ┤
 Obsidian desktop releases feed ────────────────────────────────────────────────────── ┤
 Sparkle (SUFeedURL from Info.plist) ────────────────────────────────────────────────── ┤
-npm globals (npm ls -g + npm view) ────────────────────────────────────────────────── ┤
+npm globals (npm outdated -g --json) ───────────────────────────────────────────────── ┤
 /Applications + ~/Applications scan ───────────────────────────────────────────────────┘
 ```
 
@@ -70,7 +70,7 @@ npm globals (npm ls -g + npm view) ───────────────
 Before any of this, `runCheck()` calls `brew update` so a freshly-published cask/formula version that hasn't landed locally yet is still seen.
 
 ### npm globals (sixth source)
-`NpmGlobalChecker` lists user-installed global packages with `npm ls -g --json --depth=0`, then resolves the latest version per package with `npm view <pkg> version`. `npm` itself and `corepack` are filtered out (managed by the Node distribution, not user-actionable here). The npm binary is located across Homebrew, Volta, fnm, and nvm install layouts — and as a last resort by asking the login shell (`$SHELL -lc 'command -v npm'`). This is what catches cases like the OpenAI Codex CLI being installed both as a Homebrew cask (up-to-date) and as `@openai/codex` under fnm (outdated) — brew alone would report nothing to do.
+`NpmGlobalChecker` finds outdated global packages in a **single** `npm outdated -g --json` process — one Node run for the whole scan, instead of the old unbounded `npm view <pkg> version` fan-out (one Node process per installed global) (ARCH-03). `npm` itself and `corepack` are filtered out (managed by the Node distribution, not user-actionable here). The npm binary is located across Homebrew, Volta, fnm, and nvm install layouts — and as a last resort by asking the login shell (`$SHELL -lc 'command -v npm'`) — and that resolved location is **cached for the scan**, so the globs and login-shell spawn don't repeat. When npm reports a registry/network error (a bare failure, or an `{"error": …}` payload), the scan **surfaces it as a failed source** rather than silently reporting an empty list, so a partial or total npm failure is flagged honestly instead of read as "nothing to update". (Installed globals are still enumerated with `npm ls -g --json --depth=0` for the inventory view.) This is what catches cases like the OpenAI Codex CLI being installed both as a Homebrew cask (up-to-date) and as `@openai/codex` under fnm (outdated) — brew alone would report nothing to do.
 
 ## Features
 
@@ -178,7 +178,7 @@ MacUpdaterCore (library target — no SwiftUI dependency)
 ├── PostmanUpdateChecker   — GETs Postman's Squirrel.Mac feed `dl.pstmn.io/update/osx_64/<installed>` and reads `name` (200 = newer, 204 = current); cask `postman` lags and the app ships no Sparkle feed, so this is the only source that sees the update. HTTPClient-injectable, unit-tested
 ├── SparkleUpdateChecker   — Info.plist (PropertyListSerialization, never Bundle(url:)) + CFPreferencesCopyAppValue fallback + `SparkleFeedOverrides` map (backed by AppCatalog) for apps that set the feed URL at runtime
 ├── NpmBrewDuplicateDetector — finds CLIs installed via both `npm -g` and Homebrew (surfaced in Migration)
-├── NpmGlobalChecker       — `npm ls -g` + `npm view <pkg> version`; NpmLocator scans brew/Volta/fnm/nvm + login-shell fallback
+├── NpmGlobalChecker       — outdated scan via one `npm outdated -g --json` process (`npm ls -g` for inventory); NpmLocator scans brew/Volta/fnm/nvm + login-shell fallback, resolved path cached per scan
 ├── VersionComparison    — versionsEqual, isUpgrade, compareVersions(scheme:) (SemVer vs build-numbered), normalizeGitTag (public, tested)
 ├── CaskDatabaseClient   — full cask database fetch + disk cache
 ├── CaskMatcher          — bundle-id / name → cask token matching

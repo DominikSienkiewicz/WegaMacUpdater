@@ -190,6 +190,31 @@ struct ArchitectureReviewRegressionTests {
         #expect(
             runner.contains("Task.sleep"),
             "ProcessRunner must enforce its timeout with an async Task.sleep"
+    /// ARCH-03 — the npm global-update scan runs one `npm outdated -g --json` process
+    /// instead of a `npm view` fan-out (one Node per package), and caches the resolved
+    /// npm location so a scan's repeated lookups don't re-glob nvm/fnm or respawn a
+    /// login shell.
+    @Test func npmGlobalScanUsesOneOutdatedProcessAndCachesLocation() throws {
+        let root = packageRoot()
+        let checker = executableSource(
+            try source("Sources/MacUpdaterCore/NpmGlobalChecker.swift", root: root)
+        )
+
+        #expect(
+            checker.contains("\"outdated\", \"-g\", \"--json\""),
+            "the npm outdated scan must run `npm outdated -g --json`"
+        )
+        #expect(
+            !checker.contains("\"view\""),
+            "the npm outdated scan must not shell out to `npm view` per package"
+        )
+        #expect(
+            !checker.contains("withTaskGroup"),
+            "the npm outdated scan must not fan out one process per package"
+        )
+        #expect(
+            checker.contains("cachedURL"),
+            "NpmLocator must cache the resolved npm location for the scan"
         )
     }
 
