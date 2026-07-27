@@ -176,8 +176,12 @@ not just a summary.
 ### Settings diagnostics
 
 The **Settings** window (**⌘,**) shows live diagnostics: Homebrew version, `mas` version,
-Privileged Helper status, macOS version and CPU architecture — the first things to check if
-a source behaves oddly. It also has an **App catalog** card that refreshes Wega's list of
+the **App Management** permission, Privileged Helper status, macOS version and CPU
+architecture — the first things to check if a source behaves oddly. The App Management row
+is a preflight (see below): it reads `granted`, `denied` or `undetermined`, and offers a
+link straight to the settings pane when the answer is `denied`. It is an indication, not a
+verdict — an upgrade that actually hits the refusal has the last word.
+It also has an **App catalog** card that refreshes Wega's list of
 supported apps on demand (it also refreshes on launch); a fetched update applies on the
 next launch.
 
@@ -185,6 +189,13 @@ next launch.
 
 - **"Couldn't check — check your connection."** A source was unreachable, so Wega says so
   instead of falsely reporting *"everything up to date."* This state survives a restart.
+- **"App Management permission missing."** Since macOS 13, replacing an app in
+  `/Applications` requires the **App Management** permission, and it covers the tools Wega
+  runs — so without it `brew` fails with `ditto: /Applications/X.app: Operation not
+  permitted` and nothing is updated. Click **Open privacy settings** on the banner (or the
+  link in Settings diagnostics), enable **Wega** under **Privacy & Security → App
+  Management**, then run the update again. Until it is granted, background updates pause
+  for 24 hours at a time instead of retrying — and failing — on every scheduled check.
 - **An incomplete scan banner.** If a scan finished but some sources stayed silent, Wega
   marks the list as partial rather than passing it off as complete. Open **Logs** (filtered
   to errors) to see which source failed.

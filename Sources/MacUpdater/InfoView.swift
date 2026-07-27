@@ -594,6 +594,21 @@ extension InfoView {
                         DiagRow(label: "Homebrew", required: true, value: d.brewVersion)
                         Divider().opacity(0.3).padding(.leading, 30)
                         DiagRow(label: "mas-cli", required: false, value: d.masVersion)
+                        Divider().opacity(0.3).padding(.leading, 30)
+                        // REL-05 — the preflight, so a missing "App Management" grant is
+                        // visible before the first upgrade rather than after it fails.
+                        DiagRow(label: tr("Zarządzanie aplikacjami"),
+                                required: true,
+                                value: Self.appManagementStatusText(d.appManagement),
+                                healthy: d.appManagement != .denied)
+                        if d.appManagement == .denied {
+                            Button(tr("Otwórz ustawienia prywatności")) {
+                                NSWorkspace.shared.open(AppManagementSettings.paneURL)
+                            }
+                            .buttonStyle(.link)
+                            .font(.system(size: 11))
+                            .padding(.top, 4)
+                        }
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
@@ -726,6 +741,16 @@ extension InfoView {
 
     // MARK: - Helpers
 
+    /// REL-05 — the preflight is *indicative*: `unknown` says so instead of implying a
+    /// clean bill of health nobody checked.
+    private static func appManagementStatusText(_ permission: AppManagementPermission) -> String {
+        switch permission {
+        case .granted: return tr("przyznane")
+        case .denied:  return tr("odmowa")
+        case .unknown: return tr("nieustalone")
+        }
+    }
+
     private static func cpuArch() -> String {
         var info = utsname()
         guard uname(&info) == 0 else { return "unknown" }
@@ -764,8 +789,12 @@ private struct DiagRow: View {
     var required: Bool = false
     var value: String? = nil
     var active: Bool? = nil
+    /// Overrides the dot's colour for rows whose *value* carries the verdict — a present
+    /// value normally means "found", but "odmowa" is a present value that is not healthy.
+    var healthy: Bool? = nil
 
     private var statusColor: Color {
+        if let healthy { return healthy ? .wegaSuccess : Color.wegaDanger }
         if value != nil { return .wegaSuccess }
         if active == true { return .wegaSuccess }
         if required { return Color.wegaDanger }

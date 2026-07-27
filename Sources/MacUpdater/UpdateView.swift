@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import MacUpdaterCore
 
@@ -246,6 +247,10 @@ struct UpdateView: View {
                         case .openLogs: onNavigate?(.logs)
                         case .openSettings:
                             openSettings()
+                        case .openAppManagementSettings:
+                            // REL-05 — straight to the pane that grants the permission,
+                            // not to Wega's own settings, which cannot grant anything.
+                            NSWorkspace.shared.open(AppManagementSettings.paneURL)
                         }
                     },
                     onClose: { scan.dismissBanner() }
