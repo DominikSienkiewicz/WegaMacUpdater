@@ -57,10 +57,13 @@ jobs:
           path: sonarqube-generic-coverage.xml
           if-no-files-found: error
 
-  # F5(d) — `app-catalog.json` and `app-catalog.json.sig` are served as two separate
-  # raw.githubusercontent cache entries, so a client can fetch a fresh catalog beside a stale
-  # signature. The only place their consistency can be enforced is the commit: this gate goes
-  # red whenever the catalog changes without the signature being regenerated.
+  # F5(d)/SEC-07 — the catalog carries an Ed25519 signature in one of two shapes, and
+  # `verify-catalog.sh` accepts both: the signed envelope, which holds payload and signature in
+  # one document and is what this repository publishes, and the legacy detached pair, where
+  # `app-catalog.json` and `app-catalog.json.sig` are served as two separate
+  # raw.githubusercontent cache entries — so a client can fetch a fresh catalog beside a stale
+  # signature, and the only place their consistency can be enforced is the commit. Either way
+  # this gate goes red whenever the catalog changes without its signature being regenerated.
   #
   # No secret and no write access: verification uses the public key already committed in
   # `CatalogSignature.swift`. Ed25519 is deterministic, so verifying proves exactly what
@@ -81,7 +84,7 @@ jobs:
         run: ./scripts/test-sign-catalog-guard.sh
 
       # Exit 3 means signing is not configured yet (placeholder key) — not a failure.
-      - name: Verify app-catalog.json.sig matches app-catalog.json
+      - name: Verify the app-catalog.json signature (envelope or detached .sig)
         run: |
           set +e
           ./scripts/verify-catalog.sh
