@@ -557,6 +557,8 @@ extension ScanStore {
     }
 
     func runUpdate(targetKeys: Set<String>) async {
+        // REL-12 — a clean stop switch per run; a previous cancellation may not leak in.
+        resetUpdateInterruption()
         do {
             try await UpgradeCoordinator.shared.performWriteLease(.foregroundUpgrade) { lease in
                 await self.runUpdateCoordinated(targetKeys: targetKeys, operationLease: lease)
@@ -603,6 +605,15 @@ extension ScanStore {
         let plannedCaskNames = plan.caskNames
         let npmNames      = plan.npmNames
         let masAppStoreIDs = plan.masAppStoreIDs
+        // REL-12 — what each remaining phase would still touch, so a stop can name it.
+        let boundaries    = UpgradeBoundaryKeys(planned: plannedItems, npmNames: npmNames)
+
+        // REL-12 — zeroth boundary: stopping here also skips the snapshot/preflight work.
+        guard !shouldStopUpdate(before: Array(plannedKeys)) else {
+            updating = false
+            report(run: UpdateRunOutcome())
+            return
+        }
 
         let caskPreparation: ForegroundCaskPreparation?
         if plannedCaskNames.isEmpty {
@@ -644,8 +655,12 @@ extension ScanStore {
             run.record(plannedItems.filter { $0.kind == .formula }, outcome: await runBrewUpgrade(arguments: formulaArgs))
         }
 
+        // REL-12 — boundary: a stop asked for during the formula batch takes effect here,
+        // before the phase that replaces app bundles begins.
+        let stopBeforeCasks = shouldStopUpdate(before: boundaries.afterFormulae)
+
         // Brew upgrade — casks (FEAT-05 snapshot przed, canary/rollback + FEAT-04 ledger po)
-        if caskArgs != nil, let caskPreparation {
+        if !stopBeforeCasks, caskArgs != nil, let caskPreparation {
             // REL-03 — resolved here, now, not left to whatever a full scan happened to put
             // in the map: after `restoreLastScan()` it is empty, and an empty map means no
             // snapshot to roll back to and no bundle for the canary to inspect. Both phases
@@ -684,8 +699,10 @@ extension ScanStore {
             }
         }
 
-        // npm global upgrade — one package at a time (npm semantics).
-        for (pkg, command) in zip(npmNames, npmCommands) {
+        // npm global upgrade — one package at a time (npm semantics), which also makes every
+        // iteration a boundary "Anuluj" can take effect on (REL-12).
+        for (index, (pkg, command)) in zip(npmNames, npmCommands).enumerated() {
+            if shouldStopUpdate(before: boundaries.fromNpmPackage(at: index)) { break }
             let outcome = await runNpmUpgrade(name: pkg, arguments: command.arguments)
             run.record(plannedItems.filter { $0.kind == .npm && $0.name == pkg }, outcome: outcome)
         }
@@ -694,7 +711,7 @@ extension ScanStore {
         // outdated App Store app, including rows outside the visible/confirmed UX-01 set.
         // mas still reports no per-app result, so one failure becomes a synthetic outcome
         // per planned item, exactly as `runNpmUpgrade` does.
-        if !masAppStoreIDs.isEmpty {
+        if !masAppStoreIDs.isEmpty, !shouldStopUpdate(before: boundaries.masKeys) {
             brewLog.append("$ mas upgrade " + masAppStoreIDs.joined(separator: " "))
             var masFailure: String?
             do {
@@ -774,7 +791,12 @@ extension ScanStore {
                                         message: message))
         }
 
+        // REL-12 — a run the user stopped is never announced as a finished one.
+        let interrupted = updateInterruption.didSkipWork
+        if interrupted { reportInterruptedRun(upgraded: summary.upgraded.count) }
+
         if summary.allItemsUpgraded {
+            guard !interrupted else { return }
             let count = summary.upgraded.count
             showBanner(BannerData(variant: .success,
                                   title: trf("Zaktualizowano %@ pakietów", "\(count)"),
@@ -823,7 +845,6 @@ extension ScanStore {
             WegaLog.error(.homebrew, "\(outcome.name): \(outcome.verdict.logDescription)")
         }
     }
-
     /// Runs `brew <arguments>` streaming output to the log, and returns an
     /// outcome that reflects whether brew *actually* succeeded — exit code 0
     /// alone is unreliable for cask upgrades.

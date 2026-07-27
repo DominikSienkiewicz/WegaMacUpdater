@@ -119,7 +119,8 @@ final class InfoOperationsController: ObservableObject {
                arguments: ["--version"],
                environment: HomebrewEnvironment.environment,
                inheritParentEnvironment: false,
-               timeout: 5
+               timeout: 5,
+               idleTimeout: 5
            )) {
             brewVersion = result.stdout.split(separator: "\n").first.map(String.init)
         }
@@ -130,7 +131,8 @@ final class InfoOperationsController: ObservableObject {
                arguments: ["version"],
                environment: HomebrewEnvironment.environment,
                inheritParentEnvironment: false,
-               timeout: 5
+               timeout: 5,
+               idleTimeout: 5
            )) {
             masVersion = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         }

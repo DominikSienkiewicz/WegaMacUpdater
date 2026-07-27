@@ -23,6 +23,13 @@ bump and move its entries under the new version heading when cutting a release.
   Diagnostyka systemu** so a missing grant is visible before the first upgrade. Unattended
   rounds are held back for 24 h after an observed refusal rather than failing identically
   every interval, and the hold lifts by itself once a round succeeds.
+- **Anuluj for a running update (REL-12).** The Updates screen's longest operation — a
+  multi-gigabyte, multi-minute upgrade — used to turn its button into a spinner with no way
+  out. It now offers a stop button that takes effect at the next package boundary: the
+  install already running is never cut in half, everything after it is skipped, and the
+  report says how many packages were updated and how many were left untouched instead of
+  announcing a finished run. An upgrade still queued behind another operation is dropped
+  outright, since it has changed nothing yet.
 - A hard download resource gate shared by window and unattended cask upgrades. Before
   snapshotting or downloading it vetoes metered/Low Data Mode networking, low battery,
   thermal throttling and insufficient (or unreadable) disk capacity. Required space is
@@ -174,6 +181,14 @@ bump and move its entries under the new version heading when cutting a release.
   post-install target, or the same artifact existing in both application directories, fails
   closed and retains the snapshot. Bundle-identity mismatch rollback now also restores from
   a working copy so the original snapshot survives successful automatic recovery.
+- **Cancelling or timing out an operation now really stops the process (REL-12).**
+  Stopping a subprocess is a sequence rather than a single blow: SIGTERM to the whole
+  process group, a short grace period so the package manager can release its lock and clean
+  up a half-written staging directory, then SIGKILL — which still fires for a process that
+  ignores the polite signal, so cancelling can no longer hang on a stubborn CLI. Every
+  external command is also bounded twice: a wall-clock deadline *and* an inactivity timeout,
+  the limit that actually catches a `brew`/`mas`/`npm` that is alive, silent and holding the
+  UI. The streamed brew, MAS and npm commands ran with no limit at all until now.
 - **Destructive fallbacks no longer change meaning without consent (UX-04).** A
   migration now identifies every running candidate by its resolved bundle path (or one
   unambiguous bundle ID), asks that exact app to quit normally and waits; only an app that
