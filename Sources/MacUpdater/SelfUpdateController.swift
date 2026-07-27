@@ -26,6 +26,8 @@ final class SelfUpdateController: ObservableObject {
         /// Whether any mutating operation currently holds the write gate. Injected so the rule
         /// is testable; in production it reads the coordinator that owns the gate.
         var isBusy: @MainActor @Sendable () -> Bool
+        /// The cumulative notes between the installed version and the newest one.
+        var fetchHistory: @Sendable (String) async -> ReleaseHistoryFetcher.Outcome
 
         static let live = Dependencies(
             check: { await WegaSelfUpdateChecker().check() },
@@ -83,11 +85,16 @@ final class SelfUpdateController: ObservableObject {
                 }
                 NSApp.terminate(nil)
             },
-            isBusy: { UpgradeCoordinator.shared.state != .idle }
+            isBusy: { UpgradeCoordinator.shared.state != .idle },
+            fetchHistory: { installed in
+                await ReleaseHistoryFetcher().notesNewerThan(installed)
+            }
         )
     }
 
     @Published private(set) var state: State = .idle
+    /// `nil` until an update is found — there is nothing to explain when the app is current.
+    @Published private(set) var history: ReleaseHistoryFetcher.Outcome?
 
     private let dependencies: Dependencies
     private let upgrades: UpgradeCoordinator
@@ -118,7 +125,14 @@ final class SelfUpdateController: ObservableObject {
     func check() async {
         guard !isChecking else { return }
         state = .checking
-        state = .result(await dependencies.check())
+        let outcome = await dependencies.check()
+        state = .result(outcome)
+
+        guard case .updateAvailable = outcome else {
+            history = nil
+            return
+        }
+        history = await dependencies.fetchHistory(AppMetadata.version)
     }
 
     /// True only when a restart would not interrupt a mutating operation. The write gate is the

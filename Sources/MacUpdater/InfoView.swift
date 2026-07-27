@@ -480,6 +480,45 @@ extension InfoView {
         }
     }
 
+    /// The cumulative "what's new" between the installed version and the newest one. One
+    /// collapsible entry per release; markup was stripped in Core before it got here.
+    @ViewBuilder
+    private var selfUpdateNotes: some View {
+        switch selfUpdateController.history {
+        case .history(let history) where !history.notes.isEmpty:
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(history.notes) { note in
+                    DisclosureGroup {
+                        Text(note.body.isEmpty ? tr("Brak opublikowanych notatek") : note.body)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(note.version).font(.system(size: 12, weight: .medium))
+                            if let published = note.publishedAt {
+                                Text(published, style: .date)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                if history.omitted > 0 {
+                    Text(trf("…i %@ wcześniejszych wydań", String(history.omitted)))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        case .unavailable:
+            Text(tr("Nie udało się pobrać notatek wydania"))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        case .history, .none:
+            EmptyView()
+        }
+    }
+
     private var selfUpdateCheckButton: some View {
         Button {
             Task { await checkSelfUpdate() }
@@ -562,6 +601,10 @@ extension InfoView {
                 selfUpdateRow
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
+
+                selfUpdateNotes
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 10)
 
                 Divider().opacity(0.5)
 

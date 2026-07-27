@@ -25,7 +25,8 @@ struct SelfUpdateRestartTests {
             installOrOpen: { _, _ in installed },
             openFallback: {},
             relaunch: relaunched,
-            isBusy: { busy }
+            isBusy: { busy },
+            fetchHistory: { _ in .unavailable }
         )
     }
 
