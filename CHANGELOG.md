@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 The version lives in exactly one place — `AppMetadata.version`
-(`Sources/MacUpdaterCore/AppMetadata.swift`); the release workflow refuses to publish
+(`Sources/WegaHelperKit/AppMetadata.swift`); the release workflow refuses to publish
 a tag whose version doesn't match it. Keep the `[Unreleased]` section ahead of each
 bump and move its entries under the new version heading when cutting a release.
 

@@ -262,7 +262,7 @@ Open `Package.swift` directly in Xcode for the full IDE experience. No Xcode pro
 
 ### Version — single source of truth
 
-The app version lives in exactly one place: `AppMetadata.version` (`Sources/MacUpdaterCore/AppMetadata.swift`). The running app reads it (falling back to it when no bundle `Info.plist` is present, e.g. under `swift run`), and `scripts/build-pkg.sh` extracts it from there when stamping the generated `Info.plist` and the `.pkg` — so bumping the version is a one-line edit. The release workflow **enforces** this: a tag `vX.Y.Z` whose version doesn't equal `AppMetadata.version` fails the build before anything is published.
+The app version lives in exactly one place: `AppMetadata.version` (`Sources/WegaHelperKit/AppMetadata.swift`). The running app reads it (falling back to it when no bundle `Info.plist` is present, e.g. under `swift run`), and `scripts/build-pkg.sh` extracts it from there when stamping the generated `Info.plist` and the `.pkg` — so bumping the version is a one-line edit. The release workflow **enforces** this: a tag `vX.Y.Z` whose version doesn't equal `AppMetadata.version` fails the build before anything is published.
 
 ## Distribution
 
