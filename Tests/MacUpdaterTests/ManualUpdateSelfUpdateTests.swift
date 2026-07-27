@@ -15,7 +15,12 @@ struct ManualUpdateSelfUpdateTests {
 
     @Test func availableUpdateBecomesWegaManualRow() {
         let app = ManualUpdateScanner.selfUpdateApp(
-            from: .updateAvailable(version: "0.2.0", assetURL: assetURL, releaseURL: releaseURL, notes: "Fixes"),
+            from: .updateAvailable(
+                version: "0.2.0",
+                assets: [ReleaseAsset(name: "WegaMacUpdater.dmg", url: assetURL)],
+                releaseURL: releaseURL,
+                notes: "Fixes"
+            ),
             appPath: appPath,
             installedVersion: "0.1.0",
             bundleIdentifier: "com.wega.WegaMacUpdater"

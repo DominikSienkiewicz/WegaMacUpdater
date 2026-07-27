@@ -417,7 +417,7 @@ extension InfoView {
     private var selfUpdateRow: some View {
         HStack(spacing: 10) {
             switch selfUpdate {
-            case .updateAvailable(let version, let assetURL, let releaseURL, let notes):
+            case .updateAvailable(let version, let assets, let releaseURL, let notes):
                 Image(systemName: "arrow.down.circle.fill").foregroundStyle(Color.wegaHoney)
                 Text(trf("Dostępna wersja %@", version)).font(.system(size: 12, weight: .semibold))
                 // FEAT-06: doradczy badge, jeśli notatki wydania wyglądają na poprawkę bezpieczeństwa.
@@ -429,13 +429,13 @@ extension InfoView {
                 Spacer()
                 Link(tr("Zobacz wydanie"), destination: releaseURL).font(.system(size: 12))
                 Button {
-                    Task { await downloadAndOpen(assetURL) }
+                    Task { await downloadAndOpen(assets[0].url) }
                 } label: {
                     if downloadingUpdate { ProgressView().controlSize(.small) }
                     // UX-06 — the label describes the operation that will actually run: a
                     // headless install of a verified .pkg, or (the common .dmg case) a
                     // download the user finishes by hand. "Install" no longer covers both.
-                    else { Text(SelfUpdatePresentation.actionLabel(selfUpdateAction(for: assetURL))) }
+                    else { Text(SelfUpdatePresentation.actionLabel(selfUpdateAction(for: assets[0].url))) }
                 }
                 .disabled(downloadingUpdate)
             case .upToDate:

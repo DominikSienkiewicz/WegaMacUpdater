@@ -33,7 +33,7 @@ struct WegaSelfUpdateCheckerTests {
         return WegaSelfUpdateChecker(repo: "owner/repo", currentVersion: current, client: client)
     }
 
-    @Test func detectsNewerReleaseAndPrefersDMG() async {
+    @Test func reportsEveryPublishedAssetWithoutChoosing() async {
         let body = release(tag: "v0.2.0", assets: [
             ("WegaMacUpdater.pkg", "https://example.com/Wega.pkg"),
             ("WegaMacUpdater.dmg", "https://example.com/Wega.dmg"),
@@ -42,10 +42,19 @@ struct WegaSelfUpdateCheckerTests {
 
         #expect(result == .updateAvailable(
             version: "0.2.0",
-            assetURL: URL(string: "https://example.com/Wega.dmg")!,
+            assets: [
+                ReleaseAsset(name: "WegaMacUpdater.pkg", url: URL(string: "https://example.com/Wega.pkg")!),
+                ReleaseAsset(name: "WegaMacUpdater.dmg", url: URL(string: "https://example.com/Wega.dmg")!),
+            ],
             releaseURL: URL(string: "https://github.com/owner/repo/releases/tag/v0.2.0")!,
             notes: ""
         ))
+    }
+
+    /// A release with nothing to download is not an update the user can act on.
+    @Test func failsWhenReleasePublishesNoUsableAsset() async {
+        let body = release(tag: "v0.2.0", assets: [])
+        #expect(await checker(body, current: "0.1.0").check() == .failed)
     }
 
     @Test func reportsUpToDateWhenSameVersion() async {
@@ -60,12 +69,12 @@ struct WegaSelfUpdateCheckerTests {
         #expect(result == .upToDate)
     }
 
-    @Test func fallsBackToPkgWhenNoDMG() async {
+    @Test func reportsSolePkgAssetWhenNoDMGPresent() async {
         let body = release(tag: "v0.2.0", assets: [("WegaMacUpdater.pkg", "https://example.com/Wega.pkg")])
         let result = await checker(body, current: "0.1.0").check()
         #expect(result == .updateAvailable(
             version: "0.2.0",
-            assetURL: URL(string: "https://example.com/Wega.pkg")!,
+            assets: [ReleaseAsset(name: "WegaMacUpdater.pkg", url: URL(string: "https://example.com/Wega.pkg")!)],
             releaseURL: URL(string: "https://github.com/owner/repo/releases/tag/v0.2.0")!,
             notes: ""
         ))
