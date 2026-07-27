@@ -110,7 +110,7 @@ struct WegaBadge: View {
 
     var body: some View {
         Text(label)
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
+            .font(.wega(.subheadline, weight: .medium, monospaced: true))
             .foregroundStyle(fg)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
@@ -196,22 +196,22 @@ struct WegaCardHeader<Trailing: View>: View {
             HStack(spacing: 8) {
                 Image(systemName: icon).foregroundStyle(tint)
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.wega(.headline))
                     .foregroundStyle(titleTinted ? tint : AnyShapeStyle(.primary))
                 if let count {
                     Text("\(count)")
-                        .font(.system(size: 12, design: .monospaced))
+                        .font(.wega(.callout, monospaced: true))
                         .foregroundStyle(.tertiary)
                 }
                 if let note {
-                    Text(note).font(.system(size: 11)).foregroundStyle(.tertiary)
+                    Text(note).font(.wega(.subheadline)).foregroundStyle(.tertiary)
                 }
                 Spacer()
                 trailing
             }
             if let caption {
                 Text(caption)
-                    .font(.system(size: 11))
+                    .font(.wega(.subheadline))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -281,6 +281,9 @@ struct PackageLetterIcon: View {
 
     var body: some View {
         Text(letter)
+            // UX-03-fixed-size: a glyph drawn inside a fixed `size × size` tile, not a piece
+            // of running text. It is derived from the tile it has to fit; a semantic style
+            // would grow past the tile at the larger text sizes and clip instead of reflow.
             .font(.system(size: size * 0.46, weight: .bold))
             .foregroundStyle(.white.opacity(0.9))
             .frame(width: size, height: size)
@@ -397,7 +400,7 @@ struct PackageRow: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 12))
+                        .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                 }
                 .menuStyle(.borderlessButton)
@@ -450,13 +453,13 @@ private struct RollbackBadge: View {
         switch verdict {
         case .protected:
             Image(systemName: "shield.lefthalf.filled")
-                .font(.system(size: 12))
+                .font(.wega(.callout))
                 .foregroundStyle(Color.wegaSuccess)
                 .help(tr("Przed aktualizacją robię kopię. Jeśli nowa wersja nie przejdzie testu, wracam do poprzedniej."))
                 .accessibilityLabel(tr("Chronione automatycznym cofnięciem"))
         case .unprotected:
             Image(systemName: "shield.slash")
-                .font(.system(size: 12))
+                .font(.wega(.callout))
                 .foregroundStyle(.tertiary)
                 .help(tr("Ten cask nie instaluje aplikacji, więc nie da się zrobić kopii ani cofnąć aktualizacji."))
                 .accessibilityLabel(tr("Bez ochrony cofnięciem"))
@@ -484,10 +487,10 @@ struct EmptyHero: View {
             }
             VStack(spacing: 6) {
                 Text(title)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.wega(.title, weight: .semibold))
                     .multilineTextAlignment(.center)
                 Text(message)
-                    .font(.system(size: 13))
+                    .font(.wega(.body))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 400)
@@ -567,13 +570,13 @@ struct BannerView: View {
             Image(systemName: data.variant == .success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .foregroundStyle(data.variant == .success ? Color.wegaSuccess : Color.wegaDanger)
             VStack(alignment: .leading, spacing: 2) {
-                Text(data.title).font(.system(size: 13, weight: .semibold))
+                Text(data.title).font(.wega(.headline))
                 // UX-07 — a failure's full, untranslated `stderr` can be arbitrarily long;
                 // cap the message at three lines so it never grows the banner past the
                 // window. The complete technical output stays in the log (see "Zobacz w
                 // logach").
                 Text(data.message)
-                    .font(.system(size: 12))
+                    .font(.wega(.callout))
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
             }
@@ -588,7 +591,7 @@ struct BannerView: View {
                 }()
                 Button { onAction?(action) } label: {
                     Label(actionLabel, systemImage: "info.circle")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.wega(.callout, weight: .medium))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.wegaHoney)

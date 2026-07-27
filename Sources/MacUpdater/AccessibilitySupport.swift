@@ -1,9 +1,37 @@
 import Foundation
 import MacUpdaterCore
+import SwiftUI
 
 /// Shared VoiceOver wording for checkbox-like selection controls.
 func selectionAccessibilityValue(_ isSelected: Bool) -> String {
     isSelected ? tr("Zaznaczone") : tr("Niezaznaczone")
+}
+
+/// UX-03 — the one decision every never-ending animation in the app has to make.
+///
+/// A `repeatForever` loop, a blink timer and a randomized idle "trick" schedule share a
+/// property that a transition does not: they have no end, so "Ogranicz ruch" cannot merely
+/// shorten them. The only honest alternative is not to start them, and to hold the resting
+/// frame instead — including when the setting is switched on while the loop is already
+/// running, which is why every call site reads this through the environment and re-runs on
+/// change rather than deciding once in `onAppear`.
+enum ContinuousMotion {
+    /// The animation for a forever-repeating effect, or `nil` when the system asks for
+    /// reduced motion. `nil` is SwiftUI's "no animation": the animated property snaps to the
+    /// value it is being set to instead of looping towards it.
+    static func forever(
+        _ base: Animation,
+        autoreverses: Bool,
+        reduceMotion: Bool
+    ) -> Animation? {
+        reduceMotion ? nil : base.repeatForever(autoreverses: autoreverses)
+    }
+
+    /// Whether a perpetual idle loop — the blink timer, the mascot's tricks, the bouncing
+    /// ball — may run at all.
+    static func loopsIdleAnimations(reduceMotion: Bool) -> Bool {
+        !reduceMotion
+    }
 }
 
 /// UX-09 — colour-independent cues for the Updates sidebar scan status. Success and failure

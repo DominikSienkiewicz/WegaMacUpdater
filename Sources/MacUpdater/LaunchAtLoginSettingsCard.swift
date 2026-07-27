@@ -20,7 +20,7 @@ struct LaunchAtLoginSettingsCard: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(tr("Tryb tła — harmonogram, licznik, powiadomienia i ciche aktualizacje — działa tylko, gdy Wega jest uruchomiona. Włącz tę opcję, aby macOS uruchamiał Wegę przy logowaniu i tło działało również po restarcie Maca."))
-                        .font(.system(size: 12))
+                        .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -34,14 +34,14 @@ struct LaunchAtLoginSettingsCard: View {
                             }
                         }
                     )) {
-                        Text(tr("Uruchamiaj Wegę przy logowaniu")).font(.system(size: 12))
+                        Text(tr("Uruchamiaj Wegę przy logowaniu")).font(.wega(.callout))
                     }
                     .toggleStyle(.switch)
                     .disabled(isWorking)
 
                     if controller.state.needsSystemSettings {
                         Text(tr("Element logowania został wyłączony w Ustawieniach systemowych. Włącz go ponownie w Ustawienia → Elementy logowania."))
-                            .font(.system(size: 11))
+                            .font(.wega(.subheadline))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
 
@@ -55,7 +55,7 @@ struct LaunchAtLoginSettingsCard: View {
 
                     if let error = controller.errorMessage {
                         Text(error)
-                            .font(.system(size: 11))
+                            .font(.wega(.subheadline))
                             .foregroundStyle(.red)
                             .fixedSize(horizontal: false, vertical: true)
                     }

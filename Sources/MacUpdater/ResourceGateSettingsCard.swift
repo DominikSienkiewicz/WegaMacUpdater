@@ -20,7 +20,7 @@ struct ResourceGateSettingsCard: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text(tr("Wega sprawdza miejsce, łącze, baterię i temperaturę przed snapshotem i pobraniem."))
-                        .font(.system(size: 12))
+                        .font(.wega(.callout))
                         .foregroundStyle(.secondary)
 
                     gateStepper(tr("Duże pobranie"), value: "\(largeDownloadThresholdMB) MB") {
@@ -47,9 +47,9 @@ struct ResourceGateSettingsCard: View {
         @ViewBuilder control: () -> Control
     ) -> some View {
         HStack {
-            Text(title).font(.system(size: 12))
+            Text(title).font(.wega(.callout))
             Spacer()
-            Text(value).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
+            Text(value).font(.wega(.callout, monospaced: true)).foregroundStyle(.secondary)
             control()
         }
     }
