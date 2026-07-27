@@ -21,30 +21,68 @@ struct SEC04SelfUpdatePublisherPinTests {
 
     @Test func prefersThePkgOverTheDmg() {
         #expect(
-            SelfUpdatePlanner.preferredAssetName(from: ["WegaMacUpdater.dmg", "WegaMacUpdater.pkg"])
+            SelfUpdatePlanner.preferredAsset(from: assets("WegaMacUpdater.dmg", "WegaMacUpdater.pkg"))?.name
                 == "WegaMacUpdater.pkg"
         )
     }
 
     @Test func fallsBackToTheDmgOnlyWhenNoPkgIsPublished() {
-        #expect(SelfUpdatePlanner.preferredAssetName(from: ["WegaMacUpdater.dmg"]) == "WegaMacUpdater.dmg")
+        #expect(SelfUpdatePlanner.preferredAsset(from: assets("WegaMacUpdater.dmg"))?.name == "WegaMacUpdater.dmg")
     }
 
     @Test func refusesToPickAnAssetItCannotVerify() {
-        #expect(SelfUpdatePlanner.preferredAssetName(from: ["WegaMacUpdater.zip", "notes.txt"]) == nil)
-        #expect(SelfUpdatePlanner.preferredAssetName(from: []) == nil)
+        #expect(SelfUpdatePlanner.preferredAsset(from: assets("WegaMacUpdater.zip", "notes.txt")) == nil)
+        #expect(SelfUpdatePlanner.preferredAsset(from: []) == nil)
     }
 
     @Test func assetPreferenceIgnoresExtensionCase() {
-        #expect(SelfUpdatePlanner.preferredAssetName(from: ["Wega.DMG", "Wega.PKG"]) == "Wega.PKG")
+        #expect(SelfUpdatePlanner.preferredAsset(from: assets("Wega.DMG", "Wega.PKG"))?.name == "Wega.PKG")
     }
 
     /// With a `.pkg` on offer and the helper enabled, the whole update is a headless,
     /// fully pinned install — the reason the preference was inverted in the first place.
     @Test func thePreferredAssetIsTheOneTheHelperCanInstallHeadlessly() throws {
-        let name = try #require(SelfUpdatePlanner.preferredAssetName(from: ["Wega.dmg", "Wega.pkg"]))
-        let url = try #require(URL(string: "https://example.com/\(name)"))
-        #expect(SelfUpdatePlanner.action(helperEnabled: true, assetURL: url) == .install)
+        let published = assets("Wega.dmg", "Wega.pkg")
+        let preferred = try #require(SelfUpdatePlanner.preferredAsset(from: published))
+        #expect(SelfUpdatePlanner.action(helperEnabled: true, assets: published) == .install(pkg: preferred))
+        #expect(preferred.name == "Wega.pkg")
+    }
+
+    /// The load-bearing half of the SEC-04 ruling: **the helper does not choose the asset.**
+    ///
+    /// Disabling the helper changes only *how* the artifact is applied — headless install
+    /// versus handing it to the user — never *which* artifact is fetched. A planner that
+    /// falls back to the `.dmg` when it cannot install headlessly reintroduces exactly the
+    /// gap SEC-04 closed: the common self-update path would again be validated by Gatekeeper
+    /// alone, which attests "notarized by some Apple developer", not "published by Wega".
+    /// Without this test that regression is silent — the update still works, it is just no
+    /// longer pinned to Wega.
+    @Test func withoutTheHelperTheOfferedAssetIsStillThePkgAndNeverTheDmg() throws {
+        let published = assets("Wega.dmg", "Wega.pkg")
+        let pkg = try #require(published.last)
+        let action = try #require(SelfUpdatePlanner.action(helperEnabled: false, assets: published))
+
+        #expect(action == .downloadAndOpen(asset: pkg))
+        #expect(action.asset.name == "Wega.pkg")
+        #expect(action.asset.kind == "pkg")
+    }
+
+    /// A release with no pinnable channel yields no plan at all, with or without the helper —
+    /// the caller renders no button rather than one that downloads something unverifiable.
+    @Test func anUnpinnableReleaseYieldsNoActionAtAll() {
+        let published = assets("Wega.zip", "notes.txt")
+        #expect(SelfUpdatePlanner.action(helperEnabled: true, assets: published) == nil)
+        #expect(SelfUpdatePlanner.action(helperEnabled: false, assets: published) == nil)
+        #expect(SelfUpdatePlanner.action(helperEnabled: true, assets: []) == nil)
+    }
+
+    /// Only a `.dmg` published: it is offered, and the helper cannot install it headlessly
+    /// even when it is enabled — `installVerifiedPackage` takes a package, not an image.
+    @Test func aDmgOnlyReleaseIsHandedToTheUserEvenWithTheHelperEnabled() throws {
+        let published = assets("Wega.dmg")
+        let dmg = try #require(published.first)
+        let action = try #require(SelfUpdatePlanner.action(helperEnabled: true, assets: published))
+        #expect(action == .downloadAndOpen(asset: dmg))
     }
 
     // MARK: - The payload is pinned to the version the user was shown
@@ -52,7 +90,7 @@ struct SEC04SelfUpdatePublisherPinTests {
     @Test func availableVersionIsCarriedForVerification() {
         let result = WegaSelfUpdateChecker.Result.updateAvailable(
             version: "0.2.0",
-            assetURL: URL(string: "https://example.com/Wega.pkg")!,
+            assets: assets("Wega.pkg"),
             releaseURL: URL(string: "https://example.com/release")!,
             notes: ""
         )
@@ -183,6 +221,19 @@ struct SEC04SelfUpdatePublisherPinTests {
     }
 
     // MARK: - Helpers
+
+    /// Published assets built from bare file names, in publication order. `ReleaseAsset.kind`
+    /// reads the URL's path extension, so the name alone carries everything the preference
+    /// depends on.
+    private func assets(_ names: String...) -> [ReleaseAsset] {
+        assets(names)
+    }
+
+    private func assets(_ names: [String]) -> [ReleaseAsset] {
+        names.compactMap { name in
+            URL(string: "https://example.com/\(name)").map { ReleaseAsset(name: name, url: $0) }
+        }
+    }
 
     @discardableResult
     private func makeBundle(named name: String, in root: URL, version: String) throws -> URL {

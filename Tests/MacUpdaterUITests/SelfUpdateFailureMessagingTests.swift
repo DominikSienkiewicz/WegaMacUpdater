@@ -20,12 +20,16 @@ struct SelfUpdateFailureMessagingTests {
                 check: { .upToDate },
                 download: { _ in throw URLError(.notConnectedToInternet) },
                 verify: { _, _ in },
-                installOrOpen: { _ in false },
-                openFallback: { log.record(.openedBrowser) }
+                installOrOpen: { _, _ in false },
+                openFallback: { log.record(.openedBrowser) },
+                relaunch: {},
+                isBusy: { false },
+                fetchHistory: { _ in .unavailable }
             )
         )
 
-        await controller.downloadAndOpen(URL(fileURLWithPath: "/tmp/Wega.dmg")) { state in
+        let asset = ReleaseAsset(name: "Wega.dmg", url: URL(fileURLWithPath: "/tmp/Wega.dmg"))
+        await controller.apply(.downloadAndOpen(asset: asset), version: "1.0.1") { state in
             log.record(.message(state.line))
         }
 

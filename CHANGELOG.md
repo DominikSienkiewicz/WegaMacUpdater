@@ -24,6 +24,14 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   Diagnostyka systemu** so a missing grant is visible before the first upgrade. Unattended
   rounds are held back for 24 h after an observed refusal rather than failing identically
   every interval, and the hold lifts by itself once a round succeeds.
+- **The self-update shows every release you are behind, not just the newest.** Three versions
+  behind used to mean reading one third of the change. The card now lists each release between
+  the installed version and the newest one, newest first, with markup stripped in Core.
+- **A completed headless self-update ends in an explicit *installed, restart to use it*
+  state.** A `.pkg` install swaps the bundle under a live process, so the card now offers a
+  restart button instead of pretending the new version is already running — and that button
+  stays disabled while any mutating operation holds the write gate. Nothing restarts the app
+  on its own.
 - A rebuilt window chrome on `NavigationSplitView`: a List-backed sidebar driven by one
   `SidebarSelection` value instead of two navigation axes, the scan control hoisted into
   the toolbar so its states can morph, the details pane moved into the native
@@ -175,6 +183,9 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   install/upgrade (not just `kod 1`) plus the command that was run, and **per-checker
   DEBUG lines** with timing for the checks that engaged a source.
 - This `CHANGELOG.md`.
+- **A headless self-update ends with a restart, not silently.** Installing the `.pkg` swaps
+  the bundle under the running process; the app now says so and offers a restart button,
+  disabled while any mutating operation holds the write gate. It never restarts on its own.
 
 ### Changed
 - Selection checkboxes in the update and uninstall lists, and in the leftover picker, are
@@ -184,6 +195,17 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   button on purpose — a two-state checkbox cannot say "some", so it keeps the spoken count.
   Migration and npm/brew duplicate rows name the app in their action labels, so identical
   buttons are distinguishable without sight.
+- **Wega's own update row leads to the in-app installer, not to a browser.** The row used to
+  open the release page, stepping around the signature verification and helper install that
+  the Settings screen performs. *Check for Wega Updates…* is now in the app menu as well,
+  where macOS users look for it.
+- **Install-vs-open is decided in one place, from the full release.** The checker reported a
+  single pre-selected asset, so the planner could only comment on a decision already made.
+  It now reports **every** published asset and `SelfUpdatePlanner` is the single decision
+  site: with the privileged helper enabled a `.pkg` is installed headlessly, otherwise the
+  same artifact is handed to the user to finish. The **choice of artifact is not part of that
+  decision** — it stays `.pkg` → `.dmg` on security grounds (see SEC-04 below), so turning
+  the helper off changes how an update is applied, never which bytes are fetched.
 - ⚠️ **BREAKING — the minimum supported macOS is now 26 (Tahoe).** The deployment target
   moved from macOS 14 to macOS 26 (`Package.swift`) because the rebuilt window chrome is
   built on **Liquid Glass**, which macOS 26 introduces; CI moved to the `macos-26` runner in

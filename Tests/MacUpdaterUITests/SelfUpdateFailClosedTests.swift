@@ -7,7 +7,7 @@ import MacUpdaterCore
 ///
 /// Anchors the audit scenario "gałąź fail-closed self-update" from QA-01's
 /// "🎯 Najważniejsze nowe scenariusze" list (finding SEC-04). The guarantee is
-/// implemented by `SelfUpdateController.downloadAndOpen`, which routes every
+/// implemented by `SelfUpdateController.apply`, which routes every
 /// self-update through `CodeSignatureVerifier` (the A1/SEC-03 signature pin):
 /// when the downloaded asset fails verification the controller must **fail
 /// closed** — it must never hand the unverified payload to the installer/opener,
@@ -42,14 +42,18 @@ struct SelfUpdateFailClosedTests {
             check: { .upToDate },
             download: { _ in stagedPayload },
             verify: { _, _ in throw SignatureRejected() },
-            installOrOpen: { _ in
+            installOrOpen: { _, _ in
                 installProbe.record()
                 return true
             },
-            openFallback: { fallbackProbe.record() }
+            openFallback: { fallbackProbe.record() },
+            relaunch: {},
+            isBusy: { false },
+            fetchHistory: { _ in .unavailable }
         ))
 
-        await controller.downloadAndOpen(URL(fileURLWithPath: "/tmp/Wega.pkg")) { state in
+        let asset = ReleaseAsset(name: "Wega.pkg", url: URL(fileURLWithPath: "/tmp/Wega.pkg"))
+        await controller.apply(.install(pkg: asset), version: "1.0.1") { state in
             states.record(state)
         }
 

@@ -10,6 +10,9 @@ final class SelfUpdateController: ObservableObject {
         case checking
         case result(WegaSelfUpdateChecker.Result)
         case downloading(WegaSelfUpdateChecker.Result?)
+        /// Terminal state of a headless install: the new bundle is on disk, the running process
+        /// is still the old one. Only a user click leaves this state.
+        case installedPendingRestart(version: String)
     }
 
     struct Dependencies: Sendable {
@@ -18,8 +21,15 @@ final class SelfUpdateController: ObservableObject {
         /// SEC-04 — the second argument is the version the release promised, so the payload
         /// is pinned to the update the user was actually shown, not just to a valid signature.
         var verify: @Sendable (URL, String?) throws -> Void
-        var installOrOpen: @MainActor @Sendable (URL) async -> Bool
+        var installOrOpen: @MainActor @Sendable (SelfUpdateAction, URL) async -> Bool
         var openFallback: @MainActor @Sendable () -> Void
+        /// Quit and come back on the freshly installed bundle.
+        var relaunch: @MainActor @Sendable () -> Void
+        /// Whether any mutating operation currently holds the write gate. Injected so the rule
+        /// is testable; in production it reads the coordinator that owns the gate.
+        var isBusy: @MainActor @Sendable () -> Bool
+        /// The cumulative notes between the installed version and the newest one.
+        var fetchHistory: @Sendable (String) async -> ReleaseHistoryFetcher.Outcome
 
         static let live = Dependencies(
             check: { await WegaSelfUpdateChecker().check() },
@@ -39,33 +49,55 @@ final class SelfUpdateController: ObservableObject {
                     expectedVersion: expectedVersion
                 )
             },
-            installOrOpen: { destination in
+            installOrOpen: { action, destination in
                 // UX-06 — the same decision the button label is built from, so "install" and
-                // "download and open" always describe the operation that actually runs.
-                if SelfUpdatePlanner.action(
-                    helperEnabled: PrivilegedHelperClient.shared.isEnabled,
-                    assetURL: destination
-                ) == .install {
-                    do {
-                        try await PrivilegedHelperClient.shared.installVerifiedPackage(at: destination.path)
-                        return true
-                    } catch {
-                        WegaLog.error(
-                            .helper,
-                            "Instalacja przez helper nie powiodła się: \(error.localizedDescription)"
-                        )
-                    }
+                // "download and open" always describe the operation that actually runs. The
+                // decision itself is made exactly once, by the caller that planned `action`;
+                // this only executes it — no re-deriving install-vs-open from the file or from
+                // `PrivilegedHelperClient.shared.isEnabled` a second time.
+                guard case .install = action else {
+                    NSWorkspace.shared.open(destination)
+                    return false
+                }
+                do {
+                    try await PrivilegedHelperClient.shared.installVerifiedPackage(at: destination.path)
+                    return true
+                } catch {
+                    WegaLog.error(
+                        .helper,
+                        "Instalacja przez helper nie powiodła się: \(error.localizedDescription)"
+                    )
                 }
                 NSWorkspace.shared.open(destination)
                 return false
             },
             openFallback: {
                 NSWorkspace.shared.open(AppEndpoints.shared.projectRepositoryURL)
+            },
+            relaunch: {
+                // The replacement process must start *after* this one exits, or the single-instance
+                // guard rejects it. A detached shell waits, then reopens the bundle by path.
+                let relauncher = Process()
+                relauncher.executableURL = URL(fileURLWithPath: "/bin/sh")
+                relauncher.arguments = ["-c", #"sleep 1; /usr/bin/open "$0""#, Bundle.main.bundleURL.path]
+                do {
+                    try relauncher.run()
+                } catch {
+                    WegaLog.error(.app, "Self-update — ponowne uruchomienie: \(error.localizedDescription)")
+                    return
+                }
+                NSApp.terminate(nil)
+            },
+            isBusy: { UpgradeCoordinator.shared.state != .idle },
+            fetchHistory: { installed in
+                await ReleaseHistoryFetcher().notesNewerThan(installed)
             }
         )
     }
 
     @Published private(set) var state: State = .idle
+    /// `nil` until an update is found — there is nothing to explain when the app is current.
+    @Published private(set) var history: ReleaseHistoryFetcher.Outcome?
 
     private let dependencies: Dependencies
     private let upgrades: UpgradeCoordinator
@@ -82,7 +114,7 @@ final class SelfUpdateController: ObservableObject {
         switch state {
         case .result(let result): return result
         case .downloading(let result): return result
-        case .idle, .checking: return nil
+        case .idle, .checking, .installedPendingRestart: return nil
         }
     }
 
@@ -95,18 +127,50 @@ final class SelfUpdateController: ObservableObject {
 
     func check() async {
         guard !isChecking else { return }
+        // The doc comment on `installedPendingRestart` above promises only a user click leaves
+        // that state. `InfoView.onAppear`'s `if case .idle` gate is one caller honouring that —
+        // but the invariant belongs to the controller that owns the state, not to every caller.
+        guard !isInstalledPendingRestart else { return }
         state = .checking
-        state = .result(await dependencies.check())
+        let outcome = await dependencies.check()
+        state = .result(outcome)
+
+        guard case .updateAvailable = outcome else {
+            history = nil
+            return
+        }
+        history = await dependencies.fetchHistory(AppMetadata.version)
     }
 
-    func downloadAndOpen(
-        _ source: URL,
+    private var isInstalledPendingRestart: Bool {
+        if case .installedPendingRestart = state { return true }
+        return false
+    }
+
+    /// True only when a restart would not interrupt a mutating operation. The write gate is the
+    /// authority — this never tracks a second flag of its own.
+    var canRestart: Bool {
+        if case .installedPendingRestart = state { return !dependencies.isBusy() }
+        return false
+    }
+
+    func restart() {
+        guard canRestart else { return }
+        dependencies.relaunch()
+    }
+
+    func apply(
+        _ action: SelfUpdateAction,
+        version: String,
         onWegaState: @MainActor (WegaState) -> Void
     ) async {
         guard !isDownloading else { return }
         let previousResult = result
         state = .downloading(previousResult)
-        defer { state = previousResult.map(State.result) ?? .idle }
+        var finalState: State = previousResult.map(State.result) ?? .idle
+        defer { state = finalState }
+
+        let source = action.asset.url
 
         // UX-06 — `download` is its own state, distinct from `open`/`install`/`error`.
         onWegaState(WegaState(pose: .sniff, line: SelfUpdatePresentation.message(for: .downloading)))
@@ -140,7 +204,7 @@ final class SelfUpdateController: ObservableObject {
             installed = try await upgrades.performWrite(.selfUpdate) {
                 let ticket = MutationGuard.shared.begin("self-update")
                 defer { MutationGuard.shared.end(ticket) }
-                return await self.dependencies.installOrOpen(destination)
+                return await self.dependencies.installOrOpen(action, destination)
             }
         } catch is CancellationError {
             return
@@ -151,6 +215,7 @@ final class SelfUpdateController: ObservableObject {
 
         // UX-06 — `install` (headless, via the helper) and `open` (the user finishes a
         // downloaded installer) are separate outcomes with separate messages.
+        if installed { finalState = .installedPendingRestart(version: version) }
         onWegaState(WegaState(
             pose: .happy,
             line: SelfUpdatePresentation.message(for: installed ? .installed : .opened)

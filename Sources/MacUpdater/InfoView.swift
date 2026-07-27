@@ -25,6 +25,7 @@ struct InfoView: View {
     private var githubTokenStored: Bool { operations.githubTokenStored }
     private var githubTokenStatus: String? { operations.githubTokenStatus }
     private var selfUpdate: WegaSelfUpdateChecker.Result? { selfUpdateController.result }
+    private var selfUpdateState: SelfUpdateController.State { selfUpdateController.state }
     private var checkingSelfUpdate: Bool { selfUpdateController.isChecking }
     private var downloadingUpdate: Bool { selfUpdateController.isDownloading }
     private var touchIDState: TouchIDSudoConfigurator.State { touchIDController.touchIDState }
@@ -64,9 +65,12 @@ extension InfoView {
             if diagnostics == nil {
                 Task { await loadDiagnostics() }
             }
-            // Auto-check for a Wega update once per appearance; the ETag-conditional request
-            // makes repeat visits cheap (a 304 doesn't count against GitHub's rate limit).
-            if selfUpdate == nil && !checkingSelfUpdate {
+            // Auto-check for a Wega update the first time this card appears; the ETag-conditional
+            // request makes repeat visits cheap (a 304 doesn't count against GitHub's rate limit).
+            // Gated on `.idle` specifically — not "no result yet" — so a reappearance never
+            // re-triggers a check that would clobber `.installedPendingRestart` (only a user
+            // click may leave that state; see `SelfUpdateController.State`).
+            if case .idle = selfUpdateState {
                 Task { await checkSelfUpdate() }
             }
             touchIDController.refresh()
@@ -420,42 +424,102 @@ extension InfoView {
     @ViewBuilder
     private var selfUpdateRow: some View {
         HStack(spacing: 10) {
-            switch selfUpdate {
-            case .updateAvailable(let version, let assetURL, let releaseURL, let notes):
-                Image(systemName: "arrow.down.circle.fill").foregroundStyle(Color.wegaHoney)
-                Text(trf("Dostępna wersja %@", version)).font(.wega(.callout, weight: .semibold))
-                // FEAT-06: doradczy badge, jeśli notatki wydania wyglądają na poprawkę bezpieczeństwa.
-                if ReleaseNotesTriage.heuristic(notes).isLikelySecurityFix {
-                    Label(tr("możliwa poprawka bezpieczeństwa"), systemImage: "shield.lefthalf.filled")
-                        .font(.wega(.footnote, weight: .medium))
-                        .foregroundStyle(Color.wegaDanger)
+            // `selfUpdate` (== `selfUpdateController.result`) is nil for `.idle`, `.checking` and
+            // `.installedPendingRestart` alike, so that terminal state needs its own case here —
+            // otherwise it could never render (it would fall into the bare check button below).
+            switch selfUpdateState {
+            case .installedPendingRestart(let version):
+                Image(systemName: "arrow.clockwise.circle.fill").foregroundStyle(Color.wegaHoney)
+                Text(trf("Zainstalowano wersję %@", version))
+                    .font(.wega(.callout, weight: .semibold))
+                Spacer()
+                Button(tr("Uruchom Wegę ponownie")) { selfUpdateController.restart() }
+                    .disabled(!selfUpdateController.canRestart)
+            case .idle, .checking, .result, .downloading:
+                switch selfUpdate {
+                case .updateAvailable(let version, let assets, let releaseURL, let notes):
+                    Image(systemName: "arrow.down.circle.fill").foregroundStyle(Color.wegaHoney)
+                    Text(trf("Dostępna wersja %@", version)).font(.wega(.callout, weight: .semibold))
+                    // FEAT-06: doradczy badge, jeśli notatki wydania wyglądają na poprawkę bezpieczeństwa.
+                    if ReleaseNotesTriage.heuristic(notes).isLikelySecurityFix {
+                        Label(tr("możliwa poprawka bezpieczeństwa"), systemImage: "shield.lefthalf.filled")
+                            .font(.wega(.footnote, weight: .medium))
+                            .foregroundStyle(Color.wegaDanger)
+                    }
+                    Spacer()
+                    Link(tr("Zobacz wydanie"), destination: releaseURL).font(.wega(.callout))
+                    // UX-06 — the single decision site for install-vs-open in the whole app: the
+                    // planner is consulted here, once, from the published assets and real helper
+                    // capability. No plan, no button — never force-unwrapped.
+                    if let action = SelfUpdatePlanner.action(
+                        helperEnabled: PrivilegedHelperClient.shared.isEnabled,
+                        assets: assets
+                    ) {
+                        Button {
+                            Task { await applySelfUpdate(action, version: version) }
+                        } label: {
+                            if downloadingUpdate { ProgressView().controlSize(.small) }
+                            // UX-06 — the label describes the operation that will actually run: a
+                            // headless install of a verified .pkg, or the download the user
+                            // finishes by hand. "Install" no longer covers both.
+                            else { Text(SelfUpdatePresentation.actionLabel(action)) }
+                        }
+                        .disabled(downloadingUpdate)
+                    }
+                case .upToDate:
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Text(tr("Masz najnowszą wersję Wegi")).font(.wega(.callout)).foregroundStyle(.secondary)
+                    Spacer()
+                    selfUpdateCheckButton
+                case .failed:
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    Text(tr("Nie udało się sprawdzić aktualizacji")).font(.wega(.callout)).foregroundStyle(.secondary)
+                    Spacer()
+                    selfUpdateCheckButton
+                case nil:
+                    Spacer()
+                    selfUpdateCheckButton
                 }
-                Spacer()
-                Link(tr("Zobacz wydanie"), destination: releaseURL).font(.wega(.callout))
-                Button {
-                    Task { await downloadAndOpen(assetURL) }
-                } label: {
-                    if downloadingUpdate { ProgressView().controlSize(.small) }
-                    // UX-06 — the label describes the operation that will actually run: a
-                    // headless install of a verified .pkg, or (the common .dmg case) a
-                    // download the user finishes by hand. "Install" no longer covers both.
-                    else { Text(SelfUpdatePresentation.actionLabel(selfUpdateAction(for: assetURL))) }
-                }
-                .disabled(downloadingUpdate)
-            case .upToDate:
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                Text(tr("Masz najnowszą wersję Wegi")).font(.wega(.callout)).foregroundStyle(.secondary)
-                Spacer()
-                selfUpdateCheckButton
-            case .failed:
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-                Text(tr("Nie udało się sprawdzić aktualizacji")).font(.wega(.callout)).foregroundStyle(.secondary)
-                Spacer()
-                selfUpdateCheckButton
-            case nil:
-                Spacer()
-                selfUpdateCheckButton
             }
+        }
+    }
+
+    /// The cumulative "what's new" between the installed version and the newest one. One
+    /// collapsible entry per release; markup was stripped in Core before it got here.
+    @ViewBuilder
+    private var selfUpdateNotes: some View {
+        switch selfUpdateController.history {
+        case .history(let history) where !history.notes.isEmpty:
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(history.notes) { note in
+                    DisclosureGroup {
+                        Text(note.body.isEmpty ? tr("Brak opublikowanych notatek") : note.body)
+                            .font(.wega(.subheadline))
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(note.version).font(.wega(.callout, weight: .medium))
+                            if let published = note.publishedAt {
+                                Text(published, style: .date)
+                                    .font(.wega(.subheadline))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                if history.omitted > 0 {
+                    Text(trf("…i %@ wcześniejszych wydań", String(history.omitted)))
+                        .font(.wega(.subheadline))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        case .unavailable:
+            Text(tr("Nie udało się pobrać notatek wydania"))
+                .font(.wega(.subheadline))
+                .foregroundStyle(.secondary)
+        case .history, .none:
+            EmptyView()
         }
     }
 
@@ -473,24 +537,11 @@ extension InfoView {
         await selfUpdateController.check()
     }
 
-    /// UX-06 — which operation the button is about, from current helper availability and the
-    /// asset kind. Shared with `SelfUpdateController` via `SelfUpdatePlanner`, so the label
-    /// and the code that runs the operation can never disagree.
-    private func selfUpdateAction(for assetURL: URL) -> SelfUpdateAction {
-        SelfUpdatePlanner.action(
-            helperEnabled: PrivilegedHelperClient.shared.isEnabled,
-            assetURL: assetURL
-        )
-    }
-
     /// Download the release asset to a temp file and hand it to the system (Installer for
     /// `.pkg`, DiskImageMounter for `.dmg`). On any failure, fall back to opening the asset
     /// URL in the browser so the user can still grab it.
-    private func downloadAndOpen(_ url: URL) async {
-        // Persistent audit moved with the operation to SelfUpdateController:
-        // WegaLog.error(.app, "Self-update odrzucony przez weryfikację podpisu")
-        // WegaLog.error(.helper, "Instalacja przez helper nie powiodła się")
-        await selfUpdateController.downloadAndOpen(url) { state in
+    private func applySelfUpdate(_ action: SelfUpdateAction, version: String) async {
+        await selfUpdateController.apply(action, version: version) { state in
             onWegaState?(state)
         }
     }
@@ -551,6 +602,10 @@ extension InfoView {
                 selfUpdateRow
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
+
+                selfUpdateNotes
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 10)
 
                 Divider().opacity(0.5)
 

@@ -17,13 +17,16 @@ struct ArchitectureReviewRegressionTests {
                 check: { .upToDate },
                 download: { $0 },
                 verify: { _, _ in },
-                installOrOpen: { _ in
+                installOrOpen: { _, _ in
                     installProbe.record(
                         mutationLabels: MutationGuard.shared.runningLabels
                     )
                     return true
                 },
-                openFallback: {}
+                openFallback: {},
+                relaunch: {},
+                isBusy: { false },
+                fetchHistory: { _ in .unavailable }
             ),
             upgrades: upgrades
         )
@@ -36,8 +39,9 @@ struct ArchitectureReviewRegressionTests {
         }
         await blockerStarted.wait()
 
+        let asset = ReleaseAsset(name: "Wega.pkg", url: URL(fileURLWithPath: "/tmp/Wega.pkg"))
         let update = Task {
-            await controller.downloadAndOpen(URL(fileURLWithPath: "/tmp/Wega.pkg")) { _ in }
+            await controller.apply(.install(pkg: asset), version: "1.0.1") { _ in }
         }
         while (await operations.snapshot()).queuedWrites == 0 {
             await Task.yield()
@@ -388,6 +392,4 @@ private final class SelfUpdateInstallProbe {
         didRun = true
         self.mutationLabels = mutationLabels
     }
-
-
 }

@@ -153,7 +153,7 @@ final class MenuBarUpdateCheckerTests: XCTestCase {
         let wega = ManualUpdateScanner.selfUpdateApp(
             from: .updateAvailable(
                 version: "0.2.0",
-                assetURL: URL(string: "https://example.com/Wega.dmg")!,
+                assets: [ReleaseAsset(name: "WegaMacUpdater.dmg", url: URL(string: "https://example.com/Wega.dmg")!)],
                 releaseURL: URL(string: "https://github.com/owner/repo/releases/tag/v0.2.0")!,
                 notes: ""
             ),

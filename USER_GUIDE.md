@@ -201,6 +201,20 @@ It also has an **App catalog** card that refreshes Wega's list of
 supported apps on demand (it also refreshes on launch); a fetched update applies on the
 next launch.
 
+When a newer Wega is available, the same window lists **every release since the one you
+have** — not just the latest — so three versions behind reads as three change-lists, not
+one. Each is collapsed to its version and date; expand any to read its notes. If GitHub
+can't be reached, it says so plainly instead of showing nothing — either way, this never
+holds up the update itself.
+
+Wega always downloads the **`.pkg`** when a release publishes one, and falls back to the
+`.dmg` only when it does not. That is a security choice, not a convenience one: the `.pkg`
+is the only artifact Wega can check all the way back to its own developer certificate. What
+changes when the privileged helper is switched on is only *who finishes the job* — with the
+helper, Wega installs it for you and then asks you to restart; without it, the same file is
+handed to you to run yourself. A release that publishes neither offers no update button at
+all rather than something Wega cannot verify.
+
 ### Export diagnostics
 
 **Settings → System diagnostics → Export diagnostics** (also in the **Logs** toolbar)

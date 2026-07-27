@@ -26,8 +26,8 @@ enum SelfUpdatePresentation {
     static func message(for state: SelfUpdateOperationState) -> String {
         switch state {
         case .downloading: return tr("Pobieram nową wersję Wegi…")
-        case .opened:      return tr("Pobrałam aktualizację i otwieram instalator — dokończ instalację.")
-        case .installed:   return tr("Aktualizacja zainstalowana przez komponent uprzywilejowany.")
+        case .opened:      return tr("Pobrałam aktualizację — zamknij Wegę, zanim ją zastąpisz.")
+        case .installed:   return tr("Aktualizacja zainstalowana — uruchom Wegę ponownie, żeby jej użyć.")
         case .failed:      return tr("Nie udało się pobrać aktualizacji — otwieram stronę wydania.")
         }
     }

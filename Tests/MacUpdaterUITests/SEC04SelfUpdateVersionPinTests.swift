@@ -21,9 +21,13 @@ struct SEC04SelfUpdateVersionPinTests {
         #expect(FileManager.default.createFile(atPath: payload.path, contents: Data("payload".utf8)))
         defer { try? FileManager.default.removeItem(at: payload) }
 
+        let asset = ReleaseAsset(
+            name: "Wega.pkg",
+            url: try #require(URL(string: "https://example.com/Wega.pkg"))
+        )
         let offered = WegaSelfUpdateChecker.Result.updateAvailable(
             version: "9.9.9",
-            assetURL: try #require(URL(string: "https://example.com/Wega.pkg")),
+            assets: [asset],
             releaseURL: try #require(URL(string: "https://example.com/release")),
             notes: ""
         )
@@ -37,12 +41,15 @@ struct SEC04SelfUpdateVersionPinTests {
                 // Stop here: what is under test is the argument, not the install that follows.
                 throw Rejected()
             },
-            installOrOpen: { _ in true },
-            openFallback: {}
+            installOrOpen: { _, _ in true },
+            openFallback: {},
+            relaunch: {},
+            isBusy: { false },
+            fetchHistory: { _ in .unavailable }
         ))
 
         await controller.check()
-        await controller.downloadAndOpen(try #require(URL(string: "https://example.com/Wega.pkg"))) { _ in }
+        await controller.apply(.install(pkg: asset), version: "9.9.9") { _ in }
 
         #expect(recorder.wasCalled)
         #expect(recorder.expectedVersion == "9.9.9")
