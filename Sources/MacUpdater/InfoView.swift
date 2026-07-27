@@ -429,7 +429,7 @@ extension InfoView {
                 Spacer()
                 Link(tr("Zobacz wydanie"), destination: releaseURL).font(.system(size: 12))
                 Button {
-                    Task { await downloadAndOpen(assets[0].url) }
+                    Task { await applySelfUpdate(selfUpdateAction(for: assets), version: version) }
                 } label: {
                     if downloadingUpdate { ProgressView().controlSize(.small) }
                     // UX-06 — the label describes the operation that will actually run: a
@@ -486,11 +486,11 @@ extension InfoView {
     /// Download the release asset to a temp file and hand it to the system (Installer for
     /// `.pkg`, DiskImageMounter for `.dmg`). On any failure, fall back to opening the asset
     /// URL in the browser so the user can still grab it.
-    private func downloadAndOpen(_ url: URL) async {
+    private func applySelfUpdate(_ action: SelfUpdateAction, version: String) async {
         // Persistent audit moved with the operation to SelfUpdateController:
         // WegaLog.error(.app, "Self-update odrzucony przez weryfikację podpisu")
         // WegaLog.error(.helper, "Instalacja przez helper nie powiodła się")
-        await selfUpdateController.downloadAndOpen(url) { state in
+        await selfUpdateController.apply(action, version: version) { state in
             onWegaState?(state)
         }
     }

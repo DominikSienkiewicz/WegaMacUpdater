@@ -23,7 +23,9 @@ struct ArchitectureReviewRegressionTests {
                     )
                     return true
                 },
-                openFallback: {}
+                openFallback: {},
+                relaunch: {},
+                isBusy: { false }
             ),
             upgrades: upgrades
         )
@@ -36,8 +38,9 @@ struct ArchitectureReviewRegressionTests {
         }
         await blockerStarted.wait()
 
+        let asset = ReleaseAsset(name: "Wega.pkg", url: URL(fileURLWithPath: "/tmp/Wega.pkg"))
         let update = Task {
-            await controller.downloadAndOpen(URL(fileURLWithPath: "/tmp/Wega.pkg")) { _ in }
+            await controller.apply(.install(pkg: asset), version: "1.0.1") { _ in }
         }
         while (await operations.snapshot()).queuedWrites == 0 {
             await Task.yield()
