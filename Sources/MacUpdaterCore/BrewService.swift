@@ -141,6 +141,29 @@ public final class BrewService: @unchecked Sendable {
         ["install", "--cask", "--force", "--", token]
     }
 
+    /// ARCH-05a: latest versions for many tokens in **one** `brew info` call.
+    ///
+    /// `caskLatestVersion(token:)` spawns a process per token, and the manual scanner called it
+    /// once per adoption candidate — so a machine with a dozen non-brew apps that Homebrew also
+    /// packages spawned a dozen `brew info` processes, each re-reading the same cask database.
+    /// `brew info --cask --json=v2` accepts a list, so one call answers for all of them.
+    ///
+    /// Tokens Homebrew does not know are simply absent from the result; a failed call yields an
+    /// empty map, and callers fall back to treating the app as up to date exactly as before.
+    public func caskLatestVersions(tokens: [String]) async -> [String: String] {
+        guard !tokens.isEmpty else { return [:] }
+        guard let result = try? await runBrew(["info", "--cask", "--json=v2", "--"] + tokens),
+              result.exitCode == 0,
+              let data = result.stdout.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let casks = json["casks"] as? [[String: Any]] else { return [:] }
+        return casks.reduce(into: [:]) { map, cask in
+            guard let token = cask["token"] as? String,
+                  let version = cask["version"] as? String else { return }
+            map[token] = version
+        }
+    }
+
     /// Returns the latest version string from the cask database for a given token, or nil on failure.
     public func caskLatestVersion(token: String) async -> String? {
         guard let result = try? await runBrew(["info", "--cask", "--json=v2", token]),
