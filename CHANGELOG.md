@@ -23,6 +23,12 @@ bump and move its entries under the new version heading when cutting a release.
   Diagnostyka systemu** so a missing grant is visible before the first upgrade. Unattended
   rounds are held back for 24 h after an observed refusal rather than failing identically
   every interval, and the hold lifts by itself once a round succeeds.
+- A hard download resource gate shared by window and unattended cask upgrades. Before
+  snapshotting or downloading it vetoes metered/Low Data Mode networking, low battery,
+  thermal throttling and insufficient (or unreadable) disk capacity. Required space is
+  budgeted as download + unpacked payload + rollback snapshot + safety margin; the
+  thresholds and estimates are persisted and configurable in the native Settings window.
+  Background deferrals retain their reason in the activity log.
 - **Export diagnostics** — one action, in **Settings → System diagnostics** and in the
   **Logs** toolbar, that saves a redacted `.zip` containing everything a bug report needs:
   app version and build, macOS version and CPU, detected package managers and their
@@ -38,12 +44,6 @@ bump and move its entries under the new version heading when cutting a release.
   including rollbacks and publisher changes — and travel in the diagnostics export. The
   record carries no Team ID values and no verbatim tool output; it says *that* a publisher
   changed, not who.
-- A hard download resource gate shared by window and unattended cask upgrades. Before
-  snapshotting or downloading it vetoes metered/Low Data Mode networking, low battery,
-  thermal throttling and insufficient (or unreadable) disk capacity. Required space is
-  budgeted as download + unpacked payload + rollback snapshot + safety margin; the
-  thresholds and estimates are persisted and configurable in the native Settings window.
-  Background deferrals retain their reason in the activity log.
 - Replay and downgrade protection for the over-the-air app catalog. A signature answers
   "did the publisher write this?", never "is this the current one" — so an old catalog with
   its own old, perfectly valid signature used to be valid forever, and anyone able to choose
@@ -345,13 +345,6 @@ bump and move its entries under the new version heading when cutting a release.
   via `SMAppService`, and Team-ID verification of self-update installers. Pinned by
   a new `PrivilegedHelperSecurityTests` case that fails CI on any regression to a
   non-Team-ID-shaped value.
-- Log redaction now also strips credentials and e-mail addresses, not just filesystem
-  paths and URL query strings. `Authorization` headers, bearer tokens, labelled secrets
-  (`token=`, `api_key:`, `password=`), PEM private-key blocks, GitHub/Slack/AWS/JWT
-  token shapes and addresses are replaced before a line reaches the unified log — where
-  any process on the machine could otherwise read it back. The diagnostics export applies
-  the same rules **plus** the account's login and display names, which no path-based rule
-  can catch on their own.
 - Hardened the GitHub PAT keychain item (`GitHubCredentialStore`): accessibility moved
   from `AfterFirstUnlock` to **`AfterFirstUnlockThisDeviceOnly`**, so the credential is
   no longer eligible for iCloud Keychain sync or device backups (it can't leak to
@@ -368,6 +361,13 @@ First tagged release. One native SwiftUI window that updates every app on a Mac 
 single place.
 
 ### Added
+- Log redaction now also strips credentials and e-mail addresses, not just filesystem
+  paths and URL query strings. `Authorization` headers, bearer tokens, labelled secrets
+  (`token=`, `api_key:`, `password=`), PEM private-key blocks, GitHub/Slack/AWS/JWT
+  token shapes and addresses are replaced before a line reaches the unified log — where
+  any process on the machine could otherwise read it back. The diagnostics export applies
+  the same rules **plus** the account's login and display names, which no path-based rule
+  can catch on their own.
 - **Update** — Homebrew formulae + casks (greedy), Mac App Store (`mas`), npm globals,
   and nine manual-app checkers (JetBrains, GitHub Releases, Synology, Antigravity,
   Parallels, Google Drive Omaha, ChatGPT appcast, Sparkle) deduplicated by source
