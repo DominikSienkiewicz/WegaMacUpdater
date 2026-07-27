@@ -48,26 +48,35 @@ struct SelfUpdateRestartTests {
     }
 
     @Test func restartIsRefusedWhileAMutatingOperationRuns() async {
-        var relaunches = 0
+        let relaunchProbe = RelaunchProbe()
         let controller = SelfUpdateController(
-            dependencies: dependencies(installed: true, busy: true, relaunched: { relaunches += 1 })
+            dependencies: dependencies(installed: true, busy: true, relaunched: { relaunchProbe.record() })
         )
         await controller.apply(.install(pkg: pkg()), version: "1.0.1") { _ in }
 
         #expect(controller.canRestart == false)
         controller.restart()
-        #expect(relaunches == 0)
+        #expect(relaunchProbe.count == 0)
     }
 
     @Test func restartRunsWhenNothingElseIsMutating() async {
-        var relaunches = 0
+        let relaunchProbe = RelaunchProbe()
         let controller = SelfUpdateController(
-            dependencies: dependencies(installed: true, relaunched: { relaunches += 1 })
+            dependencies: dependencies(installed: true, relaunched: { relaunchProbe.record() })
         )
         await controller.apply(.install(pkg: pkg()), version: "1.0.1") { _ in }
 
         #expect(controller.canRestart)
         controller.restart()
-        #expect(relaunches == 1)
+        #expect(relaunchProbe.count == 1)
     }
+}
+
+/// Records how many times `relaunch` ran — a reference-type probe so the closure captures a
+/// class instance instead of a mutable local, per the pattern established by `CallProbe` and
+/// `SelfUpdateInstallProbe` in this test target.
+@MainActor
+private final class RelaunchProbe {
+    private(set) var count = 0
+    func record() { count += 1 }
 }

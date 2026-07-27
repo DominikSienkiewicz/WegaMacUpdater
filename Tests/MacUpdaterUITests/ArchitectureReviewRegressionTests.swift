@@ -25,7 +25,8 @@ struct ArchitectureReviewRegressionTests {
                 },
                 openFallback: {},
                 relaunch: {},
-                isBusy: { false }
+                isBusy: { false },
+                fetchHistory: { _ in .unavailable }
             ),
             upgrades: upgrades
         )

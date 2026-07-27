@@ -44,7 +44,7 @@ struct ManualUpdateSelfUpdateTests {
 
         #expect(source.badgeLabel == "Wega")
         #expect(source.provenance == .vendorDirect)
-        #expect(source.updateActionKind == .openSelfUpdate(releaseURL: releaseURL))
+        #expect(source.updateActionKind == .openSelfUpdate)
     }
 
     @Test func upToDateProducesNoRow() {

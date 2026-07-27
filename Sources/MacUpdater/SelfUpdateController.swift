@@ -124,6 +124,10 @@ final class SelfUpdateController: ObservableObject {
 
     func check() async {
         guard !isChecking else { return }
+        // The doc comment on `installedPendingRestart` above promises only a user click leaves
+        // that state. `InfoView.onAppear`'s `if case .idle` gate is one caller honouring that —
+        // but the invariant belongs to the controller that owns the state, not to every caller.
+        guard !isInstalledPendingRestart else { return }
         state = .checking
         let outcome = await dependencies.check()
         state = .result(outcome)
@@ -133,6 +137,11 @@ final class SelfUpdateController: ObservableObject {
             return
         }
         history = await dependencies.fetchHistory(AppMetadata.version)
+    }
+
+    private var isInstalledPendingRestart: Bool {
+        if case .installedPendingRestart = state { return true }
+        return false
     }
 
     /// True only when a restart would not interrupt a mutating operation. The write gate is the

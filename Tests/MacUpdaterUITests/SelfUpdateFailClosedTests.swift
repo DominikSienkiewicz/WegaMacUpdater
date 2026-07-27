@@ -48,7 +48,8 @@ struct SelfUpdateFailClosedTests {
             },
             openFallback: { fallbackProbe.record() },
             relaunch: {},
-            isBusy: { false }
+            isBusy: { false },
+            fetchHistory: { _ in .unavailable }
         ))
 
         let asset = ReleaseAsset(name: "Wega.pkg", url: URL(fileURLWithPath: "/tmp/Wega.pkg"))

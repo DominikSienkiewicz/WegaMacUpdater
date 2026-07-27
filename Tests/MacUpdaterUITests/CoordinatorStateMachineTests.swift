@@ -15,7 +15,8 @@ struct CoordinatorStateMachineTests {
             installOrOpen: { _, _ in false },
             openFallback: {},
             relaunch: {},
-            isBusy: { false }
+            isBusy: { false },
+            fetchHistory: { _ in .unavailable }
         ))
 
         await controller.check()

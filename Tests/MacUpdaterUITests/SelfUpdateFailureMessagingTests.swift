@@ -23,7 +23,8 @@ struct SelfUpdateFailureMessagingTests {
                 installOrOpen: { _, _ in false },
                 openFallback: { log.record(.openedBrowser) },
                 relaunch: {},
-                isBusy: { false }
+                isBusy: { false },
+                fetchHistory: { _ in .unavailable }
             )
         )
 
