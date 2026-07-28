@@ -177,6 +177,19 @@ extension Color {
     /// assumption, from the other side.
     static let wegaRecessedSurface = Color(nsColor: .underPageBackgroundColor)
 
+    /// A console pane: deliberately dark in **both** appearances, the way Terminal and Xcode's
+    /// console are. These are the migration log's own surfaces, extracted from the last
+    /// `Color.black.opacity(…)` / `Color.white.opacity(…)` literals in the views.
+    ///
+    /// They are not adaptive, and that is the point — a log rendered light-on-dark in one
+    /// appearance and dark-on-light in the other stops reading as a log. Keeping them here
+    /// rather than at the call site means the palette still owns the value: the appearance
+    /// guard can see them, and an increased-contrast variant can be given to them later
+    /// without hunting through a view.
+    static let wegaConsoleSurface       = Color.black.opacity(0.85)
+    static let wegaConsoleHeaderSurface = Color.black.opacity(0.6)
+    static let wegaConsoleInk           = Color.white.opacity(0.85)
+
     // Wega coat — the mascot's own drawing. A dog is the same colour on a light desktop as
     // on a dark one, so these stay fixed; they are never text, and never a control.
     static let wegaBodyTan   = Color(red: 0.831, green: 0.627, blue: 0.416) // #d4a06a

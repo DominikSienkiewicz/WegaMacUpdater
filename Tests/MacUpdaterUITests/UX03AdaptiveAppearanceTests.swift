@@ -29,6 +29,47 @@ struct SemanticTypographyTests {
         "SharedViews.swift",
     ]
 
+    /// What the guard is allowed to miss.
+    ///
+    /// It used to be a non-recursive `contentsOfDirectory` on `Sources/MacUpdater`: it swept in
+    /// 32 files there that build no views at all, and could not see a new subdirectory under
+    /// that path or a second target that imports SwiftUI. The scope is now the import, not the
+    /// directory — so a file gains SwiftUI and gains the guard in the same edit, wherever it
+    /// lives.
+    ///
+    /// Red before the fix: the directory scan returned every `.swift` in that one folder,
+    /// including the 32 without `import SwiftUI`.
+    @Test("The typography guard scans by import, across every module")
+    func theGuardFollowsSwiftUIRatherThanADirectory() throws {
+        let scanned = try UX03Sources.appViewFiles()
+
+        #expect(!scanned.isEmpty, "sanity: the scan found the views")
+
+        let withoutSwiftUI = try scanned.filter {
+            try !String(contentsOf: $0, encoding: .utf8).contains("import SwiftUI")
+        }
+        #expect(withoutSwiftUI.isEmpty,
+                """
+                UX-03: the guard is scanning files that build no views — \
+                \(withoutSwiftUI.map(\.lastPathComponent).joined(separator: ", ")). \
+                That is a directory scan wearing the shape of a rule.
+                """)
+
+        // The other direction: nothing that does build views may sit outside the net.
+        var expected: Set<String> = []
+        let enumerator = FileManager.default.enumerator(
+            at: UX03Sources.sourcesRoot, includingPropertiesForKeys: nil
+        )
+        while let url = enumerator?.nextObject() as? URL {
+            guard url.pathExtension == "swift" else { continue }
+            if try String(contentsOf: url, encoding: .utf8).contains("import SwiftUI") {
+                expected.insert(url.lastPathComponent)
+            }
+        }
+        #expect(Set(scanned.map(\.lastPathComponent)) == expected,
+                "UX-03: every SwiftUI file under Sources/ is covered, whichever module it is in")
+    }
+
     @Test("No view hard-codes a point size without a justification on the spot")
     func everySizeComesFromTheSemanticScale() throws {
         var offenders: [String] = []
@@ -354,19 +395,43 @@ struct SettingsWindowElasticityTests {
 /// Source-inspection helpers. A package test target cannot drive the real window, but it can
 /// read the code that builds it — the same technique QA-02's accessibility tests use.
 enum UX03Sources {
+    /// Where the app's own views live. Kept for `text(ofFileNamed:)`, which addresses files by
+    /// name; the guards themselves scan `sourcesRoot`.
     static var appViewDirectory: URL {
+        packageRoot.appendingPathComponent("Sources/MacUpdater")
+    }
+
+    /// Every module, not just the one that happens to hold the views today.
+    ///
+    /// The scan used to be a non-recursive `contentsOfDirectory` on `Sources/MacUpdater`, so a
+    /// new subdirectory under it — or a second target that imports SwiftUI — was invisible to
+    /// the typography guard. Nothing escaped in practice, because nothing outside that one flat
+    /// directory imports SwiftUI; the point is that nothing *would have been reported* if it
+    /// did, and a guard whose blind spot grows with the codebase stops being one.
+    static var sourcesRoot: URL {
+        packageRoot.appendingPathComponent("Sources")
+    }
+
+    static var packageRoot: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Sources/MacUpdater")
     }
 
+    /// Every Swift file under `Sources/` that actually builds a view. Filtering on the import
+    /// rather than on a directory is what makes the rule follow the code: a file gains SwiftUI
+    /// and gains the guard in the same edit.
     static func appViewFiles() throws -> [URL] {
-        try FileManager.default
-            .contentsOfDirectory(at: appViewDirectory, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "swift" }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        var files: [URL] = []
+        let enumerator = FileManager.default.enumerator(at: sourcesRoot, includingPropertiesForKeys: nil)
+        while let url = enumerator?.nextObject() as? URL {
+            guard url.pathExtension == "swift" else { continue }
+            let text = try String(contentsOf: url, encoding: .utf8)
+            guard text.contains("import SwiftUI") else { continue }
+            files.append(url)
+        }
+        return files.sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
     static func text(ofFileNamed name: String) throws -> String {
