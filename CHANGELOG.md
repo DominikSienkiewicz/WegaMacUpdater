@@ -403,6 +403,13 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   Wega's window over whatever you were doing. Activation now happens only where you asked for
   it — the menu bar's "Otwórz Wega", and the alert that must be seen before the app quits
   mid-mutation. The window still opens at login; it no longer interrupts.
+- The rolled-back cask ledger forgets entries for casks you have since uninstalled. Their
+  marks produced no row and raised no error, so they sat in preferences for good. Pruning is
+  deliberately conservative — it reads brew's own installed list, which stays authoritative for
+  a rolled-back cask because its Caskroom entry survives the rollback, and it forgets nothing at
+  all when that list comes back empty. An empty list means brew could not answer, not that every
+  cask vanished, and discarding marks on it would turn one failed query into apps that silently
+  read as current again.
 - **A granted App Management permission unblocks unattended rounds again.** Both update paths
   armed the 24-hour hold after macOS refused to replace a bundle, but only the unattended one
   ever released it. Granting the permission and completing an update from the window left the

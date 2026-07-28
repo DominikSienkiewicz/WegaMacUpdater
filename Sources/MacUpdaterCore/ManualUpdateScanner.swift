@@ -252,6 +252,11 @@ public struct ManualUpdateScanner: Sendable {
         // reports it (its Caskroom records the new version) and it is brew-managed, so both the
         // brew list and the cask-version check above skip it; without this the reverted version
         // silently vanishes from every scan until upstream ships something newer.
+        // REL-07 follow-up — a mark for a cask the user has since uninstalled has nothing left
+        // to force onto the list, and `rolledBackRows` silently skips it, so it would sit in
+        // `UserDefaults` for good. Pruned from brew's own installed list, which stays
+        // authoritative for a rolled-back cask: its Caskroom entry survives the rollback.
+        rollbackLedger.prune(installedCaskTokens: Set(brewCaskVersions.keys))
         let listedCaskTokens = collected.compactMap { app -> String? in
             if case .cask(let token) = app.source { return token }
             return nil
