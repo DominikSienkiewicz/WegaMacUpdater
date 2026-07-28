@@ -309,7 +309,7 @@ you can make.
 
 | Card | What is open | What it needs from you |
 |------|--------------|------------------------|
-| `QA-04` | Two of eight criteria were never done: the README has no table of contents, and the 5,600-character "Update" paragraph is still a wall of text. The other six were fixed and verified. | Decide: finish them, or split them into their own card and close `QA-04` on the six. |
+| `QA-04` | Nothing structural. The two items the implementation note called unfinished — no table of contents, a 5,600-character "Update" wall — were closed after that note was written: README has a nested TOC and the Update section is 12 subsections whose longest paragraph is 1,324 characters. The last real drift (README said *nine* manual checkers against 13 in `ManualUpdateScanner`, and the "Act" step named four of the eight `.launchApp` sources) is fixed and now guarded by `QA04CheckerCountDriftTests`. | Read README against the code once and close it. |
 | `OBS-02` | The *notification → specific operation/log* deep link was consciously skipped; it needs a `UNUserNotificationCenterDelegate` in app startup. Twelve of thirteen criteria are done. | Accept as out of scope and close, or open a follow-up card. |
 | `LT-03` | Two things. A **Team ID mismatch is a hard veto** — an app legitimately re-signed with a new certificate is refused until you act. The alternative is stepping down to `requiresConfirmation`. Separately: `caskNames: []` is hardcoded at both call sites, so the **display-name matching branch is also dead** — the same class of bug this card fixed for Team ID, one level over. | Decide the veto strength. Decide whether the dead name branch is a new card. |
 | `SEC-04` | *"Digest from a signed manifest"* is infeasible as written — no signed manifest exists anywhere in the pipeline, so there is nothing to read a digest from. Identity pinning (Team ID + bundle ID + version) was implemented instead. | Decide: accept identity pinning as sufficient, or open a card for a signed manifest. |
@@ -336,7 +336,7 @@ you can make.
 | `QA-03` | [C1](#c1--qa-03--the-release-pipeline-end-to-end) | Yes — real tag + secrets |
 | `SEC-04` | [C2](#c2--sec-04--self-update-publisher-pinning) + [D](#d-verification-alone-cannot-close-these) | Yes — gated by `QA-03` |
 | `SEC-07` | [A4](#a4--sec-07-partial--the-etag-survives-a-restart) + [C3](#c3--sec-07--the-envelope-on-the-production-cdn) | Yes — production CDN |
-| `QA-04` | [D](#d-verification-alone-cannot-close-these) only | No — two criteria unfinished |
+| `QA-04` | [D](#d-verification-alone-cannot-close-these) only | No — needs one read-through |
 | `QA-06` | [D](#d-verification-alone-cannot-close-these) only | Reading + one approval |
 
 Statuses move only through the orchestrator API, never by editing a card by hand:
