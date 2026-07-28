@@ -11,7 +11,7 @@ final class CaskMatcherTests: XCTestCase {
             availableCasks: []
         )
 
-        XCTAssertEqual(match, .candidate(token: "cleanmymac"))
+        XCTAssertEqual(match, .candidate(token: "cleanmymac", provenance: .curatedMapping))
     }
 
     func testMarksInstalledTokenAsManaged() {
@@ -25,7 +25,7 @@ final class CaskMatcherTests: XCTestCase {
             ]
         )
 
-        XCTAssertEqual(match, .managed(token: "visual-studio-code"))
+        XCTAssertEqual(match, .managed(token: "visual-studio-code", provenance: .installedToken))
     }
 
     func testMarksInstalledTokenAsManagedWhenOnlyNormalizedNamesMatch() {
@@ -37,7 +37,7 @@ final class CaskMatcherTests: XCTestCase {
             availableCasks: []
         )
 
-        XCTAssertEqual(match, .managed(token: "visual-studio-code"))
+        XCTAssertEqual(match, .managed(token: "visual-studio-code", provenance: .installedToken))
     }
 
     func testMatchesByCaskDisplayName() {
@@ -51,6 +51,10 @@ final class CaskMatcherTests: XCTestCase {
             ]
         )
 
-        XCTAssertEqual(match, .candidate(token: "parallels"))
+        // LT-03 — the token assertion is unchanged, but the provenance shows this case never
+        // exercised the display-name path it is named after: the default matcher's curated
+        // table maps "Parallels Desktop" → "parallels" and is consulted first. A genuine
+        // display-name match is covered in LT03MatchProvenanceTests.
+        XCTAssertEqual(match, .candidate(token: "parallels", provenance: .curatedMapping))
     }
 }

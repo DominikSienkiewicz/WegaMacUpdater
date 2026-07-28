@@ -413,12 +413,9 @@ private struct MigrationRow: View {
     /// najmocniejszy sygnał — korelację Team ID wydawcy — ale wyliczoną wcześniej przez
     /// `MigrationStore`, więc sam widok nadal jest czystą heurystyką bez I/O.
     private var confidence: CaskMatchConfidence {
-        guard let token = app.caskToken else { return .low }
+        guard let provenance = app.caskMatchProvenance else { return CaskMatchScorer.unmatched }
         return CaskMatchScorer.score(
-            applicationName: app.name,
-            caskToken: token,
-            caskNames: [],
-            viaCustomMapping: false,
+            provenance: provenance,
             installedAppTeamID: correlation.installedAppTeamID,
             caskExpectedTeamID: correlation.caskExpectedTeamID
         )

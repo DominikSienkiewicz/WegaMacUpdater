@@ -46,6 +46,20 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   it exits early or refuses to launch at all. An app that is already open is skipped rather
   than quit to make room, and skipping never triggers a rollback. On by default, with a
   switch in **Settings → Post-update launch test**.
+- **Migration no longer refuses every app in the curated cask table.** `CaskMatchScorer` judged
+  a match partly by *how* it was found — a curated entry in `customCaskMappings`, an exact
+  token, one of a cask's display names — but that route was decided inside `CaskMatcher` and
+  thrown away, since `CaskMatch` carried only the token. Both call sites could therefore pass
+  nothing but literals, so two of the four signals were dead and collapsed to the lowest
+  score. Because `MigrationAutoTakeover` turns the lowest score into *blocked*, and because
+  every entry in the curated table is there precisely because the app's name does not
+  normalize to its cask token, all six — Docker, zoom.us, Parallels Desktop, CleanMyMac_5,
+  Gemini 2, logioptionsplus — had their automatic takeover refused. The route is now part of
+  `CaskMatch` as `CaskMatchProvenance`, travels on the scanned app, and is what the scorer
+  takes, so a caller can no longer get it silently wrong. A display-name match now asks for
+  confirmation instead of being refused; an app tied to no cask is what stays blocked; a
+  publisher mismatch still overrules everything.
+
 - `DiscordUpdateChecker`, `SignalUpdateChecker` and `ChromeUpdateChecker` — three more
   self-updating apps whose Homebrew casks are `auto_updates` and lag the real channel, so
   neither `brew outdated` nor the cask-version check sees the new build. Discord
