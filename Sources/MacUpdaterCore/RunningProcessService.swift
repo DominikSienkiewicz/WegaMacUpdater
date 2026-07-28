@@ -31,6 +31,10 @@ public struct WorkspaceApplicationTerminator: ApplicationTerminating {
 /// `ProcessRunning` seam. Consolidating it here removes the duplication and — because it
 /// runs through `ProcessRunning` — makes the command construction unit-testable with a
 /// fake runner instead of spawning real processes.
+/// REL-12 — every command here is `.quick` (30 s / 20 s), the policy whose own documentation
+/// names `pgrep`, `killall` and `open`. They used to inherit `ProcessRequest`'s default,
+/// `.query`, which allows ten minutes: sized for a `brew info` over a slow mirror and absurd
+/// for asking whether a process exists.
 public struct RunningProcessService: Sendable {
     private let runner: ProcessRunning
     private let pgrepURL: URL
@@ -58,7 +62,7 @@ public struct RunningProcessService: Sendable {
     /// True when a process whose executable name matches `processName` exactly is running.
     /// `pgrep -x` exits 0 when at least one match exists, non-zero otherwise.
     public func isRunning(_ processName: String) async -> Bool {
-        let request = ProcessRequest(executableURL: pgrepURL, arguments: ["-x", processName])
+        let request = ProcessRequest(executableURL: pgrepURL, arguments: ["-x", processName], timeouts: .quick)
         return (try? await runner.run(request))?.exitCode == 0
     }
 
@@ -72,7 +76,7 @@ public struct RunningProcessService: Sendable {
     /// Forcefully kills every exact process-name match. This is intentionally separate
     /// from the graceful request: callers must obtain explicit consent and honor `false`.
     public func forceKill(_ processName: String) async -> Bool {
-        let request = ProcessRequest(executableURL: killallURL, arguments: ["-KILL", processName])
+        let request = ProcessRequest(executableURL: killallURL, arguments: ["-KILL", processName], timeouts: .quick)
         return (try? await runner.run(request))?.exitCode == 0
     }
 
@@ -80,20 +84,21 @@ public struct RunningProcessService: Sendable {
     public func forceKill(processIdentifier: Int32) async -> Bool {
         let request = ProcessRequest(
             executableURL: killURL,
-            arguments: ["-KILL", String(processIdentifier)]
+            arguments: ["-KILL", String(processIdentifier)],
+            timeouts: .quick
         )
         return (try? await runner.run(request))?.exitCode == 0
     }
 
     /// Best-effort terminate every process matching `processName` (`killall <name>`).
     public func kill(_ processName: String) async {
-        let request = ProcessRequest(executableURL: killallURL, arguments: [processName])
+        let request = ProcessRequest(executableURL: killallURL, arguments: [processName], timeouts: .quick)
         _ = try? await runner.run(request)
     }
 
     /// Relaunch an app by name (`open -a <appName>`).
     public func launch(appName: String) async {
-        let request = ProcessRequest(executableURL: openURL, arguments: ["-a", appName])
+        let request = ProcessRequest(executableURL: openURL, arguments: ["-a", appName], timeouts: .quick)
         _ = try? await runner.run(request)
     }
 }

@@ -101,12 +101,18 @@ public struct NpmOutdatedParser {
 public final class NpmLocator: @unchecked Sendable {
     private let fileManager: FileManager
     private let extraCandidates: [URL]
+    private let runner: ProcessRunning
     private let cacheLock = NSLock()
     private var cachedURL: URL?
 
-    public init(fileManager: FileManager = .default, extraCandidates: [URL] = []) {
+    public init(
+        fileManager: FileManager = .default,
+        extraCandidates: [URL] = [],
+        runner: ProcessRunning = ProcessRunner()
+    ) {
         self.fileManager = fileManager
         self.extraCandidates = extraCandidates
+        self.runner = runner
     }
 
     /// ARCH-03: resolve npm once and reuse it. A scan calls `locate()` for every npm
@@ -115,9 +121,15 @@ public final class NpmLocator: @unchecked Sendable {
     /// positive result is memoised — so an npm installed later is still discovered —
     /// and the cached path is re-validated as executable on each hit, so a moved or
     /// removed binary forces a fresh resolve rather than returning a stale location.
-    public func locate() -> URL? {
+    ///
+    /// REL-12 — `async` because the last resort spawns a login shell, and a login shell is
+    /// somebody's `.zprofile`: it can block on a network mount, a version manager, anything.
+    /// It used to run on a raw `Process` with `waitUntilExit()`, so a shell that hung hung the
+    /// locator, and through it every npm operation in the scan. It now goes through
+    /// `ProcessRunning` like every other command.
+    public func locate() async -> URL? {
         if let cached = validatedCachedURL() { return cached }
-        let resolved = resolveUncached()
+        let resolved = await resolveUncached()
         cache(resolved)
         return resolved
     }
@@ -141,11 +153,11 @@ public final class NpmLocator: @unchecked Sendable {
         cacheLock.unlock()
     }
 
-    private func resolveUncached() -> URL? {
+    private func resolveUncached() async -> URL? {
         for url in candidates() where fileManager.isExecutableFile(atPath: url.path) {
             return url
         }
-        return resolveFromLoginShell()
+        return await resolveFromLoginShell()
     }
 
     private func candidates() -> [URL] {
@@ -168,23 +180,15 @@ public final class NpmLocator: @unchecked Sendable {
             .map { $0.appendingPathComponent(suffix) }
     }
 
-    private func resolveFromLoginShell() -> URL? {
+    private func resolveFromLoginShell() async -> URL? {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? SystemPaths.defaultLoginShell
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: shell)
-        process.arguments = ["-lc", "command -v npm"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            return nil
-        }
-        guard process.terminationStatus == 0 else { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let path = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        let request = ProcessRequest(
+            executableURL: URL(fileURLWithPath: shell),
+            arguments: ["-lc", "command -v npm"],
+            timeouts: .quick
+        )
+        guard let result = try? await runner.run(request), result.exitCode == 0 else { return nil }
+        let path = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !path.isEmpty, fileManager.isExecutableFile(atPath: path) else { return nil }
         return URL(fileURLWithPath: path)
     }
@@ -255,8 +259,8 @@ public final class NpmGlobalService: @unchecked Sendable {
         return error["current"] == nil && error["latest"] == nil
     }
 
-    public func upgradeEvents(name: String) throws -> AsyncThrowingStream<ProcessOutputEvent, Error> {
-        guard let npmURL = locator.locate() else {
+    public func upgradeEvents(name: String) async throws -> AsyncThrowingStream<ProcessOutputEvent, Error> {
+        guard let npmURL = await locator.locate() else {
             throw NpmServiceError.npmNotFound
         }
         return runner.events(
@@ -270,8 +274,8 @@ public final class NpmGlobalService: @unchecked Sendable {
         )
     }
 
-    public func uninstallEvents(name: String) throws -> AsyncThrowingStream<ProcessOutputEvent, Error> {
-        guard let npmURL = locator.locate() else {
+    public func uninstallEvents(name: String) async throws -> AsyncThrowingStream<ProcessOutputEvent, Error> {
+        guard let npmURL = await locator.locate() else {
             throw NpmServiceError.npmNotFound
         }
         return runner.events(
@@ -290,7 +294,7 @@ public final class NpmGlobalService: @unchecked Sendable {
     }
 
     private func runNpm(_ arguments: [String]) async throws -> ProcessResult {
-        guard let npmURL = locator.locate() else {
+        guard let npmURL = await locator.locate() else {
             throw NpmServiceError.npmNotFound
         }
         return try await runner.run(
