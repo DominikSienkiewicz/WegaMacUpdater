@@ -136,6 +136,14 @@ section headers.
 > publisher, Wega blocks the upgrade and raises a sticky security alert rather than
 > silently trusting it.
 
+Those checks say what the new file *is*; they don't say whether it starts. So after they
+pass, Wega **launches the updated app hidden in the background and watches it for five
+seconds**. If it crashes straight away — or macOS refuses to start it at all — the previous
+version comes back from the snapshot, the same way any other failed check is undone. An app
+you already have open is skipped, never quit to make room, and skipping never undoes an
+update. The check is on by default; you can turn it off under **Settings → Post-update
+launch test** if one of your apps takes badly to being started and closed unattended.
+
 ### Undo update
 
 For **7 days** after an upgrade, Wega keeps the pre-upgrade copy of each updated app

@@ -37,6 +37,15 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   the toolbar so its states can morph, the details pane moved into the native
   `.inspector()` container, and glass on the floating layer in place of the hand-drawn
   washes. This is the change that raises the minimum macOS to 26 — see **Changed** below.
+- **The post-update canary now checks that the app actually starts.** Gatekeeper and the
+  publisher comparison describe what a bundle *is*; neither says whether it runs, so a
+  correctly signed build that dies on startup — a missing framework, a wrong architecture,
+  a truncated bundle — passed every gate and was announced as a successful update. After
+  those checks Wega now starts the upgraded app hidden and non-activating, watches it for
+  five seconds, and restores the pre-upgrade snapshot through the existing rollback path if
+  it exits early or refuses to launch at all. An app that is already open is skipped rather
+  than quit to make room, and skipping never triggers a rollback. On by default, with a
+  switch in **Settings → Post-update launch test**.
 - `DiscordUpdateChecker`, `SignalUpdateChecker` and `ChromeUpdateChecker` — three more
   self-updating apps whose Homebrew casks are `auto_updates` and lag the real channel, so
   neither `brew outdated` nor the cask-version check sees the new build. Discord

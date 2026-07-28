@@ -225,6 +225,30 @@ and `~/Applications` is ambiguous rather than resolved by preferring one directo
 After a publisher mismatch, the original snapshot remains available even after a
 successful rollback. A bundle-identity mismatch preserves it in the same way.
 
+#### Launch smoke test
+
+The identity, Gatekeeper and publisher gates all describe what the new bundle **is**; none
+of them says whether it **runs**. A correctly signed build from the right publisher that
+dies on startup — a missing framework, an incompatible architecture, a truncated bundle —
+cleared every one of them and landed on the user as a working update.
+
+So the canary ends with a fourth gate. Once the other three have approved the build, Wega
+launches it through `NSWorkspace` **hidden and non-activating**, watches the instance for
+five seconds, and then stops it (polite quit, short grace, then a kill, the same escalation
+a cancelled subprocess gets). An instance that exits before the window closes, or a launch
+the system refuses outright, restores the pre-upgrade snapshot through the same
+`restoreSnapshot` path every other gate uses — so the verdict keeps flowing into the
+rollback ledger and the LT-01 journal, and there is no second way to undo an update.
+
+The gate runs last on purpose: a bundle whose identity or publisher is in doubt is the last
+thing that should be executed. Three cases produce no evidence and therefore never trigger
+a rollback — an app the user already has open (Wega will not quit it to make room), a cask
+with nothing launchable, and a run cancelled mid-window. Liveness is read repeatedly while
+the window is open **and once more on its closing edge**, and always through the handle the
+launch returned rather than by process name, so neither a death in the last poll gap nor a
+recycled pid can pass as a survivor. The test is on by default and can be switched off in
+**Settings → Post-update launch test**; it costs about five seconds per cask.
+
 #### The rollback net
 
 Each Homebrew cask row carries a **🛡 rollback badge**: a shield where snapshot → canary →
