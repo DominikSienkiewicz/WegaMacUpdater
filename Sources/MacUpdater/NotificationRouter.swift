@@ -38,8 +38,17 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unc
 
     /// Installs the router. Called once at startup — before anything can be clicked, because a
     /// notification delivered while no delegate is set is dropped, not queued.
+    ///
+    /// `UNUserNotificationCenter.current()` requires a bundled app and raises
+    /// `NSInternalInconsistencyException` ("bundleProxyForCurrentProcess is nil") when there is
+    /// no bundle identifier — it does not return nil, it aborts the process. So the same guard
+    /// every other notification call site here already carries applies: under `swift run`, and
+    /// in the subprocess `ScanControlLayoutTests` drives, there is no bundle and nothing to
+    /// install into. Skipping costs nothing, because an unbundled process cannot receive a
+    /// notification to route in the first place.
     @MainActor
     static func install() {
+        guard Bundle.main.bundleIdentifier != nil else { return }
         UNUserNotificationCenter.current().delegate = shared
     }
 
