@@ -390,6 +390,53 @@ struct SettingsWindowElasticityTests {
     }
 }
 
+/// UX-03 — the letter tile shown when an app has no icon of its own.
+///
+/// The palette guard grades the semantic roles; this one was outside it, because the tile
+/// builds its fill from a hash of the app's name rather than from the palette. Measured, it
+/// sat at **3.00:1** — below even the 3:1 that large text is allowed, and the glyph is only
+/// large text on the biggest of the three tiles (`size * 0.46` bold: 18.4pt at 40, 14.7pt at
+/// 32, 12.9pt at the default 28). The smallest needed 4.5:1 and none of them reached it.
+@Suite("UX-03 — the letter tile is readable at every size")
+struct PackageLetterIconContrastTests {
+
+    /// Red before the fix: `brightness: 0.65` gave 3.00:1 on the worst of the four hues.
+    @Test func everyTileHueClearsTheStrictTextThreshold() throws {
+        for hue in PackageLetterIcon.tileHues {
+            let background = try tile(hue: hue)
+            let letter = WCAGColor(red: 1, green: 1, blue: 1)
+                .blended(over: background, opacity: PackageLetterIcon.letterOpacity)
+
+            let ratio = letter.contrast(against: background)
+            #expect(ratio >= 4.5,
+                    """
+                    UX-03: hue \(hue) gives \(String(format: "%.2f", ratio)):1. The default tile \
+                    renders the glyph below the large-text size, so the strict 4.5:1 applies — \
+                    grading it as a graphic would make readability depend on which tile you land on.
+                    """)
+        }
+    }
+
+    /// The fill is what carries the ratio, so it is the thing a future edit is most likely to
+    /// brighten back. Named here so that edit has to pass through this test.
+    @Test func theTileFillStaysAsDarkAsTheThresholdNeeds() {
+        #expect(PackageLetterIcon.tileBrightness <= 0.5,
+                "UX-03: above this the worst hue drops under 4.5:1 — see the measurement above")
+    }
+
+    private func tile(hue: Double, file: StaticString = #filePath) throws -> WCAGColor {
+        let colour = try #require(
+            NSColor(
+                hue: hue,
+                saturation: PackageLetterIcon.tileSaturation,
+                brightness: PackageLetterIcon.tileBrightness,
+                alpha: 1
+            ).usingColorSpace(.sRGB)
+        )
+        return WCAGColor(red: colour.redComponent, green: colour.greenComponent, blue: colour.blueComponent)
+    }
+}
+
 // MARK: - Helpers
 
 /// Source-inspection helpers. A package test target cannot drive the real window, but it can

@@ -377,6 +377,11 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   limit that could never be reached, and `pgrep`/`killall`/`open` ran on the ten-minute policy
   sized for a network metadata query, while that policy's own documentation names those three
   commands as belonging to the short one.
+- The letter tile shown for an app with no icon is readable at every size. Measured, its glyph
+  sat at 3.00:1 against the tile — below even the ratio large text is allowed, and on the
+  smallest of the three tiles the glyph is not large text, so the strict threshold applied and
+  none of the sizes reached it. The fill is darker now, and a test measures the four tile hues
+  rather than restating a number someone would have to re-derive.
 - The typography guard follows the code instead of a folder. It scanned one directory,
   non-recursively, sweeping in 32 files there that build no views while being unable to see a
   new subdirectory or a second SwiftUI target; it now scans every module and selects on

@@ -269,14 +269,30 @@ struct AppIcon: View {
 // MARK: - PackageLetterIcon
 
 struct PackageLetterIcon: View {
+    /// UX-03 — the tile's palette, exposed so the contrast guard measures the code instead of
+    /// restating its numbers.
+    ///
+    /// The fill used to be `brightness: 0.65`, which put the letter at **3.00:1** against it —
+    /// below even the 3:1 allowed for large text. The glyph is `size * 0.46` bold, so at the
+    /// 40pt tile it is large text and at the default 28pt one it is not: the smallest tile
+    /// needed 4.5:1 and no size reached it. Darkening the fill clears the strict threshold at
+    /// every size, which is cheaper than making the rule depend on which tile you are looking at.
+    static let tileHues: [Double] = [0.08, 0.12, 0.06, 0.10]
+    static let tileSaturation: Double = 0.6
+    static let tileBrightness: Double = 0.48
+    static let letterOpacity: Double = 0.9
+
     let name: String
     var size: CGFloat = 28
 
     private var letter: String { String(name.first ?? "?").uppercased() }
     private var bg: Color {
         let h = name.unicodeScalars.reduce(0) { $0 + $1.value } % 4
-        let hues: [Double] = [0.08, 0.12, 0.06, 0.10]
-        return Color(hue: hues[Int(h)], saturation: 0.6, brightness: 0.65)
+        return Color(
+            hue: Self.tileHues[Int(h)],
+            saturation: Self.tileSaturation,
+            brightness: Self.tileBrightness
+        )
     }
 
     var body: some View {
@@ -285,7 +301,7 @@ struct PackageLetterIcon: View {
             // of running text. It is derived from the tile it has to fit; a semantic style
             // would grow past the tile at the larger text sizes and clip instead of reflow.
             .font(.system(size: size * 0.46, weight: .bold))
-            .foregroundStyle(.white.opacity(0.9))
+            .foregroundStyle(.white.opacity(Self.letterOpacity))
             .frame(width: size, height: size)
             .background(bg, in: RoundedRectangle(cornerRadius: size * 0.22))
     }
