@@ -40,9 +40,6 @@ struct WegaMacUpdaterApp: App {
                     if await scan.runLayoutRegressionScenarioIfRequested() { return }
 #endif
                 }
-                .onAppear {
-                    NSApplication.shared.activate(ignoringOtherApps: true)
-                }
         }
         .windowToolbarStyle(.unified)
         .windowStyle(.titleBar)
