@@ -87,6 +87,50 @@ struct OBS02NotificationRouterTests {
                 "OBS-02: the router is installed during launch")
     }
 
+    /// Every reach for `UNUserNotificationCenter` in the app target sits behind the bundle
+    /// guard. That class does not fail softly when there is no bundle identifier — it raises
+    /// `NSInternalInconsistencyException` ("bundleProxyForCurrentProcess is nil") and the
+    /// process aborts. So an unguarded call is a crash at launch for every unbundled run:
+    /// `swift run`, and the subprocess `ScanControlLayoutTests` drives.
+    ///
+    /// Red before the fix: `NotificationRouter.install()` called `current()` unguarded, which
+    /// killed the layout regression app on `main`. The rest of the app target already knew —
+    /// `MenuBarAgent` carries the guard and says why — which is exactly why the rule is pinned
+    /// here rather than left as a thing to remember.
+    @Test func everyNotificationCentreCallSiteIsBehindTheBundleGuard() throws {
+        var offenders: [String] = []
+
+        for url in try appTargetSources() {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            guard text.contains("UNUserNotificationCenter.current()") else { continue }
+            guard !text.contains("Bundle.main.bundleIdentifier != nil") else { continue }
+            offenders.append(url.lastPathComponent)
+        }
+
+        #expect(offenders.isEmpty,
+                """
+                OBS-02: \(offenders.joined(separator: ", ")) reaches UNUserNotificationCenter \
+                without checking Bundle.main.bundleIdentifier first. That call aborts the \
+                process when the app is not bundled — it does not return nil.
+                """)
+    }
+
+    private func appTargetSources(file: String = #filePath) throws -> [URL] {
+        let root = URL(fileURLWithPath: file)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let enumerator = FileManager.default.enumerator(
+            at: root.appendingPathComponent("Sources/MacUpdater"),
+            includingPropertiesForKeys: nil
+        )
+        var urls: [URL] = []
+        while let url = enumerator?.nextObject() as? URL {
+            if url.pathExtension == "swift" { urls.append(url) }
+        }
+        return urls
+    }
+
     private func read(_ relativePath: String, file: String = #filePath) throws -> String {
         let root = URL(fileURLWithPath: file)
             .deletingLastPathComponent()
