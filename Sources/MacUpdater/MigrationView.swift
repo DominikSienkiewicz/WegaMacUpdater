@@ -587,7 +587,7 @@ private struct MigrationLogView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Color.black.opacity(0.6))
+            .background(Color.wegaConsoleHeaderSurface)
 
             ScrollViewReader { proxy in
                 ScrollView {
@@ -595,7 +595,7 @@ private struct MigrationLogView: View {
                         ForEach(Array(logLines.enumerated()), id: \.offset) { idx, line in
                             Text(line)
                                 .font(.wega(.subheadline, monospaced: true))
-                                .foregroundStyle(Color.white.opacity(0.85))
+                                .foregroundStyle(Color.wegaConsoleInk)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .id(idx)
                         }
@@ -611,7 +611,7 @@ private struct MigrationLogView: View {
                 }
             }
         }
-        .background(Color.black.opacity(0.85))
+        .background(Color.wegaConsoleSurface)
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }

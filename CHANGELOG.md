@@ -377,6 +377,13 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   limit that could never be reached, and `pgrep`/`killall`/`open` ran on the ten-minute policy
   sized for a network metadata query, while that policy's own documentation names those three
   commands as belonging to the short one.
+- The typography guard follows the code instead of a folder. It scanned one directory,
+  non-recursively, sweeping in 32 files there that build no views while being unable to see a
+  new subdirectory or a second SwiftUI target; it now scans every module and selects on
+  `import SwiftUI`, so a file gains views and gains the guard in the same edit. The migration
+  log's last hard-coded surfaces moved into the palette as well — still deliberately dark in
+  both appearances, the way a console is, but owned by the theme rather than written into a
+  view.
 - **The helper status chip is a real button when it does something.** It opened **System
   Settings → Login Items** from a bare tap gesture on a stack of views — no button role, no
   keyboard path, nothing for VoiceOver to announce as actionable, reachable only by aiming a
