@@ -359,6 +359,37 @@ struct HelperChip: View {
     }
 
     var body: some View {
+        chip
+            .accessibilityLabel(label)
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                state = HelperChipState(status: PrivilegedHelperClient.shared.status)
+            }
+    }
+
+    /// UX-02 — the chip is a `Button` exactly when it does something.
+    ///
+    /// It used to open Login Items from a bare `onTapGesture` on an `HStack`: no button role,
+    /// no keyboard path, nothing for VoiceOver to announce as actionable — a control reachable
+    /// only by aiming a mouse at it, which is the class of defect this card is about.
+    ///
+    /// When the helper needs no approval the chip is pure status, so it stays a plain label.
+    /// A disabled `Button` would still announce itself as a button and offer a tab stop that
+    /// leads nowhere; saying nothing is more honest than saying "unavailable".
+    @ViewBuilder
+    private var chip: some View {
+        if state.opensLoginItemsSettings {
+            Button {
+                PrivilegedHelperClient.shared.openLoginItemsSettings()
+            } label: {
+                indicator
+            }
+            .buttonStyle(.plain)
+        } else {
+            indicator
+        }
+    }
+
+    private var indicator: some View {
         HStack(spacing: 5) {
             Circle().fill(color).frame(width: 5, height: 5)
             Text(label)
@@ -366,13 +397,6 @@ struct HelperChip: View {
                 .foregroundStyle(.tertiary)
         }
         .contentShape(Rectangle())
-        .onTapGesture {
-            if state.opensLoginItemsSettings { PrivilegedHelperClient.shared.openLoginItemsSettings() }
-        }
-        .accessibilityLabel(label)
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            state = HelperChipState(status: PrivilegedHelperClient.shared.status)
-        }
     }
 }
 

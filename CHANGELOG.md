@@ -377,6 +377,12 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   limit that could never be reached, and `pgrep`/`killall`/`open` ran on the ten-minute policy
   sized for a network metadata query, while that policy's own documentation names those three
   commands as belonging to the short one.
+- **The helper status chip is a real button when it does something.** It opened **System
+  Settings → Login Items** from a bare tap gesture on a stack of views — no button role, no
+  keyboard path, nothing for VoiceOver to announce as actionable, reachable only by aiming a
+  mouse at it. It is now a button exactly in the one state that has somewhere to go, and stays
+  a plain label in the two that do not: a disabled button would still announce itself and still
+  take a tab stop that leads nowhere.
 - **Launching at login no longer takes the keyboard away.** The main window's appearance
   triggered an unconditional focus grab, so enabling "Launch at login" meant every login put
   Wega's window over whatever you were doing. Activation now happens only where you asked for
