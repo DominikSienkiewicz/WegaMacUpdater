@@ -565,7 +565,7 @@ final class MigrationStore: ObservableObject {
             switch removal.side {
             case .npm:
                 title = "$ npm uninstall -g \(removal.dup.npmPackage)"
-                stream = try model.npmService.uninstallEvents(name: removal.dup.npmPackage)
+                stream = try await model.npmService.uninstallEvents(name: removal.dup.npmPackage)
             case .brew:
                 title = "$ brew uninstall \(removal.dup.brewToken)"
                 stream = try model.brewService.events(

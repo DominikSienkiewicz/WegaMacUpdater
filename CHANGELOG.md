@@ -366,6 +366,35 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   sidebar also stays steady and inset while a scan runs, the scan button is disabled while an
   update is installing, and the duplicate scan progress bar and duplicate rescan button the
   chrome rewrite left behind are gone.
+- **Every child process the update pipeline waits on is now bounded.** The existing guard
+  refused `timeout: nil` anywhere in `Sources/`, which closed the front door and left the back
+  one open: a `Process()` built directly and waited on with `waitUntilExit()` never sees
+  `ProcessRequest`, so it has no deadline, no inactivity limit and no SIGTERM → grace → SIGKILL
+  escalation. One had survived exactly there — the npm locator ran `$SHELL -lc "command -v npm"`
+  that way, so a login shell hanging on a network mount in someone's `.zprofile` hung the
+  locator, and through it every npm operation in a scan. Two smaller cases of the same class:
+  the diagnostics export paired a 5-second deadline with an inherited 180-second inactivity
+  limit that could never be reached, and `pgrep`/`killall`/`open` ran on the ten-minute policy
+  sized for a network metadata query, while that policy's own documentation names those three
+  commands as belonging to the short one.
+- **Launching at login no longer takes the keyboard away.** The main window's appearance
+  triggered an unconditional focus grab, so enabling "Launch at login" meant every login put
+  Wega's window over whatever you were doing. Activation now happens only where you asked for
+  it — the menu bar's "Otwórz Wega", and the alert that must be seen before the app quits
+  mid-mutation. The window still opens at login; it no longer interrupts.
+- **A granted App Management permission unblocks unattended rounds again.** Both update paths
+  armed the 24-hour hold after macOS refused to replace a bundle, but only the unattended one
+  ever released it. Granting the permission and completing an update from the window left the
+  hold in place with nothing left to justify it, and nothing on screen said why — the cost
+  landed in the path you were not watching.
+- **The app no longer aborts at launch when run unbundled.** `UNUserNotificationCenter` raises
+  an exception rather than failing softly when there is no bundle identifier, so the
+  notification router's startup call killed every `swift run` and the subprocess the layout
+  regression test drives. A bundled `.app` never showed the difference.
+- README's checker counts are tied to the code that defines them. It claimed nine manual
+  checkers against the thirteen actually built, and named four of the eight sources routed
+  through an app's own updater; a guard now compares both files and requires the count as a
+  digit, since a spelled-out number is what went stale.
 - **Destructive fallbacks no longer change meaning without consent (UX-04).** A
   migration now identifies every running candidate by its resolved bundle path (or one
   unambiguous bundle ID), asks that exact app to quit normally and waits; only an app that

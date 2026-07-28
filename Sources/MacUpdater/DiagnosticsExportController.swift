@@ -65,7 +65,7 @@ final class DiagnosticsExportController: ObservableObject {
         let helperVersion = try? await PrivilegedHelperClient.shared.helperVersion()
         let brewVersion = await Self.toolVersion(locator: { BinaryLocator().locateBrew() }, arguments: ["--version"])
         let masVersion = await Self.toolVersion(locator: { BinaryLocator().locateMas() }, arguments: ["version"])
-        let npmDetected = NpmLocator().locate() != nil
+        let npmDetected = await NpmLocator().locate() != nil
 
         return DiagnosticsSnapshot(
             generatedAt: now,
@@ -194,7 +194,9 @@ final class DiagnosticsExportController: ObservableObject {
                   arguments: arguments,
                   environment: HomebrewEnvironment.environment,
                   inheritParentEnvironment: false,
-                  timeout: 5
+                  // REL-12 — `.quick`, not a bare deadline: `timeout: 5` left the inactivity
+                  // limit inheriting `.query`'s 180 s, which the deadline could never reach.
+                  timeouts: .quick
               ))
         else { return nil }
         let text = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)

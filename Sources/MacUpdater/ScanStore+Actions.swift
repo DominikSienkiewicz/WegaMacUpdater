@@ -854,7 +854,7 @@ extension ScanStore {
         brewLog.append("$ npm " + arguments.joined(separator: " "))
         var exitCode: Int32 = 0
         do {
-            let stream = try model.npmService.upgradeEvents(name: name)
+            let stream = try await model.npmService.upgradeEvents(name: name)
             exitCode = try await ProcessEventStream.drain(stream) { chunk in
                 brewLog = ProcessEventStream.appendingCapped(ProcessEventStream.lines(from: chunk), to: brewLog)
             }

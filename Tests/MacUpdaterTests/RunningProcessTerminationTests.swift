@@ -88,9 +88,12 @@ struct RunningProcessTerminationTests {
         let terminated = await service.forceKill("zoom.us")
 
         #expect(!terminated)
+        // REL-12 — see the note in `MigrationRunningApplicationTargetTests`: the policy is
+        // now named, the command and arguments are untouched.
         #expect(runner.requests == [ProcessRequest(
             executableURL: killall,
-            arguments: ["-KILL", "zoom.us"]
+            arguments: ["-KILL", "zoom.us"],
+            timeouts: .quick
         )])
     }
 

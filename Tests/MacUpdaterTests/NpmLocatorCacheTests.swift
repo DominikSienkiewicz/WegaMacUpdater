@@ -4,8 +4,13 @@ import XCTest
 /// ARCH-03: the resolved npm location is cached for the scan, so repeated lookups do
 /// not re-scan the candidate list (which is where the nvm/fnm directory globs and the
 /// login-shell fallback live).
+///
+/// REL-12 made `locate()` async — the login-shell fallback now goes through `ProcessRunning`
+/// instead of blocking a thread on a raw `Process`. Every assertion below is unchanged; the
+/// calls are hoisted out of the `XCTAssertEqual` autoclosures only because an autoclosure
+/// cannot carry an `await`.
 final class NpmLocatorCacheTests: XCTestCase {
-    func testLocateCachesResolvedPathAndSkipsResolutionOnSecondCall() {
+    func testLocateCachesResolvedPathAndSkipsResolutionOnSecondCall() async {
         // The only executable is an extra candidate, which sits after the built-in
         // candidates — so a full resolve must probe several paths, while a cache hit
         // re-validates exactly one.
@@ -13,11 +18,13 @@ final class NpmLocatorCacheTests: XCTestCase {
         let fileManager = ExecutableCountingFileManager(executablePath: npm.path)
         let locator = NpmLocator(fileManager: fileManager, extraCandidates: [npm])
 
-        XCTAssertEqual(locator.locate(), npm)
+        let firstResolve = await locator.locate()
+        XCTAssertEqual(firstResolve, npm)
         let checksAfterFirstResolve = fileManager.executableCheckCount
         XCTAssertGreaterThan(checksAfterFirstResolve, 1, "first resolve scans multiple candidates")
 
-        XCTAssertEqual(locator.locate(), npm)
+        let cacheHit = await locator.locate()
+        XCTAssertEqual(cacheHit, npm)
         XCTAssertEqual(
             fileManager.executableCheckCount - checksAfterFirstResolve,
             1,
@@ -25,17 +32,19 @@ final class NpmLocatorCacheTests: XCTestCase {
         )
     }
 
-    func testLocateReresolvesWhenCachedBinaryMoves() {
+    func testLocateReresolvesWhenCachedBinaryMoves() async {
         // Both paths are built-in npm candidates, so re-resolution stays deterministic
         // (no login shell): once the cached binary stops being executable, a fresh
         // resolve finds the moved one instead of returning the stale path.
         let fileManager = ExecutableCountingFileManager(executablePath: "/opt/homebrew/bin/npm")
         let locator = NpmLocator(fileManager: fileManager)
 
-        XCTAssertEqual(locator.locate(), URL(fileURLWithPath: "/opt/homebrew/bin/npm"))
+        let beforeMove = await locator.locate()
+        XCTAssertEqual(beforeMove, URL(fileURLWithPath: "/opt/homebrew/bin/npm"))
 
         fileManager.executablePath = "/usr/local/bin/npm"
-        XCTAssertEqual(locator.locate(), URL(fileURLWithPath: "/usr/local/bin/npm"))
+        let afterMove = await locator.locate()
+        XCTAssertEqual(afterMove, URL(fileURLWithPath: "/usr/local/bin/npm"))
     }
 }
 

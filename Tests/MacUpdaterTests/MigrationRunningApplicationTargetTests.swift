@@ -186,9 +186,14 @@ struct MigrationRunningApplicationTargetTests {
         let result = await service.forceKill(processIdentifier: 4242)
 
         #expect(result)
+        // REL-12 — `.quick` is named rather than inherited: killing a confirmed pid is a
+        // local command, and the default `.query` policy would give it the ten minutes sized
+        // for a `brew info` over a slow mirror. The command and its arguments — what this case
+        // is actually about — are unchanged.
         #expect(runner.requests == [ProcessRequest(
             executableURL: kill,
-            arguments: ["-KILL", "4242"]
+            arguments: ["-KILL", "4242"],
+            timeouts: .quick
         )])
     }
 
