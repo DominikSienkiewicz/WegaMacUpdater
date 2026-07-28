@@ -94,6 +94,13 @@ extension Translations {
         "%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.": "%@: the new version failed the check — restored the previous one.",
         "Cofnęłam %@ — nowa wersja nie przeszła kontroli.": "Rolled back %@ — the new version failed the check.",
         "%@: nowa wersja nie przeszła kontroli, ale rollback się nie powiódł.": "%@: the new version failed the check, but rollback did not succeed.",
+        // LT-02 — canary ze smoke-testem: aplikacja jest startowana ukryta i musi przeżyć okno.
+        "Test startu po aktualizacji": "Post-update launch test",
+        "Kontrola Gatekeepera i wydawcy mówi, czym plik jest — nie mówi, czy da się go uruchomić. Po tych kontrolach Wega startuje zaktualizowaną aplikację ukrytą, w tle, i sprawdza, czy przeżyje pięć sekund. Jeśli padnie od razu, poprzednia wersja wraca ze snapshotu.":
+            "The Gatekeeper and publisher checks say what the file is — they do not say whether it runs. After those checks Wega starts the updated app hidden, in the background, and watches whether it stays alive for five seconds. If it dies immediately, the previous version is restored from the snapshot.",
+        "Sprawdzaj, czy zaktualizowana aplikacja się uruchamia": "Check that the updated app starts",
+        "Aplikacja, którą masz właśnie otwartą, jest pomijana — Wega nie zamknie jej, żeby zrobić sobie miejsce. Wyłącz test, jeśli któraś z aktualizowanych aplikacji źle znosi start i natychmiastowe zamknięcie.":
+            "An app you currently have open is skipped — Wega will not quit it to make room. Turn the test off if one of the apps being updated takes badly to being started and closed straight away.",
         // REL-02 — nieudany rollback to czerwony baner sticky, nie wpis w zwijanym logu.
         "Rollback się nie powiódł": "Rollback failed",
         "%@: nowa wersja nie przeszła kontroli, a przywrócenie poprzedniej nie powiodło się. Sprawdź aplikację przed użyciem.": "%@: the new version failed the check and the previous one could not be restored. Check the app before using it.",

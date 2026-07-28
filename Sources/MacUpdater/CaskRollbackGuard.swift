@@ -204,6 +204,15 @@ enum CaskRollbackGuard {
             if case .expected = publisherBaseline {
                 TeamIDLedger.shared.record(bundleID: TeamIDLedger.caskKey(token), teamID: installedTeamID)
             }
+            // LT-02 — the fourth and last gate: everything above describes the artifact, this
+            // one describes what happens when it runs. It comes last on purpose — a bundle
+            // whose identity or publisher is in doubt is the last thing that should be
+            // executed, so the smoke test only ever starts a build the other three approved.
+            guard let snapshotURL else { return .healthy }
+            let smokeTest = await launchSmokeTest(token: token, appURL: validationURL)
+            guard !LaunchSmokeTest.requiresRollback(smokeTest) else {
+                return await restoreSnapshot(snapshotURL, to: validationURL) ? .rolledBack : .rollbackFailed
+            }
             // LT-01 — the snapshot deliberately stays: it is the manual undo for the whole
             // retention window. It used to be deleted here, which is why "Cofnij
             // aktualizację" could not exist. `UpdateOperationStore.pruneExpired` owns it now.
@@ -255,6 +264,34 @@ enum CaskRollbackGuard {
                 return false
             }
         }
+    }
+
+    /// LT-02 — starts the upgraded app hidden and reports whether it survived the window.
+    ///
+    /// The verdict is narrated here rather than inside `LaunchSmokeTest` so the decision
+    /// logic stays a pure function in Core; what the caller does with it — restore or keep —
+    /// is `requiresRollback`, not this log line.
+    private static func launchSmokeTest(token: String, appURL: URL) async -> LaunchSmokeTest.Verdict {
+        guard LaunchSmokeTestConfiguration.isEnabled() else { return .skipped(.disabled) }
+
+        let verdict = await LaunchSmokeTest.run(bundleAt: appURL, probe: WorkspaceAppLaunchProbe())
+        switch verdict {
+        case .survived:
+            WegaLog.info(.homebrew, "\(token): nowa wersja uruchomiła się i przeżyła test startu.")
+        case .exitedEarly(let after):
+            WegaLog.error(
+                .homebrew,
+                "\(token): nowa wersja zakończyła się \(String(format: "%.1f", after)) s po starcie — przywracam poprzednią wersję."
+            )
+        case .launchFailed(let message):
+            WegaLog.error(
+                .homebrew,
+                "\(token): nowej wersji nie udało się uruchomić (\(message)) — przywracam poprzednią wersję."
+            )
+        case .skipped(let reason):
+            WegaLog.info(.homebrew, "\(token): test startu pominięty (\(reason)).")
+        }
+        return verdict
     }
 }
 
