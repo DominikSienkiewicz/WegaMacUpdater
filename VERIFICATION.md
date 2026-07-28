@@ -19,10 +19,10 @@ applies — what would still block the card from closing even if the check passe
 
 ## Read this first: three cards are not actually blocked on runtime
 
-`LT-03`, `LT-05` and `OBS-02` carry `runtime_verification_required: false`. They are
-`in_progress` because their implementation notes recorded an open item, not because the
-backlog demands a live measurement. They are the cheapest three to settle, and two of them
-need a decision from you rather than a test — see [Section D](#d-verification-alone-cannot-close-these).
+`LT-05` and `OBS-02` carry `runtime_verification_required: false`. They are `in_progress`
+because their implementation notes recorded an open item, not because the backlog demands a
+live measurement, and both of those items have since been closed in code. They are the two
+cheapest to settle. (`LT-03`, listed here previously, is closed.)
 
 ## Before you start
 
@@ -59,9 +59,11 @@ extracted files for your account name, any `Authorization:` header value, and an
 string. The test asserts on raw ZIP bytes for a synthetic snapshot where every field is bait —
 it cannot know what your actual log contains.
 
-**Still blocks closure:** one of the thirteen criteria — *notifications lead directly to the
-relevant operation or log* — was consciously skipped (it needs a
-`UNUserNotificationCenterDelegate` in app startup). See [Section D](#d-verification-alone-cannot-close-these).
+**Also check the deep link.** Trigger a background round and click its notification: a clean
+round opens the updates list, a round with a failed rollback or a changed publisher opens
+**Logs**. Click a recovery notification too — it always opens Logs. What a unit test cannot
+cover is whether macOS delivers the click to the delegate at all, which needs a bundled app, a
+login session and a granted permission.
 
 ### A2 · `UX-02` — keyboard and VoiceOver on the selection lists
 
@@ -310,7 +312,7 @@ you can make.
 | Card | What is open | What it needs from you |
 |------|--------------|------------------------|
 | `QA-04` | Nothing structural. The two items the implementation note called unfinished — no table of contents, a 5,600-character "Update" wall — were closed after that note was written: README has a nested TOC and the Update section is 12 subsections whose longest paragraph is 1,324 characters. The last real drift (README said *nine* manual checkers against 13 in `ManualUpdateScanner`, and the "Act" step named four of the eight `.launchApp` sources) is fixed and now guarded by `QA04CheckerCountDriftTests`. | Read README against the code once and close it. |
-| `OBS-02` | The *notification → specific operation/log* deep link was consciously skipped; it needs a `UNUserNotificationCenterDelegate` in app startup. Twelve of thirteen criteria are done. | Accept as out of scope and close, or open a follow-up card. |
+| `OBS-02` | Nothing. The *notification → specific operation/log* deep link, the one criterion left open, is implemented: `NotificationRouting` carries the destination in the notification's `userInfo` and `NotificationRouter` applies it at startup. All thirteen criteria are done. | Verify the click once (see [A1](#a1--obs-02--diagnostics-export)) and close it. |
 | `LT-03` | Two things. A **Team ID mismatch is a hard veto** — an app legitimately re-signed with a new certificate is refused until you act. The alternative is stepping down to `requiresConfirmation`. Separately: `caskNames: []` is hardcoded at both call sites, so the **display-name matching branch is also dead** — the same class of bug this card fixed for Team ID, one level over. | Decide the veto strength. Decide whether the dead name branch is a new card. |
 | `SEC-04` | *"Digest from a signed manifest"* is infeasible as written — no signed manifest exists anywhere in the pipeline, so there is nothing to read a digest from. Identity pinning (Team ID + bundle ID + version) was implemented instead. | Decide: accept identity pinning as sufficient, or open a card for a signed manifest. |
 | `QA-06` | Two things. *"Fix the links after releasing v0.1.0"* is impossible — `scripts/release.sh:302` rejects any version not greater than `AppMetadata.version`, which is already `0.1.0`, so `v0.1.0` can never be cut. The section now says plainly it was never tagged. Separately, a three-line guard was added to `scripts/release.sh` (only accept a `previous_version` that has a real tag) to stop the first release generating a fresh dead link — **that is a code change outside a documentation card's scope**. | Read `[Unreleased]` against your own memory of July and confirm the BREAKING wording. Approve or revert the `release.sh` guard. |
@@ -324,7 +326,7 @@ you can make.
 | Card | Where | Blocked on runtime? |
 |------|-------|---------------------|
 | `LT-05` | [A5](#a5--lt-05--a-crash-report-actually-arrives) | No (`rvr: false`) — but do the signed-build check |
-| `OBS-02` | [A1](#a1--obs-02--diagnostics-export) + [D](#d-verification-alone-cannot-close-these) | No (`rvr: false`) — one criterion skipped |
+| `OBS-02` | [A1](#a1--obs-02--diagnostics-export) | No (`rvr: false`) — all criteria done |
 | `LT-03` | [D](#d-verification-alone-cannot-close-these) only | No (`rvr: false`) — needs two decisions |
 | `UX-02` | [A2](#a2--ux-02--keyboard-and-voiceover-on-the-selection-lists) | Yes |
 | `UX-03` | [A3](#a3--ux-03--text-scaling-palette-contrast-reduce-motion) | Yes — contrast meter |

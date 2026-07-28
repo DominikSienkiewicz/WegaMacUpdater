@@ -60,6 +60,16 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   confirmation instead of being refused; an app tied to no cask is what stays blocked; a
   publisher mismatch still overrules everything.
 
+- **Clicking a notification now opens what it is about.** Wega posts three kinds — updates
+  available, the summary of an unattended round, and a report that an interrupted update was
+  repaired — and clicking any of them did the system default: bring the app forward, to
+  whatever screen it last showed. So *"Wega naprawiła przerwaną aktualizację"* landed on the
+  updates list with no way to find out what it had restored. The destination now travels in the
+  notification itself: updates open the list, a round with a failed rollback or a changed
+  publisher opens the **Logs** view where the reason is, and a recovery report always opens the
+  log. A notification left over from an older build still just brings Wega forward — an
+  unrecognised destination is treated as none, never as a fallback screen.
+
 - `DiscordUpdateChecker`, `SignalUpdateChecker` and `ChromeUpdateChecker` — three more
   self-updating apps whose Homebrew casks are `auto_updates` and lag the real channel, so
   neither `brew outdated` nor the cask-version check sees the new build. Discord

@@ -247,6 +247,8 @@ final class MenuBarAgent: ObservableObject {
                 content.title = title
                 content.body = body
                 content.badge = NSNumber(value: count)
+                // OBS-02 — clicking it opens the list it is counting.
+                content.userInfo = NotificationRouting.payload(for: NotificationRouting.pendingUpdatesDestination)
                 let request = UNNotificationRequest(identifier: "wega.updates", content: content, trigger: nil)
                 try? await center.add(request)
             }

@@ -51,6 +51,10 @@ public extension SidebarSelection {
 
     static let `default`: SidebarSelection = .updates(.all)
 
+    /// The `UserDefaults` key the window's selection is stored under. Shared so the notification
+    /// router can move the window without a second spelling of the same key (OBS-02).
+    static let storageKey = "wega.sidebarSelection"
+
     /// Maps a pre-macOS-26 `@AppStorage("wega.activeTab")` value onto the new selection.
     /// That key stored only the tab, never the filter, so `update` restores the unfiltered list.
     /// Returns `nil` for an absent or unrecognised value, so the caller falls back to `default`.

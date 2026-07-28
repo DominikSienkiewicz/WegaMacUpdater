@@ -92,6 +92,14 @@ Closing the main window keeps this agent running; use **Quit** in its dropdown t
 > its own window before it ever raises the macOS notification prompt — so a background
 > check never surprises you with a system dialog.
 
+**Clicking a notification takes you to what it is about**, not just to whatever screen Wega
+last showed. "Updates available" opens the updates list; the summary of an unattended round
+opens that list too, unless something in the round needs attention — a rollback that failed, a
+publisher that changed — in which case it opens the **Logs** view, because that is where the
+reason is written. A report that Wega repaired an interrupted update always opens the log, for
+the same reason. A notification left over from an older version simply brings Wega forward, as
+it always did.
+
 ---
 
 ## 3. Updating your apps

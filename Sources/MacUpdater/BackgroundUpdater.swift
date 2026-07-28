@@ -322,6 +322,11 @@ final class BackgroundUpdater {
             let content = UNMutableNotificationContent()
             content.title = title
             content.body = body
+            // OBS-02 — a clean round opens the updates list; a round with anything critical in
+            // it opens the log, because that is where the reason for it is written.
+            content.userInfo = NotificationRouting.payload(
+                for: NotificationRouting.destination(forBackgroundRound: summary)
+            )
             let request = UNNotificationRequest(identifier: "wega.background-updates", content: content, trigger: nil)
             try? await UNUserNotificationCenter.current().add(request)
         }
