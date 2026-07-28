@@ -763,6 +763,21 @@ extension ScanStore {
                                         message: message))
         }
 
+        // REL-05 — the permission is Wega's, not this run's, so the gate is settled from what
+        // this run observed, before any branch can return. The unattended round already does
+        // exactly this; the window only ever armed it. A user who met the refusal here, granted
+        // the permission and then ran a clean update from this same window left unattended
+        // rounds blocked for the full 24 h with nothing left to block them — and nothing on
+        // screen to say why, because the consequence lands in the path they are not watching.
+        //
+        // Keyed on the refusal rather than on success, like `BackgroundUpdater`: a run that
+        // failed for some unrelated reason still proves the permission is no longer missing.
+        if summary.needsAppManagementPermission {
+            AppManagementDenialStore.shared.recordDenial()
+        } else {
+            AppManagementDenialStore.shared.clear()
+        }
+
         // REL-12 — a run the user stopped is never announced as a finished one.
         let interrupted = updateInterruption.didSkipWork
         if interrupted { reportInterruptedRun(upgraded: summary.upgraded.count) }
@@ -786,9 +801,6 @@ extension ScanStore {
         // whole failure, and its `stderr` ("ditto: …: Operation not permitted") is exactly the
         // line a user cannot act on. One named permission, one button that grants it.
         if summary.needsAppManagementPermission {
-            // The permission is Wega's, not this run's: teach the unattended round about it
-            // too, so it stops walking into the same wall every interval.
-            AppManagementDenialStore.shared.recordDenial()
             showBanner(BannerData(
                 variant: .danger,
                 title: tr("Brak uprawnienia „Zarządzanie aplikacjami”"),
