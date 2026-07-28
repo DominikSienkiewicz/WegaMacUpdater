@@ -111,23 +111,20 @@ struct P1BackendsTests {
 
     // MARK: FEAT-02 — scoring confidence dopasowania
 
+    /// LT-03 (follow-up) — the same signal ladder, now expressed as the route the matcher
+    /// took rather than as strings the caller re-scores. Every band this case pinned is still
+    /// here; the "tylko fuzzy" row moved to `CaskMatchScorer.unmatched`, because a match too
+    /// weak to be found is not a weak match — it is no match, and `CaskMatcher` returns
+    /// `.none` for it.
     @Test func confidenceScoringBySignalStrength() {
-        #expect(CaskMatchScorer.score(applicationName: "Visual Studio Code",
-                                      caskToken: "visual-studio-code",
-                                      caskNames: [], viaCustomMapping: false) == .high)        // token exact
-        #expect(CaskMatchScorer.score(applicationName: "Visual Studio Code",
-                                      caskToken: "vscode",
-                                      caskNames: ["Visual Studio Code"], viaCustomMapping: false) == .medium) // name exact
-        #expect(CaskMatchScorer.score(applicationName: "VS Code",
-                                      caskToken: "visual-studio-code",
-                                      caskNames: ["Visual Studio Code"], viaCustomMapping: false) == .low)    // tylko fuzzy
-        #expect(CaskMatchScorer.score(applicationName: "X", caskToken: "y",
-                                      caskNames: [], viaCustomMapping: true) == .high)          // curated
-        #expect(CaskMatchScorer.score(applicationName: "X", caskToken: "y", caskNames: [],
-                                      viaCustomMapping: false,
+        #expect(CaskMatchScorer.score(provenance: .token) == .high)                  // token exact
+        #expect(CaskMatchScorer.score(provenance: .installedToken) == .high)         // already a cask
+        #expect(CaskMatchScorer.score(provenance: .displayName) == .medium)          // name exact
+        #expect(CaskMatchScorer.unmatched == .low)                                   // tylko fuzzy
+        #expect(CaskMatchScorer.score(provenance: .curatedMapping) == .high)         // curated
+        #expect(CaskMatchScorer.score(provenance: .displayName,
                                       installedAppTeamID: "AAA", caskExpectedTeamID: "AAA") == .high) // TeamID match
-        #expect(CaskMatchScorer.score(applicationName: "X", caskToken: "y", caskNames: [],
-                                      viaCustomMapping: false,
+        #expect(CaskMatchScorer.score(provenance: .curatedMapping,
                                       installedAppTeamID: "AAA", caskExpectedTeamID: "BBB") == .low)  // TeamID mismatch
     }
 

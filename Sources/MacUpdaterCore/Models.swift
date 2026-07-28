@@ -33,6 +33,9 @@ public struct ApplicationInfo: Identifiable, Equatable, Sendable {
     public var updateDate: Date?
     public var isManagedByBrew: Bool
     public var caskToken: String?
+    /// LT-03 — how `caskToken` was arrived at. `nil` when nothing matched, which must never
+    /// read as a weak match: `CaskMatchScorer.unmatched` is the score for that case.
+    public var caskMatchProvenance: CaskMatchProvenance?
     public var isManagedByMas: Bool
     public var masAppID: String?
 
@@ -45,6 +48,7 @@ public struct ApplicationInfo: Identifiable, Equatable, Sendable {
         updateDate: Date?,
         isManagedByBrew: Bool,
         caskToken: String? = nil,
+        caskMatchProvenance: CaskMatchProvenance? = nil,
         isManagedByMas: Bool = false,
         masAppID: String? = nil
     ) {
@@ -56,6 +60,7 @@ public struct ApplicationInfo: Identifiable, Equatable, Sendable {
         self.updateDate = updateDate
         self.isManagedByBrew = isManagedByBrew
         self.caskToken = caskToken
+        self.caskMatchProvenance = caskMatchProvenance
         self.isManagedByMas = isManagedByMas
         self.masAppID = masAppID
     }

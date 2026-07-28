@@ -24,28 +24,33 @@ public enum CaskMatchScorer {
     /// Priority of signals (strongest first):
     /// 1. **Team ID corroboration** — when both the installed app's Team ID and the
     ///    cask's expected publisher Team ID are known, equality ⇒ high, mismatch ⇒ low.
-    ///    (Cask-side Team ID isn't in `brew info` today; this is wired for a future
-    ///    publisher ledger / FEAT-04 watchdog. Until then it's typically nil.)
-    /// 2. **Curated mapping** — an explicit entry in `customCaskMappings` is trusted.
-    /// 3. **Exact normalized token** match.
-    /// 4. **Exact normalized display-name** match.
-    /// Otherwise low.
+    ///    LT-03 supplies both from `CaskPublisherCorrelation`; a mismatch is a hard veto.
+    /// 2. **How the match was found** — ``CaskMatchProvenance``, decided by `CaskMatcher`.
+    ///    A curated entry or a token hit is certain; a display-name hit is plausible.
+    ///
+    /// LT-03 (follow-up) — signals 2 and 3 used to be re-derived here from an application
+    /// name, a token and a list of cask names, which meant a caller had to reconstruct a
+    /// conclusion `CaskMatcher` had already reached. Neither call site could, so both passed
+    /// `viaCustomMapping: false` and `caskNames: []` and the signals were dead — and because
+    /// `MigrationAutoTakeover` turns `.low` into `.blocked`, the whole curated table was
+    /// refused. Taking the provenance instead makes that unrepresentable: there is no longer
+    /// a parameter a caller can silently get wrong.
     public static func score(
-        applicationName: String,
-        caskToken: String,
-        caskNames: [String],
-        viaCustomMapping: Bool,
+        provenance: CaskMatchProvenance,
         installedAppTeamID: String? = nil,
         caskExpectedTeamID: String? = nil
     ) -> CaskMatchConfidence {
         if let installed = installedAppTeamID, let expected = caskExpectedTeamID, !expected.isEmpty {
             return installed == expected ? .high : .low
         }
-        if viaCustomMapping { return .high }
 
-        let normalizedApp = StringNormalizer.normalize(applicationName)
-        if StringNormalizer.normalize(caskToken) == normalizedApp { return .high }
-        if caskNames.contains(where: { StringNormalizer.normalize($0) == normalizedApp }) { return .medium }
-        return .low
+        switch provenance {
+        case .installedToken, .curatedMapping, .token: return .high
+        case .displayName:                             return .medium
+        }
     }
+
+    /// The score for an app the matcher never tied to a cask. Kept explicit so "nothing is
+    /// known" cannot be spelled as a provenance and quietly read as a weak match.
+    public static let unmatched: CaskMatchConfidence = .low
 }

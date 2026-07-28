@@ -94,14 +94,13 @@ final class MigrationStore: ObservableObject {
         // score means `brew install --cask --force <token>` could overwrite this app with a
         // different program, so the automatic takeover is refused (the badge already warned
         // "niepewne"). This is the production call-site `allowsAutoConfirm` never had.
-        let confidence = CaskMatchScorer.score(
-            applicationName: app.name,
-            caskToken: token,
-            caskNames: [],
-            viaCustomMapping: false,
-            installedAppTeamID: correlation.installedAppTeamID,
-            caskExpectedTeamID: correlation.caskExpectedTeamID
-        )
+        let confidence = app.caskMatchProvenance.map { provenance in
+            CaskMatchScorer.score(
+                provenance: provenance,
+                installedAppTeamID: correlation.installedAppTeamID,
+                caskExpectedTeamID: correlation.caskExpectedTeamID
+            )
+        } ?? CaskMatchScorer.unmatched
         guard MigrationAutoTakeover.decide(confidence) != .blocked else {
             migrating = nil
             errorMessage = correlation.isPublisherMismatch

@@ -19,6 +19,6 @@ final class CaskMatcherCodexConflictTests: XCTestCase {
             installedCasks: ["codex"], // CLI binary cask
             availableCasks: []
         )
-        XCTAssertEqual(match, .managed(token: "codex"))
+        XCTAssertEqual(match, .managed(token: "codex", provenance: .installedToken))
     }
 }

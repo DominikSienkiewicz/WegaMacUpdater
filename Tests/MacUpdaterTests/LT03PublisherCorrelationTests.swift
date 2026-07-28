@@ -41,21 +41,15 @@ struct LT03PublisherCorrelationTests {
         )
         #expect(correlation.isPublisherMismatch)
 
-        let namesOnly = CaskMatchScorer.score(
-            applicationName: "Figma",
-            caskToken: "figma",
-            caskNames: [],
-            viaCustomMapping: false
-        )
+        // LT-03 (follow-up) — the scorer now takes how the match was found instead of loose
+        // strings. An exact-token hit is the same signal this case always described.
+        let namesOnly = CaskMatchScorer.score(provenance: .token)
         #expect(namesOnly == .high)
         #expect(MigrationAutoTakeover.decide(namesOnly) == .allowed,
                 "baseline: without the publisher signal an exact-name match takes over unattended")
 
         let corroborated = CaskMatchScorer.score(
-            applicationName: "Figma",
-            caskToken: "figma",
-            caskNames: [],
-            viaCustomMapping: false,
+            provenance: .token,
             installedAppTeamID: correlation.installedAppTeamID,
             caskExpectedTeamID: correlation.caskExpectedTeamID
         )
@@ -77,19 +71,21 @@ struct LT03PublisherCorrelationTests {
         )
         #expect(!correlation.isPublisherMismatch)
 
-        let namesOnly = CaskMatchScorer.score(
-            applicationName: "VS Code",
-            caskToken: "visual-studio-code",
-            caskNames: ["Visual Studio Code"],
-            viaCustomMapping: false
-        )
-        #expect(MigrationAutoTakeover.decide(namesOnly) == .blocked)
+        // LT-03 (follow-up) — the original spelling of this case ("VS Code" scored against
+        // token `visual-studio-code` and name "Visual Studio Code") is a state `CaskMatcher`
+        // cannot produce: nothing there normalizes onto anything, so the matcher would return
+        // `.none` and the app would never carry that token at all. The old scorer took loose
+        // strings and let it be constructed. The weakest match the matcher *can* produce is a
+        // display-name hit, and that is what stands in here — the assertion the case is about,
+        // that a corroborated publisher raises the verdict, is unchanged.
+        let namesOnly = CaskMatchScorer.score(provenance: .displayName)
+        #expect(namesOnly == .medium)
+        #expect(MigrationAutoTakeover.decide(namesOnly) == .requiresConfirmation)
+        #expect(MigrationAutoTakeover.decide(CaskMatchScorer.unmatched) == .blocked,
+                "an app the matcher tied to no cask is the case that stays blocked")
 
         let corroborated = CaskMatchScorer.score(
-            applicationName: "VS Code",
-            caskToken: "visual-studio-code",
-            caskNames: ["Visual Studio Code"],
-            viaCustomMapping: false,
+            provenance: .displayName,
             installedAppTeamID: correlation.installedAppTeamID,
             caskExpectedTeamID: correlation.caskExpectedTeamID
         )
