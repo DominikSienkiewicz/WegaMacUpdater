@@ -47,7 +47,7 @@ struct VisibleOperationTargetsTests {
     }
 
     @Test func appStoreExecutionCannotExpandOneVisibleTargetIntoGlobalMasUpgrade() throws {
-        let actions = try source("Sources/MacUpdater/ScanStore+Actions.swift")
+        let actions = try ScanStoreSources.everything()
         let service = try source("Sources/MacUpdaterCore/MasService.swift")
 
         #expect(!actions.contains("model.masService.upgrade()"),

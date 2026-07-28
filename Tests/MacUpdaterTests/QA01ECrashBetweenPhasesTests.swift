@@ -20,7 +20,7 @@ import Testing
 /// simply *gone* — must not be mistaken for this and must not be silently retried.
 ///
 /// The decision itself lives in `ScanStore.performUpdate`
-/// (`Sources/MacUpdater/ScanStore+Actions.swift`), wired behind live `BrewService` values the
+/// (`Sources/MacUpdater/ScanStore+Updating.swift`), wired behind live `BrewService` values the
 /// app target cannot stand in for in a unit test — exactly the situation
 /// `RollbackNetAfterRestoreTests` documents. So this suite exercises the recovery *contract*
 /// against the real Core primitives through a Homebrew stand-in, and separately pins the
@@ -97,7 +97,7 @@ struct QA01ECrashBetweenPhasesTests {
     /// (`merging`), in that order — so removing or reordering the recovery there fails here.
     @Test("The update run wires the between-phases auto-recovery path")
     func updateRunWiresTheAutoRecoveryPath() throws {
-        let source = try source("Sources/MacUpdater/ScanStore+Actions.swift")
+        let source = try ScanStoreSources.everything()
 
         let recognize = try #require(source.range(of: ".tokensRetryableWithForce"))
         let retry = try #require(source.range(of: "UpdatePlanner.forcedCaskCommand"))

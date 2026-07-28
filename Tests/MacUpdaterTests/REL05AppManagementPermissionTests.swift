@@ -282,7 +282,7 @@ struct REL05AppManagementPermissionTests {
     /// Touch ID for a failure Touch ID cannot fix.
     @Test("The window surfaces the refusal as a named banner with the settings deep link")
     func windowBannerNamesThePermission() throws {
-        let source = try sourceFile("Sources/MacUpdater/ScanStore+Actions.swift")
+        let source = try ScanStoreSources.everything()
 
         let permissionBranch = try #require(source.range(of: "summary.needsAppManagementPermission"))
         let sudoBranch = try #require(source.range(of: "summary.needsSudoPassword"))

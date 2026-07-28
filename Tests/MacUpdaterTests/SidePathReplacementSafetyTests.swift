@@ -24,7 +24,7 @@ struct SidePathReplacementSafetyTests {
     }
 
     @Test func manualInstallCannotBypassTheProtectedReplacementFlow() throws {
-        let text = try source("Sources/MacUpdater/ScanStore+Actions.swift")
+        let text = try ScanStoreSources.everything()
         let body = try section(
             text,
             from: "func installManual(token: String) async",

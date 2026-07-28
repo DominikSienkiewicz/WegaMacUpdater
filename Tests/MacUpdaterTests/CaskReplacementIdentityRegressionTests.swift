@@ -38,7 +38,7 @@ struct CaskReplacementIdentityRegressionTests {
     }
 
     @Test func replacementCallersResolveTheInstalledArtifactAfterBrewMutation() throws {
-        let actions = try source("Sources/MacUpdater/ScanStore+Actions.swift")
+        let actions = try ScanStoreSources.everything()
         let manual = try section(
             actions,
             from: "func installManual(token: String) async",

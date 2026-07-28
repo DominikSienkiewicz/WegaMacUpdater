@@ -58,7 +58,7 @@ struct REL12UpdateCancellationTests {
     /// Every package boundary of the run asks whether it should stop: after the formula
     /// batch, before every npm package, and before the App Store batch.
     @Test func theUpgradeChecksForAStopRequestAtEveryPackageBoundary() throws {
-        let actions = executableSource(try source("Sources/MacUpdater/ScanStore+Actions.swift"))
+        let actions = executableSource(try ScanStoreSources.everything())
         let boundaryChecks = actions.components(separatedBy: "shouldStopUpdate(before:").count - 1
 
         #expect(boundaryChecks >= 4, "the run must test the stop switch at each package boundary")

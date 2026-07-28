@@ -9,7 +9,7 @@ import Testing
 struct RestartDetectionWiringTests {
     @Test func foregroundDetectionIsGenericAndUsesTheMapOnlyAsOverride() throws {
         let text = try String(
-            contentsOf: packageRoot().appendingPathComponent("Sources/MacUpdater/ScanStore+Actions.swift"),
+            contentsOf: packageRoot().appendingPathComponent("Sources/MacUpdater/ScanStore+Updating.swift"),
             encoding: .utf8
         )
         let start = try #require(text.range(of: "private func runUpdateCoordinated("))
