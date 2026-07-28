@@ -25,11 +25,11 @@ struct UpdatePlanFidelityTests {
     }
 
     /// `ScanStore`'s implementation. It spans two files — the state in `ScanStore.swift`,
-    /// the scan/upgrade actions in `ScanStore+Actions.swift` — and is read as one text so
+    /// the actions across `ScanStore+…` — and is read as one text through `ScanStoreSources` so
     /// that a `!contains` guard still covers the whole type: pinned to one half only, the
     /// pattern it forbids could reappear in the other and the assertion would pass.
     private func scanStore() throws -> String {
-        try source("MacUpdater/ScanStore.swift") + "\n" + source("MacUpdater/ScanStore+Actions.swift")
+        try ScanStoreSources.everything()
     }
 
     /// The regression itself. The window's upgrade path lives behind a live `BrewService`

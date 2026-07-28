@@ -27,11 +27,11 @@ struct UpdateResultHonestyTests {
     }
 
     /// `ScanStore`'s implementation. It spans two files — the state in `ScanStore.swift`,
-    /// the scan/upgrade actions in `ScanStore+Actions.swift` — and is read as one text so
+    /// the actions across `ScanStore+…` — and is read as one text through `ScanStoreSources` so
     /// that a `!contains` guard still covers the whole type: pinned to one half only, the
     /// pattern it forbids could reappear in the other and the assertion would pass.
     private func scanStore() throws -> String {
-        try source("ScanStore.swift") + "\n" + source("ScanStore+Actions.swift") + "\n" + source("ScanStore+Rollback.swift")
+        try ScanStoreSources.everything()
     }
 
     /// The text of the `for`/`switch` block introduced by `header`, up to the line that

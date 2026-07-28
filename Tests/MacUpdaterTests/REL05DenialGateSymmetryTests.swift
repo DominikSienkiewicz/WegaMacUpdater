@@ -7,7 +7,7 @@ import Testing
 /// The gate holds unattended rounds back for 24 h after macOS refuses to let Wega replace a
 /// bundle, so the background updater stops walking into the same wall every interval. Both
 /// update paths arm it: the unattended round at `BackgroundUpdater`, and the window at
-/// `ScanStore+Actions` — deliberately, and the comment there says so ("teach the unattended
+/// `ScanStore+Updating` — deliberately, and the comment there says so ("teach the unattended
 /// round about it too").
 ///
 /// Only one of them disarmed it. `AppManagementDenialStore.clear()` appeared exactly once in
@@ -47,7 +47,7 @@ struct REL05DenialGateSymmetryTests {
     /// Red before the fix: `clear()` occurred exactly once in `Sources/`, in `BackgroundUpdater`.
     @Test func bothUpdatePathsArmAndDisarmTheGate() throws {
         for path in ["Sources/MacUpdater/BackgroundUpdater.swift",
-                     "Sources/MacUpdater/ScanStore+Actions.swift"] {
+                     "Sources/MacUpdater/ScanStore+Updating.swift"] {
             let source = try read(path)
 
             #expect(source.contains("AppManagementDenialStore.shared.recordDenial()"),
@@ -66,7 +66,7 @@ struct REL05DenialGateSymmetryTests {
     /// unrelated reason still proves the permission is no longer missing, and a gate that only
     /// reopens on a flawless run would stay shut on a machine with any other problem.
     @Test func theWindowPathKeysTheGateOnTheRefusalNotOnSuccess() throws {
-        let source = try read("Sources/MacUpdater/ScanStore+Actions.swift")
+        let source = try ScanStoreSources.everything()
         let arm = try #require(source.range(of: "AppManagementDenialStore.shared.recordDenial()"))
         let disarm = try #require(source.range(of: "AppManagementDenialStore.shared.clear()"))
         let earlyReturn = try #require(source.range(of: "WegaLog.info(.homebrew, \"Zaktualizowano \\(count) pakietów\")"))

@@ -1,6 +1,20 @@
 import Foundation
 import MacUpdaterCore
 
+struct ForegroundCaskPreparation {
+    let appPaths: [String: URL]
+    let snapshots: [String: URL]
+    let trustedCaskNames: [String]
+    let publisherVetoes: [String: TeamIDAudit]
+    /// LT-01 — the journaled operation this run's snapshots and verdicts belong to.
+    let operation: UpdateOperationSession
+}
+
+enum ForegroundCaskPreparationResult {
+    case ready(ForegroundCaskPreparation)
+    case blocked(publisherVetoes: [String: TeamIDAudit])
+}
+
 // MARK: - Rollback net (casks)
 //
 // The snapshot -> canary -> rollback glue of `ScanStore`, split out of

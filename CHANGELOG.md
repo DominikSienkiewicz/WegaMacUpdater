@@ -382,6 +382,12 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   smallest of the three tiles the glyph is not large text, so the strict threshold applied and
   none of the sizes reached it. The fill is darker now, and a test measures the four tile hues
   rather than restating a number someone would have to re-derive.
+- `ScanStore` is split by responsibility rather than by length. One file each for a scan round,
+  running an update, cask adoption, the dry-run preview and the consented Homebrew cleanup —
+  the seams the code already had, where an earlier split had only cut it where the file-length
+  limit fell. Behaviour is unchanged and no test assertion moved; the guards that read the type
+  now reach it through one shared list of its files, so the next split costs nothing instead of
+  breaking thirteen of them.
 - The typography guard follows the code instead of a folder. It scanned one directory,
   non-recursively, sweeping in 32 files there that build no views while being unable to see a
   new subdirectory or a second SwiftUI target; it now scans every module and selects on

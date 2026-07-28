@@ -42,7 +42,7 @@ struct LT01UpdateOperationWiringTests {
     }
 
     @Test func bothBatchUpgradePathsJournalTheirPhases() throws {
-        let foreground = try source("ScanStore+Actions.swift") + "\n" + source("ScanStore+Rollback.swift")
+        let foreground = try ScanStoreSources.everything()
         #expect(foreground.contains("UpdateOperationStore.shared.begin(trigger: .manual)"))
         #expect(foreground.contains("caskPreparation.operation.recordInstalling()"),
                 "the last journal write before brew is what recovery probes after a crash")

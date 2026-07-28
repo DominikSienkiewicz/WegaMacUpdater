@@ -20,7 +20,7 @@ struct ForegroundPublisherVetoPersistenceTests {
             encoding: .utf8
         )
         let actions = try String(
-            contentsOf: packageRoot().appendingPathComponent("Sources/MacUpdater/ScanStore+Actions.swift"),
+            contentsOf: packageRoot().appendingPathComponent("Sources/MacUpdater/ScanStore+Updating.swift"),
             encoding: .utf8
         )
         let source = rollback + "\n" + actions

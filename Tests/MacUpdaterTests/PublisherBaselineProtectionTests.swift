@@ -42,7 +42,7 @@ struct PublisherBaselineProtectionTests {
                 "SEC-02: read the installed app's Team ID before taking the pre-upgrade snapshot")
 
         let foreground = try source("Sources/MacUpdater/ScanStore+Rollback.swift")
-            + "\n" + source("Sources/MacUpdater/ScanStore+Actions.swift")
+            + "\n" + ScanStoreSources.everything()
         let foregroundSnapshot = try #require(foreground.range(of: "let snapshots = snapshotCasks("))
         let foregroundMutation = try #require(foreground.range(
             of: "var caskOutcome = await runBrewUpgrade(arguments: trustedCaskArgs)"))
@@ -112,7 +112,7 @@ struct PublisherBaselineProtectionTests {
 
     @Test func preexistingPublisherMismatchVetoesBothUpgradePathsBeforeBrew() throws {
         let foreground = try source("Sources/MacUpdater/ScanStore+Rollback.swift")
-            + "\n" + source("Sources/MacUpdater/ScanStore+Actions.swift")
+            + "\n" + ScanStoreSources.everything()
         let foregroundVeto = try #require(foreground.range(
             of: "let publisherVetoes = CaskRollbackGuard.publisherVetoes("))
         let foregroundMutation = try #require(foreground.range(

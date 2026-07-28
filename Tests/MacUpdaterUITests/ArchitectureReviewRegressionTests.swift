@@ -158,7 +158,8 @@ struct ArchitectureReviewRegressionTests {
 
         // Every path that used to inline the streaming loop with its own buffer cap.
         let streamingSites = [
-            "Sources/MacUpdater/ScanStore+Actions.swift",
+            "Sources/MacUpdater/ScanStore+Updating.swift",
+            "Sources/MacUpdater/ScanStore+Adoption.swift",
             "Sources/MacUpdater/MigrationStore.swift",
             "Sources/MacUpdater/BackgroundUpdater.swift"
         ]
@@ -254,7 +255,7 @@ struct ArchitectureReviewRegressionTests {
     @Test func topLevelHomebrewReadRoundsUseTheSharedGate() throws {
         let root = packageRoot()
         let foreground = executableSource(
-            try source("Sources/MacUpdater/ScanStore+Actions.swift", root: root)
+            try source("Sources/MacUpdater/ScanStore+Scanning.swift", root: root)
         )
         let background = executableSource(
             try source("Sources/MacUpdater/BackgroundUpdater.swift", root: root)
