@@ -240,31 +240,33 @@ public enum CodeSignatureVerifier {
         } catch {
             throw VerifyError.diskImageMountFailed(error.localizedDescription)
         }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
-        process.arguments = attachArguments(imagePath: image.path, mountPoint: mountPoint.path)
-        let errorPipe = Pipe()
-        process.standardError = errorPipe
-        process.standardOutput = Pipe()
-        do { try process.run() } catch { throw VerifyError.diskImageMountFailed(error.localizedDescription) }
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
-            let data = errorPipe.fileHandleForReading.readDataToEndOfFile()
-            let message = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        // REL-12 — the one that mattered: a damaged or truncated image can leave `hdiutil
+        // attach` wedged, and the self-update mounts its `.dmg` through exactly this call.
+        let result: BoundedProcess.Result
+        do {
+            result = try BoundedProcess.run(
+                URL(fileURLWithPath: "/usr/bin/hdiutil"),
+                arguments: attachArguments(imagePath: image.path, mountPoint: mountPoint.path),
+                timeouts: .quick
+            )
+        } catch {
+            try? FileManager.default.removeItem(at: mountPoint)
+            throw VerifyError.diskImageMountFailed(error.localizedDescription)
+        }
+        guard result.exitCode == 0 else {
+            let message = result.standardError.trimmingCharacters(in: .whitespacesAndNewlines)
             try? FileManager.default.removeItem(at: mountPoint)
             throw VerifyError.diskImageMountFailed(
-                (message?.isEmpty == false) ? message! : "hdiutil attach zakończył się kodem \(process.terminationStatus)")
+                message.isEmpty ? "hdiutil attach zakończył się kodem \(result.exitCode)" : message)
         }
     }
 
     private static func detachQuietly(_ mountPoint: URL) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
-        process.arguments = detachArguments(mountPoint: mountPoint.path)
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
-        try? process.run()
-        process.waitUntilExit()
+        _ = try? BoundedProcess.run(
+            URL(fileURLWithPath: "/usr/bin/hdiutil"),
+            arguments: detachArguments(mountPoint: mountPoint.path),
+            timeouts: .quick
+        )
         try? FileManager.default.removeItem(at: mountPoint)
     }
 
@@ -274,22 +276,21 @@ public enum CodeSignatureVerifier {
     /// bridged into Swift on this SDK). `type` is the spctl policy type: "exec"
     /// (apps), "install" (pkgs), "open" (documents/disk images). Throws on rejection.
     public static func assessGatekeeper(at url: URL, type: String, primarySignatureContext: Bool = false) throws {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/sbin/spctl")
         var arguments = ["--assess", "--type", type]
         if primarySignatureContext { arguments += ["--context", "context:primary-signature"] }
         arguments.append(url.path)
-        process.arguments = arguments
-        let errorPipe = Pipe()
-        process.standardError = errorPipe
-        process.standardOutput = Pipe()
-        do { try process.run() } catch { throw VerifyError.gatekeeperRejected(error.localizedDescription) }
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
-            let data = errorPipe.fileHandleForReading.readDataToEndOfFile()
-            let message = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let result: BoundedProcess.Result
+        do {
+            result = try BoundedProcess.run(
+                URL(fileURLWithPath: "/usr/sbin/spctl"), arguments: arguments, timeouts: .quick
+            )
+        } catch {
+            throw VerifyError.gatekeeperRejected(error.localizedDescription)
+        }
+        guard result.exitCode == 0 else {
+            let message = result.standardError.trimmingCharacters(in: .whitespacesAndNewlines)
             throw VerifyError.gatekeeperRejected(
-                (message?.isEmpty == false) ? message! : "spctl odrzucił artefakt (kod \(process.terminationStatus))")
+                message.isEmpty ? "spctl odrzucił artefakt (kod \(result.exitCode))" : message)
         }
     }
 
@@ -305,19 +306,16 @@ public enum CodeSignatureVerifier {
     /// package is unsigned or the tool/output shape is unavailable — and SEC-04 requires
     /// callers to treat that `nil` as a **rejection**, not as a skipped check.
     public static func pkgTeamID(at url: URL) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/sbin/pkgutil")
-        process.arguments = ["--check-signature", url.path]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        do { try process.run() } catch { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
+        guard let result = try? BoundedProcess.run(
+            URL(fileURLWithPath: "/usr/sbin/pkgutil"),
+            arguments: ["--check-signature", url.path],
+            timeouts: .quick
+        ) else { return nil }
         // An unsigned package exits non-zero; treat it as "no Team ID" rather than
-        // scanning its output for something that looks like one.
-        guard process.terminationStatus == 0 else { return nil }
-        guard let text = String(data: data, encoding: .utf8) else { return nil }
+        // scanning its output for something that looks like one. A timeout lands here too,
+        // and SEC-04 requires callers to read this nil as a rejection.
+        guard result.exitCode == 0 else { return nil }
+        let text = result.standardOutput
         // Developer ID leaf line looks like: "Developer ID Installer: Name (TEAMID)"
         // Grab the parenthesised 10-char alphanumeric Team ID.
         guard let match = text.range(of: #"\(([A-Z0-9]{10})\)"#, options: .regularExpression) else { return nil }

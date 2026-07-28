@@ -390,6 +390,14 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   mouse at it. It is now a button exactly in the one state that has somewhere to go, and stays
   a plain label in the two that do not: a disabled button would still announce itself and still
   take a tab stop that leads nowhere.
+- **A damaged disk image can no longer hang the self-update.** The signature verifier waited
+  on `codesign`, `spctl`, `pkgutil` and `hdiutil` with no deadline at all — and the self-update
+  mounts its `.dmg` through exactly that `hdiutil attach`, so a truncated or damaged image left
+  the update wedged with nothing to cancel. Those commands live in the base module the root
+  daemon links, which is out of reach of the runner that bounds everything in the update
+  pipeline, so they now go through a small synchronous equivalent with the same
+  signal-then-grace-then-kill escalation. Both layers name their limits from one shared policy
+  rather than restating them.
 - **Launching at login no longer takes the keyboard away.** The main window's appearance
   triggered an unconditional focus grab, so enabling "Launch at login" meant every login put
   Wega's window over whatever you were doing. Activation now happens only where you asked for
