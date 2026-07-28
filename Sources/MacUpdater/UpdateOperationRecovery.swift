@@ -201,6 +201,9 @@ final class UpdateOperationRecovery {
             let content = UNMutableNotificationContent()
             content.title = tr("Wega naprawiła przerwaną aktualizację")
             content.body = body
+            // OBS-02 — what recovery actually did exists only in the log, so that is where
+            // this notification goes.
+            content.userInfo = NotificationRouting.payload(for: NotificationRouting.recoveryDestination)
             let request = UNNotificationRequest(identifier: "wega.update-recovery", content: content, trigger: nil)
             try? await UNUserNotificationCenter.current().add(request)
         }

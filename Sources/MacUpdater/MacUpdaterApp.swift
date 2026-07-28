@@ -93,6 +93,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // crash it exists to capture. Attaching does not subscribe — the controller starts
         // delivery only if the user has opted in.
         CrashReportingController.shared.attach(source: MetricKitCrashDiagnosticSource())
+        // OBS-02 — before anything can be clicked. A notification delivered while no delegate
+        // is set is dropped, not queued, so a late install loses the very click it exists for.
+        NotificationRouter.install()
         registerMutationSources()
         // LT-01 — settle whatever a crash, kill or power loss left mid-upgrade *before*
         // the background agent starts scheduling new rounds over an unknown disk state.
