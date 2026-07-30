@@ -282,6 +282,25 @@ struct OBS02DiagnosticsExportTests {
 
     // MARK: - Archive format
 
+    @Test("A UTC timestamp is packed into its known MS-DOS time and date words")
+    func dosTimestampPacksKnownUTCDate() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        let timestamp = try #require(calendar.date(from: DateComponents(
+            year: 2026,
+            month: 7,
+            day: 30,
+            hour: 14,
+            minute: 37,
+            second: 58
+        )))
+
+        let packed = DiagnosticsArchive.dosTimestamp(timestamp)
+
+        #expect(packed.time == 0x74BD)
+        #expect(packed.date == 0x5CFE)
+    }
+
     @Test("The archive is a well-formed zip: signatures, CRC and a central directory")
     func archiveIsWellFormedZip() {
         let entries = [

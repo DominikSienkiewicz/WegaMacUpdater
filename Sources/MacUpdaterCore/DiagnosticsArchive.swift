@@ -140,7 +140,10 @@ public enum DiagnosticsArchive {
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
         let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
         let year = max(1980, parts.year ?? 1980)
-        let time = UInt16((parts.hour ?? 0) << 11 | (parts.minute ?? 0) << 5 | ((parts.second ?? 0) / 2))
+        let hourBits: Int = (parts.hour ?? 0) << 11
+        let minuteBits: Int = (parts.minute ?? 0) << 5
+        let secondBits: Int = (parts.second ?? 0) / 2
+        let time = UInt16(hourBits | minuteBits | secondBits)
         let packedDate = UInt16((year - 1980) << 9 | (parts.month ?? 1) << 5 | (parts.day ?? 1))
         return (time, packedDate)
     }
