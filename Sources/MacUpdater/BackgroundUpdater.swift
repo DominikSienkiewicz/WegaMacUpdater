@@ -3,7 +3,7 @@ import Foundation
 import MacUpdaterCore
 import UserNotifications
 
-private struct BackgroundUpdatePreflight: Sendable {
+struct BackgroundUpdatePreflight: Sendable {
     let profiles: [CaskArtifactProfile]
     let downloads: [CaskDownloadInfo]
     let appPaths: [String: URL]
@@ -23,10 +23,54 @@ private struct BackgroundUpdatePreflight: Sendable {
 final class BackgroundUpdater {
     static let shared = BackgroundUpdater()
 
+    struct Dependencies {
+        var optedInTokens: @MainActor @Sendable () -> Set<String>
+        var allowsRound: @MainActor @Sendable () -> Bool
+        var loadPreflight: @MainActor @Sendable ([String]) async throws -> BackgroundUpdatePreflight
+        var runningTokens: @MainActor @Sendable ([String: URL]) -> Set<String>
+        var probeDownloadSizes: @Sendable (
+            [String], [String: CaskDownloadInfo]
+        ) async -> [String: DownloadSizeProbeResult]
+        var performWrite: @MainActor @Sendable (
+            @MainActor @Sendable () async -> [String]
+        ) async throws -> [String]
+        var acquireMutex: @MainActor @Sendable () -> Bool
+        var releaseMutex: @MainActor @Sendable () -> Void
+        var policies: @MainActor @Sendable () -> [String: UpdatePolicy]
+        var resourceDecision: @MainActor @Sendable (
+            [String], [String: DownloadSizeProbeResult], [String: URL]
+        ) async -> DownloadGate.Decision
+        var publisherVetoes: @MainActor @Sendable (
+            [String], [String: URL]
+        ) -> [String: TeamIDAudit]
+        var beginOperation: @MainActor @Sendable () -> UpdateOperationSession
+        var snapshot: @MainActor @Sendable (
+            [String], [String: URL], UpdateOperationSession
+        ) -> [String: URL]
+        var removeOperation: @MainActor @Sendable (UUID) -> Void
+        var runBrew: @MainActor @Sendable ([String]) async -> BrewUpgradeOutcome
+        var recordAppManagementDenial: @MainActor @Sendable () -> Void
+        var clearAppManagementDenial: @MainActor @Sendable () -> Void
+        var verify: @MainActor @Sendable (
+            [String], [String: URL], [String: URL], UpdateOperationSession
+        ) async -> [String: CaskValidationVerdict]
+        var outdatedGreedy: @Sendable () async throws -> BrewOutdated
+        var notify: @MainActor @Sendable (UpdateRunSummary) -> Void
+    }
+
+    private struct Round: Sendable {
+        let profiles: [CaskArtifactProfile]
+        let downloads: [CaskDownloadInfo]
+        let appPaths: [String: URL]
+        let initiallyEligibleTokens: [String]
+        let downloadSizes: [String: DownloadSizeProbeResult]
+    }
+
+    private let dependencies: Dependencies?
     private let brewService = BrewService()
 
-    private init() {
-        // Singleton setup is complete once the stored-property defaults are initialized.
+    init(dependencies: Dependencies? = nil) {
+        self.dependencies = dependencies
     }
 
     /// Runs after a scheduled background check. Does nothing — silently and by design —
@@ -34,13 +78,13 @@ final class BackgroundUpdater {
     /// Returns the tokens it upgraded, for the notification.
     @discardableResult
     func runIfEligible(candidates: [String], policies: [String: UpdatePolicy]) async -> [String] {
-        let optedIn = BackgroundUpdateOptInStore.shared.tokens
+        let optedIn = dependencies?.optedInTokens() ?? BackgroundUpdateOptInStore.shared.tokens
         guard !candidates.isEmpty, !optedIn.isEmpty else { return [] }
 
         // REL-05 — a refused "App Management" grant fails every cask identically, so a round
         // started while it stands produces nothing but another notification. Hold back until
         // the cooldown lets one round through to find out whether the grant arrived.
-        guard AppManagementDenialStore.shared.allowsRound() else {
+        guard dependencies?.allowsRound() ?? AppManagementDenialStore.shared.allowsRound() else {
             WegaLog.info(
                 .homebrew,
                 "Aktualizacja w tle wstrzymana — brak uprawnienia „Zarządzanie aplikacjami”. Przyznaj je w Ustawieniach systemowych → Prywatność i bezpieczeństwo."
@@ -50,10 +94,14 @@ final class BackgroundUpdater {
 
         let preflight: BackgroundUpdatePreflight
         do {
-            preflight = try await OperationCoordinator.shared.withReadLease(
-                label: "background update preflight"
-            ) { @MainActor _ in
-                await self.loadPreflight(candidates: candidates)
+            if let dependencies {
+                preflight = try await dependencies.loadPreflight(candidates)
+            } else {
+                preflight = try await OperationCoordinator.shared.withReadLease(
+                    label: "background update preflight"
+                ) { @MainActor _ in
+                    await self.loadPreflight(candidates: candidates)
+                }
             }
         } catch {
             return []
@@ -72,43 +120,101 @@ final class BackgroundUpdater {
             profiles: Dictionary(profiles.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first }),
             downloads: downloadsByToken,
             optedIn: optedIn,
-            runningProcessTokens: runningTokens(appPaths: appPaths),
+            runningProcessTokens: dependencies?.runningTokens(appPaths)
+                ?? runningTokens(appPaths: appPaths),
             policies: policies
         ))
         guard !initiallyEligibleTokens.isEmpty else { return [] }
-        let downloadSizes = await DownloadResourcePreflight.probe(
-            tokens: initiallyEligibleTokens,
-            downloads: downloadsByToken
-        )
+        let downloadSizes = if let dependencies {
+            await dependencies.probeDownloadSizes(initiallyEligibleTokens, downloadsByToken)
+        } else {
+            await DownloadResourcePreflight.probe(
+                tokens: initiallyEligibleTokens,
+                downloads: downloadsByToken
+            )
+        }
 
-        return (try? await UpgradeCoordinator.shared.performWrite(.backgroundUpgrade) {
+        let round = Round(
+            profiles: profiles,
+            downloads: downloads,
+            appPaths: appPaths,
+            initiallyEligibleTokens: initiallyEligibleTokens,
+            downloadSizes: downloadSizes
+        )
+        let operation: @MainActor @Sendable () async -> [String] = {
+            await self.perform(round)
+        }
+        if let dependencies {
+            return (try? await dependencies.performWrite(operation)) ?? []
+        }
+        return (try? await UpgradeCoordinator.shared.performWrite(
+            .backgroundUpgrade,
+            operation: operation
+        )) ?? []
+    }
+
+    private func perform(_ round: Round) async -> [String] {
+        let profiles = round.profiles
+        let downloads = round.downloads
+        let appPaths = round.appPaths
+        let initiallyEligibleTokens = round.initiallyEligibleTokens
+        let downloadSizes = round.downloadSizes
+
             // F3 — the shared write queue admits only one Homebrew mutation at a time. Keep
             // the legacy mutex check as a fail-closed guard for callers outside that boundary.
-            guard UpgradeMutex.shared.acquire() else {
+            func acquireLiveMutex() -> Bool {
+                guard UpgradeMutex.shared.acquire() else { return false }
+                return true
+            }
+            let acquiredMutex = dependencies?.acquireMutex() ?? acquireLiveMutex()
+            guard acquiredMutex else {
                 WegaLog.info(.homebrew, "Aktualizacja w tle pominięta — trwa aktualizacja z okna.")
                 return []
             }
-            defer { UpgradeMutex.shared.release() }
+            defer {
+                if let dependencies {
+                    dependencies.releaseMutex()
+                } else {
+                    UpgradeMutex.shared.release()
+                }
+            }
 
             // Policy and process state can change while this round waits for the window. Once
             // the mutex is ours, every mutable veto is sampled again before any mutation.
-            let lockedPolicies = UpdatePolicyStore.shared.policiesMap
-            let lockedRunningProcessTokens = runningTokens(appPaths: appPaths)
+            func livePolicies() -> [String: UpdatePolicy] {
+                let lockedPolicies = UpdatePolicyStore.shared.policiesMap
+                return lockedPolicies
+            }
+            func liveRunningTokens() -> Set<String> {
+                let lockedRunningProcessTokens = runningTokens(appPaths: appPaths)
+                return lockedRunningProcessTokens
+            }
+            let lockedPolicies = dependencies?.policies() ?? livePolicies()
+            let lockedRunningProcessTokens = dependencies?.runningTokens(appPaths)
+                ?? liveRunningTokens()
             let eligibleLockedTokens = BackgroundUpdatePlanner.eligibleTokens(.init(
                 candidates: initiallyEligibleTokens,
                 profiles: Dictionary(profiles.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first }),
                 downloads: Dictionary(downloads.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first }),
-                optedIn: BackgroundUpdateOptInStore.shared.tokens,
+                optedIn: dependencies?.optedInTokens() ?? BackgroundUpdateOptInStore.shared.tokens,
                 runningProcessTokens: lockedRunningProcessTokens,
                 policies: lockedPolicies
             ))
             guard !eligibleLockedTokens.isEmpty else { return [] }
 
-            let resourceDecision = await backgroundResourceDecision(
-                tokens: eligibleLockedTokens,
-                downloadSizes: downloadSizes,
-                appPaths: appPaths
-            )
+            func liveResourceDecision() async -> DownloadGate.Decision {
+                let resourceDecision = await backgroundResourceDecision(
+                    tokens: eligibleLockedTokens,
+                    downloadSizes: downloadSizes,
+                    appPaths: appPaths
+                )
+                return resourceDecision
+            }
+            let resourceDecision = if let dependencies {
+                await dependencies.resourceDecision(eligibleLockedTokens, downloadSizes, appPaths)
+            } else {
+                await liveResourceDecision()
+            }
             guard case .allow = resourceDecision else {
                 if case .postpone(let reason) = resourceDecision {
                     WegaLog.info(.homebrew, "Aktualizacja w tle odroczona — \(reason).")
@@ -116,16 +222,33 @@ final class BackgroundUpdater {
                 return []
             }
 
-            let publisherVetoes = CaskRollbackGuard.publisherVetoes(
-                tokens: eligibleLockedTokens, appPaths: appPaths
-            )
+            func livePublisherVetoes() -> [String: TeamIDAudit] {
+                let publisherVetoes = CaskRollbackGuard.publisherVetoes(
+                    tokens: eligibleLockedTokens,
+                    appPaths: appPaths
+                )
+                return publisherVetoes
+            }
+            let publisherVetoes = dependencies?.publisherVetoes(eligibleLockedTokens, appPaths)
+                ?? livePublisherVetoes()
             let lockedTokens = eligibleLockedTokens.filter { publisherVetoes[$0] == nil }
             // LT-01 — the unattended round journals exactly like the windowed one: its
             // snapshots live in this operation's directory, and a crash mid-round is
             // recognizable (and recoverable) at the next launch.
-            let operation = UpdateOperationStore.shared.begin(trigger: .background)
+            func beginLiveOperation() -> UpdateOperationSession {
+                UpdateOperationStore.shared.begin(trigger: .background)
+            }
+            let operation = dependencies?.beginOperation() ?? beginLiveOperation()
             operation.recordPlanned(tokens: lockedTokens, appPaths: appPaths)
-            let snapshots = CaskRollbackGuard.snapshot(tokens: lockedTokens, appPaths: appPaths, operation: operation)
+            func liveSnapshots() -> [String: URL] {
+                CaskRollbackGuard.snapshot(
+                    tokens: lockedTokens,
+                    appPaths: appPaths,
+                    operation: operation
+                )
+            }
+            let snapshots = dependencies?.snapshot(lockedTokens, appPaths, operation)
+                ?? liveSnapshots()
             let tokens = BackgroundUpdateSafety.snapshotBackedTokens(lockedTokens, snapshots: snapshots)
             var run = UpdateRunOutcome()
             run.recordPublisherVetoes(eligibleLockedTokens.map(Self.caskItem), audits: publisherVetoes)
@@ -139,9 +262,15 @@ final class BackgroundUpdater {
                 // Brew never ran: settle the journal and drop the directory — an operation
                 // without snapshots restores nothing.
                 operation.abortUnfinished()
-                UpdateOperationStore.shared.removeOperation(id: operation.operation.id)
+                if let dependencies {
+                    dependencies.removeOperation(operation.operation.id)
+                } else {
+                    UpdateOperationStore.shared.removeOperation(id: operation.operation.id)
+                }
                 if run.summary.isEmpty {
                     WegaLog.error(.homebrew, "Aktualizacja w tle pominięta — nie udało się utworzyć snapshotu.")
+                } else if let dependencies {
+                    dependencies.notify(run.summary)
                 } else {
                     notify(summary: run.summary)
                 }
@@ -149,6 +278,42 @@ final class BackgroundUpdater {
             }
 
             WegaLog.info(.homebrew, "Aktualizacja w tle: \(tokens.joined(separator: ", "))")
+
+            return await performUpgrade(
+                tokens: tokens,
+                appPaths: appPaths,
+                snapshots: snapshots,
+                operation: operation,
+                run: &run
+            )
+    }
+
+    private func recoveringLeftover(
+        from outcome: BrewUpgradeOutcome,
+        runBrew: @MainActor @Sendable ([String]) async -> BrewUpgradeOutcome
+    ) async -> BrewUpgradeOutcome {
+        let retryTokens = outcome.tokensRetryableWithForce
+        guard !retryTokens.isEmpty else { return outcome }
+        WegaLog.info(
+            .homebrew,
+            "Aktualizacja w tle — przerwana aktualizacja casku, ponawiam z --force: \(retryTokens.joined(separator: ", "))"
+        )
+        let forcedArguments = UpdatePlanner.forcedCaskCommand(tokens: retryTokens).arguments
+        let retryOutcome = await runBrew(forcedArguments)
+        return BrewUpgradeOutcome.merging(
+            original: outcome,
+            forcedRetry: retryOutcome,
+            retriedTokens: retryTokens
+        )
+    }
+
+    private func performUpgrade(
+        tokens: [String],
+        appPaths: [String: URL],
+        snapshots: [String: URL],
+        operation: UpdateOperationSession,
+        run: inout UpdateRunOutcome
+    ) async -> [String] {
 
             let command = UpdatePlanner.commands(for: UpdatePlanner.plan(
                 selectedKeys: Set(tokens.map { "c:\($0)" }),
@@ -161,7 +326,23 @@ final class BackgroundUpdater {
             // LT-01 — `installing` is the last journal write before brew; after a crash it
             // is what recovery probes.
             operation.recordInstalling()
-            var caskOutcome = await runBrew(arguments: arguments)
+            func runLiveBrew(arguments: [String]) async -> BrewUpgradeOutcome {
+                var caskOutcome = await runBrew(arguments: arguments)
+                caskOutcome = await recoveringLeftover(from: caskOutcome) { forcedArguments in
+                    await self.runBrew(arguments: forcedArguments)
+                }
+                return caskOutcome
+            }
+            let caskOutcome: BrewUpgradeOutcome
+            if let dependencies {
+                let initialOutcome = await dependencies.runBrew(arguments)
+                caskOutcome = await recoveringLeftover(
+                    from: initialOutcome,
+                    runBrew: dependencies.runBrew
+                )
+            } else {
+                caskOutcome = await runLiveBrew(arguments: arguments)
+            }
 
             // BG-04 — the window's between-phases auto-recovery, now shared with the unattended
             // round: a cask stranded by a cut-short previous upgrade ("already an App at …")
@@ -171,34 +352,39 @@ final class BackgroundUpdater {
             // same `.backgroundUpgrade` write lease and after the snapshot above, so it goes
             // through the shared coordinator with a rollback net rather than becoming a side
             // path without one (REL-08).
-            let retryTokens = caskOutcome.tokensRetryableWithForce
-            if !retryTokens.isEmpty {
-                WegaLog.info(
-                    .homebrew,
-                    "Aktualizacja w tle — przerwana aktualizacja casku, ponawiam z --force: \(retryTokens.joined(separator: ", "))"
-                )
-                let retryOutcome = await runBrew(arguments: UpdatePlanner.forcedCaskCommand(tokens: retryTokens).arguments)
-                caskOutcome = BrewUpgradeOutcome.merging(
-                    original: caskOutcome, forcedRetry: retryOutcome, retriedTokens: retryTokens
-                )
-            }
-
             // REL-05 — record or lift the denial from what the round actually observed, before
             // the verdicts are folded in. The permission is a property of Wega, not of a cask.
             if caskOutcome.requiresAppManagementPermission {
-                AppManagementDenialStore.shared.recordDenial()
+                if let dependencies {
+                    dependencies.recordAppManagementDenial()
+                } else {
+                    AppManagementDenialStore.shared.recordDenial()
+                }
                 WegaLog.error(
                     .homebrew,
                     "Aktualizacja w tle — macOS odmówił podmiany aplikacji (uprawnienie „Zarządzanie aplikacjami”). Kolejne rundy wstrzymane do czasu przyznania uprawnienia."
                 )
+            } else if let dependencies {
+                dependencies.clearAppManagementDenial()
             } else {
                 AppManagementDenialStore.shared.clear()
             }
 
             run.recordBackgroundRound(tokens.map(Self.caskItem), outcome: caskOutcome)
-            run.applyValidation(await CaskRollbackGuard.verify(
-                tokens: tokens, appPaths: appPaths, snapshots: snapshots, operation: operation
-            ))
+            func verifyLiveBundles() async -> [String: CaskValidationVerdict] {
+                await CaskRollbackGuard.verify(
+                    tokens: tokens,
+                    appPaths: appPaths,
+                    snapshots: snapshots,
+                    operation: operation
+                )
+            }
+            let verification = if let dependencies {
+                await dependencies.verify(tokens, appPaths, snapshots, operation)
+            } else {
+                await verifyLiveBundles()
+            }
+            run.applyValidation(verification)
             await confirmByRescan(&run)
 
             let summary = run.summary
@@ -206,9 +392,12 @@ final class BackgroundUpdater {
                 WegaLog.error(.homebrew, "\(outcome.name): aktualizacja w tle — \(outcome.verdict.logDescription).")
             }
 
-            notify(summary: summary)
+            if let dependencies {
+                dependencies.notify(summary)
+            } else {
+                notify(summary: summary)
+            }
             return summary.upgraded.map(\.name)
-        }) ?? []
     }
 
     private func loadPreflight(candidates: [String]) async -> BackgroundUpdatePreflight {
@@ -239,7 +428,11 @@ final class BackgroundUpdater {
     private func confirmByRescan(_ run: inout UpdateRunOutcome) async {
         let outdated: BrewOutdated
         do {
-            outdated = try await brewService.outdatedGreedy()
+            if let dependencies {
+                outdated = try await dependencies.outdatedGreedy()
+            } else {
+                outdated = try await brewService.outdatedGreedy()
+            }
         } catch {
             WegaLog.error(.homebrew, "Aktualizacja w tle — skan potwierdzający: \(error.localizedDescription)")
             run.applyRescan(stillOutdatedKeys: [], confirmed: false)
@@ -336,7 +529,7 @@ final class BackgroundUpdater {
 
     /// One clause per outcome the round produced, so the notification cannot claim a clean
     /// sweep over a rollback that failed or a publisher that changed.
-    private static func notificationBody(for summary: UpdateRunSummary) -> String {
+    static func notificationBody(for summary: UpdateRunSummary) -> String {
         let rolledBack = summary.names { $0 == .rolledBack }
         let rollbackFailed = summary.rollbackFailures.map(\.name)
         let publisherChanged = summary.publisherChanges.map(\.name)

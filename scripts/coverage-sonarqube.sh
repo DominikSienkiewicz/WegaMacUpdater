@@ -36,15 +36,15 @@ if [[ ! -f "$PROFDATA" ]]; then
   exit 1
 fi
 
-# The single SwiftPM test bundle links in MacUpdaterCore, so its profile covers
-# all unit-tested code. (The SwiftUI app target is not exercised by unit tests;
-# its View layer is excluded from coverage in sonar-project.properties.)
-XCTEST="$(find "$BIN_PATH" -maxdepth 1 -name '*.xctest' | head -1)"
-if [[ -z "$XCTEST" ]]; then
-  echo "❌ No .xctest bundle under $BIN_PATH" >&2
+# The UI-test bundle links WegaMacUpdater, which in turn links MacUpdaterCore. SwiftPM's
+# merged profile therefore maps every production target through this one executable. Picking
+# the first `find *.xctest` result was filesystem-order dependent: when MacUpdaterTests won,
+# Sources/MacUpdater disappeared from the report and Sonar counted it as uncovered.
+TEST_BIN="$BIN_PATH/MacUpdaterUITests.xctest/Contents/MacOS/MacUpdaterUITests"
+if [[ ! -x "$TEST_BIN" ]]; then
+  echo "❌ No MacUpdaterUITests executable at $TEST_BIN" >&2
   exit 1
 fi
-TEST_BIN="$XCTEST/Contents/MacOS/$(basename "$XCTEST" .xctest)"
 
 echo "→ Exporting LCOV from $(basename "$TEST_BIN")"
 # Keep only first-party sources; drop SwiftPM checkouts, generated sources and tests.

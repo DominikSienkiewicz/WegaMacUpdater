@@ -44,6 +44,9 @@ jobs:
       - name: Test
         run: swift test --skip-build --enable-code-coverage
 
+      - name: Regression test — coverage includes the app target
+        run: ./scripts/test-coverage-bundle-guard.sh
+
       # Convert SwiftPM's llvm-cov coverage into the SonarQube generic report the
       # SonarCloud job consumes. SonarCloud runs on Linux and can't run our macOS
       # tests, so the report must be produced here and handed over as an artifact.

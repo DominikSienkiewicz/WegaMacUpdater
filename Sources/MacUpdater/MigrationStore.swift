@@ -20,6 +20,66 @@ struct PendingForceTermination: Identifiable {
 /// erase an in-flight migration, its consent dialog, results, or operation log.
 @MainActor
 final class MigrationStore: ObservableObject {
+    struct Dependencies {
+        var fetchCasks: @Sendable () async throws -> [BrewCask]
+        var scanDirectories: @Sendable () -> [URL]
+        var scanApplications: @Sendable (
+            URL,
+            Set<String>,
+            [BrewCask]
+        ) throws -> [ApplicationInfo]
+        var prepareReplacement: @MainActor @Sendable (
+            String,
+            URL,
+            BrewService
+        ) async -> CaskReplacementSafety.PreparationResult
+        var resolveInstalledAppURL: @MainActor @Sendable (
+            CaskReplacementSafety.Preparation,
+            BrewService
+        ) async -> URL?
+        var verifyReplacement: @MainActor @Sendable (
+            CaskReplacementSafety.Preparation,
+            URL?
+        ) async -> CaskValidationVerdict
+        var waitBetweenRunningChecks: @Sendable () async -> Void
+        var openURL: @MainActor @Sendable (URL) -> Void
+
+        static let live = Dependencies(
+            fetchCasks: { try await CaskDatabaseClient.caskCatalog().fetchCasks() },
+            scanDirectories: { buildScanDirs() },
+            scanApplications: { directory, installedCasks, availableCasks in
+                try ApplicationScanner().scanApplications(
+                    in: directory,
+                    installedCasks: installedCasks,
+                    availableCasks: availableCasks
+                )
+            },
+            prepareReplacement: { token, appURL, brewService in
+                await CaskReplacementSafety.prepare(
+                    token: token,
+                    appURL: appURL,
+                    brewService: brewService
+                )
+            },
+            resolveInstalledAppURL: { preparation, brewService in
+                await CaskReplacementSafety.resolveInstalledAppURL(
+                    preparation,
+                    brewService: brewService
+                )
+            },
+            verifyReplacement: { preparation, installedAppURL in
+                await CaskReplacementSafety.verify(
+                    preparation,
+                    installedAppURL: installedAppURL
+                )
+            },
+            waitBetweenRunningChecks: {
+                try? await Task.sleep(for: .milliseconds(250))
+            },
+            openURL: { NSWorkspace.shared.open($0) }
+        )
+    }
+
     @Published var status: MigrationStatus = .ready
     @Published var candidates: [ApplicationInfo] = []
     @Published var migrated: Set<String> = []
@@ -42,6 +102,7 @@ final class MigrationStore: ObservableObject {
     private let runningApplicationInspector: any RunningApplicationInspecting
     private let runningApplicationTerminator: any RunningApplicationTargetTerminating
     private let publisherCorrelator: CaskPublisherCorrelator
+    private let dependencies: Dependencies
 
     init(
         processes: RunningProcessService = RunningProcessService(),
@@ -49,12 +110,14 @@ final class MigrationStore: ObservableObject {
             WorkspaceRunningApplicationInspector(),
         runningApplicationTerminator: any RunningApplicationTargetTerminating =
             WorkspaceTargetTerminator(),
-        publisherCorrelator: CaskPublisherCorrelator = .live
+        publisherCorrelator: CaskPublisherCorrelator = .live,
+        dependencies: Dependencies = .live
     ) {
         self.processes = processes
         self.runningApplicationInspector = runningApplicationInspector
         self.runningApplicationTerminator = runningApplicationTerminator
         self.publisherCorrelator = publisherCorrelator
+        self.dependencies = dependencies
     }
 
     func scan(
@@ -229,7 +292,7 @@ final class MigrationStore: ObservableObject {
 
     func openAppStore(masID: String) {
         guard let url = URL(string: "macappstore://apps.apple.com/app/id\(masID)") else { return }
-        NSWorkspace.shared.open(url)
+        dependencies.openURL(url)
     }
 
     private func scanCoordinated(
@@ -247,7 +310,7 @@ final class MigrationStore: ObservableObject {
         ))
 
         do {
-            let casks = try await CaskDatabaseClient.caskCatalog().fetchCasks()
+            let casks = try await dependencies.fetchCasks()
             let installed = try await model.brewService.installedCasks()
             let npmInstalled = (try? await model.npmService.installedGlobals()) ?? []
             npmBrewDuplicates = NpmBrewDuplicateDetector().detect(
@@ -255,9 +318,10 @@ final class MigrationStore: ObservableObject {
                 brewTokens: installed
             )
             let all = await Self.scanApplicationDirectories(
-                buildScanDirs(),
+                dependencies.scanDirectories(),
                 installedCasks: installed,
-                availableCasks: casks
+                availableCasks: casks,
+                scan: dependencies.scanApplications
             )
             let migrationPool = MigrationPlanner.migrationPool(
                 InstallationInventory.deduplicated(all)
@@ -385,11 +449,7 @@ final class MigrationStore: ObservableObject {
         ))
 
         let preparation: CaskReplacementSafety.Preparation
-        switch await CaskReplacementSafety.prepare(
-            token: token,
-            appURL: app.path,
-            brewService: model.brewService
-        ) {
+        switch await dependencies.prepareReplacement(token, app.path, model.brewService) {
         case .ready(let ready):
             preparation = ready
         case .resourcePostponed(let reason):
@@ -440,14 +500,11 @@ final class MigrationStore: ObservableObject {
             installError = error
         }
 
-        let installedAppURL = await CaskReplacementSafety.resolveInstalledAppURL(
+        let installedAppURL = await dependencies.resolveInstalledAppURL(
             preparation,
-            brewService: model.brewService
+            model.brewService
         )
-        let verification = await CaskReplacementSafety.verify(
-            preparation,
-            installedAppURL: installedAppURL
-        )
+        let verification = await dependencies.verifyReplacement(preparation, installedAppURL)
         guard reportMigrationVerification(
             verification,
             app: app,
@@ -542,7 +599,7 @@ final class MigrationStore: ObservableObject {
             let resolution = resolveRunningTarget(for: app)
             if case .notRunning = resolution { return resolution }
             if case .ambiguousBundleIdentifier = resolution { return resolution }
-            try? await Task.sleep(for: .milliseconds(250))
+            await dependencies.waitBetweenRunningChecks()
         }
         return resolveRunningTarget(for: app)
     }

@@ -102,7 +102,7 @@ extension ScanStore {
     func resolveCaskAppPaths(_ tokens: [String]) async -> [String: URL] {
         guard let model, !tokens.isEmpty else { return [:] }
         let infos = (try? await model.brewService.caskInstallationInfo(tokens: tokens)) ?? []
-        let resolved = CaskAppPathResolver().appPaths(from: infos)
+        let resolved = dependencies.caskAppPathResolver.appPaths(from: infos)
         return caskIconPaths
             .filter { tokens.contains($0.key) }
             .merging(resolved) { _, fresh in fresh }

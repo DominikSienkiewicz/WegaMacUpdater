@@ -58,7 +58,7 @@ final class DiagnosticsExportController: ObservableObject {
 
     // MARK: - Gathering
 
-    private func snapshot() async -> DiagnosticsSnapshot {
+    func snapshot() async -> DiagnosticsSnapshot {
         let now = Date()
         let agent = MenuBarAgent.shared
         let scan = ScanResultStore().load()
@@ -111,7 +111,7 @@ final class DiagnosticsExportController: ObservableObject {
     /// Both log files, including the rotated `wega.log.1` — which nothing in the app has
     /// read back until now, so half of every long-running session's history was invisible
     /// to a bug report.
-    private static func logFiles() -> [DiagnosticsSnapshot.LogFile] {
+    static func logFiles() -> [DiagnosticsSnapshot.LogFile] {
         let directory = LogStore.shared.logFileURL.deletingLastPathComponent()
         return ["wega.log", "wega.log.1"].compactMap { name in
             guard let contents = try? String(contentsOf: directory.appendingPathComponent(name), encoding: .utf8)
@@ -120,7 +120,7 @@ final class DiagnosticsExportController: ObservableObject {
         }
     }
 
-    private static func sourceResults(_ reports: ScanSourceReports?) -> [DiagnosticsSnapshot.SourceResult] {
+    static func sourceResults(_ reports: ScanSourceReports?) -> [DiagnosticsSnapshot.SourceResult] {
         guard let reports else { return [] }
         let named: [(String, ScanSourceReport?)] = [
             ("Homebrew metadata", reports.brewMetadata),
@@ -145,7 +145,7 @@ final class DiagnosticsExportController: ObservableObject {
     /// The signature picture: whether this build is signed by the Team ID it expects, plus
     /// every cask currently held on a rolled-back version and why. Team ID *values* of the
     /// user's other apps are deliberately not exported — the verdict is the diagnostic.
-    private static func signatures() -> [DiagnosticsSnapshot.SignatureRecord] {
+    static func signatures() -> [DiagnosticsSnapshot.SignatureRecord] {
         var records: [DiagnosticsSnapshot.SignatureRecord] = []
         let ownTeamID = CodeSignatureVerifier.teamID(ofAppAt: Bundle.main.bundleURL)
         let verdict: String
@@ -165,7 +165,7 @@ final class DiagnosticsExportController: ObservableObject {
         return records
     }
 
-    private static func helperStatusLabel(_ status: PrivilegedHelperClient.Status) -> String {
+    static func helperStatusLabel(_ status: PrivilegedHelperClient.Status) -> String {
         switch status {
         case .notRegistered:    return "not registered"
         case .requiresApproval: return "requires approval"
@@ -175,7 +175,7 @@ final class DiagnosticsExportController: ObservableObject {
         }
     }
 
-    private static func architecture() -> String {
+    static func architecture() -> String {
         var info = utsname()
         guard uname(&info) == 0 else { return "unknown" }
         return withUnsafeBytes(of: &info.machine) { rawBytes -> String in
@@ -184,7 +184,7 @@ final class DiagnosticsExportController: ObservableObject {
         }
     }
 
-    private nonisolated static func toolVersion(
+    nonisolated static func toolVersion(
         locator: @Sendable () -> URL?,
         arguments: [String]
     ) async -> String? {

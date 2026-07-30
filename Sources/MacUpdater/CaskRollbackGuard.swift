@@ -24,6 +24,53 @@ enum CaskRollbackGuard {
     /// a green banner.
     typealias Outcome = CaskValidationVerdict
 
+    struct Dependencies: Sendable {
+        var teamIDBeforeMutation: @Sendable (URL) -> String?
+        var teamIDAfterMutation: @Sendable (URL) async -> String?
+        var recordTeamID: @Sendable (String, String?) -> TeamIDAudit
+        var applyRollbackLedger: @MainActor @Sendable (String, Outcome) -> Void
+        var clone: @Sendable (URL, URL) throws -> Void
+        var bundleIdentifier: @Sendable (URL) -> String?
+        var passesGatekeeper: @Sendable (URL) async -> Bool
+        var restore: @Sendable (URL, URL) throws -> Void
+        var helperIsEnabled: @MainActor @Sendable () -> Bool
+        var helperReplace: @MainActor @Sendable (String, String) async throws -> Void
+        var removeItem: @Sendable (URL) throws -> Void
+        var smokeTestIsEnabled: @Sendable () -> Bool
+        var launchSmokeTest: @Sendable (URL) async -> LaunchSmokeTest.Verdict
+
+        static let live = Dependencies(
+            teamIDBeforeMutation: { CodeSignatureVerifier.teamID(ofAppAt: $0) },
+            teamIDAfterMutation: { appURL in
+                await Task.detached {
+                    CodeSignatureVerifier.teamID(ofAppAt: appURL)
+                }.value
+            },
+            recordTeamID: { TeamIDLedger.shared.record(bundleID: $0, teamID: $1) },
+            applyRollbackLedger: { CaskRollbackLedger.shared.apply(token: $0, verdict: $1) },
+            clone: { try BundleSnapshot.clone($0, to: $1) },
+            bundleIdentifier: { CaskReplacementArtifactIdentity.bundleIdentifier(at: $0) },
+            passesGatekeeper: { appURL in
+                await Task.detached {
+                    CanaryCheck.passesGatekeeper(appAt: appURL)
+                }.value
+            },
+            restore: { try BundleSnapshot.restore(snapshot: $0, to: $1) },
+            helperIsEnabled: { PrivilegedHelperClient.shared.isEnabled },
+            helperReplace: {
+                try await PrivilegedHelperClient.shared.replaceBundle(
+                    at: $0,
+                    withSnapshotAt: $1
+                )
+            },
+            removeItem: { try FileManager.default.removeItem(at: $0) },
+            smokeTestIsEnabled: { LaunchSmokeTestConfiguration.isEnabled() },
+            launchSmokeTest: {
+                await LaunchSmokeTest.run(bundleAt: $0, probe: WorkspaceAppLaunchProbe())
+            }
+        )
+    }
+
     private enum PublisherBaseline {
         case ledger
         case expected(String?)
@@ -37,12 +84,40 @@ enum CaskRollbackGuard {
     /// Reads the installed publishers before any snapshot or package-manager mutation.
     /// A bundle that already differs from the trusted ledger is not a safe rollback source,
     /// so callers must exclude every returned token from the upgrade command.
-    static func publisherVetoes(tokens: [String], appPaths: [String: URL]) -> [String: TeamIDAudit] {
+    static func publisherVetoes(
+        tokens: [String],
+        appPaths: [String: URL]
+    ) -> [String: TeamIDAudit] {
+        publisherVetoesImpl(tokens: tokens, appPaths: appPaths, dependencies: nil)
+    }
+
+    static func publisherVetoes(
+        tokens: [String],
+        appPaths: [String: URL],
+        dependencies: Dependencies
+    ) -> [String: TeamIDAudit] {
+        publisherVetoesImpl(tokens: tokens, appPaths: appPaths, dependencies: dependencies)
+    }
+
+    private static func publisherVetoesImpl(
+        tokens: [String],
+        appPaths: [String: URL],
+        dependencies: Dependencies?
+    ) -> [String: TeamIDAudit] {
         var vetoes: [String: TeamIDAudit] = [:]
         for token in tokens {
             guard let appURL = appPaths[token] else { continue }
-            let currentTeamID = CodeSignatureVerifier.teamID(ofAppAt: appURL)
-            let audit = TeamIDLedger.shared.record(bundleID: TeamIDLedger.caskKey(token), teamID: currentTeamID)
+            let currentTeamID: String?
+            if let dependencies {
+                currentTeamID = dependencies.teamIDBeforeMutation(appURL)
+            } else {
+                currentTeamID = CodeSignatureVerifier.teamID(ofAppAt: appURL)
+            }
+            let audit = dependencies?.recordTeamID(TeamIDLedger.caskKey(token), currentTeamID)
+                ?? TeamIDLedger.shared.record(
+                    bundleID: TeamIDLedger.caskKey(token),
+                    teamID: currentTeamID
+                )
             guard case let .changed(old, new) = audit else { continue }
             vetoes[token] = audit
             WegaLog.error(
@@ -65,12 +140,35 @@ enum CaskRollbackGuard {
         appPaths: [String: URL],
         operation: UpdateOperationSession
     ) -> [String: URL] {
+        snapshotImpl(tokens: tokens, appPaths: appPaths, operation: operation, dependencies: nil)
+    }
+
+    static func snapshot(
+        tokens: [String],
+        appPaths: [String: URL],
+        operation: UpdateOperationSession,
+        dependencies: Dependencies
+    ) -> [String: URL] {
+        snapshotImpl(tokens: tokens, appPaths: appPaths, operation: operation, dependencies: dependencies)
+    }
+
+    private static func snapshotImpl(
+        tokens: [String],
+        appPaths: [String: URL],
+        operation: UpdateOperationSession,
+        dependencies: Dependencies?
+    ) -> [String: URL] {
         var snapshots: [String: URL] = [:]
         for token in tokens {
             guard let appURL = appPaths[token] else { continue }
             let name = UpdateOperationSession.snapshotDirectoryName(for: token)
             let dest = operation.snapshotsDirectory.appendingPathComponent(name, isDirectory: true)
-            if (try? BundleSnapshot.clone(appURL, to: dest)) != nil {
+            let cloned = if let dependencies {
+                (try? dependencies.clone(appURL, dest)) != nil
+            } else {
+                (try? BundleSnapshot.clone(appURL, to: dest)) != nil
+            }
+            if cloned {
                 snapshots[token] = dest
                 operation.recordSnapshotted(token: token, snapshotName: name)
             }
@@ -109,6 +207,31 @@ enum CaskRollbackGuard {
         return outcomes
     }
 
+    static func verify(
+        tokens: [String],
+        appPaths: [String: URL],
+        snapshots: [String: URL],
+        operation: UpdateOperationSession,
+        dependencies: Dependencies
+    ) async -> [String: Outcome] {
+        var outcomes: [String: Outcome] = [:]
+        for token in tokens {
+            guard let appURL = appPaths[token] else { continue }
+            let outcome = await verify(
+                token: token,
+                snapshotURL: snapshots[token],
+                validationURL: appURL,
+                publisherBaseline: .ledger,
+                bundleIdentityBaseline: .unchecked,
+                dependencies: dependencies
+            )
+            dependencies.applyRollbackLedger(token, outcome)
+            operation.recordVerdict(token: token, verdict: outcome)
+            outcomes[token] = outcome
+        }
+        return outcomes
+    }
+
     /// Verifies a replacement against the publisher read before mutation. The snapshot can
     /// originate in `~/Applications` while the installed artifact now lives in `/Applications`;
     /// validation and rollback therefore intentionally use `validationURL`, not the old path.
@@ -135,17 +258,63 @@ enum CaskRollbackGuard {
         return outcome
     }
 
+    static func verify(
+        token: String,
+        snapshotURL: URL,
+        validationURL: URL,
+        expectedTeamID: String?,
+        expectedBundleIdentifier: String?,
+        operation: UpdateOperationSession? = nil,
+        dependencies: Dependencies = .live
+    ) async -> Outcome {
+        let outcome = await verify(
+            token: token,
+            snapshotURL: snapshotURL,
+            validationURL: validationURL,
+            publisherBaseline: .expected(expectedTeamID),
+            bundleIdentityBaseline: .expected(expectedBundleIdentifier),
+            dependencies: dependencies
+        )
+        dependencies.applyRollbackLedger(token, outcome)
+        operation?.recordVerdict(token: token, verdict: outcome)
+        return outcome
+    }
+
     private static func verify(
         token: String,
         snapshotURL: URL?,
         validationURL: URL,
         publisherBaseline: PublisherBaseline,
-        bundleIdentityBaseline: BundleIdentityBaseline
+        bundleIdentityBaseline: BundleIdentityBaseline,
+        dependencies: Dependencies? = nil
     ) async -> Outcome {
-        if case .expected(let expectedBundleIdentifier) = bundleIdentityBaseline {
-            let installedBundleIdentifier = CaskReplacementArtifactIdentity.bundleIdentifier(
-                at: validationURL
+        func restoreSnapshot(
+            _ snapshot: URL,
+            to appURL: URL,
+            preservingSnapshot: Bool = false
+        ) async -> Bool {
+            await Self.restoreSnapshot(
+                snapshot,
+                to: appURL,
+                preservingSnapshot: preservingSnapshot,
+                dependencies: dependencies
             )
+        }
+        func launchSmokeTest(token: String, appURL: URL) async -> LaunchSmokeTest.Verdict {
+            await Self.launchSmokeTest(
+                token: token,
+                appURL: appURL,
+                dependencies: dependencies
+            )
+        }
+
+        if case .expected(let expectedBundleIdentifier) = bundleIdentityBaseline {
+            let installedBundleIdentifier: String?
+            if let dependencies {
+                installedBundleIdentifier = dependencies.bundleIdentifier(validationURL)
+            } else {
+                installedBundleIdentifier = CaskReplacementArtifactIdentity.bundleIdentifier(at: validationURL)
+            }
             guard expectedBundleIdentifier == installedBundleIdentifier else {
                 WegaLog.error(
                     .homebrew,
@@ -162,24 +331,44 @@ enum CaskRollbackGuard {
             }
         }
 
-        let healthy = await Task.detached {
-            CanaryCheck.passesGatekeeper(appAt: validationURL)
-        }.value
+        func liveGatekeeperResult() async -> Bool {
+            let healthy = await Task.detached {
+                CanaryCheck.passesGatekeeper(appAt: validationURL)
+            }.value
+            return healthy
+        }
+        let healthy = if let dependencies {
+            await dependencies.passesGatekeeper(validationURL)
+        } else {
+            await liveGatekeeperResult()
+        }
         guard healthy else {
             guard let snapshotURL else { return .rollbackFailed }
             return await restoreSnapshot(snapshotURL, to: validationURL) ? .rolledBack : .rollbackFailed
         }
 
-        let installedTeamID = await Task.detached {
-            CodeSignatureVerifier.teamID(ofAppAt: validationURL)
-        }.value
+        func liveInstalledTeamID() async -> String? {
+            let installedTeamID = await Task.detached {
+                CodeSignatureVerifier.teamID(ofAppAt: validationURL)
+            }.value
+            return installedTeamID
+        }
+        let installedTeamID = if let dependencies {
+            await dependencies.teamIDAfterMutation(validationURL)
+        } else {
+            await liveInstalledTeamID()
+        }
         let publisherAudit: TeamIDAudit
         switch publisherBaseline {
         case .ledger:
-            publisherAudit = TeamIDLedger.shared.record(
-                bundleID: TeamIDLedger.caskKey(token),
-                teamID: installedTeamID
-            )
+            if let dependencies {
+                publisherAudit = dependencies.recordTeamID(TeamIDLedger.caskKey(token), installedTeamID)
+            } else {
+                publisherAudit = TeamIDLedger.shared.record(
+                    bundleID: TeamIDLedger.caskKey(token),
+                    teamID: installedTeamID
+                )
+            }
         case .expected(let expectedTeamID):
             publisherAudit = expectedTeamID == installedTeamID
                 ? .unchanged(teamID: installedTeamID)
@@ -202,7 +391,11 @@ enum CaskRollbackGuard {
                 : .rollbackFailed
         case .firstSeen, .unchanged:
             if case .expected = publisherBaseline {
-                TeamIDLedger.shared.record(bundleID: TeamIDLedger.caskKey(token), teamID: installedTeamID)
+                if let dependencies {
+                    _ = dependencies.recordTeamID(TeamIDLedger.caskKey(token), installedTeamID)
+                } else {
+                    TeamIDLedger.shared.record(bundleID: TeamIDLedger.caskKey(token), teamID: installedTeamID)
+                }
             }
             // LT-02 — the fourth and last gate: everything above describes the artifact, this
             // one describes what happens when it runs. It comes last on purpose — a bundle
@@ -227,14 +420,19 @@ enum CaskRollbackGuard {
     static func restoreSnapshot(
         _ snapshot: URL,
         to appURL: URL,
-        preservingSnapshot: Bool = false
+        preservingSnapshot: Bool = false,
+        dependencies: Dependencies? = nil
     ) async -> Bool {
         let restorationSource: URL
         if preservingSnapshot {
             restorationSource = snapshot.deletingLastPathComponent()
                 .appendingPathComponent("restore-\(UUID().uuidString).app")
             do {
-                try BundleSnapshot.clone(snapshot, to: restorationSource)
+                if let dependencies {
+                    try dependencies.clone(snapshot, restorationSource)
+                } else {
+                    try BundleSnapshot.clone(snapshot, to: restorationSource)
+                }
             } catch {
                 WegaLog.error(.homebrew,
                               "Nie udało się zachować snapshotu przed rollbackiem: \(error.localizedDescription)")
@@ -246,19 +444,33 @@ enum CaskRollbackGuard {
         defer {
             if preservingSnapshot {
                 // Cleanup is best-effort; the retained original snapshot remains recoverable.
-                try? FileManager.default.removeItem(at: restorationSource)
+                if let dependencies {
+                    try? dependencies.removeItem(restorationSource)
+                } else {
+                    try? FileManager.default.removeItem(at: restorationSource)
+                }
             }
         }
 
         do {
-            try BundleSnapshot.restore(snapshot: restorationSource, to: appURL)
+            if let dependencies {
+                try dependencies.restore(restorationSource, appURL)
+            } else {
+                try BundleSnapshot.restore(snapshot: restorationSource, to: appURL)
+            }
             return true
         } catch {
-            guard PrivilegedHelperClient.shared.isEnabled else { return false }
+            let helperIsEnabled = dependencies?.helperIsEnabled()
+                ?? PrivilegedHelperClient.shared.isEnabled
+            guard helperIsEnabled else { return false }
             do {
-                try await PrivilegedHelperClient.shared.replaceBundle(
-                    at: appURL.path, withSnapshotAt: restorationSource.path
-                )
+                if let dependencies {
+                    try await dependencies.helperReplace(appURL.path, restorationSource.path)
+                } else {
+                    try await PrivilegedHelperClient.shared.replaceBundle(
+                        at: appURL.path, withSnapshotAt: restorationSource.path
+                    )
+                }
                 return true
             } catch {
                 WegaLog.error(.helper, "Rollback przez helper nie powiódł się: \(error.localizedDescription)")
@@ -272,10 +484,19 @@ enum CaskRollbackGuard {
     /// The verdict is narrated here rather than inside `LaunchSmokeTest` so the decision
     /// logic stays a pure function in Core; what the caller does with it — restore or keep —
     /// is `requiresRollback`, not this log line.
-    private static func launchSmokeTest(token: String, appURL: URL) async -> LaunchSmokeTest.Verdict {
-        guard LaunchSmokeTestConfiguration.isEnabled() else { return .skipped(.disabled) }
-
-        let verdict = await LaunchSmokeTest.run(bundleAt: appURL, probe: WorkspaceAppLaunchProbe())
+    private static func launchSmokeTest(
+        token: String,
+        appURL: URL,
+        dependencies: Dependencies? = nil
+    ) async -> LaunchSmokeTest.Verdict {
+        let verdict: LaunchSmokeTest.Verdict
+        if let dependencies {
+            guard dependencies.smokeTestIsEnabled() else { return .skipped(.disabled) }
+            verdict = await dependencies.launchSmokeTest(appURL)
+        } else {
+            guard LaunchSmokeTestConfiguration.isEnabled() else { return .skipped(.disabled) }
+            verdict = await LaunchSmokeTest.run(bundleAt: appURL, probe: WorkspaceAppLaunchProbe())
+        }
         switch verdict {
         case .survived:
             WegaLog.info(.homebrew, "\(token): nowa wersja uruchomiła się i przeżyła test startu.")
@@ -294,6 +515,7 @@ enum CaskRollbackGuard {
         }
         return verdict
     }
+
 }
 
 /// Guarantees that a foreground upgrade and a background upgrade never run at once (F3).

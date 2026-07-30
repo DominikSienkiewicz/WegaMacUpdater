@@ -11,7 +11,7 @@ extension ScanStore {
         // REL-12 — a clean stop switch per run; a previous cancellation may not leak in.
         resetUpdateInterruption()
         do {
-            try await UpgradeCoordinator.shared.performWriteLease(.foregroundUpgrade) { lease in
+            try await dependencies.upgrades.performWriteLease(.foregroundUpgrade) { lease in
                 await self.runUpdateCoordinated(targetKeys: targetKeys, operationLease: lease)
             }
         } catch is CancellationError {
@@ -228,7 +228,7 @@ extension ScanStore {
         // OBS-02 — the verdicts below drive banners that vanish with the window. The same
         // run is also written to the durable journal, so a bug report filed tomorrow can
         // still say what happened today.
-        UpdateRunJournal().record(
+        dependencies.recordUpdateRun(
             UpdateJournalEntry(summary: summary, trigger: .manual, finishedAt: Date())
         )
 
@@ -274,7 +274,9 @@ extension ScanStore {
         //
         // Keyed on the refusal rather than on success, like `BackgroundUpdater`: a run that
         // failed for some unrelated reason still proves the permission is no longer missing.
-        if summary.needsAppManagementPermission {
+        if let settleAppManagementPermission = dependencies.settleAppManagementPermission {
+            settleAppManagementPermission(summary.needsAppManagementPermission)
+        } else if summary.needsAppManagementPermission {
             AppManagementDenialStore.shared.recordDenial()
         } else {
             AppManagementDenialStore.shared.clear()
