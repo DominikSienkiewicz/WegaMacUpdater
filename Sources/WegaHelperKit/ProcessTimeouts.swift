@@ -35,5 +35,5 @@ public struct ProcessTimeoutPolicy: Equatable, Sendable {
 
     /// What a `ProcessRequest` gets when its caller names no policy. Bounded on purpose:
     /// forgetting to pass a limit must not resurrect the unbounded wait REL-12 is about.
-    public static let `default` = query
+    public static let standard = query
 }

@@ -102,6 +102,82 @@ public struct DiagnosticsSnapshot: Sendable {
         }
     }
 
+    /// Application and host facts that identify the environment in which the snapshot was made.
+    public struct Runtime: Sendable, Equatable {
+        public let generatedAt: Date
+        public let appVersion: String
+        public let appBuild: String
+        public let bundleIdentifier: String
+        public let osVersion: String
+        public let architecture: String
+        public let processorCount: Int
+
+        public init(
+            generatedAt: Date,
+            appVersion: String,
+            appBuild: String,
+            bundleIdentifier: String,
+            osVersion: String,
+            architecture: String,
+            processorCount: Int
+        ) {
+            self.generatedAt = generatedAt
+            self.appVersion = appVersion
+            self.appBuild = appBuild
+            self.bundleIdentifier = bundleIdentifier
+            self.osVersion = osVersion
+            self.architecture = architecture
+            self.processorCount = processorCount
+        }
+    }
+
+    /// Outcome and timestamp of the most recent application scan.
+    public struct Scan: Sendable, Equatable {
+        public let lastScanAt: Date?
+        public let complete: Bool
+        public let sourceResults: [SourceResult]
+
+        public init(lastScanAt: Date?, complete: Bool, sourceResults: [SourceResult]) {
+            self.lastScanAt = lastScanAt
+            self.complete = complete
+            self.sourceResults = sourceResults
+        }
+    }
+
+    /// Resource and permission facts collected from the host operating system.
+    public struct SystemState: Sendable, Equatable {
+        public let freeDiskBytes: Int64?
+        public let signatures: [SignatureRecord]
+        public let appManagementPermission: String
+
+        public init(
+            freeDiskBytes: Int64?,
+            signatures: [SignatureRecord],
+            appManagementPermission: String
+        ) {
+            self.freeDiskBytes = freeDiskBytes
+            self.signatures = signatures
+            self.appManagementPermission = appManagementPermission
+        }
+    }
+
+    /// Existing diagnostic artefacts that are copied into the export bundle.
+    public struct Artifacts: Sendable, Equatable {
+        public let history: [UpdateJournalEntry]
+        public let logFiles: [LogFile]
+        public let logWriteFailureCount: Int
+
+        public init(
+            history: [UpdateJournalEntry],
+            logFiles: [LogFile],
+            logWriteFailureCount: Int
+        ) {
+            self.history = history
+            self.logFiles = logFiles
+            self.logWriteFailureCount = logWriteFailureCount
+        }
+    }
+
     public let generatedAt: Date
     public let appVersion: String
     public let appBuild: String
@@ -121,46 +197,37 @@ public struct DiagnosticsSnapshot: Sendable {
     public let history: [UpdateJournalEntry]
     public let logFiles: [LogFile]
     public let logWriteFailureCount: Int
+}
 
+extension DiagnosticsSnapshot {
+    /// Creates a snapshot from cohesive runtime, service, scan and artefact groups.
     public init(
-        generatedAt: Date,
-        appVersion: String,
-        appBuild: String,
-        bundleIdentifier: String,
-        osVersion: String,
-        architecture: String,
-        processorCount: Int,
+        runtime: Runtime,
         managers: [Manager],
         helper: Helper,
         schedule: Schedule,
-        lastScanAt: Date?,
-        lastScanComplete: Bool,
-        sourceResults: [SourceResult],
-        freeDiskBytes: Int64?,
-        signatures: [SignatureRecord],
-        appManagementPermission: String,
-        history: [UpdateJournalEntry],
-        logFiles: [LogFile],
-        logWriteFailureCount: Int
+        scan: Scan,
+        system: SystemState,
+        artifacts: Artifacts
     ) {
-        self.generatedAt = generatedAt
-        self.appVersion = appVersion
-        self.appBuild = appBuild
-        self.bundleIdentifier = bundleIdentifier
-        self.osVersion = osVersion
-        self.architecture = architecture
-        self.processorCount = processorCount
+        self.generatedAt = runtime.generatedAt
+        self.appVersion = runtime.appVersion
+        self.appBuild = runtime.appBuild
+        self.bundleIdentifier = runtime.bundleIdentifier
+        self.osVersion = runtime.osVersion
+        self.architecture = runtime.architecture
+        self.processorCount = runtime.processorCount
         self.managers = managers
         self.helper = helper
         self.schedule = schedule
-        self.lastScanAt = lastScanAt
-        self.lastScanComplete = lastScanComplete
-        self.sourceResults = sourceResults
-        self.freeDiskBytes = freeDiskBytes
-        self.signatures = signatures
-        self.appManagementPermission = appManagementPermission
-        self.history = history
-        self.logFiles = logFiles
-        self.logWriteFailureCount = logWriteFailureCount
+        self.lastScanAt = scan.lastScanAt
+        self.lastScanComplete = scan.complete
+        self.sourceResults = scan.sourceResults
+        self.freeDiskBytes = system.freeDiskBytes
+        self.signatures = system.signatures
+        self.appManagementPermission = system.appManagementPermission
+        self.history = artifacts.history
+        self.logFiles = artifacts.logFiles
+        self.logWriteFailureCount = artifacts.logWriteFailureCount
     }
 }

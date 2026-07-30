@@ -17,8 +17,8 @@ public struct ProcessRequest: Equatable, Sendable {
         arguments: [String] = [],
         environment: [String: String] = [:],
         inheritParentEnvironment: Bool = true,
-        timeout: TimeInterval? = ProcessTimeoutPolicy.default.deadline,
-        idleTimeout: TimeInterval? = ProcessTimeoutPolicy.default.idle
+        timeout: TimeInterval? = ProcessTimeoutPolicy.standard.deadline,
+        idleTimeout: TimeInterval? = ProcessTimeoutPolicy.standard.idle
     ) {
         self.executableURL = executableURL
         self.arguments = arguments

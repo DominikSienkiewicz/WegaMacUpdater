@@ -68,13 +68,16 @@ final class DiagnosticsExportController: ObservableObject {
         let npmDetected = await NpmLocator().locate() != nil
 
         return DiagnosticsSnapshot(
-            generatedAt: now,
-            appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? AppMetadata.version,
-            appBuild: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown",
-            bundleIdentifier: Bundle.main.bundleIdentifier ?? AppMetadata.bundleIdentifier,
-            osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
-            architecture: Self.architecture(),
-            processorCount: ProcessInfo.processInfo.processorCount,
+            runtime: .init(
+                generatedAt: now,
+                appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+                    ?? AppMetadata.version,
+                appBuild: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown",
+                bundleIdentifier: Bundle.main.bundleIdentifier ?? AppMetadata.bundleIdentifier,
+                osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+                architecture: Self.architecture(),
+                processorCount: ProcessInfo.processInfo.processorCount
+            ),
             managers: [
                 .init(name: "Homebrew", version: brewVersion, detected: brewVersion != nil),
                 .init(name: "mas-cli", version: masVersion, detected: masVersion != nil),
@@ -96,15 +99,21 @@ final class DiagnosticsExportController: ObservableObject {
                 launchAtLogin: LoginItemService.shared.isEnabled,
                 backgroundUpdatesEnabled: !BackgroundUpdateOptInStore.shared.tokens.isEmpty
             ),
-            lastScanAt: scan?.scannedAt,
-            lastScanComplete: scan?.isComplete ?? false,
-            sourceResults: Self.sourceResults(scan?.sources),
-            freeDiskBytes: DiskResourceProbe.availableBytes(),
-            signatures: Self.signatures(),
-            appManagementPermission: String(describing: AppManagementPermissionProbe.liveStatus()),
-            history: journal.entries(),
-            logFiles: Self.logFiles(),
-            logWriteFailureCount: LogStore.shared.writeFailureCount
+            scan: .init(
+                lastScanAt: scan?.scannedAt,
+                complete: scan?.isComplete ?? false,
+                sourceResults: Self.sourceResults(scan?.sources)
+            ),
+            system: .init(
+                freeDiskBytes: DiskResourceProbe.availableBytes(),
+                signatures: Self.signatures(),
+                appManagementPermission: String(describing: AppManagementPermissionProbe.liveStatus())
+            ),
+            artifacts: .init(
+                history: journal.entries(),
+                logFiles: Self.logFiles(),
+                logWriteFailureCount: LogStore.shared.writeFailureCount
+            )
         )
     }
 
