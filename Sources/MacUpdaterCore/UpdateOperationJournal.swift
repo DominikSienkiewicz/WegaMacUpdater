@@ -278,7 +278,7 @@ public final class UpdateOperationStore: @unchecked Sendable {
                       ) else { continue }
                 let updatedAt = item.history.last(where: { $0.phase == .committed })?.at ?? committedAt
                 let expiresAt = updatedAt.addingTimeInterval(Self.retentionInterval)
-                guard expiresAt > now else { continue }
+                guard expiresAt >= now else { continue }
                 result.append(UndoableUpdate(
                     operationID: operation.id,
                     token: item.token,
