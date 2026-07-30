@@ -27,7 +27,9 @@ struct UninstallScan: Equatable, Sendable {
 
         var installedCaskTokens: Set<String> = []
         do { installedCaskTokens = try await installedCasks() }
-        catch is CancellationError {}
+        catch is CancellationError {
+            // Cancellation is intentionally not recorded as a source failure.
+        }
         catch { failures.append(ScanSourceFailure(source: .homebrew, message: error.localizedDescription)) }
 
         var found: [ApplicationInfo] = []

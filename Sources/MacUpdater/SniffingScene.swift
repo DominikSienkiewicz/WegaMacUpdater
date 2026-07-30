@@ -65,9 +65,14 @@ struct WigglyWega: View {
     @State private var wiggle: Bool = false
 
     var body: some View {
+        let animatedRotationDegrees = wiggle ? 2.4 : -2.4
+        let rotationDegrees = reduceMotion ? 0 : animatedRotationDegrees
+        let animatedOffset: CGFloat = wiggle ? -1 : 1
+        let verticalOffset = reduceMotion ? 0 : animatedOffset
+
         WegaFull(pose: .sniff, size: size)
-            .rotationEffect(.degrees(reduceMotion ? 0 : (wiggle ? 2.4 : -2.4)), anchor: .bottom)
-            .offset(y: reduceMotion ? 0 : (wiggle ? -1 : 1))
+            .rotationEffect(.degrees(rotationDegrees), anchor: .bottom)
+            .offset(y: verticalOffset)
             .onAppear { startWiggle() }
             .onChange(of: reduceMotion) { _, _ in startWiggle() }
     }
