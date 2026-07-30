@@ -25,7 +25,9 @@ final class BackgroundUpdater {
 
     private let brewService = BrewService()
 
-    private init() {}
+    private init() {
+        // Singleton setup is complete once the stored-property defaults are initialized.
+    }
 
     /// Runs after a scheduled background check. Does nothing — silently and by design —
     /// when nothing qualifies, when the window is mid-upgrade, or when no app is opted in.

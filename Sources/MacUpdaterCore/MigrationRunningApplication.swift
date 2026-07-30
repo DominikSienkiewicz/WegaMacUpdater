@@ -67,7 +67,9 @@ public protocol RunningApplicationInspecting: Sendable {
 }
 
 public struct WorkspaceRunningApplicationInspector: RunningApplicationInspecting {
-    public init() {}
+    public init() {
+        // This public adapter is stateless and needs no additional setup.
+    }
 
     @MainActor
     public func runningApplications() -> [RunningApplicationTarget] {
@@ -94,7 +96,9 @@ public protocol RunningApplicationTargetTerminating: Sendable {
 }
 
 public struct WorkspaceTargetTerminator: RunningApplicationTargetTerminating {
-    public init() {}
+    public init() {
+        // This public adapter is stateless and needs no additional setup.
+    }
 
     @MainActor
     public func requestGracefulTermination(_ target: RunningApplicationTarget) -> Bool {

@@ -55,7 +55,9 @@ public actor OperationCoordinator {
     private var activeOperations: [UUID: ActiveOperation] = [:]
     private var waiters: [Waiter] = []
 
-    public init() {}
+    public init() {
+        // Actor state is fully initialized by the stored-property defaults above.
+    }
 
     public func snapshot() -> Snapshot {
         Snapshot(

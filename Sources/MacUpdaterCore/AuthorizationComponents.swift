@@ -178,7 +178,9 @@ struct AuthorizationComponentResolver {
             helperDirectories: [helpersDirectory],
             fileManager: fileManager,
             verifyCode: verifyCode,
-            validateLocation: { _ in }
+            validateLocation: { _ in
+                // Signature-only tests deliberately bypass the production location check.
+            }
         )
     }
 

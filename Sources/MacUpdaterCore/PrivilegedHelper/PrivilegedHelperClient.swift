@@ -246,7 +246,9 @@ private final class Once<T>: @unchecked Sendable {
 /// tested directly (see PrivilegedHelperDeadlineTests).
 func awaitReplyWithDeadline<T: Sendable>(
     timeout: Duration,
-    onTimeout: @escaping @Sendable () -> Void = {},
+    onTimeout: @escaping @Sendable () -> Void = {
+        // Callers without connection state have nothing to tear down after a timeout.
+    },
     body: (_ done: @escaping @Sendable (sending Result<T, Error>) -> Void) -> Void
 ) async throws -> T {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<T, Error>) in
