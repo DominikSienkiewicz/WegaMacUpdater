@@ -346,41 +346,57 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         // it (terminate/kill) are individually thread-safe, so cross the boundary explicitly.
         let box = UncheckedSendableBox(process)
         return await withTaskCancellationHandler {
-            await withTaskGroup(of: ExitOutcome.self) { group in
-                group.addTask {
-                    await termination.wait()
-                    return .completed
-                }
-                if let timeout {
-                    group.addTask {
-                        // A thrown (nil) sleep means the process already exited and we were
-                        // cancelled out of the group — that value is discarded below.
-                        if (try? await Task.sleep(for: .seconds(timeout))) == nil {
-                            return .completed
-                        }
-                        return .timedOut(timeout)
-                    }
-                }
-                if let idleTimeout {
-                    group.addTask { await Self.awaitSilence(activity: activity, limit: idleTimeout) }
-                }
-
-                let winner = await group.next() ?? .completed
-                switch winner {
-                case .timedOut, .idleTimedOut:
-                    Self.terminateProcessTree(box.value)
-                case .completed, .cancelled:
-                    break
-                }
-                group.cancelAll()
-                await group.waitForAll()
-
-                // A cancellation request outranks a natural finish: the caller asked to stop.
-                if Task.isCancelled { return .cancelled }
-                return winner
-            }
+            await raceExit(
+                process: box,
+                termination: termination,
+                activity: activity,
+                timeout: timeout,
+                idleTimeout: idleTimeout
+            )
         } onCancel: {
             Self.terminateProcessTree(box.value)
+        }
+    }
+
+    private static func raceExit(
+        process: UncheckedSendableBox<Process>,
+        termination: TerminationSignal,
+        activity: OutputActivity,
+        timeout: TimeInterval?,
+        idleTimeout: TimeInterval?
+    ) async -> ExitOutcome {
+        await withTaskGroup(of: ExitOutcome.self) { group in
+            group.addTask {
+                await termination.wait()
+                return .completed
+            }
+            if let timeout {
+                group.addTask {
+                    // A thrown (nil) sleep means the process already exited and we were
+                    // cancelled out of the group — that value is discarded below.
+                    if (try? await Task.sleep(for: .seconds(timeout))) == nil {
+                        return .completed
+                    }
+                    return .timedOut(timeout)
+                }
+            }
+            if let idleTimeout {
+                group.addTask { await Self.awaitSilence(activity: activity, limit: idleTimeout) }
+            }
+
+            let winner = await group.next() ?? .completed
+            switch winner {
+            case .timedOut, .idleTimedOut:
+                Self.terminateProcessTree(process.value)
+            case .completed, .cancelled:
+                break
+            }
+            group.cancelAll()
+            await group.waitForAll()
+
+            // A cancellation request outranks a natural finish: the caller asked to stop.
+            if Task.isCancelled { return .cancelled }
+            return winner
         }
     }
 

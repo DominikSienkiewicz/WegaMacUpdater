@@ -100,6 +100,19 @@ public enum WegaHelper {
         case targetSwapped
     }
 
+    /// The identifiers that bind a bundle snapshot to the installed application it may
+    /// replace. Either value may be absent when the bundle cannot be inspected; the gate
+    /// rejects such incomplete identities.
+    public struct BundleIdentity: Equatable, Sendable {
+        public var bundleID: String?
+        public var teamID: String?
+
+        public init(bundleID: String?, teamID: String?) {
+            self.bundleID = bundleID
+            self.teamID = teamID
+        }
+    }
+
     /// What the daemon learned about the two bundles from the filesystem, gathered as root
     /// immediately before the replacement.
     ///
@@ -119,26 +132,6 @@ public enum WegaHelper {
         public var targetOwnerUID: UInt32
         /// Owner of the current console session, or `nil` when nobody is logged in.
         public var consoleUserUID: UInt32?
-
-        public init(
-            targetResolvedPath: String,
-            targetIsSymlink: Bool,
-            targetBundleID: String?,
-            targetTeamID: String?,
-            snapshotBundleID: String?,
-            snapshotTeamID: String?,
-            targetOwnerUID: UInt32,
-            consoleUserUID: UInt32?
-        ) {
-            self.targetResolvedPath = targetResolvedPath
-            self.targetIsSymlink = targetIsSymlink
-            self.targetBundleID = targetBundleID
-            self.targetTeamID = targetTeamID
-            self.snapshotBundleID = snapshotBundleID
-            self.snapshotTeamID = snapshotTeamID
-            self.targetOwnerUID = targetOwnerUID
-            self.consoleUserUID = consoleUserUID
-        }
     }
 
     /// SEC-03: the checks that need the filesystem, kept as a pure function over facts the
@@ -243,5 +236,29 @@ public enum WegaHelper {
         replacing: PackageStaging.ArtifactIdentity
     ) -> BundleReplacementRejection? {
         validated == replacing ? nil : .targetSwapped
+    }
+}
+
+extension WegaHelper.BundleReplacementFacts {
+    /// Public construction groups the identifiers by bundle. The internal memberwise
+    /// initializer remains available to `@testable` clients that use the original flat shape.
+    public init(
+        targetResolvedPath: String,
+        targetIsSymlink: Bool,
+        targetIdentity: WegaHelper.BundleIdentity,
+        snapshotIdentity: WegaHelper.BundleIdentity,
+        targetOwnerUID: UInt32,
+        consoleUserUID: UInt32?
+    ) {
+        self.init(
+            targetResolvedPath: targetResolvedPath,
+            targetIsSymlink: targetIsSymlink,
+            targetBundleID: targetIdentity.bundleID,
+            targetTeamID: targetIdentity.teamID,
+            snapshotBundleID: snapshotIdentity.bundleID,
+            snapshotTeamID: snapshotIdentity.teamID,
+            targetOwnerUID: targetOwnerUID,
+            consoleUserUID: consoleUserUID
+        )
     }
 }
