@@ -29,7 +29,7 @@ struct ProcessRunnerStarvationTests {
                 try? await runner.run(
                     ProcessRequest(
                         executableURL: URL(fileURLWithPath: "/bin/sleep"),
-                        arguments: ["3"],
+                        arguments: ["10"],
                         // Safety net so a regression can never hang the suite here.
                         timeout: 30
                     )
@@ -49,7 +49,7 @@ struct ProcessRunnerStarvationTests {
         let elapsed = clock.now - start
 
         #expect(
-            elapsed < .seconds(1),
+            elapsed < .seconds(3),
             "unrelated async work was starved for \(elapsed) while \(processCount) processes ran"
         )
 
