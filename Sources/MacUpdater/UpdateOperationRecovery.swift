@@ -25,9 +25,11 @@ final class UpdateOperationRecovery {
     static let shared = UpdateOperationRecovery()
 
     private let store: UpdateOperationStore
+    private let dependencies: Dependencies
 
-    init(store: UpdateOperationStore = .shared) {
+    init(store: UpdateOperationStore = .shared, dependencies: Dependencies = .live) {
         self.store = store
+        self.dependencies = dependencies
     }
 
     struct Report: Equatable {
@@ -40,6 +42,44 @@ final class UpdateOperationRecovery {
             abortedTokens.isEmpty && committedTokens.isEmpty
                 && rolledBackTokens.isEmpty && unrecoverableTokens.isEmpty
         }
+    }
+
+    struct Dependencies: Sendable {
+        var fileExists: @Sendable (String) -> Bool
+        var appVersion: @Sendable (URL) -> String?
+        var verify: @MainActor @Sendable (
+            [String], [String: URL], [String: URL], UpdateOperationSession
+        ) async -> [String: CaskValidationVerdict]
+        var clone: @Sendable (URL, URL) throws -> Void
+        var recordRollback: @MainActor @Sendable (String) -> Void
+        var removeItem: @Sendable (URL) throws -> Void
+        var legacyDirectory: @Sendable () -> URL
+        var announce: @MainActor @Sendable (Report) -> Void
+
+        static let live = Dependencies(
+            fileExists: { FileManager.default.fileExists(atPath: $0) },
+            appVersion: {
+                Bundle(url: $0)?.infoDictionary?["CFBundleShortVersionString"] as? String
+            },
+            verify: { tokens, appPaths, snapshots, operation in
+                await CaskRollbackGuard.verify(
+                    tokens: tokens,
+                    appPaths: appPaths,
+                    snapshots: snapshots,
+                    operation: operation
+                )
+            },
+            clone: { try BundleSnapshot.clone($0, to: $1) },
+            recordRollback: {
+                CaskRollbackLedger.shared.recordRollback(token: $0, reason: .checkFailed)
+            },
+            removeItem: { try FileManager.default.removeItem(at: $0) },
+            legacyDirectory: {
+                FileManager.default.temporaryDirectory
+                    .appendingPathComponent("wega-rollback", isDirectory: true)
+            },
+            announce: { announceLive($0) }
+        )
     }
 
     /// Runs once per launch, before the background agent starts scheduling rounds.
@@ -80,7 +120,7 @@ final class UpdateOperationRecovery {
         WegaLog.info(.app, "LT-01: recovery po przerwaniu — cofnięto: \(report.rolledBackTokens), "
             + "zatwierdzono: \(report.committedTokens), porzucono bez mutacji: \(report.abortedTokens), "
             + "bez możliwości naprawy: \(report.unrecoverableTokens).")
-        announce(report)
+        dependencies.announce(report)
         return report
     }
 
@@ -92,10 +132,8 @@ final class UpdateOperationRecovery {
         report: inout Report
     ) async {
         let appURL = URL(fileURLWithPath: item.appPath)
-        let appExists = FileManager.default.fileExists(atPath: appURL.path)
-        let installedVersion = appExists
-            ? Bundle(url: appURL)?.infoDictionary?["CFBundleShortVersionString"] as? String
-            : nil
+        let appExists = dependencies.fileExists(appURL.path)
+        let installedVersion = appExists ? dependencies.appVersion(appURL) : nil
 
         switch UpdateOperationRecoveryPlan.installingProbe(
             appExists: appExists,
@@ -111,11 +149,8 @@ final class UpdateOperationRecovery {
             // chain as a live upgrade — Gatekeeper, publisher baseline, rollback on
             // rejection. The guard journals the verdict into the resumed session.
             let snapshots = snapshotMap(for: item, operationID: session.operation.id)
-            let verdicts = await CaskRollbackGuard.verify(
-                tokens: [item.token],
-                appPaths: [item.token: appURL],
-                snapshots: snapshots,
-                operation: session
+            let verdicts = await dependencies.verify(
+                [item.token], [item.token: appURL], snapshots, session
             )
             switch verdicts[item.token] {
             case .healthy:
@@ -146,9 +181,9 @@ final class UpdateOperationRecovery {
             return
         }
         do {
-            try BundleSnapshot.clone(snapshotURL, to: appURL)
+            try dependencies.clone(snapshotURL, appURL)
             session.markRolledBack(token: item.token)
-            CaskRollbackLedger.shared.recordRollback(token: item.token, reason: .checkFailed)
+            dependencies.recordRollback(item.token)
             report.rolledBackTokens.append(item.token)
             WegaLog.error(.homebrew, "LT-01: \(item.token): przerwana instalacja usunęła aplikację — przywrócono z klona.")
         } catch {
@@ -162,28 +197,27 @@ final class UpdateOperationRecovery {
     private func snapshotMap(for item: UpdateOperationItem, operationID: UUID) -> [String: URL] {
         guard let name = item.snapshotName else { return [:] }
         let url = store.snapshotURL(operationID: operationID, name: name)
-        return FileManager.default.fileExists(atPath: url.path) ? [item.token: url] : [:]
+        return dependencies.fileExists(url.path) ? [item.token: url] : [:]
     }
 
     private func deleteSnapshot(of item: UpdateOperationItem, operationID: UUID) {
         guard let name = item.snapshotName else { return }
-        try? FileManager.default.removeItem(at: store.snapshotURL(operationID: operationID, name: name))
+        try? dependencies.removeItem(store.snapshotURL(operationID: operationID, name: name))
     }
 
     /// Pre-LT-01 builds cloned into one shared, predictable temp directory and a crash
     /// left the clones there. No journal exists for them, so there is nothing to settle —
     /// only to sweep.
     private func sweepLegacyTempSnapshots() {
-        let legacy = FileManager.default.temporaryDirectory
-            .appendingPathComponent("wega-rollback", isDirectory: true)
-        guard FileManager.default.fileExists(atPath: legacy.path) else { return }
-        try? FileManager.default.removeItem(at: legacy)
+        let legacy = dependencies.legacyDirectory()
+        guard dependencies.fileExists(legacy.path) else { return }
+        try? dependencies.removeItem(legacy)
         WegaLog.info(.app, "LT-01: usunięto osierocone snapshoty sprzed journalu (wega-rollback).")
     }
 
     /// A restore that happened while nobody was watching must not stay private to the
     /// log file — same reasoning as the background round's notification.
-    private func announce(_ report: Report) {
+    private static func announceLive(_ report: Report) {
         guard Bundle.main.bundleIdentifier != nil else { return }
         guard !report.rolledBackTokens.isEmpty || !report.unrecoverableTokens.isEmpty else { return }
         let body: String
