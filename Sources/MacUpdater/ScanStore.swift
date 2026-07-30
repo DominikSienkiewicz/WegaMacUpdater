@@ -16,6 +16,50 @@ struct ScanSinks {
     var categoryCounts: ((Int, Int) -> Void)?
 }
 
+@MainActor
+struct ScanStoreDependencies {
+    typealias ManualScan = (BrewService, Set<String>) async -> (
+        apps: [ManualOutdatedApp],
+        failedChecks: Int
+    )
+
+    let operations: OperationCoordinator
+    let upgrades: UpgradeCoordinator
+    let caskAppPathResolver: CaskAppPathResolver
+    let manualScan: ManualScan
+    let reportWindowScan: (Int, Int, String) -> Void
+    let recordUpdateRun: (UpdateJournalEntry) -> Void
+    let settleAppManagementPermission: (Bool) -> Void
+    let undoableUpdates: () -> [UndoableUpdate]
+
+    static let live = ScanStoreDependencies(
+        operations: .shared,
+        upgrades: .shared,
+        caskAppPathResolver: CaskAppPathResolver(),
+        manualScan: { brewService, outdatedCasks in
+            await ManualUpdateScanner(brewService: brewService).scan(
+                brewOutdatedCasks: outdatedCasks
+            )
+        },
+        reportWindowScan: { count, failedChecks, fingerprint in
+            MenuBarAgent.shared.reportWindowScan(
+                count: count,
+                failedChecks: failedChecks,
+                fingerprint: fingerprint
+            )
+        },
+        recordUpdateRun: { UpdateRunJournal().record($0) },
+        settleAppManagementPermission: { denied in
+            if denied {
+                AppManagementDenialStore.shared.recordDenial()
+            } else {
+                AppManagementDenialStore.shared.clear()
+            }
+        },
+        undoableUpdates: { UpdateOperationStore.shared.undoableUpdates() }
+    )
+}
+
 /// Owns everything a scan or an upgrade produces, plus the tasks that produce it.
 ///
 /// This lives as a `@StateObject` on the `App`, above the `.id(localization.language)`
@@ -103,6 +147,7 @@ final class ScanStore: ObservableObject {
     /// M2(b) — the last scan, on disk. Read once on first appearance, written after each
     /// completed scan, so a relaunch shows the previous list instead of an empty hero.
     private let resultStore: ScanResultStore
+    let dependencies: ScanStoreDependencies
     private var restoredLastScan = false
     /// M2(c) — the scan runs here, not in a view. A `Task` started from `UpdateView` died
     /// with the view tree; this one outlives a language re-key and a tab switch, and gives
@@ -114,10 +159,12 @@ final class ScanStore: ObservableObject {
 
     init(
         resultStore: ScanResultStore = ScanResultStore(),
-        runningApplicationInspector: any RunningApplicationInspecting = WorkspaceRunningApplicationInspector()
+        runningApplicationInspector: any RunningApplicationInspecting = WorkspaceRunningApplicationInspector(),
+        dependencies: ScanStoreDependencies = .live
     ) {
         self.resultStore = resultStore
         self.runningApplicationInspector = runningApplicationInspector
+        self.dependencies = dependencies
     }
 
     /// Services are owned by the app-level `AppViewModel`; hand them over on first appearance.

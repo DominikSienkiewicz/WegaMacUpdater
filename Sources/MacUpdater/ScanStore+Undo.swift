@@ -14,7 +14,7 @@ extension ScanStore {
     /// handful of journals) and called after every run, undo and appearance, so the
     /// section never shows an undo whose snapshot the retention sweep already removed.
     func refreshUndoableUpdates() {
-        undoableUpdates = UpdateOperationStore.shared.undoableUpdates()
+        undoableUpdates = dependencies.undoableUpdates()
     }
 
     /// The manual undo LT-01 exists for: put the retained pre-upgrade snapshot back over
@@ -26,7 +26,7 @@ extension ScanStore {
         undoBusy = undoable.token
         defer { undoBusy = nil }
         do {
-            try await UpgradeCoordinator.shared.performWriteLease(.foregroundUpgrade) { lease in
+            try await dependencies.upgrades.performWriteLease(.foregroundUpgrade) { lease in
                 await self.undoUpdateCoordinated(undoable, operationLease: lease)
             }
         } catch {
