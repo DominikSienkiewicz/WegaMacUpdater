@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 
 /// REL-16 — what makes one installed copy of an application *that* copy.
 ///
@@ -46,9 +47,6 @@ public struct InstallationIdentity: Hashable, Comparable, Sendable, CustomString
         lhs.rawValue < rhs.rawValue
     }
 
-    /// The three root directories macOS symlinks into `/private`.
-    private static let privateRoots = ["/tmp", "/var", "/etc"]
-
     private static func standardize(_ path: String) -> String {
         let expanded = (path as NSString).expandingTildeInPath
         let standardized = URL(fileURLWithPath: expanded, isDirectory: false).standardizedFileURL.path
@@ -56,8 +54,10 @@ public struct InstallationIdentity: Hashable, Comparable, Sendable, CustomString
     }
 
     private static func stripPrivatePrefix(_ path: String) -> String {
-        for root in privateRoots where path == "/private" + root || path.hasPrefix("/private" + root + "/") {
-            return String(path.dropFirst("/private".count))
+        let privatePrefix = SystemPaths.privateDirectoryPrefix
+        for root in SystemPaths.privateRootAliases
+            where path == privatePrefix + root || path.hasPrefix(privatePrefix + root + "/") {
+            return String(path.dropFirst(privatePrefix.count))
         }
         return path
     }

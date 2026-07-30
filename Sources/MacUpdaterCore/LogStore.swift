@@ -240,22 +240,22 @@ public final class LogStore: ObservableObject {
 /// failure somewhere to land, off the main actor, so it can be signalled rather than ignored.
 final class LogWriteFailureLog: @unchecked Sendable {
     private let lock = NSLock()
-    private var _count = 0
-    private var _last: String?
+    private var countValue = 0
+    private var lastMessage: String?
 
     func record(_ message: String) {
         lock.lock(); defer { lock.unlock() }
-        _count += 1
-        _last = message
+        countValue += 1
+        lastMessage = message
     }
 
     var count: Int {
         lock.lock(); defer { lock.unlock() }
-        return _count
+        return countValue
     }
 
     var last: String? {
         lock.lock(); defer { lock.unlock() }
-        return _last
+        return lastMessage
     }
 }

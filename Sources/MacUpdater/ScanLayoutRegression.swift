@@ -34,14 +34,14 @@ extension ScanStore {
         manualOutdated = [
             ManualOutdatedApp(
                 name: "Chrome",
-                path: URL(fileURLWithPath: "/Applications/Google Chrome.app"),
+                path: SystemPaths.applicationsDirectory.appendingPathComponent("Google Chrome.app"),
                 installedVersion: "150.0.7871.182",
                 availableVersion: "151.0.7922.34",
                 source: .chrome
             ),
             ManualOutdatedApp(
                 name: "Obsidian",
-                path: URL(fileURLWithPath: "/Applications/Obsidian.app"),
+                path: SystemPaths.applicationsDirectory.appendingPathComponent("Obsidian.app"),
                 installedVersion: "1.13.1",
                 availableVersion: "1.13.3",
                 source: .obsidian,
@@ -49,8 +49,8 @@ extension ScanStore {
             )
         ]
         caskIconPaths = [
-            "codex": URL(fileURLWithPath: "/Applications/Codex.app"),
-            "discord": URL(fileURLWithPath: "/Applications/Discord.app")
+            "codex": SystemPaths.applicationsDirectory.appendingPathComponent("Codex.app"),
+            "discord": SystemPaths.applicationsDirectory.appendingPathComponent("Discord.app")
         ]
         caskProtection = ["codex": .unprotected(.noAppBundle), "discord": .protected]
         lastCheck = Date()

@@ -81,7 +81,7 @@ struct AuthorizationPathTrustValidator {
     }
 
     private func pathChain(to url: URL) -> [URL] {
-        var current = URL(fileURLWithPath: "/", isDirectory: true)
+        var current = SystemPaths.fileSystemRoot
         var result = [current]
         for component in url.pathComponents.dropFirst() {
             current.appendPathComponent(component)
@@ -120,10 +120,9 @@ struct AuthorizationComponentResolver {
     typealias CodeVerifier = (URL, String) throws -> Void
     typealias LocationValidator = (URL) throws -> Void
 
-    private static let installedHelpersDirectory = URL(
-        fileURLWithPath: "/Library/Application Support/WegaMacUpdater/Authorization",
-        isDirectory: true
-    )
+    private static let installedHelpersDirectory = SystemPaths.systemApplicationSupportDirectory
+        .appendingPathComponent("WegaMacUpdater", isDirectory: true)
+        .appendingPathComponent("Authorization", isDirectory: true)
 
     private let helperDirectories: [URL]
     private let fileManager: FileManager
