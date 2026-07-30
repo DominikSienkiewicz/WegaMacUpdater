@@ -8,7 +8,7 @@ import MacUpdaterCore
 // honest-outcome rule lives here.
 extension ScanStore {
     func cleanUpStaleCasks() async {
-        await UpgradeCoordinator.shared.performWrite(.cleanup) {
+        await dependencies.upgrades.performWrite(.cleanup) {
             await self.cleanUpStaleCasksCoordinated()
         }
     }

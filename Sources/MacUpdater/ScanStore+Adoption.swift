@@ -9,7 +9,7 @@ import MacUpdaterCore
 // but "is this app the cask it looks like" — and REL-08 and LT-03 both live here.
 extension ScanStore {
     func installManual(token: String) async {
-        await UpgradeCoordinator.shared.performWrite(.manualInstall) {
+        await dependencies.upgrades.performWrite(.manualInstall) {
             await self.installManualCoordinated(token: token)
         }
     }

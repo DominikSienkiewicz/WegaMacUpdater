@@ -73,19 +73,33 @@ extension ScanStore {
 
         do {
             if let operationLease {
-                try await OperationCoordinator.shared.withRead(
-                    holding: operationLease,
-                    label: "foreground post-upgrade scan"
-                ) { @MainActor in
-                    await self.runCheckReadPhases(
-                        model: model,
-                        emitActivity: emitActivity,
-                        lightweight: lightweight,
-                        metadata: metadata
-                    )
+                if dependencies.operations === OperationCoordinator.shared {
+                    try await OperationCoordinator.shared.withRead(
+                        holding: operationLease,
+                        label: "foreground post-upgrade scan"
+                    ) { @MainActor in
+                        await self.runCheckReadPhases(
+                            model: model,
+                            emitActivity: emitActivity,
+                            lightweight: lightweight,
+                            metadata: metadata
+                        )
+                    }
+                } else {
+                    try await dependencies.operations.withRead(
+                        holding: operationLease,
+                        label: "foreground post-upgrade scan"
+                    ) { @MainActor in
+                        await self.runCheckReadPhases(
+                            model: model,
+                            emitActivity: emitActivity,
+                            lightweight: lightweight,
+                            metadata: metadata
+                        )
+                    }
                 }
             } else {
-                try await OperationCoordinator.shared.withReadLease(label: "foreground scan") { @MainActor _ in
+                try await dependencies.operations.withReadLease(label: "foreground scan") { @MainActor _ in
                     await self.runCheckReadPhases(
                         model: model,
                         emitActivity: emitActivity,
@@ -218,7 +232,10 @@ extension ScanStore {
                 brewOutdated = updated
             }
 
-            caskIconPaths = CaskAppPathResolver().appPaths(from: infos, excluding: drifted)
+            caskIconPaths = dependencies.caskAppPathResolver.appPaths(
+                from: infos,
+                excluding: drifted
+            )
         }
 
         // FEAT-03: transparentność pobrania (host + checksum) dla outdated casków.
@@ -250,7 +267,7 @@ extension ScanStore {
     private func refreshBrewMetadata() async -> ScanSourceReport {
         guard let model else { return ScanSourceReport(outcome: .notInstalled) }
         do {
-            let result = try await UpgradeCoordinator.shared.performWrite(.brewMetadata) {
+            let result = try await dependencies.upgrades.performWrite(.brewMetadata) {
                 let ticket = MutationGuard.shared.begin(tr("aktualizacja Homebrew"))
                 defer { MutationGuard.shared.end(ticket) }
                 return try await model.brewService.update()
@@ -320,10 +337,10 @@ extension ScanStore {
         // M4 — the dock badge has one owner (the agent); a window scan hands it the fresh
         // number instead of leaving yesterday's. Only from here, never from `emitCounts()`,
         // which also runs on a bare view rebuild and must not claim a scan just happened.
-        MenuBarAgent.shared.reportWindowScan(
-            count: updateCount.badgeCount,
-            failedChecks: sources,
-            fingerprint: UpdateFingerprint.of(items: allItems, manual: visibleManual)
+        dependencies.reportWindowScan(
+            updateCount.badgeCount,
+            sources,
+            UpdateFingerprint.of(items: allItems, manual: visibleManual)
         )
         emitCounts()
         persistLastScan()
@@ -331,6 +348,6 @@ extension ScanStore {
 
     private func scanManualUpdates(brewOutdatedCasks: Set<String> = []) async -> (apps: [ManualOutdatedApp], failedChecks: Int) {
         guard let model else { return ([], 0) }
-        return await ManualUpdateScanner(brewService: model.brewService).scan(brewOutdatedCasks: brewOutdatedCasks)
+        return await dependencies.manualScan(model.brewService, brewOutdatedCasks)
     }
 }
