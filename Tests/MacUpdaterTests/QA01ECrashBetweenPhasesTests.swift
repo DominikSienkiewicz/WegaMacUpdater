@@ -167,7 +167,7 @@ struct QA01ECrashBetweenPhasesTests {
     /// upgrade, and if any token failed only because a between-phases leftover is in the way,
     /// retry exactly those tokens once with `--force` and fold the result back in.
     private func upgradeWithAutoRecovery(tokens: [String], brew: FakeBrewCaskWorld) -> BrewUpgradeOutcome {
-        var outcome = brew.upgrade(UpdatePlanner.caskUpgradeCommand(tokens: tokens))
+        let outcome = brew.upgrade(UpdatePlanner.caskUpgradeCommand(tokens: tokens))
         let retryTokens = outcome.tokensRetryableWithForce
         guard !retryTokens.isEmpty else { return outcome }
         let forced = brew.upgrade(UpdatePlanner.forcedCaskCommand(tokens: retryTokens))

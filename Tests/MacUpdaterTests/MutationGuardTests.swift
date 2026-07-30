@@ -66,12 +66,12 @@ struct MutationGuardTests {
     /// `UpgradeMutex` shape: the guard cannot be told when the mutation starts, only asked.
     @Test func aProbeDecidesTheQuitWithoutOwningTheMutation() {
         let (sut, _) = makeGuard()
-        var busy = false
-        sut.addProbe("aktualizacja Homebrew") { busy }
+        let busy = Flag()
+        sut.addProbe("aktualizacja Homebrew") { busy.isSet }
 
         #expect(sut.terminationDecision() == .now)
 
-        busy = true
+        busy.isSet = true
         #expect(sut.terminationDecision() == .waitForMutation)
         #expect(sut.runningLabels == ["aktualizacja Homebrew"])
     }
@@ -107,6 +107,7 @@ struct MutationGuardTests {
         #expect(sut.heldActivityCount == 1)
     }
 
+    @MainActor
     private final class Flag { var isSet = false }
 
     @Test func waitingReturnsOnlyAfterTheLastMutationEnds() async {
