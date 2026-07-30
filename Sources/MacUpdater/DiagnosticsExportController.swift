@@ -58,7 +58,7 @@ final class DiagnosticsExportController: ObservableObject {
 
     // MARK: - Gathering
 
-    private func snapshot() async -> DiagnosticsSnapshot {
+    func snapshot() async -> DiagnosticsSnapshot {
         let now = Date()
         let agent = MenuBarAgent.shared
         let scan = ScanResultStore().load()
@@ -111,7 +111,7 @@ final class DiagnosticsExportController: ObservableObject {
     /// Both log files, including the rotated `wega.log.1` — which nothing in the app has
     /// read back until now, so half of every long-running session's history was invisible
     /// to a bug report.
-    private static func logFiles() -> [DiagnosticsSnapshot.LogFile] {
+    static func logFiles() -> [DiagnosticsSnapshot.LogFile] {
         let directory = LogStore.shared.logFileURL.deletingLastPathComponent()
         return ["wega.log", "wega.log.1"].compactMap { name in
             guard let contents = try? String(contentsOf: directory.appendingPathComponent(name), encoding: .utf8)

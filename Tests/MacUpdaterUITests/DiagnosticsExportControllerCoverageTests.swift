@@ -67,4 +67,27 @@ struct DiagnosticsExportControllerCoverageTests {
         #expect(records.first?.subject == "Wega bundle")
         #expect(records.first?.verdict.isEmpty == false)
     }
+
+    @Test func snapshotGathersACompleteLocalDiagnosticsPicture() async {
+        let snapshot = await DiagnosticsExportController().snapshot()
+
+        #expect(!snapshot.appVersion.isEmpty)
+        #expect(!snapshot.appBuild.isEmpty)
+        #expect(!snapshot.bundleIdentifier.isEmpty)
+        #expect(!snapshot.osVersion.isEmpty)
+        #expect(!snapshot.architecture.isEmpty)
+        #expect(snapshot.processorCount > 0)
+        #expect(snapshot.managers.map(\.name) == ["Homebrew", "mas-cli", "npm"])
+        #expect(!snapshot.helper.status.isEmpty)
+    }
+
+    @Test func missingLogDirectoryProducesNoExportEntries() {
+        let files = DiagnosticsExportController.logFiles()
+
+        #expect(files.allSatisfy { ["wega.log", "wega.log.1"].contains($0.name) })
+    }
+
+    @Test func revealWithoutAPreviousExportIsANoOp() {
+        DiagnosticsExportController().revealLastExport()
+    }
 }
