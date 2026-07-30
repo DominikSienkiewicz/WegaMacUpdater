@@ -274,7 +274,13 @@ extension ScanStore {
         //
         // Keyed on the refusal rather than on success, like `BackgroundUpdater`: a run that
         // failed for some unrelated reason still proves the permission is no longer missing.
-        dependencies.settleAppManagementPermission(summary.needsAppManagementPermission)
+        if let settleAppManagementPermission = dependencies.settleAppManagementPermission {
+            settleAppManagementPermission(summary.needsAppManagementPermission)
+        } else if summary.needsAppManagementPermission {
+            AppManagementDenialStore.shared.recordDenial()
+        } else {
+            AppManagementDenialStore.shared.clear()
+        }
 
         // REL-12 — a run the user stopped is never announced as a finished one.
         let interrupted = updateInterruption.didSkipWork

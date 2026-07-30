@@ -29,7 +29,7 @@ struct ScanStoreDependencies {
     let manualScan: ManualScan
     let reportWindowScan: (Int, Int, String) -> Void
     let recordUpdateRun: (UpdateJournalEntry) -> Void
-    let settleAppManagementPermission: (Bool) -> Void
+    let settleAppManagementPermission: ((Bool) -> Void)?
     let undoableUpdates: () -> [UndoableUpdate]
 
     static let live = ScanStoreDependencies(
@@ -49,13 +49,7 @@ struct ScanStoreDependencies {
             )
         },
         recordUpdateRun: { UpdateRunJournal().record($0) },
-        settleAppManagementPermission: { denied in
-            if denied {
-                AppManagementDenialStore.shared.recordDenial()
-            } else {
-                AppManagementDenialStore.shared.clear()
-            }
-        },
+        settleAppManagementPermission: nil,
         undoableUpdates: { UpdateOperationStore.shared.undoableUpdates() }
     )
 }
