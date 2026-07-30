@@ -97,7 +97,9 @@ enum CaskReplacementSafety {
 
     static func resolveInstalledAppURL(
         _ preparation: Preparation,
-        brewService: BrewService
+        brewService: BrewService,
+        locationResolver: CaskReplacementArtifactLocationResolver = .init(),
+        appPathResolver: CaskAppPathResolver = .init()
     ) async -> URL? {
         let token = preparation.token
         do {
@@ -112,12 +114,12 @@ enum CaskReplacementSafety {
                 )
                 return nil
             }
-            switch CaskReplacementArtifactLocationResolver().resolve(artifact: artifact) {
+            switch locationResolver.resolve(artifact: artifact) {
             case .resolved(let appURL):
                 let installationInfo = [
                     BrewCaskInstallationInfo(token: token, appArtifacts: [artifact])
                 ]
-                guard CaskAppPathResolver().appPaths(from: installationInfo)[token] == appURL else {
+                guard appPathResolver.appPaths(from: installationInfo)[token] == appURL else {
                     WegaLog.error(
                         .homebrew,
                         "\(token): lokalizacja artefaktu \(artifact) zmieniła się podczas weryfikacji."
