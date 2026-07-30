@@ -23,11 +23,11 @@ final class MigrationStore: ObservableObject {
     struct Dependencies {
         var fetchCasks: @Sendable () async throws -> [BrewCask]
         var scanDirectories: @Sendable () -> [URL]
-        var scanApplicationDirectories: @Sendable (
-            [URL],
+        var scanApplications: @Sendable (
+            URL,
             Set<String>,
             [BrewCask]
-        ) async -> [ApplicationInfo]
+        ) throws -> [ApplicationInfo]
         var prepareReplacement: @MainActor @Sendable (
             String,
             URL,
@@ -47,9 +47,9 @@ final class MigrationStore: ObservableObject {
         static let live = Dependencies(
             fetchCasks: { try await CaskDatabaseClient.caskCatalog().fetchCasks() },
             scanDirectories: { buildScanDirs() },
-            scanApplicationDirectories: { directories, installedCasks, availableCasks in
-                await MigrationStore.scanApplicationDirectories(
-                    directories,
+            scanApplications: { directory, installedCasks, availableCasks in
+                try ApplicationScanner().scanApplications(
+                    in: directory,
                     installedCasks: installedCasks,
                     availableCasks: availableCasks
                 )
@@ -317,10 +317,11 @@ final class MigrationStore: ObservableObject {
                 npmPackages: npmInstalled,
                 brewTokens: installed
             )
-            let all = await dependencies.scanApplicationDirectories(
+            let all = await Self.scanApplicationDirectories(
                 dependencies.scanDirectories(),
-                installed,
-                casks
+                installedCasks: installed,
+                availableCasks: casks,
+                scan: dependencies.scanApplications
             )
             let migrationPool = MigrationPlanner.migrationPool(
                 InstallationInventory.deduplicated(all)

@@ -16,7 +16,7 @@ struct MigrationStoreCoverageTests {
         let figma = app("Figma", token: "figma", provenance: .token)
         let pages = app("Pages", token: nil)
         let managed = app("Managed", token: "managed", provenance: .token, managedByBrew: true)
-        dependencies.scanApplicationDirectories = { _, _, _ in [figma, pages, managed] }
+        dependencies.scanApplications = { _, _, _ in [figma, pages, managed] }
 
         let runner = MigrationCoverageRunner { request in
             switch request.arguments {
@@ -410,7 +410,7 @@ struct MigrationStoreCoverageTests {
         var dependencies = MigrationStore.Dependencies.live
         dependencies.fetchCasks = { [] }
         dependencies.scanDirectories = { [] }
-        dependencies.scanApplicationDirectories = { _, _, _ in [] }
+        dependencies.scanApplications = { _, _, _ in [] }
         dependencies.waitBetweenRunningChecks = {}
         dependencies.openURL = { _ in }
         return dependencies
