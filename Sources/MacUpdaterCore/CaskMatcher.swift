@@ -10,6 +10,8 @@ import Foundation
 ///
 /// Ordered strongest first, which is also the order `match` tries them in.
 public enum CaskMatchProvenance: Equatable, Sendable {
+    /// A stable bundle identifier tied explicitly to its cask token.
+    case bundleIdentifier
     /// The app's name normalized straight onto a cask that is already installed.
     case installedToken
     /// An explicit entry in `customCaskMappings` — a human saying this app *is* this cask.
@@ -70,9 +72,14 @@ public struct CaskMatcher {
     }
 
     private let customMappings: [String: String]
+    private let bundleIdentifierMappings: [String: String]
 
-    public init(customMappings: [String: String] = MacUpdaterConstants.customCaskMappings) {
+    public init(
+        customMappings: [String: String] = MacUpdaterConstants.customCaskMappings,
+        bundleIdentifierMappings: [String: String] = MacUpdaterConstants.caskMappingsByBundleIdentifier
+    ) {
         self.customMappings = customMappings
+        self.bundleIdentifierMappings = bundleIdentifierMappings
     }
 
     public func makeIndex(
@@ -104,7 +111,18 @@ public struct CaskMatcher {
         )
     }
 
-    public func match(applicationName: String, using index: Index) -> CaskMatch {
+    public func match(
+        applicationName: String,
+        bundleIdentifier: String? = nil,
+        using index: Index
+    ) -> CaskMatch {
+        if let bundleIdentifier, let token = bundleIdentifierMappings[bundleIdentifier] {
+            return classify(
+                IndexedToken(token: token, provenance: .bundleIdentifier),
+                using: index
+            )
+        }
+
         let normalizedName = StringNormalizer.normalize(applicationName)
 
         if let installedToken = index.normalizedInstalledCasks[normalizedName] {
@@ -115,10 +133,12 @@ public struct CaskMatcher {
             .map { IndexedToken(token: $0, provenance: .curatedMapping) }
             ?? index.tokensByNormalizedName[normalizedName]
 
-        guard let matched else {
-            return .none
-        }
+        guard let matched else { return .none }
 
+        return classify(matched, using: index)
+    }
+
+    private func classify(_ matched: IndexedToken, using index: Index) -> CaskMatch {
         if index.installedCasks.contains(matched.token) {
             return .managed(token: matched.token, provenance: matched.provenance)
         }
@@ -135,11 +155,13 @@ public struct CaskMatcher {
     /// `Index` via `makeIndex(...)` and reuse it across all applications.
     public func match(
         applicationName: String,
+        bundleIdentifier: String? = nil,
         installedCasks: Set<String>,
         availableCasks: [BrewCask]
     ) -> CaskMatch {
         match(
             applicationName: applicationName,
+            bundleIdentifier: bundleIdentifier,
             using: makeIndex(installedCasks: installedCasks, availableCasks: availableCasks)
         )
     }

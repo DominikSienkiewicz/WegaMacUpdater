@@ -346,6 +346,10 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   `MigrationLeftoverCleanupDisabledTests`.
 
 ### Fixed
+- Chrome installed through Homebrew no longer appears twice in the Updates window. Its
+  internal bundle name is `Chrome`, while Homebrew calls the cask `google-chrome`, so the
+  name-only matcher classified the same bundle as both a cask and a manually installed app.
+  Stable, beta, dev and canary are now correlated to their casks by bundle identifier.
 - **Manual cask adoption bypassed the upgrade safety boundary (P1).** Both the Updates
   screen's manual `brew install --cask --force` action and the Migration wizard now take
   the shared upgrade mutex and pass the hard disk/network/power gate before downloading.

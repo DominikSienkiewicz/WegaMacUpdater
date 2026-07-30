@@ -55,7 +55,11 @@ public struct ApplicationScanner {
         // LT-03 — the route is recorded alongside the token. The migration gate reads it back
         // off the app; re-deriving it there is what left the scorer's signals dead.
         var caskMatchProvenance: CaskMatchProvenance?
-        switch matcher.match(applicationName: appName, using: caskIndex) {
+        switch matcher.match(
+            applicationName: appName,
+            bundleIdentifier: bundleIdentifier,
+            using: caskIndex
+        ) {
         case let .managed(token, provenance):
             isManagedByBrew = true
             caskToken = token

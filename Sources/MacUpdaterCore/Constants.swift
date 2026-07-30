@@ -1,4 +1,11 @@
 public enum MacUpdaterConstants {
+    public static let caskMappingsByBundleIdentifier: [String: String] = [
+        "com.google.Chrome": "google-chrome",
+        "com.google.Chrome.beta": "google-chrome@beta",
+        "com.google.Chrome.dev": "google-chrome@dev",
+        "com.google.Chrome.canary": "google-chrome@canary",
+    ]
+
     public static let customCaskMappings: [String: String] = [
         "CleanMyMac_5": "cleanmymac",
         "zoom.us": "zoom",
