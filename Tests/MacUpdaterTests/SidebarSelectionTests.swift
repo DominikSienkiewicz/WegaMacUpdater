@@ -43,8 +43,8 @@ final class SidebarSelectionTests: XCTestCase {
         XCTAssertNil(SidebarSelection.uninstall.filter)
     }
 
-    func testDefaultIsAllUpdates() {
-        XCTAssertEqual(SidebarSelection.default, .updates(.all))
+    func testInitialSelectionIsAllUpdates() {
+        XCTAssertEqual(SidebarSelection.initial, .updates(.all))
     }
 
     /// The old key stored only the tab, never the filter, so `update` restores the `.all` list.

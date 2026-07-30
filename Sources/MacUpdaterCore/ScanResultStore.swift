@@ -108,8 +108,7 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
         npm: [NpmGlobalOutdated],
         manual: [ManualOutdatedApp],
         sources: ScanSourceReports = ScanSourceReports(),
-        isComplete: Bool? = nil,
-        schemaVersion: Int = ScanSnapshot.currentSchemaVersion
+        isComplete: Bool? = nil
     ) {
         self.scannedAt = scannedAt
         self.brew = brew
@@ -118,6 +117,26 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
         self.manual = manual
         self.sources = sources
         self.isComplete = isComplete ?? sources.isComplete
+        schemaVersion = ScanSnapshot.currentSchemaVersion
+    }
+
+    /// Creates a snapshot stamped with an explicit schema version. This overload exists for
+    /// compatibility and for persistence tests that exercise unsupported schema handling.
+    public init(
+        scannedAt: Date,
+        brew: BrewOutdated?,
+        mas: [MasOutdatedApp],
+        npm: [NpmGlobalOutdated],
+        manual: [ManualOutdatedApp],
+        schemaVersion: Int
+    ) {
+        self.init(
+            scannedAt: scannedAt,
+            brew: brew,
+            mas: mas,
+            npm: npm,
+            manual: manual
+        )
         self.schemaVersion = schemaVersion
     }
 

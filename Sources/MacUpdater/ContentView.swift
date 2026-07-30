@@ -42,7 +42,7 @@ struct ContentView: View {
 
     /// Persisted so a language switch (which re-keys the view tree) doesn't bounce the user off
     /// their current destination — and the last one is restored on next launch.
-    @AppStorage(SidebarSelection.storageKey) private var selection: SidebarSelection = .default
+    @AppStorage(SidebarSelection.storageKey) private var selection: SidebarSelection = .initial
     /// The pre-macOS-26 key. Read once by `migrateLegacyTab()`, then cleared.
     @AppStorage("wega.activeTab") private var legacyTab: String = ""
 

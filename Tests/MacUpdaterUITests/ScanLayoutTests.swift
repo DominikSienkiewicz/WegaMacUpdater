@@ -25,7 +25,7 @@ final class ScanLayoutTests: XCTestCase {
     @MainActor
     private func fittingWidth(for activity: UpdateActivity) -> CGFloat {
         let view = SidebarList(
-            selection: .constant(.default),
+            selection: .constant(.initial),
             appsBadge: 0,
             cliBadge: 0,
             securityBadge: 0,

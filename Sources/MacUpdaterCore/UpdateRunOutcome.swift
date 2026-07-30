@@ -192,7 +192,9 @@ public struct UpdateRunOutcome: Equatable, Sendable {
     /// leave buried in `stderr`.
     public private(set) var needsAppManagementPermission = false
 
-    public init() {}
+    public init() {
+        // A new run starts with no outcomes, diagnostics, or permission failures.
+    }
 
     /// Records casks rejected before the package manager runs because the installed app
     /// already differs from the trusted publisher baseline.

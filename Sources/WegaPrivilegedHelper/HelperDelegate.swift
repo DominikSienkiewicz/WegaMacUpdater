@@ -274,10 +274,14 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
         return WegaHelper.BundleReplacementFacts(
             targetResolvedPath: resolved,
             targetIsSymlink: isSymlink,
-            targetBundleID: bundleIdentifier(at: target),
-            targetTeamID: CodeSignatureVerifier.teamID(ofAppAt: target),
-            snapshotBundleID: bundleIdentifier(at: snapshot),
-            snapshotTeamID: CodeSignatureVerifier.teamID(ofAppAt: snapshot),
+            targetIdentity: WegaHelper.BundleIdentity(
+                bundleID: bundleIdentifier(at: target),
+                teamID: CodeSignatureVerifier.teamID(ofAppAt: target)
+            ),
+            snapshotIdentity: WegaHelper.BundleIdentity(
+                bundleID: bundleIdentifier(at: snapshot),
+                teamID: CodeSignatureVerifier.teamID(ofAppAt: snapshot)
+            ),
             // Nieodczytany właściciel to nie „root" — sentinel, który nie pasuje ani do 0,
             // ani do UID konsoli, więc taki cel zostaje odrzucony.
             targetOwnerUID: ownerUID(of: target) ?? 0xFFFF_FFFF,

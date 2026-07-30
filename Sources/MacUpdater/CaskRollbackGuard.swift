@@ -245,6 +245,7 @@ enum CaskRollbackGuard {
         }
         defer {
             if preservingSnapshot {
+                // Cleanup is best-effort; the retained original snapshot remains recoverable.
                 try? FileManager.default.removeItem(at: restorationSource)
             }
         }

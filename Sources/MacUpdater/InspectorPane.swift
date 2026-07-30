@@ -12,7 +12,9 @@ struct InspectorPane: View {
     var busyToken: String? = nil
     /// Kicks off a manual cask install, forwarded from `UpdateView`. Defaulted so the
     /// empty-state / preview paths don't need to supply one.
-    var onInstall: (String) -> Void = { _ in }
+    var onInstall: (String) -> Void = { _ in
+        // Empty-state and preview configurations have no install action to perform.
+    }
     /// Homebrew cask download metadata (token → info), forwarded from `UpdateView` so the
     /// Trust panel's checksum signal can look up a manual cask's checksum presence.
     /// Defaulted so previews / the empty-state path still compile.

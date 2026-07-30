@@ -45,12 +45,16 @@ struct InventorySnapshot: Equatable, Sendable {
 
         var installedCaskTokens: Set<String> = []
         do { installedCaskTokens = try await sources.installedCasks() }
-        catch is CancellationError {}
+        catch is CancellationError {
+            // Cancellation is intentionally not recorded as a source failure.
+        }
         catch { failures.append(ScanSourceFailure(source: .homebrew, message: error.localizedDescription)) }
 
         var availableCaskList: [BrewCask] = []
         do { availableCaskList = try await sources.availableCasks() }
-        catch is CancellationError {}
+        catch is CancellationError {
+            // Cancellation is intentionally not recorded as a source failure.
+        }
         catch { failures.append(ScanSourceFailure(source: .caskCatalog, message: error.localizedDescription)) }
 
         var found: [ApplicationInfo] = []
@@ -83,6 +87,7 @@ struct InventorySnapshot: Equatable, Sendable {
                     return updated
                 }
             } catch is CancellationError {
+                // Cancellation is intentionally not recorded as a source failure.
             } catch {
                 failures.append(ScanSourceFailure(source: .appStore, message: error.localizedDescription))
             }
@@ -90,7 +95,9 @@ struct InventorySnapshot: Equatable, Sendable {
 
         var npmPackages: [NpmGlobalPackage] = []
         do { npmPackages = try await sources.npmGlobals() }
-        catch is CancellationError {}
+        catch is CancellationError {
+            // Cancellation is intentionally not recorded as a source failure.
+        }
         catch { failures.append(ScanSourceFailure(source: .npm, message: error.localizedDescription)) }
 
         return InventorySnapshot(apps: apps, npmGlobals: npmPackages, failures: failures)

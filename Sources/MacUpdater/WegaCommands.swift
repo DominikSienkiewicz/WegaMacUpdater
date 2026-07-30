@@ -84,7 +84,7 @@ enum WegaMenuNavigation {
 struct WegaCommands: Commands {
     let commandCenter: WegaCommandCenter
 
-    @AppStorage("wega.sidebarSelection") private var selection: SidebarSelection = .default
+    @AppStorage("wega.sidebarSelection") private var selection: SidebarSelection = .initial
     @FocusedValue(\.startCheckAction) private var startCheck
     @FocusedValue(\.runUpdateAction) private var runUpdate
     @Environment(\.openSettings) private var openSettings

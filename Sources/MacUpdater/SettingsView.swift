@@ -7,7 +7,9 @@ import MacUpdaterCore
 /// Settings window has no mascot panel to drive.
 struct SettingsView: View {
     var body: some View {
-        InfoView(onWegaState: { _ in })
+        InfoView(onWegaState: { _ in
+            // The Settings scene has no mascot whose state needs updating.
+        })
             .frame(
                 minWidth: WegaLayout.settingsMinWidth,
                 idealWidth: WegaLayout.settingsIdealWidth,

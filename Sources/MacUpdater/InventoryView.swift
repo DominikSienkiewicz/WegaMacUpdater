@@ -548,13 +548,13 @@ struct ProportionalHStack: Layout {
     let weights: [CGFloat]
     var spacing: CGFloat = 0
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
         let width = proposal.width ?? subviews.reduce(0) { $0 + $1.sizeThatFits(.unspecified).width }
         let height = subviews.map { $0.sizeThatFits(.unspecified).height }.max() ?? 0
         return CGSize(width: width, height: height)
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
         let widths = ColumnLayout.proportionalWidths(total: bounds.width, weights: weights, spacing: spacing)
         guard widths.count == subviews.count else {
             // Weight/subview mismatch is a programming error; fall back to equal columns

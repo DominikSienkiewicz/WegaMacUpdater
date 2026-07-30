@@ -11,7 +11,9 @@ public protocol ApplicationTerminating: Sendable {
 /// application to terminate through AppKit, allowing its normal save/quit handling,
 /// without requiring Automation permission for a cross-process AppleScript.
 public struct WorkspaceApplicationTerminator: ApplicationTerminating {
-    public init() {}
+    public init() {
+        // This public AppKit adapter is stateless and needs no additional setup.
+    }
 
     @MainActor
     public func requestTermination(appName: String, processName: String) -> Bool {

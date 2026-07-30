@@ -14,7 +14,9 @@ public struct BannerQueue<Banner: Equatable>: Equatable {
     private var sticky: [Banner] = []
     private var transient: Banner?
 
-    public init() {}
+    public init() {
+        // Stored-property defaults establish the complete empty queue state.
+    }
 
     /// The banner to display: sticky ones first, in the order they were raised.
     public var current: Banner? {
