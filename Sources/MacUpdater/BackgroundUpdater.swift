@@ -288,6 +288,25 @@ final class BackgroundUpdater {
             )
     }
 
+    private func recoveringLeftover(
+        from outcome: BrewUpgradeOutcome,
+        runBrew: @MainActor @Sendable ([String]) async -> BrewUpgradeOutcome
+    ) async -> BrewUpgradeOutcome {
+        let retryTokens = outcome.tokensRetryableWithForce
+        guard !retryTokens.isEmpty else { return outcome }
+        WegaLog.info(
+            .homebrew,
+            "Aktualizacja w tle — przerwana aktualizacja casku, ponawiam z --force: \(retryTokens.joined(separator: ", "))"
+        )
+        let forcedArguments = UpdatePlanner.forcedCaskCommand(tokens: retryTokens).arguments
+        let retryOutcome = await runBrew(forcedArguments)
+        return BrewUpgradeOutcome.merging(
+            original: outcome,
+            forcedRetry: retryOutcome,
+            retriedTokens: retryTokens
+        )
+    }
+
     private func performUpgrade(
         tokens: [String],
         appPaths: [String: URL],
@@ -309,12 +328,20 @@ final class BackgroundUpdater {
             operation.recordInstalling()
             func runLiveBrew(arguments: [String]) async -> BrewUpgradeOutcome {
                 var caskOutcome = await runBrew(arguments: arguments)
+                caskOutcome = await recoveringLeftover(from: caskOutcome) { forcedArguments in
+                    await self.runBrew(arguments: forcedArguments)
+                }
                 return caskOutcome
             }
-            var caskOutcome = if let dependencies {
-                await dependencies.runBrew(arguments)
+            let caskOutcome: BrewUpgradeOutcome
+            if let dependencies {
+                let initialOutcome = await dependencies.runBrew(arguments)
+                caskOutcome = await recoveringLeftover(
+                    from: initialOutcome,
+                    runBrew: dependencies.runBrew
+                )
             } else {
-                await runLiveBrew(arguments: arguments)
+                caskOutcome = await runLiveBrew(arguments: arguments)
             }
 
             // BG-04 — the window's between-phases auto-recovery, now shared with the unattended
@@ -325,23 +352,6 @@ final class BackgroundUpdater {
             // same `.backgroundUpgrade` write lease and after the snapshot above, so it goes
             // through the shared coordinator with a rollback net rather than becoming a side
             // path without one (REL-08).
-            let retryTokens = caskOutcome.tokensRetryableWithForce
-            if !retryTokens.isEmpty {
-                WegaLog.info(
-                    .homebrew,
-                    "Aktualizacja w tle — przerwana aktualizacja casku, ponawiam z --force: \(retryTokens.joined(separator: ", "))"
-                )
-                let forcedArguments = UpdatePlanner.forcedCaskCommand(tokens: retryTokens).arguments
-                let retryOutcome = if let dependencies {
-                    await dependencies.runBrew(forcedArguments)
-                } else {
-                    await runBrew(arguments: forcedArguments)
-                }
-                caskOutcome = BrewUpgradeOutcome.merging(
-                    original: caskOutcome, forcedRetry: retryOutcome, retriedTokens: retryTokens
-                )
-            }
-
             // REL-05 — record or lift the denial from what the round actually observed, before
             // the verdicts are folded in. The permission is a property of Wega, not of a cask.
             if caskOutcome.requiresAppManagementPermission {
