@@ -291,7 +291,7 @@ public enum CrashDiagnosticPayloadParser {
     }
 
     /// MetricKit stamps payloads `2026-07-22 09:41:03`, without a zone marker.
-    nonisolated(unsafe) private static let payloadStampFormatter: DateFormatter = {
+    private static let payloadStampFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: "UTC")

@@ -353,7 +353,7 @@ struct PackageRow: View {
     /// question does not apply (formulae, npm, App Store), so the row stays silent rather
     /// than implying a verdict it does not have.
     var rollback: RollbackProtection.Verdict? = nil
-    var onToggle: (() -> Void)? = nil
+    var onToggle: (@MainActor @Sendable () -> Void)? = nil
     var onSelect: (() -> Void)? = nil
     /// M5 — the ignore / pin actions, previously reachable only by right-click.
     var onIgnore: (() -> Void)? = nil
@@ -560,7 +560,11 @@ struct WegaCheckboxToggleStyle: ToggleStyle {
 /// Adapts a "flip it" callback to the two-way binding `Toggle` needs. The new value is
 /// discarded on purpose: the owner of the selection decides what toggling means, and every
 /// call site here already has that decision written down.
-func selectionToggleBinding(isOn: Bool, toggle: @escaping () -> Void) -> Binding<Bool> {
+@MainActor
+func selectionToggleBinding(
+    isOn: Bool,
+    toggle: @escaping @MainActor @Sendable () -> Void
+) -> Binding<Bool> {
     Binding(get: { isOn }, set: { _ in toggle() })
 }
 
