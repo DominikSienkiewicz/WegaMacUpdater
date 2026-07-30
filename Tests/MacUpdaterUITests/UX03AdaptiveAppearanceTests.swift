@@ -398,6 +398,7 @@ struct SettingsWindowElasticityTests {
 /// large text on the biggest of the three tiles (`size * 0.46` bold: 18.4pt at 40, 14.7pt at
 /// 32, 12.9pt at the default 28). The smallest needed 4.5:1 and none of them reached it.
 @Suite("UX-03 — the letter tile is readable at every size")
+@MainActor
 struct PackageLetterIconContrastTests {
 
     /// Red before the fix: `brightness: 0.65` gave 3.00:1 on the worst of the four hues.

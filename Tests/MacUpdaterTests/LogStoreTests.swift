@@ -134,7 +134,7 @@ final class LogStoreTests: XCTestCase {
 
     @MainActor
     func testCorruptLineInFileIsSkippedOnLoad() {
-        let (store, dir) = makeStore()
+        let (_, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }
         let url = dir.appendingPathComponent("wega.log")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

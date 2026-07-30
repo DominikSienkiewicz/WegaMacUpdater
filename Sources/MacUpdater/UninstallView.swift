@@ -790,7 +790,7 @@ struct UninstallLeftoverSelection: View {
 private struct UninstallLeftoverRow: View {
     let url: URL
     let isOn: Bool
-    let toggle: () -> Void
+    let toggle: @MainActor @Sendable () -> Void
 
     private var displayPath: String {
         (url.path as NSString).abbreviatingWithTildeInPath

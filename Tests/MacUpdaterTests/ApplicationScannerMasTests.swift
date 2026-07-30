@@ -38,8 +38,8 @@ final class ApplicationScannerMasTests: XCTestCase {
     }
 
     func testMasReceiptDetected() throws {
-        try makeApp(named: "MasApp", withReceipt: true)
-        try makeApp(named: "RegularApp", withReceipt: false)
+        _ = try makeApp(named: "MasApp", withReceipt: true)
+        _ = try makeApp(named: "RegularApp", withReceipt: false)
 
         let scanner = ApplicationScanner()
         let apps = try scanner.scanApplications(in: tmpDir)
@@ -55,7 +55,7 @@ final class ApplicationScannerMasTests: XCTestCase {
     }
 
     func testMasPriorityOverCaskCandidate() throws {
-        try makeApp(named: "Firefox", withReceipt: true)
+        _ = try makeApp(named: "Firefox", withReceipt: true)
 
         let scanner = ApplicationScanner()
         let casks = [BrewCask(token: "firefox", name: ["Firefox"])]
