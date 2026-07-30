@@ -47,7 +47,7 @@ public enum PackageStaging {
     /// Root-owned staging for `bundleID`, on the system volume so that a later move into
     /// `/Applications` stays on one filesystem.
     public static func directory(bundleID: String) -> URL {
-        URL(fileURLWithPath: "/Library/Application Support", isDirectory: true)
+        SystemPaths.systemApplicationSupportDirectory
             .appendingPathComponent(bundleID, isDirectory: true)
             .appendingPathComponent("staging", isDirectory: true)
     }

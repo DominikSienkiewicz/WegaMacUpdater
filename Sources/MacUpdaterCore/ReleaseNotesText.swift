@@ -15,7 +15,8 @@ public enum ReleaseNotesText {
     private static let strippedElements = ["script", "style", "head"]
 
     /// Tags that end a line rather than a word.
-    private static let breakingTags = ["br", "br/", "br /", "/p", "/li", "/div", "/h1", "/h2", "/h3", "/tr"]
+    private static let inlineBreakingTags = ["br", "br/", "br /"]
+    private static let blockElements = ["p", "li", "div", "h1", "h2", "h3", "tr"]
 
     public static func plain(fromHTML html: String) -> String {
         var text = html
@@ -46,6 +47,7 @@ public enum ReleaseNotesText {
 
     private static func replacingBreakingTags(in html: String) -> String {
         var text = html
+        let breakingTags = inlineBreakingTags + blockElements.map { "/\($0)" }
         for tag in breakingTags {
             text = text.replacingOccurrences(
                 of: "<\(tag)>", with: "\n", options: [.caseInsensitive]

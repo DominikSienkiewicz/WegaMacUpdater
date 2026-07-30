@@ -3,7 +3,7 @@ import Foundation
 import MacUpdaterCore
 
 let sudo = Process()
-sudo.executableURL = URL(fileURLWithPath: "/usr/bin/sudo")
+sudo.executableURL = SystemPaths.sudo
 sudo.arguments = ["-A"] + Array(CommandLine.arguments.dropFirst())
 sudo.environment = AuthorizationEnvironment.sanitized(
     inherited: ProcessInfo.processInfo.environment,

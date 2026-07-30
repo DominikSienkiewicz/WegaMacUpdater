@@ -57,6 +57,49 @@ public struct CrashDiagnosticFrame: Codable, Equatable, Sendable {
 /// The record stays local. Nothing in Wega uploads it; ``reportText`` exists so the *user*
 /// can copy a report and choose to send it.
 public struct CrashDiagnosticRecord: Codable, Equatable, Identifiable, Sendable {
+    /// Version and platform facts that identify the runtime in which the diagnostic occurred.
+    public struct RuntimeContext: Equatable, Sendable {
+        public let appVersion: String?
+        public let appBuildVersion: String?
+        public let osVersion: String?
+        public let platformArchitecture: String?
+
+        public init(
+            appVersion: String? = nil,
+            appBuildVersion: String? = nil,
+            osVersion: String? = nil,
+            platformArchitecture: String? = nil
+        ) {
+            self.appVersion = appVersion
+            self.appBuildVersion = appBuildVersion
+            self.osVersion = osVersion
+            self.platformArchitecture = platformArchitecture
+        }
+    }
+
+    /// Process-failure facts supplied by MetricKit for a crash or hang.
+    public struct Failure: Equatable, Sendable {
+        public let signal: Int?
+        public let exceptionType: Int?
+        public let exceptionCode: Int?
+        public let terminationReason: String?
+        public let hangDurationSeconds: Double?
+
+        public init(
+            signal: Int? = nil,
+            exceptionType: Int? = nil,
+            exceptionCode: Int? = nil,
+            terminationReason: String? = nil,
+            hangDurationSeconds: Double? = nil
+        ) {
+            self.signal = signal
+            self.exceptionType = exceptionType
+            self.exceptionCode = exceptionCode
+            self.terminationReason = terminationReason
+            self.hangDurationSeconds = hangDurationSeconds
+        }
+    }
+
     public let kind: CrashDiagnosticKind
     public let occurredAt: Date
     public let appVersion: String?
@@ -70,32 +113,36 @@ public struct CrashDiagnosticRecord: Codable, Equatable, Identifiable, Sendable 
     public let hangDurationSeconds: Double?
     public let frames: [CrashDiagnosticFrame]
 
+    /// Creates a diagnostic from its identity, runtime context, failure details and stack.
+    /// All string values are redacted before they become part of the stored record.
     public init(
         kind: CrashDiagnosticKind,
         occurredAt: Date,
-        appVersion: String? = nil,
-        appBuildVersion: String? = nil,
-        osVersion: String? = nil,
-        platformArchitecture: String? = nil,
-        signal: Int? = nil,
-        exceptionType: Int? = nil,
-        exceptionCode: Int? = nil,
-        terminationReason: String? = nil,
-        hangDurationSeconds: Double? = nil,
+        runtime: RuntimeContext = RuntimeContext(),
+        failure: Failure = Failure(),
         frames: [CrashDiagnosticFrame] = []
     ) {
         self.kind = kind
         self.occurredAt = occurredAt
-        self.appVersion = appVersion.map(LogRedaction.redact)
-        self.appBuildVersion = appBuildVersion.map(LogRedaction.redact)
-        self.osVersion = osVersion.map(LogRedaction.redact)
-        self.platformArchitecture = platformArchitecture.map(LogRedaction.redact)
-        self.signal = signal
-        self.exceptionType = exceptionType
-        self.exceptionCode = exceptionCode
-        self.terminationReason = terminationReason.map(LogRedaction.redact)
-        self.hangDurationSeconds = hangDurationSeconds
+        self.appVersion = runtime.appVersion.map(LogRedaction.redact)
+        self.appBuildVersion = runtime.appBuildVersion.map(LogRedaction.redact)
+        self.osVersion = runtime.osVersion.map(LogRedaction.redact)
+        self.platformArchitecture = runtime.platformArchitecture.map(LogRedaction.redact)
+        self.signal = failure.signal
+        self.exceptionType = failure.exceptionType
+        self.exceptionCode = failure.exceptionCode
+        self.terminationReason = failure.terminationReason.map(LogRedaction.redact)
+        self.hangDurationSeconds = failure.hangDurationSeconds
         self.frames = frames
+    }
+
+    /// Convenience for lightweight records that only carry a termination reason.
+    public init(kind: CrashDiagnosticKind, occurredAt: Date, terminationReason: String? = nil) {
+        self.init(
+            kind: kind,
+            occurredAt: occurredAt,
+            failure: Failure(terminationReason: terminationReason)
+        )
     }
 
     /// Stable across re-deliveries of the same diagnostic: MetricKit can hand the same crash
@@ -212,15 +259,22 @@ public enum CrashDiagnosticPayloadParser {
         return CrashDiagnosticRecord(
             kind: kind,
             occurredAt: fallbackDate,
-            appVersion: string(meta["appVersion"]) ?? string(meta["applicationVersion"]) ?? rootVersion,
-            appBuildVersion: string(meta["appBuildVersion"]) ?? string(meta["applicationBuildVersion"]),
-            osVersion: string(meta["osVersion"]),
-            platformArchitecture: string(meta["platformArchitecture"]),
-            signal: int(meta["signal"]),
-            exceptionType: int(meta["exceptionType"]),
-            exceptionCode: int(meta["exceptionCode"]),
-            terminationReason: string(meta["terminationReason"]),
-            hangDurationSeconds: seconds(meta["hangDuration"]),
+            runtime: .init(
+                appVersion: string(meta["appVersion"])
+                    ?? string(meta["applicationVersion"])
+                    ?? rootVersion,
+                appBuildVersion: string(meta["appBuildVersion"])
+                    ?? string(meta["applicationBuildVersion"]),
+                osVersion: string(meta["osVersion"]),
+                platformArchitecture: string(meta["platformArchitecture"])
+            ),
+            failure: .init(
+                signal: int(meta["signal"]),
+                exceptionType: int(meta["exceptionType"]),
+                exceptionCode: int(meta["exceptionCode"]),
+                terminationReason: string(meta["terminationReason"]),
+                hangDurationSeconds: seconds(meta["hangDuration"])
+            ),
             frames: frames(in: diagnostic["callStackTree"])
         )
     }

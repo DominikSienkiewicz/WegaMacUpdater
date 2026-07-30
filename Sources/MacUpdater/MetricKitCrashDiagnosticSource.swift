@@ -7,6 +7,9 @@ import MetricKit
 /// `CrashDiagnosticPayloadParser` / `CrashDiagnosticStore`, which know nothing about MetricKit
 /// and are testable without it.
 ///
+/// Only MetricKit's optional diagnostic callback is implemented. Omitting its metric callback
+/// keeps launch, battery, display and memory telemetry outside the collection path entirely.
+///
 /// # Why MetricKit, and what it can and cannot do here
 ///
 /// `MXMetricManager` is available on macOS 12+ and delivers diagnostics **on device, to the
@@ -63,11 +66,6 @@ final class MetricKitCrashDiagnosticSource: NSObject, CrashDiagnosticSource, MXM
     }
 
     // MARK: - MXMetricManagerSubscriber
-
-    /// Intentionally empty. The daily metric payload is behavioural telemetry — launch times,
-    /// battery, cellular, display, memory — and Wega collects none of it. The callback is
-    /// implemented rather than omitted so that "we ignore this on purpose" is stated in code.
-    func didReceive(_ payloads: [MXMetricPayload]) {}
 
     func didReceive(_ payloads: [MXDiagnosticPayload]) {
         let documents = payloads.map { $0.jsonRepresentation() }

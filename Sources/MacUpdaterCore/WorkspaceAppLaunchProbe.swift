@@ -14,7 +14,9 @@ import Foundation
 /// terminating what it started — so it would quit an app the user is using. That is reported
 /// as `.alreadyRunning`, which never triggers a rollback.
 public struct WorkspaceAppLaunchProbe: AppLaunchProbing {
-    public init() {}
+    public init() {
+        // Public construction exposes this stateless AppKit adapter outside MacUpdaterCore.
+    }
 
     public func launch(bundleAt url: URL) async -> AppLaunchOutcome {
         guard Bundle(url: url)?.executableURL != nil else { return .skipped(.unsupportedBundle) }

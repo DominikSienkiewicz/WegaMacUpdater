@@ -143,7 +143,8 @@ private func comparePrerelease(_ a: [String], _ b: [String]) -> VersionOrder? {
         // With an equal prefix, more identifiers ranks higher (SemVer §11).
         guard i < a.count else { return .orderedAscending }
         guard i < b.count else { return .orderedDescending }
-        let ai = a[i], bi = b[i]
+        let ai = a[i]
+        let bi = b[i]
         switch (Int(ai), Int(bi)) {
         case let (an?, bn?):
             if an != bn { return an < bn ? .orderedAscending : .orderedDescending }

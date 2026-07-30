@@ -277,13 +277,15 @@ public final class UpdateOperationStore: @unchecked Sendable {
                         atPath: snapshotURL(operationID: operation.id, name: snapshotName).path
                       ) else { continue }
                 let updatedAt = item.history.last(where: { $0.phase == .committed })?.at ?? committedAt
+                let expiresAt = updatedAt.addingTimeInterval(Self.retentionInterval)
+                guard expiresAt >= now else { continue }
                 result.append(UndoableUpdate(
                     operationID: operation.id,
                     token: item.token,
                     appPath: item.appPath,
                     restoredVersion: item.preUpgradeVersion,
                     updatedAt: updatedAt,
-                    expiresAt: updatedAt.addingTimeInterval(Self.retentionInterval)
+                    expiresAt: expiresAt
                 ))
             }
         }
@@ -486,7 +488,7 @@ public final class UpdateOperationSession {
 
     /// The snapshot for one token exists. `name` is relative to `snapshotsDirectory`.
     public func recordSnapshotted(token: String, snapshotName: String, now: Date = Date()) {
-        mutate(token: token, now: now) { item in
+        mutate(token: token) { item in
             item.snapshotName = snapshotName
             UpdateOperationStore.transition(&item, to: .snapshotted, at: now)
         }
@@ -506,7 +508,7 @@ public final class UpdateOperationSession {
     /// *not* pass — and lands in `rolledBack`; a failed rollback leaves the item in
     /// `installing`, non-terminal, so recovery re-examines it at the next launch.
     public func recordVerdict(token: String, verdict: CaskValidationVerdict, now: Date = Date()) {
-        mutate(token: token, now: now) { item in
+        mutate(token: token) { item in
             switch verdict {
             case .healthy:
                 UpdateOperationStore.transition(&item, to: .verified, at: now)
@@ -535,7 +537,7 @@ public final class UpdateOperationSession {
     /// Settles one item as `aborted` — recovery's verdict for an operation the journal
     /// proves never reached brew, or whose disk turned out untouched.
     public func markAborted(token: String, now: Date = Date()) {
-        mutate(token: token, now: now) { item in
+        mutate(token: token) { item in
             UpdateOperationStore.transition(&item, to: .aborted, at: now)
         }
     }
@@ -543,27 +545,27 @@ public final class UpdateOperationSession {
     /// Settles one item as `committed` — recovery's verdict for an item whose canary had
     /// already passed (`verified`) when the process died.
     public func markCommitted(token: String, now: Date = Date()) {
-        mutate(token: token, now: now) { item in
+        mutate(token: token) { item in
             UpdateOperationStore.transition(&item, to: .committed, at: now)
         }
     }
 
     /// Settles one item as `rolledBack` — recovery's own restore, where no canary ran.
     public func markRolledBack(token: String, now: Date = Date()) {
-        mutate(token: token, now: now) { item in
+        mutate(token: token) { item in
             UpdateOperationStore.transition(&item, to: .rolledBack, at: now)
         }
     }
 
     /// Notes that crash recovery has now tried once to settle this item (see
     /// ``UpdateOperationItem/recoveryAttempts``).
-    public func noteRecoveryAttempt(token: String, now: Date = Date()) {
-        mutate(token: token, now: now) { item in
+    public func noteRecoveryAttempt(token: String, now _: Date = Date()) {
+        mutate(token: token) { item in
             item.recoveryAttempts += 1
         }
     }
 
-    private func mutate(token: String, now: Date, _ body: (inout UpdateOperationItem) -> Void) {
+    private func mutate(token: String, _ body: (inout UpdateOperationItem) -> Void) {
         guard let index = operation.items.firstIndex(where: { $0.token == token }) else { return }
         body(&operation.items[index])
         store.persist(operation)

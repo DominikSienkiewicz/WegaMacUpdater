@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import WegaHelperKit
 
 /// Whether Wega may replace an application bundle in `/Applications` (REL-05).
 ///
@@ -106,7 +107,7 @@ public enum AppManagementPermissionProbe {
     /// The whole preflight, wired to the live filesystem. Returns ``AppManagementPermission/unknown``
     /// when `/Applications` cannot be listed at all.
     public static func liveStatus(
-        applicationsDirectory: URL = URL(fileURLWithPath: "/Applications", isDirectory: true),
+        applicationsDirectory: URL = SystemPaths.applicationsDirectory,
         ownBundle: URL? = Bundle.main.bundleURL
     ) -> AppManagementPermission {
         let contents = (try? FileManager.default.contentsOfDirectory(

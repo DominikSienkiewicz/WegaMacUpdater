@@ -2,8 +2,8 @@ import Foundation
 
 /// Single source of truth for the fixed macOS system paths Wega depends on —
 /// binaries it shells out to (`sudo`, `pgrep`, …), Homebrew/mas/npm install
-/// locations, the PAM files Touch ID configuration touches, and the
-/// `/Applications` scan roots.
+/// locations, the PAM files Touch ID configuration touches, and fixed
+/// filesystem roots.
 ///
 /// These are deliberately hard-coded: they are dictated by macOS and Homebrew,
 /// not by Wega, and must not be sourced from a writable config (routing
@@ -14,14 +14,30 @@ import Foundation
 /// ("URI should not be hard-coded") rule, which by design cannot fire on system
 /// paths that have no customizable alternative.
 public enum SystemPaths {
-    // MARK: Scan roots
+    // MARK: Filesystem roots
+
+    /// The root of the startup volume.
+    public static let fileSystemRoot = URL(fileURLWithPath: "/", isDirectory: true)
 
     /// The system-wide `/Applications` directory.
     public static let applicationsDirectory = URL(fileURLWithPath: "/Applications", isDirectory: true)
 
+    /// Root-owned Application Support used by privileged Wega components.
+    public static let systemApplicationSupportDirectory = URL(
+        fileURLWithPath: "/Library/Application Support",
+        isDirectory: true
+    )
+
+    /// Prefix macOS uses for the physical targets of its root directory aliases.
+    public static let privateDirectoryPrefix = "/private"
+
+    /// Root directories whose physical paths live below `/private` on macOS.
+    public static let privateRootAliases = ["/tmp", "/var", "/etc"]
+
     // MARK: System binaries
 
     public static let sudo = URL(fileURLWithPath: "/usr/bin/sudo")
+    public static let posixShell = URL(fileURLWithPath: "/bin/sh")
     public static let pgrep = URL(fileURLWithPath: "/usr/bin/pgrep")
     public static let kill = URL(fileURLWithPath: "/bin/kill")
     public static let killall = URL(fileURLWithPath: "/usr/bin/killall")

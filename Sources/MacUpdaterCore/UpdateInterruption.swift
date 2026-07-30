@@ -13,11 +13,14 @@ import Foundation
 /// upgrade announces "everything is up to date" about packages nobody touched.
 public struct UpdateInterruption: Equatable, Sendable {
     /// Whether the user has asked this run to stop.
-    public private(set) var isRequested = false
+    public private(set) var isRequested: Bool
     /// Planned keys that were never attempted because the run stopped at a boundary.
-    public private(set) var skippedKeys: Set<String> = []
+    public private(set) var skippedKeys: Set<String>
 
-    public init() {}
+    public init() {
+        isRequested = false
+        skippedKeys = []
+    }
 
     public mutating func request() {
         isRequested = true

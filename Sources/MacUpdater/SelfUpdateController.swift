@@ -78,7 +78,7 @@ final class SelfUpdateController: ObservableObject {
                 // The replacement process must start *after* this one exits, or the single-instance
                 // guard rejects it. A detached shell waits, then reopens the bundle by path.
                 let relauncher = Process()
-                relauncher.executableURL = URL(fileURLWithPath: "/bin/sh")
+                relauncher.executableURL = SystemPaths.posixShell
                 relauncher.arguments = ["-c", #"sleep 1; /usr/bin/open "$0""#, Bundle.main.bundleURL.path]
                 do {
                     try relauncher.run()
