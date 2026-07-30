@@ -26,7 +26,8 @@ public enum CaskMatchScorer {
     ///    cask's expected publisher Team ID are known, equality ⇒ high, mismatch ⇒ low.
     ///    LT-03 supplies both from `CaskPublisherCorrelation`; a mismatch is a hard veto.
     /// 2. **How the match was found** — ``CaskMatchProvenance``, decided by `CaskMatcher`.
-    ///    A curated entry or a token hit is certain; a display-name hit is plausible.
+    ///    A bundle-identifier, curated-entry or token hit is certain; a display-name hit
+    ///    is plausible.
     ///
     /// LT-03 (follow-up) — signals 2 and 3 used to be re-derived here from an application
     /// name, a token and a list of cask names, which meant a caller had to reconstruct a
@@ -45,8 +46,8 @@ public enum CaskMatchScorer {
         }
 
         switch provenance {
-        case .installedToken, .curatedMapping, .token: return .high
-        case .displayName:                             return .medium
+        case .bundleIdentifier, .installedToken, .curatedMapping, .token: return .high
+        case .displayName:                                                return .medium
         }
     }
 
