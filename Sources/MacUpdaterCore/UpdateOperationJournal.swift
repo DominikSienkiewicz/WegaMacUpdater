@@ -262,7 +262,7 @@ public final class UpdateOperationStore: @unchecked Sendable {
 
     /// Updates the user can still undo right now: committed items whose snapshot is
     /// actually on disk, inside the retention window.
-    public func undoableUpdates(now _: Date = Date()) -> [UndoableUpdate] {
+    public func undoableUpdates(now: Date = Date()) -> [UndoableUpdate] {
         lock.lock(); defer { lock.unlock() }
         var result: [UndoableUpdate] = []
         for operation in loadAllOperations() {
@@ -277,13 +277,15 @@ public final class UpdateOperationStore: @unchecked Sendable {
                         atPath: snapshotURL(operationID: operation.id, name: snapshotName).path
                       ) else { continue }
                 let updatedAt = item.history.last(where: { $0.phase == .committed })?.at ?? committedAt
+                let expiresAt = updatedAt.addingTimeInterval(Self.retentionInterval)
+                guard expiresAt > now else { continue }
                 result.append(UndoableUpdate(
                     operationID: operation.id,
                     token: item.token,
                     appPath: item.appPath,
                     restoredVersion: item.preUpgradeVersion,
                     updatedAt: updatedAt,
-                    expiresAt: updatedAt.addingTimeInterval(Self.retentionInterval)
+                    expiresAt: expiresAt
                 ))
             }
         }

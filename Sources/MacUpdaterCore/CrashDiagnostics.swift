@@ -137,7 +137,7 @@ public struct CrashDiagnosticRecord: Codable, Equatable, Identifiable, Sendable 
     }
 
     /// Convenience for lightweight records that only carry a termination reason.
-    public init(kind: CrashDiagnosticKind, occurredAt: Date, terminationReason: String?) {
+    public init(kind: CrashDiagnosticKind, occurredAt: Date, terminationReason: String? = nil) {
         self.init(
             kind: kind,
             occurredAt: occurredAt,
