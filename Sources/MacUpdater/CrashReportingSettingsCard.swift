@@ -80,7 +80,7 @@ struct CrashReportingSettingsCard: View {
                     isPresented: $confirmingClear
                 ) {
                     Button(tr("Usuń raporty"), role: .destructive) { controller.clearRecords() }
-                    Button(tr("Anuluj"), role: .cancel) {}
+                    Button(tr("Anuluj"), role: .cancel) { confirmingClear = false }
                 }
             }
         }

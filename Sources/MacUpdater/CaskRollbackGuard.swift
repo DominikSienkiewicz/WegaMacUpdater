@@ -305,9 +305,11 @@ enum CaskRollbackGuard {
 final class UpgradeMutex {
     static let shared = UpgradeMutex()
 
-    private(set) var isBusy = false
+    private(set) var isBusy: Bool
 
-    private init() {}
+    private init() {
+        isBusy = false
+    }
 
     /// Returns `false` when an upgrade is already in flight; the caller must then do nothing.
     func acquire() -> Bool {
