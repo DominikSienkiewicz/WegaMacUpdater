@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import WegaTestSupport
 @testable import MacUpdaterCore
 
 /// SEC-02 — detecting a publisher change must not turn the new publisher into the
@@ -18,10 +19,8 @@ struct PublisherBaselineProtectionTests {
     }
 
     @Test func publisherMismatchNeverReplacesTheTrustedBaseline() throws {
-        let suiteName = "wega-sec-02-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let (defaults, teardown) = TestDefaults.isolated("sec02-publisher-baseline")
+        defer { teardown() }
 
         let ledger = TeamIDLedger(defaults: defaults)
         #expect(ledger.record(bundleID: "cask:figma", teamID: "OLDTEAM") == .firstSeen(teamID: "OLDTEAM"))

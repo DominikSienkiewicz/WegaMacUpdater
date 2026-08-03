@@ -1,14 +1,14 @@
 import Foundation
 import Testing
+import WegaTestSupport
 
 @testable import MacUpdaterCore
 
 @Suite("Background update consent management")
 @MainActor
 struct BackgroundUpdateConsentManagementTests {
-    private func isolatedDefaults() throws -> (UserDefaults, String) {
-        let name = "wega-bg05-\(UUID().uuidString)"
-        return (try #require(UserDefaults(suiteName: name)), name)
+    private func isolatedDefaults() -> (UserDefaults, () -> Void) {
+        TestDefaults.isolated("bg05-consent")
     }
 
     private func profile(
@@ -36,9 +36,9 @@ struct BackgroundUpdateConsentManagementTests {
             .deletingLastPathComponent()
     }
 
-    @Test func grantDatePersistsAndARepeatedGrantDoesNotRewriteIt() throws {
-        let (defaults, suiteName) = try isolatedDefaults()
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+    @Test func grantDatePersistsAndARepeatedGrantDoesNotRewriteIt() {
+        let (defaults, teardown) = isolatedDefaults()
+        defer { teardown() }
         let grantedAt = Date(timeIntervalSinceReferenceDate: 700_000_000)
         let store = BackgroundUpdateOptInStore(defaults: defaults, now: { grantedAt })
 
@@ -53,9 +53,9 @@ struct BackgroundUpdateConsentManagementTests {
         #expect(reloaded.consents == store.consents)
     }
 
-    @Test func consentSurvivesDisappearingFromCandidatesAndCanStillBeRevoked() throws {
-        let (defaults, suiteName) = try isolatedDefaults()
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+    @Test func consentSurvivesDisappearingFromCandidatesAndCanStillBeRevoked() {
+        let (defaults, teardown) = isolatedDefaults()
+        defer { teardown() }
         let store = BackgroundUpdateOptInStore(defaults: defaults)
         store.setOptedIn(true, token: "ghost-app")
 
@@ -76,9 +76,9 @@ struct BackgroundUpdateConsentManagementTests {
         #expect(BackgroundUpdateOptInStore(defaults: defaults).consents.isEmpty)
     }
 
-    @Test func legacyTokenArrayMigratesWithoutLosingExistingConsent() throws {
-        let (defaults, suiteName) = try isolatedDefaults()
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+    @Test func legacyTokenArrayMigratesWithoutLosingExistingConsent() {
+        let (defaults, teardown) = isolatedDefaults()
+        defer { teardown() }
         defaults.set(["zed", "iterm2"], forKey: "wega.backgroundUpdate.optIn")
         let migratedAt = Date(timeIntervalSinceReferenceDate: 710_000_000)
 

@@ -1,3 +1,4 @@
+import WegaTestSupport
 import XCTest
 @testable import MacUpdaterCore
 
@@ -6,19 +7,18 @@ import XCTest
 /// entitlement); exclusions as paths; depth as a clamped integer.
 final class ScanConfigurationStoreTests: XCTestCase {
     private var defaults: UserDefaults!
-    private var suiteName: String!
+    private var teardownDefaults: (() -> Void)!
     private var tmp: URL!
 
     override func setUpWithError() throws {
-        suiteName = "wega.scan.tests.\(UUID().uuidString)"
-        defaults = UserDefaults(suiteName: suiteName)
+        (defaults, teardownDefaults) = TestDefaults.isolated("scan-configuration-store")
         tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
     }
 
     override func tearDownWithError() throws {
-        defaults.removePersistentDomain(forName: suiteName)
+        teardownDefaults()
         try? FileManager.default.removeItem(at: tmp)
     }
 

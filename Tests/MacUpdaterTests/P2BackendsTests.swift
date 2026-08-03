@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import WegaTestSupport
 @testable import MacUpdaterCore
 
 @Suite("P2Backends")
@@ -29,8 +30,9 @@ struct P2BackendsTests {
     }
 
     /// SEC-02: a mismatch is an audit signal, not permission to replace the trusted baseline.
-    @Test func teamIDLedgerPreservesTrustedBaselineOnMismatch() throws {
-        let defaults = try #require(UserDefaults(suiteName: "wega-test-\(UUID().uuidString)"))
+    @Test func teamIDLedgerPreservesTrustedBaselineOnMismatch() {
+        let (defaults, teardown) = TestDefaults.isolated("sec02-team-id-ledger")
+        defer { teardown() }
         let ledger = TeamIDLedger(defaults: defaults)
         #expect(ledger.record(bundleID: "com.x", teamID: "AAA") == .firstSeen(teamID: "AAA"))
         #expect(ledger.record(bundleID: "com.x", teamID: "AAA") == .unchanged(teamID: "AAA"))
@@ -53,8 +55,9 @@ struct P2BackendsTests {
     /// never intersect, so a cask whose publisher the watchdog HAD been tracking still
     /// read as `.firstSeen` in the inspector instead of `.unchanged`. `classifyCask`
     /// reconciles both namespaces on read, correlating existing history with no migration.
-    @Test func caskPublisherCorrelatesAcrossKeyNamespaces() throws {
-        let defaults = try #require(UserDefaults(suiteName: "wega-test-\(UUID().uuidString)"))
+    @Test func caskPublisherCorrelatesAcrossKeyNamespaces() {
+        let (defaults, teardown) = TestDefaults.isolated("i4-cask-publisher-namespaces")
+        defer { teardown() }
         let ledger = TeamIDLedger(defaults: defaults)
         // Watchdog records the freshly-upgraded cask's publisher under the cask key.
         ledger.record(bundleID: "cask:firefox", teamID: "43AQ936H96")

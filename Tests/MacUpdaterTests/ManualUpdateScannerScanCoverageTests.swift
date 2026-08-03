@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import WegaTestSupport
 @testable import MacUpdaterCore
 
 @Suite("Manual update scanner integration")
@@ -43,9 +44,8 @@ struct ManualUpdateScannerScanCoverageTests {
             BrewCask(token: "skipped", name: ["Skipped"]),
         ])
 
-        let defaultsSuite = "ManualUpdateScannerScanCoverageTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: defaultsSuite))
-        defer { defaults.removePersistentDomain(forName: defaultsSuite) }
+        let (defaults, teardown) = TestDefaults.isolated("manual-scanner-scan-coverage")
+        defer { teardown() }
         let ledger = CaskRollbackLedger(defaults: defaults)
         ledger.recordRollback(token: "managed", reason: .checkFailed)
 

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import WegaTestSupport
 @testable import MacUpdaterCore
 
 /// QA-01d — regression lock for the SEC-02 guarantee that a publisher mismatch
@@ -26,10 +27,8 @@ struct QA01DPublisherMismatchRetentionTests {
     /// on the mismatch itself, on every re-check, and even when the new signature is
     /// unreadable (which must not be allowed to erase it either).
     @Test func publisherMismatchNeverOverwritesTheTrustedBaseline() throws {
-        let suiteName = "wega-qa01d-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let (defaults, teardown) = TestDefaults.isolated("qa01d-publisher-mismatch")
+        defer { teardown() }
 
         let ledger = TeamIDLedger(defaults: defaults)
         let bundleID = "cask:figma"

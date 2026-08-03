@@ -53,16 +53,22 @@ let package = Package(
             dependencies: ["MacUpdaterCore"],
             path: "Sources/WegaSudoShim"
         ),
+        // Shared by both test targets so the UserDefaults-suite teardown lives in one place:
+        // a suite left behind is an empty plist in ~/Library/Preferences that nothing reclaims.
+        .target(
+            name: "WegaTestSupport",
+            path: "Tests/WegaTestSupport"
+        ),
         .testTarget(
             name: "MacUpdaterTests",
-            dependencies: ["MacUpdaterCore", "WegaHelperKit"],
+            dependencies: ["MacUpdaterCore", "WegaHelperKit", "WegaTestSupport"],
             resources: [
                 .process("Fixtures")
             ]
         ),
         .testTarget(
             name: "MacUpdaterUITests",
-            dependencies: ["WegaMacUpdater"]
+            dependencies: ["WegaMacUpdater", "WegaTestSupport"]
         )
     ]
 )

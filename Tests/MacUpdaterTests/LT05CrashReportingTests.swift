@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import WegaTestSupport
 @testable import MacUpdaterCore
 
 /// LT-05 — local crash reporting through MetricKit.
@@ -98,8 +99,8 @@ struct LT05CrashReportingTests {
         return url
     }
 
-    private func scratchDefaults() -> UserDefaults {
-        UserDefaults(suiteName: "wega.tests.lt05.\(UUID().uuidString)")!
+    private func scratchDefaults() -> (UserDefaults, () -> Void) {
+        TestDefaults.isolated("lt05-crash-reporting")
     }
 
     private func store(
@@ -313,8 +314,10 @@ struct LT05CrashReportingTests {
     @Test("Nothing is collected until the user opts in")
     func collectsNothingWhileOptedOut() {
         let source = FakeCrashDiagnosticSource()
+        let (defaults, teardown) = scratchDefaults()
+        defer { teardown() }
         let subject = CrashReportingController(
-            source: source, store: store(), defaults: scratchDefaults()
+            source: source, store: store(), defaults: defaults
         )
 
         #expect(!subject.isEnabled, "crash reporting is off on a fresh install")
@@ -327,7 +330,8 @@ struct LT05CrashReportingTests {
 
     @Test("Opting in subscribes, opting out unsubscribes, and the choice is remembered")
     func optInDrivesTheSystemSubscription() {
-        let defaults = scratchDefaults()
+        let (defaults, teardown) = scratchDefaults()
+        defer { teardown() }
         let source = FakeCrashDiagnosticSource()
         let subject = CrashReportingController(source: source, store: store(), defaults: defaults)
 
@@ -350,7 +354,9 @@ struct LT05CrashReportingTests {
     @Test("An opted-in delivery is parsed, stored and surfaced")
     func storesDeliveredDiagnosticWhenOptedIn() {
         let source = FakeCrashDiagnosticSource()
-        let subject = CrashReportingController(source: source, store: store(), defaults: scratchDefaults())
+        let (defaults, teardown) = scratchDefaults()
+        defer { teardown() }
+        let subject = CrashReportingController(source: source, store: store(), defaults: defaults)
 
         subject.setEnabled(true)
         source.deliver(crashPayload())
@@ -363,7 +369,9 @@ struct LT05CrashReportingTests {
     @Test("Deleting the reports is independent of the switch")
     func clearingRecordsKeepsCollectionRunning() {
         let source = FakeCrashDiagnosticSource()
-        let subject = CrashReportingController(source: source, store: store(), defaults: scratchDefaults())
+        let (defaults, teardown) = scratchDefaults()
+        defer { teardown() }
+        let subject = CrashReportingController(source: source, store: store(), defaults: defaults)
         subject.setEnabled(true)
         source.deliver(crashPayload())
 
