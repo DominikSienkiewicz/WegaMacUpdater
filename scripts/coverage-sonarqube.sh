@@ -36,15 +36,10 @@ if [[ ! -f "$PROFDATA" ]]; then
   exit 1
 fi
 
-# The UI-test bundle links WegaMacUpdater, which in turn links MacUpdaterCore. SwiftPM's
-# merged profile therefore maps every production target through this one executable. Picking
-# the first `find *.xctest` result was filesystem-order dependent: when MacUpdaterTests won,
-# Sources/MacUpdater disappeared from the report and Sonar counted it as uncovered.
-TEST_BIN="$BIN_PATH/MacUpdaterUITests.xctest/Contents/MacOS/MacUpdaterUITests"
-if [[ ! -x "$TEST_BIN" ]]; then
-  echo "❌ No MacUpdaterUITests executable at $TEST_BIN" >&2
-  exit 1
-fi
+# Which bundle carries the whole package depends on the build system in use, so the choice
+# lives in one place — see resolve-coverage-bundle.sh. Naming a single bundle here hardcoded
+# the layout of whichever toolchain the author happened to run.
+TEST_BIN="$("$SCRIPT_DIR/resolve-coverage-bundle.sh" "$BIN_PATH")"
 
 echo "→ Exporting LCOV from $(basename "$TEST_BIN")"
 # Keep only first-party sources; drop SwiftPM checkouts, generated sources and tests.
