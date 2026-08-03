@@ -346,6 +346,21 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   `MigrationLeftoverCleanupDisabledTests`.
 
 ### Fixed
+- **A cask whose Homebrew metadata runs ahead of the app on disk is no longer invisible
+  (REL-17).** When brew's Caskroom records a version the bundle never reached — an install
+  that did not land, a bundle replaced out-of-band with an older one — `brew outdated`
+  compares its own receipt against the cask, finds them equal and says nothing; because brew
+  tracks a version it is treated as authoritative, so neither the cask-version check nor any
+  vendor checker ran on that app either, and the pending update was visible to no source at
+  all. Caught in the wild on Discord: brew recorded `0.0.403` while `/Applications/Discord.app`
+  was `0.0.402`, and Discord's own Squirrel feed answered *204 — you are current* for
+  `0.0.402`, so the vendor checker could not have seen it either. The scan now compares the
+  real bundle version against brew's record for every brew-authoritative cask and forces the
+  drifted ones back onto the list, where the ordinary Brew action force-reinstalls and repairs
+  the Caskroom record in the same pass. This is the mirror image of `BrewCaskDriftFilter`,
+  which only ever suppressed the opposite drift (bundle *ahead* of brew's record). A build
+  suffix carried by only one side (Homebrew's `5.3.1,50301` against a bare `5.3.1`) stays
+  encoding noise rather than becoming a phantom row.
 - Chrome installed through Homebrew no longer appears twice in the Updates window. Its
   internal bundle name is `Chrome`, while Homebrew calls the cask `google-chrome`, so the
   name-only matcher classified the same bundle as both a cask and a manually installed app.
