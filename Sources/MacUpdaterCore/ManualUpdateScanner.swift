@@ -257,15 +257,26 @@ public struct ManualUpdateScanner: Sendable {
         // `UserDefaults` for good. Pruned from brew's own installed list, which stays
         // authoritative for a rolled-back cask: its Caskroom entry survives the rollback.
         rollbackLedger.prune(installedCaskTokens: Set(brewCaskVersions.keys))
-        let listedCaskTokens = collected.compactMap { app -> String? in
-            if case .cask(let token) = app.source { return token }
-            return nil
+        func listedCaskTokens() -> Set<String> {
+            brewOutdatedCasks.union(collected.compactMap { app -> String? in
+                if case .cask(let token) = app.source { return token }
+                return nil
+            })
         }
         collected.append(contentsOf: Self.rolledBackRows(
             rolledBackTokens: rollbackLedger.rolledBackTokens(),
             installedApps: appsToCheck,
             brewCaskVersions: brewCaskVersions,
-            alreadyListedTokens: brewOutdatedCasks.union(listedCaskTokens)
+            alreadyListedTokens: listedCaskTokens()
+        ))
+        // REL-17 — the last gap where a pending update is visible to nobody: brew's Caskroom
+        // records a version the bundle on disk never reached, so `brew outdated` (receipt vs
+        // cask) stays silent while `isBrewManaged` has already suppressed both the
+        // cask-version check and every vendor checker for that app.
+        collected.append(contentsOf: Self.caskMetadataDriftRows(
+            installedApps: appsToCheck,
+            brewCaskVersions: brewCaskVersions,
+            alreadyListedTokens: listedCaskTokens()
         ))
         return (UpdatePlanner.dedupedByPriority(collected), failedChecks)
     }
@@ -303,6 +314,61 @@ public struct ManualUpdateScanner: Sendable {
                     origin: AppOrigin.of(app),
                     bundleIdentifier: app.bundleIdentifier,
                     rolledBack: true
+                )
+            }
+    }
+
+    /// REL-17 — synthesises rows for casks whose Homebrew metadata drifted *ahead* of the app
+    /// actually on disk.
+    ///
+    /// ``BrewCaskDriftFilter`` covers the opposite direction — bundle at or past
+    /// `current_version` while brew's record lags — and hides those as false positives. This is
+    /// the false *negative*: an install that never landed, or a bundle replaced out-of-band with
+    /// an older one, leaves brew's Caskroom claiming a version the disk never reached. Brew then
+    /// compares its own receipt against the cask, finds them equal, and reports nothing; because
+    /// brew tracks a version, ``BrewManagement/isAuthoritative(caskToken:isManagedByBrew:installedCaskTokens:brewTrackedTokens:)``
+    /// makes it the sole source of truth and `scan()` runs neither the cask-version check nor any
+    /// vendor checker on that app. Nothing compares the bundle against the cask, so the update is
+    /// invisible everywhere.
+    ///
+    /// Discord is the reproducer: brew records `0.0.403`, `/Applications/Discord.app` is
+    /// `0.0.402`, and Discord's own Squirrel feed answers 204 for `0.0.402` — so even running the
+    /// vendor checker would report it current. Homebrew's metadata is the only source that knows.
+    ///
+    /// The row carries the `.cask` source, whose action force-reinstalls and thereby repairs the
+    /// Caskroom record in the same pass. It is deliberately *not* marked `rolledBack`: no rollback
+    /// happened, so the REL-07 "cofnięto — ponów próbę" label would misstate the cause while the
+    /// remedy is already identical.
+    ///
+    /// Drift is judged with the tolerant `.buildNumbered` scheme, so a build suffix on only one
+    /// side (Homebrew's `5.3.1,50301` against a bare `5.3.1`) is encoding noise rather than a
+    /// phantom row, and an unparseable version yields no row at all. Pure and deterministically
+    /// ordered so the list does not reshuffle between scans.
+    public static func caskMetadataDriftRows(
+        installedApps: [ApplicationInfo],
+        brewCaskVersions: [String: String],
+        alreadyListedTokens: Set<String>
+    ) -> [ManualOutdatedApp] {
+        let appByToken = Dictionary(
+            installedApps.compactMap { app in app.caskToken.map { ($0, app) } },
+            uniquingKeysWith: { first, _ in first }
+        )
+        return Set(appByToken.keys)
+            .subtracting(alreadyListedTokens)
+            .sorted()
+            .compactMap { token in
+                guard let app = appByToken[token],
+                      let recorded = brewCaskVersions[token],
+                      let onDisk = app.version,
+                      isUpgrade(installed: onDisk, latest: recorded) else { return nil }
+                return ManualOutdatedApp(
+                    name: app.name,
+                    path: app.path,
+                    installedVersion: onDisk,
+                    availableVersion: recorded,
+                    source: .cask(token: token),
+                    origin: AppOrigin.of(app),
+                    bundleIdentifier: app.bundleIdentifier
                 )
             }
     }
