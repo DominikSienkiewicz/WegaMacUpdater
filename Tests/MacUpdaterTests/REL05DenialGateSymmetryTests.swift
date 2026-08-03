@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import WegaTestSupport
 @testable import MacUpdaterCore
 
 /// REL-05 — the denial gate has to be disarmed by the same paths that arm it.
@@ -26,9 +27,8 @@ struct REL05DenialGateSymmetryTests {
     /// Behavioural: granting the permission and completing a clean run has to reopen the gate,
     /// whichever path observed the refusal.
     @Test func aCleanRunReopensAGateThatAnEarlierRefusalClosed() throws {
-        let suite = "wega.tests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let (defaults, teardown) = TestDefaults.isolated("rel05-denial-gate")
+        defer { teardown() }
         let store = AppManagementDenialStore(defaults: defaults)
 
         store.recordDenial()

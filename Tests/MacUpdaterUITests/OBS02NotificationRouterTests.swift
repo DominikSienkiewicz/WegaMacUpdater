@@ -1,6 +1,7 @@
 import Foundation
 import MacUpdaterCore
 import Testing
+import WegaTestSupport
 @testable import WegaMacUpdater
 
 /// OBS-02 — the app-target half of the notification deep link: what a delivered destination
@@ -17,10 +18,9 @@ struct OBS02NotificationRouterTests {
 
     /// The navigation itself. The window selects on `@AppStorage(SidebarSelection.storageKey)`,
     /// so writing that key is what moving the window means.
-    @Test func aDeliveredDestinationBecomesTheWindowsSelection() throws {
-        let suite = "wega.tests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+    @Test func aDeliveredDestinationBecomesTheWindowsSelection() {
+        let (defaults, teardown) = TestDefaults.isolated("obs02-notification-router")
+        defer { teardown() }
         defaults.set(SidebarSelection.updates(.all).rawValue, forKey: SidebarSelection.storageKey)
 
         let router = NotificationRouter(defaults: defaults)
@@ -34,10 +34,9 @@ struct OBS02NotificationRouterTests {
 
     /// A notification from an older build carries no destination. It must bring Wega forward
     /// and leave the window exactly where the user left it — the old behaviour, not a guess.
-    @Test func aDeliveryWithoutADestinationLeavesTheWindowWhereItWas() throws {
-        let suite = "wega.tests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+    @Test func aDeliveryWithoutADestinationLeavesTheWindowWhereItWas() {
+        let (defaults, teardown) = TestDefaults.isolated("obs02-notification-router")
+        defer { teardown() }
         defaults.set(SidebarSelection.migration.rawValue, forKey: SidebarSelection.storageKey)
 
         let router = NotificationRouter(defaults: defaults)

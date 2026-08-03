@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import WegaTestSupport
 @testable import MacUpdaterCore
 
 @Suite("Download resource gate")
@@ -92,9 +93,8 @@ struct DownloadResourceGateTests {
     }
 
     @Test func preferencesLoadConfiguredThresholdsInsteadOfHardCodedValues() throws {
-        let suite = "wega-download-gate-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let (defaults, teardown) = TestDefaults.isolated("download-gate")
+        defer { teardown() }
         defaults.set(350, forKey: DownloadGate.Configuration.largeDownloadThresholdMBKey)
         defaults.set(35, forKey: DownloadGate.Configuration.lowBatteryThresholdPercentKey)
         defaults.set(3.5, forKey: DownloadGate.Configuration.unpackedSizeMultiplierKey)

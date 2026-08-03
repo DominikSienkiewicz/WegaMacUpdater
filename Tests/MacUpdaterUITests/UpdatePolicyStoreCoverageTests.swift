@@ -1,6 +1,7 @@
 import Foundation
 import MacUpdaterCore
 import Testing
+import WegaTestSupport
 
 @testable import WegaMacUpdater
 
@@ -8,8 +9,8 @@ import Testing
 @MainActor
 struct UpdatePolicyStoreCoverageTests {
     @Test func malformedPersistenceStartsWithAnEmptyStore() throws {
-        let (defaults, suite) = try makeDefaults()
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let (defaults, teardown) = makeDefaults()
+        defer { teardown() }
         defaults.set(Data("not-json".utf8), forKey: "wega.updatePolicies")
 
         let store = UpdatePolicyStore(defaults: defaults)
@@ -20,8 +21,8 @@ struct UpdatePolicyStoreCoverageTests {
     }
 
     @Test func pinSkipOverwriteSortAndRemovePersistExactly() throws {
-        let (defaults, suite) = try makeDefaults()
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let (defaults, teardown) = makeDefaults()
+        defer { teardown() }
         let store = UpdatePolicyStore(defaults: defaults)
 
         store.pin(key: "c:zulu", name: "Zulu", version: "  2.0  ")
@@ -46,8 +47,8 @@ struct UpdatePolicyStoreCoverageTests {
     }
 
     @Test func duplicatePersistedKeysKeepTheLastEntry() throws {
-        let (defaults, suite) = try makeDefaults()
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let (defaults, teardown) = makeDefaults()
+        defer { teardown() }
         let entries = [
             UpdatePolicyEntry(key: "c:dup", displayName: "Old", policy: .ignored),
             UpdatePolicyEntry(key: "c:dup", displayName: "New", policy: .pinned(version: "9")),
@@ -61,10 +62,7 @@ struct UpdatePolicyStoreCoverageTests {
         #expect(store.policy(for: "c:dup") == .pinned(version: "9"))
     }
 
-    private func makeDefaults() throws -> (UserDefaults, String) {
-        let suite = "wega.tests.policy-coverage.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
-        return (defaults, suite)
+    private func makeDefaults() -> (UserDefaults, () -> Void) {
+        TestDefaults.isolated("update-policy-store-coverage")
     }
 }

@@ -320,6 +320,46 @@ struct ArchitectureReviewRegressionTests {
         )
     }
 
+    /// Every test-owned `UserDefaults` suite goes through `TestDefaults`.
+    ///
+    /// `UserDefaults(suiteName:)` writes `~/Library/Preferences/<suite>.plist`, and
+    /// `removePersistentDomain(forName:)` — the teardown every one of these sites used — empties
+    /// that file without unlinking it. One suite per test therefore left one empty 4 KB plist
+    /// per test per run: 5235 of them had accumulated, about 90% of the files in that directory.
+    /// `TestDefaults` unlinks the file and sweeps what earlier runs left behind, so the only way
+    /// to reintroduce the leak is to build a suite by hand — which is what this test refuses.
+    @Test func testSuitesNeverBuildTheirOwnUserDefaultsDomain() throws {
+        // Split so this guard does not match its own source.
+        let handRolledSuite = "UserDefaults(" + "suiteName:"
+        let offenders = try swiftSources(under: "Tests")
+            .filter { !$0.name.hasPrefix("Tests/WegaTestSupport/") }
+            .filter { executableSource($0.text).contains(handRolledSuite) }
+            .map(\.name)
+
+        #expect(
+            offenders.isEmpty,
+            """
+            these tests build a UserDefaults suite directly and leak its plist — \
+            use TestDefaults.isolated(_:) with `defer { teardown() }`: \(offenders.sorted())
+            """
+        )
+    }
+
+    private func swiftSources(under relativePath: String) throws -> [(name: String, text: String)] {
+        let root = packageRoot()
+        let directory = root.appendingPathComponent(relativePath)
+        let enumerator = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil)
+        var sources: [(name: String, text: String)] = []
+        while let url = enumerator?.nextObject() as? URL {
+            guard url.pathExtension == "swift" else { continue }
+            sources.append((
+                name: url.path.replacingOccurrences(of: root.path + "/", with: ""),
+                text: try String(contentsOf: url, encoding: .utf8)
+            ))
+        }
+        return sources
+    }
+
     private func packageRoot(file: String = #filePath) -> URL {
         URL(fileURLWithPath: file)
             .deletingLastPathComponent()

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import WegaTestSupport
 @testable import MacUpdaterCore
 
 /// REL-07 — the persistent "rolled back" state that keeps an auto-reverted cask visible.
@@ -12,16 +13,13 @@ import Testing
 @Suite("REL-07 — CaskRollbackLedger")
 struct CaskRollbackLedgerTests {
 
-    private func isolatedLedger() throws -> (CaskRollbackLedger, () -> Void) {
-        let suite = "wega-rel-07-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
-        return (CaskRollbackLedger(defaults: defaults),
-                { defaults.removePersistentDomain(forName: suite) })
+    private func isolatedLedger() -> (CaskRollbackLedger, () -> Void) {
+        let (defaults, teardown) = TestDefaults.isolated("rel07-rollback-ledger")
+        return (CaskRollbackLedger(defaults: defaults), teardown)
     }
 
     @Test func recordsAndReportsARolledBackToken() throws {
-        let (ledger, cleanup) = try isolatedLedger()
+        let (ledger, cleanup) = isolatedLedger()
         defer { cleanup() }
 
         #expect(!ledger.isRolledBack(token: "figma"))
@@ -33,7 +31,7 @@ struct CaskRollbackLedgerTests {
     }
 
     @Test func clearRemovesTheToken() throws {
-        let (ledger, cleanup) = try isolatedLedger()
+        let (ledger, cleanup) = isolatedLedger()
         defer { cleanup() }
 
         ledger.recordRollback(token: "figma", reason: .publisherChanged)
@@ -47,7 +45,7 @@ struct CaskRollbackLedgerTests {
     /// The verdict → ledger action mapping — the bridge from the `verify` decision matrix
     /// (`QA-01i`) into durable state. Only the two *restored* verdicts persist a mark.
     @Test func applyMapsRolledBackVerdictsToAMark() throws {
-        let (ledger, cleanup) = try isolatedLedger()
+        let (ledger, cleanup) = isolatedLedger()
         defer { cleanup() }
 
         ledger.apply(token: "canary", verdict: .rolledBack)
@@ -60,7 +58,7 @@ struct CaskRollbackLedgerTests {
     /// A conscious retry that finally lands healthy must erase the mark — otherwise the row
     /// would haunt the list forever (criterion: "user does not see a stale rolled-back app").
     @Test func applyHealthyClearsAPreviouslyRolledBackToken() throws {
-        let (ledger, cleanup) = try isolatedLedger()
+        let (ledger, cleanup) = isolatedLedger()
         defer { cleanup() }
 
         ledger.apply(token: "figma", verdict: .rolledBack)
@@ -74,7 +72,7 @@ struct CaskRollbackLedgerTests {
     /// it is surfaced as a critical result in the run summary and must not be quietly folded
     /// into the "rolled back — retry" state, nor may it erase an existing mark.
     @Test func applyRollbackFailedLeavesTheLedgerUntouched() throws {
-        let (ledger, cleanup) = try isolatedLedger()
+        let (ledger, cleanup) = isolatedLedger()
         defer { cleanup() }
 
         ledger.apply(token: "figma", verdict: .rolledBack)
@@ -91,10 +89,8 @@ struct CaskRollbackLedgerTests {
     /// The mark has to outlive the process: a relaunch reads the same list before any rescan,
     /// so the ledger is UserDefaults-backed exactly like `TeamIDLedger`.
     @Test func marksPersistAcrossLedgerInstances() throws {
-        let suite = "wega-rel-07-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let (defaults, teardown) = TestDefaults.isolated("rel07-rollback-ledger")
+        defer { teardown() }
 
         CaskRollbackLedger(defaults: defaults).recordRollback(token: "figma", reason: .checkFailed)
         #expect(CaskRollbackLedger(defaults: defaults).isRolledBack(token: "figma"))

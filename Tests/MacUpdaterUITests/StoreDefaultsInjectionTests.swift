@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import MacUpdaterCore
+import WegaTestSupport
 @testable import WegaMacUpdater
 
 /// QA-01 — the app-target singletons (`UpdatePolicyStore`, `LocalizationManager`,
@@ -16,17 +17,9 @@ import MacUpdaterCore
 @MainActor
 struct StoreDefaultsInjectionTests {
 
-    /// A fresh, isolated `UserDefaults` domain, wiped before use so a stale run cannot leak in.
-    private func makeDefaults(_ suite: String) -> UserDefaults {
-        let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        return defaults
-    }
-
     @Test func updatePolicyStoreReadsAndWritesInjectedDefaults() {
-        let suite = "wega.test.policy.\(UUID().uuidString)"
-        let defaults = makeDefaults(suite)
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let (defaults, teardown) = TestDefaults.isolated("qa01-update-policy-store")
+        defer { teardown() }
 
         let store = UpdatePolicyStore(defaults: defaults)
         store.ignore(key: "c:foo", name: "Foo")
@@ -40,9 +33,8 @@ struct StoreDefaultsInjectionTests {
     }
 
     @Test func localizationManagerReadsAndWritesInjectedDefaults() {
-        let suite = "wega.test.lang.\(UUID().uuidString)"
-        let defaults = makeDefaults(suite)
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let (defaults, teardown) = TestDefaults.isolated("qa01-localization-manager")
+        defer { teardown() }
 
         // `language`'s didSet mutates the global `LocalizedStrings.current`; restore it so this
         // test cannot bleed into `tr()`-based assertions elsewhere in the suite.
@@ -58,9 +50,8 @@ struct StoreDefaultsInjectionTests {
     }
 
     @Test func menuBarAgentReadsAndWritesInjectedDefaults() {
-        let suite = "wega.test.menubar.\(UUID().uuidString)"
-        let defaults = makeDefaults(suite)
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let (defaults, teardown) = TestDefaults.isolated("qa01-menu-bar-agent")
+        defer { teardown() }
 
         let agent = MenuBarAgent(defaults: defaults)
         agent.interval = .daily

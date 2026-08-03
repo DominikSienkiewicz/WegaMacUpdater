@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import Testing
+import WegaTestSupport
 @testable import MacUpdaterCore
 
 private final class EnvelopeFakeTransport: HTTPTransport, @unchecked Sendable {
@@ -70,10 +71,9 @@ struct SEC07CatalogEnvelopeTests {
             .appendingPathComponent("app-catalog.json")
     }
 
-    private func ledger() -> (CatalogGenerationLedger, UserDefaults) {
-        let suite = "wega.sec07.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        return (CatalogGenerationLedger(defaults: defaults), defaults)
+    private func ledger() -> (CatalogGenerationLedger, () -> Void) {
+        let (defaults, teardown) = TestDefaults.isolated("sec07-catalog-generation")
+        return (CatalogGenerationLedger(defaults: defaults), teardown)
     }
 
     // MARK: The envelope
@@ -86,8 +86,8 @@ struct SEC07CatalogEnvelopeTests {
         let transport = EnvelopeFakeTransport([
             .init(data: Data(try envelope(wrapping: payload).utf8), status: 200, headers: [:])
         ])
-        let (generations, defaults) = ledger()
-        defer { defaults.removePersistentDomain(forName: defaults.description) }
+        let (generations, teardown) = ledger()
+        defer { teardown() }
 
         let outcome = await CatalogRefresher(
             source: source, destination: dest,
@@ -115,8 +115,8 @@ struct SEC07CatalogEnvelopeTests {
             of: Data(catalogJSON(generation: 4).utf8).base64EncodedString(),
             with: Data(catalogJSON(generation: 4, token: "hostile").utf8).base64EncodedString()
         )
-        let (generations, defaults) = ledger()
-        defer { defaults.removePersistentDomain(forName: defaults.description) }
+        let (generations, teardown) = ledger()
+        defer { teardown() }
 
         let outcome = await CatalogRefresher(
             source: source, destination: dest,
@@ -151,8 +151,8 @@ struct SEC07CatalogEnvelopeTests {
         let dest = tempDestination()
         defer { try? FileManager.default.removeItem(at: dest.deletingLastPathComponent()) }
         let future = try envelope(wrapping: catalogJSON(generation: 4), version: 99)
-        let (generations, defaults) = ledger()
-        defer { defaults.removePersistentDomain(forName: defaults.description) }
+        let (generations, teardown) = ledger()
+        defer { teardown() }
 
         let outcome = await CatalogRefresher(
             source: source, destination: dest,
@@ -171,8 +171,8 @@ struct SEC07CatalogEnvelopeTests {
     func olderGenerationIsRefused() async throws {
         let dest = tempDestination()
         defer { try? FileManager.default.removeItem(at: dest.deletingLastPathComponent()) }
-        let (generations, defaults) = ledger()
-        defer { defaults.removePersistentDomain(forName: defaults.description) }
+        let (generations, teardown) = ledger()
+        defer { teardown() }
         generations.record(7)
 
         let outcome = await CatalogRefresher(
@@ -195,9 +195,8 @@ struct SEC07CatalogEnvelopeTests {
     func acceptedGenerationIsPersisted() async throws {
         let dest = tempDestination()
         defer { try? FileManager.default.removeItem(at: dest.deletingLastPathComponent()) }
-        let suite = "wega.sec07.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let (defaults, teardown) = TestDefaults.isolated("sec07-catalog-generation")
+        defer { teardown() }
 
         let firstRun = await CatalogRefresher(
             source: source, destination: dest,
@@ -245,8 +244,8 @@ struct SEC07CatalogEnvelopeTests {
     /// write that failed would refuse the retry that would have fixed it.
     @Test("A failed write leaves the watermark where it was")
     func failedWriteDoesNotRaiseTheWatermark() async throws {
-        let (generations, defaults) = ledger()
-        defer { defaults.removePersistentDomain(forName: defaults.description) }
+        let (generations, teardown) = ledger()
+        defer { teardown() }
         // A destination whose parent cannot be created — the write must fail.
         let unwritable = URL(fileURLWithPath: "/dev/null/nope/app-catalog.json")
 
@@ -269,8 +268,8 @@ struct SEC07CatalogEnvelopeTests {
     func unsupportedSchemaIsRefused() async throws {
         let dest = tempDestination()
         defer { try? FileManager.default.removeItem(at: dest.deletingLastPathComponent()) }
-        let (generations, defaults) = ledger()
-        defer { defaults.removePersistentDomain(forName: defaults.description) }
+        let (generations, teardown) = ledger()
+        defer { teardown() }
 
         let outcome = await CatalogRefresher(
             source: source, destination: dest,
@@ -309,8 +308,8 @@ struct SEC07CatalogEnvelopeTests {
             .init(data: Data(payload.utf8), status: 200, headers: [:]),
             .init(data: Data(signature.utf8), status: 200, headers: [:])
         ])
-        let (generations, defaults) = ledger()
-        defer { defaults.removePersistentDomain(forName: defaults.description) }
+        let (generations, teardown) = ledger()
+        defer { teardown() }
 
         let outcome = await CatalogRefresher(
             source: source, destination: dest,

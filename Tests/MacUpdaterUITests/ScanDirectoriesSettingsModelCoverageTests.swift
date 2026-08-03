@@ -1,6 +1,7 @@
 import Foundation
 import MacUpdaterCore
 import Testing
+import WegaTestSupport
 
 @testable import WegaMacUpdater
 
@@ -8,10 +9,8 @@ import Testing
 @MainActor
 struct ScanDirectoryModelCoverageTests {
     @Test func mutationsRoundTripThroughTheInjectedDefaults() throws {
-        let suite = "wega.tests.scan-directories.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let (defaults, teardown) = TestDefaults.isolated("scan-directories-settings")
+        defer { teardown() }
 
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("wega-scan-settings-\(UUID().uuidString)", isDirectory: true)
@@ -41,10 +40,8 @@ struct ScanDirectoryModelCoverageTests {
     }
 
     @Test func reloadObservesExternalChangesAndDepthIsClampedByTheStore() throws {
-        let suite = "wega.tests.scan-reload.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let (defaults, teardown) = TestDefaults.isolated("scan-directories-reload")
+        defer { teardown() }
 
         let model = ScanDirectoriesSettingsModel(defaults: defaults)
         ScanConfigurationStore.setRecursionDepth(Int.max, in: defaults)

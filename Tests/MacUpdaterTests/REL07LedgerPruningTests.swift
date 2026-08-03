@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import WegaTestSupport
 @testable import MacUpdaterCore
 
 /// REL-07 follow-up — the rolled-back ledger forgets casks that are gone, and only those.
@@ -56,9 +57,8 @@ struct REL07LedgerPruningTests {
     // MARK: Through the store
 
     @Test func pruningRemovesOnlyTheForgottenTokens() throws {
-        let suite = "wega.tests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let (defaults, teardown) = TestDefaults.isolated("rel07-ledger-pruning")
+        defer { teardown() }
         let ledger = CaskRollbackLedger(defaults: defaults)
 
         ledger.recordRollback(token: "figma", reason: .checkFailed)
@@ -73,9 +73,8 @@ struct REL07LedgerPruningTests {
     }
 
     @Test func pruningOnAFailedBrewQueryLeavesTheLedgerIntact() throws {
-        let suite = "wega.tests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let (defaults, teardown) = TestDefaults.isolated("rel07-ledger-pruning")
+        defer { teardown() }
         let ledger = CaskRollbackLedger(defaults: defaults)
 
         ledger.recordRollback(token: "figma", reason: .checkFailed)

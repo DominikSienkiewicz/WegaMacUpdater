@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import WegaTestSupport
 @testable import MacUpdaterCore
 
 /// LT-02 — the launch smoke test: what the observation window is allowed to conclude.
@@ -203,8 +204,8 @@ struct LT02LaunchSmokeTestTests {
     /// The smoke test is on unless it is switched off, and the absent key on a fresh install
     /// must read as on — `bool(forKey:)` alone would silently return `false`.
     @Test func theSmokeTestIsOnUntilItIsTurnedOff() throws {
-        let defaults = try #require(UserDefaults(suiteName: "wega.tests.\(UUID().uuidString)"))
-        defer { defaults.removeSuite(named: defaults.description) }
+        let (defaults, teardown) = TestDefaults.isolated("lt02-smoke-gate")
+        defer { teardown() }
 
         #expect(LaunchSmokeTestConfiguration.isEnabled(defaults: defaults),
                 "LT-02: an absent key is a fresh install, and the gate is on by default")

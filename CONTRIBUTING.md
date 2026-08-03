@@ -64,6 +64,25 @@ tests that spawn and wait on a real process, for example
 `Tests/MacUpdaterUITests/ScanControlLayoutTests.swift`. Those are a deliberate exception,
 not leftovers, so do not "finish the migration" by rewriting them.
 
+### Isolated `UserDefaults`
+
+A test that needs its own defaults domain takes it from `TestDefaults.isolated(_:)`
+(`Tests/WegaTestSupport`), never from `UserDefaults(suiteName:)` directly:
+
+```swift
+let (defaults, teardown) = TestDefaults.isolated("my-feature")
+defer { teardown() }
+```
+
+A suite is file-backed, and `removePersistentDomain(forName:)` empties
+`~/Library/Preferences/<suite>.plist` without deleting it — so hand-rolled suites left one
+empty 4 KB plist per test per run, thousands of them over a few weeks. `TestDefaults`
+unlinks the file in teardown *and* sweeps the leftovers of earlier runs when a run starts,
+which is the part that actually reclaims the disk: `cfprefsd` writes a domain back after the
+test process has already exited, so no in-process cleanup can be the last word.
+`ArchitectureReviewRegressionTests` fails the build if any test under `Tests/` builds a
+suite by hand.
+
 ## Making a change
 
 - **Branch** from the latest `main` and keep the change focused.
