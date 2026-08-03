@@ -49,18 +49,29 @@ struct LT02LaunchSmokeTestTests {
     }
 
     /// A slower crash — a few polls in, still well inside the window.
+    ///
+    /// The window is deliberately far wider than the scripted crash needs. The probe scripts
+    /// the exit by *observation count* while the window closes on the wall clock, so a window
+    /// only a few poll intervals wide is a race: on a loaded runner a single `Task.sleep`
+    /// overruns, the window closes before the third reading, and a crash that this suite
+    /// exists to catch is reported as `.survived`. Widening the window removes the race
+    /// without softening the claim — `after` is still required to be a small fraction of the
+    /// window, which is exactly what "dated from the launch" means, and is a tighter bound
+    /// than the `after < window` this asserted before.
     @Test func aProcessThatDiesPartwayThroughTheWindowExitsEarly() async {
+        let window: TimeInterval = 30
         let probe = FakeLaunchProbe(script: .exits(afterObservations: 2))
 
         let verdict = await LaunchSmokeTest.run(
-            bundleAt: Self.bundle, window: 1, pollInterval: 0.02, terminationGrace: 0.2, probe: probe
+            bundleAt: Self.bundle, window: window, pollInterval: 0.02, terminationGrace: 0.2, probe: probe
         )
 
         guard case .exitedEarly(let after) = verdict else {
             Issue.record("LT-02: a crash inside the window must be seen, got \(verdict)")
             return
         }
-        #expect(after < 1, "LT-02: an early exit is dated from the launch, not from the window's end")
+        #expect(after < window / 2,
+                "LT-02: an early exit is dated from the launch, not from the window's end")
     }
 
     /// The check must sit **around** the window, not beside it.
