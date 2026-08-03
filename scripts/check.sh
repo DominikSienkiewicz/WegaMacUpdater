@@ -12,6 +12,8 @@ set -euo pipefail
 #   0e. test-verify-bundle-guard — artifact gate still enforces notarization once signed
 #   0f. test-catalog-envelope-guard — the OTA envelope verifies, refuses a swapped payload
 #                                     and unwraps byte-for-byte
+#   0g. test-coverage-bundle-guard — coverage picks a test bundle covering the app target
+#                                     under both SwiftPM build-system layouts
 #   1. swift build              — compiles app + helper + core
 #   2. swift test               — full unit-test suite
 #   3. swiftlint lint --strict  — zero lint violations (warnings fail too)
@@ -63,6 +65,13 @@ echo "→ ./scripts/test-verify-bundle-guard.sh"
 # Skips itself when signing is unconfigured; needs no secret.
 echo "→ ./scripts/test-catalog-envelope-guard.sh"
 ./scripts/test-catalog-envelope-guard.sh
+
+# Pure bash too, and it earns its place here rather than only in CI: the local toolchain and
+# the CI toolchain emit different XCTest bundle layouts, so the coverage step is the one gate
+# that can be green on a developer machine and red on the runner. This exercises both layouts
+# on stub bundles, without a build.
+echo "→ ./scripts/test-coverage-bundle-guard.sh"
+./scripts/test-coverage-bundle-guard.sh
 
 # Fail fast on a CommandLineTools-only toolchain: it lacks a SourceKit that SwiftLint
 # can load, so the lint step breaks with confusing errors after build and test have
