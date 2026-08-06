@@ -93,6 +93,74 @@ struct CaskReplacementSafetyCoverageTests {
         #expect(verdict == .rollbackFailed)
     }
 
+    // MARK: - Casks that install no .app at all
+
+    /// `zoom` and `google-drive` are `pkg` casks: Homebrew's metadata declares no `app`
+    /// artifact whatsoever. Adoption ran `brew install --cask --force` anyway, then asked
+    /// `resolveInstalledAppURL` for an app artifact that cannot exist, got `nil`, and
+    /// `verify` turned that `nil` into `.rollbackFailed` — "the new version failed its
+    /// check and could not be restored". Nothing had been checked and nothing restored;
+    /// the loudest verdict in the enum was reporting a resolution gap.
+    ///
+    /// The upgrade path already refuses these through `RollbackProtection`; adoption is
+    /// the copy that forgot. Deciding it *before* brew runs also spares the user a
+    /// pointless full reinstall of a current app.
+    ///
+    /// Red before the fix: no such gate existed.
+    @Test func aCaskDeclaringNoAppArtifactIsRefusedBeforeBrewRuns() {
+        let pkgOnly = CaskArtifactProfile(
+            token: "zoom",
+            artifacts: [CaskArtifact(kind: .pkg, names: ["zoomusInstallerFull.pkg"])]
+        )
+
+        #expect(CaskReplacementSafety.adoptionIsPointless(token: "zoom", profiles: [pkgOnly]),
+                "a cask with only a pkg stanza can neither be snapshotted nor verified as an app")
+    }
+
+    /// The ordinary app cask (docker-desktop, and every cask adoption was built for)
+    /// must keep passing the gate untouched.
+    @Test func aCaskDeclaringAnAppArtifactStillProceeds() {
+        let appCask = CaskArtifactProfile(
+            token: "docker-desktop",
+            artifacts: [CaskArtifact(kind: .app, names: ["Docker.app"]), CaskArtifact(kind: .binary)]
+        )
+
+        #expect(!CaskReplacementSafety.adoptionIsPointless(token: "docker-desktop", profiles: [appCask]))
+    }
+
+    /// The gate reads Homebrew metadata, which needs the network. When it is unavailable
+    /// the answer is unknown, and an unknown must not become a refusal — behaviour then
+    /// stays exactly as before, with the post-install resolution still failing closed.
+    @Test func anUnknownProfileDoesNotBlockAdoption() {
+        #expect(!CaskReplacementSafety.adoptionIsPointless(token: "zoom", profiles: []))
+        #expect(!CaskReplacementSafety.adoptionIsPointless(
+            token: "zoom",
+            profiles: [CaskArtifactProfile(token: "something-else", artifacts: [CaskArtifact(kind: .app)])]
+        ))
+    }
+
+    /// A gate nobody calls would pass every case above and still let the phantom banner
+    /// through. Asserted at source level — the same technique REL-07 and REL-17 use —
+    /// because driving the real `prepare()` needs brew, the keychain and a snapshot.
+    @Test func prepareConsultsTheGateBeforeTakingASnapshot() throws {
+        let source = try String(
+            contentsOf: packageRoot().appendingPathComponent("Sources/MacUpdater/CaskReplacementSafety.swift"),
+            encoding: .utf8
+        )
+        let gate = try #require(source.range(of: "adoptionIsPointless(token:"))
+        let snapshot = try #require(source.range(of: "CaskRollbackGuard.snapshot("))
+
+        #expect(gate.lowerBound < snapshot.lowerBound,
+                "the refusal must come before the snapshot and before brew, not after the install")
+    }
+
+    private func packageRoot(file: String = #filePath) -> URL {
+        URL(fileURLWithPath: file)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
     private func makePreparation(artifactName: String) -> CaskReplacementSafety.Preparation {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("wega-replacement-test-\(UUID().uuidString)", isDirectory: true)

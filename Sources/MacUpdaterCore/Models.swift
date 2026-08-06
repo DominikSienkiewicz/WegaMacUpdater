@@ -29,6 +29,14 @@ public struct ApplicationInfo: Identifiable, Equatable, Sendable {
     public var name: String
     public var bundleIdentifier: String?
     public var version: String?
+    /// `CFBundleVersion`, kept alongside `version` rather than folded into it.
+    ///
+    /// The two disagree far more often than they look like they should: Google Drive ships
+    /// `129.0` as its short string while only `CFBundleVersion` carries the full `129.0.1`
+    /// Homebrew records. `version` stays the user-facing string (it is what Finder shows),
+    /// so anything comparing against a package manager's version needs this one too — see
+    /// ``ManualUpdateScanner/caskMetadataDriftRows(installedApps:brewCaskVersions:alreadyListedTokens:)``.
+    public var buildVersion: String?
     public var installDate: Date?
     public var updateDate: Date?
     public var isManagedByBrew: Bool
@@ -44,6 +52,7 @@ public struct ApplicationInfo: Identifiable, Equatable, Sendable {
         name: String,
         bundleIdentifier: String?,
         version: String?,
+        buildVersion: String? = nil,
         installDate: Date?,
         updateDate: Date?,
         isManagedByBrew: Bool,
@@ -56,6 +65,7 @@ public struct ApplicationInfo: Identifiable, Equatable, Sendable {
         self.name = name
         self.bundleIdentifier = bundleIdentifier
         self.version = version
+        self.buildVersion = buildVersion
         self.installDate = installDate
         self.updateDate = updateDate
         self.isManagedByBrew = isManagedByBrew

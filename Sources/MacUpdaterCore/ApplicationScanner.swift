@@ -47,6 +47,7 @@ public struct ApplicationScanner {
             ?? appURL.deletingPathExtension().lastPathComponent
         let version = infoDict["CFBundleShortVersionString"] as? String
             ?? infoDict["CFBundleVersion"] as? String
+        let buildVersion = infoDict["CFBundleVersion"] as? String
         let bundleIdentifier = infoDict["CFBundleIdentifier"] as? String
         let resourceValues = try? appURL.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey])
 
@@ -83,6 +84,7 @@ public struct ApplicationScanner {
             name: appName,
             bundleIdentifier: bundleIdentifier,
             version: version,
+            buildVersion: buildVersion,
             installDate: resourceValues?.creationDate,
             updateDate: resourceValues?.contentModificationDate,
             isManagedByBrew: isManagedByBrew,

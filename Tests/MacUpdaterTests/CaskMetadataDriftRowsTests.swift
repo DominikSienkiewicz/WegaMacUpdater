@@ -27,18 +27,72 @@ struct CaskMetadataDriftRowsTests {
         _ token: String,
         name: String,
         installed: String?,
-        path: String
+        path: String,
+        build: String? = nil
     ) -> ApplicationInfo {
         ApplicationInfo(
             path: URL(fileURLWithPath: path),
             name: name,
             bundleIdentifier: "com.example.\(token)",
             version: installed,
+            buildVersion: build,
             installDate: nil,
             updateDate: nil,
             isManagedByBrew: true,
             caskToken: token
         )
+    }
+
+    /// Zoom, as actually installed: the Caskroom records `7.1.5.84650` and the bundle's
+    /// `CFBundleShortVersionString` writes the identical version as `7.1.5 (84650)`. Brew
+    /// itself reports nothing outdated, and `versionsEqual` calls the two strings equal —
+    /// but this detector consulted only `isUpgrade`, which parsed the dotted build into
+    /// `primary` on one side and produced a permanent phantom row for a current app.
+    ///
+    /// Red before the fix: one row for a Zoom that had nothing to update.
+    @Test func treatsZoomsParenthesisedBuildAsTheSameVersionAsTheDottedCaskroomOne() {
+        let rows = ManualUpdateScanner.caskMetadataDriftRows(
+            installedApps: [caskApp("zoom", name: "zoom.us", installed: "7.1.5 (84650)",
+                                    path: "/Applications/zoom.us.app", build: "7.1.5.84650")],
+            brewCaskVersions: ["zoom": "7.1.5.84650"],
+            alreadyListedTokens: []
+        )
+
+        #expect(rows.isEmpty)
+    }
+
+    /// Google Drive, as actually installed: the Caskroom records `129.0.1`, but the
+    /// bundle's `CFBundleShortVersionString` is the truncated `129.0` and only
+    /// `CFBundleVersion` carries the full `129.0.1`. Comparing the short string alone is
+    /// a genuine ordering (`129.0` < `129.0.1`), so no comparator change can rescue it —
+    /// the detector has to consult the build version before declaring drift.
+    ///
+    /// Red before the fix: `ApplicationInfo` had no `buildVersion`, so the row was forced.
+    @Test func treatsATruncatedShortVersionAsCurrentWhenTheBuildVersionMatchesBrew() {
+        let rows = ManualUpdateScanner.caskMetadataDriftRows(
+            installedApps: [caskApp("google-drive", name: "Google Drive", installed: "129.0",
+                                    path: "/Applications/Google Drive.app", build: "129.0.1")],
+            brewCaskVersions: ["google-drive": "129.0.1"],
+            alreadyListedTokens: []
+        )
+
+        #expect(rows.isEmpty)
+    }
+
+    /// The build version is a tie-breaker, never a mask: when brew genuinely records a
+    /// newer version than *both* bundle strings, the row must still be forced.
+    @Test func stillForcesARowWhenTheBuildVersionIsAlsoBehind() {
+        let rows = ManualUpdateScanner.caskMetadataDriftRows(
+            installedApps: [caskApp("google-drive", name: "Google Drive", installed: "129.0",
+                                    path: "/Applications/Google Drive.app", build: "129.0.1")],
+            brewCaskVersions: ["google-drive": "130.0.2"],
+            alreadyListedTokens: []
+        )
+
+        #expect(rows.count == 1)
+        #expect(rows[0].installedVersion == "129.0",
+                "the row keeps showing what the user sees in Finder, not the build string")
+        #expect(rows[0].availableVersion == "130.0.2")
     }
 
     /// The regression: brew records a version the bundle on disk never reached, so brew
