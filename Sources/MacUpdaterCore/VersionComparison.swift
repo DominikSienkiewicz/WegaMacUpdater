@@ -64,9 +64,10 @@ public enum VersionScheme: Sendable {
     /// ranks below the same release; build metadata (`+…`) never affects precedence.
     case semver
     /// The tolerant vendor/Sparkle/Homebrew scheme. A numeric `-NNN`, `" (NNN)"`,
-    /// `,NNN` or `+NNN` suffix is a *build number* — a secondary tier that only breaks
-    /// a tie when BOTH versions carry one (otherwise it is encoding noise). An
-    /// alphabetic `-beta`/`-rc` suffix is still a prerelease and ranks below the release.
+    /// `,NNN`, `+NNN` or fourth-and-later dotted component is a *build number* — a
+    /// secondary tier that only breaks a tie when BOTH versions carry one (otherwise it
+    /// is encoding noise). An alphabetic `-beta`/`-rc` suffix is still a prerelease and
+    /// ranks below the release.
     case buildNumbered
 }
 
@@ -132,8 +133,25 @@ private func parseBuildNumbered(_ v: String) -> ParsedVersion? {
         }
     }
 
-    let primary = coreString.split(separator: ".").compactMap { Int($0) }
+    var primary = coreString.split(separator: ".").compactMap { Int($0) }
     guard !primary.isEmpty else { return nil }
+
+    // The dotted build encoding, and the reason Zoom offered a permanent phantom update.
+    // Homebrew's Caskroom writes Zoom's build as `7.1.5.84650` while the bundle writes the
+    // identical version as `7.1.5 (84650)`. `versionComponents` — and therefore
+    // `versionsEqual` — has always normalised the paren form *to* the dotted one, so the
+    // two strings were already equal by this module's own definition. Leaving the fourth
+    // component inside `primary` made `compare` weigh `[7,1,5,0]` against `[7,1,5,84650]`
+    // and contradict that, so the build tier has to claim it here too — exactly as it
+    // already claims `,NNN`, `+NNN`, `-NNN` and `" (NNN)"`.
+    //
+    // Three components stay primary because that is what every scheme this parser serves
+    // treats as the release (Chrome's `148.0.7778.216` keeps `7778` primary and `216` as
+    // its build, which orders Chrome correctly in both tiers).
+    if primary.count > 3 {
+        build = Array(primary[3...]) + build
+        primary = Array(primary.prefix(3))
+    }
     return ParsedVersion(primary: primary, prerelease: prerelease, build: build)
 }
 
@@ -189,7 +207,8 @@ public func compareVersions(_ a: String, _ b: String, scheme: VersionScheme) -> 
 /// Returns true if `latest` is strictly newer than `installed` under the default
 /// build-numbered scheme. Unparseable input is gated to `false` (the same guard
 /// `versionChangeKind` applies), and a build-number suffix present on only one side
-/// is treated as noise, so `"7.0.0"` vs `"7.0.0 (77593)"` is not a phantom upgrade.
+/// is treated as noise, so neither `"7.0.0"` vs `"7.0.0 (77593)"` nor `"7.0.0"` vs
+/// `"7.0.0.77593"` is a phantom upgrade.
 public func isUpgrade(installed: String, latest: String) -> Bool {
     isUpgrade(installed: installed, latest: latest, scheme: .buildNumbered)
 }

@@ -344,6 +344,28 @@ public struct ManualUpdateScanner: Sendable {
     /// side (Homebrew's `5.3.1,50301` against a bare `5.3.1`) is encoding noise rather than a
     /// phantom row, and an unparseable version yields no row at all. Pure and deterministically
     /// ordered so the list does not reshuffle between scans.
+    ///
+    /// ``isAlreadyAtRecordedVersion(app:recorded:)`` runs first and is what keeps an app that is
+    /// merely *written* differently from being reported as behind — the failure this detector
+    /// shipped with, which pinned a current Zoom (`7.1.5 (84650)` against the Caskroom's
+    /// `7.1.5.84650`) and a current Google Drive to the list permanently, and sent every retry
+    /// into an adoption that could not succeed.
+    /// Whether the bundle already *is* the version brew recorded, in either of the two
+    /// strings it publishes.
+    ///
+    /// Both halves are load-bearing, and for different reasons. `versionsEqual` on the
+    /// short string is the same tie-break the ordinary cask-version check has always
+    /// applied before `isUpgrade` (see `scan()`); this detector consulted only `isUpgrade`
+    /// and so had no defence when the two disagreed. `CFBundleVersion` covers the case no
+    /// comparator can reach: Google Drive's short string is a genuinely *shorter* version
+    /// (`129.0` against Homebrew's `129.0.1`), and only the build string proves they are
+    /// the same install.
+    private static func isAlreadyAtRecordedVersion(app: ApplicationInfo, recorded: String) -> Bool {
+        [app.version, app.buildVersion]
+            .compactMap { $0 }
+            .contains { versionsEqual($0, recorded) }
+    }
+
     public static func caskMetadataDriftRows(
         installedApps: [ApplicationInfo],
         brewCaskVersions: [String: String],
@@ -360,6 +382,7 @@ public struct ManualUpdateScanner: Sendable {
                 guard let app = appByToken[token],
                       let recorded = brewCaskVersions[token],
                       let onDisk = app.version,
+                      !isAlreadyAtRecordedVersion(app: app, recorded: recorded),
                       isUpgrade(installed: onDisk, latest: recorded) else { return nil }
                 return ManualOutdatedApp(
                     name: app.name,

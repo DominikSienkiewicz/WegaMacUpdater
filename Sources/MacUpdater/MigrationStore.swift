@@ -477,6 +477,12 @@ final class MigrationStore: ObservableObject {
             errorMessage = tr("Nie udało się utworzyć wymaganego snapshotu.")
             onWegaState?(WegaState(pose: .alert, line: tr("Aktualizacja odroczona")))
             return
+        case .caskInstallsNoApp:
+            errorMessage = trf("%@: ten cask instaluje pakiet .pkg, nie aplikację — Wega nie może go przejąć.",
+                               "\(token)")
+            if let errorMessage { logLines.append("⏸ " + errorMessage) }
+            onWegaState?(WegaState(pose: .alert, line: tr("Nie można przejąć")))
+            return
         }
 
         var installError: Error?

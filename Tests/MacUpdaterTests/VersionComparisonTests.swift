@@ -142,6 +142,48 @@ struct VersionComparisonTests {
         #expect(isUpgrade(installed: "7.0.0 (100)", latest: "7.0.0 (200)"))
     }
 
+    // MARK: isUpgrade — the dotted build encoding (Zoom)
+
+    /// The fourth encoding of a build number. `versionsEqual` has always normalised
+    /// `" (NNN)"` to `".NNN"` and therefore calls `"7.1.5 (84650)"` and `"7.1.5.84650"`
+    /// the same version; `parseBuildNumbered` recognised the comma, plus, paren and
+    /// hyphen forms but not the dotted one, so it left `84650` inside `primary` on one
+    /// side only and compared `[7,1,5,0]` against `[7,1,5,84650]`.
+    ///
+    /// Two functions in one module then answered the same question in opposite ways,
+    /// and `caskMetadataDriftRows` — which consults only `isUpgrade` — forced a phantom
+    /// "update available" row for a Zoom that was already current.
+    ///
+    /// Red before the fix: `isUpgrade` returned `true` here while `versionsEqual` returned `true` too.
+    @Test func dottedBuildNumberIsNotAPhantomUpgrade() {
+        #expect(isUpgrade(installed: "7.1.5 (84650)", latest: "7.1.5.84650") == false)
+        #expect(isUpgrade(installed: "7.1.5.84650", latest: "7.1.5 (84650)") == false)
+        #expect(versionsEqual("7.1.5 (84650)", "7.1.5.84650"),
+                "the two encodings were already equal here — isUpgrade must not contradict it")
+    }
+
+    /// The same "one-sided build suffix is encoding noise" rule the comma form already
+    /// obeys (`5.3.1` vs `5.3.1,50301`), now for the dotted form.
+    @Test func dottedBuildSuffixOnOneSideIsNoise() {
+        #expect(isUpgrade(installed: "7.1.5", latest: "7.1.5.84650") == false)
+        #expect(isUpgrade(installed: "7.1.5.84650", latest: "7.1.5") == false)
+    }
+
+    /// Moving the build into its own tier must not blind the comparison: when both
+    /// sides carry one it still decides, exactly as it does for `" (NNN)"`.
+    @Test func dottedBuildDecidesWhenBothSidesCarryOne() {
+        #expect(isUpgrade(installed: "7.1.5.84650", latest: "7.1.5.84700"))
+        #expect(isUpgrade(installed: "7.1.5.84700", latest: "7.1.5.84650") == false)
+    }
+
+    /// Chrome-style four-segment versions must keep working in both tiers — the third
+    /// segment is still primary, the fourth is the build.
+    @Test func fourSegmentVendorVersionsStillOrderCorrectly() {
+        #expect(isUpgrade(installed: "148.0.7778.179", latest: "148.0.7778.216"))
+        #expect(isUpgrade(installed: "148.0.7778.216", latest: "148.0.7779.1"))
+        #expect(isUpgrade(installed: "151.0.7922.34", latest: "150.0.7871.187") == false)
+    }
+
     // MARK: isUpgrade — unparseable-input gate (REL-11, criterion 9)
 
     /// `isUpgrade` must gate unparseable input the way `versionChangeKind` does. A

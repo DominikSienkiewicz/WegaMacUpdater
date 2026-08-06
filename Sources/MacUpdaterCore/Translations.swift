@@ -101,6 +101,11 @@ extension Translations {
         "Sprawdzaj, czy zaktualizowana aplikacja się uruchamia": "Check that the updated app starts",
         "Aplikacja, którą masz właśnie otwartą, jest pomijana — Wega nie zamknie jej, żeby zrobić sobie miejsce. Wyłącz test, jeśli któraś z aktualizowanych aplikacji źle znosi start i natychmiastowe zamknięcie.":
             "An app you currently have open is skipped — Wega will not quit it to make room. Turn the test off if one of the apps being updated takes badly to being started and closed straight away.",
+        // Caski typu `pkg` (zoom, google-drive) nie instalują .app — nie ma czego przejąć
+        // ani z czego zrobić snapshotu, więc odmawiamy zanim brew w ogóle wystartuje.
+        "Nie można przejąć": "Cannot adopt",
+        "%@: ten cask instaluje pakiet .pkg, nie aplikację — Wega nie może go przejąć.":
+            "%@: this cask installs a .pkg package rather than an app — Wega cannot adopt it.",
         // REL-02 — nieudany rollback to czerwony baner sticky, nie wpis w zwijanym logu.
         "Rollback się nie powiódł": "Rollback failed",
         "%@: nowa wersja nie przeszła kontroli, a przywrócenie poprzedniej nie powiodło się. Sprawdź aplikację przed użyciem.": "%@: the new version failed the check and the previous one could not be restored. Check the app before using it.",

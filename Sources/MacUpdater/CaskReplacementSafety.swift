@@ -20,6 +20,30 @@ enum CaskReplacementSafety {
         case resourcePostponed(String)
         case publisherRejected(old: String, new: String?)
         case snapshotFailed
+        /// The cask installs no `.app`, so there is nothing to adopt, snapshot or verify.
+        case caskInstallsNoApp
+    }
+
+    /// Whether adopting this token could not possibly work, according to Homebrew's own
+    /// metadata: the cask declares no `app` artifact at all.
+    ///
+    /// `zoom` and `google-drive` are `pkg` casks. Adoption used to run
+    /// `brew install --cask --force` on them regardless, then look for an app artifact that
+    /// does not exist; `resolveInstalledAppURL` returned `nil` and `verify` translated that
+    /// `nil` into `.rollbackFailed` — the enum's loudest case, reserved for a broken upgrade
+    /// that could not be undone. The user was told their app might be unusable when in truth
+    /// nothing had been verified and nothing restored.
+    ///
+    /// The batch upgrade path has always asked this question through ``RollbackProtection``;
+    /// this is the same question, asked by the path that skipped it. Answering it before brew
+    /// runs also avoids reinstalling an app that was already current.
+    ///
+    /// An unknown profile (brew unreachable, token absent) is deliberately **not** a refusal:
+    /// the gate exists to replace a misleading verdict, not to add a new way to fail, and the
+    /// post-install resolution still fails closed.
+    static func adoptionIsPointless(token: String, profiles: [CaskArtifactProfile]) -> Bool {
+        guard let profile = profiles.first(where: { $0.token == token }) else { return false }
+        return RollbackProtection.evaluate(profile: profile) != .protected
     }
 
     static func prepare(
@@ -27,6 +51,18 @@ enum CaskReplacementSafety {
         appURL: URL,
         brewService: BrewService
     ) async -> PreparationResult {
+        // First, and before anything with a side effect: a cask that installs no app can
+        // neither be snapshotted nor verified, and running brew on it only wastes a
+        // reinstall on the way to a verdict that would misdescribe the outcome.
+        if let profiles = try? await brewService.caskArtifactProfiles(tokens: [token]),
+           adoptionIsPointless(token: token, profiles: profiles) {
+            WegaLog.error(
+                .homebrew,
+                "\(token): cask nie instaluje aplikacji (.app) — nie da się go przejąć ani zabezpieczyć rollbackiem."
+            )
+            return .caskInstallsNoApp
+        }
+
         let downloads: [CaskDownloadInfo]
         do {
             downloads = try await brewService.caskDownloadInfo(tokens: [token])

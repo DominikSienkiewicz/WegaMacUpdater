@@ -69,6 +69,14 @@ extension ScanStore {
                                   message: tr("Nie udało się utworzyć wymaganego snapshotu.")))
             emitActivitySignal(.error)
             return
+        case .caskInstallsNoApp:
+            let message = trf("%@: ten cask instaluje pakiet .pkg, nie aplikację — Wega nie może go przejąć.",
+                              "\(token)")
+            brewLog.append("⏸ " + message)
+            showBanner(BannerData(variant: .danger, title: tr("Nie można przejąć"),
+                                  message: message, action: .openLogs))
+            emitActivitySignal(.error)
+            return
         }
 
         var installError: Error?
