@@ -31,14 +31,17 @@ PER_TARGET_BUNDLE="MacUpdaterUITests.xctest"
 # Kept compatible with bash 3.2, which is what /bin/bash still is on macOS — no mapfile,
 # no readarray, no associative arrays.
 collect_bundles() {
-  pattern="$1"
-  found=""
-  shopt -s nullglob
+  local pattern="$1"
+  local found="" candidate
+  # Test each candidate with -d instead of leaning on nullglob: nullglob only suppresses a
+  # pattern that contains a metacharacter, so a literal bundle name expands to itself even
+  # when nothing is on disk. The flat lookup then "succeeded" with a path that does not
+  # exist and the nested search below never ran.
   for candidate in "$BIN_PATH"/$pattern; do
+    [[ -d "$candidate" ]] || continue
     found="$found$candidate
 "
   done
-  shopt -u nullglob
   if [[ -n "$found" ]]; then
     printf '%s' "$found"
     return
