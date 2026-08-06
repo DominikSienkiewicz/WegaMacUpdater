@@ -57,6 +57,54 @@ if [[ "$resolved" != "$expected" ]]; then
     exit 1
 fi
 
+# CI wyprodukowało oba układy na tej samej gałęzi: raz scalony bundle, raz per-target.
+# W wariancie per-target bundle nie leżał bezpośrednio w `swift build --show-bin-path`,
+# tylko głębiej w drzewie builda — resolver go nie widział i CI padało na kroku coverage
+# (11 porażek na 15 runów). Bundle znaleziony niżej musi być rozpoznany tak samo jak płaski.
+NESTED_MERGED="$WORK/nested-merged"
+mkdir -p "$NESTED_MERGED"
+make_bundle "$NESTED_MERGED/Products/Debug" "WegaMacUpdaterPackageTests"
+resolved="$("$RESOLVER" "$NESTED_MERGED")"
+expected="$NESTED_MERGED/Products/Debug/WegaMacUpdaterPackageTests.xctest/Contents/MacOS/WegaMacUpdaterPackageTests"
+if [[ "$resolved" != "$expected" ]]; then
+    echo "❌ zagnieżdżony scalony bundle nie został znaleziony: $resolved" >&2
+    exit 1
+fi
+
+NESTED_PER_TARGET="$WORK/nested-per-target"
+mkdir -p "$NESTED_PER_TARGET"
+make_bundle "$NESTED_PER_TARGET/Products/Debug" "MacUpdaterTests"
+make_bundle "$NESTED_PER_TARGET/Products/Debug" "MacUpdaterUITests"
+resolved="$("$RESOLVER" "$NESTED_PER_TARGET")"
+expected="$NESTED_PER_TARGET/Products/Debug/MacUpdaterUITests.xctest/Contents/MacOS/MacUpdaterUITests"
+if [[ "$resolved" != "$expected" ]]; then
+    echo "❌ zagnieżdżony per-target: wybrano $resolved zamiast MacUpdaterUITests" >&2
+    exit 1
+fi
+
+# Bundle płaski ma pierwszeństwo przed zagnieżdżonym — inaczej stary artefakt z głębi
+# drzewa mógłby przesłonić wynik bieżącego builda.
+BOTH="$WORK/both-levels"
+mkdir -p "$BOTH"
+make_bundle "$BOTH" "WegaMacUpdaterPackageTests"
+make_bundle "$BOTH/Products/Debug" "WegaMacUpdaterPackageTests"
+resolved="$("$RESOLVER" "$BOTH")"
+expected="$BOTH/WegaMacUpdaterPackageTests.xctest/Contents/MacOS/WegaMacUpdaterPackageTests"
+if [[ "$resolved" != "$expected" ]]; then
+    echo "❌ bundle płaski musi mieć pierwszeństwo przed zagnieżdżonym: $resolved" >&2
+    exit 1
+fi
+
+# Dwa równorzędne kandydaty na tym samym poziomie to niejednoznaczność, nie loteria.
+AMBIGUOUS="$WORK/ambiguous-nested"
+mkdir -p "$AMBIGUOUS"
+make_bundle "$AMBIGUOUS/Products/Debug" "MacUpdaterUITests"
+make_bundle "$AMBIGUOUS/Products/Release" "MacUpdaterUITests"
+if "$RESOLVER" "$AMBIGUOUS" >/dev/null 2>&1; then
+    echo "❌ dwa zagnieżdżone bundle o tej samej nazwie muszą być błędem, nie wyborem" >&2
+    exit 1
+fi
+
 # Brak jakiegokolwiek bundla musi być twardym błędem, nie pustym raportem.
 EMPTY="$WORK/empty"
 mkdir -p "$EMPTY"
@@ -65,4 +113,4 @@ if "$RESOLVER" "$EMPTY" >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "✅ coverage obejmuje MacUpdaterCore i WegaMacUpdater (scalony i per-target)"
+echo "✅ coverage obejmuje MacUpdaterCore i WegaMacUpdater (scalony i per-target, płasko i zagnieżdżony)"

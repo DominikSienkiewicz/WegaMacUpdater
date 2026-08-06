@@ -24,27 +24,63 @@ BIN_PATH="${1:?usage: resolve-coverage-bundle.sh <bin-path>}"
 
 PER_TARGET_BUNDLE="MacUpdaterUITests.xctest"
 
-shopt -s nullglob
-merged=("$BIN_PATH"/*PackageTests.xctest)
-shopt -u nullglob
+# Neither layout is guaranteed to sit directly in --show-bin-path: the same branch has
+# produced both a flat merged bundle and per-target bundles nested under a Products/
+# subtree, and a resolver that only globbed the top level failed on the latter. Look flat
+# first — a bundle beside the profdata belongs to the build that just ran — then descend.
+# Kept compatible with bash 3.2, which is what /bin/bash still is on macOS — no mapfile,
+# no readarray, no associative arrays.
+collect_bundles() {
+  pattern="$1"
+  found=""
+  shopt -s nullglob
+  for candidate in "$BIN_PATH"/$pattern; do
+    found="$found$candidate
+"
+  done
+  shopt -u nullglob
+  if [[ -n "$found" ]]; then
+    printf '%s' "$found"
+    return
+  fi
+  find "$BIN_PATH" -mindepth 2 -type d -name "$pattern" 2>/dev/null | sort
+}
 
-if [[ ${#merged[@]} -gt 1 ]]; then
-  echo "❌ Ambiguous merged test bundles under $BIN_PATH:" >&2
-  printf '   %s\n' "${merged[@]}" >&2
+reject_ambiguous() {
+  echo "❌ Ambiguous $1 test bundles under $BIN_PATH:" >&2
+  printf '%s' "$2" | sed 's/^/   /' >&2
+  echo "   Refusing to guess — a wrong pick silently drops targets from the report." >&2
   exit 1
+}
+
+count_lines() {
+  [[ -z "$1" ]] && echo 0 || printf '%s' "$1" | grep -c '^'
+}
+
+MERGED="$(collect_bundles '*PackageTests.xctest')"
+if [[ "$(count_lines "$MERGED")" -gt 1 ]]; then
+  reject_ambiguous merged "$MERGED"
 fi
 
-if [[ ${#merged[@]} -eq 1 ]]; then
-  BUNDLE="${merged[0]}"
+if [[ -n "$MERGED" ]]; then
+  BUNDLE="$(printf '%s' "$MERGED" | head -1)"
 else
-  BUNDLE="$BIN_PATH/$PER_TARGET_BUNDLE"
+  PER_TARGET="$(collect_bundles "$PER_TARGET_BUNDLE")"
+  if [[ "$(count_lines "$PER_TARGET")" -gt 1 ]]; then
+    reject_ambiguous per-target "$PER_TARGET"
+  fi
+  if [[ -n "$PER_TARGET" ]]; then
+    BUNDLE="$(printf '%s' "$PER_TARGET" | head -1)"
+  else
+    BUNDLE="$BIN_PATH/$PER_TARGET_BUNDLE"
+  fi
 fi
 
 EXECUTABLE="$BUNDLE/Contents/MacOS/$(basename "$BUNDLE" .xctest)"
 if [[ ! -x "$EXECUTABLE" ]]; then
   echo "❌ No test executable at $EXECUTABLE" >&2
   echo "   Expected either a merged <Package>PackageTests.xctest or $PER_TARGET_BUNDLE" >&2
-  echo "   under $BIN_PATH. Run: swift build --build-tests --enable-code-coverage" >&2
+  echo "   under $BIN_PATH (flat or nested). Run: swift build --build-tests --enable-code-coverage" >&2
   exit 1
 fi
 
