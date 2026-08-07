@@ -247,6 +247,7 @@ extension Translations {
         "GitHub Releases": "GitHub Releases",
         "Otwórz Toolbox": "Open Toolbox",
         "Otwórz stronę pobierania": "Open the download page",
+        "Otwórz Creative Cloud": "Open Creative Cloud",
         "Aktualizuj Wegę": "Update Wega",
         "Do restartu": "To restart",
         "były otwarte podczas aktualizacji": "were open during the update",

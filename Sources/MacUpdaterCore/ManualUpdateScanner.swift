@@ -15,6 +15,11 @@ public struct ManualUpdateScanner: Sendable {
     private let maxConcurrentChecks: Int
     private let selfUpdateChecker: WegaSelfUpdateChecker
     private let rollbackLedger: CaskRollbackLedger
+    private let javaRuntimeScanner: JavaRuntimeScanner
+    private let javaRuntimeDirectories: [URL]
+    private let packageReceiptLocator: PackageReceiptLocator
+    private let adobeCatalogClient: AdobeCatalogClient
+    private let adobeUninstallDirectory: URL
 
     public init(
         brewService: BrewService = BrewService(),
@@ -22,7 +27,12 @@ public struct ManualUpdateScanner: Sendable {
         caskCacheURL: URL = AppScanDirectories.caskDatabaseCacheURL,
         maxConcurrentChecks: Int = 12,
         selfUpdateChecker: WegaSelfUpdateChecker = WegaSelfUpdateChecker(),
-        rollbackLedger: CaskRollbackLedger = .shared
+        rollbackLedger: CaskRollbackLedger = .shared,
+        javaRuntimeScanner: JavaRuntimeScanner = JavaRuntimeScanner(),
+        javaRuntimeDirectories: [URL] = JavaRuntimeScanner.scanDirectories(),
+        packageReceiptLocator: PackageReceiptLocator = PackageReceiptLocator(),
+        adobeCatalogClient: AdobeCatalogClient = .productCatalog(),
+        adobeUninstallDirectory: URL = SystemPaths.adobeUninstallDirectory
     ) {
         self.brewService = brewService
         self.scanDirectories = scanDirectories
@@ -30,6 +40,11 @@ public struct ManualUpdateScanner: Sendable {
         self.maxConcurrentChecks = maxConcurrentChecks
         self.selfUpdateChecker = selfUpdateChecker
         self.rollbackLedger = rollbackLedger
+        self.javaRuntimeScanner = javaRuntimeScanner
+        self.javaRuntimeDirectories = javaRuntimeDirectories
+        self.packageReceiptLocator = packageReceiptLocator
+        self.adobeCatalogClient = adobeCatalogClient
+        self.adobeUninstallDirectory = adobeUninstallDirectory
     }
 
     /// UX-15 — Wega dogfoods its own update path. A self-update maps to the same
@@ -115,6 +130,60 @@ public struct ManualUpdateScanner: Sendable {
         }
     }
 
+    /// The "Homebrew knows a newer version than the bundle on disk" check, for one app that
+    /// brew does not already own.
+    ///
+    /// Shared by the `.app` fan-out and the JDK one — the two lists differ in how their
+    /// members are discovered and in which vendor checkers apply to them, but this comparison
+    /// is identical, and duplicating it is how the two would drift apart. Returns `nil` for an
+    /// app no cask matches, so a machine full of unpackaged apps queues no no-op work.
+    private static func caskVersionCheck(
+        app: ApplicationInfo,
+        brewTrackedVersion: String?,
+        latestCaskVersions: [String: String]
+    ) -> (@Sendable () async -> ManualCheckResult)? {
+        guard let token = app.caskToken else { return nil }
+        return Self.logged("Cask", app) {
+            guard let latest = latestCaskVersions[token] else { return .upToDate }
+            let reference = brewTrackedVersion ?? app.version
+            guard let installed = reference,
+                  !versionsEqual(latest, installed),
+                  isUpgrade(installed: installed, latest: latest) else { return .upToDate }
+            return .outdated(ManualOutdatedApp(
+                name: app.name, path: app.path,
+                installedVersion: app.version ?? installed,
+                availableVersion: versionVariants(latest).first ?? latest,
+                source: .cask(token: token)
+            ))
+        }
+    }
+
+    /// Installed Java runtimes, each carrying the cask token its installer receipt resolves to.
+    ///
+    /// A runtime with no receipt (unpacked from an archive) or one no cask claims is dropped:
+    /// without a token there is no source that could say whether it is current, and a row with
+    /// no available version and no action would be noise rather than information.
+    private func javaRuntimesWithCaskTokens(
+        casks: [BrewCask],
+        brewOutdatedCasks: Set<String>
+    ) async -> [ApplicationInfo] {
+        let runtimes = javaRuntimeScanner.scanAll(directories: javaRuntimeDirectories)
+        guard !runtimes.isEmpty else { return [] }
+        let receiptIndex = CaskPackageReceiptIndex(casks: casks)
+
+        var resolved: [ApplicationInfo] = []
+        for var runtime in runtimes {
+            guard runtime.version != nil,
+                  let packageID = await packageReceiptLocator.packageIdentifier(forBundleAt: runtime.path),
+                  let token = receiptIndex.token(forPackageIdentifier: packageID),
+                  // `brew outdated` already reports this one; a second row would double-count it.
+                  !brewOutdatedCasks.contains(token) else { continue }
+            runtime.caskToken = token
+            resolved.append(runtime)
+        }
+        return resolved
+    }
+
     public func scan(brewOutdatedCasks: Set<String> = []) async -> (apps: [ManualOutdatedApp], failedChecks: Int) {
         let casks = (try? await CaskDatabaseClient.caskCatalog(cacheURL: caskCacheURL).fetchCasks()) ?? []
         let installedCasks = (try? await brewService.installedCasks()) ?? []
@@ -143,6 +212,21 @@ public struct ManualUpdateScanner: Sendable {
                 if seen.insert(key).inserted { appsToCheck.append(app) }
             }
         }
+
+        // JDKs live outside every Applications root and are not `.app` bundles, so the scan
+        // above cannot see them; they are resolved to a cask through their installer receipt
+        // and then compared by the same cask check every adoption candidate goes through.
+        // Kept in their own list because none of the vendor checkers apply to a runtime —
+        // there is no appcast, no JetBrains code and no GitHub repo to ask.
+        let javaRuntimes = await javaRuntimesWithCaskTokens(casks: casks, brewOutdatedCasks: brewOutdatedCasks)
+            .filter { seen.insert($0.path.path).inserted }
+
+        // One catalog and one inventory read for the whole scan (see `AdobeUpdateChecker`).
+        let adobeInventory = AdobeProductInventory.installedProducts(in: adobeUninstallDirectory)
+        let adobeChecker = adobeInventory.isEmpty ? nil : AdobeUpdateChecker(
+            catalog: (try? await adobeCatalogClient.fetchCatalog()) ?? AdobeProductCatalog(),
+            inventory: adobeInventory
+        )
 
         let sparkleChecker = SparkleUpdateChecker()
         let jetbrainsChecker = JetBrainsUpdateChecker()
@@ -185,31 +269,33 @@ public struct ManualUpdateScanner: Sendable {
         // ARCH-05a: one `brew info` for every adoption candidate, resolved before the fan-out,
         // instead of one process per app inside it. Each of those calls re-read the same cask
         // database to answer about a single token.
-        let candidateTokens = appsToCheck
-            .filter { !isBrewManaged($0) }
+        let candidateTokens = (appsToCheck.filter { !isBrewManaged($0) } + javaRuntimes)
             .compactMap(\.caskToken)
         let latestCaskVersions = await brew.caskLatestVersions(tokens: Array(Set(candidateTokens)))
 
         var work: [@Sendable () async -> ManualCheckResult] = []
+        for runtime in javaRuntimes where !isBrewManaged(runtime) {
+            if let check = Self.caskVersionCheck(
+                app: runtime,
+                brewTrackedVersion: runtime.caskToken.flatMap { brewCaskVersions[$0] },
+                latestCaskVersions: latestCaskVersions
+            ) {
+                work.append(check)
+            }
+        }
         for app in appsToCheck {
             if !isBrewManaged(app) {
                 // Non-brew apps only: cask-version check (adoption candidates) plus the
                 // cask-lag special checkers.
-                if let token = app.caskToken {
-                    let brewTracked = brewCaskVersions[token]
-                    work.append(Self.logged("Cask", app) {
-                        guard let latest = latestCaskVersions[token] else { return .upToDate }
-                        let reference = brewTracked ?? app.version
-                        guard let installed = reference,
-                              !versionsEqual(latest, installed),
-                              isUpgrade(installed: installed, latest: latest) else { return .upToDate }
-                        return .outdated(ManualOutdatedApp(
-                            name: app.name, path: app.path,
-                            installedVersion: app.version ?? installed,
-                            availableVersion: versionVariants(latest).first ?? latest,
-                            source: .cask(token: token)
-                        ))
-                    })
+                if let check = Self.caskVersionCheck(
+                    app: app,
+                    brewTrackedVersion: app.caskToken.flatMap { brewCaskVersions[$0] },
+                    latestCaskVersions: latestCaskVersions
+                ) {
+                    work.append(check)
+                }
+                if let adobeChecker {
+                    work.append(Self.logged("Adobe", app) { adobeChecker.check(app: app) })
                 }
                 work.append(Self.logged("JetBrains", app) { await jetbrainsChecker.check(app: app) })
                 work.append(Self.logged("GitHub", app) { await githubChecker.check(app: app) })
@@ -265,7 +351,7 @@ public struct ManualUpdateScanner: Sendable {
         }
         collected.append(contentsOf: Self.rolledBackRows(
             rolledBackTokens: rollbackLedger.rolledBackTokens(),
-            installedApps: appsToCheck,
+            installedApps: appsToCheck + javaRuntimes,
             brewCaskVersions: brewCaskVersions,
             alreadyListedTokens: listedCaskTokens()
         ))
@@ -274,7 +360,7 @@ public struct ManualUpdateScanner: Sendable {
         // cask) stays silent while `isBrewManaged` has already suppressed both the
         // cask-version check and every vendor checker for that app.
         collected.append(contentsOf: Self.caskMetadataDriftRows(
-            installedApps: appsToCheck,
+            installedApps: appsToCheck + javaRuntimes,
             brewCaskVersions: brewCaskVersions,
             alreadyListedTokens: listedCaskTokens()
         ))

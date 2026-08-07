@@ -18,6 +18,8 @@
   "homebrewInstallCommand": "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"",
   "githubReleasesPage": "https://github.com/{repo}/releases/latest",
   "googleDriveDownload": "https://www.google.com/drive/download/",
+  "adobeProductCatalog": "https://prod-rel-ffc-ccm.oobesaas.adobe.com/adobe-ffc-external/core/v6/products/all?_type=xml&channel=ccm&platform=macarm64,macuniversal&productType=Desktop",
+  "adobeCreativeCloud": "https://creativecloud.adobe.com/apps/all/desktop",
   "projectRepository": "https://github.com/DominikSienkiewicz/WegaMacUpdater",
   "projectIssues": "https://github.com/DominikSienkiewicz/WegaMacUpdater/issues",
   "projectNewIssue": "https://github.com/DominikSienkiewicz/WegaMacUpdater/issues/new",

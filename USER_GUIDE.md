@@ -66,6 +66,17 @@ Synology, Parallels, Google Drive, ChatGPT, Postman, Obsidian, Antigravity, and 
 walks `/Applications` and `~/Applications`, reads each app's real installed version, and
 picks the best source for each app.
 
+Two kinds of software live outside `/Applications` or outside every package manager, and
+Wega goes and gets them anyway:
+
+- **Java runtimes** — the `.jdk` bundles in `/Library/Java/JavaVirtualMachines`. Wega asks
+  macOS which installer package put each one there and matches that against Homebrew's cask
+  database, so an outdated `temurin-26.jdk` shows up as an ordinary Brew update.
+- **Adobe Creative Cloud apps** — Lightroom, Photoshop, Illustrator and the rest. Adobe
+  publishes no update feed that other tools can read and Homebrew packages almost none of
+  these apps, so Wega reads Creative Cloud's own record of what you have installed and
+  compares it against Adobe's published product catalog.
+
 ### Reading the results
 
 - The list shows every app with an available update, grouped by where it came from
@@ -178,6 +189,9 @@ Wega routes each app through the right updater:
 - **Sparkle and self-updating apps** (ChatGPT, Postman, Parallels, Antigravity, Google
   Drive, Obsidian…) — Wega launches the app so its own signed updater takes over, instead
   of forcing a stale Homebrew cask over it.
+- **Adobe Creative Cloud apps** — opens Creative Cloud, which is the only thing that can
+  install an Adobe update.
+- **Java runtimes** — updated through Homebrew like any other cask.
 
 After an upgrade, Wega detects apps that were running and offers a one-click **restart**.
 

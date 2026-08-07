@@ -65,7 +65,13 @@ struct ManualUpdateScannerScanCoverageTests {
             caskCacheURL: cacheURL,
             maxConcurrentChecks: 1,
             selfUpdateChecker: selfUpdate,
-            rollbackLedger: ledger
+            rollbackLedger: ledger,
+            // The scan gained two more sources of external IO (JDK bundles outside
+            // /Applications, and Adobe's product catalog). Both are pointed at nothing here so
+            // this suite keeps the "without external IO" contract its name states.
+            javaRuntimeDirectories: [],
+            adobeCatalogClient: AdobeCatalogClient(cache: nil, client: FakeHTTP.client(status: 500)),
+            adobeUninstallDirectory: root.appendingPathComponent("no-adobe", isDirectory: true)
         )
 
         let result = await scanner.scan(brewOutdatedCasks: ["skipped"])
