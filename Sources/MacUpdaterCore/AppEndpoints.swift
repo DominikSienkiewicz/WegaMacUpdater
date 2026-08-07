@@ -37,6 +37,11 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public let homebrewInstallCommand: String
     public let githubReleasesPage: String
     public let googleDriveDownload: String
+    /// Adobe's Creative Cloud product feed — the one document listing every shipped version
+    /// of every CC application, narrowed by query to the macOS desktop products.
+    public let adobeProductCatalog: String
+    /// Where an Adobe update is actually applied. Nothing else can install one.
+    public let adobeCreativeCloud: String
     public let projectRepository: String
     public let projectIssues: String
     /// Prefilled "new issue" endpoint the UX-14 Inventory report button targets via
@@ -103,6 +108,8 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public var appCatalogURL: URL { URL(string: appCatalog)! }
     public var homebrewWebsiteURL: URL { URL(string: homebrewWebsite)! }
     public var googleDriveDownloadURL: URL { URL(string: googleDriveDownload)! }
+    public var adobeProductCatalogURL: URL { URL(string: adobeProductCatalog)! }
+    public var adobeCreativeCloudURL: URL { URL(string: adobeCreativeCloud)! }
     public var projectRepositoryURL: URL { URL(string: projectRepository)! }
     public var projectIssuesURL: URL { URL(string: projectIssues)! }
     public var projectNewIssueURL: URL { URL(string: projectNewIssue)! }
@@ -317,6 +324,8 @@ extension AppEndpoints {
             homebrewInstallCommand: homebrewInstallCommand,
             githubReleasesPage: templateURL(other.githubReleasesPage, githubReleasesPage),
             googleDriveDownload: validURL(other.googleDriveDownload, googleDriveDownload),
+            adobeProductCatalog: validURL(other.adobeProductCatalog, adobeProductCatalog),
+            adobeCreativeCloud: validURL(other.adobeCreativeCloud, adobeCreativeCloud),
             projectRepository: validURL(other.projectRepository, projectRepository),
             projectIssues: validURL(other.projectIssues, projectIssues),
             projectNewIssue: validURL(other.projectNewIssue, projectNewIssue),
@@ -369,6 +378,10 @@ public struct AppEndpointsOverlay: Decodable, Sendable, Equatable {
     public let homebrewInstallCommand: String?
     public let githubReleasesPage: String?
     public let googleDriveDownload: String?
+    // Defaulted (like `obsidianDesktopReleases`) so existing memberwise-init call sites keep
+    // compiling without listing the Adobe keys.
+    public var adobeProductCatalog: String? = nil
+    public var adobeCreativeCloud: String? = nil
     public let projectRepository: String?
     public let projectIssues: String?
     // Defaulted (like `obsidianDesktopReleases`) so existing memberwise-init call sites keep

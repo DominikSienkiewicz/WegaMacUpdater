@@ -13,10 +13,44 @@ public struct RestartInfo: Equatable, Sendable {
 public struct BrewCask: Codable, Equatable, Sendable {
     public var token: String
     public var name: [String]
+    /// Installer-package identifiers this cask's `uninstall` stanza claims — the bridge from
+    /// a `.pkg`-installed bundle back to the cask that packages it (see
+    /// ``CaskPackageReceiptIndex``). Empty for the overwhelming majority of casks, which
+    /// install an `.app` by copying it and therefore leave no receipt.
+    public var pkgutilIdentifiers: [String]
 
-    public init(token: String, name: [String]) {
+    public init(token: String, name: [String], pkgutilIdentifiers: [String] = []) {
         self.token = token
         self.name = name
+        self.pkgutilIdentifiers = pkgutilIdentifiers
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case token, name, pkgutilIdentifiers, artifacts
+    }
+
+    /// Decodes both shapes this type is read from: Homebrew's published cask database, where
+    /// the receipt identifiers are buried in the heterogeneous `artifacts` array, and Wega's
+    /// own on-disk cache, which stores the already-extracted list. `decodeIfPresent` is what
+    /// lets a cache written before this field existed keep loading instead of forcing a
+    /// re-download on the first launch after an update.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        token = try container.decode(String.self, forKey: .token)
+        name = try container.decodeIfPresent([String].self, forKey: .name) ?? []
+        if let cached = try container.decodeIfPresent([String].self, forKey: .pkgutilIdentifiers) {
+            pkgutilIdentifiers = cached
+        } else {
+            let artifacts = try container.decodeIfPresent([JSONValue].self, forKey: .artifacts) ?? []
+            pkgutilIdentifiers = CaskArtifacts.uninstallPackageIdentifiers(in: artifacts)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(token, forKey: .token)
+        try container.encode(name, forKey: .name)
+        try container.encode(pkgutilIdentifiers, forKey: .pkgutilIdentifiers)
     }
 }
 
@@ -178,6 +212,10 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
         /// Obsidian — self-updating ASAR package; may follow the Catalyst insider channel
         /// independently of the app bundle and Homebrew cask versions.
         case obsidian
+        /// A Creative Cloud application, identified by Adobe's SAP product code (`LRCC`,
+        /// `PHSP`, …). Adobe publishes no per-app update feed and Homebrew packages almost
+        /// none of these apps, so the version comes from Adobe's own product catalog.
+        case adobe(sapCode: String)
         /// UX-15 — Wega updating itself. Surfaced through the same manual path every other
         /// app uses so the self-update is counted, badged, notified and listed in the Updates
         /// window ("one count, everywhere"). Carries the release page URL for the row action.
@@ -202,6 +240,10 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
             case .synology:    return 3
             case .cask:        return 2
             case .sparkle:     return 1
+            // Deliberately below `.cask`: where Homebrew also packages a Creative Cloud app
+            // (Acrobat Reader is the one that matters), `brew` can apply the update in place
+            // while this source can only send the user to Creative Cloud.
+            case .adobe:       return 1
             case .mas:         return 0
             }
         }

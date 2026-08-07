@@ -32,6 +32,9 @@ public enum OpenURLStyle: Equatable, Sendable {
     case githubReleases
     case synologyDownload
     case vendorDownload
+    /// Creative Cloud is the only thing that can install an Adobe update, so the row leads
+    /// there rather than to a download page that would hand the user an installer.
+    case creativeCloud
 }
 
 public extension ManualOutdatedApp.UpdateSource {
@@ -55,6 +58,7 @@ public extension ManualOutdatedApp.UpdateSource {
         case .signal:               return "Signal"
         case .chrome:               return "Chrome"
         case .obsidian:             return "Obsidian"
+        case .adobe(let sapCode):   return sapCode
         case .wega:                 return "Wega"
         }
     }
@@ -75,6 +79,8 @@ public extension ManualOutdatedApp.UpdateSource {
             return .openURL(URL(string: downloadPage), style: .synologyDownload)
         case .googleDrive:
             return .openURL(AppEndpoints.shared.googleDriveDownloadURL, style: .vendorDownload)
+        case .adobe:
+            return .openURL(AppEndpoints.shared.adobeCreativeCloudURL, style: .creativeCloud)
         case .wega:
             // "Launching the app" would be Wega itself and would apply nothing; the browser
             // would step around signature verification and the helper install. So the row

@@ -57,8 +57,13 @@ public enum AppScanDirectories {
     }
 
     /// On-disk cache for the Homebrew cask database.
+    ///
+    /// The `-v2` suffix retires the caches written before ``BrewCask`` started carrying
+    /// installer-receipt identifiers. Those files are structurally valid and up to a day
+    /// fresh, so they would be loaded as-is — and every JDK would stay invisible until the
+    /// TTL happened to expire. Changing the name costs one download once.
     public static var caskDatabaseCacheURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Caches/\(AppMetadata.bundleIdentifier)/casks.json")
+            .appendingPathComponent("Library/Caches/\(AppMetadata.bundleIdentifier)/casks-v2.json")
     }
 }

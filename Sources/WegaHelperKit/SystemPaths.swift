@@ -28,6 +28,20 @@ public enum SystemPaths {
         isDirectory: true
     )
 
+    /// Where macOS JDK installers place their `.jdk` bundles. Not an application
+    /// directory, so `AppScanDirectories` never reaches it — see ``JavaRuntimeScanner``.
+    public static let javaVirtualMachinesDirectory = URL(
+        fileURLWithPath: "/Library/Java/JavaVirtualMachines",
+        isDirectory: true
+    )
+
+    /// Creative Cloud's own record of every installed Adobe product: one `.adbarg`
+    /// argument file per product, naming its SAP code and installed version.
+    public static let adobeUninstallDirectory = URL(
+        fileURLWithPath: "/Library/Application Support/Adobe/Uninstall",
+        isDirectory: true
+    )
+
     /// Prefix macOS uses for the physical targets of its root directory aliases.
     public static let privateDirectoryPrefix = "/private"
 
@@ -43,6 +57,7 @@ public enum SystemPaths {
     public static let killall = URL(fileURLWithPath: "/usr/bin/killall")
     public static let open = URL(fileURLWithPath: "/usr/bin/open")
     public static let osascript = URL(fileURLWithPath: "/usr/bin/osascript")
+    public static let pkgutil = URL(fileURLWithPath: "/usr/sbin/pkgutil")
 
     /// Login shell used when `$SHELL` is unset.
     public static let defaultLoginShell = "/bin/zsh"
