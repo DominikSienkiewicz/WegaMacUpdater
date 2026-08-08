@@ -43,7 +43,10 @@ extension ScanStore {
             return
         }
 
-        let preparation: CaskReplacementSafety.Preparation
+        // `nil` means the cask installs no `.app`: brew still runs, but without the
+        // snapshot → canary → auto-rollback net, because there is no bundle to clone and
+        // none to verify. Every use below is guarded on it.
+        let preparation: CaskReplacementSafety.Preparation?
         switch await CaskReplacementSafety.prepare(
             token: token,
             appURL: appURL,
@@ -70,20 +73,24 @@ extension ScanStore {
             emitActivitySignal(.error)
             return
         case .caskInstallsNoApp:
-            let message = trf("%@: ten cask instaluje pakiet .pkg, nie aplikację — Wega nie może go przejąć.",
+            // Not a refusal. A `pkg` cask — a JDK, Zoom, Google Drive — installs through an
+            // installer package, so it can be neither snapshotted nor verified as an app;
+            // that is a guarantee Wega cannot make, not an update it should withhold. The
+            // batch upgrade path has always drawn this line the same way (a token with no
+            // app path is "nothing to snapshot", never "a failed snapshot"), and refusing
+            // here left the user with a visible update and no way to apply it.
+            preparation = nil
+            let message = trf("%@: ten cask instaluje pakiet .pkg — aktualizacja pójdzie bez ochrony rollbackiem.",
                               "\(token)")
-            brewLog.append("⏸ " + message)
-            showBanner(BannerData(variant: .danger, title: tr("Nie można przejąć"),
-                                  message: message, action: .openLogs))
-            emitActivitySignal(.error)
-            return
+            brewLog.append("⚠️ " + message)
+            WegaLog.warning(.homebrew, message)
         }
 
         var installError: Error?
         var exitCode: Int32 = 0
         // LT-01 — the journal's last word before brew replaces the bundle: a crash from
         // here on reads as "disk state unknown" at the next launch.
-        preparation.operation.recordInstalling()
+        preparation?.operation.recordInstalling()
         do {
             let stream = try model.brewService.events(arguments: installArgs)
             exitCode = try await ProcessEventStream.drain(stream) { chunk in
@@ -94,15 +101,23 @@ extension ScanStore {
             installError = error
         }
 
-        let installedAppURL = await CaskReplacementSafety.resolveInstalledAppURL(
-            preparation,
-            brewService: model.brewService
-        )
-        let verification = await CaskReplacementSafety.verify(
-            preparation,
-            installedAppURL: installedAppURL
-        )
-        guard reportManualReplacementVerification(verification, token: token) else { return }
+        // Only an adoption has something to verify. Asking for the installed `.app` of a cask
+        // that declares none returns `nil`, and `verify` turns that `nil` into
+        // `.rollbackFailed` — "the new version failed its check and could not be restored" —
+        // which would be a false alarm about an install that in fact just succeeded. That
+        // false alarm is the reason the gate above exists; skipping the verification, rather
+        // than skipping the install, is what removes it.
+        if let preparation {
+            let installedAppURL = await CaskReplacementSafety.resolveInstalledAppURL(
+                preparation,
+                brewService: model.brewService
+            )
+            let verification = await CaskReplacementSafety.verify(
+                preparation,
+                installedAppURL: installedAppURL
+            )
+            guard reportManualReplacementVerification(verification, token: token) else { return }
+        }
 
         if let installError {
             // UX-07 — the raw, English error text goes to the log below; the banner shows
