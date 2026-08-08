@@ -189,9 +189,12 @@ Wega routes each app through the right updater:
 - **Sparkle and self-updating apps** (ChatGPT, Postman, Parallels, Antigravity, Google
   Drive, Obsidian…) — Wega launches the app so its own signed updater takes over, instead
   of forcing a stale Homebrew cask over it.
-- **Adobe Creative Cloud apps** — opens Creative Cloud, which is the only thing that can
-  install an Adobe update.
-- **Java runtimes** — updated through Homebrew like any other cask.
+- **Adobe Creative Cloud apps** — opens the Creative Cloud app on your Mac, which is the
+  only thing that can install an Adobe update. If you do not have it, the button opens
+  Adobe's page instead.
+- **Java runtimes** — updated through Homebrew like any other cask. A JDK is installed by a
+  package rather than copied into place, so Wega cannot take a snapshot of it first: this
+  one update runs without the automatic rollback, and the log says so before it starts.
 
 After an upgrade, Wega detects apps that were running and offers a one-click **restart**.
 

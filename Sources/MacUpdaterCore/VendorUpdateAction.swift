@@ -20,6 +20,11 @@ public enum UpdateActionKind: Equatable, Sendable {
     case openURL(URL?, style: OpenURLStyle)
     /// Open JetBrains Toolbox, resolved on disk at tap time.
     case jetBrainsToolbox
+    /// Open Adobe's Creative Cloud client, resolved on disk at tap time, falling back to the
+    /// given URL when it is not installed. Creative Cloud is the only thing that can install
+    /// an Adobe update, so sending a user who has it to a web page would be sending them the
+    /// long way round to the app already sitting on their Mac.
+    case creativeCloud(fallbackURL: URL?)
     /// Wega's own update. The row opens the Settings self-update screen, which owns the
     /// download, the signature verification, the helper install, the restart, and its own
     /// "see the release" link — nothing here needs the release URL.
@@ -32,9 +37,6 @@ public enum OpenURLStyle: Equatable, Sendable {
     case githubReleases
     case synologyDownload
     case vendorDownload
-    /// Creative Cloud is the only thing that can install an Adobe update, so the row leads
-    /// there rather than to a download page that would hand the user an installer.
-    case creativeCloud
 }
 
 public extension ManualOutdatedApp.UpdateSource {
@@ -80,7 +82,7 @@ public extension ManualOutdatedApp.UpdateSource {
         case .googleDrive:
             return .openURL(AppEndpoints.shared.googleDriveDownloadURL, style: .vendorDownload)
         case .adobe:
-            return .openURL(AppEndpoints.shared.adobeCreativeCloudURL, style: .creativeCloud)
+            return .creativeCloud(fallbackURL: AppEndpoints.shared.adobeCreativeCloudURL)
         case .wega:
             // "Launching the app" would be Wega itself and would apply nothing; the browser
             // would step around signature verification and the helper install. So the row
