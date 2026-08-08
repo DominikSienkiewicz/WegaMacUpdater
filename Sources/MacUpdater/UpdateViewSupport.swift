@@ -514,10 +514,6 @@ struct ManualUpdateActionView: View {
                     // UX-05: these merely open the vendor's download page — the button says so,
                     // rather than "Pobierz…", which suggested Wega performs the download/install.
                     Label(tr("Otwórz stronę pobierania"), systemImage: "arrow.up.right.square")
-                case .creativeCloud:
-                    // Not a download page: Creative Cloud is the app that installs the update,
-                    // the same relationship JetBrains Toolbox has with its IDEs.
-                    Label(tr("Otwórz Creative Cloud"), systemImage: "arrow.up.right.square")
                 }
             }
             .controlSize(.small)
@@ -533,6 +529,24 @@ struct ManualUpdateActionView: View {
                 }
             } label: {
                 Label(tr("Otwórz Toolbox"), systemImage: "arrow.down.circle")
+            }
+            .controlSize(.small)
+        case .creativeCloud(let fallbackURL):
+            Button {
+                // LaunchServices, not a path: Creative Cloud installs outside /Applications
+                // (`/Applications/Utilities/Adobe Creative Cloud/ACC/Creative Cloud.app`), so a
+                // candidate-path list would miss it on the machines that have it. The web page
+                // is only what is left when Adobe's client is genuinely not installed.
+                let installed = CreativeCloudApplication.resolve {
+                    NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
+                }
+                if let installed {
+                    NSWorkspace.shared.open(installed)
+                } else if let fallbackURL {
+                    NSWorkspace.shared.open(fallbackURL)
+                }
+            } label: {
+                Label(tr("Otwórz Creative Cloud"), systemImage: "arrow.down.circle")
             }
             .controlSize(.small)
         case .openSelfUpdate:

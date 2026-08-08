@@ -35,12 +35,19 @@ enum CaskReplacementSafety {
     /// nothing had been verified and nothing restored.
     ///
     /// The batch upgrade path has always asked this question through ``RollbackProtection``;
-    /// this is the same question, asked by the path that skipped it. Answering it before brew
-    /// runs also avoids reinstalling an app that was already current.
+    /// this is the same question, asked by the path that skipped it.
     ///
-    /// An unknown profile (brew unreachable, token absent) is deliberately **not** a refusal:
-    /// the gate exists to replace a misleading verdict, not to add a new way to fail, and the
-    /// post-install resolution still fails closed.
+    /// What the answer means for the caller differs by intent, and the two must not be
+    /// conflated. **Migration** ("put this app under a cask") is genuinely pointless here and
+    /// is refused. An **update** is not: a `pkg` cask — a JDK, Zoom, Google Drive — is still
+    /// perfectly installable, it just cannot be snapshotted or verified as an app, so
+    /// ``ScanStore`` runs it without the net and says so. Refusing there withheld an update
+    /// the user could see and had no other way to apply, which is how the JDK row shipped
+    /// with a button that only ever produced an error.
+    ///
+    /// An unknown profile (brew unreachable, token absent) is deliberately **not** treated as
+    /// unprotected: the gate exists to replace a misleading verdict, not to quietly downgrade
+    /// the guarantee, and the post-install resolution still fails closed.
     static func adoptionIsPointless(token: String, profiles: [CaskArtifactProfile]) -> Bool {
         guard let profile = profiles.first(where: { $0.token == token }) else { return false }
         return RollbackProtection.evaluate(profile: profile) != .protected

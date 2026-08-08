@@ -143,14 +143,35 @@ struct AdobeUpdateDetectionTests {
 
     // MARK: - The action offered for the row
 
-    @Test func anAdobeRowLeadsToCreativeCloudRatherThanADownloadPage() {
+    /// The row opens Adobe's *client*, not a web page. Creative Cloud is the only thing that
+    /// can install an Adobe update, so a user who has it was being sent the long way round to
+    /// an app already sitting on their Mac. The URL survives only as the fallback for a
+    /// machine without it.
+    @Test func anAdobeRowOpensTheInstalledCreativeCloudClient() {
         let action = ManualOutdatedApp.UpdateSource.adobe(sapCode: "LRCC").updateActionKind
-        guard case .openURL(let url, let style) = action else {
-            Issue.record("An Adobe row must open a URL")
-            return
-        }
-        #expect(style == .creativeCloud)
-        #expect(url == AppEndpoints.shared.adobeCreativeCloudURL)
+        #expect(action == .creativeCloud(fallbackURL: AppEndpoints.shared.adobeCreativeCloudURL))
+    }
+
+    /// Resolution goes through LaunchServices rather than a candidate-path list, because
+    /// Creative Cloud does not install into `/Applications`: a stock install puts it at
+    /// `/Applications/Utilities/Adobe Creative Cloud/ACC/Creative Cloud.app`, under a
+    /// different name than the folder Adobe leaves in `/Applications`.
+    @Test func creativeCloudIsPreferredOverItsLauncherShim() {
+        let acc = URL(fileURLWithPath: "/Applications/Utilities/Adobe Creative Cloud/ACC/Creative Cloud.app")
+        let shim = URL(fileURLWithPath: "/Applications/Utilities/Adobe Creative Cloud/Utils/Creative Cloud Desktop App.app")
+        let installed: [String: URL] = [
+            "com.adobe.acc.AdobeCreativeCloud": acc,
+            "com.adobe.Creative-Cloud-Desktop-App": shim,
+        ]
+
+        // Both present: the client with the Updates list wins.
+        #expect(CreativeCloudApplication.resolve { installed[$0] } == acc)
+        // Only the shim: reaching the client the long way round still beats a browser.
+        #expect(CreativeCloudApplication.resolve { $0 == "com.adobe.Creative-Cloud-Desktop-App" ? shim : nil } == shim)
+    }
+
+    @Test func withoutCreativeCloudInstalledThereIsNothingToOpenAndTheRowFallsBack() {
+        #expect(CreativeCloudApplication.resolve { _ in nil } == nil)
     }
 
     /// Where Homebrew also packages a Creative Cloud application, `brew` can apply the update
