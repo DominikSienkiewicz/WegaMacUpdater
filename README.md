@@ -1,5 +1,5 @@
 # Wega Mac Updater
-**Architected & Developed by [Dominik](https://www.linkedin.com/in/dominik-sienkiewicz/)** *Principal AI Engineer | Full Stack Architect*
+**Architected & Developed by [Dominik](https://www.linkedin.com/in/dominik-sienkiewicz/)**
 
 Native macOS app that keeps every application on your Mac up to date — Homebrew casks, Mac App Store, JetBrains IDEs, GitHub Releases, and Sparkle apps — from a single window, without ever opening a terminal.
 
