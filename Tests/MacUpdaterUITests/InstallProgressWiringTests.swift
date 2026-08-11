@@ -30,20 +30,25 @@ struct InstallProgressWiringTests {
     /// Every exit path — the stop switch, a publisher veto, a thrown error — must leave the
     /// bar gone, or a finished run keeps a bar on screen forever.
     @Test func theRunClearsTheBarOnEveryExitPath() throws {
-        let run = executableSource(try ScanStoreSources.everything())
+        let run = compact(executableSource(try ScanStoreSources.everything()))
 
-        #expect(run.contains("defer {"), "clearing must be a defer, not a line each early return remembers")
+        #expect(run.contains("defer { upgradeProgress = nil upgradeTracker = nil }"),
+                "clearing must be a defer, not a line each early return remembers")
         #expect(run.contains("upgradeProgress = nil"))
         #expect(run.contains("upgradeTracker = nil"))
     }
 
     @Test func sourcesThatReportNothingPerPackageAdvanceOnlyOnSuccess() throws {
-        let run = executableSource(try ScanStoreSources.everything())
+        let run = compact(executableSource(try ScanStoreSources.everything()))
 
-        #expect(run.contains("tracker.completeUnits("),
-                "npm and the App Store advance the counter directly")
-        #expect(run.contains("brewCallFinished(succeeded:"),
-                "a failed brew call must not credit the package it left unfinished")
+        #expect(run.contains("if outcome.isSuccessful { tracker.completeUnits(1)"),
+                "an npm package that failed must not be counted as installed")
+        #expect(run.contains("if masFailure == nil { tracker.completeUnits("),
+                "a failed mas batch must credit nothing — it reports nothing per app")
+        #expect(run.contains("brewCallFinished(succeeded: outcome.isSuccessful)"),
+                "the brew call must report its real verdict, not an assumed success")
+        #expect(run.contains("brewCallFinished(succeeded: false)"),
+                "a brew call that threw must report failure")
     }
 
     /// M2(c) deleted five invented command bars that animated on a timer while the real work
@@ -71,5 +76,11 @@ struct InstallProgressWiringTests {
             .split(separator: "\n", omittingEmptySubsequences: false)
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
             .joined(separator: "\n")
+    }
+
+    /// Collapses whitespace so a guard can assert on a code shape without pinning the
+    /// indentation it happens to be written at.
+    private func compact(_ source: String) -> String {
+        source.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 }
