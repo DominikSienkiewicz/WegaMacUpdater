@@ -30,6 +30,7 @@ final class ScanLayoutTests: XCTestCase {
             cliBadge: 0,
             securityBadge: 0,
             logsErrorBadge: 0,
+            rollbackBadge: 0,
             updateActivity: activity
         )
         let hostingView = NSHostingView(rootView: view)

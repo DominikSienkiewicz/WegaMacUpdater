@@ -33,6 +33,10 @@ struct UpdateView: View {
     var updateFilter:     UpdateFilter = .all
     /// Reports (apps count, CLI count) after each scan, for sidebar badges.
     var onCategoryCounts: ((Int, Int) -> Void)? = nil
+    /// LT-01 — how many updates can still be taken back, for the „Cofnij aktualizacje”
+    /// badge. Reported from here, not from `RollbackView`, because this view stays mounted
+    /// for the whole session: the badge is right before that destination is ever opened.
+    var onUndoableCount:  ((Int) -> Void)? = nil
 
     @EnvironmentObject private var model: AppViewModel
     @EnvironmentObject private var policies: UpdatePolicyStore
@@ -49,9 +53,6 @@ struct UpdateView: View {
     /// execution one immutable decision.
     @State private var pendingUpdateTargets: [OutdatedItem] = []
     @State private var showUpdateConfirmation = false
-    /// LT-01 — the update the user has asked to take back, pending confirmation.
-    @State private var undoTarget: UndoableUpdate? = nil
-    @State private var showUndoConfirmation = false
 
     private var allItems: [OutdatedItem] { scan.allItems }
     private var visibleItems: [OutdatedItem] { scan.visibleItems(for: updateFilter) }
@@ -86,25 +87,6 @@ struct UpdateView: View {
             .onChange(of: showUpdateConfirmation) { _, isPresented in
                 if !isPresented { pendingUpdateTargets = [] }
             }
-            .confirmationDialog(
-                undoTarget.map { trf("Cofnąć aktualizację: %@?", "\($0.token)") } ?? tr("Cofnąć aktualizację?"),
-                isPresented: $showUndoConfirmation,
-                titleVisibility: .visible
-            ) {
-                if let undoTarget {
-                    Button(trf("Przywróć wersję %@", "\(undoTarget.restoredVersion ?? "—")")) {
-                        self.undoTarget = nil
-                        Task { await scan.undoUpdate(undoTarget) }
-                    }
-                }
-                Button(tr("Anuluj"), role: .cancel) { undoTarget = nil }
-            } message: {
-                if let undoTarget {
-                    Text(trf("%@ zostanie zastąpiona kopią sprzed aktualizacji, a przywrócona wersja zostanie przypięta. Kopia jest trzymana do %@.",
-                             "\(undoTarget.token)",
-                             "\(undoTarget.expiresAt.formatted(date: .abbreviated, time: .omitted))"))
-                }
-            }
             // Switching the sidebar category re-filters the list but not the inspector's
             // resolver, so a selection made in one category would otherwise keep showing in
             // the pane after switching away from it. Clear it so the detail pane never
@@ -124,14 +106,16 @@ struct UpdateView: View {
                     errorCount:     onErrorCount,
                     activity:       onActivity,
                     footerInfo:     onFooterInfo,
-                    categoryCounts: onCategoryCounts
+                    categoryCounts: onCategoryCounts,
+                    undoableCount:  onUndoableCount
                 ))
                 // M2 — put the previous result on screen before doing anything else. It is
                 // a no-op after the first appearance and whenever a scan has already run.
                 scan.restoreLastScan()
                 scan.replayLastScan()
-                // LT-01 — surface what can still be undone (incl. whatever launch-time
-                // recovery just settled).
+                // LT-01 — count what can still be undone (incl. whatever launch-time
+                // recovery just settled) for the „Cofnij aktualizacje” badge. The list
+                // itself is shown by `RollbackView`, which refreshes it again on arrival.
                 scan.refreshUndoableUpdates()
                 UpdateFilterInteraction.apply(updateFilter, to: scan)
             }
@@ -433,17 +417,6 @@ struct UpdateView: View {
                                 onSkip: scan.skipManual,
                                 onInspect: { scan.inspectedKey = "m:" + $0.path.path }
                             )
-                        }
-                        // LT-01 — the manual undo lives where the updates it reverses were
-                        // launched from; visible only while a retained snapshot exists.
-                        if !scan.undoableUpdates.isEmpty {
-                            UndoUpdateSection(
-                                items: scan.undoableUpdates,
-                                busyToken: scan.undoBusy
-                            ) { undoable in
-                                undoTarget = undoable
-                                showUndoConfirmation = true
-                            }
                         }
                         if !scan.restartCandidates.isEmpty {
                             RestartSection(

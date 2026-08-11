@@ -14,6 +14,7 @@ struct ScanSinks {
     var activity:       ((UpdateActivity) -> Void)?
     var footerInfo:     ((Date?, Int) -> Void)?
     var categoryCounts: ((Int, Int) -> Void)?
+    var undoableCount:  ((Int) -> Void)?
 }
 
 @MainActor
@@ -454,5 +455,12 @@ final class ScanStore: ObservableObject {
         let appsCount = allItems.filter { $0.kind.category == .apps }.count + visibleManual.count
         let cliCount  = allItems.filter { $0.kind.category == .cli }.count
         sinks.categoryCounts?(appsCount, cliCount)
+    }
+
+    /// Publishes the "Cofnij aktualizacje" badge. `sinks` is private to this file, so the
+    /// emit lives here and `refreshUndoableUpdates()` — the one writer of
+    /// `undoableUpdates` — calls it.
+    func emitUndoableCount() {
+        sinks.undoableCount?(undoableUpdates.count)
     }
 }

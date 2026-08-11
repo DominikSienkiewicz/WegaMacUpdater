@@ -814,6 +814,14 @@ extension Translations {
         "Przerwana aktualizacja dokończona: %@ przywrócono z kopii.":
             "Interrupted update settled: restored from a copy: %@.",
         "Cofnij aktualizację": "Undo update",
+        // Sidebar destination carrying the section above (label, subtitle, mascot line) and
+        // its empty state.
+        "Cofnij aktualizacje": "Undo updates",
+        "Co da się cofnąć": "What can be undone",
+        "Coś poszło nie tak? Przyniosę starą.": "Something broke? I'll fetch the old one.",
+        "Nic do cofnięcia": "Nothing to undo",
+        "Po każdej aktualizacji Wega trzyma kopię poprzedniej wersji przez 7 dni — przez ten czas znajdziesz ją tutaj. Teraz żadna kopia nie czeka.":
+            "After every update Wega keeps a copy of the previous version for 7 days — for that long you will find it here. Right now no copy is waiting.",
         "Kopie sprzed aktualizacji są trzymane przez 7 dni — w tym czasie możesz wrócić do poprzedniej wersji. Wega przypnie przywróconą wersję, żeby nie proponować jej od razu ponownie.":
             "Pre-update copies are kept for 7 days — during that time you can go back to the previous version. Wega pins the restored version so it is not offered again right away.",
         "Cofnij": "Undo",

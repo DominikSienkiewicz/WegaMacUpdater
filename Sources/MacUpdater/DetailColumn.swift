@@ -138,6 +138,7 @@ struct DetailColumn: View {
     @Binding var securityBadge:     Int
     @Binding var appsBadge:         Int
     @Binding var cliBadge:          Int
+    @Binding var rollbackBadge:     Int
     @Binding var brewInstalled:     Bool
     @Binding var showInspector:    Bool
     let onNavigate: (SidebarSelection) -> Void
@@ -262,7 +263,8 @@ struct DetailColumn: View {
                 onActivity:    { updateActivity = $0 },
                 onFooterInfo:  { lastCheck = $0; securityBadge = $1 },
                 updateFilter:  selection.filter ?? .all,
-                onCategoryCounts: { appsBadge = $0; cliBadge = $1 }
+                onCategoryCounts: { appsBadge = $0; cliBadge = $1 },
+                onUndoableCount:  { rollbackBadge = $0 }
             )
             .opacity(selection.tab == .update ? 1 : 0)
             .allowsHitTesting(selection.tab == .update)
@@ -278,6 +280,8 @@ struct DetailColumn: View {
                     MigrationView(onWegaState: { wegaState = $0 })
                 case .inventory:
                     InventoryView(onWegaState: { wegaState = $0 })
+                case .rollback:
+                    RollbackView()
                 case .logs:
                     LogsView(onWegaState: { wegaState = $0 }, initialFilter: logsInitialFilter)
                         .id(logsInitialFilter)
