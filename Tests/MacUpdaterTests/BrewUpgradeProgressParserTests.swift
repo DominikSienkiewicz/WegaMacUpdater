@@ -47,6 +47,11 @@ struct BrewUpgradeProgressParserTests {
     @Test func ignoresTheCellarPathAFormulaEndsWith() {
         #expect(BrewUpgradeProgressParser.event(for: "🍺  /opt/homebrew/Cellar/git/2.45.0: 1,600 files, 50MB")
                 == nil)
+        // The line above is turned away by the success-suffix check before the parser ever
+        // looks at the token. This one carries the suffix, so a path really does reach the
+        // rule that rejects it — the guard the first line was believed to exercise.
+        #expect(BrewUpgradeProgressParser.event(for: "🍺  /opt/homebrew/Cellar/git/2.45.0 was successfully installed!")
+                == nil)
     }
 
     @Test func ignoresEverythingElseBrewPrints() {

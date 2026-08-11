@@ -850,6 +850,6 @@ extension Translations {
         "Pobieram %@ — %@": "Downloading %@ — %@",
         "Pobieram pakiety — %@": "Downloading packages — %@",
         "Instaluję %@ — %@": "Installing %@ — %@",
-        "Odświeżam listę…": "Refreshing the list…",
+        "Instaluję pakiety — %@": "Installing packages — %@",
     ]
 }

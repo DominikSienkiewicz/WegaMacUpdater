@@ -1,16 +1,20 @@
-import Foundation
-
 /// Turns the markers Homebrew prints into `UpgradeProgress`.
 ///
 /// One instance per run, fed every stdout/stderr chunk of every brew call that run makes,
 /// plus direct advances for the two sources that report nothing per package: npm (a loop
 /// that already knows its package) and the Mac App Store (one opaque batch).
 ///
+/// `plannedTokens` is what the run set out to upgrade, and the only thing it may credit.
+/// `brew upgrade <names…>` also upgrades outdated *dependents* nobody selected and
+/// announces each of them with the same marker, so a tracker that counted every token it
+/// saw reached the total before the run had started its cask phase.
+///
 /// `soleDownloadToken` is the run's only planned package, when it has exactly one. It is
 /// the one case where a download may be named without guessing.
 public final class UpgradeProgressTracker {
     public let totalUnits: Int
 
+    private let plannedTokens: Set<String>
     private let soleDownloadToken: String?
     private var finishedTokens: Set<String> = []
     private var inFlightToken: String?
@@ -18,8 +22,9 @@ public final class UpgradeProgressTracker {
     private var stage: UpgradeStage = .preparing
     private var pendingLine: String = ""
 
-    public init(totalUnits: Int, soleDownloadToken: String? = nil) {
+    public init(totalUnits: Int, plannedTokens: Set<String>, soleDownloadToken: String? = nil) {
         self.totalUnits = totalUnits
+        self.plannedTokens = Set(plannedTokens.map(Self.bareName))
         self.soleDownloadToken = soleDownloadToken
     }
 
@@ -58,35 +63,57 @@ public final class UpgradeProgressTracker {
         explicitlyCompletedUnits += max(0, count)
     }
 
-    public func beginRefreshing() {
-        stage = .refreshing
+    /// npm upgrades one package per call and prints nothing this tracker parses, so the
+    /// run names the package it is about to hand over.
+    public func beginInstalling(token: String) {
+        stage = .installing(token: token)
+    }
+
+    /// The App Store batch moves several apps behind one opaque call, so it names none.
+    public func beginInstallingBatch() {
+        stage = .installing(token: nil)
     }
 
     private func apply(_ event: BrewProgressEvent?) {
         switch event {
         case .packageStarted(let token):
-            // The boundary rule: whatever was running is done, because brew moved on. A
-            // cask announces itself twice (`Upgrading x`, then `Installing Cask x`), so the
-            // same token starting again closes nothing.
-            if inFlightToken != token { closeInFlight() }
-            inFlightToken = token
+            let name = Self.bareName(token)
+            // The boundary rule: whatever was running is done, because brew moved on — an
+            // unplanned dependent starting proves that too. A cask announces itself twice
+            // (`Upgrading x`, then `Installing Cask x`), so the same token starting again
+            // closes nothing.
+            if inFlightToken != name { closeInFlight() }
+            // Only a planned package may be credited later; brew's own dependents never can.
+            inFlightToken = plannedTokens.contains(name) ? name : nil
+            // The stage still names what is really installing, planned or not.
             stage = .installing(token: token)
         case .packageFinished(let token):
-            finishedTokens.insert(token)
-            if inFlightToken == token { inFlightToken = nil }
+            let name = Self.bareName(token)
+            if plannedTokens.contains(name) { finishedTokens.insert(name) }
+            if inFlightToken == name { inFlightToken = nil }
             // The stage is left alone on purpose: nothing else has started yet, and naming
             // a phase that is not running would be worse than a label a moment stale.
         case .downloadStarted(let token):
-            stage = .downloading(token: token ?? soleDownloadToken)
+            // A cask that fetches a resource mid-install was named one line earlier, so the
+            // package in flight beats falling back to the generic label.
+            stage = .downloading(token: token ?? inFlightToken ?? soleDownloadToken)
         case nil:
             break
         }
     }
 
+    /// Whatever is in flight is a planned bare name, so what lands here is always creditable.
     private func closeInFlight() {
         guard let inFlightToken else { return }
         finishedTokens.insert(inFlightToken)
         self.inFlightToken = nil
+    }
+
+    /// Brew prints a tapped name (`homebrew/core/node`) where the plan holds the bare one,
+    /// so both sides are matched on the substring after the last `/`.
+    private static func bareName(_ token: String) -> String {
+        guard let bare = token.split(separator: "/").last else { return token }
+        return String(bare)
     }
 
     private func flushPendingLine() {

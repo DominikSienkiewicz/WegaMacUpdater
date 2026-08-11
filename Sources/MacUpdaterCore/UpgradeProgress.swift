@@ -1,5 +1,3 @@
-import Foundation
-
 /// What an upgrade run is doing right now, in the order it happens.
 public enum UpgradeStage: Equatable, Sendable {
     /// Snapshots and the publisher watchdog, before brew is called at all.
@@ -7,9 +5,9 @@ public enum UpgradeStage: Equatable, Sendable {
     /// A download is under way. The token is set only when it can be attributed — brew
     /// named it, or the run plans a single package and there is nothing else it could be.
     case downloading(token: String?)
-    case installing(token: String)
-    /// The post-upgrade rescan, which decides what the list says afterwards.
-    case refreshing
+    /// A package is being installed. The token is `nil` for the App Store batch, which
+    /// moves several apps behind one opaque call and can honestly name none of them.
+    case installing(token: String?)
 }
 
 /// How far an upgrade run has got, in whole packages.

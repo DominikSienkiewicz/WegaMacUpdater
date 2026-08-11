@@ -58,10 +58,14 @@ extension ScanStore {
         let masAppStoreIDs = plan.masAppStoreIDs
         // REL-12 — what each remaining phase would still touch, so a stop can name it.
         let boundaries    = UpgradeBoundaryKeys(planned: plannedItems, npmNames: npmNames)
-        // The bar counts whole planned rows. A run with a single package is the one case
-        // where a download can be attributed without guessing what it belongs to.
+        // The bar counts whole planned rows. Only the tokens this run asked brew for may be
+        // credited: `brew upgrade <names…>` also upgrades outdated dependents nobody
+        // selected and announces them identically. npm and the App Store advance explicitly,
+        // so they are not brew tokens. A run with a single package is the one case where a
+        // download can be attributed without guessing what it belongs to.
         let tracker = UpgradeProgressTracker(
             totalUnits: plannedItems.count,
+            plannedTokens: Set(plan.formulaNames + plannedCaskNames),
             soleDownloadToken: plannedItems.count == 1 ? plannedItems.first?.name : nil
         )
         upgradeTracker = tracker
@@ -182,6 +186,10 @@ extension ScanStore {
         // npm upgrades one package at a time, so every iteration is a REL-12 stop boundary.
         for (index, (pkg, command)) in zip(npmNames, npmCommands).enumerated() {
             if shouldStopUpdate(before: boundaries.fromNpmPackage(at: index)) { break }
+            // npm prints nothing the tracker can parse, so the run names the package itself
+            // — otherwise the label keeps naming the brew package that finished before it.
+            tracker.beginInstalling(token: pkg)
+            upgradeProgress = tracker.progress
             let outcome = await runNpmUpgrade(name: pkg, arguments: command.arguments)
             run.record(plannedItems.filter { $0.kind == .npm && $0.name == pkg }, outcome: outcome)
             if outcome.isSuccessful {
@@ -195,6 +203,11 @@ extension ScanStore {
         // mas still reports no per-app result, so one failure becomes a synthetic outcome
         // per planned item, exactly as `runNpmUpgrade` does.
         if !masAppStoreIDs.isEmpty, !shouldStopUpdate(before: boundaries.masKeys) {
+            let appStoreItems = plannedItems.filter { $0.kind == .appStore }
+            // One opaque call for the whole batch: the bar takes over the label but names
+            // no app, because mas reports none.
+            tracker.beginInstallingBatch()
+            upgradeProgress = tracker.progress
             brewLog.append("$ mas upgrade " + masAppStoreIDs.joined(separator: " "))
             var masFailure: String?
             do {
@@ -206,11 +219,11 @@ extension ScanStore {
                 brewLog.append("error: \(error.localizedDescription)")
                 WegaLog.error(.app, "mas upgrade: \(error.localizedDescription)")
             }
-            run.record(masItems: plannedItems.filter { $0.kind == .appStore }, failure: masFailure)
+            run.record(masItems: appStoreItems, failure: masFailure)
             // mas reports nothing per app, so the whole batch advances at once — and only
             // when it succeeded, because a failure is no evidence any single app updated.
             if masFailure == nil {
-                tracker.completeUnits(plannedItems.filter { $0.kind == .appStore }.count)
+                tracker.completeUnits(appStoreItems.count)
                 upgradeProgress = tracker.progress
             }
         }
@@ -227,9 +240,9 @@ extension ScanStore {
         // Re-query brew/mas so the list reflects reality, not optimistic clearing.
         // If a cask failed (e.g. "App source not there"), it will still appear here.
         // Suppress its icon signal — the upgrade outcome below sets the final state.
-        // M2(d) — lightweight: no second `brew update`, no second stale-cask sweep.
-        tracker.beginRefreshing()
-        upgradeProgress = tracker.progress
+        // M2(d) — lightweight: no second `brew update`, no second stale-cask sweep. The
+        // rescan is not a stage of this bar: `runCheck` replaces the results view with the
+        // scan's own screen, so the two bars hand over to each other.
         await runCheck(emitActivity: false, lightweight: true, operationLease: operationLease)
 
         updating = false

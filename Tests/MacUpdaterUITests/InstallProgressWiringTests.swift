@@ -51,6 +51,28 @@ struct InstallProgressWiringTests {
                 "a brew call that threw must report failure")
     }
 
+    /// `brew upgrade <names…>` also upgrades dependents nobody selected, so the tracker is
+    /// told what the run asked for. Without that set the bar reached its total during the
+    /// formula phase and never moved again.
+    @Test func onlyTheTokensTheRunAskedBrewForMayBeCredited() throws {
+        let run = compact(executableSource(try ScanStoreSources.everything()))
+
+        #expect(run.contains("plannedTokens: Set(plan.formulaNames + plannedCaskNames)"),
+                "the tracker must know which tokens this run planned")
+    }
+
+    /// npm and the App Store print nothing the tracker parses, so the run names what it is
+    /// handing over — otherwise the label keeps naming a brew package that already finished,
+    /// and a run with neither cask nor formula never leaves "preparing backups".
+    @Test func theSourcesThatPrintNothingNameWhatTheyAreInstalling() throws {
+        let run = compact(executableSource(try ScanStoreSources.everything()))
+
+        #expect(run.contains("tracker.beginInstalling(token: pkg) upgradeProgress = tracker.progress let outcome = await runNpmUpgrade("),
+                "npm must name its package before that package starts installing")
+        #expect(run.contains("tracker.beginInstallingBatch() upgradeProgress = tracker.progress"),
+                "the App Store batch must take the label over, naming no single app")
+    }
+
     /// M2(c) deleted five invented command bars that animated on a timer while the real work
     /// happened elsewhere. This is the guard that keeps them deleted.
     @Test func nothingAnimatesProgressOnATimer() throws {

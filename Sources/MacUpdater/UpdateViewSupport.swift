@@ -93,10 +93,10 @@ struct UpgradeProgressBar: View {
             return trf("Pobieram %@ — %@", "\(token)", "\(counter)")
         case .downloading:
             return trf("Pobieram pakiety — %@", "\(counter)")
-        case .installing(let token):
+        case .installing(let token?):
             return trf("Instaluję %@ — %@", "\(token)", "\(counter)")
-        case .refreshing:
-            return tr("Odświeżam listę…")
+        case .installing:
+            return trf("Instaluję pakiety — %@", "\(counter)")
         }
     }
 }
