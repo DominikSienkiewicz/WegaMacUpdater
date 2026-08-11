@@ -145,4 +145,24 @@ struct UpgradeProgressTrackerTests {
 
         #expect(progress.fractionCompleted == 0)
     }
+
+    /// Chunks arrive on pipe-read boundaries, so a marker routinely straddles two of them.
+    @Test func aMarkerSplitAcrossTwoChunksIsStillRead() {
+        let tracker = UpgradeProgressTracker(totalUnits: 1)
+
+        tracker.consume(chunk: "==> Upgrading fire")
+        tracker.consume(chunk: "fox\n")
+
+        #expect(tracker.progress.stage == .installing(token: "firefox"))
+    }
+
+    /// A process's last line has no trailing newline; without a flush it would be lost.
+    @Test func theLastLineWithoutANewlineIsStillRead() {
+        let tracker = UpgradeProgressTracker(totalUnits: 2)
+
+        tracker.consume(chunk: "==> Upgrading git\n==> Upgrading node")
+        tracker.brewCallFinished(succeeded: true)
+
+        #expect(tracker.progress.completedUnits == 2)
+    }
 }

@@ -16,6 +16,7 @@ public final class UpgradeProgressTracker {
     private var inFlightToken: String?
     private var explicitlyCompletedUnits = 0
     private var stage: UpgradeStage = .preparing
+    private var pendingLine: String = ""
 
     public init(totalUnits: Int, soleDownloadToken: String? = nil) {
         self.totalUnits = totalUnits
@@ -32,8 +33,12 @@ public final class UpgradeProgressTracker {
 
     @discardableResult
     public func consume(chunk: String) -> UpgradeProgress {
-        for line in chunk.split(whereSeparator: \.isNewline) {
-            apply(BrewUpgradeProgressParser.event(for: String(line)))
+        pendingLine += chunk
+        // Chunks arrive on pipe-read boundaries, not line boundaries, so the tail of one
+        // read is usually half a line. Parsing it would drop the marker it belongs to.
+        while let lineBreak = pendingLine.firstIndex(where: \.isNewline) {
+            apply(BrewUpgradeProgressParser.event(for: String(pendingLine[..<lineBreak])))
+            pendingLine = String(pendingLine[pendingLine.index(after: lineBreak)...])
         }
         return progress
     }
@@ -41,6 +46,7 @@ public final class UpgradeProgressTracker {
     /// A brew call returned. Only a successful one closes the package it left in flight:
     /// the package brew died on is not finished work.
     public func brewCallFinished(succeeded: Bool) {
+        flushPendingLine()
         if succeeded { closeInFlight() }
         inFlightToken = nil
     }
@@ -81,5 +87,11 @@ public final class UpgradeProgressTracker {
         guard let inFlightToken else { return }
         finishedTokens.insert(inFlightToken)
         self.inFlightToken = nil
+    }
+
+    private func flushPendingLine() {
+        guard !pendingLine.isEmpty else { return }
+        apply(BrewUpgradeProgressParser.event(for: pendingLine))
+        pendingLine = ""
     }
 }
