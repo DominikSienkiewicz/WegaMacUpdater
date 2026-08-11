@@ -228,6 +228,12 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   disabled while any mutating operation holds the write gate. It never restarts on its own.
 
 ### Changed
+- **Success banners now dismiss themselves** after three seconds, sliding up and fading out
+  (a plain fade when *Reduce Motion* is on). A banner that only reports something finished
+  has nothing left to say once it has been read, and it was sitting at the top of the window
+  until someone clicked it away. Failures stay, and so does any banner offering a button —
+  the rule reads the action as well as the variant, so a confirmation that ever grows a
+  button stops vanishing on its own.
 - **„Cofnij aktualizacje" (Undo updates) is its own sidebar destination**, under
   **Narzędzia** next to Uninstall and Logs, with a badge counting the pre-upgrade copies
   still retained. It used to render at the very bottom of the Updates list, below the plan
