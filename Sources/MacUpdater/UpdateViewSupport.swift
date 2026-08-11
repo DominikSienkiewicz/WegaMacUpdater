@@ -66,7 +66,9 @@ struct UpgradeProgressBar: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(tr("Postęp aktualizacji"))
-        .accessibilityValue(counter)
+        // `label` already ends with the counter, so it is the whole sentence a sighted
+        // user reads — the combined children would otherwise be replaced by a bare count.
+        .accessibilityValue(label)
     }
 
     @ViewBuilder
