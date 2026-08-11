@@ -15,8 +15,9 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ### Added
 - Installing updates now shows a **progress bar** counting whole packages ("Installing
-  firefox — 3 of 7"), with a line naming the current phase — preparing, downloading,
-  installing, refreshing. It reports finished work only: a run that fails part-way stops
+  firefox — 3 of 7"), with a line naming the current phase — preparing, downloading or
+  installing — and the package it is working on. It reports finished work only: it counts
+  only the packages the run set out to upgrade, and a run that fails part-way stops
   short of the end rather than rounding up to a success it did not achieve. There is no
   download percentage because Homebrew silences its download meter when it is not attached
   to a terminal, and an invented number is worse than an honest one.

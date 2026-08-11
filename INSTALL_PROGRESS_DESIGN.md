@@ -74,8 +74,9 @@ public enum UpgradeStage: Equatable, Sendable {
     /// `nil` while brew downloads several artifacts at once and no single
     /// package can honestly be named (§4 says when it may be named).
     case downloading(token: String?)
-    case installing(token: String)
-    case refreshing
+    /// `nil` for the App Store batch, which moves several apps behind one
+    /// opaque call and can name none of them.
+    case installing(token: String?)
 }
 
 public struct UpgradeProgress: Equatable, Sendable {
@@ -113,6 +114,12 @@ public enum BrewProgressEvent: Equatable, Sendable {
 
 - **boundary rule**: `packageStarted(next)` implies whatever was in flight is finished. This
   is what closes formulae, which have no per-token success line.
+- **planned tokens only**: `brew upgrade <names…>` also upgrades the outdated *dependents* of
+  what it was asked for, announcing each with the same `==> Upgrading` marker. Only a token
+  the run planned may be credited, matched on the bare name (the part after the last `/`) so
+  brew's tapped form `homebrew/core/node` credits a planned `node` — and credits it once. A
+  dependent still closes the planned package it interrupted, and is still named on screen,
+  because both are true; it just never counts.
 - **completion set**: finished tokens are kept in a `Set`, so the `🍺` line and the boundary
   rule cannot credit the same package twice.
 - **monotonic**: `completedUnits` never decreases. The `--force` retry re-runs tokens that
@@ -122,6 +129,10 @@ public enum BrewProgressEvent: Equatable, Sendable {
   unit per successful iteration; `mas` reports nothing per app, so its whole group advances
   at once — and only when the call returned without error. A failed `mas upgrade` credits
   nothing, because we have no evidence any single app was updated.
+- **explicit naming**: those same two sources also set the stage, since neither prints a
+  marker this parser reads. Without it a run holding only npm or only App Store rows would
+  stay in `.preparing` from start to finish, and a run that ends in npm would keep naming the
+  cask that finished before it.
 - **naming a download**: `.downloading` carries a token in exactly two cases — brew named it
   (`==> Fetching downloads for: <name>`), or the run plans a single package, in which case
   there is nothing else the download could be. Otherwise the token is `nil` and the view says
@@ -138,7 +149,10 @@ happened; the banner already explains it.
 - `ScanStore` gains `@Published var upgradeProgress: UpgradeProgress?`, next to the existing
   `progress`.
 - `runUpdateCoordinated` owns one tracker per run: `.preparing` before `prepareForegroundCasks`,
-  `.refreshing` before the closing `runCheck`, `nil` wherever `updating` is set back to `false`.
+  `.installing` named before each npm package and before the `mas` batch, `nil` wherever
+  `updating` is set back to `false`. The closing `runCheck` is not a stage of this bar: it
+  replaces the results view with the scan's own screen, which carries its own honest bar, so
+  the two hand over to each other.
 - `runBrewUpgrade` feeds the tracker from inside the existing `onChunk` closure, next to the
   line that appends to `brewLog`. No new streaming loop — the architecture test
   `brewNpmEventStreamingRunsThroughOneSharedHelper` requires exactly one, and this design does

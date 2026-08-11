@@ -128,9 +128,9 @@ it always did.
 ### Watching an update run
 
 While an update installs, a progress bar sits under the header. It counts **whole
-packages** — "Installing firefox — 3 of 7" — and the line under it names whatever Homebrew
-last announced: preparing backups, downloading, installing, or refreshing the list at the
-end.
+packages** — "Installing firefox — 3 of 7" — and the line under it names what the run is
+doing: preparing backups, downloading, or installing. When the last package is done, Wega
+re-checks the list and the scan's own progress bar takes over.
 
 There is no download percentage, and that is deliberate. Homebrew silences its download
 meter whenever it is not printing to a terminal, so the bytes are genuinely invisible to
