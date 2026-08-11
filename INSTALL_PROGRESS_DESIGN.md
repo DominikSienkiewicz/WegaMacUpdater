@@ -104,7 +104,9 @@ substantiate. Total units = the planned items the run captured before it started
 
 ```swift
 public enum BrewProgressEvent: Equatable, Sendable {
-    case downloadStarted
+    /// `nil` unless brew named the package it fetches for: a parallel batch
+    /// names URLs, and a URL is not a package.
+    case downloadStarted(token: String?)
     case packageStarted(token: String)
     case packageFinished(token: String)
 }
@@ -122,6 +124,11 @@ public enum BrewProgressEvent: Equatable, Sendable {
   because both are true; it just never counts.
 - **completion set**: finished tokens are kept in a `Set`, so the `🍺` line and the boundary
   rule cannot credit the same package twice.
+- **known limit of a name-keyed set**: a run planning both the formula *and* the cask of one
+  name — `docker` is both — puts 2 in the total and can be credited only 1, so the bar stops
+  one short. Fixing it means keying the set by kind as well as name, which brew's markers do
+  not carry: they print the bare name in both phases. Left as it is, because the error runs
+  the same direction as every other rule here — understating finished work, never overstating.
 - **monotonic**: `completedUnits` never decreases. The `--force` retry re-runs tokens that
   have already been counted, and a bar that walks backwards reads as a bug.
 - **clamped**: never above `totalUnits`, whatever brew prints.
@@ -171,9 +178,11 @@ rendered under the results header while `scan.updating`:
   documented at [`UpdateView.swift:190`](Sources/MacUpdater/UpdateView.swift:190).
 - **indeterminate** while `.preparing` (there is nothing to count yet), determinate from the
   first package onwards.
-- a label naming the package and the activity: `Instaluję firefox — 3 z 7`, or
-  `Pobieram firefox…` when the download can be attributed (§4). During a parallel download
-  batch it says `Pobieram pakiety…` rather than inventing a name.
+- a label naming the activity, the counter, and the package whenever one can be named:
+  `Instaluję firefox — 3 z 7`, or `Pobieram firefox — 3 z 7` when the download can be
+  attributed (§4). Where no single package can honestly be named it says so instead of
+  inventing one: `Pobieram pakiety — 3 z 7` during a parallel download batch, and
+  `Instaluję pakiety — 3 z 7` for the App Store's one opaque call.
 - accessibility: label `Postęp aktualizacji`, value `3 z 7`.
 
 The existing stop button and the button's own spinner stay exactly as they are.

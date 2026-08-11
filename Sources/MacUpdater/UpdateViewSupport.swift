@@ -47,8 +47,9 @@ struct RestartSection: View {
 ///
 /// There is no percentage to show: piped brew runs curl with `--silent`, so the bytes are
 /// invisible from here (see `INSTALL_PROGRESS_DESIGN.md`). What the bar reports is finished
-/// work — the rule the scan's bar already follows — and the line under it names whatever
-/// brew last announced.
+/// work — the rule the scan's bar already follows — and the line under it names the phase,
+/// plus the package whenever the run can honestly name one: brew announces its own, npm's
+/// loop already knows it, and the App Store's one opaque call names nothing.
 struct UpgradeProgressBar: View {
     let progress: UpgradeProgress
 
