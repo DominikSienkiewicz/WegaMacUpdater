@@ -580,10 +580,44 @@ struct BannerData: Equatable {
     var action: BannerAction? = nil
 }
 
+/// When a banner may take itself off the screen.
+///
+/// A banner that only reports something finished — no failure to understand, no button to
+/// press — has said everything it has to say the moment it is read, and then it is just
+/// occupying the top of the window. Anything else waits: a failure needs reading, and a
+/// banner carrying an action needs the action to still be there when the user reaches for it.
+///
+/// The rule is written against the action as well as the variant, so a future success banner
+/// that grows a button does not start vanishing out from under the cursor. The two banners
+/// raised as *sticky* (a failed rollback, a changed publisher) are both `.danger`, so they
+/// are excluded by this rule already and need no second channel.
+enum BannerDismissal {
+    /// Long enough to read two short lines, short enough not to become furniture.
+    static let delay: Duration = .seconds(3)
+
+    static func isSelfDismissing(_ data: BannerData) -> Bool {
+        data.variant == .success && data.action == nil
+    }
+
+    /// Leaving is animated; arriving is not. A confirmation should be on screen the instant
+    /// the work finishes, and animating that would mean wrapping all 26 `showBanner` calls.
+    static func removal(reduceMotion: Bool) -> Animation {
+        reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.34, dampingFraction: 0.82)
+    }
+
+    /// Under "Ogranicz ruch" the banner fades without travelling — still a transition, just
+    /// not a moving one.
+    static func transition(reduceMotion: Bool) -> AnyTransition {
+        reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity)
+    }
+}
+
 struct BannerView: View {
     let data: BannerData
     var onAction: ((BannerAction) -> Void)? = nil
     let onClose: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -617,7 +651,7 @@ struct BannerView: View {
                 .foregroundStyle(Color.wegaHoney)
                 .accessibilityLabel(actionLabel)
             }
-            Button { onClose() } label: { Image(systemName: "xmark") }
+            Button { close() } label: { Image(systemName: "xmark") }
                 .buttonStyle(.plain)
                 .foregroundStyle(.tertiary)
                 .accessibilityLabel(tr("Zamknij"))
@@ -634,6 +668,22 @@ struct BannerView: View {
                     lineWidth: 1
                 )
         )
+        .transition(BannerDismissal.transition(reduceMotion: reduceMotion))
+        // Keyed on the banner itself: a banner replaced by a newer one restarts the countdown
+        // rather than inheriting what was left of the previous one's.
+        .task(id: data) {
+            guard BannerDismissal.isSelfDismissing(data) else { return }
+            try? await Task.sleep(for: BannerDismissal.delay)
+            guard !Task.isCancelled else { return }
+            close()
+        }
+    }
+
+    /// The dismissal animation is driven from inside the banner, so every host gets the
+    /// transition without wrapping its own state change — the three views that show banners
+    /// each own that state differently.
+    private func close() {
+        withAnimation(BannerDismissal.removal(reduceMotion: reduceMotion)) { onClose() }
     }
 }
 

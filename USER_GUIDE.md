@@ -217,8 +217,10 @@ After an upgrade, Wega detects apps that were running and offers a one-click **r
 
 A green *"Updated N packages"* banner appears **only when every step of every item
 succeeded** — the package manager, the security canary, the rollback net and the follow-up
-re-scan. If something didn't make it, Wega says **"Update incomplete"** and names what
-failed. A failed rollback (new version rejected *and* old one not restored) raises its own
+re-scan. It fades out on its own after about three seconds: it confirms something finished
+and asks nothing of you. If something didn't make it, Wega says **"Update incomplete"** and
+names what failed — and *that* banner stays until you close it, as does any banner offering
+a button. A failed rollback (new version rejected *and* old one not restored) raises its own
 **red sticky banner** telling you to check that app before using it.
 
 ### Skip or pin updates
