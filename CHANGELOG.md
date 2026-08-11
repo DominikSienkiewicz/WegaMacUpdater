@@ -14,6 +14,12 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 ## [Unreleased]
 
 ### Added
+- Installing updates now shows a **progress bar** counting whole packages ("Installing
+  firefox — 3 of 7"), with a line naming the current phase — preparing, downloading,
+  installing, refreshing. It reports finished work only: a run that fails part-way stops
+  short of the end rather than rounding up to a success it did not achieve. There is no
+  download percentage because Homebrew silences its download meter when it is not attached
+  to a terminal, and an invented number is worse than an honest one.
 - macOS's **App Management** permission is now a recognized failure mode instead of raw
   `stderr`. Since macOS 13, replacing a bundle in `/Applications` needs that grant — and it
   applies to child processes, so a missing grant makes the `ditto` inside `brew upgrade`

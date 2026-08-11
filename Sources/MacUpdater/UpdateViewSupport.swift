@@ -43,6 +43,62 @@ struct RestartSection: View {
     }
 }
 
+/// The upgrade's progress, in whole packages finished out of the batch the run planned.
+///
+/// There is no percentage to show: piped brew runs curl with `--silent`, so the bytes are
+/// invisible from here (see `INSTALL_PROGRESS_DESIGN.md`). What the bar reports is finished
+/// work — the rule the scan's bar already follows — and the line under it names whatever
+/// brew last announced.
+struct UpgradeProgressBar: View {
+    let progress: UpgradeProgress
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            bar
+                .tint(Color.wegaHoney)
+                // A linear ProgressView reports a nonzero intrinsic width, which — with no
+                // upper bound — propagates up and pushes the detail column wide enough to
+                // shove the sidebar off-screen. Pin it elastic (0…∞) so it fills, not forces.
+                .frame(minWidth: 0, maxWidth: .infinity)
+            Text(label)
+                .font(.wega(.subheadline, monospaced: true))
+                .foregroundStyle(.tertiary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(tr("Postęp aktualizacji"))
+        .accessibilityValue(counter)
+    }
+
+    @ViewBuilder
+    private var bar: some View {
+        if progress.stage == .preparing {
+            // Nothing has been counted yet, so the bar declines to claim a value.
+            ProgressView().progressViewStyle(.linear)
+        } else {
+            ProgressView(value: progress.fractionCompleted).progressViewStyle(.linear)
+        }
+    }
+
+    private var counter: String {
+        trf("%@ z %@", "\(progress.completedUnits)", "\(progress.totalUnits)")
+    }
+
+    private var label: String {
+        switch progress.stage {
+        case .preparing:
+            return tr("Przygotowuję kopie zapasowe…")
+        case .downloading(let token?):
+            return trf("Pobieram %@ — %@", "\(token)", "\(counter)")
+        case .downloading:
+            return trf("Pobieram pakiety — %@", "\(counter)")
+        case .installing(let token):
+            return trf("Instaluję %@ — %@", "\(token)", "\(counter)")
+        case .refreshing:
+            return tr("Odświeżam listę…")
+        }
+    }
+}
+
 struct BrewLogPanel: View {
     let lines:   [String]
     let onClose: () -> Void

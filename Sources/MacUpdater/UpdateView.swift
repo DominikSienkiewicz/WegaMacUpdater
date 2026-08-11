@@ -277,6 +277,12 @@ struct UpdateView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
 
+            if scan.updating, let progress = scan.upgradeProgress {
+                UpgradeProgressBar(progress: progress)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
+
             if let b = scan.banner {
                 BannerView(
                     data: b,

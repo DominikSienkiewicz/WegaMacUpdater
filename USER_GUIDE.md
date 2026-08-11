@@ -125,6 +125,21 @@ it always did.
   checksum, whether rollback protection covers it, whether it **may** ask for an admin
   password, and the download size (shown as **"size unknown"** when the server won't say).
 
+### Watching an update run
+
+While an update installs, a progress bar sits under the header. It counts **whole
+packages** — "Installing firefox — 3 of 7" — and the line under it names whatever Homebrew
+last announced: preparing backups, downloading, installing, or refreshing the list at the
+end.
+
+There is no download percentage, and that is deliberate. Homebrew silences its download
+meter whenever it is not printing to a terminal, so the bytes are genuinely invisible to
+Wega; showing a percentage would mean inventing one. A single large app therefore holds the
+bar at the same place while it downloads — the label keeps saying what is happening.
+
+A run that fails part-way stops short of the end: six of seven packages upgraded leaves the
+bar at 6/7, and the banner explains the rest.
+
 ### Stopping an update
 
 An update in progress can be stopped: while it runs, the **Update** button is joined by

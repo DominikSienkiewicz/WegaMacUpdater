@@ -60,6 +60,24 @@ struct InstallProgressWiringTests {
         #expect(!bar.contains("Task.sleep"), "the bar must not fabricate movement")
     }
 
+    @Test func theUpdatesScreenShowsTheBarOnlyWhileInstalling() throws {
+        let view = executableSource(try source("Sources/MacUpdater/UpdateView.swift"))
+
+        #expect(view.contains("if scan.updating, let progress = scan.upgradeProgress"),
+                "the bar appears only while an update is running")
+        #expect(view.contains("UpgradeProgressBar(progress: progress)"),
+                "and renders the store's value rather than one of its own")
+    }
+
+    /// A linear ProgressView reports a nonzero intrinsic width; with no upper bound it
+    /// widens the detail column until the sidebar is pushed off-screen.
+    @Test func theBarIsPinnedElasticSoItCannotShoveTheSidebarOffScreen() throws {
+        let bar = executableSource(try source("Sources/MacUpdater/UpdateViewSupport.swift"))
+
+        #expect(bar.contains("struct UpgradeProgressBar"))
+        #expect(bar.contains("frame(minWidth: 0, maxWidth: .infinity)"))
+    }
+
     private func packageRoot(file: String = #filePath) -> URL {
         URL(fileURLWithPath: file)
             .deletingLastPathComponent()
