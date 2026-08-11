@@ -844,5 +844,12 @@ extension Translations {
             "No automatic undo — npm does not keep previous package versions.",
         "Bez automatycznego cofnięcia — poprzednią wersję pobierzesz od wydawcy.":
             "No automatic undo — download the previous version from the vendor.",
+        // INSTALL_PROGRESS — the upgrade's progress bar.
+        "Postęp aktualizacji": "Update progress",
+        "Przygotowuję kopie zapasowe…": "Preparing backups…",
+        "Pobieram %@ — %@": "Downloading %@ — %@",
+        "Pobieram pakiety — %@": "Downloading packages — %@",
+        "Instaluję %@ — %@": "Installing %@ — %@",
+        "Instaluję pakiety — %@": "Installing packages — %@",
     ]
 }

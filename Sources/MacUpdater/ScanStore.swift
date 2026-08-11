@@ -101,6 +101,13 @@ final class ScanStore: ObservableObject {
     @Published var showPlanPreview    = false
     /// M2(c) — where the scan actually is. `nil` before the first one ever runs.
     @Published var progress: ScanProgress?
+    /// How far the running upgrade has got, in whole packages. `nil` when nothing is
+    /// installing, which is also what hides the bar.
+    @Published var upgradeProgress: UpgradeProgress?
+    /// The counter behind `upgradeProgress`. One per run, created by the upgrade and read
+    /// by the brew streaming loop — a stored property, so it cannot live in the extension
+    /// that uses it.
+    var upgradeTracker: UpgradeProgressTracker?
     /// F4 — tools the user has not installed. An invitation to install them, not an error.
     @Published var unavailableSources = 0
     /// REL-09 — what each source of the result currently on screen answered. Survives a
