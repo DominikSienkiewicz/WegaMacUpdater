@@ -9,6 +9,7 @@ import MacUpdaterCore
 /// `SidebarSelection.hint`.
 enum SidebarTab: String, Identifiable {
     case update    = "update"
+    case rollback  = "rollback"
     case uninstall = "uninstall"
     case migration = "migration"
     case inventory = "inventory"
@@ -19,6 +20,7 @@ enum SidebarTab: String, Identifiable {
     var hint: String {
         switch self {
         case .update:    return tr("Co do odświeżenia")
+        case .rollback:  return tr("Co da się cofnąć")
         case .uninstall: return tr("Usuń aplikacje")
         case .migration: return tr("Przepnij pod Brew")
         case .inventory: return tr("Pełny obchód")
@@ -57,6 +59,11 @@ struct ContentView: View {
     @State private var securityBadge: Int   = 0
     @State private var appsBadge:     Int   = 0
     @State private var cliBadge:      Int   = 0
+    /// LT-01 — how many updates still have a retained snapshot. Fed by `UpdateView`'s sink
+    /// rather than read off `ScanStore` here: observing the store from the window's root
+    /// would re-evaluate this body on every publish during a scan, and this split view is
+    /// deliberately kept still (see the fixed sidebar width below).
+    @State private var rollbackBadge: Int   = 0
     @State private var showInspector: Bool  = Self.showsInspectorAtLaunch
     /// D5 — one namespace for the toolbar's scan control, so `.glassEffectID` can morph
     /// glass between its ready and checking states.
@@ -74,6 +81,7 @@ struct ContentView: View {
                 cliBadge:       cliBadge,
                 securityBadge:  securityBadge,
                 logsErrorBadge: logsErrorBadge,
+                rollbackBadge:  rollbackBadge,
                 updateActivity: updateActivity
             )
             // Fixed, not a range: with a min/ideal/max the split view re-solved the sidebar
@@ -93,6 +101,7 @@ struct ContentView: View {
                 securityBadge:     $securityBadge,
                 appsBadge:         $appsBadge,
                 cliBadge:          $cliBadge,
+                rollbackBadge:     $rollbackBadge,
                 brewInstalled:     $brewInstalled,
                 showInspector:     $showInspector,
                 onNavigate:        { selection = $0 }

@@ -66,16 +66,21 @@ final class WegaCommandCenter: ObservableObject {
     }
 }
 
-/// The ⌘1…⌘5 destinations, in sidebar order: the five coarse sections, top to bottom. The
-/// Updates section opens on its unfiltered list; its category sub-filters keep their place in
-/// the sidebar but are not each given a number.
+/// The ⌘1…⌘6 destinations, in sidebar order: the coarse sections, top to bottom. The Updates
+/// section opens on its unfiltered list; its category sub-filters keep their place in the
+/// sidebar but are not each given a number.
+///
+/// „Cofnij aktualizacje” takes ⌘4 by sitting where it sits in the sidebar, which pushes
+/// Uninstall and Logs down a digit. The numbers follow the sidebar rather than the other way
+/// round: a menu that skipped a visible destination would be the worse surprise.
 enum WegaMenuNavigation {
     static let numberedDestinations: [SidebarSelection] = [
         .updates(.all),   // ⌘1
         .migration,       // ⌘2
         .inventory,       // ⌘3
-        .uninstall,       // ⌘4
-        .logs,            // ⌘5
+        .rollback,        // ⌘4
+        .uninstall,       // ⌘5
+        .logs,            // ⌘6
     ]
 }
 

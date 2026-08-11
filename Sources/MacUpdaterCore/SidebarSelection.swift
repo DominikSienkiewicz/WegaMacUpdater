@@ -9,8 +9,31 @@ public enum SidebarSelection: Hashable, Sendable {
     case updates(UpdateFilter)
     case migration
     case inventory
+    case rollback
     case uninstall
     case logs
+}
+
+/// Every destination, in the order the sidebar lists them.
+///
+/// The associated value on `updates` rules out a synthesised conformance, so this list is
+/// written by hand — but it is the *only* hand-written list: the accessibility reading order
+/// (`SidebarFocusPolicy`) is derived from it rather than repeating it, which is how a new
+/// destination used to end up with sort priority `0`. The `rawValue` switch below is
+/// exhaustive and has no `default`, so adding a case still fails the build until it is
+/// spelled out there.
+extension SidebarSelection: CaseIterable {
+    public static let allCases: [SidebarSelection] = [
+        .updates(.all),
+        .updates(.apps),
+        .updates(.cli),
+        .updates(.security),
+        .migration,
+        .inventory,
+        .rollback,
+        .uninstall,
+        .logs,
+    ]
 }
 
 extension SidebarSelection: RawRepresentable {
@@ -22,6 +45,7 @@ extension SidebarSelection: RawRepresentable {
         case "updates.security": self = .updates(.security)
         case "migration":        self = .migration
         case "inventory":        self = .inventory
+        case "rollback":         self = .rollback
         case "uninstall":        self = .uninstall
         case "logs":             self = .logs
         default:                 return nil
@@ -36,6 +60,7 @@ extension SidebarSelection: RawRepresentable {
         case .updates(.security): return "updates.security"
         case .migration:          return "migration"
         case .inventory:          return "inventory"
+        case .rollback:           return "rollback"
         case .uninstall:          return "uninstall"
         case .logs:               return "logs"
         }

@@ -2,16 +2,9 @@ import SwiftUI
 import MacUpdaterCore
 
 enum SidebarFocusPolicy {
-    static let orderedSelections: [SidebarSelection] = [
-        .updates(.all),
-        .updates(.apps),
-        .updates(.cli),
-        .updates(.security),
-        .migration,
-        .inventory,
-        .uninstall,
-        .logs,
-    ]
+    /// Reading order for assistive technology, taken from `SidebarSelection.allCases` so a
+    /// new destination cannot reach the sidebar with an unset priority.
+    static let orderedSelections: [SidebarSelection] = SidebarSelection.allCases
 
     static func accessibilityPriority(for selection: SidebarSelection) -> Double {
         guard let index = orderedSelections.firstIndex(of: selection) else { return 0 }
@@ -27,6 +20,9 @@ struct SidebarList: View {
     let cliBadge:       Int
     let securityBadge:  Int
     let logsErrorBadge: Int
+    /// How many committed updates still have a retained snapshot — a possibility, not an
+    /// alarm, so it is badged in caramel like the update counts rather than in danger red.
+    let rollbackBadge:  Int
     let updateActivity: UpdateActivity
 
     /// `List` must be able to express "no selection"; the window never can. Writes of `nil`
@@ -51,6 +47,7 @@ struct SidebarList: View {
                 row(.inventory)
             } header: { header(tr("Zainstalowane")) }
             Section {
+                row(.rollback, badge: rollbackBadge)
                 row(.uninstall)
                 row(.logs, badge: logsErrorBadge, isDanger: true)
             } header: { header(tr("Narzędzia")) }

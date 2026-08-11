@@ -228,6 +228,15 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   disabled while any mutating operation holds the write gate. It never restarts on its own.
 
 ### Changed
+- **„Cofnij aktualizacje" (Undo updates) is its own sidebar destination**, under
+  **Narzędzia** next to Uninstall and Logs, with a badge counting the pre-upgrade copies
+  still retained. It used to render at the very bottom of the Updates list, below the plan
+  preview, four package sections, two manual-update groups, the stale-cask card and the
+  restart prompt — an action on updates that already happened, competing for room with the
+  list of updates that have not, and reachable only by scrolling past all of it. The
+  per-source notes about what *cannot* be undone stay with the package sections they
+  describe. This shifts the numbered shortcuts: Undo updates takes ⌘4, Uninstall moves to
+  ⌘5 and Logs to ⌘6.
 - Selection checkboxes in the update and uninstall lists, and in the leftover picker, are
   real `Toggle`s behind a custom style that keeps Wega's honey glyph. VoiceOver now
   announces them as a checkbox with a state instead of a button carrying a value, and the

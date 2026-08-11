@@ -12,9 +12,11 @@ extension ScanStore {
 
     /// Re-reads which committed updates can still be undone. Cheap (a directory walk of a
     /// handful of journals) and called after every run, undo and appearance, so the
-    /// section never shows an undo whose snapshot the retention sweep already removed.
+    /// „Cofnij aktualizacje” destination never shows an undo whose snapshot the retention
+    /// sweep already removed — and the sidebar badge counts what that destination will show.
     func refreshUndoableUpdates() {
         undoableUpdates = dependencies.undoableUpdates()
+        emitUndoableCount()
     }
 
     /// The manual undo LT-01 exists for: put the retained pre-upgrade snapshot back over

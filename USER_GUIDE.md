@@ -181,11 +181,11 @@ launch test** if one of your apps takes badly to being started and closed unatte
 ### Undo update
 
 For **7 days** after an upgrade, Wega keeps the pre-upgrade copy of each updated app
-(casks only — the sources listed above without a shield have nothing to restore). While
-a copy is retained, the Updates window shows an **„Cofnij aktualizację" (Undo update)**
-section naming the version it would bring back and the date the copy expires. Undoing
-restores the previous app and **pins that version**, so the update you just took back is
-not offered again until you lift the pin in Settings.
+(casks only — the sources listed above without a shield have nothing to restore). The
+**„Cofnij aktualizacje" (Undo updates)** section of the sidebar lists every copy still
+retained, naming the version it would bring back and the date the copy expires; the badge
+next to it counts them. Undoing restores the previous app and **pins that version**, so the
+update you just took back is not offered again until you lift the pin in Settings.
 
 Every upgrade also writes a **journal** of its phases, so a crash or power cut in the
 middle does not leave an app half-installed: at the next launch Wega settles what was

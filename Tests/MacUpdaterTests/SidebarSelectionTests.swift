@@ -8,10 +8,7 @@ import XCTest
 /// the pre-macOS-26 `wega.activeTab` key.
 final class SidebarSelectionTests: XCTestCase {
 
-    private let everyCase: [SidebarSelection] = [
-        .updates(.all), .updates(.apps), .updates(.cli), .updates(.security),
-        .migration, .inventory, .uninstall, .logs
-    ]
+    private let everyCase = SidebarSelection.allCases
 
     func testRawValueRoundTripsForEveryCase() {
         for selection in everyCase {
@@ -28,6 +25,13 @@ final class SidebarSelectionTests: XCTestCase {
         XCTAssertEqual(Set(raws).count, everyCase.count, "two cases share a raw value: \(raws)")
     }
 
+    /// `allCases` is hand-written (the associated value on `updates` rules out synthesis), and
+    /// the sidebar derives its rows' accessibility order from it. A case listed twice would
+    /// quietly give one of the duplicates the wrong reading priority.
+    func testAllCasesHasNoDuplicates() {
+        XCTAssertEqual(Set(everyCase).count, everyCase.count, "a case is listed twice: \(everyCase)")
+    }
+
     func testUnknownRawValueIsRejected() {
         XCTAssertNil(SidebarSelection(rawValue: "updates"))
         XCTAssertNil(SidebarSelection(rawValue: "updates.everything"))
@@ -40,6 +44,7 @@ final class SidebarSelectionTests: XCTestCase {
         XCTAssertNil(SidebarSelection.logs.filter)
         XCTAssertNil(SidebarSelection.migration.filter)
         XCTAssertNil(SidebarSelection.inventory.filter)
+        XCTAssertNil(SidebarSelection.rollback.filter)
         XCTAssertNil(SidebarSelection.uninstall.filter)
     }
 
