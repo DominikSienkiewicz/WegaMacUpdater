@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generation": 1,
+  "generation": 2,
   "github": [
     { "bundleId": "com.microsoft.VSCode",         "repo": "microsoft/vscode",             "caskToken": "visual-studio-code", "selfUpdates": true },
     { "bundleId": "md.obsidian",                  "repo": "obsidianmd/obsidian-releases", "caskToken": "obsidian",            "selfUpdates": true },
