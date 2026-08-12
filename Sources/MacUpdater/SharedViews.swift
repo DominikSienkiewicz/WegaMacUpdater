@@ -736,6 +736,7 @@ struct WegaDisclosure<Content: View, Label: View>: View {
                         .font(.wega(.subheadline))
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .accessibilityHidden(true)
                     label()
                     Spacer(minLength: 0)
                 }

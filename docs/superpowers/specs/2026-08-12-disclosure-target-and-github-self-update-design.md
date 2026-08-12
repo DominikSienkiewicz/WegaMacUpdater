@@ -176,5 +176,10 @@ odpalane są na wyraźną prośbę).
 ## Dokumentacja
 
 `USER_GUIDE.md` opisuje akcje w sekcji „Ręcznie zainstalowane" — wymaga zdania o tym, że apka
-z własnym updaterem otwiera się zamiast odsyłać do wydań. `README.md` nie opisuje ani
-`DisclosureGroup`, ani rozstrzygania akcji per źródło, więc nie wymaga zmiany.
+z własnym updaterem otwiera się zamiast odsyłać do wydań. `README.md` jednak *opisuje*
+rozstrzyganie akcji per źródło — punkt 5. „Act" wylicza je zdanie po zdaniu — i przegląd
+całej gałęzi wykrył, że to zdanie się zdezaktualizowało: zapis „GitHub apps open the Releases
+page" był już fałszywy, skoro wszystkie dwanaście wpisów katalogu GitHub ma `selfUpdates: true`
+i renderuje przycisk uruchamiający apkę, ze stroną wydań jako drugorzędnym linkiem obok. Zdanie
+poprawiono na „GitHub apps launch the app itself, with the Releases page kept as a secondary
+link", spójnie z sąsiednim opisem pozostałych samo-aktualizujących się vendorów.
