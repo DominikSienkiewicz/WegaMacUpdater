@@ -52,7 +52,10 @@ struct CatalogRefresherTests {
             source: source,
             destination: dest,
             client: client([ok(json)]),
-            signatureVerifier: CatalogSignature(publicKeyBase64: CatalogSignature.unconfiguredPlaceholder)
+            signatureVerifier: CatalogSignature(publicKeyBase64: CatalogSignature.unconfiguredPlaceholder),
+            // Ten zestaw jest o dekodowaniu i zapisie, nie o podłodze generacji: fixture nie
+            // niesie `generation`, więc mierzony przeciw katalogowi z builda byłby downgrade'em.
+            generations: CatalogGenerationLedger(floor: 0)
         )
         let outcome = await refresher.refresh()
 

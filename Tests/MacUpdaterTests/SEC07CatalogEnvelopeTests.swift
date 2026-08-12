@@ -359,4 +359,29 @@ struct SEC07CatalogEnvelopeTests {
 
         #expect(!second.requestedURLs.isEmpty)
     }
+
+    /// A catalog older than the one compiled into this build is a downgrade even on a fresh
+    /// install, where the persisted watermark is still `0`. Refusing it at fetch time is what
+    /// keeps the disk from holding a document that `AppCatalog.resolve` would only ignore.
+    @Test("A catalog older than the build's own is refused before it is written")
+    func generationBelowTheBuildFloorIsRefused() async throws {
+        let dest = tempDestination()
+        defer { try? FileManager.default.removeItem(at: dest.deletingLastPathComponent()) }
+        let (defaults, teardown) = TestDefaults.isolated("sec07-catalog-build-floor")
+        defer { teardown() }
+
+        let outcome = await CatalogRefresher(
+            source: source, destination: dest,
+            client: HTTPClient(transport: EnvelopeFakeTransport([
+                .init(data: Data(try envelope(wrapping: catalogJSON(generation: 2)).utf8),
+                      status: 200, headers: [:])
+            ]), maxRetries: 0, retryBaseDelay: 0),
+            signatureVerifier: verifier,
+            generations: CatalogGenerationLedger(defaults: defaults, floor: 5)
+        ).refresh()
+
+        #expect(outcome == .replayRejected)
+        #expect(!FileManager.default.fileExists(atPath: dest.path),
+                "katalog spod podłogi builda nie może dotknąć overlaya")
+    }
 }
