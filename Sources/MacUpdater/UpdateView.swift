@@ -453,7 +453,7 @@ struct UpdateView: View {
     @ViewBuilder
     private var planPreview: some View {
         if !visibleItems.isEmpty {
-            DisclosureGroup(isExpanded: $scan.showPlanPreview) {
+            WegaDisclosure(isExpanded: $scan.showPlanPreview) {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(scan.plannedCommands(targetKeys: updateTargetKeys).enumerated()), id: \.offset) { _, command in
                         Text("$ \(command.executable) \(command.arguments.joined(separator: " "))")

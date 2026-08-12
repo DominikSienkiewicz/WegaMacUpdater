@@ -636,7 +636,7 @@ private struct ReleaseNotesDisclosure: View {
 
     var body: some View {
         if !text.isEmpty {
-            DisclosureGroup(isExpanded: $expanded) {
+            WegaDisclosure(isExpanded: $expanded) {
                 ScrollView {
                     Text(text)
                         .font(.wega(.subheadline))

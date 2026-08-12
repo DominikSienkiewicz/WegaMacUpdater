@@ -609,6 +609,9 @@ extension Translations {
         "Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.": "Wega is updating something in the background. Try again in a moment.",
         // F2 — podgląd planu: każde pole wolno powiedzieć „nie wiem”.
         "Pokaż, co dokładnie zrobię": "Show exactly what I will do",
+        // Stan rozwinięcia czyta VoiceOver — sam chevron nic nie mówi.
+        "rozwinięte": "expanded",
+        "zwinięte": "collapsed",
         "Sprawdzam rozmiary pobrań…": "Checking download sizes…",
         "rozmiar nieznany": "size unknown",
         "nieznany host": "unknown host",
