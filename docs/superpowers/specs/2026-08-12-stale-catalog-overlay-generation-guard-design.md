@@ -162,7 +162,10 @@ dojść do ścieżki decode-only. Żadna asercja nie jest osłabiona, żadne pok
 te zestawy są o podpisywaniu i IO, nie o podłodze generacji. Zmiana zaakceptowana przez
 użytkownika przed implementacją.
 
-Zestaw SEC-07 wstrzykuje własny rejestr wszędzie, więc pozostaje nietknięty.
+Wszystkie istniejące testy SEC-07 wstrzykują własny rejestr, więc pozostają nietknięte.
+Wyjątkiem jest **nowy** `defaultGenerationsFloorsAtTheBuildsOwnGeneration`, który celowo
+pomija `generations:` — to jedyny test przypinający produkcyjną wartość domyślną, więc musi
+przejść tą samą drogą co produkcja.
 
 ## Dokumentacja
 
