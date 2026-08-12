@@ -338,7 +338,15 @@ if [ -n "$LAST_TAG" ] && git merge-base --is-ancestor "$LAST_TAG" HEAD 2>/dev/nu
   BASELINE_LABEL="$LAST_TAG"
 else
   # 0.1.0 shipped without a tag, so fall back to the previous release commit.
-  BASELINE="$(git rev-list -1 --grep='^chore(release):' HEAD || true)"
+  #
+  # Matched on the SUBJECT only. `--grep` searches the whole message and `^` anchors to
+  # any line inside it, so a commit that merely quotes `chore(release):` in its body
+  # became the baseline — which is how the commit that stopped the first release from
+  # replaying all of history ended up making it replay 85 subjects anyway. Everything
+  # after the first space is the subject; a hash never contains one.
+  # Guarded by test-release-baseline-guard.sh (REL-06).
+  BASELINE="$(git log --format='%H %s' HEAD \
+    | awk 'substr($0, index($0, " ") + 1) ~ /^chore\(release\):/ { print $1; exit }')"
   [ -n "$BASELINE" ] && BASELINE_LABEL="$(git log -1 --format=%s "$BASELINE")"
 fi
 
