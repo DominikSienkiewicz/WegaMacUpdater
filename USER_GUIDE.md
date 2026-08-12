@@ -200,7 +200,10 @@ Wega routes each app through the right updater:
 - **Mac App Store** — `mas` upgrade.
 - **npm globals** — `npm install -g <pkg>@latest`.
 - **JetBrains IDEs** — opens JetBrains Toolbox.
-- **GitHub-released apps** — opens the Releases page.
+- **GitHub-released apps** — those that carry their own updater (Visual Studio Code,
+  Obsidian, GitHub Desktop…) open so that updater can take over, with a **GitHub Releases**
+  link kept beside the button for when it has been switched off. The rest open the Releases
+  page.
 - **Sparkle and self-updating apps** (ChatGPT, Postman, Parallels, Antigravity, Google
   Drive, Obsidian…) — Wega launches the app so its own signed updater takes over, instead
   of forcing a stale Homebrew cask over it.
