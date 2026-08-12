@@ -49,7 +49,10 @@ final class CatalogSignaturePersistenceTests: XCTestCase {
             source: URL(string: "https://example.test/app-catalog.json")!,
             destination: destination,
             client: HTTPClient(transport: FakeHTTPTransport(responses)),
-            signatureVerifier: verifier ?? self.verifier
+            signatureVerifier: verifier ?? self.verifier,
+            // Zestaw jest o trwałości podpisu, nie o podłodze generacji — `catalogJSON` nie
+            // niesie `generation`, więc domyślna podłoga z builda odrzuciłaby go jako replay.
+            generations: CatalogGenerationLedger(floor: 0)
         )
     }
 

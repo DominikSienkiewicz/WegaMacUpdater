@@ -287,6 +287,15 @@ anything lower — which is what stops an old but perfectly-signed catalog from 
 at a client forever. Skipping the bump leaves that protection inert, so it is a flag rather
 than a step to remember.
 
+The counter has a second reader. Every build carries its own copy of the catalog, and a
+client refuses a fetched catalog — and ignores an overlay already on disk — whose generation
+is **lower than the one compiled into the running build**. A published generation must
+therefore be at least the generation of the catalog in the released app, or the publication
+has no effect on anyone running it. In practice this is automatic: the same `--bump` that
+raised the file is what the next release ships. If this is ever violated — a build ships with
+generation N while the CDN still serves N-1 — every client on that build shows the "Serwer
+podał starszy katalog niż zainstalowany" state until a catalog at generation ≥ N is published.
+
 `--envelope` publishes the catalog as one document carrying its own signature, instead of a
 JSON beside a `.sig`. Those were two separate CDN entries, so a client could fetch a fresh
 catalog next to a cached signature and get a mismatch indistinguishable from tampering. One

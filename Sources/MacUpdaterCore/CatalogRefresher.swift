@@ -41,6 +41,9 @@ public struct CatalogRefresher: Sendable {
     /// passes the key compiled into the build.
     private let signatureVerifier: CatalogSignature
     /// SEC-07 — the replay watermark, injected so a test can start from a known generation.
+    /// Its production floor is the generation compiled into *this build*: the persisted
+    /// watermark only remembers what arrived over the air, so without the floor a fresh
+    /// install would accept — and write — a catalog its own bundled copy already outranks.
     private let generations: CatalogGenerationLedger
 
     public init(
@@ -48,7 +51,7 @@ public struct CatalogRefresher: Sendable {
         destination: URL = AppCatalog.overlayURL,
         client: HTTPClient = .shared,
         signatureVerifier: CatalogSignature = .shared,
-        generations: CatalogGenerationLedger = CatalogGenerationLedger()
+        generations: CatalogGenerationLedger = CatalogGenerationLedger(floor: AppCatalog.bundledGeneration)
     ) {
         self.source = source
         self.destination = destination
