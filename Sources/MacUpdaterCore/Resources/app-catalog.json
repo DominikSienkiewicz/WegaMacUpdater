@@ -1,44 +1,5 @@
 {
-  "schemaVersion": 1,
-  "generation": 2,
-  "github": [
-    { "bundleId": "com.microsoft.VSCode",         "repo": "microsoft/vscode",             "caskToken": "visual-studio-code", "selfUpdates": true },
-    { "bundleId": "md.obsidian",                  "repo": "obsidianmd/obsidian-releases", "caskToken": "obsidian",            "selfUpdates": true },
-    { "bundleId": "com.knollsoft.Rectangle",      "repo": "rxhanson/Rectangle",           "caskToken": "rectangle",           "selfUpdates": true },
-    { "bundleId": "com.lwouis.alt-tab-macos",     "repo": "lwouis/alt-tab-macos",         "caskToken": "alt-tab",             "selfUpdates": true },
-    { "bundleId": "eu.exelban.Stats",             "repo": "exelban/Stats",                "caskToken": "stats",               "selfUpdates": true },
-    { "bundleId": "org.p0deje.Maccy",             "repo": "p0deje/Maccy",                 "caskToken": "maccy",               "selfUpdates": true },
-    { "bundleId": "me.guillaumeb.MonitorControl", "repo": "MonitorControl/MonitorControl", "caskToken": "monitorcontrol",     "selfUpdates": true },
-    { "bundleId": "com.linearmouse.linearmouse",  "repo": "linearmouse/linearmouse",      "caskToken": "linearmouse",         "selfUpdates": true },
-    { "bundleId": "com.colliderli.iina",          "repo": "iina/iina",                    "caskToken": "iina",                "selfUpdates": true },
-    { "bundleId": "fr.handbrake.HandBrake",       "repo": "HandBrake/HandBrake",          "caskToken": "handbrake",           "selfUpdates": true },
-    { "bundleId": "com.aone.keka",                "repo": "aonez/Keka",                   "caskToken": "keka",                "selfUpdates": true },
-    { "bundleId": "com.github.GitHubClient",      "repo": "desktop/desktop",              "caskToken": "github",              "selfUpdates": true }
-  ],
-  "jetbrains": [
-    { "bundleId": "com.jetbrains.intellij",    "code": "IIU", "caskToken": "intellij-idea" },
-    { "bundleId": "com.jetbrains.intellij.ce", "code": "IIC", "caskToken": "intellij-idea-ce" },
-    { "bundleId": "com.jetbrains.pycharm",     "code": "PCP", "caskToken": "pycharm" },
-    { "bundleId": "com.jetbrains.pycharm.ce",  "code": "PCC", "caskToken": "pycharm-ce" },
-    { "bundleId": "com.jetbrains.webstorm",    "code": "WS",  "caskToken": "webstorm" },
-    { "bundleId": "com.jetbrains.goland",      "code": "GO",  "caskToken": "goland" },
-    { "bundleId": "com.jetbrains.clion",       "code": "CL",  "caskToken": "clion" },
-    { "bundleId": "com.jetbrains.rider",       "code": "RD",  "caskToken": "rider" },
-    { "bundleId": "com.jetbrains.datagrip",    "code": "DG",  "caskToken": "datagrip" },
-    { "bundleId": "com.jetbrains.rubymine",    "code": "RM",  "caskToken": "rubymine" },
-    { "bundleId": "com.jetbrains.phpstorm",    "code": "PS",  "caskToken": "phpstorm" },
-    { "bundleId": "com.jetbrains.dataspell",   "code": "DS",  "caskToken": "dataspell" },
-    { "bundleId": "com.jetbrains.aqua",        "code": "QA",  "caskToken": "aqua" },
-    { "bundleId": "com.jetbrains.rustrover",   "code": "RR",  "caskToken": "rustrover" }
-  ],
-  "synology": [
-    {
-      "bundleId": "com.synology.CloudStation",
-      "identify": "SynologyDriveClient",
-      "downloadPage": "https://www.synology.com/en-global/releaseNote/SynologyDriveClient"
-    }
-  ],
-  "sparkleFeedOverrides": [
-    { "bundleId": "com.openai.codex", "feedURL": "https://persistent.oaistatic.com/codex-app-prod/appcast.xml" }
-  ]
+  "wegaCatalogEnvelope": 1,
+  "payload": "ewogICJzY2hlbWFWZXJzaW9uIjogMSwKICAiZ2VuZXJhdGlvbiI6IDMsCiAgImdpdGh1YiI6IFsKICAgIHsgImJ1bmRsZUlkIjogImNvbS5taWNyb3NvZnQuVlNDb2RlIiwgICAgICAgICAicmVwbyI6ICJtaWNyb3NvZnQvdnNjb2RlIiwgICAgICAgICAgICAgImNhc2tUb2tlbiI6ICJ2aXN1YWwtc3R1ZGlvLWNvZGUiLCAic2VsZlVwZGF0ZXMiOiB0cnVlIH0sCiAgICB7ICJidW5kbGVJZCI6ICJtZC5vYnNpZGlhbiIsICAgICAgICAgICAgICAgICAgInJlcG8iOiAib2JzaWRpYW5tZC9vYnNpZGlhbi1yZWxlYXNlcyIsICJjYXNrVG9rZW4iOiAib2JzaWRpYW4iLCAgICAgICAgICAgICJzZWxmVXBkYXRlcyI6IHRydWUgfSwKICAgIHsgImJ1bmRsZUlkIjogImNvbS5rbm9sbHNvZnQuUmVjdGFuZ2xlIiwgICAgICAicmVwbyI6ICJyeGhhbnNvbi9SZWN0YW5nbGUiLCAgICAgICAgICAgImNhc2tUb2tlbiI6ICJyZWN0YW5nbGUiLCAgICAgICAgICAgInNlbGZVcGRhdGVzIjogdHJ1ZSB9LAogICAgeyAiYnVuZGxlSWQiOiAiY29tLmx3b3Vpcy5hbHQtdGFiLW1hY29zIiwgICAgICJyZXBvIjogImx3b3Vpcy9hbHQtdGFiLW1hY29zIiwgICAgICAgICAiY2Fza1Rva2VuIjogImFsdC10YWIiLCAgICAgICAgICAgICAic2VsZlVwZGF0ZXMiOiB0cnVlIH0sCiAgICB7ICJidW5kbGVJZCI6ICJldS5leGVsYmFuLlN0YXRzIiwgICAgICAgICAgICAgInJlcG8iOiAiZXhlbGJhbi9TdGF0cyIsICAgICAgICAgICAgICAgICJjYXNrVG9rZW4iOiAic3RhdHMiLCAgICAgICAgICAgICAgICJzZWxmVXBkYXRlcyI6IHRydWUgfSwKICAgIHsgImJ1bmRsZUlkIjogIm9yZy5wMGRlamUuTWFjY3kiLCAgICAgICAgICAgICAicmVwbyI6ICJwMGRlamUvTWFjY3kiLCAgICAgICAgICAgICAgICAgImNhc2tUb2tlbiI6ICJtYWNjeSIsICAgICAgICAgICAgICAgInNlbGZVcGRhdGVzIjogdHJ1ZSB9LAogICAgeyAiYnVuZGxlSWQiOiAibWUuZ3VpbGxhdW1lYi5Nb25pdG9yQ29udHJvbCIsICJyZXBvIjogIk1vbml0b3JDb250cm9sL01vbml0b3JDb250cm9sIiwgImNhc2tUb2tlbiI6ICJtb25pdG9yY29udHJvbCIsICAgICAic2VsZlVwZGF0ZXMiOiB0cnVlIH0sCiAgICB7ICJidW5kbGVJZCI6ICJjb20ubGluZWFybW91c2UubGluZWFybW91c2UiLCAgInJlcG8iOiAibGluZWFybW91c2UvbGluZWFybW91c2UiLCAgICAgICJjYXNrVG9rZW4iOiAibGluZWFybW91c2UiLCAgICAgICAgICJzZWxmVXBkYXRlcyI6IHRydWUgfSwKICAgIHsgImJ1bmRsZUlkIjogImNvbS5jb2xsaWRlcmxpLmlpbmEiLCAgICAgICAgICAicmVwbyI6ICJpaW5hL2lpbmEiLCAgICAgICAgICAgICAgICAgICAgImNhc2tUb2tlbiI6ICJpaW5hIiwgICAgICAgICAgICAgICAgInNlbGZVcGRhdGVzIjogdHJ1ZSB9LAogICAgeyAiYnVuZGxlSWQiOiAiZnIuaGFuZGJyYWtlLkhhbmRCcmFrZSIsICAgICAgICJyZXBvIjogIkhhbmRCcmFrZS9IYW5kQnJha2UiLCAgICAgICAgICAiY2Fza1Rva2VuIjogImhhbmRicmFrZSIsICAgICAgICAgICAic2VsZlVwZGF0ZXMiOiB0cnVlIH0sCiAgICB7ICJidW5kbGVJZCI6ICJjb20uYW9uZS5rZWthIiwgICAgICAgICAgICAgICAgInJlcG8iOiAiYW9uZXovS2VrYSIsICAgICAgICAgICAgICAgICAgICJjYXNrVG9rZW4iOiAia2VrYSIsICAgICAgICAgICAgICAgICJzZWxmVXBkYXRlcyI6IHRydWUgfSwKICAgIHsgImJ1bmRsZUlkIjogImNvbS5naXRodWIuR2l0SHViQ2xpZW50IiwgICAgICAicmVwbyI6ICJkZXNrdG9wL2Rlc2t0b3AiLCAgICAgICAgICAgICAgImNhc2tUb2tlbiI6ICJnaXRodWIiLCAgICAgICAgICAgICAgInNlbGZVcGRhdGVzIjogdHJ1ZSB9CiAgXSwKICAiamV0YnJhaW5zIjogWwogICAgeyAiYnVuZGxlSWQiOiAiY29tLmpldGJyYWlucy5pbnRlbGxpaiIsICAgICJjb2RlIjogIklJVSIsICJjYXNrVG9rZW4iOiAiaW50ZWxsaWotaWRlYSIgfSwKICAgIHsgImJ1bmRsZUlkIjogImNvbS5qZXRicmFpbnMuaW50ZWxsaWouY2UiLCAiY29kZSI6ICJJSUMiLCAiY2Fza1Rva2VuIjogImludGVsbGlqLWlkZWEtY2UiIH0sCiAgICB7ICJidW5kbGVJZCI6ICJjb20uamV0YnJhaW5zLnB5Y2hhcm0iLCAgICAgImNvZGUiOiAiUENQIiwgImNhc2tUb2tlbiI6ICJweWNoYXJtIiB9LAogICAgeyAiYnVuZGxlSWQiOiAiY29tLmpldGJyYWlucy5weWNoYXJtLmNlIiwgICJjb2RlIjogIlBDQyIsICJjYXNrVG9rZW4iOiAicHljaGFybS1jZSIgfSwKICAgIHsgImJ1bmRsZUlkIjogImNvbS5qZXRicmFpbnMud2Vic3Rvcm0iLCAgICAiY29kZSI6ICJXUyIsICAiY2Fza1Rva2VuIjogIndlYnN0b3JtIiB9LAogICAgeyAiYnVuZGxlSWQiOiAiY29tLmpldGJyYWlucy5nb2xhbmQiLCAgICAgICJjb2RlIjogIkdPIiwgICJjYXNrVG9rZW4iOiAiZ29sYW5kIiB9LAogICAgeyAiYnVuZGxlSWQiOiAiY29tLmpldGJyYWlucy5jbGlvbiIsICAgICAgICJjb2RlIjogIkNMIiwgICJjYXNrVG9rZW4iOiAiY2xpb24iIH0sCiAgICB7ICJidW5kbGVJZCI6ICJjb20uamV0YnJhaW5zLnJpZGVyIiwgICAgICAgImNvZGUiOiAiUkQiLCAgImNhc2tUb2tlbiI6ICJyaWRlciIgfSwKICAgIHsgImJ1bmRsZUlkIjogImNvbS5qZXRicmFpbnMuZGF0YWdyaXAiLCAgICAiY29kZSI6ICJERyIsICAiY2Fza1Rva2VuIjogImRhdGFncmlwIiB9LAogICAgeyAiYnVuZGxlSWQiOiAiY29tLmpldGJyYWlucy5ydWJ5bWluZSIsICAgICJjb2RlIjogIlJNIiwgICJjYXNrVG9rZW4iOiAicnVieW1pbmUiIH0sCiAgICB7ICJidW5kbGVJZCI6ICJjb20uamV0YnJhaW5zLnBocHN0b3JtIiwgICAgImNvZGUiOiAiUFMiLCAgImNhc2tUb2tlbiI6ICJwaHBzdG9ybSIgfSwKICAgIHsgImJ1bmRsZUlkIjogImNvbS5qZXRicmFpbnMuZGF0YXNwZWxsIiwgICAiY29kZSI6ICJEUyIsICAiY2Fza1Rva2VuIjogImRhdGFzcGVsbCIgfSwKICAgIHsgImJ1bmRsZUlkIjogImNvbS5qZXRicmFpbnMuYXF1YSIsICAgICAgICAiY29kZSI6ICJRQSIsICAiY2Fza1Rva2VuIjogImFxdWEiIH0sCiAgICB7ICJidW5kbGVJZCI6ICJjb20uamV0YnJhaW5zLnJ1c3Ryb3ZlciIsICAgImNvZGUiOiAiUlIiLCAgImNhc2tUb2tlbiI6ICJydXN0cm92ZXIiIH0KICBdLAogICJzeW5vbG9neSI6IFsKICAgIHsKICAgICAgImJ1bmRsZUlkIjogImNvbS5zeW5vbG9neS5DbG91ZFN0YXRpb24iLAogICAgICAiaWRlbnRpZnkiOiAiU3lub2xvZ3lEcml2ZUNsaWVudCIsCiAgICAgICJkb3dubG9hZFBhZ2UiOiAiaHR0cHM6Ly93d3cuc3lub2xvZ3kuY29tL2VuLWdsb2JhbC9yZWxlYXNlTm90ZS9TeW5vbG9neURyaXZlQ2xpZW50IgogICAgfQogIF0sCiAgInNwYXJrbGVGZWVkT3ZlcnJpZGVzIjogWwogICAgeyAiYnVuZGxlSWQiOiAiY29tLm9wZW5haS5jb2RleCIsICJmZWVkVVJMIjogImh0dHBzOi8vcGVyc2lzdGVudC5vYWlzdGF0aWMuY29tL2NvZGV4LWFwcC1wcm9kL2FwcGNhc3QueG1sIiB9CiAgXQp9Cg==",
+  "signature": "ojqrY/RwOIt/ab1Iw97dOtzRMCR9V4LmNLsax/qZmCWnQlSj5VU2OYaknFu8474gbutbPLVeJVnAm809YqDZAQ=="
 }
