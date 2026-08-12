@@ -310,10 +310,13 @@ git commit -m "feat: let a catalog entry declare that the app updates itself"
 - Modify: `Tests/MacUpdaterTests/ScanResultStoreTests.swift:43`
 - Modify: `Tests/MacUpdaterTests/CaskChecksumSignalTests.swift:23`
 - Modify: `Tests/MacUpdaterUITests/ScanStoreRuntimeScanningTests.swift:40`
+- Modify: `Sources/MacUpdater/UpdateViewSupport.swift:531-578` (`actionControl`)
 
 **Interfaces:**
 - Consumes: `GitHubCatalogEntry.selfUpdates` (zadanie 2).
-- Produces: `UpdateActionKind.launchAppWithReleases(URL?)` — renderowane w zadaniu 4.
+- Produces: `UpdateActionKind.launchAppWithReleases(URL?)`, renderowane w tym samym zadaniu —
+  nowy przypadek czyni `switch` w `ManualUpdateActionView` niewyczerpującym, więc rozdzielenie
+  zostawiłoby commit, który się nie kompiluje.
   `UpdateSource.github(repo: String, selfUpdates: Bool)` — nowy ładunek, pięć miejsc
   konstrukcji w testach do poprawienia.
 
@@ -417,37 +420,11 @@ Zmiana mechaniczna — dopisanie `selfUpdates: false` tam, gdzie test nie dotycz
             source: .github(repo: "example/repo", selfUpdates: false)
 ```
 
-- [ ] **Step 8: Bramka**
+- [ ] **Step 8: Dodaj gałąź renderu**
 
-```bash
-swift build && swiftlint lint --strict
-```
-
-Kompilator wskaże każde miejsce, które przeoczono — `switch` po `UpdateActionKind`
-w `ManualUpdateActionView` stanie się niewyczerpujący. To jest zadanie 4; do tego czasu build
-app-targetu może być czerwony, więc uruchom bramkę dopiero po zadaniu 4, jeśli wolisz jeden
-przebieg.
-
-- [ ] **Step 9: Commit**
-
-```bash
-git add Sources/MacUpdaterCore/Models.swift Sources/MacUpdaterCore/VendorUpdateAction.swift Sources/MacUpdaterCore/GitHubReleasesChecker.swift Tests/MacUpdaterTests/VendorUpdateCheckerTests.swift Tests/MacUpdaterTests/ProvenanceTests.swift Tests/MacUpdaterTests/ScanResultStoreTests.swift Tests/MacUpdaterTests/CaskChecksumSignalTests.swift Tests/MacUpdaterUITests/ScanStoreRuntimeScanningTests.swift
-git commit -m "feat: separate where a GitHub version comes from and how it installs"
-```
-
----
-
-### Task 4: Render, dane katalogu i dokumentacja
-
-**Files:**
-- Modify: `Sources/MacUpdater/UpdateViewSupport.swift:531-578` (`actionControl`)
-- Modify: `Sources/MacUpdaterCore/Resources/app-catalog.json`
-- Modify: `USER_GUIDE.md`
-
-**Interfaces:**
-- Consumes: `UpdateActionKind.launchAppWithReleases(URL?)` (zadanie 3).
-
-- [ ] **Step 1: Dodaj gałąź renderu**
+Nowy przypadek `UpdateActionKind` czyni `switch` w `ManualUpdateActionView` niewyczerpującym,
+więc render należy do tego samego zadania — inaczej gałąź zostaje w stanie, który się nie
+kompiluje.
 
 W `Sources/MacUpdater/UpdateViewSupport.swift`, w `ManualUpdateActionView.actionControl`,
 bezpośrednio po gałęzi `case .launchApp:`:
@@ -479,7 +456,32 @@ bezpośrednio po gałęzi `case .launchApp:`:
 `.buttonStyle(.link)` nie występuje nigdzie w tym projekcie. Oba teksty już są
 w `Translations.swift`.
 
-- [ ] **Step 2: Rozpakuj katalog**
+- [ ] **Step 9: Bramka**
+
+```bash
+swift build && swiftlint lint --strict
+```
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add Sources/MacUpdaterCore/Models.swift Sources/MacUpdaterCore/VendorUpdateAction.swift Sources/MacUpdaterCore/GitHubReleasesChecker.swift Sources/MacUpdater/UpdateViewSupport.swift Tests/MacUpdaterTests/VendorUpdateCheckerTests.swift Tests/MacUpdaterTests/ProvenanceTests.swift Tests/MacUpdaterTests/ScanResultStoreTests.swift Tests/MacUpdaterTests/CaskChecksumSignalTests.swift Tests/MacUpdaterUITests/ScanStoreRuntimeScanningTests.swift
+git commit -m "feat: separate where a GitHub version comes from and how it installs"
+```
+
+---
+
+### Task 4: Dane katalogu i dokumentacja
+
+**Files:**
+- Modify: `Sources/MacUpdaterCore/Resources/app-catalog.json`
+- Modify: `USER_GUIDE.md`
+
+**Interfaces:**
+- Consumes: `GitHubCatalogEntry.selfUpdates` (zadanie 2) — to zadanie tylko wypełnia dane;
+  cały kod czytający flagę powstał w zadaniach 2 i 3.
+
+- [ ] **Step 1: Rozpakuj katalog**
 
 `--unwrap` nie wymaga klucza prywatnego.
 
@@ -487,7 +489,7 @@ w `Translations.swift`.
 ./scripts/sign-catalog.sh --unwrap
 ```
 
-- [ ] **Step 3: Oznacz dwanaście wpisów**
+- [ ] **Step 2: Oznacz dwanaście wpisów**
 
 W `Sources/MacUpdaterCore/Resources/app-catalog.json` dopisz `"selfUpdates": true` do
 **każdego** z dwunastu wpisów sekcji `github`:
@@ -507,7 +509,7 @@ Podstawa dla każdego wpisu jest w spec → Dowody. Zweryfikowane lokalnie: VS C
 Pozostałe dziesięć — deklaracja wydawcy; konsekwencja pomyłki jest łagodna, bo link do wydań
 zostaje w wierszu obok.
 
-- [ ] **Step 4: Zaktualizuj `USER_GUIDE.md`**
+- [ ] **Step 3: Zaktualizuj `USER_GUIDE.md`**
 
 Przewodnik jest **po angielsku** — pisz po angielsku. W sekcji
 `### What "updating" means per source` (linia 195) jedna pozycja listy staje się po tej
@@ -529,20 +531,20 @@ tym:
 Sąsiedniej pozycji „Sparkle and self-updating apps" **nie** ruszaj — opisuje `.launchApp`,
 który się nie zmienia.
 
-- [ ] **Step 5: Bramka**
+- [ ] **Step 4: Bramka**
 
 ```bash
 swift build && swiftlint lint --strict
 ```
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add Sources/MacUpdater/UpdateViewSupport.swift Sources/MacUpdaterCore/Resources/app-catalog.json USER_GUIDE.md
-git commit -m "feat: launch the app for GitHub-tracked apps that update themselves"
+git add Sources/MacUpdaterCore/Resources/app-catalog.json USER_GUIDE.md
+git commit -m "feat: mark the GitHub-tracked apps that carry their own updater"
 ```
 
-- [ ] **Step 7: Odnotuj zaległość podpisu w handoffie**
+- [ ] **Step 6: Odnotuj zaległość podpisu w handoffie**
 
 Katalog jest teraz płaski (bez koperty). Nie próbuj podpisywać — klucz prywatny leży poza
 repozytorium i skrypt odmawia użycia klucza z drzewa roboczego. Do handoffu trafia polecenie
