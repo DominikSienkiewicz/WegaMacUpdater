@@ -120,4 +120,86 @@ final class AppCatalogTests: XCTestCase {
 
         XCTAssertTrue(entry.selfUpdates)
     }
+
+    // MARK: Overlay generation guard — a stale overlay must not shadow the build
+    //
+    // Zgłoszone 2026-08-12: flaga `selfUpdates` pojechała w buildzie generacji 3, a overlay
+    // generacji 1 sprzed istnienia tego klucza dalej zasłaniał wpis VS Code — akcja została
+    // „GitHub Releases" zamiast „Otwórz aplikację", bo `selfUpdates` zdekodowało się do
+    // domyślnego `false`.
+
+    func testStaleOverlayDoesNotShadowTheBundledCatalog() throws {
+        let bundled = AppCatalog(
+            generation: 3,
+            github: [GitHubCatalogEntry(
+                bundleId: "com.microsoft.VSCode",
+                repo: "microsoft/vscode",
+                caskToken: "visual-studio-code",
+                selfUpdates: true
+            )]
+        )
+        let overlay = AppCatalog(
+            generation: 1,
+            github: [GitHubCatalogEntry(
+                bundleId: "com.microsoft.VSCode",
+                repo: "microsoft/vscode",
+                caskToken: "visual-studio-code"
+            )]
+        )
+
+        let entry = try XCTUnwrap(
+            AppCatalog.resolve(bundled: bundled, overlay: overlay).githubRepos["com.microsoft.VSCode"]
+        )
+
+        XCTAssertTrue(entry.selfUpdates, "overlay starszej generacji nie może zasłonić builda")
+    }
+
+    /// Overlay starszej generacji jest odrzucany **w całości**: generacja opisuje publikację,
+    /// nie wpis, więc mieszanie dałoby katalog, dla którego żadna generacja nie jest prawdziwa.
+    func testStaleOverlayIsRejectedWholesaleIncludingItsNewApps() {
+        let bundled = AppCatalog(generation: 3)
+        let overlay = AppCatalog(
+            generation: 1,
+            github: [GitHubCatalogEntry(bundleId: "com.example.fresh", repo: "fresh/repo", caskToken: "fresh")]
+        )
+
+        let resolved = AppCatalog.resolve(bundled: bundled, overlay: overlay)
+
+        XCTAssertNil(resolved.githubRepos["com.example.fresh"])
+        XCTAssertEqual(resolved.generation, 3)
+    }
+
+    /// Kopia OTA tej samej publikacji to normalny stan, nie atak — równość musi przechodzić.
+    func testOverlayOfEqualGenerationStillApplies() {
+        let bundled = AppCatalog(generation: 3)
+        let overlay = AppCatalog(
+            generation: 3,
+            github: [GitHubCatalogEntry(bundleId: "com.example.fresh", repo: "fresh/repo", caskToken: "fresh")]
+        )
+
+        let resolved = AppCatalog.resolve(bundled: bundled, overlay: overlay)
+
+        XCTAssertEqual(resolved.githubRepos["com.example.fresh"]?.repo, "fresh/repo")
+    }
+
+    func testNewerOverlayStillWinsOnCollisionAndSetsTheMergedGeneration() {
+        let bundled = AppCatalog(
+            generation: 3,
+            github: [GitHubCatalogEntry(bundleId: "com.example.app", repo: "old/repo", caskToken: "example")]
+        )
+        let overlay = AppCatalog(
+            generation: 4,
+            github: [GitHubCatalogEntry(bundleId: "com.example.app", repo: "new/repo", caskToken: "example")]
+        )
+
+        let resolved = AppCatalog.resolve(bundled: bundled, overlay: overlay)
+
+        XCTAssertEqual(resolved.githubRepos["com.example.app"]?.repo, "new/repo")
+        XCTAssertEqual(resolved.generation, 4, "scalony katalog raportuje generację danych w użyciu")
+    }
+
+    /// Katalog z builda niesie generację, przeciw której mierzy się każdy overlay.
+    func testBundledGenerationMatchesTheShippedCatalog() throws {
+        XCTAssertEqual(AppCatalog.bundledGeneration, try AppCatalog.loadBundled().generation)
+    }
 }

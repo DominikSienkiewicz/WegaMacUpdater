@@ -221,7 +221,11 @@ public struct AppCatalog: Decodable, Sendable, Equatable {
     public func overlaying(_ other: AppCatalog) -> AppCatalog {
         AppCatalog(
             schemaVersion: schemaVersion,
-            // The merged catalog is as new as the newest document that fed it.
+            // The merged catalog is as new as the newest document that fed it. True only
+            // because `resolve(bundled:overlay:)` refuses an older overlay upstream: given
+            // `other.generation >= generation`, this is exactly the generation of the data
+            // in effect. Calling this directly with an older overlay reports a number the
+            // merged catalog does not honour.
             generation: max(generation, other.generation),
             github: github + other.github,
             jetbrains: jetbrains + other.jetbrains,
@@ -247,9 +251,39 @@ extension AppCatalog {
             .appendingPathComponent("app-catalog.json", isDirectory: false)
     }
 
+    /// The catalog generation compiled into this build — the floor no overlay may go under.
+    /// `0` when the bundled resource cannot be read, which keeps a packaging failure from
+    /// also disabling the overlay; `testBundledCatalogDecodes` is what guards that resource.
+    public static let bundledGeneration: Int = (try? loadBundled())?.generation ?? 0
+
     static func loadShared() -> AppCatalog {
         let bundled = (try? loadBundled()) ?? AppCatalog()
         guard let overlay = loadOverlay() else { return bundled }
+        return resolve(bundled: bundled, overlay: overlay)
+    }
+
+    /// Applies `overlay` on top of `bundled` unless it is a step *backwards*.
+    ///
+    /// `loadOverlay()` answers "did the publisher sign this?", which an old but genuinely
+    /// signed document passes forever. The lookup dictionaries resolve collisions with
+    /// last-wins, so before this guard an overlay written by a previous install shadowed
+    /// every key a newer build had just shipped — and `overlaying(_:)` reported the *newer*
+    /// generation while serving the older data, making the staleness invisible.
+    ///
+    /// Kept free of IO so the guard is unit-testable without touching the real Application
+    /// Support overlay, mirroring `AppEndpoints.resolveOverlayStatus`.
+    static func resolve(bundled: AppCatalog, overlay: AppCatalog) -> AppCatalog {
+        guard CatalogGenerationPolicy.accepts(
+            candidate: overlay.generation,
+            accepted: bundled.generation
+        ) else {
+            WegaLog.error(
+                .app,
+                "app-catalog.json: generacja \(overlay.generation) starsza niż katalog "
+                + "z builda (\(bundled.generation)) — overlay zignorowany, używam katalogu z builda."
+            )
+            return bundled
+        }
         return bundled.overlaying(overlay)
     }
 
