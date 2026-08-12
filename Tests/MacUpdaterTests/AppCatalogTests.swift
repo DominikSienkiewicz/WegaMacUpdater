@@ -95,4 +95,29 @@ final class AppCatalogTests: XCTestCase {
         let catalog = try JSONDecoder().decode(AppCatalog.self, from: json)
         XCTAssertEqual(catalog.sparkleFeedOverrides.first?.feedURL, "https://ok.example/a.xml")
     }
+
+    // MARK: GitHub catalog entry selfUpdates field
+
+    /// Katalog jest podpisany i pobierany zdalnie, więc dokument starszej generacji, który
+    /// nie zna tego pola, musi nadal dekodować się poprawnie. Domyślka „nie" znaczy też, że
+    /// nowy wpis nie obiecuje uruchomienia, które niczego nie zrobi.
+    func testSelfUpdatesDefaultsToFalseWhenTheKeyIsAbsent() throws {
+        let json = Data("""
+        {"github":[{"bundleId":"com.example.App","repo":"o/r","caskToken":"app"}]}
+        """.utf8)
+
+        let entry = try XCTUnwrap(AppCatalog.decode(json).githubRepos["com.example.App"])
+
+        XCTAssertFalse(entry.selfUpdates)
+    }
+
+    func testSelfUpdatesIsCarriedWhenDeclared() throws {
+        let json = Data("""
+        {"github":[{"bundleId":"com.example.App","repo":"o/r","caskToken":"app","selfUpdates":true}]}
+        """.utf8)
+
+        let entry = try XCTUnwrap(AppCatalog.decode(json).githubRepos["com.example.App"])
+
+        XCTAssertTrue(entry.selfUpdates)
+    }
 }

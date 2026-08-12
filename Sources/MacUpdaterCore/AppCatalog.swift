@@ -7,6 +7,34 @@ public struct GitHubCatalogEntry: Decodable, Sendable, Equatable {
     public let bundleId: String
     public let repo: String
     public let caskToken: String
+    /// Czy apka niesie własny updater (Squirrel.Mac, Sparkle, electron-updater…).
+    ///
+    /// GitHub mówi, **skąd znamy wersję**, a nie **jak się instaluje**. Dla wpisu z tą flagą
+    /// akcją wiersza jest uruchomienie apki, a strona wydań zostaje obok jako wyjście
+    /// awaryjne — gdy wbudowany updater jest wyłączony albo nie ma prawa zapisu do bundle'a.
+    ///
+    /// Domyślne `false`: katalog starszej generacji nie zna tego klucza i musi nadal
+    /// dekodować się poprawnie, a milczenie nie może być obietnicą.
+    public let selfUpdates: Bool
+
+    public init(bundleId: String, repo: String, caskToken: String, selfUpdates: Bool = false) {
+        self.bundleId = bundleId
+        self.repo = repo
+        self.caskToken = caskToken
+        self.selfUpdates = selfUpdates
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case bundleId, repo, caskToken, selfUpdates
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        bundleId = try container.decode(String.self, forKey: .bundleId)
+        repo = try container.decode(String.self, forKey: .repo)
+        caskToken = try container.decode(String.self, forKey: .caskToken)
+        selfUpdates = try container.decodeIfPresent(Bool.self, forKey: .selfUpdates) ?? false
+    }
 }
 
 /// One JetBrains IDE the `JetBrainsUpdateChecker` knows how to track.
