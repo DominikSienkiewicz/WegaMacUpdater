@@ -84,13 +84,7 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
     /// 2 — REL-09 added the per-source results and the completeness flag. A version-1 file
     /// carries neither, and reading it as complete is exactly the false reassurance this
     /// bump exists to prevent, so it is rejected and the next scan writes a fresh one.
-    ///
-    /// 3 — the GitHub self-update disclosure work gave `UpdateSource.github` a second
-    /// associated value (`selfUpdates`), which changes its synthesized `Codable` payload.
-    /// A version-2 file's `.github` entries are missing that key, so decoding would throw
-    /// and `load()` would return `nil` instead of the last known list; bumping here makes
-    /// that discard deliberate.
-    public static let currentSchemaVersion = 3
+    public static let currentSchemaVersion = 2
 
     public var schemaVersion: Int
     public var scannedAt: Date
