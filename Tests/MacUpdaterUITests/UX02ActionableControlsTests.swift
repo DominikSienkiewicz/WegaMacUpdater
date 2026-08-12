@@ -73,6 +73,28 @@ struct UX02ActionableControlsTests {
                 """)
     }
 
+    /// Rozwijanie na macOS przełącza się z samego chevronu — celu o szerokości około 12 pt,
+    /// obok martwej etykiety, która wygląda na część tej samej kontrolki. `WegaDisclosure`
+    /// wkłada chevron i etykietę do jednego `Button`, więc cel to cały nagłówek.
+    ///
+    /// Czerwony przed zmianą: `UpdateView`, `UpdateViewSupport` i `InfoView` niosły
+    /// `DisclosureGroup` — dwa pierwsze przez `DisclosureGroup(isExpanded:)`, trzeci przez
+    /// gołe `DisclosureGroup { }` bez nawiasu, więc dopasowanie nie może zakładać `(` po nazwie.
+    @Test func noDisclosureGroupSurvivesInTheAppTarget() throws {
+        var offenders: [String] = []
+
+        for url in try appTargetSources() {
+            let text = executableSource(try String(contentsOf: url, encoding: .utf8))
+            if text.contains("DisclosureGroup") { offenders.append(url.lastPathComponent) }
+        }
+
+        #expect(offenders.isEmpty,
+                """
+                UX-02: \(offenders.joined(separator: ", ")) używa DisclosureGroup, którego \
+                etykieta nie jest celem kliknięcia. Użyj WegaDisclosure.
+                """)
+    }
+
     // MARK: Helpers
 
     private func packageRoot(file: String = #filePath) -> URL {

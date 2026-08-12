@@ -18,7 +18,7 @@ final class ProvenanceTests: XCTestCase {
     }
 
     func testGithubIsGithub() {
-        XCTAssertEqual(ManualOutdatedApp.UpdateSource.github(repo: "o/r").provenance, .github)
+        XCTAssertEqual(ManualOutdatedApp.UpdateSource.github(repo: "o/r", selfUpdates: false).provenance, .github)
     }
 
     func testSparkleIsSparkle() {

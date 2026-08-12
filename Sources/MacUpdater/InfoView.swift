@@ -493,21 +493,7 @@ extension InfoView {
         case .history(let history) where !history.notes.isEmpty:
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(history.notes) { note in
-                    DisclosureGroup {
-                        Text(note.body.isEmpty ? tr("Brak opublikowanych notatek") : note.body)
-                            .font(.wega(.subheadline))
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(note.version).font(.wega(.callout, weight: .medium))
-                            if let published = note.publishedAt {
-                                Text(published, style: .date)
-                                    .font(.wega(.subheadline))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
+                    SelfUpdateNoteDisclosure(note: note)
                 }
                 if history.omitted > 0 {
                     Text(trf("…i %@ wcześniejszych wydań", String(history.omitted)))
@@ -946,5 +932,33 @@ private struct LicenseRow: View {
                 .font(.wega(.callout))
         }
         .padding(.vertical, 5)
+    }
+}
+
+/// Notatki jednego wydania, domyślnie zwinięte.
+///
+/// Wydzielone z `InfoView.selfUpdateNotes`, bo `WegaDisclosure` potrzebuje bindingu,
+/// a `ForEach` nie może trzymać `@State` dla każdego elementu z osobna.
+private struct SelfUpdateNoteDisclosure: View {
+    let note: ReleaseNote
+
+    @State private var isExpanded = false
+
+    var body: some View {
+        WegaDisclosure(isExpanded: $isExpanded) {
+            Text(note.body.isEmpty ? tr("Brak opublikowanych notatek") : note.body)
+                .font(.wega(.subheadline))
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+        } label: {
+            HStack(spacing: 6) {
+                Text(note.version).font(.wega(.callout, weight: .medium))
+                if let published = note.publishedAt {
+                    Text(published, style: .date)
+                        .font(.wega(.subheadline))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 }

@@ -707,3 +707,45 @@ private struct BackgroundUpdateToggle: View {
         }
     }
 }
+
+// MARK: - WegaDisclosure
+
+/// Rozwijanie, w którym całym celem kliknięcia jest nagłówek.
+///
+/// `DisclosureGroup` na macOS przełącza się wyłącznie z chevronu, a etykieta obok — mimo że
+/// wygląda na część kontrolki — nic nie robi. Tutaj chevron i etykieta siedzą w jednym
+/// `Button`, więc trafienie w dowolne miejsce nagłówka przełącza sekcję.
+///
+/// UX-02: `Button`, nie `.onTapGesture`. Rola dla VoiceOver, fokus i aktywacja spacją
+/// przychodzą razem z nim, a gest oblałby guard w `UX02ActionableControlsTests`.
+///
+/// Kolejność `content` przed `label` powiela `DisclosureGroup(isExpanded:content:label:)`,
+/// żeby podmiana w istniejących miejscach była zmianą nazwy typu, a nie przepisywaniem.
+struct WegaDisclosure<Content: View, Label: View>: View {
+    @Binding var isExpanded: Bool
+    @ViewBuilder var content: () -> Content
+    @ViewBuilder var label: () -> Label
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(.wega(.subheadline))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .accessibilityHidden(true)
+                    label()
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(tr(isExpanded ? "rozwinięte" : "zwinięte"))
+
+            if isExpanded { content() }
+        }
+    }
+}

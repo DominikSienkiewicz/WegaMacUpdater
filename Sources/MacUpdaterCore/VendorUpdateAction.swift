@@ -11,6 +11,12 @@ public enum UpdateActionKind: Equatable, Sendable {
     /// Launch the app so its own updater applies the staged build. Shared by every vendor
     /// that self-updates while its Homebrew cask lags (Sparkle, ChatGPT, Discord, …).
     case launchApp
+    /// Apka z własnym updaterem, której wersję znamy z GitHuba: uruchomienie jest akcją
+    /// główną, a strona wydań zostaje jako wyjście awaryjne — updater bywa wyłączony
+    /// (VS Code ma `update.mode`), a bundle poza `/Applications` bywa bez prawa zapisu.
+    /// Osobny przypadek zamiast rozszerzenia `.launchApp`: dziewięciu pozostałych vendorów
+    /// nie ma żadnej strony wydań i ich wiersz nie powinien urosnąć o kontrolkę.
+    case launchAppWithReleases(URL?)
     /// Update through Homebrew, with a busy indicator while the install runs.
     case brewInstall(token: String)
     /// App Store apps update themselves; the row shows text, not a button.
@@ -73,8 +79,10 @@ public extension ManualOutdatedApp.UpdateSource {
             return .brewInstall(token: token)
         case .mas:
             return .appStore
-        case .github(let repo):
-            return .openURL(AppEndpoints.shared.githubReleasesPageURL(repo: repo), style: .githubReleases)
+        case .github(let repo, let selfUpdates):
+            let releases = AppEndpoints.shared.githubReleasesPageURL(repo: repo)
+            return selfUpdates ? .launchAppWithReleases(releases)
+                               : .openURL(releases, style: .githubReleases)
         case .jetbrains:
             return .jetBrainsToolbox
         case .synology(let downloadPage):

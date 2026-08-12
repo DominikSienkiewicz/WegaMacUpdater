@@ -37,7 +37,7 @@ final class ScanStoreRuntimeScanningTests: XCTestCase {
             path: URL(fileURLWithPath: "/Applications/\(manualName).app"),
             installedVersion: "1.0",
             availableVersion: "2.0",
-            source: .github(repo: "example/repo")
+            source: .github(repo: "example/repo", selfUpdates: false)
         )
         let harness = makeScanStoreRuntimeHarness(
             runner: runner,

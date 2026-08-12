@@ -36,7 +36,7 @@ public struct GitHubReleasesChecker: VendorUpdateChecker {
                 latest: normalizeGitTag(release.tagName),
                 installed: installed,
                 recordedInstalled: app.version,
-                source: .github(repo: mapping.repo),
+                source: .github(repo: mapping.repo, selfUpdates: mapping.selfUpdates),
                 releaseNotes: release.body,  // FEAT-06: real notes for triage
                 // REL-11: GitHub release tags are SemVer, so a prerelease must rank
                 // below its own release instead of above it.

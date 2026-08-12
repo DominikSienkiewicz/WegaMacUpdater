@@ -40,7 +40,7 @@ final class ScanResultStoreTests: XCTestCase {
                     path: URL(fileURLWithPath: "/Applications/Ghostty.app"),
                     installedVersion: "1.0.0",
                     availableVersion: "1.1.0",
-                    source: .github(repo: "ghostty-org/ghostty"),
+                    source: .github(repo: "ghostty-org/ghostty", selfUpdates: false),
                     origin: .brew,
                     releaseNotes: "security fix"
                 )

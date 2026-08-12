@@ -20,7 +20,7 @@ final class CaskChecksumSignalTests: XCTestCase {
     }
 
     func testGithubSourceReturnsNil() {
-        XCTAssertNil(caskChecksumToken(of: .github(repo: "owner/repo")))
+        XCTAssertNil(caskChecksumToken(of: .github(repo: "owner/repo", selfUpdates: false)))
     }
 
     // MARK: - Three-state signal (UX-05)

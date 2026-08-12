@@ -544,6 +544,26 @@ struct ManualUpdateActionView: View {
                 Label(tr("Otwórz aplikację"), systemImage: "arrow.up.forward.app")
             }
             .controlSize(.small)
+        case .launchAppWithReleases(let releasesURL):
+            // Akcja główna jest ta sama co w `.launchApp` — updater apki. Strona wydań
+            // zostaje obok jako wyjście awaryjne, kontrolką wyraźnie drugorzędną, żeby
+            // hierarchia była czytelna na pierwszy rzut oka.
+            Button {
+                NSWorkspace.shared.open(item.path)
+            } label: {
+                Label(tr("Otwórz aplikację"), systemImage: "arrow.up.forward.app")
+            }
+            .controlSize(.small)
+            if let releasesURL {
+                Button {
+                    NSWorkspace.shared.open(releasesURL)
+                } label: {
+                    Text(tr("GitHub Releases"))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.wegaHoney)
+                .controlSize(.small)
+            }
         case .brewInstall(let token):
             Button {
                 onInstall(token)
@@ -636,7 +656,7 @@ private struct ReleaseNotesDisclosure: View {
 
     var body: some View {
         if !text.isEmpty {
-            DisclosureGroup(isExpanded: $expanded) {
+            WegaDisclosure(isExpanded: $expanded) {
                 ScrollView {
                     Text(text)
                         .font(.wega(.subheadline))
