@@ -14,6 +14,8 @@ set -euo pipefail
 #                                     and unwraps byte-for-byte
 #   0g. test-coverage-bundle-guard — coverage picks a test bundle covering the app target
 #                                     under both SwiftPM build-system layouts
+#   0h. test-release-baseline-guard — release.sh reads "previous release" from the subject,
+#                                     not from any line of the message body
 #   1. swift build              — compiles app + helper + core
 #   2. swift test               — full unit-test suite
 #   3. swiftlint lint --strict  — zero lint violations (warnings fail too)
@@ -72,6 +74,13 @@ echo "→ ./scripts/test-catalog-envelope-guard.sh"
 # on stub bundles, without a build.
 echo "→ ./scripts/test-coverage-bundle-guard.sh"
 ./scripts/test-coverage-bundle-guard.sh
+
+# REL-06: release.sh decides what "since the last release" means, and it got that wrong in
+# the direction nothing else can see — a commit quoting `chore(release):` in its body was
+# read as a previous release, so the first release notes replayed 85 subjects the changelog
+# already described by hand. Pure bash, throwaway repositories under $TMPDIR.
+echo "→ ./scripts/test-release-baseline-guard.sh"
+./scripts/test-release-baseline-guard.sh
 
 # Fail fast on a CommandLineTools-only toolchain: it lacks a SourceKit that SwiftLint
 # can load, so the lint step breaks with confusing errors after build and test have
