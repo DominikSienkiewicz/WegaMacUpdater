@@ -1,3 +1,4 @@
+import WegaTestSupport
 import XCTest
 @testable import MacUpdaterCore
 
@@ -201,5 +202,53 @@ final class AppCatalogTests: XCTestCase {
     /// Katalog z builda niesie generację, przeciw której mierzy się każdy overlay.
     func testBundledGenerationMatchesTheShippedCatalog() throws {
         XCTAssertEqual(AppCatalog.bundledGeneration, try AppCatalog.loadBundled().generation)
+    }
+
+    // MARK: Ledger floor — the build's own generation is a floor under the OTA watermark
+
+    func testLedgerRefusesACatalogBelowTheFloor() {
+        let (defaults, teardown) = TestDefaults.isolated("catalog-generation-floor")
+        defer { teardown() }
+        let ledger = CatalogGenerationLedger(defaults: defaults, floor: 3)
+
+        XCTAssertFalse(ledger.accepts(2))
+        XCTAssertTrue(ledger.accepts(3), "równa generacja jest normalna, nie atak")
+        XCTAssertTrue(ledger.accepts(4))
+    }
+
+    /// Bez podłogi rejestr zachowuje się jak dotąd, więc istniejące wstrzyknięcia nie zmieniają
+    /// znaczenia.
+    func testLedgerWithoutAFloorAcceptsFromZero() {
+        let (defaults, teardown) = TestDefaults.isolated("catalog-generation-no-floor")
+        defer { teardown() }
+        let ledger = CatalogGenerationLedger(defaults: defaults)
+
+        XCTAssertTrue(ledger.accepts(0))
+        XCTAssertEqual(ledger.accepted, 0)
+    }
+
+    /// Znak wodny dalej znaczy „najwyższa faktycznie przyjęta generacja OTA" i nie wchłania
+    /// numeru z builda — dzięki temu downgrade aplikacji wyprowadza podłogę z builda, który
+    /// naprawdę działa, zamiast utknąć na liczbie zapisanej przez nowszy build.
+    func testRecordingAtTheFloorDoesNotPersistTheBuildsGeneration() {
+        let (defaults, teardown) = TestDefaults.isolated("catalog-generation-floor-record")
+        defer { teardown() }
+        let ledger = CatalogGenerationLedger(defaults: defaults, floor: 3)
+
+        ledger.record(3)
+
+        XCTAssertEqual(defaults.integer(forKey: CatalogGenerationLedger.defaultsKey), 0)
+        XCTAssertEqual(ledger.accepted, 3, "podłoga nadal obowiązuje")
+    }
+
+    func testRecordingAboveTheFloorPersists() {
+        let (defaults, teardown) = TestDefaults.isolated("catalog-generation-above-floor")
+        defer { teardown() }
+        let ledger = CatalogGenerationLedger(defaults: defaults, floor: 3)
+
+        ledger.record(5)
+
+        XCTAssertEqual(defaults.integer(forKey: CatalogGenerationLedger.defaultsKey), 5)
+        XCTAssertEqual(ledger.accepted, 5)
     }
 }

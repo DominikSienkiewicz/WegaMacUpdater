@@ -28,16 +28,23 @@ public struct CatalogGenerationLedger: @unchecked Sendable {
     public static let defaultsKey = "wega.catalog.acceptedGeneration"
 
     private let defaults: UserDefaults
+    /// The generation this build ships, below which no fetched catalog may go.
+    ///
+    /// The persisted watermark only remembers what arrived over the air, so a build whose
+    /// bundled catalog is *newer* than anything fetched would otherwise accept — and write —
+    /// a document it already outranks. `0` leaves the ledger behaving exactly as before.
+    private let floor: Int
 
-    public init(defaults: UserDefaults = .standard) {
+    public init(defaults: UserDefaults = .standard, floor: Int = 0) {
         self.defaults = defaults
+        self.floor = floor
     }
 
     /// `0` when nothing has been accepted yet, which is also the generation of every catalog
-    /// published before the field existed — so a first run accepts anything and tightens
-    /// from there.
+    /// published before the field existed — so a first run accepts anything at or above the
+    /// floor and tightens from there.
     public var accepted: Int {
-        defaults.integer(forKey: Self.defaultsKey)
+        max(defaults.integer(forKey: Self.defaultsKey), floor)
     }
 
     public func accepts(_ candidate: Int) -> Bool {
