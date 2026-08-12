@@ -137,10 +137,25 @@ final class VendorUpdateCheckerTests: XCTestCase {
         XCTAssertEqual(ManualOutdatedApp.UpdateSource.mas(appStoreID: "1").updateActionKind, .appStore)
         XCTAssertEqual(ManualOutdatedApp.UpdateSource.jetbrains(caskToken: "idea").updateActionKind, .jetBrainsToolbox)
 
-        guard case .openURL(_, let style) = ManualOutdatedApp.UpdateSource.github(repo: "o/r").updateActionKind else {
-            return XCTFail("github should resolve to an openURL action")
+        guard case .openURL(_, let style) = ManualOutdatedApp.UpdateSource
+            .github(repo: "o/r", selfUpdates: false).updateActionKind else {
+            return XCTFail("a GitHub entry that does not self-update should resolve to an openURL action")
         }
         XCTAssertEqual(style, .githubReleases)
+    }
+
+    /// `.github` mówi, skąd znamy wersję, a nie jak się instaluje. Apka z własnym updaterem
+    /// (VS Code, Obsidian, GitHub Desktop) ma dostać uruchomienie jako akcję główną —
+    /// odesłanie do przeglądarki to najdłuższa droga do czegoś, co apka zrobi sama.
+    func testASelfUpdatingGitHubEntryLaunchesTheAppAndKeepsTheReleasesPage() {
+        let kind = ManualOutdatedApp.UpdateSource
+            .github(repo: "microsoft/vscode", selfUpdates: true).updateActionKind
+
+        guard case .launchAppWithReleases(let url) = kind else {
+            return XCTFail("a self-updating GitHub entry should resolve to launchAppWithReleases")
+        }
+        XCTAssertEqual(url, AppEndpoints.shared.githubReleasesPageURL(repo: "microsoft/vscode"),
+                       "the releases page stays reachable as the way out when the built-in updater is off")
     }
 
     func testBadgeLabelsAreResolvedFromData() {

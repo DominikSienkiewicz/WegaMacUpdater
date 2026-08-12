@@ -183,7 +183,7 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
         case cask(token: String)
         case mas(appStoreID: String)
         case jetbrains(caskToken: String)
-        case github(repo: String)
+        case github(repo: String, selfUpdates: Bool)
         case synology(downloadPage: String)
         /// Antigravity IDE — self-updating app whose Homebrew cask is stale;
         /// detected via Google's own update endpoint.
