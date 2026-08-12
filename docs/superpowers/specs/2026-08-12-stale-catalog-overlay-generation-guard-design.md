@@ -96,10 +96,24 @@ public init(defaults: UserDefaults = .standard, floor: Int = 0)
 public var accepted: Int { max(defaults.integer(forKey: Self.defaultsKey), floor) }
 ```
 
-`record(_:)` bez zmian — zapis generacji równej podłodze albo niższej pozostaje no-opem.
-Utrwalony znak wodny dalej znaczy „najwyższa faktycznie przyjęta generacja OTA" i nigdy nie
-wchłania numeru z builda, więc **downgrade aplikacji wyprowadza podłogę z builda, który
-faktycznie działa**, a znak wodny OTA nadal go chroni.
+`record(_:)` mierzy się z wartością zapisaną w `UserDefaults`, nie z `accepted`:
+
+```swift
+public func record(_ candidate: Int) {
+    guard candidate > defaults.integer(forKey: Self.defaultsKey) else { return }
+    defaults.set(candidate, forKey: Self.defaultsKey)
+}
+```
+
+Podłoga jest klamrą wyłącznie po stronie odczytu (`accepted`). Gdyby `record` porównywał się
+z `accepted`, każde pobranie katalogu o generacji równej podłodze — normalny przypadek, bo
+wydanie wysyła build z katalogiem, który samo właśnie opublikowało — byłoby cichym no-opem, a
+znak wodny zostałby na `0` na zawsze. Instalacja byłaby wtedy chroniona wyłącznie przez to,
+jaki build akurat działa: downgrade do starszego builda zniósłby podłogę i odsłonił generacje
+pomiędzy jako możliwe do odtworzenia. Zapisując wyłącznie generacje, które faktycznie przyszły
+przez sieć — nawet gdy pokrywają się z podłogą — znak wodny OTA dalej znaczy „najwyższa
+faktycznie przyjęta generacja OTA", nigdy nie wchłania numeru z builda, i to on, nie podłoga,
+chroni instalację po downgrade'zie do starszego builda.
 
 `CatalogRefresher.init` domyślnie dostaje `CatalogGenerationLedger(floor: AppCatalog.bundledGeneration)`,
 zgodnie z konwencją tego pliku (`signatureVerifier: CatalogSignature = .shared`,

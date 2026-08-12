@@ -53,8 +53,15 @@ public struct CatalogGenerationLedger: @unchecked Sendable {
 
     /// Raises the watermark. Never lowers it: accepting an equal generation must not make a
     /// later downgrade legal.
+    ///
+    /// Measured against the *persisted* value, not ``accepted``: the floor is a read-side
+    /// clamp, and folding it in here would make every fetch whose generation equals the
+    /// build's — the normal case, since a release ships the catalog it just published — a
+    /// silent no-op, leaving the watermark at `0` and the installation protected only by
+    /// whatever build happens to be running. Only generations that actually arrived over the
+    /// air are recorded, so the watermark still never absorbs the build's own number.
     public func record(_ candidate: Int) {
-        guard candidate > accepted else { return }
+        guard candidate > defaults.integer(forKey: Self.defaultsKey) else { return }
         defaults.set(candidate, forKey: Self.defaultsKey)
     }
 }

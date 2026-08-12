@@ -384,4 +384,36 @@ struct SEC07CatalogEnvelopeTests {
         #expect(!FileManager.default.fileExists(atPath: dest.path),
                 "katalog spod podłogi builda nie może dotknąć overlaya")
     }
+
+    /// Pins `CatalogRefresher.init`'s default argument itself, not just the ledger it
+    /// constructs. Every other test in this tree injects `generations:` explicitly, so
+    /// deleting `floor: AppCatalog.bundledGeneration` from that default expression would
+    /// leave the rest of the suite green while removing the branch's central safety
+    /// property in production.
+    ///
+    /// Hermetic despite touching `UserDefaults.standard`, which the omitted `generations:`
+    /// resolves to: the outcome is `.replayRejected` before `CatalogRefresher.refresh()` ever
+    /// calls `generations.record(_:)`, so nothing is read from or written to that domain that
+    /// the assertions below depend on. Do not "fix" this into an isolated `TestDefaults` suite
+    /// — that would construct the ledger explicitly and stop testing the default argument.
+    @Test("The production default floor refuses a catalog at generation zero")
+    func defaultGenerationsFloorsAtTheBuildsOwnGeneration() async throws {
+        try #require(AppCatalog.bundledGeneration > 0, "this guard is a no-op unless the build ships a real generation")
+        let dest = tempDestination()
+        defer { try? FileManager.default.removeItem(at: dest.deletingLastPathComponent()) }
+
+        let outcome = await CatalogRefresher(
+            source: source, destination: dest,
+            client: HTTPClient(transport: EnvelopeFakeTransport([
+                .init(data: Data(try envelope(wrapping: catalogJSON(generation: 0)).utf8),
+                      status: 200, headers: [:])
+            ]), maxRetries: 0, retryBaseDelay: 0),
+            signatureVerifier: verifier
+            // generations: intentionally omitted — this is what exercises the default.
+        ).refresh()
+
+        #expect(outcome == .replayRejected)
+        #expect(!FileManager.default.fileExists(atPath: dest.path),
+                "a catalog below the build's own generation must not touch the overlay")
+    }
 }
