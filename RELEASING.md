@@ -243,18 +243,22 @@ second release onward, measured against the tag this one creates.
 
 The baseline is always printed, so it is never a guess.
 
-Two consequences worth knowing before you run it:
+Three consequences worth knowing before you run it:
 
 - **The first tag will be higher than `0.1.0`.** An explicit version has to be *greater* than
   `AppMetadata.version`, which already reads `0.1.0`, so `./scripts/release.sh 0.1.0` is
-  refused. The existing `## [0.1.0] — 2026-06-05` section stays in `CHANGELOG.md` as the
-  untagged history it is, and the release script never rewrites it.
-- **`[0.1.0]` carries no link, on purpose** (QA-06). There is no release page and no
-  comparison range for a version that was never tagged, so the link reference was removed
-  rather than left pointing at a 404. For the same reason `previous_version()` only accepts a
-  version that has a real tag — otherwise the first release would generate
-  `compare/v0.1.0...vX.Y.Z`, a dead link, and `release.sh` copies every older reference
-  forward verbatim, so nothing would ever repair it.
+  refused.
+- **`[Unreleased]` describes the application, not a delta.** A first release is the first thing
+  anyone installs, so *Fixed*, *Changed* and *Removed* would be measured against a version no
+  user ever ran — and the section becomes the GitHub Release description verbatim. It is
+  therefore written as one `### Added` describing what Wega does, with `#### ` subsections
+  inside it. From the second release onward the section goes back to being an ordinary Keep a
+  Changelog delta. The earlier `## [0.1.0] — 2026-06-05` section was removed for the same
+  reason: it dated an untagged state of the tree that was never published.
+- **No link reference is generated for a version that has no tag** (QA-06). `previous_version()`
+  accepts only a version with a real tag, so the first release's reference points at its own
+  release page instead of a `compare/…` range that would 404. `release.sh` copies every older
+  reference forward verbatim, so a dead link written once would never repair itself.
 
 ## 10. Republishing the app catalog
 
