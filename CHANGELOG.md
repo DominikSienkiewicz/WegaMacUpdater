@@ -13,6 +13,18 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Fixed
+- **A release could hang instead of failing.** The signing key was imported with
+  `security import -T /usr/bin/codesign`, which is the list of tools allowed to use it without
+  a keychain prompt. `codesign` signs the `.app`, so app signing always worked — but the `.pkg`
+  is signed by `pkgbuild`, a different binary and therefore not on the list. macOS asked for
+  authorization, a runner has nobody to answer, and the job blocked on `→ Tworzę PKG...` until
+  GitHub cancelled it at its six-hour maximum, with no error anywhere in the log. Every tool in
+  the chain is now named, the publishing job carries its own `timeout-minutes` so a future stall
+  costs minutes rather than six hours of macOS runner time, and a new step reports which
+  identities the `.p12` actually contained — a `.p12` exported with only the Application
+  certificate was the other, equally silent way to reach the same stall.
+
 ## [0.2.0] — 2026-08-13
 
 ### Added
