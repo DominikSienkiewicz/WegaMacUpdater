@@ -16,6 +16,8 @@ set -euo pipefail
 #                                     under both SwiftPM build-system layouts
 #   0h. test-release-baseline-guard — release.sh reads "previous release" from the subject,
 #                                     not from any line of the message body
+#   0i. test-release-headings-guard — release.sh republishes a hand-written changelog
+#                                     heading exactly as written
 #   1. swift build              — compiles app + helper + core
 #   2. swift test               — full unit-test suite
 #   3. swiftlint lint --strict  — zero lint violations (warnings fail too)
@@ -81,6 +83,13 @@ echo "→ ./scripts/test-coverage-bundle-guard.sh"
 # already described by hand. Pure bash, throwaway repositories under $TMPDIR.
 echo "→ ./scripts/test-release-baseline-guard.sh"
 ./scripts/test-release-baseline-guard.sh
+
+# REL-07: the same script decides how a hand-written heading is spelled in the GitHub
+# Release description. Section files were named after a stripped copy of the heading and the
+# heading was rebuilt from that name, so `### Known issues` shipped as `### Knownissues` —
+# and `### Fixed!` was absorbed into the canonical `### Fixed`. Also pure bash.
+echo "→ ./scripts/test-release-headings-guard.sh"
+./scripts/test-release-headings-guard.sh
 
 # The v0.2.0 attempt that hung: the signing key admitted only codesign, so pkgbuild waited on a
 # keychain prompt no runner can answer, and the job burned GitHub's six-hour maximum without

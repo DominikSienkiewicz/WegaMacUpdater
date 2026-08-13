@@ -43,6 +43,13 @@ The script bumps the version, then rewrites `CHANGELOG.md`: the hand-written `[U
 entries move under a new `## [X.Y.Z] — YYYY-MM-DD` heading, and entries derived from the
 commits since the last release are appended beneath them, each carrying its short SHA.
 
+Sections are matched by their `### ` heading. The Keep a Changelog set — Added, Changed,
+Deprecated, Removed, Fixed, Security — comes first, in that order, with the derived entries
+merged in under the matching heading. Any other heading you write (`### Known issues`) is
+kept exactly as written, after the canonical ones, in the order you wrote it. Every entry
+must sit under some `### ` heading: text above the first one has no section to be assembled
+into, so the script refuses rather than dropping it.
+
 Commits are read as [Conventional Commits](https://www.conventionalcommits.org/):
 
 | Prefix | Lands under |
@@ -206,6 +213,11 @@ Phase 1 ran and was never finished. Continue it, or throw it away:
 **`nothing to release`**
 `[Unreleased]` is empty and no commit since the last release qualifies — typically a run of
 `docs:`/`chore:` work only. Add entries under `[Unreleased]`, or release nothing.
+
+**`[Unreleased] has text above its first '### ' heading`**
+A paragraph or a list item was written directly under `## [Unreleased]`. The notes are
+assembled section by section, so there is nowhere to put it. Move it under a `### ` heading
+— an existing one, or one of your own.
 
 **The release job sits on `→ Tworzę PKG...` and is cancelled hours later**
 A signing step waiting for a keychain authorization prompt, which no runner can answer. It does
