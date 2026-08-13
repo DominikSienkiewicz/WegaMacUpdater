@@ -189,11 +189,43 @@ split_changelog() {
 
 # Splits a section body into one file per '### Heading', so hand-written and generated
 # entries can be merged under the same headings.
+#
+# A file name cannot be the heading itself — a heading may hold anything markdown allows —
+# but it must not be a lossy *rendering* of it either. The name used to be
+# `gsub(/[^A-Za-z]/, "", heading)` and the assembly step rebuilt the heading from that
+# name, so `### Known issues` was published as `### Knownissues` in the GitHub Release.
+# The verbatim heading therefore goes to a parallel map ($2.names/<file>), $2.order keeps
+# the order the headings were written in, and $2.preamble catches whatever was written
+# above the first heading.
+#
+# The name is injective by construction: a heading that already reads as one bare word is
+# its own name, everything else is prefixed with `other-`, which no bare word produces.
+# Without that split, `### Fixed!` would land in the canonical `Fixed` file and come back
+# out as `### Fixed`, merged with the entries derived from `fix:` commits.
+# Guarded by test-release-headings-guard.sh (REL-07).
 split_sections() {
-  mkdir -p "$2"
-  awk -v dir="$2" '
-    /^### / { sec = $0; sub(/^### +/, "", sec); gsub(/[^A-Za-z]/, "", sec); file = dir "/" sec; next }
-    file != "" { print >> file }
+  mkdir -p "$2" "$2.names"
+  : > "$2.order"; : > "$2.preamble"
+  awk -v dir="$2" -v names="$2.names" -v order="$2.order" -v preamble="$2.preamble" '
+    /^### / {
+      head = $0; sub(/^### +/, "", head); sub(/[[:space:]]+$/, "", head)
+      if (!(head in slot)) {
+        if (head ~ /^[A-Za-z]+$/) {
+          name = head
+        } else {
+          base = head; gsub(/[^A-Za-z]/, "", base)
+          name = "other-" base
+          for (n = 2; name in used; n++) name = "other-" base n
+        }
+        used[name] = 1; slot[head] = name
+        print head >> (names "/" name); close(names "/" name)
+        print name >> order
+      }
+      file = dir "/" slot[head]
+      next
+    }
+    file != "" { print >> file; next }
+    NF { print >> preamble }
   ' "$1"
 }
 
@@ -415,6 +447,19 @@ split_changelog
 mkdir -p "$TMP/hand"
 split_sections "$TMP/unreleased" "$TMP/hand"
 
+# Text above the first '### ' has no section to be assembled into, and was dropped without
+# a trace. Refusing is the only non-destructive answer: these notes become the GitHub
+# Release description verbatim, so losing a paragraph here loses it for good.
+if [ -s "$TMP/hand.preamble" ]; then
+  {
+    echo "!! [Unreleased] has text above its first '### ' heading:"
+    sed 's/^/     /' "$TMP/hand.preamble"
+    echo "   Release notes are assembled section by section, so these lines have nowhere to go."
+    echo "   Move them under a '### ' heading in $CHANGELOG, then re-run."
+  } >&2
+  exit 1
+fi
+
 HAND_COUNT="$(find "$TMP/hand" -type f 2>/dev/null | wc -l | tr -d ' ')"
 if [ "$kept" -eq 0 ] && [ "$HAND_COUNT" -eq 0 ]; then
   if [ -n "$BASELINE" ]; then
@@ -445,15 +490,17 @@ NEW="$TMP/CHANGELOG.new"
     fi
   done
 
-  # A hand-written heading outside the canonical set must not be silently dropped.
-  for hand in "$TMP/hand"/*; do
-    [ -e "$hand" ] || continue
-    section="$(basename "$hand")"
-    case " $emitted " in *" $section "*) continue ;; esac
-    printf '### %s\n' "$section"
+  # A hand-written heading outside the canonical set must not be silently dropped — and it
+  # is republished exactly as written, from the map rather than from the file name, in the
+  # order the author wrote it.
+  while read -r name; do
+    hand="$TMP/hand/$name"
+    [ -s "$hand" ] || continue
+    case " $emitted " in *" $name "*) continue ;; esac
+    printf '### %s\n' "$(cat "$TMP/hand.names/$name")"
     trim_blanks "$hand"
     printf '\n'
-  done
+  done < "$TMP/hand.order"
 
   trim_blanks "$TMP/tail"
 } > "$NEW"
