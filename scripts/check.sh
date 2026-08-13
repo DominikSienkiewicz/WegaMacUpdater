@@ -82,6 +82,13 @@ echo "→ ./scripts/test-coverage-bundle-guard.sh"
 echo "→ ./scripts/test-release-baseline-guard.sh"
 ./scripts/test-release-baseline-guard.sh
 
+# The v0.2.0 attempt that hung: the signing key admitted only codesign, so pkgbuild waited on a
+# keychain prompt no runner can answer, and the job burned GitHub's six-hour maximum without
+# emitting an error. A release stall costs macOS runner minutes at the 10x rate and is invisible
+# in a diff, so the tool list, the job timeout and the identity check are pinned here.
+echo "→ ./scripts/test-release-signing-guard.sh"
+./scripts/test-release-signing-guard.sh
+
 # Fail fast on a CommandLineTools-only toolchain: it lacks a SourceKit that SwiftLint
 # can load, so the lint step breaks with confusing errors after build and test have
 # already spent their minutes.

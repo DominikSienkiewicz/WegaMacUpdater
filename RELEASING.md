@@ -207,6 +207,17 @@ Phase 1 ran and was never finished. Continue it, or throw it away:
 `[Unreleased]` is empty and no commit since the last release qualifies — typically a run of
 `docs:`/`chore:` work only. Add entries under `[Unreleased]`, or release nothing.
 
+**The release job sits on `→ Tworzę PKG...` and is cancelled hours later**
+A signing step waiting for a keychain authorization prompt, which no runner can answer. It does
+not fail — it blocks until GitHub's job maximum, which is why the job now carries its own
+`timeout-minutes`. The cause is the private key's access list: `security import -T` names the
+tools allowed to use the key unattended, and it has to name **every** tool in the chain.
+`codesign` signs the `.app`, but the `.pkg` is signed by `pkgbuild` — a different binary, so app
+signing succeeding tells you nothing about the package. `scripts/test-release-signing-guard.sh`
+pins the list; if it is green and the job still stalls, the remaining suspect is a `.p12`
+exported with only one of the two identities, which the *Verify the imported signing identities*
+step now reports before anything is built.
+
 **The workflow failed after the tag was pushed**
 Nothing was published. Fix the cause on `main`, then remove the tag from both places and cut
 the release again:

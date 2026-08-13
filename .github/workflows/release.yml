@@ -43,6 +43,12 @@ jobs:
     name: Build & publish release
     needs: build
     runs-on: macos-26
+    # A signing stall is this job's most likely failure, and it does not look like a failure:
+    # v0.2.0's first attempt sat on "Tworzę PKG..." waiting for a keychain prompt nobody could
+    # answer, and was cancelled only by GitHub's six-hour job maximum — six hours billed at the
+    # macOS 10x rate, with no error to read. A healthy run builds in ~8 minutes and notarization
+    # adds a few more, so the ceiling is generous and still an order of magnitude below the default.
+    timeout-minutes: 60
     # The `secrets` context can't be used in step `if:` conditions, so map presence to
     # job-level booleans here (job `env` may read `secrets`) and gate steps on `env`.
     env:
@@ -99,6 +105,11 @@ jobs:
             exit 1
           fi
 
+      # `-T` lists the tools allowed to use the imported private key without a keychain
+      # authorization prompt. It named `codesign` alone — which signs the .app, and is why app
+      # signing has always worked — but the .pkg is signed by `pkgbuild`, a different binary and
+      # therefore not on the key's access list. macOS asked for authorization, a runner has nobody
+      # to answer, and the job hung rather than failed. Every tool that touches the key is named.
       - name: Import Developer ID certificate
         if: ${{ env.HAS_DEVELOPER_ID == 'true' }}
         env:
@@ -111,9 +122,34 @@ jobs:
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/pkgbuild \
+            -T /usr/bin/productbuild \
+            -T /usr/bin/productsign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
           security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+
+      # The other way the .pkg step can stall, and the one nothing checked: DEVELOPER_ID_CERT_P12
+      # is expected to carry BOTH identities, and a .p12 exported with only the Application one
+      # looks identical to a correct setup until pkgbuild goes looking for a certificate that is
+      # not there. Only the identity *types* are printed — the full names carry the Team ID.
+      - name: Verify the imported signing identities
+        if: ${{ env.HAS_DEVELOPER_ID == 'true' }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          FOUND="$(security find-identity -v "$KEYCHAIN" \
+            | grep -oE 'Developer ID (Application|Installer)' | sort -u || true)"
+          echo "identities in the build keychain:"
+          echo "${FOUND:-  (none)}" | sed 's/^/  /'
+          if ! grep -q 'Developer ID Application' <<<"$FOUND"; then
+            echo "::error::DEVELOPER_ID_CERT_P12 carries no 'Developer ID Application' identity — the .app cannot be signed. Re-export the .p12 with both identities (see RELEASING.md)."
+            exit 1
+          fi
+          if [[ "$HAS_INSTALLER_ID" == "true" ]] && ! grep -q 'Developer ID Installer' <<<"$FOUND"; then
+            echo "::error::DEVELOPER_ID_INSTALLER_IDENTITY names an installer certificate, but DEVELOPER_ID_CERT_P12 carries no 'Developer ID Installer' identity. Export BOTH identities into the one .p12 (see RELEASING.md)."
+            exit 1
+          fi
 
       - name: Build artifacts (.pkg + .dmg)
         env:
