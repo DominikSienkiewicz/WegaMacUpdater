@@ -5,7 +5,7 @@ Native macOS app that keeps every application on your Mac up to date — Homebre
 
 ![Swift](https://img.shields.io/badge/Swift-6.0-orange?style=for-the-badge&logo=swift&logoColor=white)
 ![SwiftUI](https://img.shields.io/badge/SwiftUI-macOS_26%2B-blue?style=for-the-badge&logo=apple&logoColor=white)
-![Version](https://img.shields.io/badge/Version-0.1.0-lightgrey?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-0.2.0-lightgrey?style=for-the-badge)
 ![Homebrew](https://img.shields.io/badge/Homebrew-optional-FBB040?style=for-the-badge&logo=homebrew&logoColor=white)
 ![Architecture](https://img.shields.io/badge/Architecture-SPM_Modules-purple?style=for-the-badge)
 [![CI](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml/badge.svg)](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml)
