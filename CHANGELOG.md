@@ -13,8 +13,9 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
-### Added
+## [0.2.0] — 2026-08-13
 
+### Added
 **Wega Mac Updater keeps every application on your Mac up to date from one native window —
 whatever installed them.** Homebrew, the App Store and npm each know about their own apps and
 nothing else; the rest update themselves, or quietly don't. Wega reads all of them in one pass,
@@ -174,3 +175,7 @@ their terms are still theirs.
   what changed in it, because there is no published predecessor to have changed from.
 -->
 [Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/commits/main
+
+
+[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/releases/tag/v0.2.0
