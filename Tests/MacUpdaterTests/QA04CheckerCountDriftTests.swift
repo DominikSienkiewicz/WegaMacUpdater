@@ -100,12 +100,72 @@ struct QA04CheckerCountDriftTests {
                 """)
     }
 
+    /// The counter has to recognise a checker by the fact that it is *built*, not by the shape
+    /// of the line that builds it.
+    ///
+    /// Red before the fix: the pattern required an empty argument list, so `AdobeUpdateChecker`
+    /// — constructed with a catalog and an inventory, and only when Creative Cloud is installed
+    /// — was invisible. The guard counted 13, README said 13, and the two agreed on a number the
+    /// scanner had already outgrown: a drift guard that reads past the drift is worse than none,
+    /// because it certifies the stale claim. Every argument-taking checker added after this one
+    /// would have been missed the same way.
+    @Test func countsCheckersBuiltWithArgumentsOrBehindAConditional() throws {
+        let source = """
+            let plainChecker = PlainUpdateChecker()
+            let renamedChecker = GitHubReleasesChecker()
+            let argumentChecker = ArgumentUpdateChecker(
+                catalog: catalog,
+                inventory: inventory
+            )
+            let conditionalChecker = inventory.isEmpty ? nil : ConditionalUpdateChecker(
+                inventory: inventory
+            )
+            """
+
+        #expect(try checkerNames(in: source) == ["plain", "githubreleases", "argument", "conditional"])
+    }
+
+    /// The other half of that contract: a checker the scanner *takes* is not a checker the
+    /// scanner *builds*.
+    ///
+    /// `WegaSelfUpdateChecker` is injected through `init` and asks about Wega itself rather than
+    /// about an installed app; UX-15 folds its single result in beside the per-app fan-out, and
+    /// both README and the scanner's doc comment describe it separately from the manual checkers.
+    /// Counting the parameter's default value would inflate the number the README has to match —
+    /// so the pattern reads assignments, not every mention of a checker type.
+    @Test func ignoresCheckersInjectedThroughTheInitialiser() throws {
+        let source = """
+            private let selfUpdateChecker: WegaSelfUpdateChecker
+            public init(
+                selfUpdateChecker: WegaSelfUpdateChecker = WegaSelfUpdateChecker()
+            ) {
+                self.selfUpdateChecker = selfUpdateChecker
+            }
+            """
+
+        #expect(try checkerNames(in: source).isEmpty)
+    }
+
     // MARK: Helpers
 
     /// The checkers the scanner builds, as their type-name stems (`sparkle`, `jetbrains`, …).
     private func instantiatedCheckerNames() throws -> [String] {
-        let source = try scannerSource()
-        return try matches(in: source, pattern: #"let \w+ = (\w+)UpdateChecker\(\)|let \w+ = (GitHubReleases)Checker\(\)"#)
+        try checkerNames(in: scannerSource())
+    }
+
+    /// Anchored on the *binding*, not on the call. Everything between `=` and the type name is
+    /// unconstrained, so a checker built with arguments — or only when its vendor is installed,
+    /// as in `adobeInventory.isEmpty ? nil : AdobeUpdateChecker(catalog:inventory:)` — is counted
+    /// like any other. The previous pattern demanded a literal `()` and so read straight past
+    /// both, which is this guard suffering the drift it exists to catch: it counted 13, README
+    /// said 13, and the scanner ran 14. `Update` is optional in the middle because
+    /// `GitHubReleasesChecker` does not carry it.
+    ///
+    /// A binding is required, though, so that a checker the scanner *takes* is not mistaken for
+    /// one it *builds*: `WegaSelfUpdateChecker` arrives as an `init` default, asks about Wega
+    /// rather than about an installed app, and is documented separately from the manual checkers.
+    private func checkerNames(in source: String) throws -> [String] {
+        try matches(in: source, pattern: #"\b(?:let|var)\s+\w+\s*(?::[^=\n]+)?=\s*[^\n]*?\b([A-Z]\w*?)(?:Update)?Checker\("#)
             .map { $0.lowercased() }
     }
 

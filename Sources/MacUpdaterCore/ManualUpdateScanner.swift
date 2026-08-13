@@ -1,8 +1,8 @@
 import Foundation
 
-/// Runs the 13 manual-app update checkers (Sparkle, JetBrains, GitHub, Synology,
+/// Runs the 14 manual-app update checkers (Sparkle, JetBrains, GitHub, Synology,
 /// Antigravity, Parallels, Google Drive, ChatGPT, Postman, Discord, Signal, Chrome,
-/// Obsidian) plus the brew-cask version check
+/// Obsidian, Adobe Creative Cloud) plus the brew-cask version check
 /// over every installed app, and returns the outdated ones deduplicated by source
 /// priority — together with the number of checks that genuinely failed.
 ///

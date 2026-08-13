@@ -13,6 +13,17 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Fixed
+- **The README's manual-checker count reads 14, and the guard that ties it to the code can see
+  every checker (QA-04).** The guard recognised only a checker built with an empty argument list,
+  so the Adobe Creative Cloud checker — constructed with a catalog and an inventory, and only
+  when Creative Cloud is installed — never reached the count. It read 13, agreed with a README
+  that said 13, and so certified a claim the scanner had already outgrown, while the priority
+  table listing Adobe as its own source contradicted that same sentence a few hundred lines
+  earlier. The count now follows the binding rather than the shape of the call, so the next
+  checker that takes a parameter is counted as well, and `ManualUpdateScanner`'s own doc comment
+  names Adobe alongside the other thirteen.
+
 ## [0.2.0] — 2026-08-13
 
 ### Added
