@@ -2,7 +2,8 @@ import SwiftUI
 import AppKit
 import MacUpdaterCore
 
-@main
+// The entry point is `WegaMain` (ResourceSelfCheck.swift), which forwards here after handling
+// the pipeline's resource probe. `@main` cannot sit on both.
 struct WegaMacUpdaterApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var model = AppViewModel()
