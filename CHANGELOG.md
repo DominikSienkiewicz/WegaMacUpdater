@@ -14,6 +14,14 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 ## [Unreleased]
 
 ### Fixed
+- **The resource probe now runs on the bytes that are published.** It was added to the CI
+  packaging job, which builds an ad-hoc-signed app — but the publishing job rebuilds and signs
+  with the Developer ID, and only that build becomes the `.pkg` and `.dmg` people download. The
+  artifact gate beside it confirms the resources are *present* in the signed bundle; whether the
+  program can *read* them is the distinction the v0.2.0 crash turned on, so a gate that answered
+  it for a neighbouring build only was worth about as much as a green tick. The probe runs after
+  notarization and stapling, on the app in its shipped state, and before the release is created,
+  so a failure publishes nothing. `test-release-signing-guard.sh` pins its presence.
 - **The packaged app can read its own resources, and says so instead of dying when it cannot.**
   `AppEndpoints.loadBundled()` and `AppCatalog.loadBundled()` reached their JSON through
   `Bundle.module`, whose SwiftPM-generated accessor searches the `.app` directory and the build

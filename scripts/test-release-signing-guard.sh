@@ -68,6 +68,15 @@ else
     record_fail "brak weryfikacji tożsamości — brakujący certyfikat Installer wyjdzie dopiero przy pkgbuild"
 fi
 
+# Sonda zasobów musi dotykać bajtów, które są publikowane. Zadanie pakujące w CI buduje
+# aplikację podpisaną ad-hoc, a zadanie publikujące buduje ją od nowa z Developer ID i to
+# ona staje się .pkg oraz .dmg — sonda w jednym miejscu nie mówi nic o drugim.
+if grep -q 'test-app-launches.sh' "$WORKFLOW"; then
+    record_pass "zadanie publikujące uruchamia sondę zasobów na podpisanym artefakcie"
+else
+    record_fail "brak sondy zasobów w $WORKFLOW — publikowane bajty nie są uruchamiane"
+fi
+
 if [[ "$failures" -gt 0 ]]; then
     printf '\n✗ guard podpisywania wydania wykrył %d problem/problemy\n' "$failures" >&2
     exit 1
