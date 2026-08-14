@@ -170,6 +170,20 @@ jobs:
       - name: Verify bundle (layout, helper signature, resources)
         run: ./scripts/verify-bundle.sh
 
+      # v0.2.0 shipped a build that died three seconds after launch, on every Mac, and every gate
+      # above was green: `swift test` passes because the resource layout under `swift test` is not
+      # the layout inside a .app, and verify-bundle.sh checks that files are in the bundle, not
+      # that the program can read them. Nothing had ever started the app it was about to publish.
+      #
+      # So ask the build directly. Starting it and watching was tried and measured first: the
+      # crashing path runs from a throttled background task, so the released build survived about
+      # one launch in three — a gate whose verdict depends on timing teaches people to re-run it.
+      # The app instead answers a hidden flag by loading endpoints.json and app-catalog.json
+      # through the same public calls the rest of the code uses, then exiting 0 or 1. No window
+      # server required, and it cannot pass while the real call sites fail.
+      - name: Smoke test — the packaged app can read its own resources
+        run: ./scripts/test-app-launches.sh
+
       - name: Upload .pkg artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

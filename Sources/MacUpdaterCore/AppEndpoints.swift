@@ -178,7 +178,7 @@ extension AppEndpoints {
     /// Decodes the JSON shipped inside `MacUpdaterCore`. Throws if the resource is
     /// missing or malformed — a contract the `AppEndpointsTests` suite guards.
     public static func loadBundled() throws -> AppEndpoints {
-        guard let url = Bundle.module.url(forResource: "endpoints", withExtension: "json") else {
+        guard let url = ModuleResources.url(forResource: "endpoints", withExtension: "json") else {
             throw CocoaError(.fileNoSuchFile)
         }
         return try decode(contentsOf: url)

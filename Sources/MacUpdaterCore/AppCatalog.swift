@@ -290,7 +290,7 @@ extension AppCatalog {
     /// Decodes the JSON shipped inside `MacUpdaterCore`. Throws if the resource is missing
     /// or malformed — a contract the `AppCatalogTests` suite guards.
     public static func loadBundled() throws -> AppCatalog {
-        guard let url = Bundle.module.url(forResource: "app-catalog", withExtension: "json") else {
+        guard let url = ModuleResources.url(forResource: "app-catalog", withExtension: "json") else {
             throw CocoaError(.fileNoSuchFile)
         }
         return try decode(contentsOf: url)

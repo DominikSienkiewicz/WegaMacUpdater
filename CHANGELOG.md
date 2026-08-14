@@ -14,6 +14,20 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 ## [Unreleased]
 
 ### Fixed
+- **The packaged app can read its own resources, and says so instead of dying when it cannot.**
+  `AppEndpoints.loadBundled()` and `AppCatalog.loadBundled()` reached their JSON through
+  `Bundle.module`, whose SwiftPM-generated accessor searches the `.app` directory and the build
+  directory of the machine that compiled the binary, then calls `fatalError`. A packaged app keeps
+  its resources in `Contents/Resources`, which is neither — so the app trapped seconds after
+  launch, on every Mac, with a message naming a path on a GitHub runner. Both functions were
+  already written to *throw* when the resource is missing, and their callers already handled it;
+  a `fatalError` simply ran first. A resolver that searches the packaged layout and returns an
+  optional restores that contract, and a test refuses `Bundle.module` anywhere in `Sources/`,
+  because reintroducing it compiles, passes every test, and breaks only the shipped app.
+  Nothing in the pipeline had ever run the app it published: the build now asks it, through a
+  hidden flag, to load both files and report. Watching it launch was measured first and rejected
+  — the crashing path came from a throttled background task, so a broken build survived about one
+  launch in three.
 - **The README's manual-checker count reads 14, and the guard that ties it to the code can see
   every checker (QA-04).** The guard recognised only a checker built with an empty argument list,
   so the Adobe Creative Cloud checker — constructed with a catalog and an inventory, and only
