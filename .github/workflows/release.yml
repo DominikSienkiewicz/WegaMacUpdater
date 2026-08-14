@@ -210,6 +210,17 @@ jobs:
             build/WegaMacUpdater.pkg \
             build/WegaMacUpdater.dmg
 
+      # The same probe the CI package job runs, against the bytes that are actually published.
+      # Those are not the same bytes: the package job builds an ad-hoc-signed app, this job
+      # rebuilds and signs with the Developer ID, and only this one becomes the .pkg and .dmg.
+      # verify-bundle.sh above confirms the resources are present in this bundle; it cannot
+      # confirm the program reads them, which is precisely the distinction v0.2.0 turned on.
+      #
+      # Placed after notarization and stapling so it exercises the app in its shipped state, and
+      # before the release is created so a failure means nothing is published.
+      - name: Smoke test — the signed app can read its own resources
+        run: ./scripts/test-app-launches.sh
+
       # The release description is the changelog section for this version, verbatim — the
       # text a human reviewed before the tag was cut (see RELEASING.md). `--generate-notes`
       # is deliberately not used: it would replace that curated text with a commit dump.
