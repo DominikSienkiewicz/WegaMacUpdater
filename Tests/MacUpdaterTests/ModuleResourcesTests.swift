@@ -91,11 +91,11 @@ struct ModuleResourcesTests {
             .subpathsOfDirectory(atPath: sources.path)
             .filter { $0.hasSuffix(".swift") }
             .filter { path in
-                let contents = try? String(
+                let contents = (try? String(
                     contentsOf: sources.appendingPathComponent(path),
                     encoding: .utf8
-                )
-                return contents?.contains("Bundle.module") == true
+                )) ?? ""
+                return Self.strippingComments(from: contents).contains("Bundle.module")
             }
 
         #expect(offenders.isEmpty, """
@@ -105,5 +105,24 @@ struct ModuleResourcesTests {
             ModuleResources.url(forResource:withExtension:), which returns nil and lets the caller \
             throw as its documentation promises.
             """)
+    }
+
+    /// Each line up to its `//`, so prose about `Bundle.module` does not read as a use of it.
+    ///
+    /// The first version of this guard searched whole files and flagged the two files that
+    /// document why the ban exists — and since it only ever ran in CI, it did so after the tag
+    /// had been cut and the release workflow was already running.
+    ///
+    /// Known limit: a line carrying both a `//`-bearing string literal and a real use would be
+    /// truncated before the use. No line in this codebase does that, and the alternative is
+    /// parsing Swift to catch a case that has never occurred.
+    private static func strippingComments(from source: String) -> String {
+        source
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line in
+                guard let comment = line.range(of: "//") else { return line }
+                return line[line.startIndex..<comment.lowerBound]
+            }
+            .joined(separator: "\n")
     }
 }
