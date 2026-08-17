@@ -266,9 +266,26 @@ the system refuses outright, restores the pre-upgrade snapshot through the same
 rollback ledger and the LT-01 journal, and there is no second way to undo an update.
 
 The gate runs last on purpose: a bundle whose identity or publisher is in doubt is the last
-thing that should be executed. Three cases produce no evidence and therefore never trigger
+thing that should be executed. Five cases produce no evidence and therefore never trigger
 a rollback — an app the user already has open (Wega will not quit it to make room), a cask
-with nothing launchable, and a run cancelled mid-window. Liveness is read repeatedly while
+with nothing launchable, a run cancelled mid-window, and the two that exist because stopping
+the app would be destructive rather than tidy: an instance holding an **open system
+authorization prompt**, and a cask named as doing a **privileged first run**.
+
+That last pair is the Docker Desktop lesson. An app whose bundle was just replaced may come
+up asking for authorization to reinstate privileged state — Docker rebuilds its `vmnetd`
+configuration this way. The prompt is drawn by a helper process that dies with its parent, so
+the teardown cancels an installation the user is still answering: Docker's password dialog was
+killed 7.4 seconds after it appeared (the five-second window plus the two-second grace), and
+because the privileged step never finished, every later launch re-prompted and crashed. So an
+open prompt — detected through `SecurityAgent`, which exists only while an authorization sheet
+is on screen — suspends the teardown and leaves the instance running for the user to answer.
+Detection alone would race, since Docker's dialog took about four seconds to appear against a
+five-second window, so casks known to repair privileged state on first run are never launched
+by the smoke test at all. Both are "no evidence", never a failure: not learning whether an app
+runs must not be spent as a reason to undo an upgrade.
+
+Liveness is read repeatedly while
 the window is open **and once more on its closing edge**, and always through the handle the
 launch returned rather than by process name, so neither a death in the last poll gap nor a
 recycled pid can pass as a survivor. The test is on by default and can be switched off in
