@@ -53,6 +53,12 @@ public enum LaunchSmokeTest {
         case unsupportedBundle
         /// The update run was cancelled while the window was open (REL-12).
         case cancelled
+        /// The instance raised a system authorization prompt that is still open, so the
+        /// teardown was suspended and the instance was left running for the user to answer.
+        case awaitingAuthorization
+        /// The app is on ``LaunchSmokeTestConfiguration/tokensExemptFromSmokeTest`` — its
+        /// first run after an upgrade repairs privileged state, which must not be interrupted.
+        case privilegedFirstRun
     }
 
     /// Whether a verdict obliges the caller to restore the snapshot.
@@ -110,6 +116,17 @@ public enum LaunchSmokeTest {
         if await handle.hasExited() {
             return await stopping(handle, grace: terminationGrace, pollInterval: pollInterval,
                                   verdict: .exitedEarly(after: seconds(from: openedAt, on: clock)))
+        }
+
+        // An app that came up asking for authorization is not a survivor to be cashed in and
+        // closed: the prompt belongs to a helper process that dies with its parent, so the
+        // teardown below would cancel a privileged installation the user is mid-way through
+        // answering. Docker Desktop reinstating `vmnetd` after a cask upgrade is the case that
+        // taught us this — see the suite note in `LT02AuthorizationPromptTests`. Leaving the
+        // instance running is the lesser evil: the user finishes authorizing, and the window
+        // stays hidden until they do.
+        if await probe.hasOpenAuthorizationPrompt() {
+            return .skipped(.awaitingAuthorization)
         }
         return await stopping(handle, grace: terminationGrace, pollInterval: pollInterval, verdict: .survived)
     }
@@ -179,6 +196,18 @@ public protocol AppLaunchProbing: Sendable {
     /// Starts the app at `url` without bringing it forward, and returns before the
     /// observation window opens.
     func launch(bundleAt url: URL) async -> AppLaunchOutcome
+
+    /// True while the system is showing an authorization prompt — the sheet macOS puts up for
+    /// `AuthorizationExecuteWithPrivileges` and for AppleScript's `with administrator
+    /// privileges`. It belongs to the system half of the test because only the system can
+    /// answer it, and the smoke test needs it to know when its teardown would be destructive.
+    func hasOpenAuthorizationPrompt() async -> Bool
+}
+
+public extension AppLaunchProbing {
+    /// A probe that cannot observe the system says "no prompt", which is the pre-existing
+    /// behaviour. Only the production probe overrides this.
+    func hasOpenAuthorizationPrompt() async -> Bool { false }
 }
 
 /// The tunables of the launch smoke test, and the switch that turns it off.
@@ -206,5 +235,25 @@ public enum LaunchSmokeTestConfiguration {
     /// explicit `object(forKey:)`, since `bool(forKey:)` would silently return `false`.
     public static func isEnabled(defaults: UserDefaults = .standard) -> Bool {
         defaults.object(forKey: enabledKey) as? Bool ?? enabledByDefault
+    }
+
+    /// Casks whose first run after an upgrade repairs privileged system state, and which
+    /// therefore must never be started and stopped unattended.
+    ///
+    /// `hasOpenAuthorizationPrompt()` already refuses to tear down an app mid-prompt, but it is
+    /// a race by nature: it can only see a prompt that is already on screen, and Docker's took
+    /// ~4 s to appear against a 5 s window. This list is the part that does not race — these
+    /// apps are simply never launched by the smoke test.
+    ///
+    /// Deliberately short. An entry costs the crash-at-startup gate for that app, so it is
+    /// earned by evidence of a privileged first run, not by suspicion.
+    public static let tokensExemptFromSmokeTest: Set<String> = [
+        // Reinstates `com.docker.vmnetd` and the `/var/run/docker.sock` symlink through an
+        // authorization prompt whenever its bundle changed underneath it (observed 4.87.0).
+        "docker-desktop"
+    ]
+
+    public static func isExemptFromSmokeTest(token: String) -> Bool {
+        tokensExemptFromSmokeTest.contains(token)
     }
 }
