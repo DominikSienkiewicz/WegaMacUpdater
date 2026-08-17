@@ -555,35 +555,11 @@ final class MigrationStore: ObservableObject {
         token: String,
         onWegaState: (@MainActor (WegaState) -> Void)?
     ) -> Bool {
-        switch verdict {
-        case .healthy:
+        guard let message = MigrationVerificationMessage.text(for: verdict, token: token) else {
             return true
-        case .rolledBack:
-            errorMessage = trf(
-                "%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.",
-                "\(token)"
-            )
-        case .rollbackFailed:
-            errorMessage = trf(
-                "%@: nowa wersja nie przeszła kontroli, a przywrócenie poprzedniej nie powiodło się. Sprawdź aplikację przed użyciem.",
-                "\(token)"
-            )
-        case .publisherChanged(let old, let new):
-            errorMessage = trf(
-                "%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
-                "\(token)",
-                "\(old)",
-                "\(new ?? "—")"
-            )
-        case .publisherChangedAndRolledBack(let old, let new):
-            errorMessage = trf(
-                "%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
-                "\(token)",
-                "\(old)",
-                "\(new ?? "—")"
-            )
         }
-        if let errorMessage { logLines.append("⚠️ " + errorMessage) }
+        errorMessage = message
+        logLines.append("⚠️ " + message)
         onWegaState?(WegaState(
             pose: .alert,
             line: trf("Błąd podczas migracji %@.", "\(app.name)")
@@ -688,5 +664,48 @@ final class MigrationStore: ObservableObject {
         operation: @MainActor @Sendable () async -> Void
     ) async {
         await UpgradeCoordinator.shared.performWrite(flow, operation: operation)
+    }
+}
+
+/// Why a migration's post-upgrade check failed, as a pure mapping — `nil` means it passed.
+///
+/// Outside `MigrationStore` on purpose: the store holds the flow's state, and this holds only
+/// the wording, so the message for a verdict can be read (and reasoned about) without the
+/// surrounding actor.
+private enum MigrationVerificationMessage {
+    static func text(for verdict: CaskValidationVerdict, token: String) -> String? {
+        switch verdict {
+        case .healthy:
+            return nil
+        case .rolledBack:
+            return trf(
+                "%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.",
+                "\(token)"
+            )
+        case .rollbackFailed:
+            return trf(
+                "%@: nowa wersja nie przeszła kontroli, a przywrócenie poprzedniej nie powiodło się. Sprawdź aplikację przed użyciem.",
+                "\(token)"
+            )
+        case .publisherChanged(let old, let new):
+            return trf(
+                "%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
+                "\(token)",
+                "\(old)",
+                "\(new ?? "—")"
+            )
+        case .publisherChangedAndRolledBack(let old, let new):
+            return trf(
+                "%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
+                "\(token)",
+                "\(old)",
+                "\(new ?? "—")"
+            )
+        case .notUpgraded:
+            return trf(
+                "%@: brew zakończył się sukcesem, ale na dysku została wersja sprzed migracji — nic nie zainstalowano.",
+                "\(token)"
+            )
+        }
     }
 }

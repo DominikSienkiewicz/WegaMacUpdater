@@ -150,6 +150,10 @@ extension ScanStore {
                 emitWegaState(WegaState(pose: .alert, line: trf("Cofnęłam %@ — nowa wersja nie przeszła kontroli.", "\(token)")))
             case .rollbackFailed:
                 brewLog.append("⚠️ " + trf("%@: nowa wersja nie przeszła kontroli, ale rollback się nie powiódł.", "\(token)"))
+            case .notUpgraded:
+                brewLog.append("⚠️ " + trf("%@: brew nie zainstalował nowej wersji — na dysku została poprzednia.", "\(token)"))
+                emitWegaState(WegaState(pose: .alert,
+                                        line: trf("%@ nie został zaktualizowany.", "\(token)")))
             }
         }
         return verdicts

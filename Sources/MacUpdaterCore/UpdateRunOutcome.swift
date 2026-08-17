@@ -17,6 +17,11 @@ public enum CaskValidationVerdict: Equatable, Sendable {
     case publisherChanged(old: String, new: String?)
     /// The publisher changed and the previous version was restored from its snapshot.
     case publisherChangedAndRolledBack(old: String, new: String?)
+    /// The package manager reported success but the bundle on disk still holds the
+    /// pre-upgrade version: nothing was installed, so there is nothing to validate and
+    /// nothing to roll back. Homebrew does this whenever its own Caskroom record already
+    /// names the new version while the app on disk does not — see `NoOpCaskUpgradeTests`.
+    case notUpgraded
 }
 
 /// How one item ended the run, across **every** phase it had to clear: execution,
@@ -157,6 +162,11 @@ public struct ItemUpdateOutcome: Equatable, Sendable {
             escalate(to: .rollbackFailed)
         case (_, .publisherChanged(let old, let new)):
             escalate(to: .publisherChanged(old: old, new: new))
+        case (_, .notUpgraded):
+            // The item is exactly as outdated as it was before the run. Saying so here matters
+            // because the confirming rescan cannot: it asks brew, and brew is the thing whose
+            // record was wrong.
+            escalate(to: .stillOutdated)
         }
     }
 

@@ -45,7 +45,11 @@ public final class CaskRollbackLedger: @unchecked Sendable {
         switch verdict {
         case .rolledBack:                                  return .checkFailed
         case .publisherChangedAndRolledBack:               return .publisherChanged
-        case .healthy, .rollbackFailed, .publisherChanged: return nil
+        // `.notUpgraded` restored nothing, so it arms no mark — and because it is not
+        // `.healthy` it clears none either: a run that changed nothing must leave whatever the
+        // ledger already remembered about this cask exactly as it was.
+        case .healthy, .rollbackFailed, .publisherChanged,
+             .notUpgraded:                                 return nil
         }
     }
 
