@@ -145,6 +145,17 @@ private final class SubprocessHandle: LaunchedAppHandle, @unchecked Sendable {
         kill(processIdentifier, SIGKILL)
         // Reaping the child is what flips `isRunning`; without it the caller would keep
         // seeing a zombie as alive.
-        process.waitUntilExit()
+        //
+        // Polled rather than waited on. `waitUntilExit()` blocks the *calling thread*, and
+        // under Swift Testing that thread belongs to the concurrency cooperative pool — the
+        // same "no bare waitUntilExit" rule `REL12UnboundedProcessGuardTests` enforces on
+        // `Sources/`, which this harness was quietly exempt from. With the pool contended,
+        // Foundation's own termination bookkeeping cannot get a thread, so `isRunning` never
+        // flips and the wait never returns: on 2026-08-18 this hung a `merge.sh` gate for
+        // hours on a child that was already dead. `Task.sleep` suspends instead of blocking,
+        // which hands the thread back and lets that bookkeeping run.
+        while process.isRunning {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
     }
 }

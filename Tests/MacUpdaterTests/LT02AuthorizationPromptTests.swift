@@ -134,9 +134,14 @@ private final class AuthorizationSubprocessHandle: LaunchedAppHandle, @unchecked
         process.terminate()
     }
 
+    /// Polled, not waited on — see the note on `SubprocessHandle.forceTerminate()` in
+    /// `LT02LaunchSmokeProcessLifetimeTests`: a blocking `waitUntilExit()` on a cooperative
+    /// pool thread can deadlock against Foundation's own termination bookkeeping.
     func forceTerminate() async {
         lock.withLock { askedToStop = true }
         kill(processIdentifier, SIGKILL)
-        process.waitUntilExit()
+        while process.isRunning {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
     }
 }
