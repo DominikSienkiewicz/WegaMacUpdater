@@ -489,6 +489,17 @@ enum CaskRollbackGuard {
         appURL: URL,
         dependencies: Dependencies? = nil
     ) async -> LaunchSmokeTest.Verdict {
+        // Checked before the enablement switch and in both branches: an app that repairs
+        // privileged state on its first run after an upgrade must not be started and stopped
+        // unattended at all, so the exemption is not something a test double can opt out of.
+        if LaunchSmokeTestConfiguration.isExemptFromSmokeTest(token: token) {
+            WegaLog.info(
+                .homebrew,
+                "\(token): test startu pominięty — pierwszy start odtwarza uprawnienia systemowe."
+            )
+            return .skipped(.privilegedFirstRun)
+        }
+
         let verdict: LaunchSmokeTest.Verdict
         if let dependencies {
             guard dependencies.smokeTestIsEnabled() else { return .skipped(.disabled) }

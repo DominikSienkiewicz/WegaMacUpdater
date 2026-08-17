@@ -14,8 +14,24 @@ import Foundation
 /// terminating what it started — so it would quit an app the user is using. That is reported
 /// as `.alreadyRunning`, which never triggers a rollback.
 public struct WorkspaceAppLaunchProbe: AppLaunchProbing {
-    public init() {
-        // Public construction exposes this stateless AppKit adapter outside MacUpdaterCore.
+    private let processes: RunningProcessService
+
+    public init(processes: RunningProcessService = RunningProcessService()) {
+        self.processes = processes
+    }
+
+    /// `SecurityAgent` is the process macOS starts to draw an authorization sheet, and it exists
+    /// only while one is on screen — unlike `authd`/`coreauthd`, which run permanently and so
+    /// say nothing. Its presence is therefore the available "someone is being asked to
+    /// authorize right now" signal, which is what stops the smoke test from killing the app
+    /// holding the prompt.
+    ///
+    /// It answers for the machine, not for this instance: a prompt raised by something else at
+    /// the same moment also suspends the teardown. That bias is deliberate — the cost is a
+    /// hidden app left running and a `.skipped` verdict, against a cancelled privileged install
+    /// the other way.
+    public func hasOpenAuthorizationPrompt() async -> Bool {
+        await processes.isRunning("SecurityAgent")
     }
 
     public func launch(bundleAt url: URL) async -> AppLaunchOutcome {
