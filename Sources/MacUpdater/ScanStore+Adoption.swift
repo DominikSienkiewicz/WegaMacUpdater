@@ -174,6 +174,12 @@ extension ScanStore {
             title = tr("Zmiana wydawcy")
             message = trf("%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
                           "\(token)", "\(old)", "\(new ?? "—")")
+        case .notUpgraded:
+            title = tr("Nic nie zainstalowano")
+            message = trf(
+                "%@: brew zakończył się sukcesem, ale na dysku została wersja sprzed aktualizacji. Wpis Homebrew rozjechał się z aplikacją — pomoże brew reinstall --cask %@.",
+                "\(token)", "\(token)"
+            )
         }
         brewLog.append("⚠️ " + message)
         showBanner(BannerData(variant: .danger, title: title, message: message))

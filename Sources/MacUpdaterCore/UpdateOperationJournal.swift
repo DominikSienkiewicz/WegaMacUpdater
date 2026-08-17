@@ -207,6 +207,32 @@ public enum UpdateOperationRecoveryPlan {
         }
         return .mutated
     }
+
+    /// Whether the package manager actually replaced the bundle, judged on the one source a
+    /// stale Homebrew Caskroom cannot fool: the version in the app's own `Info.plist`,
+    /// against the snapshot taken before the run.
+    ///
+    /// The same reading as ``installingProbe(appExists:installedVersion:preUpgradeVersion:)``
+    /// `.untouched`, asked on the success path rather than during crash recovery. Brew exits 0
+    /// without doing anything when its record already names the new version, and asking brew
+    /// again — which is what the confirming rescan does — just repeats the same wrong answer.
+    ///
+    /// An unreadable version on either side returns `true`: absence of evidence must not
+    /// promote every unparsable bundle into a failed upgrade.
+    public static func bundleWasReplaced(installedVersion: String?, snapshotVersion: String?) -> Bool {
+        guard let installed = installedVersion, let before = snapshotVersion else { return true }
+        return !versionsEqual(installed, before)
+    }
+
+    /// `CFBundleShortVersionString` read straight from the plist, deliberately not through
+    /// `Bundle(url:)`: that keeps a per-URL cache which can still answer with the version from
+    /// before the replacement, which is the exact instant this is asked.
+    public static func bundleShortVersion(at url: URL) -> String? {
+        guard let data = try? Data(contentsOf: url.appendingPathComponent("Contents/Info.plist")),
+              let object = try? PropertyListSerialization.propertyList(from: data, format: nil),
+              let dictionary = object as? [String: Any] else { return nil }
+        return dictionary["CFBundleShortVersionString"] as? String
+    }
 }
 
 /// Owns the `update-operations/` tree: unique directory per operation, an atomically
@@ -517,6 +543,12 @@ public final class UpdateOperationSession {
                 UpdateOperationStore.transition(&item, to: .rolledBack, at: now)
             case .rollbackFailed, .publisherChanged:
                 break
+            case .notUpgraded:
+                // Nothing reached the disk, so this is the `abortUnfinished` case arriving
+                // through the verdict instead of through an interrupted run: terminal, no
+                // `verified` (the canary would have inspected the old bundle and passed it),
+                // and a snapshot of an untouched disk that restores nothing.
+                UpdateOperationStore.transition(&item, to: .aborted, at: now)
             }
         }
     }

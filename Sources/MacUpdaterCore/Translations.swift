@@ -92,6 +92,14 @@ extension Translations {
         "Nie udało się utworzyć wymaganego snapshotu.": "Could not create the required snapshot.",
         // FEAT-05 — rollback casków.
         "%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.": "%@: the new version failed the check — restored the previous one.",
+        "%@: brew nie zainstalował nowej wersji — na dysku została poprzednia.":
+            "%@: brew installed no new version — the previous one is still on disk.",
+        "%@ nie został zaktualizowany.": "%@ was not updated.",
+        "Nic nie zainstalowano": "Nothing was installed",
+        "%@: brew zakończył się sukcesem, ale na dysku została wersja sprzed aktualizacji. Wpis Homebrew rozjechał się z aplikacją — pomoże brew reinstall --cask %@.":
+            "%@: brew reported success, but the pre-upgrade version is still on disk. Homebrew's record is out of sync with the app — brew reinstall --cask %@ will fix it.",
+        "%@: brew zakończył się sukcesem, ale na dysku została wersja sprzed migracji — nic nie zainstalowano.":
+            "%@: brew reported success, but the pre-migration version is still on disk — nothing was installed.",
         "Cofnęłam %@ — nowa wersja nie przeszła kontroli.": "Rolled back %@ — the new version failed the check.",
         "%@: nowa wersja nie przeszła kontroli, ale rollback się nie powiódł.": "%@: the new version failed the check, but rollback did not succeed.",
         // LT-02 — canary ze smoke-testem: aplikacja jest startowana ukryta i musi przeżyć okno.

@@ -157,6 +157,11 @@ final class UpdateOperationRecovery {
                 report.committedTokens.append(item.token)
             case .rolledBack, .publisherChangedAndRolledBack:
                 report.rolledBackTokens.append(item.token)
+            case .notUpgraded:
+                // Contradicts the `.mutated` probe that led here — the disk differed from
+                // `preUpgradeVersion`, yet the guard read it as equal to the snapshot. Nothing
+                // was committed either way, so it settles as aborted rather than as an update.
+                report.abortedTokens.append(item.token)
             case .rollbackFailed, .publisherChanged, nil:
                 report.unrecoverableTokens.append(item.token)
             }

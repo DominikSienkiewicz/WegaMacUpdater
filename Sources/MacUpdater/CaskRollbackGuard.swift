@@ -402,6 +402,25 @@ enum CaskRollbackGuard {
             // whose identity or publisher is in doubt is the last thing that should be
             // executed, so the smoke test only ever starts a build the other three approved.
             guard let snapshotURL else { return .healthy }
+
+            // Before any gate describing the artifact: did an artifact actually arrive? brew
+            // exits 0 without touching the disk whenever its Caskroom record already names the
+            // version the cask offers, and the confirming rescan cannot catch that because it
+            // asks brew — the very thing whose record is wrong. The snapshot is the pre-upgrade
+            // bundle, so the disk answers it directly. Without this the canary would inspect the
+            // *old* app, pass it, and talk a no-op up into "zaktualizowano" (Obsidian 1.13.6,
+            // reported updated twice while never moving — see `NoOpCaskUpgradeTests`).
+            if !UpdateOperationRecoveryPlan.bundleWasReplaced(
+                installedVersion: UpdateOperationRecoveryPlan.bundleShortVersion(at: validationURL),
+                snapshotVersion: UpdateOperationRecoveryPlan.bundleShortVersion(at: snapshotURL)
+            ) {
+                WegaLog.error(
+                    .homebrew,
+                    "\(token): brew zakończył się sukcesem, ale na dysku została wersja sprzed aktualizacji — nic nie zainstalowano."
+                )
+                return .notUpgraded
+            }
+
             let smokeTest = await launchSmokeTest(token: token, appURL: validationURL)
             guard !LaunchSmokeTest.requiresRollback(smokeTest) else {
                 return await restoreSnapshot(snapshotURL, to: validationURL) ? .rolledBack : .rollbackFailed
