@@ -228,6 +228,28 @@ and `~/Applications` is ambiguous rather than resolved by preferring one directo
 After a publisher mismatch, the original snapshot remains available even after a
 successful rollback. A bundle-identity mismatch preserves it in the same way.
 
+#### When the package manager installed nothing
+
+Homebrew exits 0 without touching the disk whenever its own Caskroom record already names the
+version the cask offers — a state a self-updating app can leave behind, and one the confirming
+rescan cannot see, because that rescan asks `brew` and brew's record is the thing that is
+wrong. Observed with Obsidian: `Caskroom/obsidian/1.13.7` alongside an
+`/Applications/Obsidian.app` still reporting `1.13.6`, so `brew outdated --cask --greedy`
+printed nothing while every scan — which reads the bundle's `Info.plist`, not brew's record —
+kept calling it outdated. Each upgrade was announced as applied and the next scan contradicted
+it.
+
+So before any gate describing the artifact, Wega asks whether an artifact arrived at all. The
+snapshot **is** the pre-upgrade bundle, so the version on disk is compared against it directly,
+read straight from `Info.plist` rather than through `Bundle(url:)` and its per-URL cache. An
+unchanged version is `notUpgraded`: journaled as **aborted** — never `verified`, never
+`committed`, and its snapshot restores nothing — reported as **still outdated**, and left out
+of the rollback ledger in both directions, since a run that changed nothing must not disturb
+what the ledger already remembered. The check comes first on purpose: run later, the canary
+would inspect the *old* app, pass it, and talk the no-op up into a success. An unreadable
+version on either side counts as replaced — absence of evidence must not turn every unparsable
+bundle into a failed upgrade.
+
 #### Launch smoke test
 
 The identity, Gatekeeper and publisher gates all describe what the new bundle **is**; none
