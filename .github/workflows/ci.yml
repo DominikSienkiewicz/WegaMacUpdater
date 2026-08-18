@@ -17,6 +17,41 @@ jobs:
   build:
     uses: ./.github/workflows/build.yml
 
+  # Own job, not a step in `build`: the build runs on a macOS runner behind a reusable
+  # workflow, and a link check needs neither Xcode nor macOS. Kept separate it reports in
+  # seconds instead of waiting on the Mac queue.
+  # README is a router into docs/, so a link that does not resolve is a public defect —
+  # and one no test in this repository can see. PulseDigest shipped exactly this: a router
+  # commit whose four reference documents were silently dropped by .gitignore, leaving 404s
+  # live for three and a half days. Only relative links are checked; external URLs would
+  # need the network and would break on someone else's outage.
+  docs:
+    name: Verify Markdown links
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Verify Markdown links
+        run: |
+          status=0
+          while IFS= read -r file; do
+            dir=$(dirname "$file")
+            grep -oE '\]\([^)#][^)]*\)' "$file" | sed 's/](\(.*\))/\1/' | sed 's/#.*//' \
+            | while IFS= read -r target; do
+                case "$target" in http*|mailto:*|'') continue ;; esac
+                # `Sources/Foo.swift:190` points at a line, not at a file called "…swift:190".
+                # Strip a trailing :<digits> before the existence check, or the convention reads
+                # as a dead link and blocks CI on a file that is right there.
+                target=${target%:[0-9]*}
+                [ -e "$dir/$target" ] || echo "DEAD $file -> $target"
+              done
+          done < <(git ls-files '*.md') > dead-links.txt
+          if [ -s dead-links.txt ]; then cat dead-links.txt; status=1; fi
+          rm -f dead-links.txt
+          exit $status
+
   sonarcloud:
     name: SonarCloud
     runs-on: ubuntu-latest
