@@ -76,6 +76,15 @@ DerivedData/
 /docs/*
 # Design specs are reviewed alongside the code they describe, so they are tracked.
 !/docs/superpowers/
+# README is a router; these five are the reference it routes to, so they must be tracked or
+# every link in it 404s. Named one by one on purpose: `!/docs/*.md` would also expose
+# AUDIT-CONSOLIDATED-*.md and DISPATCH-PLAN-*.md, which sit in the same directory and are
+# internal working material.
+!/docs/how-it-works.md
+!/docs/features.md
+!/docs/architecture.md
+!/docs/building.md
+!/docs/distribution.md
 
 # Ed25519 catalog signing key — NIGDY w repo
 wega-catalog.pem
