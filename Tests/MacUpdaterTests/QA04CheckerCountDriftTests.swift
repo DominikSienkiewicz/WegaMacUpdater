@@ -191,7 +191,30 @@ struct QA04CheckerCountDriftTests {
         try String(contentsOf: packageRoot().appendingPathComponent(relativePath), encoding: .utf8)
     }
 
-    private func readme() throws -> String { try read("README.md") }
+    /// The published documentation, as one text.
+    ///
+    /// README used to hold every claim these guards pin. It is now a router and the reference
+    /// lives in `docs/`, so reading README alone would let a claim pass out of the guard's sight
+    /// simply by moving one section — the drift this suite exists to catch, arriving through the
+    /// back door. The claims are what is pinned here, not the file that happens to carry them.
+    ///
+    /// The list is explicit rather than a `docs/*.md` glob because `docs/` is a mixed directory:
+    /// it also holds AUDIT-CONSOLIDATED-*.md, DISPATCH-PLAN-*.md and a backlog, none of which is
+    /// tracked. A glob would read whatever a developer happens to have on disk and behave
+    /// differently here and in CI. Adding a sixth published document means adding a line here;
+    /// forgetting to fails loudly, which is the correct direction to fail in.
+    private static let publishedDocuments = [
+        "README.md",
+        "docs/how-it-works.md",
+        "docs/features.md",
+        "docs/architecture.md",
+        "docs/building.md",
+        "docs/distribution.md",
+    ]
+
+    private func readme() throws -> String {
+        try Self.publishedDocuments.map { try read($0) }.joined(separator: "\n")
+    }
     private func scannerSource() throws -> String { try read("Sources/MacUpdaterCore/ManualUpdateScanner.swift") }
     private func actionSource() throws -> String { try read("Sources/MacUpdaterCore/VendorUpdateAction.swift") }
 

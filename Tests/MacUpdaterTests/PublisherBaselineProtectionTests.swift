@@ -149,8 +149,24 @@ struct PublisherBaselineProtectionTests {
                 "SEC-02: no rollback happened because brew never ran")
     }
 
+    /// Reads the published documentation as one text, for the same reason QA-04 does: README is
+    /// a router now and this claim lives in `docs/features.md`. Pinning the file instead of the
+    /// claim would mean a section move silently retires the guard.
+    private static let publishedDocuments = [
+        "README.md",
+        "docs/how-it-works.md",
+        "docs/features.md",
+        "docs/architecture.md",
+        "docs/building.md",
+        "docs/distribution.md",
+    ]
+
+    private func publishedDocumentation() throws -> String {
+        try Self.publishedDocuments.map { try source($0) }.joined(separator: "\n")
+    }
+
     @Test func readmeDoesNotClaimMismatchSnapshotsAlwaysEndWithTheCanaryWindow() throws {
-        let readme = try source("README.md")
+        let readme = try publishedDocumentation()
         #expect(!readme.contains("because the snapshot lives only for the canary window"))
         #expect(readme.contains("After a publisher mismatch, the original snapshot remains"))
     }
