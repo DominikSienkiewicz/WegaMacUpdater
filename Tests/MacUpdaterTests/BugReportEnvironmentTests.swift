@@ -18,6 +18,7 @@ struct BugReportEnvironmentTests {
             managers: [
                 .init(name: "Homebrew", version: "4.3.0", detected: true),
                 .init(name: "mas-cli", version: nil, detected: false),
+                .init(name: "npm", version: nil, detected: true),
             ],
             helper: .init(status: "enabled", expectedVersion: "3",
                           reportedVersion: "3", teamIDConfigured: true),
@@ -42,6 +43,7 @@ struct BugReportEnvironmentTests {
         #expect(fields["macOS"] == "Version 26.1 (Build 26A1) (arm64)")
         #expect(fields["Homebrew"] == "4.3.0")
         #expect(fields["mas-cli"] == "not detected")
+        #expect(fields["npm"] == "detected, version unknown")
         #expect(fields["Privileged helper"] == "enabled")
     }
 
