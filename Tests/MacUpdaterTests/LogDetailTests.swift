@@ -54,9 +54,12 @@ struct LogDetailTests {
     }
 
     @Test func dropsOutputLinesOnlyWhenSerializedSizeExceeds8000() {
-        // Create field values large enough that fields + marker + capped output exceed 8000
-        // cappedSerialization must trim output lines to stay under the limit
-        let longValue = String(repeating: "x", count: 1500)
+        // Arithmetic: field line = prefix(3) + key(3) + sep(2) + value(2500) = 2508 chars.
+        // Three fields = 7524. Marker = 6. Output (40 lines of ~22 chars) = ~861.
+        // Separators (43) = 43. Total = 7524 + 6 + 861 + 43 = 8434 > 8000.
+        // cappedSerialization must drop output lines to fit under the limit.
+        // (With 1500-char values, total is ~5434, which never exceeds 8000.)
+        let longValue = String(repeating: "x", count: 2500)
         let detail = LogDetail(fields: [
             .init(key: "cmd", value: longValue),
             .init(key: "sub", value: longValue),
@@ -77,6 +80,13 @@ struct LogDetailTests {
 
         // 3. The marker survives (trimming stops at/before marker, not past it)
         #expect(lines.contains { $0.contains(LogDetail.outputMarker) })
+
+        // 4. Output lines were actually trimmed (regression guard: cappedSerialization
+        // must not be a no-op; output after marker is strictly less than the 40-line cap)
+        if let markerIndex = lines.firstIndex(of: "\(LogDetail.continuationPrefix)\(LogDetail.outputMarker)") {
+            let outputLineCount = lines.count - markerIndex - 1
+            #expect(outputLineCount < LogDetail.maxOutputLines)
+        }
     }
 
     @Test func flattensNewlinesInsideAFieldValue() {
