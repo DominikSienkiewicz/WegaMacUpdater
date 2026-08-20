@@ -22,6 +22,11 @@
 - **Wszystko, co opuszcza maszynę, przechodzi przez `LogRedaction.redactForExport`.** Brak ścieżki „raw" jest wymogiem strukturalnym, nie konwencją.
 - **Każdy nowy string UI** przechodzi przez `tr(...)` i **musi** dostać wpis w `Translations.operations` w `Sources/MacUpdaterCore/Translations.swift` — pilnuje tego `LocalizationCompletenessTests`.
 - **Treść samego zgłoszenia jest po angielsku**, ze stabilnymi etykietami — jak `DiagnosticsBundle` i `InventoryExport`.
+- **`swift test --filter` dopasowuje NAZWY TYPÓW, nie nazwy wyświetlane z `@Suite("…")`.**
+  Filtr po nazwie z `@Suite` nie uruchamia **żadnego** testu, a SwiftPM sygnalizuje to
+  wyłącznie ostrzeżeniem `warning: No matching test cases were run` przy kodzie wyjścia 0 —
+  czyli wygląda jak sukces. Zawsze filtruj po nazwie typu (`LogsSelectionTests`, nie
+  `"Logs selection"`) i sprawdź w wyjściu linię `Test run with N tests`; `N` musi być > 0.
 - Limity: `stderr` 40 linii **i** 4000 znaków; cały detal po serializacji 8000 znaków; URL `mailto:` 2000 znaków; URL GitHub 8000 znaków.
 
 ---
@@ -417,7 +422,7 @@ struct LogEntryDetailSerializationTests {
 - [ ] **Step 2: (warunkowo) uruchom test i potwierdź Red**
 
 ```bash
-swift test --filter "LogEntry detail serialization"
+swift test --filter LogEntryDetailSerializationTests
 ```
 
 Oczekiwane: FAIL — brak argumentu `detail:` w `LogEntry.init` oraz brak `fileText` / `parseLog`.
@@ -510,7 +515,7 @@ W `LogStore.loadFromFile()` zamień ciało na:
 - [ ] **Step 5: (warunkowo) uruchom testy i potwierdź Green**
 
 ```bash
-swift test --filter "LogEntry detail serialization"
+swift test --filter LogEntryDetailSerializationTests
 ```
 
 ```bash
@@ -570,7 +575,7 @@ struct LogDetailRedactionTests {
 - [ ] **Step 2: (warunkowo) uruchom test i potwierdź Red**
 
 ```bash
-swift test --filter "LogDetail redaction"
+swift test --filter LogDetailRedactionTests
 ```
 
 Oczekiwane: FAIL — `value of type 'LogDetail' has no member 'redacted'`.
@@ -736,7 +741,7 @@ struct ProcessRunnerDetailTests {
 - [ ] **Step 2: (warunkowo) uruchom test i potwierdź Red**
 
 ```bash
-swift test --filter "ProcessRunner failure detail"
+swift test --filter ProcessRunnerDetailTests
 ```
 
 Oczekiwane: FAIL na `source.contains("detail: LogDetail(")`.
@@ -788,7 +793,7 @@ Pętla `for outcome in summary.notUpgraded { … }` zostaje bez zmian.
 - [ ] **Step 5: (warunkowo) uruchom testy i potwierdź Green**
 
 ```bash
-swift test --filter "ProcessRunner failure detail"
+swift test --filter ProcessRunnerDetailTests
 ```
 
 - [ ] **Step 6: Lint i commit**
@@ -2158,7 +2163,7 @@ struct LogsSelectionTests {
 - [ ] **Step 2: (warunkowo) uruchom test i potwierdź Red**
 
 ```bash
-swift test --filter "Logs selection"
+swift test --filter LogsSelectionTests
 ```
 
 Oczekiwane: FAIL — `cannot find 'LogSelection' in scope`.
@@ -2290,7 +2295,7 @@ W `copyVisible()` zamień `visible.map(\.fileLine)` na:
 - [ ] **Step 8: (warunkowo) uruchom testy i potwierdź Green**
 
 ```bash
-swift test --filter "Logs selection"
+swift test --filter LogsSelectionTests
 ```
 
 - [ ] **Step 9: Zweryfikuj wydajność listy w działającej aplikacji**
@@ -2421,7 +2426,7 @@ Agent **nie** wykonuje integracji — to rola użytkownika. Jeśli `main` przesu
 Podaj: nazwę gałęzi, ścieżkę worktree, listę zmian, uruchomione bramki oraz **wyraźnie**, że pakiety testowe nie były uruchamiane (o ile użytkownik o to nie poprosił), więc potwierdzenie Red-Green pozostaje do wykonania. Wymień suity warte uruchomienia:
 
 ```bash
-swift test --filter "LogDetail|LogEntry detail serialization|ProcessRunner failure detail|PrefilledURLBody|CatalogIssueBuilder|BugReport|AppEndpoints|Logs selection|LocalizationCompleteness|LogStore"
+swift test --filter "LogDetailTests|LogEntryDetailSerializationTests|WegaLogDetailTests|ProcessRunnerDetailTests|PrefilledURLBodyTests|CatalogIssueBuilderTests|BugReport|AppEndpointsTests|LogsSelectionTests|LocalizationCompletenessTests|LogStoreTests"
 ```
 
 Zakończ gotową do wklejenia komendą integracji — jedną na blok — którą uruchamia **użytkownik**, nie agent. Skrypt przyjmuje dwa argumenty: gałąź i niepusty komunikat commita scalającego.
