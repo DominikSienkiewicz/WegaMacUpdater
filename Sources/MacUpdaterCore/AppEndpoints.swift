@@ -47,6 +47,10 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     /// Prefilled "new issue" endpoint the UX-14 Inventory report button targets via
     /// ``CatalogIssueBuilder``.
     public let projectNewIssue: String
+    /// Odbiorca zgłoszeń błędów wysyłanych z zakładki Logi. Trzymany jako sam adres —
+    /// schemat `mailto:` dokłada ``BugReportBuilder``, więc overlay użytkownika nie może
+    /// podmienić go na URL o innym schemacie.
+    public let supportEmail: String
     public let authorLinkedIn: String
     public let masRepository: String
 
@@ -113,6 +117,7 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public var projectRepositoryURL: URL { URL(string: projectRepository)! }
     public var projectIssuesURL: URL { URL(string: projectIssues)! }
     public var projectNewIssueURL: URL { URL(string: projectNewIssue)! }
+    public var supportEmailAddress: String { supportEmail }
     public var authorLinkedInURL: URL { URL(string: authorLinkedIn)! }
     public var masRepositoryURL: URL { URL(string: masRepository)! }
 }
@@ -329,6 +334,7 @@ extension AppEndpoints {
             projectRepository: validURL(other.projectRepository, projectRepository),
             projectIssues: validURL(other.projectIssues, projectIssues),
             projectNewIssue: validURL(other.projectNewIssue, projectNewIssue),
+            supportEmail: other.supportEmail ?? supportEmail,
             authorLinkedIn: validURL(other.authorLinkedIn, authorLinkedIn),
             masRepository: validURL(other.masRepository, masRepository)
         )
@@ -387,6 +393,7 @@ public struct AppEndpointsOverlay: Decodable, Sendable, Equatable {
     // Defaulted (like `obsidianDesktopReleases`) so existing memberwise-init call sites keep
     // compiling without listing this UX-14 key.
     public var projectNewIssue: String? = nil
+    public var supportEmail: String? = nil
     public let authorLinkedIn: String?
     public let masRepository: String?
 }

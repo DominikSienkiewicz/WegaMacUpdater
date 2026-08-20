@@ -34,6 +34,16 @@ final class AppEndpointsTests: XCTestCase {
                        "https://github.com/DominikSienkiewicz/WegaMacUpdater/issues/new")
     }
 
+    // Zgłoszenie błędu z zakładki Logi otwiera domyślnego klienta poczty pod tym adresem,
+    // więc musi być obecny w konfiguracji — inaczej kanał e-mail cicho przestaje istnieć.
+    func testSupportEmailIsConfigured() throws {
+        let e = try AppEndpoints.loadBundled()
+        XCTAssertEqual(e.supportEmailAddress, "wegamacupdater.unbroken239@passmail.net")
+        XCTAssertTrue(e.supportEmailAddress.contains("@"), "musi być adresem, nie URL-em")
+        XCTAssertFalse(e.supportEmailAddress.hasPrefix("mailto:"),
+                       "schemat dokłada builder — konfiguracja trzyma sam adres")
+    }
+
     // MARK: Fixed endpoints keep the exact URLs the checkers used to hard-code
 
     func testFixedEndpointsMatchLegacyValues() throws {
