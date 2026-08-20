@@ -48,6 +48,10 @@ struct ContentView: View {
     /// The pre-macOS-26 key. Read once by `migrateLegacyTab()`, then cleared.
     @AppStorage("wega.activeTab") private var legacyTab: String = ""
 
+    /// Drives the toolbar's globe menu. Injected at the scene root (`MacUpdaterApp.swift`),
+    /// which also re-keys this tree on change — so the switch takes effect everywhere at once.
+    @EnvironmentObject private var localization: LocalizationManager
+
     @State private var wegaState:         WegaState       = .forTab(.update)
     @State private var updateBadge:       Int             = 0
     @State private var logsInitialFilter: LogLevelFilter  = .all
@@ -113,6 +117,20 @@ struct ContentView: View {
                     ScanControl(namespace: glassNamespace)
                 }
                 ToolbarSpacer(.fixed)
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Picker(tr("Język interfejsu"), selection: $localization.language) {
+                            ForEach(AppLanguage.allCases) { lang in
+                                Text("\(lang.flag)  \(lang.displayName)").tag(lang)
+                            }
+                        }
+                        .pickerStyle(.inline)
+                    } label: {
+                        Image(systemName: "globe")
+                    }
+                    .help(tr("Język interfejsu"))
+                    .accessibilityLabel(tr("Język interfejsu"))
+                }
                 ToolbarItem(placement: .primaryAction) {
                     SettingsLink { Image(systemName: "gearshape") }
                         .help(tr("Ustawienia"))

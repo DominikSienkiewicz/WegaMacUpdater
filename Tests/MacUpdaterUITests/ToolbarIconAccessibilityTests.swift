@@ -36,6 +36,28 @@ final class ToolbarIconAccessibilityTests: XCTestCase {
         )
     }
 
+    /// The language switcher used to live only in the Settings window, three cards down behind
+    /// the gear icon. A user who cannot read the interface cannot read their way to it either —
+    /// so the main window's toolbar carries a `globe` menu, an icon that needs no translation.
+    ///
+    /// Source inspection, like its neighbours: a package test target cannot drive
+    /// `XCUIApplication`, so the SwiftUI wiring is pinned here instead.
+    func testToolbarCarriesAGlobeLanguageMenu() throws {
+        let content = try source("Sources/MacUpdater/ContentView.swift")
+        XCTAssertTrue(
+            content.contains(#"Image(systemName: "globe")"#),
+            "The main window's toolbar must offer a globe control for switching language."
+        )
+        XCTAssertTrue(
+            content.contains("selection: $localization.language"),
+            "The globe menu must drive LocalizationManager.language, not a local copy of it."
+        )
+        XCTAssertTrue(
+            content.contains(#".accessibilityLabel(tr("Język interfejsu"))"#),
+            "The globe icon must spell its name for VoiceOver, not only .help()."
+        )
+    }
+
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {
         let root = URL(fileURLWithPath: file)
             .deletingLastPathComponent()
