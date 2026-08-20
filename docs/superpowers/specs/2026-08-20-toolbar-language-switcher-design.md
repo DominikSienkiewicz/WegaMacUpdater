@@ -79,9 +79,19 @@ wraca do wartości domyślnej, przez co panel szczegółów zamyka się (albo ot
 zmianie języka. Zachowanie to istnieje już dziś przy przełączeniu z okna Ustawień; nowe
 jest wyłącznie to, że użytkownik zobaczy je natychmiast, we własnym oknie.
 
-Naprawa polegałaby na podniesieniu `showInspector` do `@AppStorage`, tak jak zrobiono
-z `selection`. Świadomie poza zakresem: dotyka stanu okna niezwiązanego z językiem
-i zasługuje na osobną decyzję.
+**Poprawka wykonana osobno (2026-08-20), innym sposobem niż zapowiadany tutaj.**
+Pierwotnie zapisano tu, że lekarstwem jest podniesienie `showInspector` do `@AppStorage`,
+tak jak zrobiono z `selection`. To było błędne i groźne: `@AppStorage` przywróciłby
+otwarty inspektor przy starcie, a natywny inspektor obecny podczas pierwszego przebiegu
+layoutu okna potrafi doprowadzić AppKit do rekurencyjnego unieważniania constraintów
+`NavigationSplitView` i przerwania procesu. Dokładnie temu służą `showsInspectorAtLaunch`
+oraz `StartupLayoutTests`.
+
+Zastosowano wzorzec, którego to repozytorium już używa: flaga przeniosła się do
+`WegaMacUpdaterApp`, ponad `.id(localization.language)` — tam, gdzie z tego samego powodu
+siedzą `ScanStore`, `MigrationStore` i `WegaCommandCenter` — i trafia do `ContentView`
+jako `@Binding`. Przeżywa przełączenie języka, a jako `@State` sceny nadal startuje
+zamknięta przy każdym uruchomieniu.
 
 ## Testy
 
