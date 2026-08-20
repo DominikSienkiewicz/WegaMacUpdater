@@ -102,3 +102,18 @@ struct LogDetailTests {
         #expect(LogDetail(command: nil, exitCode: nil, stderr: nil) == nil)
     }
 }
+
+@Suite("LogDetail redaction")
+struct LogDetailRedactionTests {
+
+    @Test func redactionReachesBothFieldsAndOutput() {
+        let detail = LogDetail(
+            fields: [.init(key: "command", value: "cp /Users/ala/Desktop/a.app /Applications")],
+            output: "token=ghp_0123456789abcdefghij failed"
+        )
+        let redacted = detail.redacted(using: LogRedaction.redact)
+        #expect(redacted.fields.first?.value.contains("/Users/ala") == false)
+        #expect(redacted.fields.first?.value.contains(LogRedaction.pathPlaceholder) == true)
+        #expect(redacted.output?.contains("ghp_0123456789abcdefghij") == false)
+    }
+}

@@ -101,6 +101,15 @@ public struct LogDetail: Equatable, Sendable {
         return LogDetail(fields: fields, output: inOutput ? outputLines.joined(separator: "\n") : nil)
     }
 
+    /// Ten sam detal z każdą wartością przepuszczoną przez `transform`. Używane, żeby
+    /// kanał OSLog dostał tekst zredagowany dokładnie tak jak `message`.
+    public func redacted(using transform: (String) -> String) -> LogDetail {
+        LogDetail(
+            fields: fields.map { Field(key: $0.key, value: transform($0.value)) },
+            output: output.map(transform)
+        )
+    }
+
     // MARK: - Limity
 
     /// Zachowuje **ogon** wyjścia: awaria jest na końcu, nie na początku.
