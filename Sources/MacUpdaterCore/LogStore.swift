@@ -30,14 +30,18 @@ public struct LogEntry: Identifiable, Equatable, Sendable {
     public let level: LogLevel
     public let category: LogCategory
     public let message: String
+    /// Strukturalny kontekst awarii, gdy wpis go niesie. Opcjonalny, więc każde
+    /// istniejące wywołanie `WegaLog.error(...)` kompiluje się bez zmian.
+    public let detail: LogDetail?
 
     public init(id: UUID = UUID(), date: Date, level: LogLevel,
-                category: LogCategory, message: String) {
+                category: LogCategory, message: String, detail: LogDetail? = nil) {
         self.id = id
         self.date = date
         self.level = level
         self.category = category
         self.message = message
+        self.detail = detail
     }
 
     nonisolated(unsafe) private static let isoFormatter: ISO8601DateFormatter = {
@@ -51,6 +55,45 @@ public struct LogEntry: Identifiable, Equatable, Sendable {
         let flat = message.replacingOccurrences(of: "\n", with: " ")
                           .replacingOccurrences(of: "\r", with: " ")
         return "\(Self.isoFormatter.string(from: date)) [\(level.rawValue.uppercased())] [\(category.label)] \(flat)"
+    }
+
+    /// Wszystko, co ten wpis zapisuje do pliku: linia nagłówka plus linie detalu.
+    /// Dla wpisu bez detalu jest bajt w bajt równe ``fileLine``, więc żaden istniejący
+    /// `wega.log` nie wymaga migracji.
+    public var fileText: String {
+        guard let detail else { return fileLine }
+        return ([fileLine] + detail.continuationLines).joined(separator: "\n")
+    }
+
+    /// Parsuje cały fragment pliku, sklejając linie kontynuacji z wpisem, który je
+    /// poprzedza. Sieroce linie kontynuacji — ogon pliku potrafi zacząć się w środku
+    /// wpisu — są odrzucane, nie doklejane do następnego wpisu.
+    public static func parseLog(_ text: String) -> [LogEntry] {
+        var entries: [LogEntry] = []
+        var pendingHeader: LogEntry?
+        var pendingDetail: [String] = []
+
+        func flush() {
+            guard let header = pendingHeader else { pendingDetail = []; return }
+            entries.append(LogEntry(
+                id: header.id, date: header.date, level: header.level,
+                category: header.category, message: header.message,
+                detail: LogDetail.parse(continuationLines: pendingDetail)
+            ))
+            pendingHeader = nil
+            pendingDetail = []
+        }
+
+        for line in text.split(separator: "\n", omittingEmptySubsequences: true).map(String.init) {
+            if line.hasPrefix(LogDetail.continuationPrefix) {
+                if pendingHeader != nil { pendingDetail.append(line) }
+                continue
+            }
+            flush()
+            pendingHeader = LogEntry.parse(line)
+        }
+        flush()
+        return entries
     }
 
     /// Parsuje linię pliku. Zwraca `nil` dla uszkodzonej/niepełnej linii.
@@ -150,7 +193,7 @@ public final class LogStore: ObservableObject {
     public func append(_ entry: LogEntry) {
         entries.append(entry)
         if entries.count > memoryCap { entries.removeFirst(entries.count - memoryCap) }
-        let line = entry.fileLine
+        let line = entry.fileText
         let dir = directory
         let fileURL = logFileURL
         let backup = backupURL
@@ -189,8 +232,7 @@ public final class LogStore: ObservableObject {
         guard let content = try? String(contentsOf: logFileURL, encoding: .utf8) else { return }
         let lines = content.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
         let tail = lines.suffix(loadTailLines)
-        let parsed = tail.compactMap { LogEntry.parse($0) }
-        entries = Array(parsed.suffix(memoryCap))
+        entries = Array(LogEntry.parseLog(tail.joined(separator: "\n")).suffix(memoryCap))
     }
 
     private static nonisolated func rotateIfNeeded(fileURL: URL, backup: URL, maxBytes: Int, incoming: Int) {
