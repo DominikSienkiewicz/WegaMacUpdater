@@ -53,6 +53,32 @@ struct LogDetailTests {
         #expect(detail.continuationLines.joined(separator: "\n").count <= LogDetail.maxSerializedCharacters)
     }
 
+    @Test func dropsOutputLinesOnlyWhenSerializedSizeExceeds8000() {
+        // Create field values large enough that fields + marker + capped output exceed 8000
+        // cappedSerialization must trim output lines to stay under the limit
+        let longValue = String(repeating: "x", count: 1500)
+        let detail = LogDetail(fields: [
+            .init(key: "cmd", value: longValue),
+            .init(key: "sub", value: longValue),
+            .init(key: "src", value: longValue),
+        ], output: String(repeating: "output line content\n", count: 100))
+
+        let lines = detail.continuationLines
+        let serialized = lines.joined(separator: "\n")
+
+        // 1. Serialized length respects the cap
+        #expect(serialized.count <= LogDetail.maxSerializedCharacters)
+
+        // 2. Every field line survives — trimming drops output lines only, never fields
+        let fieldCount = lines.filter { line in
+            line.contains(": ") && !line.contains(LogDetail.outputMarker)
+        }.count
+        #expect(fieldCount == 3)
+
+        // 3. The marker survives (trimming stops at/before marker, not past it)
+        #expect(lines.contains { $0.contains(LogDetail.outputMarker) })
+    }
+
     @Test func flattensNewlinesInsideAFieldValue() {
         let detail = LogDetail(fields: [.init(key: "command", value: "a\nb")], output: nil)
         #expect(detail.continuationLines == ["\t| command: a b"])
