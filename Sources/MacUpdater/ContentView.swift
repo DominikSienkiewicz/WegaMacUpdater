@@ -68,12 +68,17 @@ struct ContentView: View {
     /// would re-evaluate this body on every publish during a scan, and this split view is
     /// deliberately kept still (see the fixed sidebar width below).
     @State private var rollbackBadge: Int   = 0
-    @State private var showInspector: Bool  = Self.showsInspectorAtLaunch
+    /// Owned by `WegaMacUpdaterApp`, above `.id(localization.language)`, so switching language
+    /// re-keys this view without closing a panel the user deliberately opened. Not `@AppStorage`:
+    /// a persisted `true` would present the inspector during first layout — see
+    /// `showsInspectorAtLaunch`.
+    @Binding private var showInspector: Bool
     /// D5 — one namespace for the toolbar's scan control, so `.glassEffectID` can morph
     /// glass between its ready and checking states.
     @Namespace private var glassNamespace
 
-    init() {
+    init(showInspector: Binding<Bool>) {
+        _showInspector = showInspector
         _brewInstalled = State(initialValue: BinaryLocator().locateBrew() != nil)
     }
 

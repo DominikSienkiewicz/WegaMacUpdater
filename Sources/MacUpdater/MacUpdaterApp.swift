@@ -18,6 +18,10 @@ struct WegaMacUpdaterApp: App {
     @StateObject private var scan = ScanStore()
     /// Migration can remain active while `.id(localization.language)` rebuilds its view.
     @StateObject private var migration = MigrationStore()
+    /// Whether the detail column shows its inspector. Held here, above the language re-key, so a
+    /// switch does not close a panel the user opened. `@State` on the scene — never persisted —
+    /// keeps every launch starting closed, which `ContentView.showsInspectorAtLaunch` demands.
+    @State private var showInspector: Bool = ContentView.showsInspectorAtLaunch
 
     // Deliberately no `init()`. The askpass helper and the sudo shim used to be written into
     // Application Support here, on every launch, before the user had authorised anything.
@@ -26,7 +30,7 @@ struct WegaMacUpdaterApp: App {
 
     var body: some Scene {
         WindowGroup(id: "main") {
-            ContentView()
+            ContentView(showInspector: $showInspector)
                 .environmentObject(model)
                 .environmentObject(localization)
                 .environmentObject(policies)

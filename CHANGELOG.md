@@ -13,7 +13,26 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Added
+- **The interface language switches from the main window, not only from Settings.** The picker
+  lived three cards down in the Settings window, behind the gear icon — reachable only by reading
+  your way to it, which is precisely what someone who cannot read the interface is unable to do.
+  A `globe` menu now sits in the detail column's toolbar, after the spacer that separates the scan
+  control from the window's own settings: an icon that needs no translation. It drives the same
+  `LocalizationManager` publisher the Settings card drives, so neither control is a copy of the
+  other, and the card stays where people have already learned to look for it. Wega still opens in
+  the system language on first launch; this is about switching, not about guessing better.
+
 ### Fixed
+- **Switching the language no longer closes the details panel.** `.id(localization.language)`
+  re-keys the window's view tree so every `tr(...)` re-evaluates — which also hands `ContentView`
+  a new identity and throws away its `@State`, including whether the inspector was open. The flag
+  moved up to the scene root, beside the scan store and the command centre, which already live
+  above the re-key for exactly this reason. It is deliberately not persisted across launches:
+  `@AppStorage` would restore an open inspector during the window's first layout pass, and a
+  native inspector presented that early can make AppKit recursively invalidate
+  `NavigationSplitView` constraints and abort the process — the crash `showsInspectorAtLaunch`
+  exists to prevent.
 - **The resource probe now runs on the bytes that are published.** It was added to the CI
   packaging job, which builds an ad-hoc-signed app — but the publishing job rebuilds and signs
   with the Developer ID, and only that build becomes the `.pkg` and `.dmg` people download. The
