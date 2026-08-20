@@ -81,6 +81,25 @@ enum CaskRollbackGuard {
         case expected(String?)
     }
 
+    /// What "the version on disk did not change" is allowed to prove about whether an
+    /// artifact actually arrived.
+    ///
+    /// It is evidence for `brew upgrade` and only for it: the target version differs from the
+    /// installed one by definition, so an unchanged `CFBundleShortVersionString` means brew
+    /// exited 0 on a Caskroom record that already named the new version and never touched the
+    /// disk. Adoption runs `brew install --cask --force`, which no record can make skip, and
+    /// lands the version already on disk on purpose — reading that as "nothing was installed"
+    /// turned a successful takeover into a red banner (Proton Drive 3.0.2, 2026-08-20, see
+    /// `AdoptionSameVersionVerificationTests`). What adoption needs answered instead —
+    /// *is there an app where the cask says it put one* — is already answered before this,
+    /// by `CaskReplacementSafety.resolveInstalledAppURL`, whose `nil` never reaches here.
+    /// `.versionChange` is the default on purpose: a caller that says nothing keeps the
+    /// strict reading, so the gate can only ever be stood down deliberately.
+    private enum ArrivalEvidence {
+        case versionChange
+        case forcedReinstall
+    }
+
     /// Reads the installed publishers before any snapshot or package-manager mutation.
     /// A bundle that already differs from the trusted ledger is not a safe rollback source,
     /// so callers must exclude every returned token from the upgrade command.
@@ -248,7 +267,8 @@ enum CaskRollbackGuard {
             snapshotURL: snapshotURL,
             validationURL: validationURL,
             publisherBaseline: .expected(expectedTeamID),
-            bundleIdentityBaseline: .expected(expectedBundleIdentifier)
+            bundleIdentityBaseline: .expected(expectedBundleIdentifier),
+            arrivalEvidence: .forcedReinstall
         )
         // REL-07 — the conscious "Aktualizuj przez Brew" retry lands here: a healthy result
         // clears the mark (the force-reinstall repaired the Caskroom metadata in the same pass),
@@ -273,6 +293,7 @@ enum CaskRollbackGuard {
             validationURL: validationURL,
             publisherBaseline: .expected(expectedTeamID),
             bundleIdentityBaseline: .expected(expectedBundleIdentifier),
+            arrivalEvidence: .forcedReinstall,
             dependencies: dependencies
         )
         dependencies.applyRollbackLedger(token, outcome)
@@ -286,6 +307,7 @@ enum CaskRollbackGuard {
         validationURL: URL,
         publisherBaseline: PublisherBaseline,
         bundleIdentityBaseline: BundleIdentityBaseline,
+        arrivalEvidence: ArrivalEvidence = .versionChange,
         dependencies: Dependencies? = nil
     ) async -> Outcome {
         func restoreSnapshot(
@@ -410,7 +432,10 @@ enum CaskRollbackGuard {
             // bundle, so the disk answers it directly. Without this the canary would inspect the
             // *old* app, pass it, and talk a no-op up into "zaktualizowano" (Obsidian 1.13.6,
             // reported updated twice while never moving — see `NoOpCaskUpgradeTests`).
-            if !UpdateOperationRecoveryPlan.bundleWasReplaced(
+            //
+            // Only an upgrade can be answered this way — see ``ArrivalEvidence``.
+            if case .versionChange = arrivalEvidence,
+               !UpdateOperationRecoveryPlan.bundleWasReplaced(
                 installedVersion: UpdateOperationRecoveryPlan.bundleShortVersion(at: validationURL),
                 snapshotVersion: UpdateOperationRecoveryPlan.bundleShortVersion(at: snapshotURL)
             ) {
