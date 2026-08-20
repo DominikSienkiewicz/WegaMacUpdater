@@ -361,12 +361,18 @@ extension ScanStore {
         }
         emitActivitySignal(.error)
         emitWegaState(WegaState(pose: .alert, line: tr("Część pakietów się nie zaktualizowała.")))
-        WegaLog.error(.homebrew, "Aktualizacja niekompletna: \(failedNames.isEmpty ? "Brew zgłosił błąd" : failedNames.joined(separator: ", "))")
         // Surface *why* each upgrade failed — the brew error block, not just the token
-        // name — so the log explains the failure instead of only flagging it.
-        for line in summary.diagnostics {
-            WegaLog.error(.homebrew, line)
-        }
+        // name — so the log explains the failure instead of only flagging it. The block
+        // rides on the failure entry as one detail rather than as N loose lines, so
+        // selecting that entry for a bug report carries the explanation with it.
+        WegaLog.error(
+            .homebrew,
+            "Aktualizacja niekompletna: \(failedNames.isEmpty ? "Brew zgłosił błąd" : failedNames.joined(separator: ", "))",
+            detail: LogDetail(
+                stderr: summary.diagnostics.joined(separator: "\n"),
+                source: "cask"
+            )
+        )
         for outcome in summary.notUpgraded {
             WegaLog.error(.homebrew, "\(outcome.name): \(outcome.verdict.logDescription)")
         }
