@@ -12,9 +12,9 @@ see [`CONTRIBUTING.md`](CONTRIBUTING.md). To report a security problem, see
 [`SECURITY.md`](SECURITY.md).
 
 > **Language.** Wega ships in **Polski** and **English**. On first launch it follows your
-> macOS language; you can switch it any time in the **Settings** window (**⌘,** →
-> *Language*). The menu and button names in this guide are given by what they do — your
-> app may show them in Polish.
+> macOS language; you can switch it any time from the **globe** button in the main window's
+> toolbar, or in the **Settings** window (**⌘,** → *Language*). The menu and button names in
+> this guide are given by what they do — your app may show them in Polish.
 
 ---
 
