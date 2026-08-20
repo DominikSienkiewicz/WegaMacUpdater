@@ -136,6 +136,14 @@ would inspect the *old* app, pass it, and talk the no-op up into a success. An u
 version on either side counts as replaced — absence of evidence must not turn every unparsable
 bundle into a failed upgrade.
 
+The reading holds for `brew upgrade` and only for it, because there the target version differs
+from the installed one by definition. Adoption — "Przepnij pod Brew" and "Aktualizuj przez
+Brew" — runs `brew install --cask --force`, which no Caskroom record can make skip, and lands
+the version already on disk whenever the cask offers exactly that version. An unchanged version
+there says nothing about whether the bundle was replaced, so the check stands down and the
+takeover is reported as the success it is; that the app arrived where the cask says it did is
+already established before validation, by artifact resolution, whose failure fails closed.
+
 #### Launch smoke test
 
 The identity, Gatekeeper and publisher gates all describe what the new bundle **is**; none
