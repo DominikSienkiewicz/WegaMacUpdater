@@ -22,6 +22,9 @@
 - **Wszystko, co opuszcza maszynę, przechodzi przez `LogRedaction.redactForExport`.** Brak ścieżki „raw" jest wymogiem strukturalnym, nie konwencją.
 - **Każdy nowy string UI** przechodzi przez `tr(...)` i **musi** dostać wpis w `Translations.operations` w `Sources/MacUpdaterCore/Translations.swift` — pilnuje tego `LocalizationCompletenessTests`.
 - **Treść samego zgłoszenia jest po angielsku**, ze stabilnymi etykietami — jak `DiagnosticsBundle` i `InventoryExport`.
+- **SwiftLint 0.65.0 nie zna opcji `--path`** — ścieżki podaje się pozycyjnie:
+  `swiftlint lint --strict <plik>`. Wariant z `--path` kończy się błędem
+  `Unknown option '--path'`, czyli lint w ogóle się nie wykonuje.
 - **`swift test --filter` dopasowuje NAZWY TYPÓW, nie nazwy wyświetlane z `@Suite("…")`.**
   Filtr po nazwie z `@Suite` nie uruchamia **żadnego** testu, a SwiftPM sygnalizuje to
   wyłącznie ostrzeżeniem `warning: No matching test cases were run` przy kodzie wyjścia 0 —
@@ -320,7 +323,7 @@ swift test --filter LogDetail
 - [ ] **Step 5: Lint**
 
 ```bash
-swiftlint lint --strict --path Sources/MacUpdaterCore/LogDetail.swift
+swiftlint lint --strict Sources/MacUpdaterCore/LogDetail.swift
 ```
 
 - [ ] **Step 6: Commit**
@@ -527,7 +530,7 @@ Drugi filtr to regresja: istniejące testy `LogStore` muszą przejść bez zmian
 - [ ] **Step 6: Lint i commit**
 
 ```bash
-swiftlint lint --strict --path Sources/MacUpdaterCore/LogStore.swift
+swiftlint lint --strict Sources/MacUpdaterCore/LogStore.swift
 ```
 
 ```bash
@@ -667,7 +670,7 @@ swift test --filter LogDetail
 - [ ] **Step 6: Lint i commit**
 
 ```bash
-swiftlint lint --strict --path Sources/MacUpdaterCore/WegaLog.swift
+swiftlint lint --strict Sources/MacUpdaterCore/WegaLog.swift
 ```
 
 ```bash
@@ -951,7 +954,7 @@ Drugi filtr jest istotą tego zadania: refaktor jest poprawny wtedy i tylko wted
 - [ ] **Step 6: Lint i commit**
 
 ```bash
-swiftlint lint --strict --path Sources/MacUpdaterCore/PrefilledURLBody.swift
+swiftlint lint --strict Sources/MacUpdaterCore/PrefilledURLBody.swift
 ```
 
 ```bash
@@ -1037,7 +1040,7 @@ swift test --filter AppEndpoints
 - [ ] **Step 6: Lint i commit**
 
 ```bash
-swiftlint lint --strict --path Sources/MacUpdaterCore/AppEndpoints.swift
+swiftlint lint --strict Sources/MacUpdaterCore/AppEndpoints.swift
 ```
 
 ```bash
@@ -1205,7 +1208,7 @@ swift test --filter BugReportEnvironment
 - [ ] **Step 5: Lint i commit**
 
 ```bash
-swiftlint lint --strict --path Sources/MacUpdaterCore/BugReportEnvironment.swift
+swiftlint lint --strict Sources/MacUpdaterCore/BugReportEnvironment.swift
 ```
 
 ```bash
@@ -1594,7 +1597,7 @@ swift test --filter BugReportBuilder
 - [ ] **Step 5: Lint i commit**
 
 ```bash
-swiftlint lint --strict --path Sources/MacUpdaterCore/BugReport.swift
+swiftlint lint --strict Sources/MacUpdaterCore/BugReport.swift
 ```
 
 ```bash
@@ -1855,7 +1858,7 @@ swift test --filter BugReportController
 - [ ] **Step 6: Lint i commit**
 
 ```bash
-swiftlint lint --strict --path Sources/MacUpdater/BugReportController.swift
+swiftlint lint --strict Sources/MacUpdater/BugReportController.swift
 ```
 
 ```bash
@@ -2071,7 +2074,7 @@ struct BugReportSheet: View {
 - [ ] **Step 4: Lint**
 
 ```bash
-swiftlint lint --strict --path Sources/MacUpdater/BugReportSheet.swift
+swiftlint lint --strict Sources/MacUpdater/BugReportSheet.swift
 ```
 
 - [ ] **Step 5: (warunkowo) uruchom test kompletności tłumaczeń**
@@ -2309,7 +2312,7 @@ Przejdź do zakładki Logi z pełnym buforem (2000 wpisów) i przewiń listę. J
 - [ ] **Step 10: Lint i commit**
 
 ```bash
-swiftlint lint --strict --path Sources/MacUpdater/LogsView.swift
+swiftlint lint --strict Sources/MacUpdater/LogsView.swift
 ```
 
 ```bash
