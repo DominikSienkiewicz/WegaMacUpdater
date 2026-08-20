@@ -41,7 +41,8 @@ jobs:
             grep -oE '\]\([^)#][^)]*\)' "$file" | sed 's/](\(.*\))/\1/' | sed 's/#.*//' \
             | while IFS= read -r target; do
                 case "$target" in http*|mailto:*|'') continue ;; esac
-                # `Sources/Foo.swift:190` points at a line, not at a file called "…swift:190".
+                # `Sources/MacUpdaterCore/BrewService.swift:190` points at a line, not at a
+                # file called "…swift:190".
                 # Strip a trailing :<digits> before the existence check, or the convention reads
                 # as a dead link and blocks CI on a file that is right there.
                 target=${target%:[0-9]*}
