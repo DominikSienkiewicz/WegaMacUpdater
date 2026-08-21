@@ -891,5 +891,13 @@ extension Translations {
         "Zgłoszenie jest redagowane — ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami.":
             "The report is redacted: paths, tokens and account names are replaced with placeholders.",
         "Zaznacz wpisy w logu, żeby zgłosić błąd": "Select log entries to report a problem",
+        // Fix round 1 — channel picker replaces two send buttons, and the no-handler
+        // fallback becomes channel-aware.
+        "Kanał": "Channel",
+        "Wyślij zgłoszenie": "Send report",
+        "Nie udało się otworzyć zgłoszenia na GitHubie": "Could not open the GitHub issue page",
+        "Ta maszyna nie może otworzyć strony zgłoszenia. Skopiuj poniższe dane i utwórz je ręcznie pod tym adresem.":
+            "This machine cannot open the issue page. Copy the details below and create it manually at this address.",
+        "Link": "Link",
     ]
 }

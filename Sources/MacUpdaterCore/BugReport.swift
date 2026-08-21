@@ -16,7 +16,10 @@ public struct BugReportDraft: Sendable, Equatable {
 
 /// Dokąd zgłoszenie trafia. Kanał niesie własny limit długości URL-a, żeby żadne
 /// wywołanie nie mogło zbudować treści pod limit innego kanału.
-public enum BugReportChannel: Sendable, Equatable {
+///
+/// `Hashable` (not just `Equatable`) so the value can back a SwiftUI `Picker` selection —
+/// `Picker`'s `SelectionValue` requires `Hashable`.
+public enum BugReportChannel: Sendable, Hashable {
     case email(address: String)
     case gitHubIssue(endpoint: URL)
 
