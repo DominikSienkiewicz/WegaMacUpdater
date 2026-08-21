@@ -140,4 +140,110 @@ final class SEC09LogPrivacyTests: XCTestCase {
                              "SEC-09: a failed log write must be signalled, not ignored")
         XCTAssertNotNil(store.lastWriteError)
     }
+
+    // MARK: - Every rule but the PEM block is bounded to a single line (criterion 1 & 5)
+
+    /// `DiagnosticsBundle` hands a whole log file to the redactor in ONE call so the
+    /// multi-line `pemBlock` rule can fire at all. That is only safe while every *other*
+    /// rule stops at a newline. `labelledSecret`'s quoted branch did not: a
+    /// `password: "hunter2` whose closing quote never arrives on that line matched forward
+    /// to the next `"` anywhere in the file, replacing every entry in between with a single
+    /// `[secret]`.
+    func testAnUnbalancedQuoteAfterASecretLabelCannotSwallowLaterEntries() {
+        let text = """
+        2026-08-20T10:00:00Z [ERROR] [Brew] password: "hunter2
+        2026-08-20T10:00:01Z [INFO] [App] Sprawdzam aktualizacje
+        2026-08-20T10:00:02Z [INFO] [App] Znaleziono 3 aktualizacje
+        2026-08-20T10:00:03Z [ERROR] [Brew] Error: Cask "foo" is not installed
+        """
+
+        let out = LogRedaction.redact(text)
+
+        XCTAssertFalse(out.contains("hunter2"), "the labelled value must still go: \(out)")
+        XCTAssertTrue(out.contains("2026-08-20T10:00:01Z [INFO] [App] Sprawdzam aktualizacje"), out)
+        XCTAssertTrue(out.contains("2026-08-20T10:00:02Z [INFO] [App] Znaleziono 3 aktualizacje"), out)
+        XCTAssertTrue(out.contains(#"Error: Cask "foo" is not installed"#), out)
+        XCTAssertEqual(out.components(separatedBy: "\n").count, 4,
+                       "no entry may be absorbed into another: \(out)")
+    }
+
+    /// The apostrophe branch has exactly the same reach — and Homebrew hands us unbalanced
+    /// apostrophes routinely (`Error: Cask 'foo' is not installed`), so this is the shape
+    /// the over-match actually fires on in the field.
+    func testAnUnbalancedApostropheAfterASecretLabelCannotSwallowLaterEntries() {
+        let text = """
+        2026-08-20T10:00:00Z [ERROR] [Brew] password: 'hunter2
+        2026-08-20T10:00:01Z [INFO] [App] Sprawdzam aktualizacje
+        2026-08-20T10:00:02Z [ERROR] [Brew] Error: Cask 'foo' is not installed
+        """
+
+        let out = LogRedaction.redact(text)
+
+        XCTAssertFalse(out.contains("hunter2"), out)
+        XCTAssertTrue(out.contains("2026-08-20T10:00:01Z [INFO] [App] Sprawdzam aktualizacje"), out)
+        XCTAssertTrue(out.contains("Error: Cask 'foo' is not installed"), out)
+        XCTAssertEqual(out.components(separatedBy: "\n").count, 3,
+                       "no entry may be absorbed into another: \(out)")
+    }
+
+    /// A line ending on the header name alone — value logged separately, or the line
+    /// truncated — let the separator's `\s*` cross the newline so `\S+` ate the *next*
+    /// entry's timestamp and welded the two entries together.
+    func testAnAuthorizationHeaderAtALineEndCannotSwallowTheNextEntry() {
+        let text = """
+        2026-08-20T10:00:00Z [DEBUG] [Network] nagłówki żądania: Authorization:
+        2026-08-20T10:00:01Z [INFO] [App] Sprawdzam aktualizacje
+        """
+
+        let out = LogRedaction.redact(text)
+
+        XCTAssertTrue(out.contains("2026-08-20T10:00:01Z [INFO] [App] Sprawdzam aktualizacje"), out)
+        XCTAssertEqual(out.components(separatedBy: "\n").count, 2,
+                       "no entry may be absorbed into another: \(out)")
+    }
+
+    /// Same shape for the bare `bearer` rule: its `\s+` crossed the newline and the token
+    /// class then happily consumed the next entry's `2026-08-20T10`.
+    func testABearerLabelAtALineEndCannotSwallowTheNextEntry() {
+        let text = """
+        2026-08-20T10:00:00Z [DEBUG] [Network] schemat uwierzytelnienia: Bearer
+        2026-08-20T10:00:01Z [INFO] [App] Sprawdzam aktualizacje
+        """
+
+        let out = LogRedaction.redact(text)
+
+        XCTAssertTrue(out.contains("2026-08-20T10:00:01Z [INFO] [App] Sprawdzam aktualizacje"), out)
+        XCTAssertEqual(out.components(separatedBy: "\n").count, 2,
+                       "no entry may be absorbed into another: \(out)")
+    }
+
+    /// Bounding those three rules to a line must not narrow them *within* one: a genuine
+    /// secret sitting on a single line is still removed, in every form each rule accepts.
+    func testASameLineSecretIsStillRedactedByEachBoundedRule() {
+        let quoted = LogRedaction.redact(#"password: "hunter2" zapisane"#)
+        XCTAssertFalse(quoted.contains("hunter2"), quoted)
+        XCTAssertTrue(quoted.contains("password"), "the label stays, so the line says what went: \(quoted)")
+        XCTAssertTrue(quoted.contains("[secret]"), quoted)
+        XCTAssertTrue(quoted.contains("zapisane"), "text after the value must survive: \(quoted)")
+
+        let apostrophed = LogRedaction.redact(#"api_key = 'ala ma kota' ok"#)
+        XCTAssertFalse(apostrophed.contains("ala ma kota"), apostrophed)
+        XCTAssertTrue(apostrophed.contains("[secret]"), apostrophed)
+
+        let bare = LogRedaction.redact("client_secret=s3cr3t-value dalej")
+        XCTAssertFalse(bare.contains("s3cr3t-value"), bare)
+        XCTAssertTrue(bare.contains("dalej"), bare)
+
+        let header = LogRedaction.redact("Authorization: Basic YWxpY2phOnNlY3JldA==")
+        XCTAssertFalse(header.contains("YWxpY2phOnNlY3JldA=="), header)
+        XCTAssertTrue(header.contains("[secret]"), header)
+
+        let spacedHeader = LogRedaction.redact("proxy-authorization\t=\tBearer abcdef1234567890 koniec")
+        XCTAssertFalse(spacedHeader.contains("abcdef1234567890"), spacedHeader)
+        XCTAssertTrue(spacedHeader.contains("koniec"), spacedHeader)
+
+        let bearer = LogRedaction.redact("curl -H Bearer abcdef1234567890 done")
+        XCTAssertFalse(bearer.contains("abcdef1234567890"), bearer)
+        XCTAssertTrue(bearer.contains("done"), bearer)
+    }
 }

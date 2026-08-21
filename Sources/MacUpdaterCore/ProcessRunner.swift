@@ -315,10 +315,18 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         )
         // Non-zero is often domain-meaningful (handled by callers), so keep it at
         // debug — available for diagnosis without escalating it to a warning/error.
+        // The detail is what makes it diagnosable at all: without it the line said
+        // "exited 1" and threw the tool's own explanation away.
         if result.exitCode != 0 {
             WegaLog.debug(
                 .process,
-                "\(request.executableURL.lastPathComponent) exited \(result.exitCode)"
+                "\(request.executableURL.lastPathComponent) exited \(result.exitCode)",
+                detail: LogDetail(
+                    command: ([request.executableURL.lastPathComponent] + request.arguments)
+                        .joined(separator: " "),
+                    exitCode: result.exitCode,
+                    stderr: result.stderr
+                )
             )
         }
         return result

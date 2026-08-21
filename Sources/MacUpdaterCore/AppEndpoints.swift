@@ -47,6 +47,10 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     /// Prefilled "new issue" endpoint the UX-14 Inventory report button targets via
     /// ``CatalogIssueBuilder``.
     public let projectNewIssue: String
+    /// Odbiorca zgłoszeń błędów wysyłanych z zakładki Logi. Trzymany jako sam adres —
+    /// schemat `mailto:` dokłada ``BugReportBuilder``, więc overlay użytkownika nie może
+    /// podmienić go na URL o innym schemacie.
+    public let supportEmail: String
     public let authorLinkedIn: String
     public let masRepository: String
 
@@ -113,6 +117,7 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public var projectRepositoryURL: URL { URL(string: projectRepository)! }
     public var projectIssuesURL: URL { URL(string: projectIssues)! }
     public var projectNewIssueURL: URL { URL(string: projectNewIssue)! }
+    public var supportEmailAddress: String { supportEmail }
     public var authorLinkedInURL: URL { URL(string: authorLinkedIn)! }
     public var masRepositoryURL: URL { URL(string: masRepository)! }
 }
@@ -261,7 +266,10 @@ extension AppEndpoints {
     ///     **host on the allowlist** the bundled baseline already talks to — an override that
     ///     leaves that set, or downgrades to http, silently falls back to the baseline;
     ///   • the Homebrew install command is a shell string (surfaced as a copy button), so it is
-    ///     **excluded from the overlay entirely** and always taken from the bundled baseline.
+    ///     **excluded from the overlay entirely** and always taken from the bundled baseline;
+    ///   • the support address is not a URL, so it is validated as an **address** (`validEmail`)
+    ///     — an override that could redirect reports elsewhere or inject extra `mailto:`
+    ///     headers falls back to the baseline like any rejected URL.
     func overlaying(_ other: AppEndpointsOverlay) -> AppEndpoints {
         // DBT-5: stałe (nie-szablonowe) endpointy są force-unwrapowane w akcesorach
         // `…URL`, więc nadpisanie ich musi być POPRAWNYM URL-em — inaczej trzymamy
@@ -277,6 +285,32 @@ extension AppEndpoints {
                   let scheme = comps.scheme?.lowercased(), scheme == "http" || scheme == "https",
                   let host = comps.host, !host.isEmpty
             else { return base }
+            return override
+        }
+
+        // SEC-08: `supportEmail` is the one endpoint that is not a URL, so `validURL` cannot
+        // judge it — and it was the only field merged unchecked. That let a user-writable
+        // overlay redirect every bug report to an attacker's mailbox, and let an address
+        // carrying `?`/`&` smuggle extra `mailto:` headers (a hidden `bcc`) into the URL the
+        // mail client opens. It is held to an address shape instead: exactly one `@` with
+        // both sides non-empty, ASCII only (`URL(string:)` refuses anything else), and none
+        // of the characters that would end the address or start another header.
+        //
+        // `,` and `;` are rejected for the same reason as `?`/`&`/`#`: RFC 6068 makes the
+        // `to` field a *comma-separated list*, so `victim@good.test,attacker@evil.test` is
+        // two recipients, not one malformed address. `%` goes with them, because the mail
+        // client percent-decodes the field before reading it — `attacker%40evil.test`
+        // carries no literal `@` and sails past the exactly-one-`@` test, then becomes a
+        // second addressee once decoded. None of the three has a legitimate place in an
+        // address emitted literally into a `mailto:` URI.
+        func validEmail(_ override: String?, _ base: String) -> String {
+            guard let override, override.allSatisfy(\.isASCII) else { return base }
+            let sides = override.split(separator: "@", omittingEmptySubsequences: false)
+            guard sides.count == 2, !sides[0].isEmpty, !sides[1].isEmpty else { return base }
+            let forbidden = CharacterSet(charactersIn: "?&#,;%")
+                .union(.whitespacesAndNewlines)
+                .union(.controlCharacters)
+            guard override.rangeOfCharacter(from: forbidden) == nil else { return base }
             return override
         }
 
@@ -329,6 +363,7 @@ extension AppEndpoints {
             projectRepository: validURL(other.projectRepository, projectRepository),
             projectIssues: validURL(other.projectIssues, projectIssues),
             projectNewIssue: validURL(other.projectNewIssue, projectNewIssue),
+            supportEmail: validEmail(other.supportEmail, supportEmail),
             authorLinkedIn: validURL(other.authorLinkedIn, authorLinkedIn),
             masRepository: validURL(other.masRepository, masRepository)
         )
@@ -387,6 +422,7 @@ public struct AppEndpointsOverlay: Decodable, Sendable, Equatable {
     // Defaulted (like `obsidianDesktopReleases`) so existing memberwise-init call sites keep
     // compiling without listing this UX-14 key.
     public var projectNewIssue: String? = nil
+    public var supportEmail: String? = nil
     public let authorLinkedIn: String?
     public let masRepository: String?
 }

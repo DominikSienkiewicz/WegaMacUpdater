@@ -17,15 +17,27 @@ public enum LogLevelFilter: CaseIterable, Identifiable, Sendable {
 }
 
 /// Czysta funkcja filtrowania — testowalna bez UI. Filtruje po poziomie i po
-/// frazie (dopasowanie w treści LUB w etykiecie kategorii, bez rozróżniania
-/// wielkości liter).
+/// frazie (dopasowanie w treści, w etykiecie kategorii LUB w strukturalnym detalu
+/// awarii, bez rozróżniania wielkości liter).
 public func filterLogEntries(_ entries: [LogEntry], level: LogLevelFilter, search: String) -> [LogEntry] {
     let q = search.trimmingCharacters(in: .whitespaces).lowercased()
     return entries.filter { e in
         guard level.includes(e.level) else { return false }
         guard !q.isEmpty else { return true }
-        return e.message.lowercased().contains(q) || e.category.label.lowercased().contains(q)
+        return e.message.lowercased().contains(q)
+            || e.category.label.lowercased().contains(q)
+            || detailMatches(e.detail, q)
     }
+}
+
+/// A failure's own words — the command that ran and the tail of its `stderr` — live on the
+/// entry's detail, not in its message. They are as much part of "what this entry says" as
+/// the message is, so the search has to reach them; without this, moving text out of N loose
+/// messages and onto one detail silently breaks a search that used to match.
+private func detailMatches(_ detail: LogDetail?, _ lowercasedQuery: String) -> Bool {
+    guard let detail else { return false }
+    if detail.fields.contains(where: { $0.value.lowercased().contains(lowercasedQuery) }) { return true }
+    return detail.output?.lowercased().contains(lowercasedQuery) ?? false
 }
 
 /// UX-06 — why the log list is empty. An empty log ("nothing has happened") and a filter

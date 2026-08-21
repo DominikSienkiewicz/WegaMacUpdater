@@ -34,6 +34,16 @@ final class AppEndpointsTests: XCTestCase {
                        "https://github.com/DominikSienkiewicz/WegaMacUpdater/issues/new")
     }
 
+    // Zgłoszenie błędu z zakładki Logi otwiera domyślnego klienta poczty pod tym adresem,
+    // więc musi być obecny w konfiguracji — inaczej kanał e-mail cicho przestaje istnieć.
+    func testSupportEmailIsConfigured() throws {
+        let e = try AppEndpoints.loadBundled()
+        XCTAssertEqual(e.supportEmailAddress, "wegamacupdater.unbroken239@passmail.net")
+        XCTAssertTrue(e.supportEmailAddress.contains("@"), "musi być adresem, nie URL-em")
+        XCTAssertFalse(e.supportEmailAddress.hasPrefix("mailto:"),
+                       "schemat dokłada builder — konfiguracja trzyma sam adres")
+    }
+
     // MARK: Fixed endpoints keep the exact URLs the checkers used to hard-code
 
     func testFixedEndpointsMatchLegacyValues() throws {
@@ -198,6 +208,49 @@ final class AppEndpointsTests: XCTestCase {
         XCTAssertEqual(merged.githubLatestReleaseURL(repo: "o/r")?.absoluteString,
                        "https://api.github.com/repos/o/r/releases/latest?per_page=1",
                        "the templated accessor still fills placeholders in the applied override")
+    }
+
+    /// Criterion 2, address edition: `supportEmail` is the one endpoint that is not a URL, so
+    /// `validURL` cannot judge it — and merging it unchecked let a user-writable overlay
+    /// redirect every bug report to someone else's mailbox, or smuggle extra `mailto:`
+    /// headers into the URL the mail client opens. A well-formed address is still applied.
+    func testOverlayAcceptsAWellFormedSupportAddress() throws {
+        let base = try AppEndpoints.loadBundled()
+        let overlay = try JSONDecoder().decode(
+            AppEndpointsOverlay.self,
+            from: Data(#"{"supportEmail":"maintainer@example.test"}"#.utf8)
+        )
+        XCTAssertEqual(base.overlaying(overlay).supportEmailAddress, "maintainer@example.test",
+                       "a plain address override is legitimate and must be applied")
+    }
+
+    func testOverlayRejectsMalformedSupportAddresses() throws {
+        let base = try AppEndpoints.loadBundled()
+        let rejected = [
+            "victim@example.test?bcc=attacker@evil.test&body=",  // extra mailto headers
+            "victim@example.test&bcc=attacker@evil.test",
+            "victim@example.test#fragment",
+            "victim@example.test\nBcc: attacker@evil.test",      // header injection via a newline
+            // RFC 6068 makes `to` a comma-separated list that the mail client
+            // percent-decodes, so a comma plus `%40` adds a second recipient while still
+            // reading as one literal `@`.
+            "victim@example.test,attacker%40evil.test",
+            "victim;tag@example.test",                           // `;` is a list separator too
+            "victim%40attacker.evil.test@example.test",          // percent-encoding hides an `@`
+            "victim @example.test",                              // whitespace breaks the URL apart
+            "no-at-sign.example.test",
+            "two@at@example.test",
+            "@example.test",
+            "local@",
+            "pocztą@example.test",                               // non-ASCII: URL(string:) refuses it
+            "",
+        ]
+        for address in rejected {
+            let data = try JSONSerialization.data(withJSONObject: ["supportEmail": address])
+            let overlay = try JSONDecoder().decode(AppEndpointsOverlay.self, from: data)
+            XCTAssertEqual(base.overlaying(overlay).supportEmailAddress, base.supportEmailAddress,
+                           "overlay address \(address.debugDescription) must fall back to the baseline")
+        }
     }
 
     // MARK: SEC-08 — the presence of an unverified overlay is a first-class, surfaced state

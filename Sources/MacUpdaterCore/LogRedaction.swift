@@ -43,21 +43,30 @@ public enum LogRedaction {
     /// carries. The scheme word is matched explicitly rather than as "one more token", so
     /// the credential after `Basic`/`Bearer` is swallowed too without the pattern running
     /// on into the rest of the line.
+    ///
+    /// The gaps are `[^\S\n]` (horizontal whitespace) rather than `\s`, so a line that ends
+    /// on the header name alone cannot reach across the newline and eat the next entry.
     private static let authorizationHeader = try? NSRegularExpression(
-        pattern: #"(?i)\b(?:proxy-)?authorization\b\s*[:=]\s*(?:(?:bearer|basic|digest|token|negotiate)\s+)?\S+"#
+        pattern: #"(?i)\b(?:proxy-)?authorization\b[^\S\n]*[:=][^\S\n]*"#
+            + #"(?:(?:bearer|basic|digest|token|negotiate)[^\S\n]+)?\S+"#
     )
 
     /// A bearer credential outside a header, e.g. `curl -H "Bearer ghp_…"` flattened
-    /// into one log line.
+    /// into one log line. Horizontal whitespace only, for the same reason.
     private static let bearerToken = try? NSRegularExpression(
-        pattern: #"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{8,}"#
+        pattern: #"(?i)\bbearer[^\S\n]+[A-Za-z0-9._~+/=-]{8,}"#
     )
 
     /// A labelled credential: `token=…`, `api_key: …`, `password="…"`. The label is kept
     /// so the line still says *what* was removed; only the value is replaced.
+    ///
+    /// Both quoted alternatives stop at a newline. An unterminated quote is routine — a
+    /// truncated line, or Homebrew's `Error: Cask 'foo' is not installed` — and an
+    /// unbounded `"[^"]*"` would run to the next quote *anywhere in the file*, deleting
+    /// every entry in between. Falling back to `\S+` still redacts the value on its line.
     private static let labelledSecret = try? NSRegularExpression(
         pattern: #"(?i)\b(token|secret|passphrase|password|passwd|api[_-]?key|access[_-]?key|client[_-]?secret)"#
-            + #"(\s*[:=]\s*)("[^"]*"|'[^']*'|\S+)"#
+            + #"([^\S\n]*[:=][^\S\n]*)("[^"\n]*"|'[^'\n]*'|\S+)"#
     )
 
     /// Credentials recognisable by shape alone, so they are caught even when nothing

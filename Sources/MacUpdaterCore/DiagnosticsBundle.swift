@@ -37,9 +37,20 @@ public enum DiagnosticsBundle {
             DiagnosticsArchiveEntry(name: historyEntryName, text: history(snapshot, redact: redact)),
         ]
         for file in snapshot.logFiles {
+            // The file is redacted in ONE call, whole, never split by line. `LogRedaction`'s
+            // `pemBlock` pattern spans "-----BEGIN … PRIVATE KEY-----" through "-----END …
+            // PRIVATE KEY-----" and needs both markers in the same pass to fire — and since a
+            // failure detail writes raw `stderr` into `wega.log` as continuation lines, a
+            // multi-line key can genuinely be in there. Redacting line by line would never
+            // present the whole block to that pattern, and the key would travel verbatim into
+            // the one artefact that deliberately leaves the machine. `pemBlock` is the ONLY
+            // rule that spans lines, and it does so by design; every other rule is explicitly
+            // bounded to a line — horizontal-whitespace gaps (`[^\S\n]`) and character classes
+            // that exclude `\n` — so a whole-file pass cannot let one match run across entries
+            // and swallow the log between them.
             entries.append(DiagnosticsArchiveEntry(
                 name: "\(logDirectoryName)/\(file.name)",
-                text: redactLines(file.contents, redact: redact)
+                text: redact(file.contents)
             ))
         }
         return entries
@@ -180,13 +191,6 @@ public enum DiagnosticsBundle {
     }
 
     // MARK: - Helpers
-
-    private static func redactLines(_ contents: String, redact: Redactor) -> String {
-        contents
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .map { redact(String($0)) }
-            .joined(separator: "\n")
-    }
 
     private static func lineCount(_ contents: String) -> Int {
         contents.split(separator: "\n", omittingEmptySubsequences: true).count
