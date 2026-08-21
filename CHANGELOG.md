@@ -14,6 +14,31 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 ## [Unreleased]
 
 ### Added
+- **Selected updates install side by side, three package-manager processes at a time.** A run
+  walked its selection one package at a time, so seven casks meant seven downloads queueing
+  behind each other while the network and the disk sat idle for most of the run. Each cask and
+  each npm global now gets its own process, at most `MacUpdaterConstants.maxConcurrentUpgrades`
+  of them in flight, and the Homebrew formula batch and the App Store batch run in lanes beside
+  them rather than after them. Formulae deliberately stay a single `brew upgrade`: they share
+  dependencies, and a process each would rebuild the same dependency several times over — slower
+  rather than faster. Casks whose stanza can raise an admin-password prompt (`pkg`, `installer`,
+  `preflight`) are upgraded strictly one at a time, as is any cask whose artifact profile Wega
+  does not recognise, so two Touch ID sheets can never compete for the screen. Three is a
+  constant rather than a setting, because a cask install is bound by disk and network rather
+  than by cores — past roughly three the wall-clock gain flattens while lock collisions and peak
+  disk usage keep climbing — and because a fixed value is what keeps a *"it was slow"* report
+  reproducible. Concurrency adds exactly one new way to fail, brew refusing because another brew
+  already holds a lock it needs; nothing is installed when that happens, which is what makes the
+  single retry safe. **Stop** still stops at a package boundary: the processes already running
+  finish, nothing new is started, and everything still queued is reported as skipped rather than
+  as failed.
+- **Every line of the update log names the package it came from.** `[figma] ==> Downloading…`,
+  `[mas] error: …` — the log panel is one flat list, and a run now feeds it from several
+  processes at once, so a bare `==> Downloading` no longer says which of three concurrent
+  downloads produced it. Chronological order is still the honest order; the prefix is what makes
+  it readable again. It is a package token rather than interface text, so it is never translated
+  — the same marker appears whatever language the window is in, which is also what keeps a
+  pasted log searchable under the name the package manager itself uses.
 - **The interface language switches from the main window, not only from Settings.** The picker
   lived three cards down in the Settings window, behind the gear icon — reachable only by reading
   your way to it, which is precisely what someone who cannot read the interface is unable to do.

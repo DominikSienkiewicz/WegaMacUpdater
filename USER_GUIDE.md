@@ -128,9 +128,12 @@ it always did.
 ### Watching an update run
 
 While an update installs, a progress bar sits under the header. It counts **whole
-packages** — "Installing firefox — 3 of 7" — and the line under it names what the run is
-doing: preparing backups, downloading, or installing. When the last package is done, Wega
-re-checks the list and the scan's own progress bar takes over.
+packages**, and the line under it names what the run is doing: preparing backups,
+downloading, or installing. It names the package too — "Installing firefox — 3 of 7" — but
+only while that package is the only one installing; once several are running at once the
+line reads "Installing packages — 3 of 7" instead, because naming one of three would
+misdescribe the other two. When the last package is done, Wega re-checks the list and the
+scan's own progress bar takes over.
 
 There is no download percentage, and that is deliberate. Homebrew silences its download
 meter whenever it is not printing to a terminal, so the bytes are genuinely invisible to
@@ -140,15 +143,23 @@ bar at the same place while it downloads — the label keeps saying what is happ
 A run that fails part-way stops short of the end: six of seven packages upgraded leaves the
 bar at 6/7, and the banner explains the rest.
 
+While the run works, a **log panel** opens under the list and streams what the package
+managers are printing. Because several packages install at once, **every line is prefixed
+with the package it came from** — `[figma] ==> Downloading…`, `[mas] error: …` — so three
+interleaved downloads stay tellable apart. That prefix is the package's own token and is
+never translated, whatever language the interface is in: it is the name Homebrew, `mas` or
+npm uses, so a log you paste into a bug report stays searchable by it.
+
 ### Stopping an update
 
 An update in progress can be stopped: while it runs, the **Update** button is joined by
-**Cancel**. Wega stops at the **next package boundary** — the install already running is
+**Cancel**. Wega stops at the **next package boundary** — the installs already running are
 allowed to finish, because a package manager killed halfway through a download or an app
-replacement is exactly how a broken app happens. Everything after that package is skipped,
-and the summary says how many packages were updated and how many were left untouched, so a
-stopped run is never reported as a finished one. An update still waiting for another
-operation to release the system is dropped immediately, since it has changed nothing yet.
+replacement is exactly how a broken app happens. Nothing new is started and everything still
+queued is skipped, and the summary says how many packages were updated and how many were
+left untouched, so a stopped run is never reported as a finished one. An update still
+waiting for another operation to release the system is dropped immediately, since it has
+changed nothing yet.
 
 Cancelling — and every timeout — now really stops the tool Wega started, together with any
 helper process it spawned: Wega asks it to quit, gives it a moment to unwind, and kills it
