@@ -23,6 +23,12 @@ public enum PrefilledURLBody {
     /// length, the boundary is found with a binary search — and cutting on `Character`
     /// boundaries guarantees a `%XX` triplet is never split.
     public static func truncatedEncoded(_ raw: String, toEncodedLength limit: Int) -> String {
+        percentEncoded(truncated(raw, toEncodedLength: limit))
+    }
+
+    /// The same boundary as ``truncatedEncoded(_:toEncodedLength:)``, returned unencoded —
+    /// for callers that keep composing readable text and only encode it at the very end.
+    public static func truncated(_ raw: String, toEncodedLength limit: Int) -> String {
         let chars = Array(raw)
         var low = 0
         var high = chars.count
@@ -36,6 +42,6 @@ public enum PrefilledURLBody {
                 high = mid - 1
             }
         }
-        return percentEncoded(String(chars[0..<best]))
+        return String(chars[0..<best])
     }
 }

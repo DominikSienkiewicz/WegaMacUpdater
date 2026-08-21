@@ -172,6 +172,50 @@ struct BugReportBuilderTests {
         #expect(body.omittedEntryCount == 2)
     }
 
+    /// The metryczka a real machine produces: seven rows, the same shape
+    /// `BugReportEnvironment` builds from a diagnostics snapshot.
+    private func environmentRows() -> [ReportField] {
+        [
+            ReportField(label: "Wega", value: "1.4.2 (812)"),
+            ReportField(label: "macOS", value: "26.1 (arm64)"),
+            ReportField(label: "Homebrew", value: "4.3.0"),
+            ReportField(label: "mas-cli", value: "not detected"),
+            ReportField(label: "npm", value: "detected"),
+            ReportField(label: "Privileged helper", value: "enabled"),
+            ReportField(label: "Last scan", value: "2026-08-20T09:00:00Z (complete)"),
+        ]
+    }
+
+    /// Two paragraphs of Polish are enough to put the *fixed* sections alone over the
+    /// `mailto:` limit. The entry budget then went negative, so every entry was silently
+    /// dropped — and the URL still came out past what Outlook will carry, which the mail
+    /// client mangles without saying so. The URL limit is the property that has to hold;
+    /// the description is the last thing shortened, and it must show that it was.
+    @Test func aLongDescriptionCannotPushTheURLPastTheChannelLimit() throws {
+        let builder = BugReportBuilder()
+        let d = BugReportDraft(
+            userDescription: String(repeating: "Kliknąłem aktualizuj i nic się nie stało. ", count: 36),
+            environment: environmentRows(),
+            entries: (1...5).map {
+                entry("entry-\($0) " + String(repeating: "x", count: 120), at: TimeInterval($0))
+            }
+        )
+
+        for channel in [email, gitHub] {
+            let url = try #require(builder.url(d, channel: channel))
+            #expect(url.absoluteString.count <= channel.urlLengthLimit,
+                    "kanał \(channel) przekroczył własny limit o \(url.absoluteString.count - channel.urlLengthLimit)")
+        }
+
+        let body = builder.body(d, channel: email)
+        #expect(body.text.contains(BugReportBuilder.descriptionShortenedMarker),
+                "a shortened description must say so — the reader cannot see the cut otherwise")
+        #expect(body.text.contains("Kliknąłem aktualizuj"), "the beginning of the description survives")
+        #expect(body.omittedEntryCount == d.entries.count,
+                "entries are spent first; the description is only cut once nothing else is left")
+        #expect(body.text.contains("- Homebrew: 4.3.0"), "the environment block stays untouchable")
+    }
+
     @Test func everyChannelStaysUnderItsOwnLimit() throws {
         let builder = BugReportBuilder()
         for channel in [email, gitHub] {

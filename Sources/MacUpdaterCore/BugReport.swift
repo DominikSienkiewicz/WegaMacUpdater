@@ -61,6 +61,15 @@ public struct BugReportBuilder: Sendable {
     /// przycinany przez limit URL-a — budżet zabierają mu wyłącznie wpisy.
     public static let maxTitleLength = 90
 
+    /// Appended to a description that had to be cut. The spec asks for two things that
+    /// cannot both hold — "the description is never truncated" and "the URL never exceeds
+    /// the channel limit" — and the limit wins: an over-limit `mailto:` is silently mangled
+    /// by the mail client, while a shortened description is something the reader can see.
+    /// So it has to be visible; a half-sentence that looks whole is the failure mode this
+    /// marker exists to prevent.
+    public static let descriptionShortenedMarker =
+        "… [truncated — the description did not fit the channel's URL limit]"
+
     private let redact: Redactor
 
     public init(redact: @escaping Redactor = { LogRedaction.redactForExport($0) }) {
@@ -86,6 +95,10 @@ public struct BugReportBuilder: Sendable {
     // MARK: - Treść
 
     public func body(_ draft: BugReportDraft, channel: BugReportChannel) -> BugReportBody {
+        body(draft, channel: channel, title: title(draft))
+    }
+
+    private func body(_ draft: BugReportDraft, channel: BugReportChannel, title: String) -> BugReportBody {
         let fixed = fixedSections(draft)
         // Each entry's `fileText` (header line plus any `\t| `-prefixed detail lines) is
         // redacted in ONE call, whole, never split by line. `LogRedaction`'s `pemBlock`
@@ -98,9 +111,21 @@ public struct BugReportBuilder: Sendable {
             .sorted { $0.date < $1.date }
             .map { redact($0.fileText) }
 
-        // Budżet dla wpisów to limit kanału pomniejszony o wszystko, czego nie wolno ciąć:
-        // prefiks URL-a, tytuł i sekcje stałe.
-        let budget = channel.urlLengthLimit - encodedOverhead(draft, channel: channel, fixed: fixed)
+        // Wszystko, czego przycinanie wpisów nie rusza — prefiks URL-a, tytuł i sekcje
+        // stałe — wycenione BEZ opisu użytkownika. Percent-encoding jest odwzorowaniem
+        // znak po znaku, więc zakodowane długości po prostu się sumują i opis da się
+        // wycenić osobno.
+        let overhead = encodedOverhead(draft, channel: channel, title: title, fixed: fixed)
+
+        // Ostatnia deska ratunku: gdy same sekcje stałe przekraczają limit kanału, ucina się
+        // OPIS — bo URL ponad limit klient poczty i tak okroi po cichu, a widocznie skrócony
+        // opis użytkownik przynajmniej widzi. Wpisy idą pierwsze: opis rusza się dopiero, gdy
+        // budżet i tak spadł do zera. Blok środowiska pozostaje nietykalny, więc dostatecznie
+        // rozbudowana metryczka to jedyny przypadek, w którym limitu nie da się dotrzymać.
+        let description = shortened(fixed.description,
+                                    toEncodedLength: max(0, channel.urlLengthLimit - overhead))
+        let budget = max(0, channel.urlLengthLimit - overhead
+                            - PrefilledURLBody.percentEncoded(description).count)
 
         // Od najnowszego: awaria jest ostatnia. Pierwsza, która się nie zmieści, kończy
         // przeglądanie — inaczej krótszy STARSZY wpis mógłby wskoczyć na miejsce dłuższego
@@ -120,7 +145,7 @@ public struct BugReportBuilder: Sendable {
             omitted += 1
         }
 
-        var lines = fixed.head
+        var lines = fixed.lines(description: description)
         lines.append("## Log entries (\(draft.entries.count) selected)")
         if omitted > 0 { lines.append("[truncated — \(omitted) earlier entries omitted]") }
         lines.append(contentsOf: kept)
@@ -152,38 +177,65 @@ public struct BugReportBuilder: Sendable {
     // MARK: - Sekcje stałe
 
     private struct FixedSections {
+        /// Nagłówek nad opisem użytkownika.
         let head: [String]
+        /// Wszystko między opisem a blokiem wpisów — czyli metryczka środowiska.
+        let middle: [String]
         let tail: [String]
+        /// Zredagowany opis użytkownika, jeszcze w pełnej długości. Trzymany osobno, bo
+        /// jako jedyna z sekcji stałych może zostać skrócony — i tylko w ostateczności.
+        let description: String
+
+        /// Sekcje stałe ułożone wokół podanego opisu. Liczba elementów nie zależy od jego
+        /// treści, więc wycena z pustym opisem ma dokładnie tyle samo separatorów co
+        /// finalny tekst.
+        func lines(description: String) -> [String] { head + [description] + middle }
     }
 
     private func fixedSections(_ draft: BugReportDraft) -> FixedSections {
         let described = draft.userDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-        var head: [String] = [
-            "## What happened",
-            described.isEmpty ? "(not provided)" : redact(described),
-            "",
-            "## Environment",
-        ]
-        head.append(contentsOf: draft.environment.map { "- \(redact($0.label)): \(redact($0.value))" })
-        head.append("")
-        let tail = [
-            "",
-            "## Note",
-            "This report is redacted: paths, query strings, credentials, e-mail addresses",
-            "and account names are replaced with placeholders.",
-        ]
-        return FixedSections(head: head, tail: tail)
+        var middle: [String] = ["", "## Environment"]
+        middle.append(contentsOf: draft.environment.map { "- \(redact($0.label)): \(redact($0.value))" })
+        middle.append("")
+        return FixedSections(
+            head: ["## What happened"],
+            middle: middle,
+            tail: [
+                "",
+                "## Note",
+                "This report is redacted: paths, query strings, credentials, e-mail addresses",
+                "and account names are replaced with placeholders.",
+            ],
+            description: described.isEmpty ? "(not provided)" : redact(described)
+        )
+    }
+
+    /// The description cut on a whole-character boundary so its encoding fits `limit`, with
+    /// ``descriptionShortenedMarker`` appended so the cut is visible. Returned untouched
+    /// when it already fits, which is the ordinary case.
+    private func shortened(_ description: String, toEncodedLength limit: Int) -> String {
+        guard PrefilledURLBody.percentEncoded(description).count > limit else { return description }
+        let markerCost = PrefilledURLBody.percentEncoded(Self.descriptionShortenedMarker).count
+        guard limit > markerCost else {
+            // Not even the marker fits: the environment block alone has eaten the channel's
+            // budget. Say as much as there is room for rather than emitting a fragment of
+            // the description that looks whole.
+            return PrefilledURLBody.truncated(Self.descriptionShortenedMarker, toEncodedLength: limit)
+        }
+        return PrefilledURLBody.truncated(description, toEncodedLength: limit - markerCost)
+            + Self.descriptionShortenedMarker
     }
 
     /// Zakodowana długość `"\n"`. Sekcje stałe i blok wpisów są w finalnym tekście
     /// spajane jednym dodatkowym separatorem, którego nie widać w żadnej z nich osobno.
     private static let separatorCost = PrefilledURLBody.percentEncoded("\n").count
 
-    /// Ile z limitu kanału zjada wszystko poza wpisami — tego przycinanie nie rusza.
-    /// Znacznik przycięcia wliczany jest zawsze, w najdłuższej możliwej postaci, żeby
-    /// jego późniejsze dopisanie nie mogło przepchnąć URL-a ponad limit.
+    /// Ile z limitu kanału zjada wszystko poza wpisami I opisem użytkownika — tego
+    /// przycinanie wpisów nie rusza. Znacznik przycięcia wliczany jest zawsze, w najdłuższej
+    /// możliwej postaci, żeby jego późniejsze dopisanie nie mogło przepchnąć URL-a ponad
+    /// limit. Opis wyceniany jest osobno, bo jako jedyny bywa skracany.
     private func encodedOverhead(_ draft: BugReportDraft, channel: BugReportChannel,
-                                 fixed: FixedSections) -> Int {
+                                 title: String, fixed: FixedSections) -> Int {
         let scheme: String
         switch channel {
         case .email(let address):
@@ -194,9 +246,10 @@ public struct BugReportBuilder: Sendable {
         }
         let header = "## Log entries (\(draft.entries.count) selected)"
         let marker = "[truncated — \(draft.entries.count) earlier entries omitted]"
-        let fixedText = (fixed.head + [header, marker] + fixed.tail).joined(separator: "\n")
+        let fixedText = (fixed.lines(description: "") + [header, marker] + fixed.tail)
+            .joined(separator: "\n")
         return scheme.count
-            + PrefilledURLBody.percentEncoded(title(draft)).count
+            + PrefilledURLBody.percentEncoded(title).count
             + PrefilledURLBody.percentEncoded(fixedText).count
             + Self.separatorCost
     }
