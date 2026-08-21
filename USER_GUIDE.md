@@ -257,6 +257,34 @@ scan couldn't reach a source and the Updates screen shows a *"the list may be in
 warning, its button jumps straight here, pre-filtered to errors — so you land on the cause,
 not just a summary.
 
+### Reporting a bug
+
+Some log entries carry extra detail behind a disclosure arrow — the command that ran, its
+exit code, and the tail of `stderr`. To turn one or more of them into a bug report:
+
+1. Open the **Logs** tab. If you know roughly when it happened, filter to **Errors only**
+   to find it faster.
+2. Select the entries that describe the problem — ⌘-click adds one, ⇧-click a range.
+   Expand any disclosure arrow first if you want to see the extra detail before reporting.
+3. Click **"Zgłoś błąd…"** in the toolbar (it stays disabled until something is selected).
+4. Describe briefly what you were doing when it happened — optional, but it helps.
+5. Pick a channel: **"Wyślij e-mailem"** or **"Zgłoś na GitHubie"**. The preview below
+   switches to match.
+6. Read the preview. It is exactly the text that will leave your computer, redacted the
+   same way **Export diagnostics** is (below): paths, URL query strings, credentials,
+   e-mail addresses and account names are replaced with placeholders.
+7. Click **"Wyślij zgłoszenie"**. Wega opens your mail app or a prefilled GitHub issue
+   form — it never sends the report itself; you still have to press send there.
+
+Selecting a lot of entries can push the report past the channel's size limit (e-mail and
+GitHub allow different amounts); when that happens the oldest selected entries are dropped
+and the preview says so plainly. Because a `mailto:` link cannot carry attachments in any
+mail client, this flow only ever carries the entries you selected — for the full log files
+and environment report, use **"Eksportuj diagnostykę"** in the same toolbar instead. If
+your Mac has no app that can open the channel you picked, the window falls back to a
+copyable subject and body, plus — for e-mail, the recipient address; for GitHub, the
+issue-page link — so the report is never a dead end.
+
 ### Settings diagnostics
 
 The **Settings** window (**⌘,**) shows live diagnostics: Homebrew version, `mas` version,
