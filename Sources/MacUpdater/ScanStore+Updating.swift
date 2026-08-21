@@ -167,14 +167,13 @@ extension ScanStore {
             run.record(masItems: items, failure: failure)
         }
 
-        let casks = laneRows.filter { $0.item.kind == .cask }
-
         // LT-01 / REL-12 — an operation none of whose casks ever ran: every candidate was
         // vetoed by the publisher watchdog, or a stop caught them all while they were still
         // queued. Either way brew never ran and the clones restore nothing, so settle the
         // journal and drop the operation instead of leaving recovery an orphan that claims a
         // mutation was under way.
-        if let caskPreparation, casks.allSatisfy({ $0.outcome == nil }) {
+        let noCaskRan = laneRows.allSatisfy { $0.item.kind != .cask || $0.outcome == nil }
+        if let caskPreparation, noCaskRan {
             caskPreparation.operation.abortUnfinished()
             UpdateOperationStore.shared.removeOperation(id: caskPreparation.operation.operation.id)
         }
