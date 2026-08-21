@@ -35,6 +35,19 @@ struct LogsSelectionTests {
         #expect(source.contains("List(visible, selection: $selection)"))
     }
 
+    /// Clearing the log leaves the selection pointing at entries that no longer exist, so
+    /// "Zgłoś błąd…" stays enabled over nothing — and clicking it builds a report from an
+    /// empty set. The same rule as the filter change: the selection may only ever hold what
+    /// the user can still see.
+    @Test func clearingTheLogAlsoClearsTheSelection() throws {
+        let source = try Self.source("Sources/MacUpdater/LogsView.swift")
+        #expect(source.contains("Button(tr(\"Wyczyść\"), role: .destructive) { clearLog() }"))
+        let range = try #require(source.range(of: "private func clearLog()"))
+        let body = source[range.upperBound...].prefix(200)
+        #expect(body.contains("store.clear()"))
+        #expect(body.contains("selection.removeAll()"))
+    }
+
     @Test func anEntryWithADetailRendersADisclosure() throws {
         let source = try Self.source("Sources/MacUpdater/LogsView.swift")
         #expect(source.contains("if let detail = entry.detail"))

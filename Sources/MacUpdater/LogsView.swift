@@ -101,7 +101,7 @@ struct LogsView: View {
             Button { confirmingClear = true } label: { Label(tr("Wyczyść"), systemImage: "trash") }
                 .buttonStyle(.plain).foregroundStyle(Color.wegaDanger)
                 .confirmationDialog(tr("Wyczyścić logi?"), isPresented: $confirmingClear) {
-                    Button(tr("Wyczyść"), role: .destructive) { store.clear() }
+                    Button(tr("Wyczyść"), role: .destructive) { clearLog() }
                     Button(tr("Anuluj"), role: .cancel) { /* tylko zamyka dialog */ }
                 }
         }
@@ -152,6 +152,14 @@ struct LogsView: View {
         let text = visible.map(\.fileText).joined(separator: "\n")
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    /// Czyszczenie logu zabiera ze sobą zaznaczenie — ta sama zasada, co przy zmianie
+    /// filtra: zaznaczone może być wyłącznie to, co użytkownik nadal widzi. Bez tego
+    /// „Zgłoś błąd…" zostaje aktywny nad wpisami, których już nie ma.
+    private func clearLog() {
+        store.clear()
+        selection.removeAll()
     }
 
     private func startReport() {
