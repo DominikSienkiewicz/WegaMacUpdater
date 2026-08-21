@@ -75,6 +75,7 @@ extension Translations {
         "npm nie odpowiedział podczas sprawdzania — szczegóły w logu.": "npm did not respond during the check — see the log for details.",
         // Auto-recovery przerwanej aktualizacji casku (leftover w Caskroom → retry z --force).
         "Przerwana aktualizacja (%@) — ponawiam z --force.": "Interrupted upgrade (%@) — retrying with --force.",
+        "Homebrew był zajęty (%@) — ponawiam.": "Homebrew was busy (%@) — retrying.",
         // FEAT-07 — gating pobrań.
         "Niekorzystne warunki pobierania (%@) — kontynuuję na żądanie.": "Unfavorable download conditions (%@) — continuing at your request.",
         "Uwaga: kosztowne łącze lub throttling — pobieram mimo to.": "Note: metered link or throttling — downloading anyway.",

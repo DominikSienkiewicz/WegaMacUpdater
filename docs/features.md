@@ -83,6 +83,21 @@ sequential (brew → mas → npm → manual), the bar reports the phase it is ge
 
 #### Running the update
 
+- **Selected updates run side by side.** A run no longer walks its selection one package at a
+  time: each cask and each npm global gets its own package-manager process, with **at most
+  three in flight**, while the Homebrew formula batch and the App Store batch run alongside
+  them. Formulae stay one `brew upgrade` on purpose — they share dependencies, and a process
+  each would rebuild the same dependency several times over, which is slower rather than
+  faster. Casks whose stanza can raise an admin-password prompt (`pkg`, `installer`,
+  `preflight`) are upgraded strictly **one at a time**, as is any cask whose artifact profile
+  is not known, so two Touch ID sheets can never compete for the screen. Concurrency adds
+  exactly one new failure — brew refusing because another brew already holds a lock it needs
+  — and because nothing was installed when that happens, that cask is **retried once**. The
+  live log prefixes every line with the package it came from (`[figma] ==> Downloading…`),
+  and the progress bar counts whole packages, naming the one that is installing only while it
+  is the only one. **Stop** still stops at a package boundary: the processes already running
+  finish, nothing new is started, and everything still queued is reported as skipped rather
+  than as anything else.
 - **Checking never mutates your system.** `brew update` runs before the outdated check — but
   **not** on the post-upgrade re-query, which is a plain `brew outdated` with no second
   metadata refresh and no second stale-cask sweep. Casks Homebrew still tracks but whose app

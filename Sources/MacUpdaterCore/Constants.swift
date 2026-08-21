@@ -38,4 +38,13 @@ public enum MacUpdaterConstants {
         "1password": RestartInfo(processName: "1Password 7", appName: "1Password 7"),
         "1password7": RestartInfo(processName: "1Password 7", appName: "1Password 7")
     ]
+
+    /// How many package-manager processes one update run may have in flight.
+    ///
+    /// A cask install is bound by disk and network, not by cores: past roughly three the
+    /// wall-clock gain flattens while the chance of two `brew` processes colliding on a lock
+    /// they both need — and the peak disk usage of several staged apps at once — keeps
+    /// climbing. Deliberately a constant and not a setting: a fixed value is what keeps a
+    /// "it was slow" report reproducible.
+    public static let maxConcurrentUpgrades = 3
 }

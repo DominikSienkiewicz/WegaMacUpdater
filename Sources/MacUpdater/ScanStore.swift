@@ -109,6 +109,12 @@ final class ScanStore: ObservableObject {
     /// by the brew streaming loop — a stored property, so it cannot live in the extension
     /// that uses it.
     var upgradeTracker: UpgradeProgressTracker?
+    /// How many planned rows have a process running right now.
+    ///
+    /// Not `@Published`: nothing renders the number itself. It decides only whether the
+    /// progress bar may name the package it is installing — with several processes out, any
+    /// single name is a claim about the other two as well.
+    var inFlightItemCount = 0
     /// F4 — tools the user has not installed. An invitation to install them, not an error.
     @Published var unavailableSources = 0
     /// REL-09 — what each source of the result currently on screen answered. Survives a
