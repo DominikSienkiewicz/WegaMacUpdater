@@ -96,7 +96,7 @@ final class BugReportController: ObservableObject {
             return
         }
         outcome = .opened(channel)
-        WegaLog.info(.app, "Utworzono zgłoszenie błędu (\(entries.count) wpisów).")
+        WegaLog.info(.app, "Utworzono zgłoszenie błędu (\(entries.count) wpisów, kanał: \(channelLabel(channel))).")
     }
 
     /// Wstrzykuje gotową metryczkę, żeby testy nie musiały odpytywać realnego systemu.
@@ -113,7 +113,9 @@ final class BugReportController: ObservableObject {
     }
 
     /// Identifies the channel in a log line without ever including report content —
-    /// no address, no endpoint, no title or body text.
+    /// no address, no endpoint, no title or body text. Both the success and the failure
+    /// line carry it: "a report was created" without saying where it went leaves the one
+    /// question a later reader actually has unanswered.
     private func channelLabel(_ channel: BugReportChannel) -> String {
         switch channel {
         case .email:       return "email"

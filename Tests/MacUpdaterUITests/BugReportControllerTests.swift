@@ -126,4 +126,22 @@ struct BugReportControllerTests {
         #expect(counter.current == 1)
         #expect(controller.environment != nil)
     }
+
+    /// `WegaLog` hands its entry to the store from a detached task, so the success line
+    /// cannot be observed synchronously here — what this pins is that the line names the
+    /// channel at all. "A report was created" without saying where it went leaves a later
+    /// reader with the one question they actually have.
+    @Test func theSuccessLogNamesTheChannelThatWasOpened() throws {
+        let source = try Self.source("Sources/MacUpdater/BugReportController.swift")
+        let successLine = try #require(
+            source.split(separator: "\n").first { $0.contains("Utworzono zgłoszenie błędu") }
+        )
+        #expect(successLine.contains("channelLabel(channel)"))
+    }
+
+    private static func source(_ relativePath: String, file: String = #filePath) throws -> String {
+        let root = URL(fileURLWithPath: file)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+    }
 }
