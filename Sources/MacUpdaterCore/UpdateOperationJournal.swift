@@ -155,6 +155,34 @@ public struct UndoableUpdate: Equatable, Sendable, Identifiable {
         self.updatedAt = updatedAt
         self.expiresAt = expiresAt
     }
+
+    /// One offer per app: the newest retained snapshot for each token, newest first.
+    ///
+    /// An app updated several times inside the retention window leaves several committed
+    /// snapshots behind, but only the newest is a step back from the version that is
+    /// actually installed. Offering the older ones would jump the app over versions it is
+    /// no longer running, and they cannot be told apart in the list — same name, same
+    /// icon, same button, and one shared busy spinner, which keys on the token.
+    ///
+    /// Superseded snapshots are hidden, not forgotten: once the newest undo is spent the
+    /// item leaves `.committed`, and the step before it becomes the offer — an undo at a
+    /// time, for as long as the retention window holds them.
+    ///
+    /// Ties break on `id` so the surviving row is the same one on every read; two
+    /// snapshots for one token can share a timestamp when a single run wrote them in the
+    /// same second.
+    public static func newestPerToken(_ updates: [UndoableUpdate]) -> [UndoableUpdate] {
+        var newest: [String: UndoableUpdate] = [:]
+        for update in updates where isNewer(update, than: newest[update.token]) {
+            newest[update.token] = update
+        }
+        return newest.values.sorted { isNewer($0, than: $1) }
+    }
+
+    private static func isNewer(_ candidate: UndoableUpdate, than incumbent: UndoableUpdate?) -> Bool {
+        guard let incumbent else { return true }
+        return (candidate.updatedAt, candidate.id) > (incumbent.updatedAt, incumbent.id)
+    }
 }
 
 /// The pure half of crash recovery: given where an item's journal stopped, what should
@@ -287,7 +315,9 @@ public final class UpdateOperationStore: @unchecked Sendable {
     }
 
     /// Updates the user can still undo right now: committed items whose snapshot is
-    /// actually on disk, inside the retention window.
+    /// actually on disk, inside the retention window — collapsed to the newest one per
+    /// app, so the destination offers one step back per app rather than one row per
+    /// retained snapshot (see ``UndoableUpdate/newestPerToken(_:)``).
     public func undoableUpdates(now: Date = Date()) -> [UndoableUpdate] {
         lock.lock(); defer { lock.unlock() }
         var result: [UndoableUpdate] = []
@@ -315,7 +345,7 @@ public final class UpdateOperationStore: @unchecked Sendable {
                 ))
             }
         }
-        return result.sorted { $0.updatedAt > $1.updatedAt }
+        return UndoableUpdate.newestPerToken(result)
     }
 
     /// Reopens the session for an operation that is already on disk — how crash recovery

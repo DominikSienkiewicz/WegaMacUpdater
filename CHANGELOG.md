@@ -24,6 +24,15 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   the system language on first launch; this is about switching, not about guessing better.
 
 ### Fixed
+- **„Cofnij aktualizacje" shows one entry per app, not one per retained copy.** An app updated
+  three times inside the 7-day retention window filled the list with three identical-looking
+  rows — same name, same icon, same button — differing only in the version each would bring
+  back. Only the newest of them is a step back from what is installed; the older ones would
+  have jumped the app over versions it is no longer running, and all of them shared the busy
+  spinner, which keys on the token. `undoableUpdates()` now collapses to the newest snapshot
+  per app, so the list and the sidebar badge count apps rather than copies. Nothing is
+  discarded: once the newest undo is spent, the step before it becomes the offer, until the
+  retention sweep takes its copy.
 - **Switching the language no longer closes the details panel.** `.id(localization.language)`
   re-keys the window's view tree so every `tr(...)` re-evaluates — which also hands `ContentView`
   a new identity and throws away its `@State`, including whether the inspector was open. The flag
