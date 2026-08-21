@@ -295,6 +295,19 @@ struct WegaState: Equatable {
 enum WegaLayout {
     static let cardRadius: CGFloat       = 12
     static let rowRadius: CGFloat        = 8
+    /// Horizontal padding inside a `WegaCard` — the inset every card header and package
+    /// row starts at.
+    static let cardPadding: CGFloat      = 14
+    /// The gutter the Updates list keeps around its cards.
+    static let listGutter: CGFloat       = 16
+    /// Gap between a checkbox and whatever it labels, so a group header and the rows under
+    /// it put their content in the same column.
+    static let checkboxSpacing: CGFloat  = 12
+    /// Where the column of checkboxes on the Updates screen starts. The per-row and
+    /// per-group checkboxes reach it through the card's own padding; the global
+    /// "select all" control sits outside the cards and has to reproduce it, which is why
+    /// the sum is written down once here instead of guessed twice.
+    static let selectionColumnInset: CGFloat = listGutter + cardPadding
     static let windowMinWidth: CGFloat   = 980
     static let windowMinHeight: CGFloat  = 640
     /// UX-03 — the Settings window was pinned to exactly 640×600. At the larger system text

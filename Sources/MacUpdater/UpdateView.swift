@@ -230,11 +230,19 @@ struct UpdateView: View {
                 }
                 Spacer()
                 if !visibleItems.isEmpty {
+                    // The batch button names the selection and nothing else. It used to read
+                    // "Update all (N)" whenever nothing was ticked and upgrade every visible
+                    // row on the first click — the widest possible action, one click deep,
+                    // reached by doing nothing. Now an empty selection disables it, and the
+                    // hint beside it says why rather than leaving a dead control unexplained.
+                    if !scan.updating && updateTargets.isEmpty {
+                        Text(tr("Zaznacz, co mam zaktualizować"))
+                            .font(.wega(.subheadline))
+                            .foregroundStyle(.secondary)
+                    }
                     Button(action: requestUpdate) {
                         if scan.updating {
                             ProgressView().controlSize(.small)
-                        } else if selectedVisibleCount == 0 {
-                            Label(trf("Zaktualizuj wszystkie (%@)", "\(updateTargets.count)"), systemImage: "arrow.down.circle.fill")
                         } else {
                             Label(trf("Zaktualizuj wybrane (%@)", "\(updateTargets.count)"), systemImage: "arrow.down.circle.fill")
                         }
@@ -242,7 +250,8 @@ struct UpdateView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(Color.wegaHoneyFill)
                     .foregroundStyle(Color.wegaInk)
-                    .disabled(scan.updating)
+                    .disabled(scan.updating || updateTargets.isEmpty)
+                    .help(tr("Zaznacz przynajmniej jedną pozycję — Wega nie aktualizuje niczego, czego sam nie wskażesz."))
 
                     // REL-12 — the longest operation in the app finally has a stop button.
                     // It does not kill the package manager mid-install; it stops the run at
@@ -312,25 +321,25 @@ struct UpdateView: View {
             }
         } else if filterHasContent(updateFilter) || !scan.restartCandidates.isEmpty {
             VStack(spacing: 0) {
-                // Select-all row
-                HStack(spacing: 10) {
-                    Button {
-                        scan.toggleAll(filter: updateFilter)
-                    } label: {
-                        Image(systemName: selectAllSymbol)
-                            .foregroundStyle(selectedVisibleCount == 0 ? .secondary : Color.wegaHoney)
-                            .font(.wega(.title3))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(tr("Zaznacz wszystko"))
-                    .accessibilityValue(
-                        trf("%@ z %@ zaznaczonych", "\(selectedVisibleCount)", "\(visibleItems.count)")
+                // Select-all row. It sits outside the cards, so it reproduces their inset
+                // by hand (`selectionColumnInset`) and wears the row-sized glyph: this
+                // control, every group header's checkbox and every package row's checkbox
+                // form one column, and a stray offset made the widest of the three read as
+                // an unrelated control floating in the middle of the screen.
+                HStack(spacing: WegaLayout.checkboxSpacing) {
+                    SelectionCheckbox(
+                        state: selectAllState,
+                        accessibilityLabel: tr("Zaznacz wszystko"),
+                        accessibilityValue: selectionSummary,
+                        toggle: { scan.toggleAll(filter: updateFilter) }
                     )
-                    Text(selectedVisibleCount == 0 ? tr("Zaznacz wszystko") : trf("%@ z %@ zaznaczonych", "\(selectedVisibleCount)", "\(visibleItems.count)"))
+                    Text(selectedVisibleCount == 0 ? tr("Zaznacz wszystko") : selectionSummary)
                         .font(.wega(.callout))
                         .foregroundStyle(.secondary)
+                    Spacer()
                 }
-                .padding(.horizontal, 20)
+                .padding(.leading, WegaLayout.selectionColumnInset)
+                .padding(.trailing, WegaLayout.listGutter)
                 .padding(.vertical, 8)
 
                 ScrollView {
@@ -429,7 +438,7 @@ struct UpdateView: View {
                             BrewLogPanel(lines: scan.brewLog) { scan.showLog = false }
                         }
                     }
-                    .padding(16)
+                    .padding(WegaLayout.listGutter)
                 }
                 .scrollEdgeEffectStyle(.soft, for: .top)
             }
@@ -452,7 +461,7 @@ struct UpdateView: View {
     /// with **unknown** shown as itself, never as a guess.
     @ViewBuilder
     private var planPreview: some View {
-        if !visibleItems.isEmpty {
+        if !updateTargets.isEmpty {
             WegaDisclosure(isExpanded: $scan.showPlanPreview) {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(scan.plannedCommands(targetKeys: updateTargetKeys).enumerated()), id: \.offset) { _, command in
@@ -546,12 +555,12 @@ struct UpdateView: View {
         return SourceCommunication.stamp(for: active.isEmpty ? ScanSource.allCases : active)
     }
 
-    private var selectAllSymbol: String {
-        switch UpdatePlanner.selectAllState(selectedCount: selectedVisibleCount, totalCount: visibleItems.count) {
-        case .none:    return "square"
-        case .all:     return "checkmark.square.fill"
-        case .partial: return "minus.square.fill"
-        }
+    private var selectAllState: SelectAllState {
+        UpdatePlanner.selectAllState(selectedCount: selectedVisibleCount, totalCount: visibleItems.count)
+    }
+
+    private var selectionSummary: String {
+        trf("%@ z %@ zaznaczonych", "\(selectedVisibleCount)", "\(visibleItems.count)")
     }
 
     private func requestUpdate() {

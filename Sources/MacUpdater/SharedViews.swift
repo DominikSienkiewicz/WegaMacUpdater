@@ -134,6 +134,45 @@ extension Provenance {
     }
 }
 
+// MARK: - Tri-state selection checkbox
+
+extension SelectAllState {
+    /// The glyph each state wears. One mapping, so the global "select all" control and every
+    /// group header speak the same visual language as the row checkboxes beneath them.
+    var symbolName: String {
+        switch self {
+        case .none:    return "square"
+        case .all:     return "checkmark.square.fill"
+        case .partial: return "minus.square.fill"
+        }
+    }
+}
+
+/// The checkbox that selects a whole collection of rows at once — the list-wide
+/// "Zaznacz wszystko" and the per-group checkbox in each card header.
+///
+/// It renders the same glyph, at the same size, as `PackageRow`'s own checkbox, because all
+/// three sit in one column (`WegaLayout.selectionColumnInset`): a bigger or differently
+/// placed glyph reads as an unrelated control rather than as "the same choice, wider".
+struct SelectionCheckbox: View {
+    let state: SelectAllState
+    let accessibilityLabel: String
+    var accessibilityValue: String? = nil
+    let toggle: @MainActor @Sendable () -> Void
+
+    var body: some View {
+        Button(action: toggle) {
+            Image(systemName: state.symbolName)
+                .foregroundStyle(state == .none ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.wegaHoney))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityAddTraits(state == .all ? [.isToggle, .isSelected] : .isToggle)
+        .accessibilityValue(accessibilityValue ?? selectionAccessibilityValue(state == .all))
+    }
+}
+
 // MARK: - WegaCard
 
 struct WegaCard<Content: View>: View {
@@ -176,10 +215,14 @@ struct WegaCardHeader<Trailing: View>: View {
     let note: String?
     /// Optional one-line explanation rendered under the header row.
     let caption: String?
+    /// Optional checkbox that selects or clears every row this card lists, rendered ahead
+    /// of the icon so it lands in the same column as the row checkboxes below.
+    let selection: SelectionCheckbox?
     let trailing: Trailing
 
     init(icon: String, tint: Color = .wegaHoney, title: String, titleTinted: Bool = false,
          count: Int? = nil, note: String? = nil, caption: String? = nil,
+         selection: SelectionCheckbox? = nil,
          @ViewBuilder trailing: () -> Trailing) {
         self.icon = icon
         self.tint = AnyShapeStyle(tint)
@@ -188,37 +231,50 @@ struct WegaCardHeader<Trailing: View>: View {
         self.count = count
         self.note = note
         self.caption = caption
+        self.selection = selection
         self.trailing = trailing()
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                Image(systemName: icon).foregroundStyle(tint)
-                Text(title)
-                    .font(.wega(.headline))
-                    .foregroundStyle(titleTinted ? tint : AnyShapeStyle(.primary))
-                if let count {
-                    Text("\(count)")
-                        .font(.wega(.callout, monospaced: true))
-                        .foregroundStyle(.tertiary)
-                }
-                if let note {
-                    Text(note).font(.wega(.subheadline)).foregroundStyle(.tertiary)
-                }
-                Spacer()
-                trailing
+        // The checkbox is a sibling of the whole text block, not of the header line alone,
+        // so the caption indents under the title by construction — no glyph measuring, and
+        // nothing to re-tune when the system text size changes.
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            if let selection {
+                selection.padding(.trailing, WegaLayout.checkboxSpacing)
             }
-            if let caption {
-                Text(caption)
-                    .font(.wega(.subheadline))
-                    .foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 4) {
+                headerRow
+                if let caption {
+                    Text(caption)
+                        .font(.wega(.subheadline))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, WegaLayout.cardPadding)
         .padding(.vertical, 10)
         .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+    }
+
+    private var headerRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon).foregroundStyle(tint)
+            Text(title)
+                .font(.wega(.headline))
+                .foregroundStyle(titleTinted ? tint : AnyShapeStyle(.primary))
+            if let count {
+                Text("\(count)")
+                    .font(.wega(.callout, monospaced: true))
+                    .foregroundStyle(.tertiary)
+            }
+            if let note {
+                Text(note).font(.wega(.subheadline)).foregroundStyle(.tertiary)
+            }
+            Spacer()
+            trailing
+        }
     }
 }
 
@@ -226,6 +282,7 @@ extension WegaCardHeader {
     /// A tint that is not one of the palette `Color`s (e.g. `.tertiary` for a muted header).
     init(icon: String, tint: AnyShapeStyle, title: String, titleTinted: Bool = false,
          count: Int? = nil, note: String? = nil, caption: String? = nil,
+         selection: SelectionCheckbox? = nil,
          @ViewBuilder trailing: () -> Trailing) {
         self.icon = icon
         self.tint = tint
@@ -234,21 +291,24 @@ extension WegaCardHeader {
         self.count = count
         self.note = note
         self.caption = caption
+        self.selection = selection
         self.trailing = trailing()
     }
 }
 
 extension WegaCardHeader where Trailing == EmptyView {
     init(icon: String, tint: Color = .wegaHoney, title: String, titleTinted: Bool = false,
-         count: Int? = nil, note: String? = nil, caption: String? = nil) {
+         count: Int? = nil, note: String? = nil, caption: String? = nil,
+         selection: SelectionCheckbox? = nil) {
         self.init(icon: icon, tint: tint, title: title, titleTinted: titleTinted,
-                  count: count, note: note, caption: caption) { EmptyView() }
+                  count: count, note: note, caption: caption, selection: selection) { EmptyView() }
     }
 
     init(icon: String, tint: AnyShapeStyle, title: String, titleTinted: Bool = false,
-         count: Int? = nil, note: String? = nil, caption: String? = nil) {
+         count: Int? = nil, note: String? = nil, caption: String? = nil,
+         selection: SelectionCheckbox? = nil) {
         self.init(icon: icon, tint: tint, title: title, titleTinted: titleTinted,
-                  count: count, note: note, caption: caption) { EmptyView() }
+                  count: count, note: note, caption: caption, selection: selection) { EmptyView() }
     }
 }
 
@@ -365,7 +425,7 @@ struct PackageRow: View {
     var backgroundUpdateToken: String? = nil
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: WegaLayout.checkboxSpacing) {
             if let onToggle {
                 Toggle(isOn: selectionToggleBinding(isOn: isSelected, toggle: onToggle)) {
                     EmptyView()
@@ -425,7 +485,7 @@ struct PackageRow: View {
                 .accessibilityLabel(tr("Więcej działań"))
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, WegaLayout.cardPadding)
         .padding(.vertical, 9)
         .background(isSelected ? Color.wegaHoney.opacity(0.05) : Color.clear)
         .background(isInspected ? Color.wegaHoney.opacity(0.14) : Color.clear)

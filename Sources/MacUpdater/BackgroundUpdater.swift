@@ -316,8 +316,7 @@ final class BackgroundUpdater {
     ) async -> [String] {
 
             let command = UpdatePlanner.commands(for: UpdatePlanner.plan(
-                selectedKeys: Set(tokens.map { "c:\($0)" }),
-                allKeys: tokens.map { "c:\($0)" }
+                selectedKeys: Set(tokens.map { "c:\($0)" })
             ))
             guard let arguments = command.first(where: { $0.executable == "brew" })?.arguments else { return [] }
 

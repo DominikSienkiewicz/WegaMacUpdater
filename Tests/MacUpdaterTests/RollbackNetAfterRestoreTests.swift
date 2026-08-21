@@ -3,7 +3,7 @@ import Foundation
 
 /// REL-03 — the snapshot → canary → rollback chain must also cover an upgrade started
 /// from a *restored* scan, which is the most common way the app is used at all: open the
-/// window, press "Zaktualizuj wszystkie".
+/// window, tick the rows, press "Zaktualizuj wybrane".
 ///
 /// `restoreLastScan()` brings back the lists but not `caskIconPaths` (token → `.app`),
 /// which only a full `runCheck` ever fills. Reading that map at snapshot time therefore

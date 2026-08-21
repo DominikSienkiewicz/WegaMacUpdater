@@ -68,21 +68,27 @@ struct VisibleOperationTargetsTests {
         #expect(targets.map(\.key) == ["c:firefox"])
     }
 
-    @Test func noVisibleSelectionMeansAllVisibleRowsNotAllRows() {
+    /// An empty *visible* selection used to mean "every visible row", so switching to a
+    /// category where nothing was ticked armed the button with that whole category. A
+    /// selection the active filter hides is no selection at all, and no selection is no
+    /// batch — the button above this is disabled rather than silently retargeted.
+    @Test func noVisibleSelectionMeansNoTargets() {
         let targets = UpdatePlanner.targets(
             from: updates,
             selectedKeys: ["f:wget"],
             filter: .apps
         )
 
-        #expect(targets.map(\.key) == ["c:firefox", "a:1"])
+        #expect(targets.isEmpty)
+    }
+
+    @Test func anEmptySelectionNeverPlansAnUpgrade() {
+        #expect(UpdatePlanner.targets(from: updates, selectedKeys: [], filter: .all).isEmpty)
+        #expect(UpdatePlanner.commands(for: UpdatePlanner.plan(selectedKeys: [])).isEmpty)
     }
 
     @Test func appStoreCommandNamesOnlyTheApprovedID() {
-        let plan = UpdatePlanner.plan(
-            selectedKeys: ["a:1"],
-            allKeys: updates.map(\.key)
-        )
+        let plan = UpdatePlanner.plan(selectedKeys: ["a:1"])
 
         #expect(plan.masAppStoreIDs == ["1"])
         #expect(UpdatePlanner.commands(for: plan) == [

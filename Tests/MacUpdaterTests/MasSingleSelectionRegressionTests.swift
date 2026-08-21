@@ -28,7 +28,7 @@ struct MasSingleSelectionRegressionTests {
 
     @Test func selectingOneAppStoreItemUpgradesOnlyItAndLeavesTheOthersUntouched() async throws {
         // The user ticks a single App Store row (Numbers, id 2) among three outdated ones.
-        let plan = UpdatePlanner.plan(selectedKeys: ["a:2"], allKeys: outdated.map(\.key))
+        let plan = UpdatePlanner.plan(selectedKeys: ["a:2"])
 
         // The plan carries only the approved ID — the other two outdated apps are absent.
         #expect(plan.masAppStoreIDs == ["2"])

@@ -95,7 +95,7 @@ extension ScanStore {
     /// time and **returned** so the phases that need it are handed it explicitly.
     ///
     /// `caskIconPaths` is only ever filled by a full `runCheck`, so in the most ordinary
-    /// session there is — launch, look at the restored list, press "Zaktualizuj wszystkie" —
+    /// session there is — launch, tick the restored list, press "Zaktualizuj wybrane" —
     /// it was empty, `CaskRollbackGuard` cloned nothing and `verify` skipped every token.
     /// Whatever the last scan did resolve for these tokens is kept as a fallback: a
     /// `brew info` that cannot answer now must not take the net down with it.

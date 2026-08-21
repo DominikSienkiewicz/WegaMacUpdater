@@ -40,7 +40,7 @@ extension ScanStore {
         showLog = true
         emitWegaState(WegaState(pose: .sniff, line: tr("Aktualizuję, chwila…")))
 
-        let plan          = UpdatePlanner.plan(selectedKeys: targetKeys, allKeys: allItems.map(\.key))
+        let plan          = UpdatePlanner.plan(selectedKeys: targetKeys)
         // The rows this run is about, captured before anything changes: the post-upgrade
         // rescan rewrites `allItems`, and an outcome has to keep pointing at the item it
         // was produced for. `name`/`key` here are what the tools and the rescan both use.
