@@ -7,6 +7,16 @@ import MacUpdaterCore
 // selected item, the two retries that apply to it, its progress unit and its log prefix.
 // Deciding *what* to run is `ScanStore+UpdatePlan`; sequencing the lanes and reporting the
 // run is `ScanStore+Updating`; the snapshot/canary net around a cask is `ScanStore+Rollback`.
+/// What a lane hands back to the run.
+///
+/// Three lanes answer per row; the App Store lane cannot, because `mas` reports no per-app
+/// result — one call covers the whole batch and one failure belongs to all of it. The two
+/// shapes share this type so the four lanes can run in one task group.
+enum UpgradeLaneOutput: Sendable {
+    case rows([ScanStore.LaneItemResult])
+    case appStore(items: [OutdatedItem], failure: String?)
+}
+
 extension ScanStore {
 
     /// What one lane produced for one planned row.
@@ -169,6 +179,53 @@ extension ScanStore {
         }
 
         return inPlanOrder(results, plan: items)
+    }
+
+    /// The formula batch. One `brew upgrade` for all of them, because they share
+    /// dependencies: split into a process each, brew would build the same dependency several
+    /// times over and the run would get slower, not faster. This is also the only call that
+    /// streams into the progress tracker.
+    func runFormulaLane(items: [OutdatedItem], arguments: [String]?) async -> [LaneItemResult] {
+        let formulae = items.filter { $0.kind == .formula }
+        guard let arguments, !formulae.isEmpty else { return [] }
+        let outcome = await runBrewUpgrade(arguments: arguments, logSource: "brew", streamsProgress: true)
+        return formulae.map { LaneItemResult(item: $0, outcome: outcome) }
+    }
+
+    /// The App Store batch. `mas` reports no per-app result, so one failure becomes the same
+    /// failure for every planned row — and the bar advances by the whole batch or not at all,
+    /// because a failed `mas upgrade` is no evidence any single app updated.
+    ///
+    /// The IDs are load-bearing: a bare `mas upgrade` expands to every outdated App Store
+    /// app, including rows outside the confirmed UX-01 set (REL-01).
+    func runMasLane(
+        items: [OutdatedItem],
+        appStoreIDs: [String]
+    ) async -> (items: [OutdatedItem], failure: String?) {
+        let appStoreItems = items.filter { $0.kind == .appStore }
+        guard let model, !appStoreIDs.isEmpty, !appStoreItems.isEmpty else { return ([], nil) }
+        guard !shouldStopUpdate(before: appStoreItems.map(\.key)) else { return ([], nil) }
+
+        // An empty token on purpose: mas names no app, so the bar must not name one either.
+        // It still counts as a row in flight, which is what makes the other lanes fall back
+        // to the unnamed label while this batch is working.
+        beginItem(named: "")
+        defer { endItem() }
+        brewLog.append(UpgradeLogPrefix.line(
+            "$ mas upgrade " + appStoreIDs.joined(separator: " "), from: "mas"))
+
+        do {
+            let result = try await model.masService.upgrade(appStoreIDs: appStoreIDs)
+            let lines = result.stdout.components(separatedBy: "\n").filter { !$0.isEmpty }
+            brewLog.append(contentsOf: UpgradeLogPrefix.lines(lines, from: "mas"))
+            upgradeTracker?.completeUnits(appStoreItems.count)
+            upgradeProgress = upgradeTracker?.progress
+            return (appStoreItems, nil)
+        } catch {
+            brewLog.append(UpgradeLogPrefix.line("error: \(error.localizedDescription)", from: "mas"))
+            WegaLog.error(.app, "mas upgrade: \(error.localizedDescription)")
+            return (appStoreItems, error.localizedDescription)
+        }
     }
 
     /// Every npm global of this plan, at most `maxConcurrentUpgrades` at a time. npm globals

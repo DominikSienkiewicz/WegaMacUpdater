@@ -25,7 +25,7 @@ extension ScanStore {
         targetKeys: Set<String>,
         operationLease: OperationCoordinator.Lease
     ) async {
-        guard let model, !targetKeys.isEmpty else { return }
+        guard model != nil, !targetKeys.isEmpty else { return }
         // F3 — never overlap with a background upgrade: both take snapshots and both call
         // `brew upgrade --cask`. The window is the one the user is waiting on.
         guard UpgradeMutex.shared.acquire() else {
@@ -55,8 +55,6 @@ extension ScanStore {
         let plannedCaskNames = plan.caskNames
         let npmNames      = plan.npmNames
         let masAppStoreIDs = plan.masAppStoreIDs
-        // REL-12 — what each remaining phase would still touch, so a stop can name it.
-        let boundaries    = UpgradeBoundaryKeys(planned: plannedItems, npmNames: npmNames)
         // The bar counts whole planned rows. Only the tokens this run asked brew for may be
         // credited: `brew upgrade <names…>` also upgrades outdated dependents nobody
         // selected and announces them identically. npm and the App Store advance explicitly,
@@ -117,86 +115,68 @@ extension ScanStore {
         // that applies to an item has had its say.
         var run = UpdateRunOutcome()
 
-        // Brew upgrade — formulae. One call for all of them, because they share
-        // dependencies: a process each would rebuild the same dependency several times over
-        // and the run would get slower, not faster. It is also the only call that streams
-        // into the progress tracker — see `creditUnit()` for why nothing else may.
-        if let formulaArgs {
-            let outcome = await runBrewUpgrade(arguments: formulaArgs, logSource: "brew", streamsProgress: true)
-            run.record(plannedItems.filter { $0.kind == .formula }, outcome: outcome)
-        }
-
-        // Brew upgrade — casks (FEAT-05 snapshot przed, canary/rollback + FEAT-04 ledger po)
-        if caskArgs != nil, let caskPreparation {
+        // FEAT-04 — a publisher veto is about a cask that will never be attempted, so it is
+        // recorded before any lane starts rather than alongside what the lanes produce.
+        if let caskPreparation {
             run.recordPublisherVetoes(
                 plannedItems.filter { $0.kind == .cask },
                 audits: caskPreparation.publisherVetoes
             )
-            let caskNames = caskPreparation.trustedCaskNames
-            if !caskNames.isEmpty {
-                // One brew process per cask, three at a time, and the canary/rollback verdict
-                // now settles per cask as soon as that cask's own process is done — rather
-                // than being raised after the summary had already been computed, which is how
-                // a cask the guard had just rolled back still counted towards
-                // "Zaktualizowano N pakietów".
-                let caskResults = await runCaskLane(items: plannedItems, preparation: caskPreparation)
-                for result in caskResults { fold(result, into: &run) }
-                // REL-12 — a stop that caught every cask while it was still queued: brew
-                // never ran and the clones restore nothing, so settle the journal instead of
-                // leaving recovery an operation that claims a mutation was under way.
-                if caskResults.allSatisfy({ $0.outcome == nil }) {
-                    caskPreparation.operation.abortUnfinished()
-                    UpdateOperationStore.shared.removeOperation(id: caskPreparation.operation.operation.id)
-                }
-            } else {
-                // Every candidate was vetoed by the publisher watchdog: no snapshot exists
-                // and brew never ran — nothing to retain.
-                caskPreparation.operation.abortUnfinished()
-                UpdateOperationStore.shared.removeOperation(id: caskPreparation.operation.operation.id)
-            }
-        } else if let caskPreparation {
-            // REL-12 stopped the run before the cask phase (or the plan held no cask
-            // command): brew never ran, the clones restore nothing — settle the journal
-            // and drop the operation instead of leaving an orphan for recovery to find.
-            caskPreparation.operation.abortUnfinished()
-            UpdateOperationStore.shared.removeOperation(id: caskPreparation.operation.operation.id)
         }
+        // The cask lane runs only when the plan actually emitted a cask command *and* the
+        // preparation left a trusted token to run it on.
+        let caskLanePreparation = caskArgs != nil && caskPreparation?.trustedCaskNames.isEmpty == false
+            ? caskPreparation
+            : nil
 
-        // npm upgrades one package per process, three at a time; each queued package is its
-        // own REL-12 stop boundary.
-        for result in await runNpmLane(items: plannedItems, names: npmNames) {
+        // The four lanes overlap. They drive four different tools over four different sets
+        // of paths, so nothing one of them touches is anything another one can reach — and
+        // the wall-clock of a mixed selection stops being the sum of its parts. The rescan
+        // below is what waits for all of them.
+        //
+        // Closures rather than `async let`: the cask lane needs the run's
+        // `UpdateOperationSession`, a reference type that is rightly not `Sendable`. Passing
+        // it as an argument would send it across a task boundary; capturing it in a
+        // `@MainActor` closure keeps it on the one actor it never leaves.
+        let lanes: [@MainActor @Sendable () async -> UpgradeLaneOutput] = [
+            { .rows(await self.runFormulaLane(items: plannedItems, arguments: formulaArgs)) },
+            { .rows(await self.runCaskLane(items: plannedItems, preparation: caskLanePreparation)) },
+            { .rows(await self.runNpmLane(items: plannedItems, names: npmNames)) },
+            {
+                let mas = await self.runMasLane(items: plannedItems, appStoreIDs: masAppStoreIDs)
+                return .appStore(items: mas.items, failure: mas.failure)
+            }
+        ]
+        // `limit: 0` — no cap here. These are four different tools, not four processes
+        // competing for one; the caps that matter are the ones inside the cask and npm lanes.
+        let laneOutputs = await runBoundedOnMainActor(limit: 0, lanes)
+
+        // Folded in the plan's order, never the order the lanes happened to finish in: a
+        // report that reshuffled itself run to run would be unreadable, and the log carries
+        // the real chronology already.
+        let laneRows = laneOutputs.flatMap { output -> [LaneItemResult] in
+            if case .rows(let rows) = output { return rows }
+            return []
+        }
+        let byKey = Dictionary(laneRows.map { ($0.item.key, $0) }, uniquingKeysWith: { first, _ in first })
+        for item in plannedItems {
+            guard let result = byKey[item.key] else { continue }
             fold(result, into: &run)
         }
+        for case .appStore(let items, let failure) in laneOutputs where !items.isEmpty {
+            run.record(masItems: items, failure: failure)
+        }
 
-        // MAS upgrade — the IDs are load-bearing. A bare `mas upgrade` expands to every
-        // outdated App Store app, including rows outside the visible/confirmed UX-01 set.
-        // mas still reports no per-app result, so one failure becomes a synthetic outcome
-        // per planned item, exactly as `runNpmUpgrade` does.
-        if !masAppStoreIDs.isEmpty, !shouldStopUpdate(before: boundaries.masKeys) {
-            let appStoreItems = plannedItems.filter { $0.kind == .appStore }
-            // One opaque call for the whole batch: the bar takes over the label but names
-            // no app, because mas reports none.
-            tracker.beginInstallingBatch()
-            upgradeProgress = tracker.progress
-            brewLog.append(UpgradeLogPrefix.line(
-                "$ mas upgrade " + masAppStoreIDs.joined(separator: " "), from: "mas"))
-            var masFailure: String?
-            do {
-                let result = try await model.masService.upgrade(appStoreIDs: masAppStoreIDs)
-                let lines = result.stdout.components(separatedBy: "\n").filter { !$0.isEmpty }
-                brewLog.append(contentsOf: UpgradeLogPrefix.lines(lines, from: "mas"))
-            } catch {
-                masFailure = error.localizedDescription
-                brewLog.append(UpgradeLogPrefix.line("error: \(error.localizedDescription)", from: "mas"))
-                WegaLog.error(.app, "mas upgrade: \(error.localizedDescription)")
-            }
-            run.record(masItems: appStoreItems, failure: masFailure)
-            // mas reports nothing per app, so the whole batch advances at once — and only
-            // when it succeeded, because a failure is no evidence any single app updated.
-            if masFailure == nil {
-                tracker.completeUnits(appStoreItems.count)
-                upgradeProgress = tracker.progress
-            }
+        let casks = laneRows.filter { $0.item.kind == .cask }
+
+        // LT-01 / REL-12 — an operation none of whose casks ever ran: every candidate was
+        // vetoed by the publisher watchdog, or a stop caught them all while they were still
+        // queued. Either way brew never ran and the clones restore nothing, so settle the
+        // journal and drop the operation instead of leaving recovery an orphan that claims a
+        // mutation was under way.
+        if let caskPreparation, casks.allSatisfy({ $0.outcome == nil }) {
+            caskPreparation.operation.abortUnfinished()
+            UpdateOperationStore.shared.removeOperation(id: caskPreparation.operation.operation.id)
         }
 
         // REL-04 — no `brew cleanup` here. It ran after *every* update, including one that
