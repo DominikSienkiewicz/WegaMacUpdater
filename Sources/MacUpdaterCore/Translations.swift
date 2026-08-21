@@ -870,5 +870,26 @@ extension Translations {
         "Pobieram pakiety — %@": "Downloading packages — %@",
         "Instaluję %@ — %@": "Installing %@ — %@",
         "Instaluję pakiety — %@": "Installing packages — %@",
+        // Zgłaszanie błędów z zakładki Logi.
+        "Zgłoś błąd…": "Report a problem…",
+        "Opisz, co się stało": "Describe what happened",
+        "Co robiłeś, zanim to się wydarzyło? (opcjonalne)":
+            "What were you doing when it happened? (optional)",
+        "Podgląd zgłoszenia": "Report preview",
+        "Zbieram informacje o środowisku…": "Gathering environment information…",
+        "Wyślij e-mailem": "Send by e-mail",
+        "Zgłoś na GitHubie": "Report on GitHub",
+        "Kopiuj treść": "Copy contents",
+        "Kopiuj %@": "Copy %@",
+        "Pominięto %d najstarszych wpisów": "%d oldest entries omitted",
+        "Nie znaleziono klienta poczty": "No mail client found",
+        "Ta maszyna nie ma skonfigurowanego klienta poczty. Skopiuj poniższe dane i wyślij zgłoszenie ręcznie.":
+            "This machine has no mail client configured. Copy the details below and send the report manually.",
+        "Adres": "Address",
+        "Temat": "Subject",
+        "Treść": "Contents",
+        "Zgłoszenie jest redagowane — ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami.":
+            "The report is redacted: paths, tokens and account names are replaced with placeholders.",
+        "Zaznacz wpisy w logu, żeby zgłosić błąd": "Select log entries to report a problem",
     ]
 }
