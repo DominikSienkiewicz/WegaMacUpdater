@@ -12,6 +12,16 @@ extension LogLevelFilter {
     }
 }
 
+/// Przycinanie zaznaczenia do tego, co użytkownik faktycznie widzi.
+///
+/// Wydzielone z widoku, bo to jedyna reguła w tej zakładce, którą da się złamać cicho:
+/// bez niej można zaznaczyć pięć wpisów, zmienić filtr i wysłać dwanaście.
+enum LogSelection {
+    static func pruned(_ selection: Set<LogEntry.ID>, toVisible visible: [LogEntry]) -> Set<LogEntry.ID> {
+        selection.intersection(Set(visible.map(\.id)))
+    }
+}
+
 struct LogsView: View {
     @ObservedObject var store = LogStore.shared
     var onWegaState: ((WegaState) -> Void)?
@@ -20,6 +30,8 @@ struct LogsView: View {
     @State private var filter: LogLevelFilter = .all
     @State private var search: String = ""
     @State private var confirmingClear = false
+    @State private var selection: Set<LogEntry.ID> = []
+    @State private var reportController: BugReportController?
     // OBS-02 — "Kopiuj" hands over the 2000 lines currently on screen. The export hands over
     // both log files plus the environment they were produced in, redacted.
     @StateObject private var diagnosticsExport = DiagnosticsExportController()
@@ -36,12 +48,12 @@ struct LogsView: View {
             if let reason = logEmptyReason(totalCount: store.entries.count, visibleCount: visible.count) {
                 emptyState(reason)
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(visible) { row($0) }
-                    }
-                    .padding(.vertical, 6)
+                List(visible, selection: $selection) { entry in
+                    row(entry)
+                        .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
+                        .listRowSeparator(.hidden)
                 }
+                .listStyle(.plain)
                 .scrollEdgeEffectStyle(.soft, for: .top)
             }
         }
@@ -50,6 +62,11 @@ struct LogsView: View {
         .onAppear {
             filter = initialFilter
             onWegaState?(WegaState(pose: .sniff, line: tr("Zaglądam do notatek…")))
+        }
+        .onChange(of: filter) { _, _ in selection = LogSelection.pruned(selection, toVisible: visible) }
+        .onChange(of: search) { _, _ in selection = LogSelection.pruned(selection, toVisible: visible) }
+        .sheet(item: $reportController) { controller in
+            BugReportSheet(controller: controller) { reportController = nil }
         }
     }
 
@@ -75,6 +92,12 @@ struct LogsView: View {
             .buttonStyle(.plain).foregroundStyle(Color.wegaHoney)
             .disabled(diagnosticsExport.isExporting)
             .help(tr("Zapisuje redagowaną paczkę zip z oboma plikami logów i pełnym kontekstem środowiska."))
+            Button { startReport() } label: {
+                Label(tr("Zgłoś błąd…"), systemImage: "exclamationmark.bubble")
+            }
+            .buttonStyle(.plain).foregroundStyle(Color.wegaHoney)
+            .disabled(selection.isEmpty)
+            .help(tr("Zaznacz wpisy w logu, żeby zgłosić błąd"))
             Button { confirmingClear = true } label: { Label(tr("Wyczyść"), systemImage: "trash") }
                 .buttonStyle(.plain).foregroundStyle(Color.wegaDanger)
                 .confirmationDialog(tr("Wyczyścić logi?"), isPresented: $confirmingClear) {
@@ -86,7 +109,25 @@ struct LogsView: View {
         .frame(height: 48)
     }
 
-    private func row(_ e: LogEntry) -> some View {
+    @ViewBuilder
+    private func row(_ entry: LogEntry) -> some View {
+        if let detail = entry.detail {
+            DisclosureGroup {
+                Text(detail.continuationLines.joined(separator: "\n"))
+                    .font(.wega(.footnote, monospaced: true))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, 8)
+            } label: {
+                rowLine(entry)
+            }
+        } else {
+            rowLine(entry)
+        }
+    }
+
+    private func rowLine(_ e: LogEntry) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Text(Self.timeFormatter.string(from: e.date))
                 .font(.wega(.subheadline, monospaced: true)).foregroundStyle(.tertiary)
@@ -104,7 +145,7 @@ struct LogsView: View {
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 16).padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
 
     private func levelColor(_ level: LogLevel) -> Color {
@@ -155,9 +196,16 @@ struct LogsView: View {
     }
 
     private func copyVisible() {
-        let text = visible.map(\.fileLine).joined(separator: "\n")
+        let text = visible.map(\.fileText).joined(separator: "\n")
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    private func startReport() {
+        let selected = visible.filter { selection.contains($0.id) }
+                              .sorted { $0.date < $1.date }
+        guard !selected.isEmpty else { return }
+        reportController = BugReportController(entries: selected)
     }
 
     private static let timeFormatter: DateFormatter = {
