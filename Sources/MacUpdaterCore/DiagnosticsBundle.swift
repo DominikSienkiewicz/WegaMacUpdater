@@ -36,6 +36,12 @@ public enum DiagnosticsBundle {
             DiagnosticsArchiveEntry(name: reportEntryName, text: report(snapshot, redact: redact)),
             DiagnosticsArchiveEntry(name: historyEntryName, text: history(snapshot, redact: redact)),
         ]
+        // Each log file is redacted in ONE call, whole, never split by line.
+        // `LogRedaction`'s `pemBlock` pattern matches "-----BEGIN … PRIVATE KEY-----"
+        // through "-----END … PRIVATE KEY-----" and needs both markers in the same pass to
+        // fire; a failed `git`, `ssh` or `gpg` subprocess can write a whole key to stderr
+        // and from there into `wega.log`, so redacting line by line would never present the
+        // block to that pattern and the key would leave the machine verbatim.
         for file in snapshot.logFiles {
             // The file is redacted in ONE call, whole, never split by line. `LogRedaction`'s
             // `pemBlock` pattern spans "-----BEGIN … PRIVATE KEY-----" through "-----END …
