@@ -71,9 +71,10 @@ struct DiagnosticsBundleRedactionTests {
         #expect(text.contains(LogRedaction.secretPlaceholder))
     }
 
-    /// The line-bounded rules must keep working on a whole-file pass: every one of them is
-    /// anchored on `\S` or a character class that stops at a newline, so redacting the file
-    /// in one call may only ever remove *more*, never less.
+    /// The line-bounded rules must keep working on a whole-file pass. `pemBlock` is the only
+    /// rule allowed to span lines; every other one is explicitly bounded to a single line —
+    /// horizontal-whitespace gaps (`[^\S\n]`) and character classes that exclude `\n` — so
+    /// redacting the file in one call cannot let a match run from one entry into the next.
     @Test func theOrdinaryPerLineRulesStillFire() throws {
         let text = try exportedLog("""
         2026-08-20T10:00:00Z [INFO] [App] Skanuję /Users/ala/Applications/Foo.app

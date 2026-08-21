@@ -43,9 +43,11 @@ public enum DiagnosticsBundle {
             // failure detail writes raw `stderr` into `wega.log` as continuation lines, a
             // multi-line key can genuinely be in there. Redacting line by line would never
             // present the whole block to that pattern, and the key would travel verbatim into
-            // the one artefact that deliberately leaves the machine. Every other rule is
-            // anchored on `\S` or a character class that stops at a newline, so the whole-file
-            // pass can only ever remove more, never less.
+            // the one artefact that deliberately leaves the machine. `pemBlock` is the ONLY
+            // rule that spans lines, and it does so by design; every other rule is explicitly
+            // bounded to a line — horizontal-whitespace gaps (`[^\S\n]`) and character classes
+            // that exclude `\n` — so a whole-file pass cannot let one match run across entries
+            // and swallow the log between them.
             entries.append(DiagnosticsArchiveEntry(
                 name: "\(logDirectoryName)/\(file.name)",
                 text: redact(file.contents)
