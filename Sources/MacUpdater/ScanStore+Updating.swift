@@ -126,40 +126,27 @@ extension ScanStore {
             run.record(plannedItems.filter { $0.kind == .formula }, outcome: outcome)
         }
 
-        // REL-12 — boundary: a stop asked for mid-formulae lands here, before bundles move.
-        let stopBeforeCasks = shouldStopUpdate(before: boundaries.afterFormulae)
-
         // Brew upgrade — casks (FEAT-05 snapshot przed, canary/rollback + FEAT-04 ledger po)
-        if !stopBeforeCasks, caskArgs != nil, let caskPreparation {
-            // REL-03 — resolved here, now, not left to whatever a full scan happened to put
-            // in the map: after `restoreLastScan()` it is empty, and an empty map means no
-            // snapshot to roll back to and no bundle for the canary to inspect. Both phases
-            // are handed this one value, so neither can be given a different answer.
-            let appPaths = caskPreparation.appPaths
-            let snapshots = caskPreparation.snapshots
+        if caskArgs != nil, let caskPreparation {
             run.recordPublisherVetoes(
                 plannedItems.filter { $0.kind == .cask },
                 audits: caskPreparation.publisherVetoes
             )
             let caskNames = caskPreparation.trustedCaskNames
             if !caskNames.isEmpty {
-                // LT-01 — the last line before the mutation: a crash after it reads as
-                // "disk state unknown, probe me", a crash before it reads as "never ran".
-                caskPreparation.operation.recordInstalling()
-                // One brew process per cask. The canary/rollback verdict is a phase of the
-                // same result rather than an aside — it used to be raised after the summary
-                // had already been computed, so a cask the guard had just rolled back still
-                // counted towards "Zaktualizowano N pakietów" — and it now settles per cask,
-                // as soon as that cask's own process is done.
-                for token in caskNames {
-                    guard let item = plannedItems.first(where: { $0.kind == .cask && $0.name == token }) else { continue }
-                    let result = await upgradeOneCask(
-                        item: item,
-                        appPaths: appPaths,
-                        snapshots: snapshots,
-                        operation: caskPreparation.operation
-                    )
-                    fold(result, into: &run)
+                // One brew process per cask, three at a time, and the canary/rollback verdict
+                // now settles per cask as soon as that cask's own process is done — rather
+                // than being raised after the summary had already been computed, which is how
+                // a cask the guard had just rolled back still counted towards
+                // "Zaktualizowano N pakietów".
+                let caskResults = await runCaskLane(items: plannedItems, preparation: caskPreparation)
+                for result in caskResults { fold(result, into: &run) }
+                // REL-12 — a stop that caught every cask while it was still queued: brew
+                // never ran and the clones restore nothing, so settle the journal instead of
+                // leaving recovery an operation that claims a mutation was under way.
+                if caskResults.allSatisfy({ $0.outcome == nil }) {
+                    caskPreparation.operation.abortUnfinished()
+                    UpdateOperationStore.shared.removeOperation(id: caskPreparation.operation.operation.id)
                 }
             } else {
                 // Every candidate was vetoed by the publisher watchdog: no snapshot exists
@@ -175,11 +162,10 @@ extension ScanStore {
             UpdateOperationStore.shared.removeOperation(id: caskPreparation.operation.operation.id)
         }
 
-        // npm upgrades one package per process, so every iteration is a REL-12 stop boundary.
-        for (index, pkg) in npmNames.enumerated() {
-            if shouldStopUpdate(before: boundaries.fromNpmPackage(at: index)) { break }
-            guard let item = plannedItems.first(where: { $0.kind == .npm && $0.name == pkg }) else { continue }
-            fold(await upgradeOneNpmPackage(item: item), into: &run)
+        // npm upgrades one package per process, three at a time; each queued package is its
+        // own REL-12 stop boundary.
+        for result in await runNpmLane(items: plannedItems, names: npmNames) {
+            fold(result, into: &run)
         }
 
         // MAS upgrade — the IDs are load-bearing. A bare `mas upgrade` expands to every

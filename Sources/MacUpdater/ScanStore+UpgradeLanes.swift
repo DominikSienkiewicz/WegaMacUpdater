@@ -130,6 +130,94 @@ extension ScanStore {
         return LaneItemResult(item: item, outcome: outcome)
     }
 
+    // MARK: Lanes
+
+    /// Every trusted cask of this plan: at most `maxConcurrentUpgrades` at a time, and the
+    /// ones that may raise an admin-password prompt strictly one at a time, so at most one
+    /// Touch ID sheet is ever on screen.
+    ///
+    /// Results come back in the plan's order rather than the order the pool finished in: a
+    /// report that reordered itself run to run would be unreadable, and the log already
+    /// carries the real chronology.
+    func runCaskLane(
+        items: [OutdatedItem],
+        preparation: ForegroundCaskPreparation?
+    ) async -> [LaneItemResult] {
+        guard let preparation, !preparation.trustedCaskNames.isEmpty else { return [] }
+        // LT-01 — the last line before the mutation: a crash after it reads as "disk state
+        // unknown, probe me", a crash before it reads as "never ran". It has to be written
+        // once, before the first process starts, not once per cask.
+        preparation.operation.recordInstalling()
+
+        let lanes = CaskUpgradeLanes(tokens: preparation.trustedCaskNames, profiles: caskProfiles)
+        let itemsByToken = Dictionary(
+            items.filter { $0.kind == .cask }.map { ($0.name, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        let pooled: [@MainActor @Sendable () async -> LaneItemResult] = lanes.concurrent.compactMap { token in
+            guard let item = itemsByToken[token] else { return nil }
+            return { await self.upgradeCaskGated(item: item, preparation: preparation) }
+        }
+        var results = await runBoundedOnMainActor(
+            limit: MacUpdaterConstants.maxConcurrentUpgrades, pooled
+        )
+
+        for token in lanes.serial {
+            guard let item = itemsByToken[token] else { continue }
+            results.append(await upgradeCaskGated(item: item, preparation: preparation))
+        }
+
+        return inPlanOrder(results, plan: items)
+    }
+
+    /// Every npm global of this plan, at most `maxConcurrentUpgrades` at a time. npm globals
+    /// are independent packages behind independent processes, so they need no lane of their
+    /// own the way a password-prompting cask does.
+    func runNpmLane(items: [OutdatedItem], names: [String]) async -> [LaneItemResult] {
+        let itemsByName = Dictionary(
+            items.filter { $0.kind == .npm }.map { ($0.name, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let pooled: [@MainActor @Sendable () async -> LaneItemResult] = names.compactMap { name in
+            guard let item = itemsByName[name] else { return nil }
+            return {
+                guard !self.shouldStopUpdate(before: [item.key]) else {
+                    return LaneItemResult(item: item, outcome: nil)
+                }
+                return await self.upgradeOneNpmPackage(item: item)
+            }
+        }
+        let results = await runBoundedOnMainActor(
+            limit: MacUpdaterConstants.maxConcurrentUpgrades, pooled
+        )
+        return inPlanOrder(results, plan: items)
+    }
+
+    /// REL-12 — the stop switch moved from "before a phase" to "before a row is let out of
+    /// the queue". A row already running finishes: killing `brew` mid-install leaves a
+    /// half-replaced bundle in /Applications, which is the very state the `--force` retry
+    /// exists to repair. A row that never started is recorded as skipped and reports nothing.
+    private func upgradeCaskGated(
+        item: OutdatedItem,
+        preparation: ForegroundCaskPreparation
+    ) async -> LaneItemResult {
+        guard !shouldStopUpdate(before: [item.key]) else {
+            return LaneItemResult(item: item, outcome: nil)
+        }
+        return await upgradeOneCask(
+            item: item,
+            appPaths: preparation.appPaths,
+            snapshots: preparation.snapshots,
+            operation: preparation.operation
+        )
+    }
+
+    private func inPlanOrder(_ results: [LaneItemResult], plan: [OutdatedItem]) -> [LaneItemResult] {
+        let byKey = Dictionary(results.map { ($0.item.key, $0) }, uniquingKeysWith: { first, _ in first })
+        return plan.compactMap { byKey[$0.key] }
+    }
+
     // MARK: The processes
 
     /// Runs `brew <arguments>` streaming output into the log, and returns an outcome that
