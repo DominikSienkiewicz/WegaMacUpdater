@@ -216,6 +216,34 @@ struct BugReportBuilderTests {
         #expect(body.text.contains("- Homebrew: 4.3.0"), "the environment block stays untouchable")
     }
 
+    /// Counts how many *entries* went through the redactor. Only an entry's `fileText`
+    /// carries the level/category header, so the title and the environment rows do not
+    /// register here.
+    private final class RedactionCounter: @unchecked Sendable {
+        private(set) var entryCalls = 0
+
+        func redact(_ text: String) -> String {
+            if text.contains("[ERROR] [Homebrew]") { entryCalls += 1 }
+            return text
+        }
+    }
+
+    /// ⌘A in the Logs tab hands the composer up to the store's whole 2000-entry buffer, and
+    /// the window re-renders on every keystroke in the description field. Redacting every
+    /// selected entry up front — nine regular expressions plus an account-name lookup each —
+    /// throws almost all of that work away, because the fit loop stops at the first entry
+    /// that does not fit. The cost has to follow what is kept, not what is selected.
+    @Test func onlyTheEntriesThatCouldStillFitAreRedacted() {
+        let counter = RedactionCounter()
+        let d = fatDraft()
+        let body = BugReportBuilder(redact: { counter.redact($0) }).body(d, channel: email)
+        let kept = d.entries.count - body.omittedEntryCount
+
+        #expect(body.omittedEntryCount > 0, "the fixture has to overflow for this to mean anything")
+        #expect(counter.entryCalls == kept + 1,
+                "every kept entry plus the one that did not fit — never the whole selection")
+    }
+
     @Test func everyChannelStaysUnderItsOwnLimit() throws {
         let builder = BugReportBuilder()
         for channel in [email, gitHub] {

@@ -100,16 +100,6 @@ public struct BugReportBuilder: Sendable {
 
     private func body(_ draft: BugReportDraft, channel: BugReportChannel, title: String) -> BugReportBody {
         let fixed = fixedSections(draft)
-        // Each entry's `fileText` (header line plus any `\t| `-prefixed detail lines) is
-        // redacted in ONE call, whole, never split by line. `LogRedaction`'s `pemBlock`
-        // pattern matches "-----BEGIN … PRIVATE KEY-----" through "-----END … PRIVATE
-        // KEY-----" and needs both markers in the same pass to fire; a PEM key captured in
-        // a detail's stderr serialises across several separate continuation lines, so
-        // redacting line-by-line would never present the whole block to that pattern and
-        // the key would survive verbatim into the report.
-        let entryTexts = draft.entries
-            .sorted { $0.date < $1.date }
-            .map { redact($0.fileText) }
 
         // Wszystko, czego przycinanie wpisów nie rusza — prefiks URL-a, tytuł i sekcje
         // stałe — wycenione BEZ opisu użytkownika. Percent-encoding jest odwzorowaniem
@@ -130,11 +120,24 @@ public struct BugReportBuilder: Sendable {
         // Od najnowszego: awaria jest ostatnia. Pierwsza, która się nie zmieści, kończy
         // przeglądanie — inaczej krótszy STARSZY wpis mógłby wskoczyć na miejsce dłuższego
         // NOWSZEGO, który odpadł, i zbiór zachowanych wpisów przestałby być ciągły.
+        //
+        // Redakcja dzieje się W pętli, nie przed nią: pętla i tak zatrzymuje się na
+        // pierwszym niemieszczącym się wpisie, więc koszt idzie za tym, co zostaje
+        // (zachowane + jeden), a nie za tym, co zaznaczono — a ⌘A w zakładce Logi potrafi
+        // podać całe 2000 wpisów bufora, przy przebudowie okna po KAŻDYM znaku opisu.
+        //
+        // Każdy `fileText` (linia nagłówka plus linie detalu z prefiksem `\t| `) idzie do
+        // redaktora w JEDNYM wywołaniu, w całości, nigdy linia po linii. Wzorzec `pemBlock`
+        // w `LogRedaction` obejmuje "-----BEGIN … PRIVATE KEY-----" aż po "-----END …
+        // PRIVATE KEY-----" i musi zobaczyć oba znaczniki w jednym przebiegu; klucz PEM
+        // złapany w `stderr` detalu serializuje się na kilka osobnych linii kontynuacji,
+        // więc redakcja per linia nigdy nie pokazałaby wzorcowi całego bloku.
         var kept: [String] = []
         var omitted = 0
         var stillFits = true
-        for text in entryTexts.reversed() {
+        for entry in draft.entries.sorted(by: { $0.date < $1.date }).reversed() {
             if stillFits {
+                let text = redact(entry.fileText)
                 let candidate = ([text] + kept).joined(separator: "\n")
                 if PrefilledURLBody.percentEncoded(candidate).count <= budget {
                     kept.insert(text, at: 0)
@@ -156,8 +159,11 @@ public struct BugReportBuilder: Sendable {
     // MARK: - URL
 
     public func url(_ draft: BugReportDraft, channel: BugReportChannel) -> URL? {
-        let encodedTitle = PrefilledURLBody.percentEncoded(title(draft))
-        let encodedBody = PrefilledURLBody.percentEncoded(body(draft, channel: channel).text)
+        // Policzony RAZ i przekazany w dół: `body` wycenia go w narzucie kanału, więc
+        // liczony osobno byłby tym samym przebiegiem redakcji zrobionym dwa razy.
+        let title = title(draft)
+        let encodedTitle = PrefilledURLBody.percentEncoded(title)
+        let encodedBody = PrefilledURLBody.percentEncoded(body(draft, channel: channel, title: title).text)
         switch channel {
         case .email(let address):
             // SEC: `address` ultimately comes from `endpoints.json`, which a user-writable
