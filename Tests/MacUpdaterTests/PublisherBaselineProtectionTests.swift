@@ -40,12 +40,19 @@ struct PublisherBaselineProtectionTests {
         #expect(oldPublisherRead.lowerBound < snapshotClone.lowerBound,
                 "SEC-02: read the installed app's Team ID before taking the pre-upgrade snapshot")
 
-        let foreground = try source("Sources/MacUpdater/ScanStore+Rollback.swift")
-            + "\n" + ScanStoreSources.everything()
-        let foregroundSnapshot = try #require(foreground.range(of: "let snapshots = snapshotCasks("))
-        let foregroundMutation = try #require(foreground.range(
-            of: "var caskOutcome = await runBrewUpgrade(arguments: trustedCaskArgs)"))
-        #expect(foregroundSnapshot.lowerBound < foregroundMutation.lowerBound,
+        // ARCH-08 split the foreground upgrade into a preparation phase and a per-cask lane,
+        // so "before" stopped being two statements in one body whose offsets can be compared
+        // and became a data dependency. Two facts carry it: the phase that snapshots starts
+        // no brew process, and the only lane that does cannot be entered without the
+        // snapshots it is handed.
+        let rollback = try source("Sources/MacUpdater/ScanStore+Rollback.swift")
+        #expect(rollback.contains("let snapshots = snapshotCasks("),
+                "SEC-02: the pre-upgrade snapshot is taken in the preparation phase")
+        #expect(!rollback.contains("runBrewUpgrade("),
+                "SEC-02: the preparation phase must not mutate an app it has not snapshotted yet")
+
+        let lanes = try source("Sources/MacUpdater/ScanStore+UpgradeLanes.swift")
+        #expect(lanes.contains("func upgradeOneCask(\n        item: OutdatedItem,\n        appPaths: [String: URL],\n        snapshots: [String: URL],"),
                 "SEC-02: the foreground path must capture the old publisher before brew mutates the app")
 
         let background = try source("Sources/MacUpdater/BackgroundUpdater.swift")
@@ -110,14 +117,18 @@ struct PublisherBaselineProtectionTests {
     }
 
     @Test func preexistingPublisherMismatchVetoesBothUpgradePathsBeforeBrew() throws {
-        let foreground = try source("Sources/MacUpdater/ScanStore+Rollback.swift")
-            + "\n" + ScanStoreSources.everything()
-        let foregroundVeto = try #require(foreground.range(
+        // A vetoed cask no longer has to beat brew to the app: the veto runs in the
+        // preparation phase and its tokens are filtered out of the trusted set the lane is
+        // handed, so by the time any process starts there is no plan entry left to pick up.
+        let rollback = try source("Sources/MacUpdater/ScanStore+Rollback.swift")
+        let foregroundVeto = try #require(rollback.range(
             of: "let publisherVetoes = CaskRollbackGuard.publisherVetoes("))
-        let foregroundMutation = try #require(foreground.range(
-            of: "var caskOutcome = await runBrewUpgrade(arguments: trustedCaskArgs)"))
-        #expect(foregroundVeto.lowerBound < foregroundMutation.lowerBound)
-        #expect(foreground.contains("run.recordPublisherVetoes("),
+        let trustedFilter = try #require(rollback.range(
+            of: "let caskNames = caskNames.filter { publisherVetoes[$0] == nil }"))
+        #expect(foregroundVeto.lowerBound < trustedFilter.lowerBound)
+        #expect(rollback.contains("trustedCaskNames: caskNames"),
+                "SEC-02: only the tokens that survived the veto reach the cask lane")
+        #expect(try ScanStoreSources.everything().contains("run.recordPublisherVetoes("),
                 "SEC-02: a foreground veto needs a critical per-item outcome")
 
         let background = try source("Sources/MacUpdater/BackgroundUpdater.swift")

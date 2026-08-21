@@ -204,7 +204,9 @@ final class ScanStoreRuntimeUpdateGapTests: XCTestCase {
 
         XCTAssertFalse(harness.store.updating)
         XCTAssertEqual(harness.store.banner?.variant, .danger)
-        XCTAssertTrue(harness.store.brewLog.contains { $0.hasPrefix("error:") })
+        // Concurrent lanes interleave, so every streamed line is tagged with the package it
+        // came from: the error line now reads "[<source>] error: …".
+        XCTAssertTrue(harness.store.brewLog.contains { $0.contains("error:") })
     }
 
     private func makeFormulaFailureHarness(
