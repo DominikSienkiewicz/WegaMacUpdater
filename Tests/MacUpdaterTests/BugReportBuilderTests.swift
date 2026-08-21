@@ -120,15 +120,28 @@ struct BugReportBuilderTests {
         #expect(text.contains("NHVv3fQeLp8sTz1mWkX7yBc4RdE6gHj2KfA9uYo0IiPz5nSrTlVwOxCq8bMdEjF") == false)
     }
 
-    @Test func theMailtoAddressCannotInjectExtraHeaders() throws {
-        // The address comes from a user-writable overlay (endpoints.json) that is not
-        // validated as a URL, so it can carry `?`/`&` that would otherwise smuggle extra
-        // mailto headers (e.g. a hidden `bcc`) into the URL the user's mail client opens.
-        let injecting = BugReportChannel.email(
-            address: "victim@example.test?bcc=attacker@evil.test&body="
+    @Test func aMaliciousSupportAddressIsRejectedAtTheOverlayBoundary() throws {
+        // `supportEmail` used to be the one endpoint an overlay could set unvalidated, so an
+        // address carrying `?`/`&` could smuggle extra mailto headers — a hidden `bcc` — into
+        // the URL the mail client opens. Percent-encoding the whole address papered over
+        // that while breaking the `@` separator with it; the value is refused where the
+        // overlay is merged instead, which also stops an overlay from quietly redirecting
+        // every bug report to someone else's mailbox.
+        let base = try AppEndpoints.loadBundled()
+        let overlay = try JSONDecoder().decode(
+            AppEndpointsOverlay.self,
+            from: Data(#"{"supportEmail":"victim@example.test?bcc=attacker@evil.test&body="}"#.utf8)
         )
-        let url = try #require(BugReportBuilder().url(draft(entries: [entry("foo padł")]), channel: injecting))
-        #expect(url.absoluteString.contains("?bcc=") == false)
+        #expect(base.overlaying(overlay).supportEmailAddress == base.supportEmailAddress)
+    }
+
+    @Test func theAddressReachesTheURLLiterally() throws {
+        // RFC 6068's own examples keep `@` literal and encode only specials inside the local
+        // part; per RFC 3986 a percent-encoded reserved delimiter is a *different* URI. The
+        // no-mail-client fallback already shows the raw address for exactly this reason.
+        let url = try #require(BugReportBuilder().url(draft(entries: [entry("foo padł")]), channel: email))
+        #expect(url.absoluteString.hasPrefix("mailto:bugs@example.test?subject="))
+        #expect(url.absoluteString.contains("%40") == false)
     }
 
     // MARK: Przycinanie
@@ -257,7 +270,7 @@ struct BugReportBuilderTests {
     @Test func theEmailChannelBuildsAMailtoURL() throws {
         let url = try #require(BugReportBuilder().url(draft(entries: [entry("foo padł")]), channel: email))
         #expect(url.scheme == "mailto")
-        #expect(url.absoluteString.hasPrefix("mailto:bugs%40example.test?subject="))
+        #expect(url.absoluteString.hasPrefix("mailto:bugs@example.test?subject="))
         let items = try Self.queryItems(url)
         #expect(items["body"]?.contains("foo padł") == true)
     }

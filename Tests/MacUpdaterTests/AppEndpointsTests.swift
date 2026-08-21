@@ -210,6 +210,43 @@ final class AppEndpointsTests: XCTestCase {
                        "the templated accessor still fills placeholders in the applied override")
     }
 
+    /// Criterion 2, address edition: `supportEmail` is the one endpoint that is not a URL, so
+    /// `validURL` cannot judge it — and merging it unchecked let a user-writable overlay
+    /// redirect every bug report to someone else's mailbox, or smuggle extra `mailto:`
+    /// headers into the URL the mail client opens. A well-formed address is still applied.
+    func testOverlayAcceptsAWellFormedSupportAddress() throws {
+        let base = try AppEndpoints.loadBundled()
+        let overlay = try JSONDecoder().decode(
+            AppEndpointsOverlay.self,
+            from: Data(#"{"supportEmail":"maintainer@example.test"}"#.utf8)
+        )
+        XCTAssertEqual(base.overlaying(overlay).supportEmailAddress, "maintainer@example.test",
+                       "a plain address override is legitimate and must be applied")
+    }
+
+    func testOverlayRejectsMalformedSupportAddresses() throws {
+        let base = try AppEndpoints.loadBundled()
+        let rejected = [
+            "victim@example.test?bcc=attacker@evil.test&body=",  // extra mailto headers
+            "victim@example.test&bcc=attacker@evil.test",
+            "victim@example.test#fragment",
+            "victim@example.test\nBcc: attacker@evil.test",      // header injection via a newline
+            "victim @example.test",                              // whitespace breaks the URL apart
+            "no-at-sign.example.test",
+            "two@at@example.test",
+            "@example.test",
+            "local@",
+            "pocztą@example.test",                               // non-ASCII: URL(string:) refuses it
+            "",
+        ]
+        for address in rejected {
+            let data = try JSONSerialization.data(withJSONObject: ["supportEmail": address])
+            let overlay = try JSONDecoder().decode(AppEndpointsOverlay.self, from: data)
+            XCTAssertEqual(base.overlaying(overlay).supportEmailAddress, base.supportEmailAddress,
+                           "overlay address \(address.debugDescription) must fall back to the baseline")
+        }
+    }
+
     // MARK: SEC-08 — the presence of an unverified overlay is a first-class, surfaced state
 
     /// Criterion 3: an applied, unsigned overlay is the state the Info card must surface — not

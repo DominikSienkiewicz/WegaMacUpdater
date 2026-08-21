@@ -82,10 +82,11 @@ struct BugReportControllerTests {
         let opener = SpyOpener()
         let controller = ready(opener)
         controller.send(controller.emailChannel)
-        // The address is percent-encoded to prevent mailto header injection from an
-        // overlay-supplied address — do not "simplify" this back to the raw address.
+        // The address is emitted literally: `@` is the mailto separator, and encoding a
+        // reserved delimiter changes what the URI means. An overlay-supplied address is
+        // validated in `AppEndpoints.overlaying(_:)`, so the injection shape never gets here.
         #expect(opener.opened.first?.absoluteString.hasPrefix(
-            "mailto:" + PrefilledURLBody.percentEncoded(AppEndpoints.shared.supportEmailAddress)
+            "mailto:" + AppEndpoints.shared.supportEmailAddress + "?subject="
         ) == true)
     }
 

@@ -266,7 +266,10 @@ extension AppEndpoints {
     ///     **host on the allowlist** the bundled baseline already talks to — an override that
     ///     leaves that set, or downgrades to http, silently falls back to the baseline;
     ///   • the Homebrew install command is a shell string (surfaced as a copy button), so it is
-    ///     **excluded from the overlay entirely** and always taken from the bundled baseline.
+    ///     **excluded from the overlay entirely** and always taken from the bundled baseline;
+    ///   • the support address is not a URL, so it is validated as an **address** (`validEmail`)
+    ///     — an override that could redirect reports elsewhere or inject extra `mailto:`
+    ///     headers falls back to the baseline like any rejected URL.
     func overlaying(_ other: AppEndpointsOverlay) -> AppEndpoints {
         // DBT-5: stałe (nie-szablonowe) endpointy są force-unwrapowane w akcesorach
         // `…URL`, więc nadpisanie ich musi być POPRAWNYM URL-em — inaczej trzymamy
@@ -282,6 +285,24 @@ extension AppEndpoints {
                   let scheme = comps.scheme?.lowercased(), scheme == "http" || scheme == "https",
                   let host = comps.host, !host.isEmpty
             else { return base }
+            return override
+        }
+
+        // SEC-08: `supportEmail` is the one endpoint that is not a URL, so `validURL` cannot
+        // judge it — and it was the only field merged unchecked. That let a user-writable
+        // overlay redirect every bug report to an attacker's mailbox, and let an address
+        // carrying `?`/`&` smuggle extra `mailto:` headers (a hidden `bcc`) into the URL the
+        // mail client opens. It is held to an address shape instead: exactly one `@` with
+        // both sides non-empty, ASCII only (`URL(string:)` refuses anything else), and none
+        // of the characters that would end the address or start another header.
+        func validEmail(_ override: String?, _ base: String) -> String {
+            guard let override, override.allSatisfy(\.isASCII) else { return base }
+            let sides = override.split(separator: "@", omittingEmptySubsequences: false)
+            guard sides.count == 2, !sides[0].isEmpty, !sides[1].isEmpty else { return base }
+            let forbidden = CharacterSet(charactersIn: "?&#")
+                .union(.whitespacesAndNewlines)
+                .union(.controlCharacters)
+            guard override.rangeOfCharacter(from: forbidden) == nil else { return base }
             return override
         }
 
@@ -334,7 +355,7 @@ extension AppEndpoints {
             projectRepository: validURL(other.projectRepository, projectRepository),
             projectIssues: validURL(other.projectIssues, projectIssues),
             projectNewIssue: validURL(other.projectNewIssue, projectNewIssue),
-            supportEmail: other.supportEmail ?? supportEmail,
+            supportEmail: validEmail(other.supportEmail, supportEmail),
             authorLinkedIn: validURL(other.authorLinkedIn, authorLinkedIn),
             masRepository: validURL(other.masRepository, masRepository)
         )

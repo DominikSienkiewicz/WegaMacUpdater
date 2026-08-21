@@ -166,15 +166,19 @@ public struct BugReportBuilder: Sendable {
         let encodedBody = PrefilledURLBody.percentEncoded(body(draft, channel: channel, title: title).text)
         switch channel {
         case .email(let address):
-            // SEC: `address` ultimately comes from `endpoints.json`, which a user-writable
-            // overlay (`~/Library/Application Support/WegaMacUpdater/endpoints.json`) can
-            // replace — and unlike every other endpoint, it is not validated as a URL when
-            // the overlay is merged. An address containing `?`/`&` (e.g.
-            // "victim@example.com?bcc=attacker@evil.com&body=") would otherwise inject extra
-            // mailto headers the user never sees before their mail client opens. Percent-
-            // encoding it closes that off; encoding `@` to `%40` is valid in a mailto URI.
-            let encodedAddress = PrefilledURLBody.percentEncoded(address)
-            return URL(string: "mailto:\(encodedAddress)?subject=\(encodedTitle)&body=\(encodedBody)")
+            // SEC: the address is emitted LITERALLY. `@` is the separator between the local
+            // part and the host — RFC 6068's own examples keep it unencoded and escape only
+            // specials inside the local part — and per RFC 3986 §2.2 a percent-encoded
+            // reserved delimiter is a different URI, not a safer spelling of the same one.
+            //
+            // What keeps a hostile address out is validation at the boundary, not encoding
+            // here: `address` comes from `endpoints.json`, which a user-writable overlay
+            // (`~/Library/Application Support/WegaMacUpdater/endpoints.json`) can replace, and
+            // `AppEndpoints.overlaying(_:)` refuses any override that is not a plain ASCII
+            // address — no `?`, `&`, `#`, whitespace or control characters — falling back to
+            // the bundled value. Encoding never addressed the real risk anyway: an overlay
+            // silently redirecting every report to someone else's mailbox needs no `?` at all.
+            return URL(string: "mailto:\(address)?subject=\(encodedTitle)&body=\(encodedBody)")
         case .gitHubIssue(let endpoint):
             return URL(string: "\(endpoint.absoluteString)?title=\(encodedTitle)&body=\(encodedBody)")
         }
@@ -245,8 +249,8 @@ public struct BugReportBuilder: Sendable {
         let scheme: String
         switch channel {
         case .email(let address):
-            let encodedAddress = PrefilledURLBody.percentEncoded(address)
-            scheme = "mailto:\(encodedAddress)?subject=&body="
+            // Liczone tak, jak `url(_:channel:)` to składa — adres dosłownie, bez kodowania.
+            scheme = "mailto:\(address)?subject=&body="
         case .gitHubIssue(let endpoint):
             scheme = "\(endpoint.absoluteString)?title=&body="
         }

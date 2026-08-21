@@ -162,8 +162,9 @@ struct BugReportSheet: View {
                 .font(.wega(.headline)).foregroundStyle(Color.wegaToffee)
             Text(tr("Ta maszyna nie ma skonfigurowanego klienta poczty. Skopiuj poniższe dane i wyślij zgłoszenie ręcznie."))
                 .font(.wega(.callout)).foregroundStyle(.secondary)
-            // Surowy adres — trafi do pola "Do:" klienta poczty, gdzie zakodowane "%40"
-            // byłoby błędem.
+            // Surowy adres — trafi do pola "Do:" klienta poczty. Dokładnie ten sam, który
+            // `BugReportBuilder` wstawia dosłownie do `mailto:`; poprawność sprawdza
+            // `AppEndpoints.overlaying(_:)` na granicy overlaya, nie kodowanie tutaj.
             copyableRow(tr("Adres"), value: AppEndpoints.shared.supportEmailAddress)
         case .gitHubIssue:
             Label(tr("Nie udało się otworzyć zgłoszenia na GitHubie"), systemImage: "chevron.left.slash.chevron.right")
