@@ -140,6 +140,18 @@ public struct BrewUpgradeOutcome: Equatable, Sendable {
         return result
     }
 
+    /// True when brew refused because another brew process already held a lock this one
+    /// needs (`LockFile#lock` → `OperationInProgressError`).
+    ///
+    /// The only failure mode running casks concurrently adds. It is also the only brew
+    /// failure where nothing was installed at all, which is what makes retrying it safe —
+    /// unlike a failed install, where a blind retry only repeats the failure. Matched on the
+    /// invariant half of the message: the command inside the backticks is whatever brew
+    /// happened to be running, and the locked path is whatever it happened to lock.
+    public var isHomebrewLockCollision: Bool {
+        errorLines.contains { $0.contains("process has already locked") }
+    }
+
     /// Folds a forced-retry outcome back into the original batch outcome. The retried
     /// tokens' original failures are dropped (we just re-ran them); whatever the forced
     /// retry produced for those tokens stands. Unrelated failures in the original batch
