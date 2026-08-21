@@ -49,7 +49,7 @@ struct LogsView: View {
                 emptyState(reason)
             } else {
                 List(visible, selection: $selection) { entry in
-                    row(entry)
+                    LogRow(entry: entry)
                         .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
                         .listRowSeparator(.hidden)
                 }
@@ -109,53 +109,6 @@ struct LogsView: View {
         .frame(height: 48)
     }
 
-    @ViewBuilder
-    private func row(_ entry: LogEntry) -> some View {
-        if let detail = entry.detail {
-            DisclosureGroup {
-                Text(detail.continuationLines.joined(separator: "\n"))
-                    .font(.wega(.footnote, monospaced: true))
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 8)
-            } label: {
-                rowLine(entry)
-            }
-        } else {
-            rowLine(entry)
-        }
-    }
-
-    private func rowLine(_ e: LogEntry) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text(Self.timeFormatter.string(from: e.date))
-                .font(.wega(.subheadline, monospaced: true)).foregroundStyle(.tertiary)
-                .frame(width: 64, alignment: .leading)
-            Text(e.level.rawValue.uppercased())
-                .font(.wega(.footnote, weight: .bold, monospaced: true))
-                .foregroundStyle(levelColor(e.level))
-                .frame(width: 64, alignment: .leading)
-            Text(e.category.label)
-                .font(.wega(.footnote, weight: .medium))
-                .foregroundStyle(Color.wegaHoney)
-                .frame(width: 84, alignment: .leading)
-            Text(e.message)
-                .font(.wega(.subheadline, monospaced: true))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.vertical, 2)
-    }
-
-    private func levelColor(_ level: LogLevel) -> Color {
-        switch level {
-        case .error:        return Color.wegaDanger
-        case .warning:      return Color.wegaToffee
-        case .info, .debug: return .secondary
-        }
-    }
-
     // UX-06 — an empty log and a filter that hides everything are different situations, so
     // each gets its own state. "Nothing has happened yet" rests; "nothing matches the filter"
     // sniffs and offers a way back to the full list.
@@ -206,6 +159,66 @@ struct LogsView: View {
                               .sorted { $0.date < $1.date }
         guard !selected.isEmpty else { return }
         reportController = BugReportController(entries: selected)
+    }
+}
+
+/// Jeden wiersz logu: płaska linia albo, gdy wpis niesie strukturalny detal, `WegaDisclosure`
+/// go rozwijająca.
+///
+/// Własny `View`, bo rozwinięcie jest stanem per wiersz, a `List`/`ForEach` nie dają miejsca
+/// na `@State` per element inaczej niż wydzielając go do osobnego typu. `WegaDisclosure`
+/// zamiast `DisclosureGroup`, żeby cel kliknięcia był całym nagłówkiem, nie samym chevronem —
+/// `UX02ActionableControlsTests.noDisclosureGroupSurvivesInTheAppTarget` pilnuje tego w całym
+/// celu aplikacji.
+private struct LogRow: View {
+    let entry: LogEntry
+
+    @State private var isExpanded = false
+
+    var body: some View {
+        if let detail = entry.detail {
+            WegaDisclosure(isExpanded: $isExpanded) {
+                Text(detail.continuationLines.joined(separator: "\n"))
+                    .font(.wega(.footnote, monospaced: true))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, 8)
+            } label: {
+                rowLine(entry)
+            }
+        } else {
+            rowLine(entry)
+        }
+    }
+
+    private func rowLine(_ e: LogEntry) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text(Self.timeFormatter.string(from: e.date))
+                .font(.wega(.subheadline, monospaced: true)).foregroundStyle(.tertiary)
+                .frame(width: 64, alignment: .leading)
+            Text(e.level.rawValue.uppercased())
+                .font(.wega(.footnote, weight: .bold, monospaced: true))
+                .foregroundStyle(levelColor(e.level))
+                .frame(width: 64, alignment: .leading)
+            Text(e.category.label)
+                .font(.wega(.footnote, weight: .medium))
+                .foregroundStyle(Color.wegaHoney)
+                .frame(width: 84, alignment: .leading)
+            Text(e.message)
+                .font(.wega(.subheadline, monospaced: true))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func levelColor(_ level: LogLevel) -> Color {
+        switch level {
+        case .error:        return Color.wegaDanger
+        case .warning:      return Color.wegaToffee
+        case .info, .debug: return .secondary
+        }
     }
 
     private static let timeFormatter: DateFormatter = {

@@ -38,7 +38,10 @@ struct LogsSelectionTests {
     @Test func anEntryWithADetailRendersADisclosure() throws {
         let source = try Self.source("Sources/MacUpdater/LogsView.swift")
         #expect(source.contains("if let detail = entry.detail"))
-        #expect(source.contains("DisclosureGroup"))
+        // UX-02: bare `DisclosureGroup`'s label isn't a click target — the app's own guard
+        // (`UX02ActionableControlsTests.noDisclosureGroupSurvivesInTheAppTarget`) bans it
+        // project-wide, so this uses `WegaDisclosure` instead.
+        #expect(source.contains("WegaDisclosure"))
     }
 
     private static func source(_ relativePath: String, file: String = #filePath) throws -> String {
