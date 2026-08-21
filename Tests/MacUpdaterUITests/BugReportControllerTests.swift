@@ -22,6 +22,25 @@ struct BugReportControllerTests {
         }
     }
 
+    /// Lock-guarded so it is safe to touch from inside a `@Sendable` gatherer closure —
+    /// the counter itself is not actor-isolated, only its access is serialized.
+    private final class Counter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = 0
+        @discardableResult
+        func increment() -> Int {
+            lock.lock()
+            defer { lock.unlock() }
+            value += 1
+            return value
+        }
+        var current: Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return value
+        }
+    }
+
     private func entry(_ message: String) -> LogEntry {
         LogEntry(date: Date(timeIntervalSince1970: 1_770_000_000), level: .error,
                  category: .homebrew, message: message)
@@ -84,5 +103,26 @@ struct BugReportControllerTests {
         #expect(pending.isReady == false)
         pending.applyEnvironmentForTests([])
         #expect(pending.isReady)
+    }
+
+    /// `@MainActor` isolation is reentrant across suspension points: without an in-flight
+    /// handle, two overlapping `loadEnvironment()` calls each see `environment == nil` and
+    /// each kick off a full gather. `snapshot()` shells out to brew, mas, npm and the
+    /// privileged helper — a real double gather costs seconds, not milliseconds — so this
+    /// asserts the gather itself runs exactly once no matter how many callers overlap.
+    @Test func loadEnvironmentGathersOnlyOnceUnderOverlappingCalls() async {
+        let counter = Counter()
+        let controller = BugReportController(entries: [entry("foo padł")], opener: SpyOpener()) {
+            counter.increment()
+            try? await Task.sleep(for: .milliseconds(20))
+            return [ReportField(label: "Wega", value: "1.4.2 (812)")]
+        }
+
+        async let first: Void = controller.loadEnvironment()
+        async let second: Void = controller.loadEnvironment()
+        _ = await (first, second)
+
+        #expect(counter.current == 1)
+        #expect(controller.environment != nil)
     }
 }

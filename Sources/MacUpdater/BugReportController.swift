@@ -30,11 +30,27 @@ final class BugReportController: ObservableObject {
     @Published private(set) var outcome: Outcome = .idle
 
     private let opener: URLOpening
+    private let gatherEnvironment: @Sendable () async -> [ReportField]
     private let builder = BugReportBuilder()
 
-    init(entries: [LogEntry], opener: URLOpening = WorkspaceURLOpener()) {
+    /// The in-flight gather, if any. `@MainActor` isolation is reentrant across suspension
+    /// points, so a second overlapping `loadEnvironment()` call can observe `environment ==
+    /// nil` before the first call has assigned it — without this handle it would start a
+    /// second, redundant gather. Storing it *before* awaiting it is what makes it visible
+    /// to that reentrant caller in time to join instead of duplicating the work.
+    private var environmentGatherTask: Task<[ReportField], Never>?
+
+    init(
+        entries: [LogEntry],
+        opener: URLOpening = WorkspaceURLOpener(),
+        gatherEnvironment: @escaping @Sendable () async -> [ReportField] = {
+            let snapshot = await DiagnosticsExportController().snapshot()
+            return BugReportEnvironment.fields(from: snapshot)
+        }
+    ) {
         self.entries = entries
         self.opener = opener
+        self.gatherEnvironment = gatherEnvironment
     }
 
     /// Metryczka jest dociągana asynchronicznie, więc wysyłka czeka, aż będzie komplet.
@@ -45,8 +61,15 @@ final class BugReportController: ObservableObject {
 
     func loadEnvironment() async {
         guard environment == nil else { return }
-        let snapshot = await DiagnosticsExportController().snapshot()
-        environment = BugReportEnvironment.fields(from: snapshot)
+        let task: Task<[ReportField], Never>
+        if let inFlight = environmentGatherTask {
+            task = inFlight
+        } else {
+            let newTask = Task { [gatherEnvironment] in await gatherEnvironment() }
+            environmentGatherTask = newTask
+            task = newTask
+        }
+        environment = await task.value
     }
 
     /// Dokładnie ten tekst, który trafi do URL-a — łącznie z przycięciem. Podgląd
@@ -60,7 +83,14 @@ final class BugReportController: ObservableObject {
     func url(for channel: BugReportChannel) -> URL? { builder.url(draft, channel: channel) }
 
     func send(_ channel: BugReportChannel) {
-        guard let url = url(for: channel) else { return }
+        guard let url = url(for: channel) else {
+            // Same user-facing state as "system can't open it": the window's no-handler
+            // state shows the address, subject and body to copy, which is exactly what
+            // someone needs when the app cannot open anything itself.
+            outcome = .noHandler(channel)
+            WegaLog.error(.app, "Nie udało się zbudować URL-a zgłoszenia dla kanału \(channelLabel(channel)).")
+            return
+        }
         guard opener.canOpen(url), opener.open(url) else {
             outcome = .noHandler(channel)
             return
@@ -80,6 +110,15 @@ final class BugReportController: ObservableObject {
             environment: environment ?? [],
             entries: entries
         )
+    }
+
+    /// Identifies the channel in a log line without ever including report content —
+    /// no address, no endpoint, no title or body text.
+    private func channelLabel(_ channel: BugReportChannel) -> String {
+        switch channel {
+        case .email:       return "email"
+        case .gitHubIssue: return "GitHub"
+        }
     }
 }
 
