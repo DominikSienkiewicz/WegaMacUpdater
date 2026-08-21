@@ -231,6 +231,12 @@ final class AppEndpointsTests: XCTestCase {
             "victim@example.test&bcc=attacker@evil.test",
             "victim@example.test#fragment",
             "victim@example.test\nBcc: attacker@evil.test",      // header injection via a newline
+            // RFC 6068 makes `to` a comma-separated list that the mail client
+            // percent-decodes, so a comma plus `%40` adds a second recipient while still
+            // reading as one literal `@`.
+            "victim@example.test,attacker%40evil.test",
+            "victim;tag@example.test",                           // `;` is a list separator too
+            "victim%40attacker.evil.test@example.test",          // percent-encoding hides an `@`
             "victim @example.test",                              // whitespace breaks the URL apart
             "no-at-sign.example.test",
             "two@at@example.test",

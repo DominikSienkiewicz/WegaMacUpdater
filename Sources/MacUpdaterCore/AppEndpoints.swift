@@ -295,11 +295,19 @@ extension AppEndpoints {
         // mail client opens. It is held to an address shape instead: exactly one `@` with
         // both sides non-empty, ASCII only (`URL(string:)` refuses anything else), and none
         // of the characters that would end the address or start another header.
+        //
+        // `,` and `;` are rejected for the same reason as `?`/`&`/`#`: RFC 6068 makes the
+        // `to` field a *comma-separated list*, so `victim@good.test,attacker@evil.test` is
+        // two recipients, not one malformed address. `%` goes with them, because the mail
+        // client percent-decodes the field before reading it — `attacker%40evil.test`
+        // carries no literal `@` and sails past the exactly-one-`@` test, then becomes a
+        // second addressee once decoded. None of the three has a legitimate place in an
+        // address emitted literally into a `mailto:` URI.
         func validEmail(_ override: String?, _ base: String) -> String {
             guard let override, override.allSatisfy(\.isASCII) else { return base }
             let sides = override.split(separator: "@", omittingEmptySubsequences: false)
             guard sides.count == 2, !sides[0].isEmpty, !sides[1].isEmpty else { return base }
-            let forbidden = CharacterSet(charactersIn: "?&#")
+            let forbidden = CharacterSet(charactersIn: "?&#,;%")
                 .union(.whitespacesAndNewlines)
                 .union(.controlCharacters)
             guard override.rangeOfCharacter(from: forbidden) == nil else { return base }
