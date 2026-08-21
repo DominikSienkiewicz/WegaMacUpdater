@@ -52,7 +52,6 @@ extension ScanStore {
         let commands      = UpdatePlanner.commands(for: plan)
         let formulaArgs   = commands.first { $0.executable == "brew" && !$0.arguments.contains("--cask") }?.arguments
         let caskArgs      = commands.first { $0.executable == "brew" && $0.arguments.contains("--cask") }?.arguments
-        let npmCommands   = commands.filter { $0.executable == "npm" }
         let plannedCaskNames = plan.caskNames
         let npmNames      = plan.npmNames
         let masAppStoreIDs = plan.masAppStoreIDs
@@ -118,9 +117,13 @@ extension ScanStore {
         // that applies to an item has had its say.
         var run = UpdateRunOutcome()
 
-        // Brew upgrade — formulae
+        // Brew upgrade — formulae. One call for all of them, because they share
+        // dependencies: a process each would rebuild the same dependency several times over
+        // and the run would get slower, not faster. It is also the only call that streams
+        // into the progress tracker — see `creditUnit()` for why nothing else may.
         if let formulaArgs {
-            run.record(plannedItems.filter { $0.kind == .formula }, outcome: await runBrewUpgrade(arguments: formulaArgs))
+            let outcome = await runBrewUpgrade(arguments: formulaArgs, logSource: "brew", streamsProgress: true)
+            run.record(plannedItems.filter { $0.kind == .formula }, outcome: outcome)
         }
 
         // REL-12 — boundary: a stop asked for mid-formulae lands here, before bundles move.
@@ -143,32 +146,21 @@ extension ScanStore {
                 // LT-01 — the last line before the mutation: a crash after it reads as
                 // "disk state unknown, probe me", a crash before it reads as "never ran".
                 caskPreparation.operation.recordInstalling()
-                let trustedCaskArgs = UpdatePlanner.caskUpgradeCommand(tokens: caskNames).arguments
-                var caskOutcome = await runBrewUpgrade(arguments: trustedCaskArgs)
-
-                // Auto-recover an interrupted upgrade: if a cask bailed because a stale
-                // staged app from a previous, cut-short upgrade is in the way ("already an
-                // App at …"), retry just those casks once with --force, which overwrites
-                // the leftover. Without this they fail on every attempt until cleaned by hand.
-                let retryTokens = caskOutcome.tokensRetryableWithForce
-                if !retryTokens.isEmpty {
-                    brewLog.append("↻ " + trf("Przerwana aktualizacja (%@) — ponawiam z --force.", "\(retryTokens.joined(separator: ", "))"))
-                    WegaLog.info(.homebrew, "Przerwana aktualizacja casku — ponawiam z --force: \(retryTokens.joined(separator: ", "))")
-                    let retryOutcome = await runBrewUpgrade(arguments: UpdatePlanner.forcedCaskCommand(tokens: retryTokens).arguments)
-                    caskOutcome = BrewUpgradeOutcome.merging(original: caskOutcome, forcedRetry: retryOutcome, retriedTokens: retryTokens)
+                // One brew process per cask. The canary/rollback verdict is a phase of the
+                // same result rather than an aside — it used to be raised after the summary
+                // had already been computed, so a cask the guard had just rolled back still
+                // counted towards "Zaktualizowano N pakietów" — and it now settles per cask,
+                // as soon as that cask's own process is done.
+                for token in caskNames {
+                    guard let item = plannedItems.first(where: { $0.kind == .cask && $0.name == token }) else { continue }
+                    let result = await upgradeOneCask(
+                        item: item,
+                        appPaths: appPaths,
+                        snapshots: snapshots,
+                        operation: caskPreparation.operation
+                    )
+                    fold(result, into: &run)
                 }
-
-                let trustedItems = plannedItems.filter {
-                    $0.kind == .cask && caskNames.contains($0.name)
-                }
-                run.record(trustedItems, outcome: caskOutcome)
-                // The canary/rollback verdict is a phase of the same result, not an aside: it
-                // used to be raised after the summary had already been computed, so a cask the
-                // guard had just rolled back still counted towards "Zaktualizowano N pakietów".
-                run.applyValidation(await postCaskUpgrade(
-                    caskNames, appPaths: appPaths, snapshots: snapshots,
-                    operation: caskPreparation.operation
-                ))
             } else {
                 // Every candidate was vetoed by the publisher watchdog: no snapshot exists
                 // and brew never ran — nothing to retain.
@@ -183,19 +175,11 @@ extension ScanStore {
             UpdateOperationStore.shared.removeOperation(id: caskPreparation.operation.operation.id)
         }
 
-        // npm upgrades one package at a time, so every iteration is a REL-12 stop boundary.
-        for (index, (pkg, command)) in zip(npmNames, npmCommands).enumerated() {
+        // npm upgrades one package per process, so every iteration is a REL-12 stop boundary.
+        for (index, pkg) in npmNames.enumerated() {
             if shouldStopUpdate(before: boundaries.fromNpmPackage(at: index)) { break }
-            // npm prints nothing the tracker can parse, so the run names the package itself
-            // — otherwise the label keeps naming the brew package that finished before it.
-            tracker.beginInstalling(token: pkg)
-            upgradeProgress = tracker.progress
-            let outcome = await runNpmUpgrade(name: pkg, arguments: command.arguments)
-            run.record(plannedItems.filter { $0.kind == .npm && $0.name == pkg }, outcome: outcome)
-            if outcome.isSuccessful {
-                tracker.completeUnits(1)
-                upgradeProgress = tracker.progress
-            }
+            guard let item = plannedItems.first(where: { $0.kind == .npm && $0.name == pkg }) else { continue }
+            fold(await upgradeOneNpmPackage(item: item), into: &run)
         }
 
         // MAS upgrade — the IDs are load-bearing. A bare `mas upgrade` expands to every
@@ -208,15 +192,16 @@ extension ScanStore {
             // no app, because mas reports none.
             tracker.beginInstallingBatch()
             upgradeProgress = tracker.progress
-            brewLog.append("$ mas upgrade " + masAppStoreIDs.joined(separator: " "))
+            brewLog.append(UpgradeLogPrefix.line(
+                "$ mas upgrade " + masAppStoreIDs.joined(separator: " "), from: "mas"))
             var masFailure: String?
             do {
                 let result = try await model.masService.upgrade(appStoreIDs: masAppStoreIDs)
                 let lines = result.stdout.components(separatedBy: "\n").filter { !$0.isEmpty }
-                brewLog.append(contentsOf: lines)
+                brewLog.append(contentsOf: UpgradeLogPrefix.lines(lines, from: "mas"))
             } catch {
                 masFailure = error.localizedDescription
-                brewLog.append("error: \(error.localizedDescription)")
+                brewLog.append(UpgradeLogPrefix.line("error: \(error.localizedDescription)", from: "mas"))
                 WegaLog.error(.app, "mas upgrade: \(error.localizedDescription)")
             }
             run.record(masItems: appStoreItems, failure: masFailure)
@@ -377,57 +362,19 @@ extension ScanStore {
             WegaLog.error(.homebrew, "\(outcome.name): \(outcome.verdict.logDescription)")
         }
     }
-    /// Runs `brew <arguments>` streaming output to the log, and returns an
-    /// outcome that reflects whether brew *actually* succeeded — exit code 0
-    /// alone is unreliable for cask upgrades.
-    private func runBrewUpgrade(arguments: [String]) async -> BrewUpgradeOutcome {
-        guard let model else { return BrewUpgradeOutcome(exitCode: -1, failedTokens: [], errorLines: []) }
-        brewLog.append("$ brew \(arguments.joined(separator: " "))")
-        var captured = ""
-        var exitCode: Int32 = 0
-        do {
-            let stream = try model.brewService.events(arguments: arguments)
-            exitCode = try await ProcessEventStream.drain(stream) { chunk in
-                captured += chunk
-                brewLog = ProcessEventStream.appendingCapped(ProcessEventStream.lines(from: chunk), to: brewLog)
-                upgradeProgress = upgradeTracker?.consume(chunk: chunk)
-            }
-        } catch {
-            brewLog.append("error: \(error.localizedDescription)")
-            upgradeTracker?.brewCallFinished(succeeded: false)
-            upgradeProgress = upgradeTracker?.progress
-            return BrewUpgradeOutcome(exitCode: -1, failedTokens: [], errorLines: [error.localizedDescription])
+
+    /// Folds one row's lane result into the run.
+    ///
+    /// A result with no outcome is a row the stop switch caught before it started: it is
+    /// already recorded as skipped by `shouldStopUpdate`, and adding a verdict for it here
+    /// would report on a row nothing ever attempted.
+    func fold(_ result: LaneItemResult, into run: inout UpdateRunOutcome) {
+        guard let outcome = result.outcome else { return }
+        run.record([result.item], outcome: outcome)
+        if let validation = result.validation {
+            run.applyValidation([result.item.name: validation])
         }
-        let outcome = BrewUpgradeOutcome.analyze(exitCode: exitCode, output: captured)
-        upgradeTracker?.brewCallFinished(succeeded: outcome.isSuccessful)
-        upgradeProgress = upgradeTracker?.progress
-        return outcome
     }
-
-    private func runNpmUpgrade(name: String, arguments: [String]) async -> BrewUpgradeOutcome {
-        guard let model else { return BrewUpgradeOutcome(exitCode: -1, failedTokens: [name], errorLines: []) }
-        brewLog.append("$ npm " + arguments.joined(separator: " "))
-        var exitCode: Int32 = 0
-        do {
-            let stream = try await model.npmService.upgradeEvents(name: name)
-            exitCode = try await ProcessEventStream.drain(stream) { chunk in
-                brewLog = ProcessEventStream.appendingCapped(ProcessEventStream.lines(from: chunk), to: brewLog)
-            }
-        } catch {
-            brewLog.append("error: \(error.localizedDescription)")
-            return BrewUpgradeOutcome(exitCode: -1, failedTokens: [name], errorLines: [error.localizedDescription])
-        }
-        return BrewUpgradeOutcome(
-            exitCode: exitCode,
-            failedTokens: exitCode == 0 ? [] : [name],
-            errorLines: []
-        )
-    }
-
-
-    /// F2 — the exact commands the upgrade will run, from the same planner call the upgrade
-    /// itself uses. If this ever disagrees with execution, it is because someone rebuilt an
-    /// argument vector by hand.
 
     func restartApp(_ info: RestartInfo) async {
         restartBusy = info.processName
