@@ -52,10 +52,24 @@ Per cask it also shows:
 
 The window header, the sidebar badge, the menu-bar badge and the background notification all
 read the same `UpdatePlanner.unifiedCount`, and the header names both halves of it — *"12 to
-install + 3 manual"* — because they behave differently. The **Update all (N)** button counts
-only the installable half, so it never promises an upgrade Wega cannot perform. A scan run
-from the window reports its result to the menu-bar agent, which is the single owner of the
-dock badge.
+install + 3 manual"* — because they behave differently. The batch button counts only the
+installable half, so it never promises an upgrade Wega cannot perform. A scan run from the
+window reports its result to the menu-bar agent, which is the single owner of the dock badge.
+
+#### Nothing is updated that you did not tick
+
+**Update selected (N)** acts on the ticked rows and on nothing else. With an empty selection
+it is disabled and says so — *"Pick what I should update"* — rather than reading *Update all*
+and upgrading every visible row on the first click. `UpdatePlanner.plan` no longer treats an
+empty key set as "everything" either, so no caller can arrive without a selection and mutate
+the whole machine.
+
+Selecting in bulk is a choice you make, not a default you inherit: the list-wide checkbox
+ticks every visible row, and each section header — *Homebrew Formulae*, *Homebrew Casks*,
+*Mac App Store*, *npm globalne* — carries its own tri-state checkbox that ticks or clears
+just that group, leaving the other sections alone. All three controls share one column and
+one glyph, so "select this row", "select this group" and "select everything" read as the same
+choice at different widths.
 
 #### The window opens with a result, not an empty screen
 
@@ -213,8 +227,8 @@ snapshots are pruned at launch and after each run.
 
 The bundles the guard clones are
 located **when the upgrade starts** (`CaskAppPathResolver`), not when the scan ran — so the
-net also covers the most ordinary flow there is: open Wega, look at the list it restored from
-disk, press *Update all*. Banners **queue** rather than overwrite, so a *publisher changed*
+net also covers the most ordinary flow there is: open Wega, tick the list it restored from
+disk, press *Update selected*. Banners **queue** rather than overwrite, so a *publisher changed*
 alert is sticky and survives the upgrade summary that used to clobber it.
 
 #### What a green banner means

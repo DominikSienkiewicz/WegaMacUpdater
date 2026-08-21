@@ -219,10 +219,23 @@ struct UpdateSection: View {
         return { onSkip(item) }
     }
 
+    /// How much of this section is ticked, ignoring every row outside it.
+    private var groupState: SelectAllState {
+        UpdatePlanner.groupSelectionState(selected: selected, groupKeys: items.map(\.key))
+    }
+
     var body: some View {
         WegaCard {
             WegaCardHeader(icon: icon, title: title, count: items.count, note: subtitle,
-                           caption: rollbackCaption)
+                           caption: rollbackCaption,
+                           selection: SelectionCheckbox(
+                               state: groupState,
+                               accessibilityLabel: trf("Zaznacz całą grupę: %@", title),
+                               accessibilityValue: trf("%@ z %@ zaznaczonych",
+                                                       "\(items.filter { selected.contains($0.key) }.count)",
+                                                       "\(items.count)"),
+                               toggle: { toggleGroup() }
+                           ))
 
             ForEach(items) { item in
                 PackageRow(
@@ -252,6 +265,12 @@ struct UpdateSection: View {
 
     private func toggle(_ key: String) {
         if selected.contains(key) { selected.remove(key) } else { selected.insert(key) }
+    }
+
+    /// Ticks the whole section, or clears it when it is already fully ticked. Sections the
+    /// user picked rows in are left exactly as they were.
+    private func toggleGroup() {
+        selected = UpdatePlanner.toggledGroup(selected: selected, groupKeys: items.map(\.key))
     }
 }
 

@@ -184,8 +184,12 @@ extension Translations {
         // M2 — stara lista mówi wprost, kiedy powstała.
         "Znaleziono %@": "Found %@",
         "Sprawdź ponownie": "Check again",
-        "Zaktualizuj wszystkie (%@)": "Update all (%@)",
         "Zaktualizuj wybrane (%@)": "Update selected (%@)",
+        // Nic zaznaczonego = przycisk nieaktywny; podpowiedź mówi, czego brakuje.
+        "Zaznacz, co mam zaktualizować": "Pick what I should update",
+        "Zaznacz przynajmniej jedną pozycję — Wega nie aktualizuje niczego, czego sam nie wskażesz.":
+            "Select at least one item — Wega updates nothing you have not pointed at.",
+        "Zaznacz całą grupę: %@": "Select the whole group: %@",
         "Zaktualizować %@ pozycji?": "Update %@ items?",
         "Wega się zdrzemnie. Zajrzymy znowu za jakiś czas.": "Wega will take a nap. We'll check again in a while.",
         "Nic w tej kategorii": "Nothing in this category",

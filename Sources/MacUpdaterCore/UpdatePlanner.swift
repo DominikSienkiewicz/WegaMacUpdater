@@ -4,7 +4,7 @@ import Foundation
 /// Mac App Store, npm global) into one row the update list can render and select.
 ///
 /// The `key` carries a one-character source tag (`f:`/`c:`/`a:`/`n:`) that is
-/// **load-bearing**: `UpdatePlanner.plan(selectedKeys:allKeys:)` routes each
+/// **load-bearing**: `UpdatePlanner.plan(selectedKeys:)` routes each
 /// selected key back to the right upgrade command by that prefix. Building and
 /// parsing the keys used to live in two far-apart private methods of `UpdateView`,
 /// so a mismatch silently upgraded the wrong things — now both sides share this type
@@ -104,7 +104,8 @@ public struct UnifiedUpdateCount: Equatable, Sendable {
 
     public var badgeCount: Int { total }
 
-    /// What "Update all (N)" may claim — never the manual half.
+    /// The upper bound on what the batch-update button may ever claim — never the manual
+    /// half. The button itself counts the current selection, which is a subset of this.
     public var updateAllButtonCount: Int { installable }
 
     public var isEmpty: Bool { total == 0 }
@@ -146,7 +147,7 @@ public enum UpdatePlanner {
     /// address the same row without re-deriving the prefix by hand.
     ///
     /// For App Store items `name` is the numeric `appStoreID`, not the app's display name —
-    /// that is what the key carries and what `plan(selectedKeys:allKeys:)` routes on.
+    /// that is what the key carries and what `plan(selectedKeys:)` routes on.
     public static func key(name: String, kind: OutdatedItem.Kind) -> String {
         switch kind {
         case .formula:  return formulaPrefix + name
@@ -203,17 +204,20 @@ public enum UpdatePlanner {
         }
     }
 
-    /// The visible rows the next batch update will touch, in display order. An empty
-    /// visible selection retains the established "update all" meaning, but "all" now
-    /// means all rows in the active filter — never rows hidden in another category.
+    /// The visible rows the next batch update will touch, in display order: exactly the
+    /// rows the user ticked, intersected with the active filter.
+    ///
+    /// An empty selection is an empty batch. It used to mean "all of them", which made the
+    /// most destructive reading of a click the default one — a user who had ticked nothing,
+    /// or who had just cleared the list, pressed a button that upgraded everything on
+    /// screen. Nothing in the app may turn "I chose nothing" into a mutation; the button
+    /// above this call is disabled while this returns empty.
     public static func targets(
         from items: [OutdatedItem],
         selectedKeys: Set<String>,
         filter: UpdateFilter
     ) -> [OutdatedItem] {
-        let visible = visibleItems(items, filter: filter)
-        let selected = visible.filter { selectedKeys.contains($0.key) }
-        return selected.isEmpty ? visible : selected
+        visibleItems(items, filter: filter).filter { selectedKeys.contains($0.key) }
     }
 
     /// FEAT-03 download transparency: the subset of outdated casks Homebrew will install
@@ -231,20 +235,25 @@ public enum UpdatePlanner {
         casks.filter { downloads[$0.name]?.hasChecksum == false }
     }
 
-    /// Resolves which packages to upgrade. An empty selection means "all of them",
-    /// matching the UI's "Update all" affordance. Returns the names split per manager.
-    public static func plan(selectedKeys: Set<String>, allKeys: [String]) -> UpdatePlan {
-        let keys = selectedKeys.isEmpty ? Set(allKeys) : selectedKeys
-        return UpdatePlan(
-            formulaNames: keys.compactMap { name(of: $0, prefix: formulaPrefix) }.sorted(),
-            caskNames:    keys.compactMap { name(of: $0, prefix: caskPrefix) }.sorted(),
-            npmNames:     keys.compactMap { name(of: $0, prefix: npmPrefix) }.sorted(),
-            count:        keys.count,
+    /// Resolves which packages to upgrade, split per manager. The selection is the whole
+    /// input: an empty one plans nothing.
+    ///
+    /// This used to take the full key list as a second argument and fall back to it when the
+    /// selection was empty, so a caller that lost or never built a selection silently
+    /// upgraded every outdated package on the machine. The fallback is gone along with the
+    /// argument that fed it — there is no longer a value of `selectedKeys` that means more
+    /// than itself.
+    public static func plan(selectedKeys: Set<String>) -> UpdatePlan {
+        UpdatePlan(
+            formulaNames: selectedKeys.compactMap { name(of: $0, prefix: formulaPrefix) }.sorted(),
+            caskNames:    selectedKeys.compactMap { name(of: $0, prefix: caskPrefix) }.sorted(),
+            npmNames:     selectedKeys.compactMap { name(of: $0, prefix: npmPrefix) }.sorted(),
+            count:        selectedKeys.count,
             // Only numeric identifiers reach the command. `key(name:kind:)` builds an
             // App Store key from the display *name*, so a key can carry something `mas`
             // would never accept; dropping those here keeps a malformed key from turning
             // into an upgrade of the wrong thing.
-            masAppStoreIDs: keys
+            masAppStoreIDs: selectedKeys
                 .compactMap { name(of: $0, prefix: masPrefix) }
                 .filter { !$0.isEmpty && $0.allSatisfy(\.isNumber) }
                 .sorted()
@@ -303,6 +312,21 @@ public enum UpdatePlanner {
     /// otherwise selects everything.
     public static func toggledAll(selected: Set<String>, allKeys: [String]) -> Set<String> {
         selected.count == allKeys.count ? [] : Set(allKeys)
+    }
+
+    /// Toggling one group's checkbox (e.g. "Homebrew Casks"): a fully-ticked group is
+    /// cleared, an empty or partly-ticked one becomes fully ticked. Rows belonging to other
+    /// groups keep whatever state they had — the control speaks for its own section only.
+    public static func toggledGroup(selected: Set<String>, groupKeys: [String]) -> Set<String> {
+        let group = Set(groupKeys)
+        guard !group.isEmpty else { return selected }
+        return group.isSubset(of: selected) ? selected.subtracting(group) : selected.union(group)
+    }
+
+    /// The tri-state a group checkbox shows, from the keys that group renders.
+    public static func groupSelectionState(selected: Set<String>, groupKeys: [String]) -> SelectAllState {
+        selectAllState(selectedCount: groupKeys.filter(selected.contains).count,
+                       totalCount: groupKeys.count)
     }
 
     /// Deduplicates manual-update results that resolve to the same on-disk app, keeping

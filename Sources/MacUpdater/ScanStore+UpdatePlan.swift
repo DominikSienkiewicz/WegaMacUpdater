@@ -9,12 +9,12 @@ import MacUpdaterCore
 // not from a second description of it.
 extension ScanStore {
     func plannedCommands(targetKeys: Set<String>) -> [UpdateCommand] {
-        UpdatePlanner.commands(for: UpdatePlanner.plan(selectedKeys: targetKeys, allKeys: allItems.map(\.key)))
+        UpdatePlanner.commands(for: UpdatePlanner.plan(selectedKeys: targetKeys))
     }
 
     /// The casks this run would upgrade, in the order the command lists them.
     func plannedCaskTokens(targetKeys: Set<String>) -> [String] {
-        UpdatePlanner.plan(selectedKeys: targetKeys, allKeys: allItems.map(\.key)).caskNames
+        UpdatePlanner.plan(selectedKeys: targetKeys).caskNames
     }
 
     /// F2 — one HEAD per cask, on demand. `brew info --json` has no size field (verified),

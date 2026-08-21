@@ -34,18 +34,21 @@ final class UpdatePlannerTests: XCTestCase {
 
     // MARK: plan
 
-    func testEmptySelectionPlansEverything() {
-        let keys = UpdatePlanner.outdatedItems(brew: brew(), mas: mas(), npm: npm()).map(\.key)
-        let plan = UpdatePlanner.plan(selectedKeys: [], allKeys: keys)
-        XCTAssertEqual(plan.formulaNames, ["wget"])
-        XCTAssertEqual(plan.caskNames, ["firefox"])
-        XCTAssertEqual(plan.npmNames, ["@openai/codex"])
-        XCTAssertTrue(plan.includesMas)
-        XCTAssertEqual(plan.count, 4)
+    /// The planner used to read an empty selection as "everything", so any caller that
+    /// arrived without a selection upgraded the whole machine. Nothing selected now plans
+    /// nothing, and there is no second argument left for the old meaning to hide in.
+    func testEmptySelectionPlansNothing() {
+        let plan = UpdatePlanner.plan(selectedKeys: [])
+        XCTAssertTrue(plan.formulaNames.isEmpty)
+        XCTAssertTrue(plan.caskNames.isEmpty)
+        XCTAssertTrue(plan.npmNames.isEmpty)
+        XCTAssertFalse(plan.includesMas)
+        XCTAssertEqual(plan.count, 0)
+        XCTAssertTrue(UpdatePlanner.commands(for: plan).isEmpty)
     }
 
     func testExplicitSelectionPlansOnlyChosenKeys() {
-        let plan = UpdatePlanner.plan(selectedKeys: ["c:firefox", "n:@openai/codex"], allKeys: ["f:wget", "c:firefox"])
+        let plan = UpdatePlanner.plan(selectedKeys: ["c:firefox", "n:@openai/codex"])
         XCTAssertEqual(plan.caskNames, ["firefox"])
         XCTAssertEqual(plan.npmNames, ["@openai/codex"])
         XCTAssertTrue(plan.formulaNames.isEmpty)
@@ -57,7 +60,7 @@ final class UpdatePlannerTests: XCTestCase {
     /// would silently upgrade the wrong packages. This pins the contract end-to-end.
     func testKeysRoundTripThroughPlan() {
         let items = UpdatePlanner.outdatedItems(brew: brew(), mas: mas(), npm: npm())
-        let plan = UpdatePlanner.plan(selectedKeys: Set(items.map(\.key)), allKeys: items.map(\.key))
+        let plan = UpdatePlanner.plan(selectedKeys: Set(items.map(\.key)))
         XCTAssertEqual(Set(plan.formulaNames), ["wget"])
         XCTAssertEqual(Set(plan.caskNames), ["firefox"])
         XCTAssertEqual(Set(plan.npmNames), ["@openai/codex"])
@@ -65,6 +68,45 @@ final class UpdatePlannerTests: XCTestCase {
     }
 
     // MARK: selection helpers
+
+    func testToggledGroupSelectsAnEmptyOrPartialGroupAndClearsAFullOne() {
+        XCTAssertEqual(UpdatePlanner.toggledGroup(selected: [], groupKeys: ["a", "b"]), ["a", "b"])
+        XCTAssertEqual(UpdatePlanner.toggledGroup(selected: ["a"], groupKeys: ["a", "b"]), ["a", "b"])
+        XCTAssertEqual(UpdatePlanner.toggledGroup(selected: ["a", "b"], groupKeys: ["a", "b"]), [])
+    }
+
+    /// A group checkbox speaks for its own section: ticking or clearing "Homebrew Casks"
+    /// must not disturb a formula the user picked in the section above it.
+    func testToggledGroupLeavesRowsOutsideTheGroupAlone() {
+        XCTAssertEqual(
+            UpdatePlanner.toggledGroup(selected: ["f:wget"], groupKeys: ["c:firefox"]),
+            ["f:wget", "c:firefox"]
+        )
+        XCTAssertEqual(
+            UpdatePlanner.toggledGroup(selected: ["f:wget", "c:firefox"], groupKeys: ["c:firefox"]),
+            ["f:wget"]
+        )
+    }
+
+    func testToggledGroupIsANoOpForAnEmptyGroup() {
+        XCTAssertEqual(UpdatePlanner.toggledGroup(selected: ["a"], groupKeys: []), ["a"])
+    }
+
+    func testGroupSelectionStateReportsTheGroupNotTheWholeSelection() {
+        XCTAssertEqual(
+            UpdatePlanner.groupSelectionState(selected: ["f:wget"], groupKeys: ["c:firefox", "c:slack"]),
+            .none
+        )
+        XCTAssertEqual(
+            UpdatePlanner.groupSelectionState(selected: ["f:wget", "c:firefox"], groupKeys: ["c:firefox", "c:slack"]),
+            .partial
+        )
+        XCTAssertEqual(
+            UpdatePlanner.groupSelectionState(selected: ["f:wget", "c:firefox", "c:slack"],
+                                              groupKeys: ["c:firefox", "c:slack"]),
+            .all
+        )
+    }
 
     func testSelectAllState() {
         XCTAssertEqual(UpdatePlanner.selectAllState(selectedCount: 0, totalCount: 3), .none)
@@ -207,7 +249,7 @@ final class UpdatePlannerTests: XCTestCase {
 
     /// A key built from the display name instead of the numeric ID must not reach the command.
     func testANonNumericAppStoreKeyIsDroppedFromThePlan() {
-        let plan = UpdatePlanner.plan(selectedKeys: ["a:Xcode"], allKeys: ["a:Xcode"])
+        let plan = UpdatePlanner.plan(selectedKeys: ["a:Xcode"])
         XCTAssertTrue(plan.masAppStoreIDs.isEmpty)
         XCTAssertTrue(UpdatePlanner.commands(for: plan).isEmpty)
     }
