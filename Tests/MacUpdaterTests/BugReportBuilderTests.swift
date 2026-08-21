@@ -100,6 +100,26 @@ struct BugReportBuilderTests {
         #expect(text.contains("[user]"), "nazwa konta z opisu użytkownika też jest redagowana")
     }
 
+    @Test func aMultiLinePEMKeyInADetailCannotSurviveRedaction() {
+        // LogRedaction's pemBlock pattern spans "-----BEGIN … PRIVATE KEY-----" through
+        // "-----END … PRIVATE KEY-----" and must see both markers in one pass. A failed
+        // git/ssh/gpg invocation can land a PEM key in a detail's stderr, which serialises
+        // to several separate continuation lines — redacting those lines one at a time
+        // would never present the whole block to the pattern at once.
+        let pemKey = """
+        -----BEGIN PRIVATE KEY-----
+        MIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAy1QXJ9k2ZP0abcd
+        NHVv3fQeLp8sTz1mWkX7yBc4RdE6gHj2KfA9uYo0IiPz5nSrTlVwOxCq8bMdEjF
+        -----END PRIVATE KEY-----
+        """
+        let leaking = entry("git push padł",
+                            detail: LogDetail(command: "git push", exitCode: 1, stderr: pemKey))
+        let text = BugReportBuilder().body(draft(entries: [leaking]), channel: gitHub).text
+        #expect(text.contains("-----BEGIN PRIVATE KEY-----") == false)
+        #expect(text.contains("MIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAy1QXJ9k2ZP0abcd") == false)
+        #expect(text.contains("NHVv3fQeLp8sTz1mWkX7yBc4RdE6gHj2KfA9uYo0IiPz5nSrTlVwOxCq8bMdEjF") == false)
+    }
+
     @Test func theMailtoAddressCannotInjectExtraHeaders() throws {
         // The address comes from a user-writable overlay (endpoints.json) that is not
         // validated as a URL, so it can carry `?`/`&` that would otherwise smuggle extra
@@ -129,6 +149,27 @@ struct BugReportBuilderTests {
         let body = BugReportBuilder().body(fatDraft(), channel: email)
         #expect(body.text.contains("- Wega: 1.4.2 (812)"))
         #expect(body.text.contains("Kliknąłem aktualizuj."))
+    }
+
+    @Test func truncationKeepsAContiguousRunOfTheNewestEntries() {
+        // oldest → newest: short, very long (already exceeds the budget alone), short.
+        // Newest-first probing must STOP at the first miss — an older, shorter entry must
+        // not sneak back in after a newer, longer one was rejected, or the kept set stops
+        // being "the newest entries" and starts being "whichever entries happen to fit".
+        let longMessage = String(repeating: "y", count: 5000)
+        let d = draft(entries: [
+            entry("first-short", at: 1),
+            entry(longMessage, at: 2),
+            entry("third-short", at: 3),
+        ])
+        let body = BugReportBuilder().body(d, channel: email)
+        let hasFirst = body.text.contains("first-short")
+        let hasSecond = body.text.contains(longMessage)
+        let hasThird = body.text.contains("third-short")
+        #expect(hasThird, "the newest entry must survive if anything does")
+        #expect(hasSecond == false, "the oversized middle entry cannot fit under any ordering")
+        #expect(hasFirst == false, "an older entry must not survive while a newer one was dropped")
+        #expect(body.omittedEntryCount == 2)
     }
 
     @Test func everyChannelStaysUnderItsOwnLimit() throws {

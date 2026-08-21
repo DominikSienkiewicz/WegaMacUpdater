@@ -84,23 +84,37 @@ public struct BugReportBuilder: Sendable {
 
     public func body(_ draft: BugReportDraft, channel: BugReportChannel) -> BugReportBody {
         let fixed = fixedSections(draft)
+        // Each entry's `fileText` (header line plus any `\t| `-prefixed detail lines) is
+        // redacted in ONE call, whole, never split by line. `LogRedaction`'s `pemBlock`
+        // pattern matches "-----BEGIN … PRIVATE KEY-----" through "-----END … PRIVATE
+        // KEY-----" and needs both markers in the same pass to fire; a PEM key captured in
+        // a detail's stderr serialises across several separate continuation lines, so
+        // redacting line-by-line would never present the whole block to that pattern and
+        // the key would survive verbatim into the report.
         let entryTexts = draft.entries
             .sorted { $0.date < $1.date }
-            .map { redactLines($0.fileText) }
+            .map { redact($0.fileText) }
 
         // Budżet dla wpisów to limit kanału pomniejszony o wszystko, czego nie wolno ciąć:
         // prefiks URL-a, tytuł i sekcje stałe.
         let budget = channel.urlLengthLimit - encodedOverhead(draft, channel: channel, fixed: fixed)
 
+        // Od najnowszego: awaria jest ostatnia. Pierwsza, która się nie zmieści, kończy
+        // przeglądanie — inaczej krótszy STARSZY wpis mógłby wskoczyć na miejsce dłuższego
+        // NOWSZEGO, który odpadł, i zbiór zachowanych wpisów przestałby być ciągły.
         var kept: [String] = []
         var omitted = 0
-        for text in entryTexts.reversed() {   // od najnowszego: awaria jest ostatnia
-            let candidate = ([text] + kept).joined(separator: "\n")
-            if PrefilledURLBody.percentEncoded(candidate).count <= budget {
-                kept.insert(text, at: 0)
-            } else {
-                omitted += 1
+        var stillFits = true
+        for text in entryTexts.reversed() {
+            if stillFits {
+                let candidate = ([text] + kept).joined(separator: "\n")
+                if PrefilledURLBody.percentEncoded(candidate).count <= budget {
+                    kept.insert(text, at: 0)
+                    continue
+                }
+                stillFits = false
             }
+            omitted += 1
         }
 
         var lines = fixed.head
@@ -182,11 +196,5 @@ public struct BugReportBuilder: Sendable {
             + PrefilledURLBody.percentEncoded(title(draft)).count
             + PrefilledURLBody.percentEncoded(fixedText).count
             + Self.separatorCost
-    }
-
-    /// Redaguje wpis linia po linii, żeby wzorce zakotwiczone na początku linii — jak
-    /// prefiks detalu — nadal pasowały.
-    private func redactLines(_ text: String) -> String {
-        text.components(separatedBy: "\n").map(redact).joined(separator: "\n")
     }
 }
