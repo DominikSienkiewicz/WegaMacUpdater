@@ -161,7 +161,8 @@ final class ScanStoreRuntimeUpdatingTests: XCTestCase {
         XCTAssertFalse(harness.store.updating)
         XCTAssertEqual(Set(harness.store.allItems.map(\.name)), ["Broken App", package])
         XCTAssertEqual(harness.store.banner?.variant, .danger)
-        XCTAssertEqual(harness.store.brewLog.filter { $0.hasPrefix("error:") }.count, 2)
+        // One tagged error line per failed lane — "[<package>] error: …" and "[mas] error: …".
+        XCTAssertEqual(harness.store.brewLog.filter { $0.contains("error:") }.count, 2)
     }
 
     func testEmptyUpdateRequestIsANoOp() async {

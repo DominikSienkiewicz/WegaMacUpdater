@@ -62,7 +62,7 @@ struct RollbackNetAfterRestoreTests {
                 "REL-03: the snapshot cannot be taken without being told which bundles it covers")
         #expect(text.contains("snapshotCasks(caskNames, appPaths: appPaths, operation: operation)"),
                 "REL-03: the snapshot takes the freshly resolved paths")
-        #expect(text.contains("postCaskUpgrade(\n                    caskNames, appPaths: appPaths, snapshots: snapshots,"),
+        #expect(text.contains("postCaskUpgrade(\n            [token], appPaths: appPaths, snapshots: snapshots,"),
                 "REL-03: the canary verifies against the very same paths, never a second map")
     }
 

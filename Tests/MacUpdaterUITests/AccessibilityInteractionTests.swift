@@ -75,12 +75,21 @@ final class AccessibilityInteractionTests: XCTestCase {
             endingAt: "ScrollView {"
         )
 
-        XCTAssertTrue(selectAllRow.contains("Button"))
+        // The three-state control itself moved into the shared `SelectionCheckbox` when
+        // every checkbox became one column: the row still supplies the state and the spoken
+        // count, the shared view supplies the role and the glyph.
+        XCTAssertTrue(selectAllRow.contains("SelectionCheckbox("))
+        XCTAssertTrue(selectAllRow.contains("state: selectAllState"))
         XCTAssertFalse(selectAllRow.contains("Toggle("),
                        "a two-state Toggle cannot represent a partial selection")
-        XCTAssertTrue(selectAllRow.contains("%@ z %@ zaznaczonych"),
+        XCTAssertTrue(selectAllRow.contains("accessibilityValue: selectionSummary"))
+        XCTAssertTrue(update.contains("%@ z %@ zaznaczonych"),
                       "the spoken value must carry the count a mixed checkbox could not")
-        XCTAssertTrue(update.contains("minus.square.fill"),
+
+        let sharedViews = try source("Sources/MacUpdater/SharedViews.swift")
+        XCTAssertTrue(sharedViews.contains("Button(action: toggle)"),
+                      "the select-all control stays an action, not a two-state checkbox")
+        XCTAssertTrue(sharedViews.contains("case .partial: return \"minus.square.fill\""),
                       "the partial state must remain visually distinct too")
     }
 
@@ -129,9 +138,14 @@ final class AccessibilityInteractionTests: XCTestCase {
             startingAt: "// Select-all row",
             endingAt: "ScrollView {"
         )
-        XCTAssertTrue(selectAllRow.contains("Button"))
+        XCTAssertTrue(selectAllRow.contains("SelectionCheckbox("))
         XCTAssertTrue(selectAllRow.contains("scan.toggleAll(filter: updateFilter)"))
         XCTAssertFalse(selectAllRow.contains("onTapGesture"))
+
+        // `SelectionCheckbox` is a `Button`, so the space bar activates it as a system
+        // control — which is what replaced the tap gesture this test forbids.
+        let sharedSelection = try source("Sources/MacUpdater/SharedViews.swift")
+        XCTAssertTrue(sharedSelection.contains("Button(action: toggle)"))
 
         let migration = try source("Sources/MacUpdater/MigrationView.swift")
         let migrationRow = try section(

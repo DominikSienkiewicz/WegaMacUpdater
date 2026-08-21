@@ -44,7 +44,9 @@ struct LT01UpdateOperationWiringTests {
     @Test func bothBatchUpgradePathsJournalTheirPhases() throws {
         let foreground = try ScanStoreSources.everything()
         #expect(foreground.contains("UpdateOperationStore.shared.begin(trigger: .manual)"))
-        #expect(foreground.contains("caskPreparation.operation.recordInstalling()"),
+        // ARCH-08 — the write moved into `runCaskLane`, which is where the preparation is
+        // now unwrapped: once, before the first cask process, not once per cask.
+        #expect(foreground.contains("preparation.operation.recordInstalling()"),
                 "the last journal write before brew is what recovery probes after a crash")
 
         let background = try source("BackgroundUpdater.swift")

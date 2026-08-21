@@ -157,8 +157,10 @@ struct ArchitectureReviewRegressionTests {
         let root = packageRoot()
 
         // Every path that used to inline the streaming loop with its own buffer cap.
+        // ARCH-08 moved the upgrade's streaming out of `ScanStore+Updating.swift` and into
+        // the per-row lanes, so the list follows the code rather than the filename.
         let streamingSites = [
-            "Sources/MacUpdater/ScanStore+Updating.swift",
+            "Sources/MacUpdater/ScanStore+UpgradeLanes.swift",
             "Sources/MacUpdater/ScanStore+Adoption.swift",
             "Sources/MacUpdater/MigrationStore.swift",
             "Sources/MacUpdater/BackgroundUpdater.swift"
@@ -178,6 +180,20 @@ struct ArchitectureReviewRegressionTests {
                 "\(path) still hardcodes its own streamed-log buffer limit"
             )
         }
+
+        // The list above names files, and ARCH-08 showed that a file can stop streaming
+        // without the pattern it was watched for being gone from the type. So the two
+        // prohibitions are also swept over `ScanStore` as a whole, which is where the
+        // upgrade's streaming lives however it is split next.
+        let scanStore = executableSource(try ScanStoreSources.everything())
+        #expect(
+            !scanStore.contains("case .finished(let result)"),
+            "ScanStore still inlines its own ProcessOutputEvent streaming loop"
+        )
+        #expect(
+            !scanStore.contains(".count > 500") && !scanStore.contains(".count > 200"),
+            "ScanStore still hardcodes its own streamed-log buffer limit"
+        )
 
         // The loop and the buffer limit each exist exactly once — in the shared helper.
         let helper = executableSource(

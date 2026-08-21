@@ -51,7 +51,7 @@ struct UpdateResultHonestyTests {
         let text = try scanStore()
         #expect(text.contains("run.record(masItems:"),
                 "REL-02: a failed `mas upgrade` must produce an outcome, not just a log line")
-        #expect(text.contains("masFailure = error.localizedDescription"),
+        #expect(text.contains("return (appStoreItems, error.localizedDescription)"),
                 "REL-02: the thrown mas error must be carried into the run")
     }
 
@@ -65,7 +65,12 @@ struct UpdateResultHonestyTests {
         // verdicts must be *returned* — only the signature it quotes was updated.
         #expect(text.contains("func postCaskUpgrade(\n        _ tokens: [String],\n        appPaths: [String: URL],\n        snapshots: [String: URL],\n        operation: UpdateOperationSession\n    ) async -> [String: CaskValidationVerdict]"),
                 "REL-02: the canary/rollback verdicts must be returned, not only narrated")
-        #expect(text.contains("run.applyValidation(await postCaskUpgrade("),
+        // ARCH-08 — the canary runs inside the cask lane, per token, so a build that fails
+        // it is restored while the other rows still work; the run folds the verdict in when
+        // it folds the row that carries it.
+        #expect(text.contains("let verdicts = await postCaskUpgrade("),
+                "REL-02: the canary/rollback verdicts must be produced by the lane")
+        #expect(text.contains("run.applyValidation([result.item.name: validation])"),
                 "REL-02: the verdicts must be folded into the run before it is summarized")
         #expect(text.contains("let summary = run.summary"),
                 "REL-02: the banner is decided from the whole run, never from BrewUpgradeOutcome alone")

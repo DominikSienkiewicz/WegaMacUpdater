@@ -41,9 +41,14 @@ struct InstallProgressWiringTests {
     @Test func sourcesThatReportNothingPerPackageAdvanceOnlyOnSuccess() throws {
         let run = compact(executableSource(try ScanStoreSources.everything()))
 
-        #expect(run.contains("if outcome.isSuccessful { tracker.completeUnits(1)"),
+        // ARCH-08 — a lane credits its own row through `creditUnit()` instead of reaching
+        // for the tracker, because several rows now finish at once.
+        #expect(run.contains("await runNpmUpgrade(name: name) if outcome.isSuccessful { creditUnit() }"),
                 "an npm package that failed must not be counted as installed")
-        #expect(run.contains("if masFailure == nil { tracker.completeUnits("),
+        #expect(run.contains("func creditUnit() { upgradeTracker?.completeUnits(1)"),
+                "one credited row is one unit, whichever lane produced it")
+        #expect(run.contains("upgradeTracker?.completeUnits(appStoreItems.count) "
+                             + "upgradeProgress = upgradeTracker?.progress return (appStoreItems, nil)"),
                 "a failed mas batch must credit nothing — it reports nothing per app")
         #expect(run.contains("brewCallFinished(succeeded: outcome.isSuccessful)"),
                 "the brew call must report its real verdict, not an assumed success")
@@ -67,10 +72,16 @@ struct InstallProgressWiringTests {
     @Test func theSourcesThatPrintNothingNameWhatTheyAreInstalling() throws {
         let run = compact(executableSource(try ScanStoreSources.everything()))
 
-        #expect(run.contains("tracker.beginInstalling(token: pkg) upgradeProgress = tracker.progress let outcome = await runNpmUpgrade("),
+        #expect(run.contains("beginItem(named: name) defer { endItem() } let outcome = await runNpmUpgrade(name: name)"),
                 "npm must name its package before that package starts installing")
-        #expect(run.contains("tracker.beginInstallingBatch() upgradeProgress = tracker.progress"),
+        #expect(run.contains("beginItem(named: \"\")"),
                 "the App Store batch must take the label over, naming no single app")
+        // ARCH-08 — naming is now conditional: with several rows in flight, naming one of
+        // them misdescribes the others, so the batch label takes over.
+        #expect(run.contains("if inFlightItemCount > 1 { upgradeTracker?.beginInstallingBatch() } "
+                             + "else { upgradeTracker?.beginInstalling(token: token) } "
+                             + "upgradeProgress = upgradeTracker?.progress"),
+                "the batch label must take over whenever a single name would misdescribe the run")
     }
 
     /// M2(c) deleted five invented command bars that animated on a timer while the real work
