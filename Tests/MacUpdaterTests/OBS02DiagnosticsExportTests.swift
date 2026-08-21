@@ -232,6 +232,44 @@ struct OBS02DiagnosticsExportTests {
         }
     }
 
+    /// A log file reaches the archive as one string, and it has to reach the redactor that
+    /// way too. ``LogRedaction``'s `pemBlock` pattern spans "-----BEGIN … PRIVATE KEY-----"
+    /// through "-----END … PRIVATE KEY-----" and only fires when both markers are in the
+    /// same call; a failed `git`, `ssh` or `gpg` subprocess can spill a whole key onto
+    /// stderr and from there into `wega.log`, so splitting the file into lines first would
+    /// hand the pattern a BEGIN with no END and archive the key verbatim.
+    @Test("A multi-line PEM private key in a log file cannot survive into the archive")
+    func multiLinePEMKeyIsRedactedAsAWholeBlock() throws {
+        let keyBody = [
+            "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDLtQF2mZ8rKpTn",
+            "b4XvHy1QeWc6NfRjA0uEoIiPz5nSrTlVwOxCq8bMdEjFkYh3RaGtUvW9pLxCn7Bq",
+            "ZeD1uKfA9uYo0IiPz5nSrTlVwOxCq8bMdEjFkYh3RaGtUvW9pLxCn7BqZeD1uKfA",
+        ]
+        let contents = ([
+            "2026-07-27T10:00:00Z [ERROR] [Update] ssh zwrócił 255, stderr:",
+            "-----BEGIN OPENSSH PRIVATE KEY-----",
+        ] + keyBody + [
+            "-----END OPENSSH PRIVATE KEY-----",
+            "2026-07-27T10:00:01Z [INFO] [Update] wycofuję zmianę",
+        ]).joined(separator: "\n")
+
+        let snapshot = plainSnapshot(logFiles: [.init(name: "wega.log", contents: contents)])
+        let entries = DiagnosticsBundle.entries(
+            snapshot,
+            redact: { LogRedaction.redactForExport($0, userNames: []) }
+        )
+        let logEntry = try #require(entries.first { $0.name == "\(DiagnosticsBundle.logDirectoryName)/wega.log" })
+        let text = String(decoding: logEntry.contents, as: UTF8.self)
+
+        #expect(!text.contains("-----BEGIN"), "the PEM armour survived into the archive")
+        #expect(!text.contains("-----END"))
+        for line in keyBody {
+            #expect(!text.contains(line), "the key's body survived: \(line)")
+        }
+        #expect(text.contains(LogRedaction.secretPlaceholder))
+        #expect(text.contains("wycofuję zmianę"), "the surrounding log must survive redaction")
+    }
+
     @Test("Redaction leaves the diagnostic signal behind, not just holes")
     func redactionKeepsTheDiagnosis() {
         let report = DiagnosticsBundle.report(baitedSnapshot(), redact: { LogRedaction.redactForExport($0) })
