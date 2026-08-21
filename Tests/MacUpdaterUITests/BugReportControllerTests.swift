@@ -139,6 +139,21 @@ struct BugReportControllerTests {
         #expect(successLine.contains("channelLabel(channel)"))
     }
 
+    /// `.sheet(item:)` reopens whenever the identity changes, so identity has to belong to
+    /// the controller and not to the memory it happens to occupy: `ObjectIdentifier(self)`
+    /// is the allocation address, which the allocator may hand to the next controller once
+    /// this one is gone. Pinned by reading the source, because reproducing an address reuse
+    /// on demand is not something a test can do reliably.
+    @Test func theIdentityIsAValueOfItsOwnRatherThanTheAllocationAddress() throws {
+        let source = try Self.source("Sources/MacUpdater/BugReportController.swift")
+        #expect(source.contains("var id: ObjectIdentifier") == false)
+        #expect(source.contains("nonisolated let id = UUID()"))
+
+        let first = BugReportController(entries: [entry("foo padł")], opener: SpyOpener())
+        let second = BugReportController(entries: [entry("foo padł")], opener: SpyOpener())
+        #expect(first.id != second.id)
+    }
+
     private static func source(_ relativePath: String, file: String = #filePath) throws -> String {
         let root = URL(fileURLWithPath: file)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

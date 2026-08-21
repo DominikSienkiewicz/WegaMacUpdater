@@ -23,6 +23,11 @@ final class BugReportController: ObservableObject {
         case noHandler(BugReportChannel)
     }
 
+    /// Tożsamość okna dla `.sheet(item:)`. Wygenerowana raz i przechowywana, bo
+    /// `ObjectIdentifier(self)` jest adresem alokacji: po zwolnieniu kontrolera ten sam
+    /// adres może dostać następny, a wtedy SwiftUI wziąłby NOWE okno za wciąż otwarte stare.
+    nonisolated let id = UUID()
+
     let entries: [LogEntry]
 
     @Published var userDescription: String = ""
@@ -124,6 +129,4 @@ final class BugReportController: ObservableObject {
     }
 }
 
-extension BugReportController: Identifiable {
-    nonisolated var id: ObjectIdentifier { ObjectIdentifier(self) }
-}
+extension BugReportController: Identifiable {}
