@@ -246,10 +246,18 @@ Every scan, source response, install result and error is recorded in the **Logs*
 (sidebar), newest first. You can:
 
 - filter by severity (**All / Warnings+ / Errors only**),
-- search the text,
-- copy entries to the clipboard,
+- search the text — including the extra failure detail behind a disclosure arrow, not just
+  the visible line,
+- copy entries to the clipboard (**not redacted** — see the warning below),
 - **Reveal in Finder** the underlying log file, or
 - **Export diagnostics** — the whole troubleshooting package in one file (below).
+
+> **"Kopiuj" hands over the raw text.** It copies the visible entries exactly as they are
+> written to `wega.log`: full filesystem paths, URL query strings, and the raw `stderr` of
+> whatever command failed. That is deliberate — it is the shortcut for reading your own log
+> in your own editor. **"Zgłoś błąd…"** and **"Eksportuj diagnostykę"** are the two paths
+> that redact, because they are the ones meant to leave your computer. So read what you
+> pasted before it goes into an issue tracker, a chat or an e-mail.
 
 The log also lives on disk at
 `~/Library/Logs/WegaMacUpdater/wega.log` (it rotates to `wega.log.1` past ~5 MB). When a
@@ -278,7 +286,11 @@ exit code, and the tail of `stderr`. To turn one or more of them into a bug repo
 
 Selecting a lot of entries can push the report past the channel's size limit (e-mail and
 GitHub allow different amounts); when that happens the oldest selected entries are dropped
-and the preview says so plainly. Because a `mailto:` link cannot carry attachments in any
+and the preview says so plainly. A very long description can overflow the limit all by
+itself — e-mail is the tighter of the two — and then it is shortened as well, after every
+entry has already been dropped, with a visible `[truncated — …]` note where it was cut.
+Both are visible in the preview before you send anything: the report is kept inside the
+limit rather than handed to a mail client that would quietly cut it off mid-word. Because a `mailto:` link cannot carry attachments in any
 mail client, this flow only ever carries the entries you selected — for the full log files
 and environment report, use **"Eksportuj diagnostykę"** in the same toolbar instead. If
 your Mac has no app that can open the channel you picked, the window falls back to a
