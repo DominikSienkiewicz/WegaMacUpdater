@@ -38,6 +38,15 @@ public struct LogDetail: Equatable, Sendable {
     public static let maxOutputCharacters = 4000
     public static let maxSerializedCharacters = 8000
 
+    /// Mówi wprost, że blok poniżej jest tylko ogonem tego, co proces wypisał. Sformułowany
+    /// jak znacznik przycięcia w treści zgłoszenia i z tego samego powodu: skrócony `stderr`
+    /// nie może udawać kompletnego — czytelnik szukałby przyczyny w linii, której nie ma.
+    public static func outputTruncationMarker(droppedLines: Int) -> String {
+        "[truncated — \(droppedLines) earlier line\(droppedLines == 1 ? "" : "s") omitted]"
+    }
+
+    private static let truncationMarkerPrefix = "[truncated — "
+
     public let fields: [Field]
     public let output: String?
 
@@ -112,14 +121,28 @@ public struct LogDetail: Equatable, Sendable {
 
     // MARK: - Limity
 
-    /// Zachowuje **ogon** wyjścia: awaria jest na końcu, nie na początku.
+    /// Zachowuje **ogon** wyjścia: awaria jest na końcu, nie na początku — i zapowiada to
+    /// znacznikiem, bo bez niego strata jest niewidoczna.
     private static func capped(_ output: String?) -> String? {
         guard let output else { return nil }
-        var lines = output.components(separatedBy: "\n")
-        if lines.count > maxOutputLines { lines = Array(lines.suffix(maxOutputLines)) }
-        var text = lines.joined(separator: "\n")
-        if text.count > maxOutputCharacters { text = String(text.suffix(maxOutputCharacters)) }
-        return text
+        let original = output.components(separatedBy: "\n")
+        guard original.count > maxOutputLines || output.count > maxOutputCharacters else { return output }
+
+        // Znacznik płaci za siebie z obu budżetów, więc przycięty blok nadal się w nich
+        // mieści. Rezerwa liczona dla najgorszego przypadku (odpadły wszystkie linie), żeby
+        // liczba w znaczniku nie zmieniała długości, do której dopiero przycinamy.
+        let reserve = outputTruncationMarker(droppedLines: original.count).count + 1
+        var text = original.suffix(maxOutputLines - 1).joined(separator: "\n")
+        var cutMidLine = false
+        let characterBudget = max(0, maxOutputCharacters - reserve)
+        if text.count > characterBudget {
+            // Cięcie po znakach ląduje zwykle w środku linii — to, co z niej zostało, nie
+            // jest już tą linią, więc liczy się jako utracona.
+            cutMidLine = !text.dropLast(characterBudget).hasSuffix("\n")
+            text = String(text.suffix(characterBudget))
+        }
+        let dropped = original.count - text.components(separatedBy: "\n").count + (cutMidLine ? 1 : 0)
+        return outputTruncationMarker(droppedLines: dropped) + "\n" + text
     }
 
     /// Ostatnia bariera: jeden rozgadany proces nie może wyczerpać budżetu rotacji pliku
@@ -128,10 +151,30 @@ public struct LogDetail: Equatable, Sendable {
         var lines = lines
         let marker = "\(continuationPrefix)\(outputMarker)"
         while lines.joined(separator: "\n").count > maxSerializedCharacters,
-              let markerIndex = lines.firstIndex(of: marker),
-              lines.count > markerIndex + 1 {
-            lines.remove(at: markerIndex + 1)
+              let markerIndex = lines.firstIndex(of: marker) {
+            // Znacznik przycięcia, jeśli już stoi na czele bloku, zostaje: to jedyne zdanie
+            // mówiące, że blok jest ogonem, więc usunięcie go w pierwszej kolejności ukryłoby
+            // właśnie tę stratę, którą opisuje. Odpada najstarsza linia TREŚCI, a licznik
+            // w znaczniku rośnie razem z nią, żeby nie zaczął kłamać.
+            let head = markerIndex + 1
+            let announced = head < lines.count ? droppedLineCount(lines[head]) : nil
+            let victim = announced == nil ? head : head + 1
+            guard victim < lines.count else { break }
+            lines.remove(at: victim)
+            if let announced {
+                lines[head] = continuationPrefix + outputTruncationMarker(droppedLines: announced + 1)
+            }
         }
         return lines
+    }
+
+    /// Liczba zapowiedziana w linii znacznika przycięcia, albo `nil`, gdy to zwykła linia
+    /// wyjścia.
+    private static func droppedLineCount(_ line: String) -> Int? {
+        let body = line.hasPrefix(continuationPrefix)
+            ? String(line.dropFirst(continuationPrefix.count))
+            : line
+        guard body.hasPrefix(truncationMarkerPrefix), body.hasSuffix("omitted]") else { return nil }
+        return Int(body.dropFirst(truncationMarkerPrefix.count).prefix { $0.isNumber })
     }
 }

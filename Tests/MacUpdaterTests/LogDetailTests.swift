@@ -38,8 +38,52 @@ struct LogDetailTests {
         let lines = (1...200).map { "line \($0)" }.joined(separator: "\n")
         let detail = LogDetail(fields: [], output: lines)
         let kept = try #require(detail.output).split(separator: "\n")
+        // One line of the budget goes to the truncation notice, which is why 39 lines of
+        // output survive rather than 40 — the block as a whole still fits the cap.
         #expect(kept.count == LogDetail.maxOutputLines)
+        #expect(kept.first == "\(LogDetail.outputTruncationMarker(droppedLines: 161))")
         #expect(kept.last == "line 200", "the tail matters — the failure is at the end")
+    }
+
+    /// A capped `stderr` that looks complete sends the reader hunting for a cause in a line
+    /// that was silently thrown away. The block says how much of it is missing, the same way
+    /// the bug report body's `[truncated — …]` marker does.
+    @Test func aCappedOutputSaysHowManyLinesWereDropped() throws {
+        let detail = LogDetail(fields: [], output: (1...200).map { "line \($0)" }.joined(separator: "\n"))
+        let output = try #require(detail.output)
+        #expect(output.hasPrefix(LogDetail.outputTruncationMarker(droppedLines: 161)))
+        #expect(output.contains("line 200"))
+        #expect(output.contains("line 161") == false, "the notice counts exactly what is gone")
+    }
+
+    @Test func anOutputThatFitsIsLeftExactlyAsItCame() {
+        let detail = LogDetail(fields: [], output: "boom\nsecond")
+        #expect(detail.output == "boom\nsecond", "no notice where nothing was lost")
+    }
+
+    /// The serialization cap drops the OLDEST output lines, and the notice sits at the head
+    /// of the block — dropping it first would hide exactly the loss it reports, so it stays
+    /// and its count grows with every further line removed.
+    @Test func theTruncationNoticeSurvivesTheSerializationCapAndKeepsCounting() throws {
+        let detail = LogDetail(
+            fields: [.init(key: "cmd", value: String(repeating: "x", count: 3900)),
+                     .init(key: "sub", value: String(repeating: "x", count: 3900))],
+            output: (1...300).map { "line \($0)" }.joined(separator: "\n")
+        )
+        let lines = detail.continuationLines
+        let markerLine = "\(LogDetail.continuationPrefix)\(LogDetail.outputMarker)"
+        let markerIndex = try #require(lines.firstIndex(of: markerLine))
+        let notice = lines[markerIndex + 1]
+        let prefix = "\(LogDetail.continuationPrefix)\(LogDetail.outputTruncationMarker(droppedLines: 0).prefix(13))"
+
+        #expect(lines.joined(separator: "\n").count <= LogDetail.maxSerializedCharacters)
+        #expect(notice.hasPrefix(prefix), "the notice is still the first line of the block")
+
+        let announced = Int(notice.dropFirst(prefix.count).prefix { $0.isNumber })
+        let contentLines = lines.count - markerIndex - 2
+        #expect(contentLines < LogDetail.maxOutputLines - 1,
+                "regression guard: the serialization cap has to have dropped lines of its own")
+        #expect(announced == 300 - contentLines, "the count follows every line actually dropped")
     }
 
     @Test func capsOutputCharacterCount() {
