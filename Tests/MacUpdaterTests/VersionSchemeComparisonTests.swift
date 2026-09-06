@@ -74,6 +74,25 @@ struct VersionSchemeComparisonTests {
         #expect(compareVersions("26.3.2", "26.3.3-57507", scheme: .buildNumbered) == .orderedAscending)
     }
 
+    /// Little Snitch as actually installed: the bundle reports `6.5 nightly (7301)` while
+    /// the Caskroom records `6.4.1`. The word after the numeric core swallowed the minor
+    /// component — `"5 nightly"` is not an `Int` — so the nightly parsed as `6.0.0` and
+    /// ranked *below* the stable it is ahead of; the REL-17 drift detector then offered that
+    /// stable as an update, i.e. a downgrade.
+    ///
+    /// Red before the fix: `.orderedAscending`.
+    @Test func buildNumberedKeepsTheNumericCoreBeforeAWhitespacePrereleaseWord() {
+        #expect(compareVersions("6.5 nightly (7301)", "6.4.1", scheme: .buildNumbered) == .orderedDescending)
+    }
+
+    /// The nightly is still a prerelease of its own version, exactly as `-beta` is: the
+    /// stable `6.5`, once published, must be offered. Green both before and after the fix —
+    /// it exists to reject the tempting alternative of merely *dropping* the word, which
+    /// would leave a build number on one side only and call the two versions the same.
+    @Test func aWhitespacePrereleaseWordRanksBelowTheStableOfTheSameVersion() {
+        #expect(compareVersions("6.5 nightly (7301)", "6.5", scheme: .buildNumbered) == .orderedAscending)
+    }
+
     // MARK: Unparseable ⇒ .unknown (both schemes)
 
     @Test func unparseableIsUnknownSemver() {

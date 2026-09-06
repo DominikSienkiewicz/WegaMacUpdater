@@ -20,6 +20,18 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   compared the real bundle and dropped those entries; it now says which ones, so „checked and
   current" stops reading like „never checked".
 
+### Fixed
+- **A nightly or beta build is no longer offered its own stable release as an „update”** — the
+  version parser dropped the component in front of a whitespace-separated word, so
+  `6.5 nightly (7301)` read as `6.0.0` and the cask-drift detector listed Little Snitch's
+  recorded `6.4.1` as available: a downgrade. A word after the numeric core is now a prerelease
+  tag, exactly as `-beta` already was, so the nightly ranks above the stable it is ahead of and
+  below its own stable release.
+- **A Sparkle feed that is not newest-first no longer hides the real update** — the appcast
+  parser stopped at the first versioned `<item>`. It now takes the highest version on the
+  default channel, keeps that item's release notes, and skips items published on a named
+  `<sparkle:channel>` (beta, nightly) unless the feed has nothing else.
+
 ## [0.3.0] — 2026-08-21
 
 ### Added

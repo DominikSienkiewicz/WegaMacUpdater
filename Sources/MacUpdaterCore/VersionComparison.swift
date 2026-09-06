@@ -119,8 +119,23 @@ private func parseBuildNumbered(_ v: String) -> ParsedVersion? {
         coreString.removeSubrange(paren)
     }
 
-    // Trailing dash suffix: numeric ⇒ build number, alphabetic ⇒ prerelease.
+    // A whitespace-separated word after the numeric core — Little Snitch's `6.5 nightly` —
+    // is a prerelease tag, exactly as the `-beta` suffix below. Left in place it swallowed
+    // the component it followed (`"5 nightly"` is not an `Int`), so `6.5 nightly` parsed as
+    // `6.0.0` and ranked below the `6.4.1` it is ahead of; the REL-17 drift detector then
+    // offered that stable as an update, i.e. a downgrade (MKT-02). The split happens only
+    // when the head is itself a version, so a leading word keeps its old parse.
     var prerelease: [String] = []
+    if let space = coreString.firstIndex(where: \.isWhitespace) {
+        let head = String(coreString[..<space])
+        let tail = coreString[space...].trimmingCharacters(in: .whitespaces)
+        if tail.first?.isLetter == true, head.split(separator: ".").contains(where: { Int($0) != nil }) {
+            prerelease = tail.split(whereSeparator: { $0.isWhitespace || $0 == "." }).map(String.init)
+            coreString = head
+        }
+    }
+
+    // Trailing dash suffix: numeric ⇒ build number, alphabetic ⇒ prerelease.
     if let dash = coreString.firstIndex(of: "-") {
         let suffix = String(coreString[coreString.index(after: dash)...])
         coreString = String(coreString[..<dash])

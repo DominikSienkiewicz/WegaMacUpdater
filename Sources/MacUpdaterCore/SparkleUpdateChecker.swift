@@ -77,7 +77,7 @@ public enum SparkleFeedOverrides {
 
 // MARK: - Appcast XML parser
 
-/// The first appcast `<item>` that carries a version, decomposed into the fields the
+/// The appcast `<item>` chosen for the update, decomposed into the fields the
 /// release-notes UI needs. `descriptionHTML` is the raw `<description>` payload (often
 /// HTML, often CDATA) handed back untouched — sanitizing / AttributedString conversion
 /// is a UI concern, not the parser's. `releaseNotesLink` obeys SEC-09: HTTPS only.
@@ -88,9 +88,13 @@ struct AppcastItem: Equatable {
 }
 
 final class AppcastParser: NSObject, XMLParserDelegate {
+    /// Every `<item>` that carried a version, in document order, with the channel it was
+    /// published on — `nil` is Sparkle's default channel.
+    private var items: [(item: AppcastItem, channel: String?)] = []
     private var version: String?
     private var descriptionHTML: String?
     private var releaseNotesLink: URL?
+    private var channel: String?
     private var inItem = false
     private var enclosureVersionFound = false
     private var currentChars = ""
@@ -100,19 +104,23 @@ final class AppcastParser: NSObject, XMLParserDelegate {
         parseItem(data: data)?.version
     }
 
-    /// Full first-versioned-item extraction: version + release notes. `nil` when no
-    /// item carries a version — mirroring `parse`'s nil contract exactly.
+    /// The highest version among the items on Sparkle's default channel — never merely the
+    /// first. Feeds are not reliably newest-first (`ChatGPTUpdateParser` exists for exactly
+    /// that reason), and an item carrying `<sparkle:channel>` is offered by Sparkle only to
+    /// users who opted into that channel, so such items are skipped unless the feed has no
+    /// default-channel item at all. Incomparable versions keep document order. `nil` when
+    /// no item carries a version — mirroring `parse`'s nil contract exactly.
     static func parseItem(data: Data) -> AppcastItem? {
         let delegate = AppcastParser()
         let parser = XMLParser(data: data)
         parser.delegate = delegate
         parser.parse()
-        guard let version = delegate.version else { return nil }
-        return AppcastItem(
-            version: version,
-            descriptionHTML: delegate.descriptionHTML,
-            releaseNotesLink: delegate.releaseNotesLink
-        )
+        let defaultChannel = delegate.items.filter { $0.channel == nil }
+        let candidates = defaultChannel.isEmpty ? delegate.items : defaultChannel
+        // max(by:) wants an ascending predicate: $0 precedes $1 when $1 is the newer version.
+        return candidates.map(\.item).max { lhs, rhs in
+            isUpgrade(installed: lhs.version ?? "", latest: rhs.version ?? "")
+        }
     }
 
     func parser(
@@ -122,7 +130,14 @@ final class AppcastParser: NSObject, XMLParserDelegate {
         qualifiedName _: String?,
         attributes attrs: [String: String]
     ) {
-        if el == "item" { inItem = true }
+        if el == "item" {
+            inItem = true
+            version = nil
+            descriptionHTML = nil
+            releaseNotesLink = nil
+            channel = nil
+            enclosureVersionFound = false
+        }
         // Handle both "sparkle:…" and plain (namespace-unaware) local names.
         let local = el.components(separatedBy: ":").last ?? el
         if inItem, !enclosureVersionFound, local == "enclosure",
@@ -141,7 +156,7 @@ final class AppcastParser: NSObject, XMLParserDelegate {
     }
 
     func parser(
-        _ p: XMLParser,
+        _: XMLParser,
         didEndElement el: String,
         namespaceURI _: String?,
         qualifiedName _: String?
@@ -160,20 +175,20 @@ final class AppcastParser: NSObject, XMLParserDelegate {
                    url.scheme?.lowercased() == "https" {
                     releaseNotesLink = url
                 }
+            case "channel":
+                // `<sparkle:channel>` inside an item. The RSS `<channel>` container closes
+                // outside any item and never reaches this branch.
+                if !trimmed.isEmpty { channel = trimmed }
             default:
                 break
             }
         }
         if el == "item" {
-            if version != nil {
-                // First versioned item wins; stop before later items overwrite it.
-                p.abortParsing()
-            } else {
-                // Version-less item: discard its notes and keep scanning (a later item
-                // may carry the version — preserving the original lookup contract).
-                descriptionHTML = nil
-                releaseNotesLink = nil
-                enclosureVersionFound = false
+            if let version {
+                items.append((
+                    AppcastItem(version: version, descriptionHTML: descriptionHTML, releaseNotesLink: releaseNotesLink),
+                    channel
+                ))
             }
             inItem = false
         }

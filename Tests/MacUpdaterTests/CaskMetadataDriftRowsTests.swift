@@ -157,6 +157,25 @@ struct CaskMetadataDriftRowsTests {
         #expect(rows.isEmpty)
     }
 
+    /// Little Snitch, as actually installed on 2026-09-06: the Caskroom records `6.4.1`, the
+    /// bundle on disk is the nightly `6.5 nightly (7301)`. That is forward drift — the disk is
+    /// *ahead* of brew — yet the real scan listed it with `6.4.1` as the available version,
+    /// because the version parser dropped the minor component behind the word `nightly` and
+    /// ranked the nightly as `6.0.0`. Forcing that row offers a downgrade as an update.
+    ///
+    /// Red before the fix: one row, `installedVersion` `6.5 nightly (7301)`,
+    /// `availableVersion` `6.4.1`.
+    @Test func doesNotOfferADowngradeWhenTheDiskRunsANightlyAheadOfBrew() {
+        let rows = ManualUpdateScanner.caskMetadataDriftRows(
+            installedApps: [caskApp("little-snitch", name: "Little Snitch", installed: "6.5 nightly (7301)",
+                                    path: "/Applications/Little Snitch.app", build: "7301")],
+            brewCaskVersions: ["little-snitch": "6.4.1"],
+            alreadyListedTokens: []
+        )
+
+        #expect(rows.isEmpty)
+    }
+
     /// A cask brew lists but tracks no version for is *not* brew-authoritative — the
     /// cask-version check already owns it (see ``BrewManagement``), so forcing a row here
     /// would duplicate that path.
