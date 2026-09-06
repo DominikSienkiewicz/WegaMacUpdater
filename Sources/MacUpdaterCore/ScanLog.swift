@@ -82,4 +82,21 @@ public enum ScanLog {
             return nil
         }
     }
+
+    // MARK: 5. Homebrew metadata drift
+
+    /// One line naming the casks that `BrewCaskDriftFilter` dropped from the outdated list
+    /// because the real bundle already matched `current_version` — a self-updater rewrote the
+    /// app behind Homebrew's back, leaving `installed_versions` stale.
+    ///
+    /// Without this line the drop is invisible, and "checked, already current" reads exactly
+    /// like "never checked" (REL-09). Tokens are sorted so the line is stable across scans:
+    /// the caller holds a `Set`, which has no order of its own.
+    ///
+    /// `nil` when nothing drifted, so the caller logs nothing on the common path.
+    public static func driftLine(tokens: Set<String>) -> String? {
+        guard !tokens.isEmpty else { return nil }
+        return "Pominięto jako już aktualne (zapis Homebrew nieaktualny): "
+            + tokens.sorted().joined(separator: ", ")
+    }
 }

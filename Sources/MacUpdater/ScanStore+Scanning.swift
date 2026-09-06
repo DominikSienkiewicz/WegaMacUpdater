@@ -231,6 +231,11 @@ extension ScanStore {
                 updated.casks.removeAll { drifted.contains($0.name) }
                 brewOutdated = updated
             }
+            // REL-09 — the drop has to leave a trace. A cask hidden here was checked and
+            // found current; without a line it reads as never checked at all.
+            if let line = ScanLog.driftLine(tokens: drifted) {
+                WegaLog.info(.scanner, line)
+            }
 
             caskIconPaths = dependencies.caskAppPathResolver.appPaths(
                 from: infos,

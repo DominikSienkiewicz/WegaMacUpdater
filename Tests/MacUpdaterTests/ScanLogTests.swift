@@ -91,4 +91,19 @@ final class ScanLogTests: XCTestCase {
         XCTAssertEqual(ScanLog.checkerDebugLine(source: "Sparkle", app: "Transmit", result: .upToDate, millis: 120),
                        "Sparkle · Transmit: aktualna (120 ms)")
     }
+
+    // 5. Drift metadanych brew (cicho odsiane caski)
+    func testDriftLineIsNilWhenNothingDrifted() {
+        XCTAssertNil(ScanLog.driftLine(tokens: []))
+    }
+
+    func testDriftLineNamesDriftedTokensAlphabetically() {
+        XCTAssertEqual(ScanLog.driftLine(tokens: ["zed", "arc", "raycast"]),
+                       "Pominięto jako już aktualne (zapis Homebrew nieaktualny): arc, raycast, zed")
+    }
+
+    func testDriftLineForSingleToken() {
+        XCTAssertEqual(ScanLog.driftLine(tokens: ["zed"]),
+                       "Pominięto jako już aktualne (zapis Homebrew nieaktualny): zed")
+    }
 }

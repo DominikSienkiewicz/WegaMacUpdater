@@ -13,6 +13,13 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Added
+- **The scan log names casks it hid as already current** — an app with its own updater (Zed,
+  Arc, Raycast, JetBrains Toolbox) rewrites its bundle behind Homebrew's back, so `brew
+  outdated --greedy` keeps reporting a version that is no longer installed. Wega already
+  compared the real bundle and dropped those entries; it now says which ones, so „checked and
+  current" stops reading like „never checked".
+
 ## [0.3.0] — 2026-08-21
 
 ### Added
