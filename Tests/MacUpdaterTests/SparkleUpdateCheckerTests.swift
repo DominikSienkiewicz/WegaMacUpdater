@@ -51,6 +51,75 @@ struct SparkleUpdateCheckerTests {
         #expect(AppcastParser.parse(data: Data(xml.utf8)) == nil)
     }
 
+    // MARK: - AppcastParser item selection (MKT-02)
+
+    private struct AppcastItemFixture {
+        var version: String
+        var channel: String?
+        var description: String?
+    }
+
+    private func appcast(items: [AppcastItemFixture]) -> String {
+        let body = items.map { item -> String in
+            var lines = ["<item>"]
+            if let channel = item.channel { lines.append("<sparkle:channel>\(channel)</sparkle:channel>") }
+            if let description = item.description { lines.append("<description>\(description)</description>") }
+            lines.append("<enclosure url=\"https://example.com/App-\(item.version).dmg\" sparkle:shortVersionString=\"\(item.version)\"/>")
+            lines.append("</item>")
+            return lines.joined(separator: "\n")
+        }.joined(separator: "\n")
+        return """
+        <?xml version="1.0"?>
+        <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+            <channel>
+        \(body)
+            </channel>
+        </rss>
+        """
+    }
+
+    /// Appcasts are conventionally newest-first, but nothing enforces it — ChatGPT's feed
+    /// carries older builds with newer `pubDate`s, and `ChatGPTUpdateParser` already takes the
+    /// maximum for exactly that reason. The generic parser stopped at the first versioned
+    /// item, so a feed listing `1.0.0` first reported an installed `1.1.0` as current while
+    /// `1.2.0` waited further down.
+    ///
+    /// Red before the fix: `"1.0.0"`.
+    @Test func parserPicksTheHighestVersionWhenItemsAreNotNewestFirst() {
+        let xml = appcast(items: [
+            .init(version: "1.0.0"),
+            .init(version: "1.2.0"),
+            .init(version: "1.1.0"),
+        ])
+        #expect(AppcastParser.parse(data: Data(xml.utf8)) == "1.2.0")
+    }
+
+    /// The release notes shown for the update must belong to the item that was chosen, not
+    /// to whichever item happened to come first.
+    ///
+    /// Red before the fix: `"old"`.
+    @Test func parserKeepsTheReleaseNotesOfTheItemItPicked() {
+        let xml = appcast(items: [
+            .init(version: "1.0.0", description: "old"),
+            .init(version: "1.2.0", description: "new"),
+        ])
+        #expect(AppcastParser.parseItem(data: Data(xml.utf8))?.descriptionHTML == "new")
+    }
+
+    /// Sparkle offers an item carrying `<sparkle:channel>` only to users who opted into that
+    /// channel; the default channel is every item *without* one. Taking the maximum over all
+    /// items would otherwise turn every beta feed into a phantom update for stable users — a
+    /// new false positive replacing the old false negative.
+    ///
+    /// Red before the fix: `"2.0.0-beta"` — first item wins, channel ignored.
+    @Test func parserIgnoresItemsOnANamedChannel() {
+        let xml = appcast(items: [
+            .init(version: "2.0.0-beta", channel: "beta"),
+            .init(version: "1.5.0"),
+        ])
+        #expect(AppcastParser.parse(data: Data(xml.utf8)) == "1.5.0")
+    }
+
     // MARK: - AppcastParser release notes (F1)
 
     // The `<description>` is frequently HTML wrapped in CDATA. The parser must hand
