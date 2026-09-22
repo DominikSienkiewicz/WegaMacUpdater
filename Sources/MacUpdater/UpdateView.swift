@@ -190,45 +190,15 @@ struct UpdateView: View {
 
     // MARK: Checking
     //
-    // M2(c) — this screen used to animate five invented command bars on a timer, regardless
-    // of what the scan was doing or how long it would take, with no way to stop it. The scan
-    // is strictly sequential, so the bar now reports the phase it is genuinely in.
+    // The same scene the quiet launch refresh draws over the list — see `ScanProgressScene`.
+    // A scan reports the identical thing whichever of the two is on screen, so it wears one
+    // face and neither screen can be restyled without the other following.
     private var checkingView: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ProgressView(value: scan.progress?.fractionCompleted ?? 0)
-                .progressViewStyle(.linear)
-                .tint(Color.wegaHoney)
-                // A linear ProgressView reports a nonzero intrinsic width, which — with no
-                // upper bound — propagates up and pushes the detail column wide enough to
-                // shove the sidebar off-screen. Pin it elastic (0…∞) so it fills, not forces.
-                .frame(minWidth: 0, maxWidth: .infinity)
-            if case .running(let phase) = scan.progress {
-                Text(phase.commandLabel)
-                    .font(.wega(.subheadline, monospaced: true))
-                    .foregroundStyle(.tertiary)
-            }
-            SniffingScene(
-                caption: tr("Wega węszy po Homebrew…"),
-                thoughts: [
-                    tr("Czy ten cask jest świeży?"),
-                    tr("Coś tu pachnie aktualizacją"),
-                    tr("Sniff sniff… brew outdated"),
-                    tr("Hmm, znajomy zapach Sparkle"),
-                    tr("SHA256 się zgadza?"),
-                    tr("Łapię trop wersji"),
-                    "0x4A 0x65 0x6C 0x6C 0x79",
-                    tr("Mhm… nowa wersja?"),
-                    tr("Info.plist… mhm"),
-                    tr("Ten cask wymaga odświeżenia")
-                ]
-            )
-            .frame(maxWidth: .infinity)
-            .padding(.top, 16)
-        }
-        // The whole checking screen fills the detail column and demands no minimum of its
-        // own, so the sidebar keeps the exact width (and inset) it has when idle.
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(24)
+        ScanProgressScene(progress: scan.progress)
+            // The whole checking screen fills the detail column and demands no minimum of its
+            // own, so the sidebar keeps the exact width (and inset) it has when idle.
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(24)
     }
 
     // MARK: Results
@@ -344,7 +314,7 @@ struct UpdateView: View {
                 .opacity(scan.isRefreshing ? ScanBusyOverlay.dimmedListOpacity : 1)
                 .overlay {
                     if scan.isRefreshing {
-                        ScanBusyOverlay(presentation: ScanBusyPresentation(progress: scan.progress))
+                        ScanBusyOverlay(progress: scan.progress)
                     }
                 }
                 .animation(.easeInOut(duration: 0.2), value: scan.isRefreshing)
