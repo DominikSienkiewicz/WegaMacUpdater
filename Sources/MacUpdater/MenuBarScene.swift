@@ -2,7 +2,11 @@ import SwiftUI
 import AppKit
 import MacUpdaterCore
 
-/// The menu-bar item itself: a box icon, badged with the update count when > 0.
+/// The menu-bar item itself: Wega's head, badged with the update count when > 0.
+///
+/// It used to be `shippingbox` — a parcel standing in for an app whose whole face is a dog.
+/// `WegaHeadGlyph` draws the same head as the app icon, as a template image, so the bar tints it
+/// for light, dark and the inverted state it takes on while the menu is open.
 struct MenuBarLabel: View {
     let count: Int
     let isChecking: Bool
@@ -10,9 +14,9 @@ struct MenuBarLabel: View {
     var body: some View {
         Group {
             if count > 0 {
-                Label("\(count)", systemImage: "shippingbox.fill")
+                Label { Text("\(count)") } icon: { Image(nsImage: WegaHeadGlyph.menuBarImage) }
             } else {
-                Image(systemName: "shippingbox")
+                Image(nsImage: WegaHeadGlyph.menuBarImage)
             }
         }
         .accessibilityLabel(count > 0

@@ -97,7 +97,9 @@ Wega goes and gets them anyway:
 
 ### The menu-bar agent
 
-A small box icon lives in your menu bar, **badged with the number of available updates**.
+Wega's head lives in your menu bar, **badged with the number of available updates**. It is
+drawn as a template image, so it follows the bar — dark on a light bar, light on a dark one,
+and inverted while its menu is open.
 On a schedule you choose (off / hourly / every 6 hours / daily — default every 6 hours) it
 runs a quiet, **read-only** background check and notifies you when new updates appear.
 Closing the main window keeps this agent running; use **Quit** in its dropdown to stop it.
