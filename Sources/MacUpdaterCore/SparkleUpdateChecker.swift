@@ -85,6 +85,14 @@ struct AppcastItem: Equatable {
     var version: String?
     var descriptionHTML: String?
     var releaseNotesLink: URL?
+    /// RSS `<pubDate>` (RFC 822), when the feed carries one.
+    var publishedAt: Date?
+}
+
+/// What one appcast says: which item to offer, and everything published on the way to it.
+struct AppcastResult: Equatable {
+    var latest: AppcastItem
+    var history: ReleaseHistory
 }
 
 final class AppcastParser: NSObject, XMLParserDelegate {
@@ -94,14 +102,41 @@ final class AppcastParser: NSObject, XMLParserDelegate {
     private var version: String?
     private var descriptionHTML: String?
     private var releaseNotesLink: URL?
+    private var publishedAt: Date?
     private var channel: String?
     private var inItem = false
     private var enclosureVersionFound = false
     private var currentChars = ""
 
+    /// RSS dates are RFC 822. Fixed locale and zero time zone so a user's regional
+    /// settings cannot change whether a feed's date parses.
+    private static let rfc822Formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"
+        return formatter
+    }()
+
+    static func rfc822Date(from string: String) -> Date? {
+        rfc822Formatter.date(from: string)
+    }
+
     /// Backward-compatible entry point: the latest version string only.
     static func parse(data: Data) -> String? {
         parseItem(data: data)?.version
+    }
+
+    /// Every item Sparkle would offer this user: the default channel when the feed has one,
+    /// otherwise all items. An item carrying `<sparkle:channel>` is offered by Sparkle only
+    /// to users who opted into that channel.
+    private static func candidates(data: Data) -> [AppcastItem] {
+        let delegate = AppcastParser()
+        let parser = XMLParser(data: data)
+        parser.delegate = delegate
+        parser.parse()
+        let defaultChannel = delegate.items.filter { $0.channel == nil }
+        return (defaultChannel.isEmpty ? delegate.items : defaultChannel).map(\.item)
     }
 
     /// The highest version among the items on Sparkle's default channel — never merely the
@@ -111,16 +146,42 @@ final class AppcastParser: NSObject, XMLParserDelegate {
     /// default-channel item at all. Incomparable versions keep document order. `nil` when
     /// no item carries a version — mirroring `parse`'s nil contract exactly.
     static func parseItem(data: Data) -> AppcastItem? {
-        let delegate = AppcastParser()
-        let parser = XMLParser(data: data)
-        parser.delegate = delegate
-        parser.parse()
-        let defaultChannel = delegate.items.filter { $0.channel == nil }
-        let candidates = defaultChannel.isEmpty ? delegate.items : defaultChannel
         // max(by:) wants an ascending predicate: $0 precedes $1 when $1 is the newer version.
-        return candidates.map(\.item).max { lhs, rhs in
+        candidates(data: data).max { lhs, rhs in
             isUpgrade(installed: lhs.version ?? "", latest: rhs.version ?? "")
         }
+    }
+
+    /// The chosen item plus every release published between `installedVersion` and it —
+    /// the answer to *what do I get if I update*, which the newest item alone cannot give
+    /// once more than one release has passed.
+    ///
+    /// Entries whose description collapses to nothing are left out rather than listed
+    /// empty; `omitted` counts only what the cap dropped.
+    static func parseResult(data: Data, installedVersion: String, limit: Int = 10) -> AppcastResult? {
+        let items = candidates(data: data)
+        guard let latest = items.max(by: { isUpgrade(installed: $0.version ?? "", latest: $1.version ?? "") })
+        else { return nil }
+
+        let newer = items
+            .filter { isUpgrade(installed: installedVersion, latest: $0.version ?? "") }
+            .filter { !ReleaseNotesText.plain(fromHTML: $0.descriptionHTML ?? "").isEmpty }
+            // `compareVersions` takes no default scheme — appcasts are `.buildNumbered`,
+            // the same scheme `isUpgrade(installed:latest:)` applies above.
+            .sorted { compareVersions($0.version ?? "", $1.version ?? "", scheme: .buildNumbered) == .orderedDescending }
+
+        let kept = newer.prefix(limit).map { entry in
+            ReleaseNote(
+                version: entry.version ?? "",
+                publishedAt: entry.publishedAt,
+                body: ReleaseNotesText.plain(fromHTML: entry.descriptionHTML ?? "")
+            )
+        }
+
+        return AppcastResult(
+            latest: latest,
+            history: ReleaseHistory(notes: Array(kept), omitted: max(0, newer.count - kept.count))
+        )
     }
 
     func parser(
@@ -135,6 +196,7 @@ final class AppcastParser: NSObject, XMLParserDelegate {
             version = nil
             descriptionHTML = nil
             releaseNotesLink = nil
+            publishedAt = nil
             channel = nil
             enclosureVersionFound = false
         }
@@ -179,6 +241,8 @@ final class AppcastParser: NSObject, XMLParserDelegate {
                 // `<sparkle:channel>` inside an item. The RSS `<channel>` container closes
                 // outside any item and never reaches this branch.
                 if !trimmed.isEmpty { channel = trimmed }
+            case "pubDate":
+                if publishedAt == nil { publishedAt = Self.rfc822Date(from: trimmed) }
             default:
                 break
             }
@@ -186,7 +250,8 @@ final class AppcastParser: NSObject, XMLParserDelegate {
         if el == "item" {
             if let version {
                 items.append((
-                    AppcastItem(version: version, descriptionHTML: descriptionHTML, releaseNotesLink: releaseNotesLink),
+                    AppcastItem(version: version, descriptionHTML: descriptionHTML,
+                                releaseNotesLink: releaseNotesLink, publishedAt: publishedAt),
                     channel
                 ))
             }
