@@ -2,7 +2,7 @@ import Foundation
 
 /// One release's notes, ready for display: a version, when it was published, and a body with
 /// every trace of markup removed.
-public struct ReleaseNote: Equatable, Sendable, Identifiable {
+public struct ReleaseNote: Codable, Equatable, Sendable, Identifiable {
     public let version: String
     public let publishedAt: Date?
     public let body: String
@@ -20,7 +20,7 @@ public struct ReleaseNote: Equatable, Sendable, Identifiable {
 ///
 /// `omitted` is how many further releases the cap left out — reported rather than truncated
 /// silently, so a long gap does not read as a short one.
-public struct ReleaseHistory: Equatable, Sendable {
+public struct ReleaseHistory: Codable, Equatable, Sendable {
     public let notes: [ReleaseNote]
     public let omitted: Int
 
