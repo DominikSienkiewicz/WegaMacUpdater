@@ -410,7 +410,11 @@ final class ScanStore: ObservableObject {
     // Items the user has ignored or pinned below the available version are filtered out.
     var allItems: [OutdatedItem] {
         UpdatePlanner.applyPolicies(
-            UpdatePlanner.outdatedItems(brew: brewOutdated, mas: masOutdated, npm: npmOutdated),
+            UpdatePlanner.attachingReleaseNotes(
+                to: UpdatePlanner.outdatedItems(brew: brewOutdated, mas: masOutdated, npm: npmOutdated),
+                manual: manualOutdated,
+                caskAppPaths: caskIconPaths
+            ),
             policies: UpdatePolicyStore.shared.policiesMap
         )
     }

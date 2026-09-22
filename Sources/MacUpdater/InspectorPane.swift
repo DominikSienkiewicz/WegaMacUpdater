@@ -247,10 +247,9 @@ struct InspectorPane: View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeading(tr("Co nowego"))
             switch update {
-            case .outdated:
-                Text(tr("Informacje o zmianach niedostępne dla tego źródła"))
-                    .font(.wega(.subheadline))
-                    .foregroundStyle(.tertiary)
+            // `InspectedUpdate.outdated(OutdatedItem, iconPath: URL?)` — see UpdateView.swift:9.
+            case .outdated(let item, _):
+                whatsNewContent(notes: item.releaseNotes)
             case .manual(let app):
                 whatsNewContent(notes: app.releaseNotes)
             }
@@ -274,6 +273,9 @@ struct InspectorPane: View {
                     ReleaseNoteView(note: note, bodyFont: .wega(.callout))
                 }
             }
+        } else if let link = notes?.link {
+            Link(tr("Zobacz notatki wydania"), destination: link)
+                .font(.wega(.callout))
         } else {
             Text(tr("Brak informacji o zmianach"))
                 .font(.wega(.subheadline))

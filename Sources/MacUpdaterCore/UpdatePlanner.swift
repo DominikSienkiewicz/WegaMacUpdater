@@ -18,11 +18,12 @@ public struct OutdatedItem: Identifiable, Equatable, Sendable {
     public let from: String?
     public let to: String?
     public let kind: Kind
-    /// Optional human-readable release notes for this update (F1). Sources may not
-    /// provide any, so it defaults to `nil` and existing call sites need no change.
-    public var releaseNotes: String?
+    /// What this update brings (F1), when a source in the same scan could supply it.
+    /// Sources that publish nothing leave it `nil`, and the row then shows no disclosure
+    /// at all — Wega does not invent a "no changes" it cannot know.
+    public var releaseNotes: ReleaseNotes?
 
-    public init(key: String, name: String, from: String?, to: String?, kind: Kind, releaseNotes: String? = nil) {
+    public init(key: String, name: String, from: String?, to: String?, kind: Kind, releaseNotes: ReleaseNotes? = nil) {
         self.key = key
         self.name = name
         self.from = from
@@ -184,6 +185,38 @@ public enum UpdatePlanner {
                          from: $0.installedVersion, to: $0.latestVersion, kind: .npm)
         }
         return items
+    }
+
+    /// Lends each batch row the notes another source in the *same scan* already found for it.
+    ///
+    /// Only casks can be joined, and only through the token → app-path map the scan builds
+    /// anyway (`ScanStore.caskIconPaths`): a formula, an npm package and an App Store row have
+    /// no bundle to match against. The version must agree — notes describing a release nobody
+    /// is offering would be worse than no notes at all.
+    public static func attachingReleaseNotes(
+        to items: [OutdatedItem],
+        manual: [ManualOutdatedApp],
+        caskAppPaths: [String: URL]
+    ) -> [OutdatedItem] {
+        guard !manual.isEmpty else { return items }
+        let notesByPath = Dictionary(
+            manual.compactMap { app in app.releaseNotes.map { (app.path, (notes: $0, version: app.availableVersion)) } },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        return items.map { item in
+            // `target` must exist: two rows that both say "version unknown" are not a match,
+            // they are two unknowns, and attaching on that would be guessing.
+            guard item.kind == .cask,
+                  let target = item.to,
+                  let path = caskAppPaths[item.name],
+                  let match = notesByPath[path],
+                  match.version == target,
+                  !match.notes.isEmpty else { return item }
+            var enriched = item
+            enriched.releaseNotes = match.notes
+            return enriched
+        }
     }
 
     /// The installable rows surfaced by one sidebar filter. UX-01 requires every

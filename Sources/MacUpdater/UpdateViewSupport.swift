@@ -238,21 +238,30 @@ struct UpdateSection: View {
                            ))
 
             ForEach(items) { item in
-                PackageRow(
-                    name:           item.name,
-                    iconPath:       iconPaths[item.name],
-                    currentVersion: item.from,
-                    latestVersion:  item.to,
-                    isSelected:     selected.contains(item.key),
-                    isInspected:    item.key == inspectedKey,
-                    rollback:       rollbackProtection[item.name],
-                    onToggle:       { toggle(item.key) },
-                    onSelect:       { onInspect?(item) },
-                    onIgnore:       { onIgnore?(item) },
-                    onPin:          { onPin?(item) },
-                    onSkip:         skipAction(for: item),
-                    backgroundUpdateToken: item.kind == .cask ? item.name : nil
-                )
+                VStack(spacing: 0) {
+                    PackageRow(
+                        name:           item.name,
+                        iconPath:       iconPaths[item.name],
+                        currentVersion: item.from,
+                        latestVersion:  item.to,
+                        isSelected:     selected.contains(item.key),
+                        isInspected:    item.key == inspectedKey,
+                        rollback:       rollbackProtection[item.name],
+                        onToggle:       { toggle(item.key) },
+                        onSelect:       { onInspect?(item) },
+                        onIgnore:       { onIgnore?(item) },
+                        onPin:          { onPin?(item) },
+                        onSkip:         skipAction(for: item),
+                        backgroundUpdateToken: item.kind == .cask ? item.name : nil
+                    )
+                    // F1 — the same disclosure the manual rows use. Rows whose source
+                    // published nothing have none, rather than an empty "no changes".
+                    if let notes = item.releaseNotes, !notes.isEmpty {
+                        ReleaseNotesDisclosure(notes: notes)
+                            .padding(.horizontal, 14)
+                            .padding(.bottom, 10)
+                    }
+                }
                 .contextMenu {
                     UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) }, onSkip: skipAction(for: item))
                 }
