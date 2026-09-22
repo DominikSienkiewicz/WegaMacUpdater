@@ -55,51 +55,41 @@ struct ScanBusySelectionGateTests {
         #expect(!ScanSelectionGate.allowsSelection(isRefreshing: true))
     }
 
-    /// The ring reports the phase the scan is genuinely in, and declines to report one when
-    /// the scan has not named it — including after a finished run leaves `.finished` standing,
-    /// which would otherwise open the next refresh on a full ring.
+    /// The bar reports the phase the scan is genuinely in, and declines to report one when the
+    /// scan has not named it — including after a finished run leaves `.finished` standing,
+    /// which would otherwise open the next refresh on a full bar.
     @Test func theOverlayClaimsNoPositionTheScanHasNotTaken() {
         let brew = ScanBusyPresentation(progress: .running(.brew))
         #expect(brew.fraction == 0)
-        #expect(brew.percentLabel == "0%")
         #expect(brew.phaseLabel == "brew outdated")
+        #expect(brew.accessibilityValue == "brew outdated")
 
         let npm = ScanBusyPresentation(progress: .running(.npm))
-        #expect(npm.percentLabel == "50%")
-        #expect(npm.accessibilityValue == "npm outdated -g — 50%")
+        #expect(npm.fraction == 0.5)
 
         for progress: ScanProgress? in [nil, .finished, .cancelled(at: .mas)] {
             let presentation = ScanBusyPresentation(progress: progress)
             #expect(presentation.fraction == nil, "\(String(describing: progress)) is not a running phase")
-            #expect(presentation.percentLabel == nil)
             #expect(presentation.phaseLabel == nil)
         }
     }
 
-    /// The visible half of the same rule: while the scan runs the list says so and stops
-    /// taking selections, instead of looking exactly like a finished result.
-    @Test func theListSaysItIsBusyAndStopsTakingSelections() throws {
+    /// The scan wears one face. The full-screen scan and the overlay over the list report the
+    /// identical thing, and used to look nothing alike — Wega sniffing across a binary stream
+    /// on one, a progress ring on the other. Both now render `ScanProgressScene`, so neither
+    /// can be restyled without the other following.
+    @Test func bothScanScreensDrawTheSameScene() throws {
         let view = executableSource(try source("Sources/MacUpdater/UpdateView.swift"))
-
-        #expect(view.contains("ScanBusyOverlay("),
-                "a running scan must be visible over the rows it is about to replace")
-        #expect(view.contains("ScanSelectionGate.allowsSelection("),
-                "the list must be gated on the same flag the overlay is shown for")
-    }
-
-    /// UX-03 — the ring's endless turn is an idle loop like the mascot's, so it answers
-    /// "Ogranicz ruch" through the one policy rather than through a condition of its own.
-    /// `ContinuousMotionTests` already forbids a raw `repeatForever`; this pins that the ring
-    /// also declines to *start* the loop, instead of starting one that cannot be seen.
-    @Test func theRingsEndlessTurnObeysTheReduceMotionPolicy() throws {
         let overlay = executableSource(try source("Sources/MacUpdater/ScanBusyOverlay.swift"))
 
-        #expect(overlay.contains("ContinuousMotion.loopsIdleAnimations(reduceMotion: reduceMotion)"),
-                "the turn must not start at all under Ogranicz ruch")
-        #expect(overlay.contains("ContinuousMotion.forever("),
-                "and its animation must come from the shared policy")
-        #expect(overlay.contains("onChange(of: reduceMotion)"),
-                "switching the setting on mid-scan must stop a turn that is already running")
+        #expect(view.contains("ScanProgressScene(progress: scan.progress)"),
+                "the full-screen scan must draw the shared scene")
+        #expect(overlay.contains("ScanProgressScene(progress: progress, size: .compact)"),
+                "and so must the overlay, differing only in scale")
+        #expect(!view.contains("SniffingScene("),
+                "the scene is owned by ScanProgressScene — a second copy is how the two drifted")
+        #expect(!overlay.contains(".trim(from:"),
+                "the ring is gone: its fill duplicated the bar and its turn meant nothing")
     }
 
     // MARK: - Helpers
