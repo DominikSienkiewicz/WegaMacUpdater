@@ -63,30 +63,10 @@ public struct ReleaseHistoryFetcher: Sendable {
             headers: GitHubAuth.headers(),
             enableETag: true
         ), response.statusCode == 200,
-            let releases = try? JSONDecoder().decode([GitHubRelease].self, from: response.data) else {
+            let releases = GitHubReleaseHistory.stableReleases(from: response.data) else {
             return .unavailable
         }
 
-        let newer = releases
-            .filter { !$0.draft && !$0.prerelease }
-            .map { (release: $0, version: normalizeGitTag($0.tagName)) }
-            .filter { isUpgrade(installed: installed, latest: $0.version, scheme: .semver) }
-            .sorted { compareVersions($0.version, $1.version, scheme: .semver) == .orderedDescending }
-
-        let kept = newer.prefix(limit).map { entry in
-            ReleaseNote(
-                version: entry.version,
-                publishedAt: entry.release.publishedAt.flatMap(Self.date(from:)),
-                body: ReleaseNotesText.plain(fromHTML: entry.release.body ?? "")
-            )
-        }
-
-        return .history(ReleaseHistory(notes: Array(kept), omitted: max(0, newer.count - kept.count)))
-    }
-
-    private static func date(from iso: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: iso)
+        return .history(GitHubReleaseHistory.history(releases, newerThan: installed, limit: limit))
     }
 }
