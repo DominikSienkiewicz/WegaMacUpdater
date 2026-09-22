@@ -13,8 +13,9 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
-### Added
+## [0.4.0] — 2026-09-23
 
+### Added
 - **Every update says what it brings, before you apply it** — Wega now keeps the release notes
   it was already downloading. A Sparkle appcast's `<description>` was parsed and thrown away on
   the next line; it is now shown in the row, one entry per release between the version you have
@@ -56,12 +57,26 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   in a terminal. It now has a **„Przeinstaluj przez Brew"** button that runs exactly that, through
   the same snapshot → verification → rollback transaction as the original action. A reinstall that
   itself lands nothing does not offer the button a second time.
+- **updates:** Reinstall the cask straight from the "Nic nie zainstalowano" banner. (a98044a)
+- **updates:** Show release notes on Homebrew, App Store and npm rows too. (4b6aac8)
+- **ui:** Load a linked release-notes page when the row is expanded. (ceb7b4d)
+- **core:** Fetch a linked release-notes page on demand, capped and sanitized. (c731481)
+- **updates:** Carry real release notes from Sparkle and GitHub into every manual row. (8faae1b)
+- **sparkle:** Read every release between installed and newest from the appcast. (0c60847)
+- **core:** One type for what an update brings. (79cbce8)
+- **scan:** Turn the busy ring slowly while the fill waits on a phase. (abf842a)
+- **scan:** Draw the running scan over the list it is replacing. (620f6f3)
+- **menu-bar:** Draw Wega's head instead of a shipping box. (a0bb035)
+- **scan:** Refresh at launch without hiding the restored list. (fad3165)
+- **scan:** Name the casks hidden as already current. (feea0c5)
 
 ### Changed
 - **The menu bar shows Wega's head instead of a cardboard box** — the status item borrowed
   `shippingbox`, a parcel standing in for an app whose whole face is a dog. It is now the same
   head as the app icon, drawn as a template image so the bar tints it for light, dark and the
   inverted state it takes while the menu is open. The update count still sits beside it.
+- **core:** One reading of a GitHub releases list, shared by both callers. (3da5f3d)
+- **scan:** Give the scan one face on both screens. (10d627a)
 
 ### Fixed
 - **„Aktualizuj przez Brew" no longer reports an update that never happened** — Homebrew exits 0
@@ -95,6 +110,10 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   parser stopped at the first versioned `<item>`. It now takes the highest version on the
   default channel, keeps that item's release notes, and skips items published on a named
   `<sparkle:channel>` (beta, nightly) unless the feed has nothing else.
+- **ui:** Don't report a collapsed release-notes fetch as a failure. (565aab6)
+- **scan:** Draw the overlay's scan at the same size as the full screen. (b2ec5ab)
+- **brew:** Detect a no-op update behind 'Aktualizuj przez Brew'. (0363ac0)
+- **scan:** Never offer a downgrade as an update (MKT-02). (938a69f)
 
 ## [0.3.0] — 2026-08-21
 
@@ -300,7 +319,8 @@ their terms are still theirs.
   what changed in it, because there is no published predecessor to have changed from.
 -->
 
-[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.2.0...v0.3.0
 
 
