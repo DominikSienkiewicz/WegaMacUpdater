@@ -27,6 +27,11 @@ struct ScanStoreDependencies {
     let operations: OperationCoordinator
     let upgrades: UpgradeCoordinator
     let caskAppPathResolver: CaskAppPathResolver
+    /// Whether a restored `.app` path still points at something. Separate from the resolver's
+    /// own existence check because it answers a different question at a different time: the
+    /// resolver asks brew where a bundle *should* be, this asks whether yesterday's answer
+    /// is still true before an icon is drawn from it.
+    let bundleExists: (URL) -> Bool
     let manualScan: ManualScan
     let reportWindowScan: (Int, Int, String) -> Void
     let recordUpdateRun: (UpdateJournalEntry) -> Void
@@ -37,6 +42,7 @@ struct ScanStoreDependencies {
         operations: .shared,
         upgrades: .shared,
         caskAppPathResolver: CaskAppPathResolver(),
+        bundleExists: { FileManager.default.fileExists(atPath: $0.path) },
         manualScan: { brewService, outdatedCasks in
             await ManualUpdateScanner(brewService: brewService).scan(
                 brewOutdatedCasks: outdatedCasks
@@ -102,6 +108,15 @@ final class ScanStore: ObservableObject {
     @Published var showPlanPreview    = false
     /// M2(c) — where the scan actually is. `nil` before the first one ever runs.
     @Published var progress: ScanProgress?
+    /// True while a scan is running *underneath* a result that stays on screen.
+    ///
+    /// The launch refresh is the reason this exists. A scan normally takes the window over —
+    /// `status` goes to `.checking` and the list is replaced by the scan's own screen — which
+    /// is right when the user asked for it and wrong when the app asked for itself: the
+    /// restored list would flash up and vanish for a minute, which is worse than the stale
+    /// numbers it was meant to correct. In this mode `status` stays `.results` and only the
+    /// header and the toolbar say that something is running.
+    @Published private(set) var isRefreshing = false
     /// How far the running upgrade has got, in whole packages. `nil` when nothing is
     /// installing, which is also what hides the bar.
     @Published var upgradeProgress: UpgradeProgress?
@@ -157,6 +172,10 @@ final class ScanStore: ObservableObject {
     private let resultStore: ScanResultStore
     let dependencies: ScanStoreDependencies
     private var restoredLastScan = false
+    /// `UpdateView.onAppear` fires again on every tab switch and on every language re-key, so
+    /// the launch refresh needs the same one-shot latch the restore has — without it, walking
+    /// between destinations would kick off a scan each time.
+    private var startedLaunchRefresh = false
     /// M2(c) — the scan runs here, not in a view. A `Task` started from `UpdateView` died
     /// with the view tree; this one outlives a language re-key and a tab switch, and gives
     /// **Cancel** something to cancel.
@@ -269,11 +288,54 @@ final class ScanStore: ObservableObject {
             return
         }
 
+        // The icons come from the file even when the agent's newer lists win: the map is keyed
+        // by cask token, so every token the two have in common gets its icon, and one the file
+        // has never heard of simply keeps its letter tile.
+        caskIconPaths = survivingCaskAppPaths(snapshot?.caskAppPaths ?? [:])
+
         status = .results
         if !lastScanComplete { warnAboutIncompleteScan() }
         // Deliberately no `emitActivitySignal`: nothing is running. The tab icon must not
         // spin, and the scan-finished sound of `finishScan` would be a lie.
         emitCounts()
+    }
+
+    /// Whether a token → bundle pair belongs to a cask the current result reports as outdated.
+    private func isOutdatedCask(_ pair: (key: String, value: URL)) -> Bool {
+        brewOutdated?.casks.contains { $0.name == pair.key } ?? false
+    }
+
+    /// Drops every restored path whose bundle is no longer there.
+    ///
+    /// A cask uninstalled since the scan must come back as a letter tile, not as the icon of
+    /// an app that is gone — an icon is a claim that the thing is on this machine.
+    private func survivingCaskAppPaths(_ paths: [String: URL]) -> [String: URL] {
+        paths.filter { dependencies.bundleExists($0.value) }
+    }
+
+    /// Correct the restored list without taking the window away from it.
+    ///
+    /// Called once, from the first `onAppear`, straight after `restoreLastScan()`. With a
+    /// result already on screen the scan runs quietly underneath it; with nothing to show —
+    /// a first launch, or a snapshot too old to decode — there is no list to protect, so the
+    /// ordinary full-screen scan is both honest and what the user would have pressed anyway.
+    func startLaunchRefresh() {
+#if DEBUG
+        guard !Self.layoutRegressionScenarioRequested else { return }
+#endif
+        guard !startedLaunchRefresh, !updating, status != .checking else { return }
+        startedLaunchRefresh = true
+        startCheck(quiet: status == .results)
+    }
+
+    /// The scan's one door onto `isRefreshing`, which is why the property itself is
+    /// `private(set)`: the flag is half of a pair with `status`, and a view that could set
+    /// either alone could leave the window claiming a scan that is not running.
+    ///
+    /// `internal` rather than `private` because the scan lives in `ScanStore+Scanning.swift`,
+    /// and a private setter is not reachable across files.
+    func setRefreshing(_ refreshing: Bool) {
+        isRefreshing = refreshing
     }
 
     /// REL-09 — says out loud that the result on screen came from a scan that did not
@@ -319,6 +381,10 @@ final class ScanStore: ObservableObject {
             mas: masOutdated,
             npm: npmOutdated,
             manual: manualOutdated,
+            // Only the casks this result actually lists. `caskIconPaths` is never emptied by a
+            // scan that finds nothing outdated, so persisting it whole would let the file
+            // accumulate a path for every cask ever updated on this machine.
+            caskAppPaths: caskIconPaths.filter(isOutdatedCask),
             sources: sourceReports
         )
         do { try resultStore.save(snapshot) }

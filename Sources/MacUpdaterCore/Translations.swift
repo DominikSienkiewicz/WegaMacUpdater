@@ -184,6 +184,9 @@ extension Translations {
         "Sprawdzono %@": "Checked %@",
         // M2 — stara lista mówi wprost, kiedy powstała.
         "Znaleziono %@": "Found %@",
+        // Ciche odświeżenie po starcie: lista zostaje na ekranie, nagłówek mówi, że trwa skan.
+        "odświeżam…": "refreshing…",
+        "odświeżam… %@": "refreshing… %@",
         "Sprawdź ponownie": "Check again",
         "Zaktualizuj wybrane (%@)": "Update selected (%@)",
         // Nic zaznaczonego = przycisk nieaktywny; podpowiedź mówi, czego brakuje.

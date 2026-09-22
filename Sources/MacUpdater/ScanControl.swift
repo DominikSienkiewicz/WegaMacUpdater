@@ -13,7 +13,10 @@ struct ScanControl: View {
 
     var body: some View {
         GlassEffectContainer(spacing: 8) {
-            if scan.status == .checking {
+            // A quiet launch refresh keeps `status` on `.results` so the list stays put, but
+            // it is every bit as cancellable as one the user started — and just as much worth
+            // saying out loud that something is running.
+            if scan.status == .checking || scan.isRefreshing {
                 // The progress bar lives in the scan view's centre (`checkingView`), next to
                 // the phase label and the sniffing scene — one bar, not two. The toolbar keeps
                 // only the action: cancelling the scan it started.
@@ -38,5 +41,6 @@ struct ScanControl: View {
         // make AppKit re-run constraints until it aborts the process.
         .frame(width: 135)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: scan.status)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: scan.isRefreshing)
     }
 }

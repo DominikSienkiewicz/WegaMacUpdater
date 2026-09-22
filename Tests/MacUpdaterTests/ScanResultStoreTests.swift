@@ -230,6 +230,44 @@ final class ScanResultStoreTests: XCTestCase {
         XCTAssertNil(store.load())
     }
 
+    // MARK: The cask icon map
+
+    /// The regression: a restored scan drew lettered placeholders where a finished scan drew
+    /// app icons, because the token → `.app` map only ever lived in memory. It has to survive
+    /// the round trip for the restored list to look like the result it is.
+    func testCaskAppPathsSurviveTheRoundTrip() throws {
+        let io = InMemoryScanSnapshotIO()
+        let store = ScanResultStore(io: io)
+        var snapshot = makeSnapshot(scannedAt: Date(timeIntervalSince1970: 1_700_000_000))
+        snapshot.caskAppPaths = ["iterm2": URL(fileURLWithPath: "/Applications/iTerm.app")]
+
+        try store.save(snapshot)
+        let loaded = try XCTUnwrap(store.load())
+
+        XCTAssertEqual(loaded.caskAppPaths, ["iterm2": URL(fileURLWithPath: "/Applications/iTerm.app")])
+    }
+
+    /// The field is additive, so a file written before it existed must still load — with an
+    /// empty map, not with a decoding failure that throws the whole list away and greets the
+    /// user with an empty window after an update of the app.
+    func testASnapshotWrittenBeforeTheIconMapExistedStillLoads() throws {
+        let io = InMemoryScanSnapshotIO()
+        let store = ScanResultStore(io: io)
+        try store.save(makeSnapshot(scannedAt: Date(timeIntervalSince1970: 1_700_000_000)))
+
+        // Strip the key the way a file from the previous build has it: absent entirely.
+        var payload = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try XCTUnwrap(io.storedData)) as? [String: Any]
+        )
+        payload.removeValue(forKey: "caskAppPaths")
+        io.storedData = try JSONSerialization.data(withJSONObject: payload)
+
+        let loaded = try XCTUnwrap(store.load())
+
+        XCTAssertTrue(loaded.caskAppPaths.isEmpty)
+        XCTAssertEqual(loaded.mas.map(\.appStoreID), ["497799835"], "the lists still come back")
+    }
+
     func testSavePropagatesWriteError() {
         let io = InMemoryScanSnapshotIO()
         io.writeError = FakeIOError.boom

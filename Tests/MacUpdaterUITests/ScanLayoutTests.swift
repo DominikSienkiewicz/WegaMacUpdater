@@ -38,10 +38,23 @@ final class ScanLayoutTests: XCTestCase {
         return hostingView.fittingSize.width
     }
 
+    /// The quiet launch refresh is a third way the toolbar shows **Cancel** — with `status`
+    /// left on `.results`, where the two assertions above never look. A control that changes
+    /// width there invalidates the window safe area exactly as one that changes width on
+    /// `.checking` does.
     @MainActor
-    private func toolbarFittingWidth(for status: UpdateStatus) -> CGFloat {
+    func testToolbarControlKeepsItsWidthWhenAQuietRefreshStartsAndStops() {
+        let idleWidth = toolbarFittingWidth(for: .results)
+        let refreshingWidth = toolbarFittingWidth(for: .results, refreshing: true)
+
+        XCTAssertEqual(refreshingWidth, idleWidth, accuracy: 0.5)
+    }
+
+    @MainActor
+    private func toolbarFittingWidth(for status: UpdateStatus, refreshing: Bool = false) -> CGFloat {
         let scan = ScanStore()
         scan.status = status
+        scan.setRefreshing(refreshing)
         let hostingView = NSHostingView(
             rootView: ScanControlHarness().environmentObject(scan)
         )

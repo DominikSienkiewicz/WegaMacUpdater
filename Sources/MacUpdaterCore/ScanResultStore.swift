@@ -94,6 +94,16 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
     public var mas: [MasOutdatedApp]
     public var npm: [NpmGlobalOutdated]
     public var manual: [ManualOutdatedApp]
+    /// Where each outdated cask's `.app` bundle stood when the scan ran, keyed by token.
+    ///
+    /// The window resolves this map during a full scan and used to drop it on quit, so a
+    /// restored list drew lettered placeholders instead of icons and read as a mock-up
+    /// rather than as the previous result. Purely additive — a file written before this
+    /// field decodes with an empty map — so it needs no `schemaVersion` bump.
+    ///
+    /// Paths are re-checked against disk on restore: an app uninstalled since the scan must
+    /// fall back to its letter tile rather than show an icon for a bundle that is gone.
+    public var caskAppPaths: [String: URL]
     /// REL-09 — what each source of this scan answered.
     public var sources: ScanSourceReports
     /// REL-09 — whether this scan heard from every source it asked. Stored rather than
@@ -107,6 +117,7 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
         mas: [MasOutdatedApp],
         npm: [NpmGlobalOutdated],
         manual: [ManualOutdatedApp],
+        caskAppPaths: [String: URL] = [:],
         sources: ScanSourceReports = ScanSourceReports(),
         isComplete: Bool? = nil
     ) {
@@ -115,6 +126,7 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
         self.mas = mas
         self.npm = npm
         self.manual = manual
+        self.caskAppPaths = caskAppPaths
         self.sources = sources
         self.isComplete = isComplete ?? sources.isComplete
         schemaVersion = ScanSnapshot.currentSchemaVersion
@@ -128,6 +140,7 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
         mas: [MasOutdatedApp],
         npm: [NpmGlobalOutdated],
         manual: [ManualOutdatedApp],
+        caskAppPaths: [String: URL] = [:],
         schemaVersion: Int
     ) {
         self.init(
@@ -135,13 +148,14 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
             brew: brew,
             mas: mas,
             npm: npm,
-            manual: manual
+            manual: manual,
+            caskAppPaths: caskAppPaths
         )
         self.schemaVersion = schemaVersion
     }
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, scannedAt, brew, mas, npm, manual, sources, isComplete
+        case schemaVersion, scannedAt, brew, mas, npm, manual, caskAppPaths, sources, isComplete
     }
 
     /// Decodes a schema-1 file too — it carries the lists but neither `sources` nor
@@ -156,6 +170,9 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
         mas = try container.decode([MasOutdatedApp].self, forKey: .mas)
         npm = try container.decode([NpmGlobalOutdated].self, forKey: .npm)
         manual = try container.decode([ManualOutdatedApp].self, forKey: .manual)
+        // Absent in every file written before the icon map existed; an empty map is the
+        // honest reading and costs only the letter tiles until the next scan.
+        caskAppPaths = try container.decodeIfPresent([String: URL].self, forKey: .caskAppPaths) ?? [:]
         sources = try container.decodeIfPresent(ScanSourceReports.self, forKey: .sources) ?? ScanSourceReports()
         isComplete = try container.decodeIfPresent(Bool.self, forKey: .isComplete) ?? false
     }

@@ -118,19 +118,30 @@ struct UpdateView: View {
                 // itself is shown by `RollbackView`, which refreshes it again on arrival.
                 scan.refreshUndoableUpdates()
                 UpdateFilterInteraction.apply(updateFilter, to: scan)
+                // The restored list is the *previous* answer, and nothing but a scan makes it
+                // the current one. Correct it without taking the window away from it — see
+                // `startLaunchRefresh()`. One-shot, so a tab switch does not re-trigger it.
+                scan.startLaunchRefresh()
             }
             // UX-10 — expose the scan and the "Zaktualizuj…" action to the menu bar (⌘R, ⌘⏎).
             // `UpdateView` stays mounted for the whole session, so these are the window's
             // scan hooks regardless of which destination is on screen; the menu itself gates
             // ⌘⏎ to the Updates destination.
             .focusedSceneValue(\.startCheckAction, WegaMenuAction(
-                isEnabled: scan.status != .checking && !scan.updating,
+                isEnabled: scan.status != .checking && !scan.isRefreshing && !scan.updating,
                 run: { scan.startCheck() }
             ))
             .focusedSceneValue(\.runUpdateAction, WegaMenuAction(
                 isEnabled: scan.status == .results && !scan.updating && !updateTargets.isEmpty,
                 run: { requestUpdate() }
             ))
+    }
+
+    /// What the header says in place of the source stamp while the launch refresh runs.
+    /// Names the phase, so a minute of waiting is a minute of visible progress.
+    private var refreshingStamp: String {
+        guard case .running(let phase) = scan.progress else { return tr("odświeżam…") }
+        return trf("odświeżam… %@", phase.commandLabel)
     }
 
     @ViewBuilder
@@ -222,7 +233,12 @@ struct UpdateView: View {
                                  ? trf("Znaleziono %@", "\(d.formatted(date: .abbreviated, time: .shortened))")
                                  : trf("Sprawdzono %@", "\(d.formatted(date: .omitted, time: .shortened))"))
                             Text("·")
-                            Text(sourceStamp).font(.wega(.subheadline, monospaced: true))
+                            // While a quiet refresh runs, the phase it is on replaces the
+                            // source stamp: the list below is still last time's, and a line
+                            // that only ever said when it was taken would not say that it is
+                            // being replaced right now.
+                            Text(scan.isRefreshing ? refreshingStamp : sourceStamp)
+                                .font(.wega(.subheadline, monospaced: true))
                         }
                         .font(.wega(.subheadline))
                         .foregroundStyle(freshness.needsExplicitTimestamp ? AnyShapeStyle(Color.wegaToffee) : AnyShapeStyle(.tertiary))
