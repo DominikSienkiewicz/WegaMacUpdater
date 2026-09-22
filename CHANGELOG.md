@@ -64,47 +64,16 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 ## [0.4.0] — 2026-09-23
 
 ### Added
-- **Every update says what it brings, before you apply it** — Wega now keeps the release notes
-  it was already downloading. A Sparkle appcast's `<description>` was parsed and thrown away on
-  the next line; it is now shown in the row, one entry per release between the version you have
-  and the one on offer. Apps tracked through GitHub Releases gained the same history, from the
-  same single request. Where a feed publishes a link instead of the text, expanding the row
-  fetches that page — capped, stripped of markup, and never during a scan. Homebrew, App Store
-  and npm rows render the same disclosure when another source in the same scan found notes for
-  that exact version. The advisory security badge now reads the whole history rather than the
-  newest release alone.
-
-- **The scan log names casks it hid as already current** — an app with its own updater (Zed,
-  Arc, Raycast, JetBrains Toolbox) rewrites its bundle behind Homebrew's back, so `brew
-  outdated --greedy` keeps reporting a version that is no longer installed. Wega already
-  compared the real bundle and dropped those entries; it now says which ones, so „checked and
-  current" stops reading like „never checked".
-
-- **Wega refreshes itself when you open it, without taking the list away** — the window
-  already painted the previous scan the moment it opened, but nothing turned that into the
-  current answer until you pressed refresh. A scan now starts by itself on the first
-  appearance and runs *underneath* the restored list: the rows stay where they are, the
-  header says which phase it is on, and the toolbar offers to cancel it. With nothing on
-  disk to restore — a first launch — it is the ordinary full-screen scan, because there is
-  no list to protect.
-
-- **A scan running under the list now says so, over the list** — the refresh above was
-  announced only by a line of small print in the header, above rows that looked exactly like
-  a finished result. A progress ring is now drawn over them, filled by the phase the scan is
-  genuinely in and captioned with the command it runs, and the rows underneath dim and stop
-  taking selections for its duration: what is on screen is the answer being replaced, so it
-  is a report until the scan lands, not a menu. It is drawn as the same scene the full-screen
-  scan uses — Wega sniffing across the binary stream, over the progress bar and the phase label
-  — at the same size and over a material covering the list, so a scan looks the same wherever it
-  is running rather than wearing a different face on each screen. The rows stay faintly visible
-  through it, because the point of the quiet refresh is that the restored result never leaves
-  the window.
-
-- **"Nic nie zainstalowano" now carries its own fix** — when „Aktualizuj przez Brew" exits 0 but
-  leaves the old bundle on disk, the banner used to tell you to run `brew reinstall --cask <token>`
-  in a terminal. It now has a **„Przeinstaluj przez Brew"** button that runs exactly that, through
-  the same snapshot → verification → rollback transaction as the original action. A reinstall that
-  itself lands nothing does not offer the button a second time.
+- **Every update shows what it brings before you apply it** — release notes from Sparkle feeds
+  and GitHub Releases appear in the row, one entry per version between yours and the newest.
+  Linked notes load when you expand the row; Homebrew, App Store and npm rows show them too
+  when another source found notes for the same version.
+- **Wega refreshes itself on launch without hiding the last result** — the restored list stays
+  on screen, dimmed under a progress ring, and can't be selected until the scan finishes.
+- **„Nic nie zainstalowano" gets a „Przeinstaluj przez Brew" button**, which runs
+  `brew reinstall --cask` with the same snapshot, verification and rollback as the update.
+- **The scan log names casks hidden as already current** — apps that update themselves (Zed,
+  Arc, Raycast) no longer look as if they were never checked.
 - **updates:** Reinstall the cask straight from the "Nic nie zainstalowano" banner. (a98044a)
 - **updates:** Show release notes on Homebrew, App Store and npm rows too. (4b6aac8)
 - **ui:** Load a linked release-notes page when the row is expanded. (ceb7b4d)
@@ -119,45 +88,21 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 - **scan:** Name the casks hidden as already current. (feea0c5)
 
 ### Changed
-- **The menu bar shows Wega's head instead of a cardboard box** — the status item borrowed
-  `shippingbox`, a parcel standing in for an app whose whole face is a dog. It is now the same
-  head as the app icon, drawn as a template image so the bar tints it for light, dark and the
-  inverted state it takes while the menu is open. The update count still sits beside it.
+- **The menu bar shows Wega's head instead of a cardboard box**, tinted for light and dark mode.
+- **The security badge reads every release on offer**, not only the newest one.
 - **core:** One reading of a GitHub releases list, shared by both callers. (3da5f3d)
 - **scan:** Give the scan one face on both screens. (10d627a)
 
 ### Fixed
-- **„Aktualizuj przez Brew" no longer reports an update that never happened** — Homebrew exits 0
-  without touching the disk when its own Caskroom record already names the version the cask
-  offers, and Wega has caught that on the ordinary upgrade path since the Obsidian fix. The
-  force-reinstall path behind a manually-checked row stood the same check down outright, because
-  the stand-down was keyed on the command (`brew install --cask --force`) rather than on whether
-  the run was supposed to move the version. Observed with Discord: `Caskroom/discord/0.0.413`
-  recorded against an `/Applications/Discord.app` still reporting `0.0.412`, announced as applied
-  on 10, 15 and 22 September, with every following scan listing it as outdated again. The check
-  now asks what the run promised: a takeover („Przepnij pod Brew", which lands the version already
-  on disk) still stands down, while an update whose cask offers something newer is read as
-  `notUpgraded` — journaled as aborted, never committed, and reported as still outdated.
-- **An update can no longer be started against a list that is being replaced** — during the
-  launch refresh, „Update selected" and its ⌘⏎ shortcut stayed live, so a batch approved
-  against the restored rows would install whatever the scan had settled on by the time the
-  confirmation was answered. Both are now held until the scan lands, and the button's tooltip
-  names the scan as the reason rather than blaming an empty selection.
-- **A restored list no longer looks like a mock-up of itself** — app icons were resolved
-  during a scan and dropped on quit, so a cold launch drew lettered placeholders where the
-  finished scan had drawn icons. The scan's token → bundle map is now part of the saved
-  result, re-checked against disk on restore so an app uninstalled in the meantime falls
-  back to its letter tile rather than showing the icon of something that is gone.
-- **A nightly or beta build is no longer offered its own stable release as an „update”** — the
-  version parser dropped the component in front of a whitespace-separated word, so
-  `6.5 nightly (7301)` read as `6.0.0` and the cask-drift detector listed Little Snitch's
-  recorded `6.4.1` as available: a downgrade. A word after the numeric core is now a prerelease
-  tag, exactly as `-beta` already was, so the nightly ranks above the stable it is ahead of and
-  below its own stable release.
-- **A Sparkle feed that is not newest-first no longer hides the real update** — the appcast
-  parser stopped at the first versioned `<item>`. It now takes the highest version on the
-  default channel, keeps that item's release notes, and skips items published on a named
-  `<sparkle:channel>` (beta, nightly) unless the feed has nothing else.
+- **„Aktualizuj przez Brew" no longer reports an update that never happened** — a forced
+  reinstall that leaves the old version on disk is now reported as not upgraded.
+- **Updates can't be started while the list is being refreshed** — „Update selected" and ⌘⏎
+  wait for the scan to finish.
+- **App icons survive a relaunch** instead of turning into letter placeholders.
+- **A nightly or beta build is no longer offered its own stable release as an update** — e.g.
+  Little Snitch `6.5 nightly` was read as `6.0.0`.
+- **A Sparkle feed that isn't sorted newest-first no longer hides the real update**, and beta
+  or nightly channels are skipped unless nothing else is published.
 - **ui:** Don't report a collapsed release-notes fetch as a failure. (565aab6)
 - **scan:** Draw the overlay's scan at the same size as the full screen. (b2ec5ab)
 - **brew:** Detect a no-op update behind 'Aktualizuj przez Brew'. (0363ac0)
