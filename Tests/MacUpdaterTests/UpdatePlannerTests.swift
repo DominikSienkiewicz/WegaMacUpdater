@@ -1,4 +1,5 @@
 import XCTest
+import Testing
 @testable import MacUpdaterCore
 
 final class UpdatePlannerTests: XCTestCase {
@@ -278,8 +279,78 @@ final class UpdatePlannerTests: XCTestCase {
     }
 
     func testOutdatedItemCarriesReleaseNotesWhenProvided() {
+        let notes = ReleaseNotes(html: "Fixes and improvements", version: "121")
         let item = OutdatedItem(key: "c:firefox", name: "firefox", from: "120", to: "121",
-                                kind: .cask, releaseNotes: "Fixes and improvements")
-        XCTAssertEqual(item.releaseNotes, "Fixes and improvements")
+                                kind: .cask, releaseNotes: notes)
+        XCTAssertEqual(item.releaseNotes, notes)
+    }
+}
+
+@Suite("UpdatePlanner.attachingReleaseNotes")
+struct UpdatePlannerAttachingReleaseNotesTests {
+    @Test func attachesCaskNotesWhenTheVersionOnOfferMatches() {
+        let appPath = URL(fileURLWithPath: "/Applications/Example.app")
+        let items = [OutdatedItem(key: "c:example", name: "example", from: "1.0.0", to: "2.0.0", kind: .cask)]
+        let manual = [ManualOutdatedApp(
+            name: "Example", path: appPath,
+            installedVersion: "1.0.0", availableVersion: "2.0.0",
+            source: .sparkle,
+            releaseNotes: ReleaseNotes(html: "Fixed a crash", version: "2.0.0")
+        )]
+
+        let joined = UpdatePlanner.attachingReleaseNotes(
+            to: items, manual: manual, caskAppPaths: ["example": appPath]
+        )
+
+        #expect(joined.first?.releaseNotes?.history.notes.first?.body == "Fixed a crash")
+    }
+
+    @Test func refusesNotesDescribingADifferentVersion() {
+        let appPath = URL(fileURLWithPath: "/Applications/Example.app")
+        let items = [OutdatedItem(key: "c:example", name: "example", from: "1.0.0", to: "2.0.0", kind: .cask)]
+        let manual = [ManualOutdatedApp(
+            name: "Example", path: appPath,
+            installedVersion: "1.0.0", availableVersion: "3.0.0",
+            source: .sparkle,
+            releaseNotes: ReleaseNotes(html: "Notes for a release nobody offered")
+        )]
+
+        let joined = UpdatePlanner.attachingReleaseNotes(
+            to: items, manual: manual, caskAppPaths: ["example": appPath]
+        )
+
+        #expect(joined.first?.releaseNotes == nil)
+    }
+
+    @Test func aNonCaskRowIsLeftAloneEvenWhenEverythingElseWouldMatch() {
+        // A formula named like a cask token that really does resolve: every guard in the
+        // chain passes except `kind`, so this is the case that fails if `kind` is dropped.
+        let appPath = URL(fileURLWithPath: "/Applications/Example.app")
+        let items = [OutdatedItem(key: "f:example", name: "example", from: "1.0.0", to: "2.0.0", kind: .formula)]
+        let manual = [ManualOutdatedApp(
+            name: "Example", path: appPath,
+            installedVersion: "1.0.0", availableVersion: "2.0.0",
+            source: .sparkle,
+            releaseNotes: ReleaseNotes(html: "Notes for the app, not the formula", version: "2.0.0")
+        )]
+
+        let joined = UpdatePlanner.attachingReleaseNotes(
+            to: items, manual: manual, caskAppPaths: ["example": appPath]
+        )
+
+        #expect(joined.first?.releaseNotes == nil)
+    }
+
+    @Test func sourcesWithNoAppPathAreLeftAlone() {
+        let items = [
+            OutdatedItem(key: "f:jq", name: "jq", from: "1.6", to: "1.7", kind: .formula),
+            OutdatedItem(key: "a:497799835", name: "497799835", from: "1.0", to: "2.0", kind: .appStore),
+            OutdatedItem(key: "n:typescript", name: "typescript", from: "5.0.0", to: "5.1.0", kind: .npm),
+        ]
+
+        let joined = UpdatePlanner.attachingReleaseNotes(to: items, manual: [], caskAppPaths: [:])
+
+        #expect(joined.allSatisfy { $0.releaseNotes == nil })
+        #expect(joined.map(\.key) == items.map(\.key))
     }
 }

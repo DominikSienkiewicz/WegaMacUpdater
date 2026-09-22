@@ -31,7 +31,8 @@ struct ManualUpdateSelfUpdateTests {
         #expect(app?.availableVersion == "0.2.0")
         #expect(app?.source == .wega(releaseURL: releaseURL))
         #expect(app?.origin == .manual)
-        #expect(app?.releaseNotes == "Fixes")
+        #expect(app?.releaseNotes?.history.notes.map(\.version) == ["0.2.0"])
+        #expect(app?.releaseNotes?.history.notes.first?.body == "Fixes")
         #expect(app?.path == appPath)
         #expect(app?.bundleIdentifier == "com.wega.WegaMacUpdater")
     }

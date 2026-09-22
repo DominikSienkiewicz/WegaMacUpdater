@@ -23,7 +23,7 @@ struct SelfUpdatePolicyTests {
             availableVersion: version,
             source: .wega(releaseURL: URL(string: "https://example.com/release")!),
             origin: .manual,
-            releaseNotes: "",
+            releaseNotes: nil,
             bundleIdentifier: "com.wega.macupdater"
         )
     }

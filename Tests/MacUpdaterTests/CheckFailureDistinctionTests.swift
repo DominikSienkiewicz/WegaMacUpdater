@@ -39,7 +39,7 @@ final class CheckFailureDistinctionTests: XCTestCase {
     }
 
     private func releaseJSON(_ tag: String) -> Data {
-        Data(#"{"tag_name":"\#(tag)","draft":false,"prerelease":false}"#.utf8)
+        Data(#"[{"tag_name":"\#(tag)","draft":false,"prerelease":false}]"#.utf8)
     }
 
     func testNetworkErrorReportsUnavailable() async {
@@ -76,5 +76,23 @@ final class CheckFailureDistinctionTests: XCTestCase {
     func testWrongBundleIdReportsNotApplicable() async {
         let result = await checker(.success((releaseJSON("v2.0.0"), 200))).check(app: app(version: "1.0.0", bundleId: "com.other.app"))
         XCTAssertEqual(result, .notApplicable)
+    }
+
+    /// The list endpoint carries every release between the installed version and the newest
+    /// one, not just the version string — this pins that the checker actually attaches that
+    /// history to the result, newest first, with markup sanitised out of each body.
+    func testOutdatedResultCarriesTheReleaseHistory() async {
+        let releases = Data(#"""
+        [
+          {"tag_name":"v1.2.0","draft":false,"prerelease":false,"body":"<p>Fixes a crash</p>"},
+          {"tag_name":"v1.1.0","draft":false,"prerelease":false,"body":"<p>Adds dark mode</p>"}
+        ]
+        """#.utf8)
+
+        let result = await checker(.success((releases, 200))).check(app: app(version: "1.0.0"))
+
+        guard case .outdated(let item) = result else { return XCTFail("expected .outdated, got \(result)") }
+        XCTAssertEqual(item.releaseNotes?.history.notes.map(\.version), ["1.2.0", "1.1.0"])
+        XCTAssertEqual(item.releaseNotes?.history.notes.map(\.body), ["Fixes a crash", "Adds dark mode"])
     }
 }

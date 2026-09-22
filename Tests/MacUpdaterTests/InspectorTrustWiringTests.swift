@@ -7,7 +7,8 @@ import Foundation
 /// Three acceptance criteria are guarded here:
 ///  1. the inspector passes the **full** trust model (path + checksum signal) for a regular cask,
 ///     rather than the old `path: nil, caskChecksum: nil` that always rendered `.unavailable`;
-///  2. the inspector shares the list's release-notes sanitizer, so it can never show raw HTML;
+///  2. the inspector never handles release-notes markup — sanitising happens once in Core —
+///     so it can never show raw HTML;
 ///  3. the manual-update actions name their real effect instead of suggesting an install.
 @Suite("InspectorTrustWiring")
 struct InspectorTrustWiringTests {
@@ -34,10 +35,12 @@ struct InspectorTrustWiringTests {
                 "UX-05: a regular cask must probe its resolved .app bundle, not nil")
     }
 
-    @Test func inspectorSharesTheReleaseNotesSanitizer() throws {
+    @Test func inspectorRendersOnlySanitizedNotes() throws {
         let inspector = try source("InspectorPane.swift")
-        #expect(inspector.contains("ReleaseNotesText.plain(fromHTML:"),
-                "UX-05: the inspector's What's-New must run notes through the shared sanitizer")
+        #expect(inspector.contains("notes: ReleaseNotes?"),
+                "UX-05: the inspector's What's-New must take the sanitized model, not raw markup")
+        #expect(!inspector.contains("fromHTML:"),
+                "UX-05: the inspector must never handle vendor HTML — ReleaseNotesText runs in Core")
     }
 
     @Test func manualActionsNameTheirRealEffect() throws {

@@ -40,7 +40,7 @@ struct SelfUpdateManualSplitTests {
             availableVersion: "1.2.0",
             source: .wega(releaseURL: URL(string: "https://example.com/release")!),
             origin: .manual,
-            releaseNotes: "",
+            releaseNotes: nil,
             bundleIdentifier: "com.wega.macupdater.\(token)"
         )
         let snapshot = ScanSnapshot(

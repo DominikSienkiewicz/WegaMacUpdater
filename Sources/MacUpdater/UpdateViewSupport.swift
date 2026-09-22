@@ -238,21 +238,30 @@ struct UpdateSection: View {
                            ))
 
             ForEach(items) { item in
-                PackageRow(
-                    name:           item.name,
-                    iconPath:       iconPaths[item.name],
-                    currentVersion: item.from,
-                    latestVersion:  item.to,
-                    isSelected:     selected.contains(item.key),
-                    isInspected:    item.key == inspectedKey,
-                    rollback:       rollbackProtection[item.name],
-                    onToggle:       { toggle(item.key) },
-                    onSelect:       { onInspect?(item) },
-                    onIgnore:       { onIgnore?(item) },
-                    onPin:          { onPin?(item) },
-                    onSkip:         skipAction(for: item),
-                    backgroundUpdateToken: item.kind == .cask ? item.name : nil
-                )
+                VStack(spacing: 0) {
+                    PackageRow(
+                        name:           item.name,
+                        iconPath:       iconPaths[item.name],
+                        currentVersion: item.from,
+                        latestVersion:  item.to,
+                        isSelected:     selected.contains(item.key),
+                        isInspected:    item.key == inspectedKey,
+                        rollback:       rollbackProtection[item.name],
+                        onToggle:       { toggle(item.key) },
+                        onSelect:       { onInspect?(item) },
+                        onIgnore:       { onIgnore?(item) },
+                        onPin:          { onPin?(item) },
+                        onSkip:         skipAction(for: item),
+                        backgroundUpdateToken: item.kind == .cask ? item.name : nil
+                    )
+                    // F1 — the same disclosure the manual rows use. Rows whose source
+                    // published nothing have none, rather than an empty "no changes".
+                    if let notes = item.releaseNotes, !notes.isEmpty {
+                        ReleaseNotesDisclosure(notes: notes)
+                            .padding(.horizontal, 14)
+                            .padding(.bottom, 10)
+                    }
+                }
                 .contextMenu {
                     UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) }, onSkip: skipAction(for: item))
                 }
@@ -441,7 +450,7 @@ struct ManualUpdateSection: View {
                     AppIcon(path: item.path, size: 32)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.name).font(.wega(.body, weight: .medium))
-                        let isSecurity = item.releaseNotes.map { ReleaseNotesTriage.heuristic($0).isLikelySecurityFix } ?? false
+                        let isSecurity = item.releaseNotes.map { ReleaseNotesTriage.heuristic($0.plainText).isLikelySecurityFix } ?? false
                         VersionArrow(
                             from: item.installedVersion ?? "—",
                             to: item.availableVersion ?? "—",
@@ -660,35 +669,98 @@ struct ManualUpdateActionView: View {
     }
 }
 
-/// F1 — expands a row into the vendor's own release notes.
+/// F1 — expands a row into the vendor's own release notes, one entry per release published
+/// between the installed version and the one on offer.
 ///
-/// The text is scrubbed of markup by `ReleaseNotesText` first: it arrives as HTML from a
-/// Sparkle appcast or the JetBrains API, written by a third party and fetched over the
-/// network, and Wega renders it. Long notes are truncated in place with a scroll rather
-/// than pushing the update list off screen.
+/// The bodies arrived plain: `ReleaseNotes` is sanitised in Core, at the source that produced
+/// it, so nothing here ever holds vendor HTML. Long histories are truncated in place with a
+/// scroll rather than pushing the update list off screen.
+///
+/// A feed that publishes only a link (`ReleaseNotes.link`, no inline history) is fetched here,
+/// once, the first time the row is expanded — never during a scan (`ReleaseNotesLoader`).
 private struct ReleaseNotesDisclosure: View {
-    let notes: String
+    let notes: ReleaseNotes
 
     @State private var expanded = false
-
-    private var text: String { ReleaseNotesText.plain(fromHTML: notes) }
+    @StateObject private var loader = ReleaseNotesLoader()
 
     var body: some View {
-        if !text.isEmpty {
-            WegaDisclosure(isExpanded: $expanded) {
-                ScrollView {
-                    Text(text)
-                        .font(.wega(.subheadline))
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 4)
+        WegaDisclosure(isExpanded: $expanded) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    // Guarded, not merely empty-looping: a link-only value has no entries
+                    // and no omitted count, and without this the disclosure would render an
+                    // empty stack the user expands to nothing.
+                    if notes.hasRenderableNotes {
+                        ForEach(notes.history.notes) { note in
+                            ReleaseNoteView(note: note, bodyFont: .wega(.subheadline))
+                        }
+                        if notes.history.omitted > 0 {
+                            Text(trf("…i %@ wcześniejszych wydań", String(notes.history.omitted)))
+                                .font(.wega(.subheadline))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    linkedNotes
                 }
-                .frame(maxHeight: 160)
-            } label: {
-                Text(tr("Co nowego"))
-                    .font(.wega(.subheadline, weight: .medium))
+                .padding(.top, 4)
+            }
+            .frame(maxHeight: 160)
+        } label: {
+            Text(tr("Co nowego"))
+                .font(.wega(.subheadline, weight: .medium))
+                .foregroundStyle(.tertiary)
+        }
+        // The fetch belongs to the expansion, not to the scan: a row nobody opens costs
+        // nothing. `.task(id:)` re-runs on collapse too, which `loadIfNeeded` absorbs.
+        .task(id: expanded) {
+            guard expanded else { return }
+            await loader.loadIfNeeded(from: notes.link)
+        }
+    }
+
+    /// The branch for a feed that published a link instead of a body.
+    @ViewBuilder
+    private var linkedNotes: some View {
+        switch loader.state {
+        case .idle:
+            EmptyView()
+        case .loading:
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text(tr("Pobieram notatki wydania…"))
+                    .font(.wega(.subheadline))
                     .foregroundStyle(.tertiary)
+            }
+        case .loaded(let text, let truncated):
+            VStack(alignment: .leading, spacing: 4) {
+                Text(text)
+                    .font(.wega(.subheadline))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if truncated, let link = notes.link {
+                    HStack(spacing: 6) {
+                        Text(tr("Notatki są dłuższe — to początek"))
+                            .font(.wega(.footnote))
+                            .foregroundStyle(.tertiary)
+                        Link(tr("Zobacz pełne notatki"), destination: link)
+                            .font(.wega(.footnote))
+                    }
+                }
+            }
+        case .failed:
+            HStack(spacing: 6) {
+                Text(tr("Nie udało się pobrać notatek wydania"))
+                    .font(.wega(.subheadline))
+                    .foregroundStyle(.tertiary)
+                Button(tr("Spróbuj ponownie")) {
+                    Task { await loader.retry(from: notes.link) }
+                }
+                .controlSize(.small)
+                if let link = notes.link {
+                    Link(tr("Zobacz u wydawcy"), destination: link).font(.wega(.subheadline))
+                }
             }
         }
     }

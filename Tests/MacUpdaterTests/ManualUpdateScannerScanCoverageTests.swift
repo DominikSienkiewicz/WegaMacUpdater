@@ -104,7 +104,7 @@ struct ManualUpdateScannerScanCoverageTests {
         })
         #expect(wega.name == "Wega")
         #expect(wega.availableVersion == "999.0.0")
-        #expect(wega.releaseNotes == "Coverage release")
+        #expect(wega.releaseNotes?.plainText == "Coverage release")
 
         #expect(!result.apps.contains { $0.name == "Skipped" })
         #expect(!result.apps.contains { $0.name == "StoreOnly" })

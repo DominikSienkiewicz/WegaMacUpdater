@@ -410,7 +410,11 @@ final class ScanStore: ObservableObject {
     // Items the user has ignored or pinned below the available version are filtered out.
     var allItems: [OutdatedItem] {
         UpdatePlanner.applyPolicies(
-            UpdatePlanner.outdatedItems(brew: brewOutdated, mas: masOutdated, npm: npmOutdated),
+            UpdatePlanner.attachingReleaseNotes(
+                to: UpdatePlanner.outdatedItems(brew: brewOutdated, mas: masOutdated, npm: npmOutdated),
+                manual: manualOutdated,
+                caskAppPaths: caskIconPaths
+            ),
             policies: UpdatePolicyStore.shared.policiesMap
         )
     }
@@ -447,7 +451,7 @@ final class ScanStore: ObservableObject {
     /// True when a manual app's release notes look like a security fix — used to
     /// narrow the manual sections when `updateFilter.isSecurityOnly`.
     func isSecurityApp(_ app: ManualOutdatedApp) -> Bool {
-        app.releaseNotes.map { ReleaseNotesTriage.heuristic($0).isLikelySecurityFix } ?? false
+        app.releaseNotes.map { ReleaseNotesTriage.heuristic($0.plainText).isLikelySecurityFix } ?? false
     }
 
     /// Selections cannot survive invisibly across filters. Keeping this invariant in the

@@ -323,14 +323,12 @@ sections:
   **checksum-verified**. Batch items with no inspectable bundle (formulae, npm, App Store)
   honestly read *"weryfikacja niedostępna"* rather than a faked verdict.
 - **Szczegóły** lists versions, install origin and path.
-- **Co nowego** shows real release notes when the source provides them (with the advisory
-  "possible security fix" badge a deterministic keyword scan raises — advisory only, it
-  never gates or auto-applies anything) and says so plainly when it doesn't; the same notes are
-  now also **inline on the row**, behind a *What's new* disclosure, for every manually-checked
-  app whose source publishes them (GitHub release bodies, Sparkle `<description>`, JetBrains
-  `whatsnew`). Vendor HTML is untrusted input — `ReleaseNotesText` in Core strips every tag
-  and drops `<script>` / `<style>` bodies whole before anything reaches the window, without
-  going near WebKit.
+- **Co nowego** shows the real release notes for every version you are behind, not just the
+  newest one, wherever the source publishes them — a Sparkle appcast or a GitHub release. When
+  the feed publishes a link instead of the text, Wega fetches that page the moment you expand
+  the row, never during a scan. Sources that publish nothing show nothing. The advisory
+  "možliwa poprawka bezpieczeństwa" badge reads the whole history, so a security fix two
+  releases back is still flagged.
 - **Akcje** reuses the row's own per-source update control.
 
 The probe runs in a `.task(id:)` that **cancels and restarts** as you change selection, so it

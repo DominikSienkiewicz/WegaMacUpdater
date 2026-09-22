@@ -92,7 +92,7 @@ struct InspectorPane: View {
                 sourceBadge: WegaBadge(label: kindLabel(item.kind), variant: kindVariant(item.kind))
             ))
         case .manual(let app):
-            let isSecurity = app.releaseNotes.map { ReleaseNotesTriage.heuristic($0).isLikelySecurityFix } ?? false
+            let isSecurity = app.releaseNotes.map { ReleaseNotesTriage.heuristic($0.plainText).isLikelySecurityFix } ?? false
             headerContent(HeaderInfo(
                 iconPath: app.path,
                 name: app.name,
@@ -247,10 +247,9 @@ struct InspectorPane: View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeading(tr("Co nowego"))
             switch update {
-            case .outdated:
-                Text(tr("Informacje o zmianach niedostępne dla tego źródła"))
-                    .font(.wega(.subheadline))
-                    .foregroundStyle(.tertiary)
+            // `InspectedUpdate.outdated(OutdatedItem, iconPath: URL?)` — see UpdateView.swift:9.
+            case .outdated(let item, _):
+                whatsNewContent(notes: item.releaseNotes)
             case .manual(let app):
                 whatsNewContent(notes: app.releaseNotes)
             }
@@ -258,26 +257,25 @@ struct InspectorPane: View {
     }
 
     @ViewBuilder
-    private func whatsNewContent(notes: String?) -> some View {
-        // UX-05: share the list's sanitizer (`ReleaseNotesText`) so the inspector never renders
-        // raw HTML from a Sparkle appcast or the JetBrains API. Notes that are pure markup
-        // collapse to empty and fall through to the "no notes" line, exactly as the list's
-        // disclosure does. The security heuristic stays on the raw notes, matching the header
-        // and the list row.
-        let cleaned = notes.map { ReleaseNotesText.plain(fromHTML: $0) } ?? ""
-        if !cleaned.isEmpty {
+    private func whatsNewContent(notes: ReleaseNotes?) -> some View {
+        // UX-05: nothing here sanitises, because nothing here holds markup. `ReleaseNotes`
+        // is plain text by contract — `ReleaseNotesText` ran in Core, at the source that
+        // produced it. Notes that collapsed to nothing never became an entry, so they fall
+        // through to the "no notes" line exactly as the list's disclosure does.
+        if let notes, notes.hasRenderableNotes {
             VStack(alignment: .leading, spacing: 6) {
-                if let notes, ReleaseNotesTriage.heuristic(notes).isLikelySecurityFix {
+                if ReleaseNotesTriage.heuristic(notes.plainText).isLikelySecurityFix {
                     Label(tr("możliwa poprawka bezpieczeństwa"), systemImage: "shield.lefthalf.filled")
                         .font(.wega(.footnote, weight: .medium))
                         .foregroundStyle(Color.wegaDanger)
                 }
-                Text(cleaned)
-                    .font(.wega(.callout))
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(notes.history.notes) { note in
+                    ReleaseNoteView(note: note, bodyFont: .wega(.callout))
+                }
             }
+        } else if let link = notes?.link {
+            Link(tr("Zobacz notatki wydania"), destination: link)
+                .font(.wega(.callout))
         } else {
             Text(tr("Brak informacji o zmianach"))
                 .font(.wega(.subheadline))

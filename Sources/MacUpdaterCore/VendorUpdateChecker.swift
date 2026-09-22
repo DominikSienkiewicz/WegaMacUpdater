@@ -28,7 +28,7 @@ public struct VendorCandidate: Sendable {
     /// `installed`.
     public var recordedInstalled: String?
     public var source: ManualOutdatedApp.UpdateSource
-    public var releaseNotes: String?
+    public var releaseNotes: ReleaseNotes?
     /// How to order `installed` against `latest`. Defaults to the build-numbered scheme
     /// most vendors use; sources that publish SemVer tags (GitHub) must say so, or a
     /// prerelease outranks its own release (REL-11).
@@ -39,7 +39,7 @@ public struct VendorCandidate: Sendable {
         installed: String,
         recordedInstalled: String? = nil,
         source: ManualOutdatedApp.UpdateSource,
-        releaseNotes: String? = nil,
+        releaseNotes: ReleaseNotes? = nil,
         scheme: VersionScheme = .buildNumbered
     ) {
         self.latest = latest

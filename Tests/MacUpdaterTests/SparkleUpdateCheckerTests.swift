@@ -286,4 +286,98 @@ struct SparkleUpdateCheckerTests {
             .check(app: app(bundleID: overrideBundleID, version: "1.0.0"))
         #expect(result == .failed)
     }
+
+    // MARK: - AppcastParser.parseResult
+
+    private func feed(_ items: String) -> Data {
+        Data("""
+        <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel>
+        \(items)
+        </channel></rss>
+        """.utf8)
+    }
+
+    private func item(version: String, description: String? = nil, pubDate: String? = nil) -> String {
+        """
+        <item>
+          <sparkle:shortVersionString>\(version)</sparkle:shortVersionString>
+          \(pubDate.map { "<pubDate>\($0)</pubDate>" } ?? "")
+          \(description.map { "<description><![CDATA[\($0)]]></description>" } ?? "")
+        </item>
+        """
+    }
+
+    @Test func historyKeepsEveryReleaseNewerThanTheInstalledOne() {
+        let data = feed(
+            item(version: "1.0.0", description: "<p>Old</p>")
+            + item(version: "1.1.0", description: "<p>Middle</p>")
+            + item(version: "1.2.0", description: "<p>New</p>")
+        )
+
+        let result = AppcastParser.parseResult(data: data, installedVersion: "1.0.0")
+
+        #expect(result?.latest.version == "1.2.0")
+        #expect(result?.history.notes.map(\.version) == ["1.2.0", "1.1.0"])
+        #expect(result?.history.notes.first?.body == "New")
+        #expect(result?.history.omitted == 0)
+    }
+
+    @Test func historyCapsAndReportsWhatItLeftOut() {
+        let items = (1...12).map { item(version: "1.0.\($0)", description: "<p>Note \($0)</p>") }.joined()
+
+        let result = AppcastParser.parseResult(data: feed(items), installedVersion: "1.0.0", limit: 10)
+
+        #expect(result?.history.notes.count == 10)
+        #expect(result?.history.notes.first?.version == "1.0.12")
+        #expect(result?.history.omitted == 2)
+    }
+
+    @Test func historyReadsThePublicationDate() {
+        let data = feed(item(version: "2.0.0", description: "<p>New</p>",
+                             pubDate: "Mon, 20 Jul 2026 10:00:00 +0000"))
+
+        let note = AppcastParser.parseResult(data: data, installedVersion: "1.0.0")?.history.notes.first
+
+        #expect(note?.publishedAt != nil)
+    }
+
+    @Test func entriesWithNoDescriptionAreLeftOutRatherThanShownEmpty() {
+        let data = feed(item(version: "1.1.0") + item(version: "1.2.0", description: "<p>New</p>"))
+
+        let result = AppcastParser.parseResult(data: data, installedVersion: "1.0.0")
+
+        #expect(result?.history.notes.map(\.version) == ["1.2.0"])
+        #expect(result?.history.omitted == 0)
+    }
+
+    @Test func aFeedWithNoUsableItemIsNoResultAtAll() {
+        #expect(AppcastParser.parseResult(data: Data("not xml".utf8), installedVersion: "1.0.0") == nil)
+    }
+
+    @Test func theCheckerHandsTheNotesOnRatherThanDroppingThem() async {
+        // `checker(_:)`, `app(bundleID:version:)`, `overrideBundleID` and `FakeHTTP` are the
+        // suite's existing helpers — see the "check(app:)" section of this file.
+        let xml = """
+        <?xml version="1.0"?>
+        <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+            <channel>
+                <item><sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+                      <description><![CDATA[<p>Old</p>]]></description></item>
+                <item><sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
+                      <description><![CDATA[<p>Fixes a crash</p>]]></description>
+                      <sparkle:releaseNotesLink>https://example.com/notes</sparkle:releaseNotesLink></item>
+            </channel>
+        </rss>
+        """
+
+        let result = await checker(FakeHTTP.client(ok: xml))
+            .check(app: app(bundleID: overrideBundleID, version: "1.0.0"))
+
+        guard case .outdated(let outdated) = result else {
+            Issue.record("expected .outdated, got \(result)"); return
+        }
+        #expect(outdated.releaseNotes?.history.notes.map(\.version) == ["2.0.0"])
+        #expect(outdated.releaseNotes?.history.notes.first?.body == "Fixes a crash")
+        #expect(outdated.releaseNotes?.link == URL(string: "https://example.com/notes"))
+    }
 }

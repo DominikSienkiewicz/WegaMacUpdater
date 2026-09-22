@@ -68,7 +68,7 @@ public struct ManualUpdateScanner: Sendable {
             availableVersion: version,
             source: .wega(releaseURL: releaseURL),
             origin: .manual,
-            releaseNotes: notes,
+            releaseNotes: ReleaseNotes(html: notes, version: version),
             bundleIdentifier: bundleIdentifier
         )
     }

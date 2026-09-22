@@ -162,7 +162,7 @@ final class ScanStoreRuntimeActionTests: XCTestCase {
             installedVersion: "1",
             availableVersion: "2",
             source: .sparkle,
-            releaseNotes: "Critical security fix",
+            releaseNotes: ReleaseNotes(html: "Critical security fix"),
             bundleIdentifier: "example.security"
         )
         let runner = ScanStoreRuntimeProcessRunner { request in
