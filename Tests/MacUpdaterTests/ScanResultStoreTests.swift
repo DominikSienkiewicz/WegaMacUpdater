@@ -42,7 +42,7 @@ final class ScanResultStoreTests: XCTestCase {
                     availableVersion: "1.1.0",
                     source: .github(repo: "ghostty-org/ghostty", selfUpdates: false),
                     origin: .brew,
-                    releaseNotes: "security fix"
+                    releaseNotes: ReleaseNotes(html: "security fix")
                 )
             ],
             schemaVersion: schemaVersion

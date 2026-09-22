@@ -447,7 +447,7 @@ final class ScanStore: ObservableObject {
     /// True when a manual app's release notes look like a security fix — used to
     /// narrow the manual sections when `updateFilter.isSecurityOnly`.
     func isSecurityApp(_ app: ManualOutdatedApp) -> Bool {
-        app.releaseNotes.map { ReleaseNotesTriage.heuristic($0).isLikelySecurityFix } ?? false
+        app.releaseNotes.map { ReleaseNotesTriage.heuristic($0.plainText).isLikelySecurityFix } ?? false
     }
 
     /// Selections cannot survive invisibly across filters. Keeping this invariant in the

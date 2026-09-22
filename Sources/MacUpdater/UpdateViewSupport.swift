@@ -441,7 +441,7 @@ struct ManualUpdateSection: View {
                     AppIcon(path: item.path, size: 32)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.name).font(.wega(.body, weight: .medium))
-                        let isSecurity = item.releaseNotes.map { ReleaseNotesTriage.heuristic($0).isLikelySecurityFix } ?? false
+                        let isSecurity = item.releaseNotes.map { ReleaseNotesTriage.heuristic($0.plainText).isLikelySecurityFix } ?? false
                         VersionArrow(
                             from: item.installedVersion ?? "—",
                             to: item.availableVersion ?? "—",
@@ -660,36 +660,48 @@ struct ManualUpdateActionView: View {
     }
 }
 
-/// F1 — expands a row into the vendor's own release notes.
+/// F1 — expands a row into the vendor's own release notes, one entry per release published
+/// between the installed version and the one on offer.
 ///
-/// The text is scrubbed of markup by `ReleaseNotesText` first: it arrives as HTML from a
-/// Sparkle appcast or the JetBrains API, written by a third party and fetched over the
-/// network, and Wega renders it. Long notes are truncated in place with a scroll rather
-/// than pushing the update list off screen.
+/// The bodies arrived plain: `ReleaseNotes` is sanitised in Core, at the source that produced
+/// it, so nothing here ever holds vendor HTML. Long histories are truncated in place with a
+/// scroll rather than pushing the update list off screen.
 private struct ReleaseNotesDisclosure: View {
-    let notes: String
+    let notes: ReleaseNotes
 
     @State private var expanded = false
 
-    private var text: String { ReleaseNotesText.plain(fromHTML: notes) }
-
     var body: some View {
-        if !text.isEmpty {
-            WegaDisclosure(isExpanded: $expanded) {
-                ScrollView {
-                    Text(text)
-                        .font(.wega(.subheadline))
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 4)
+        WegaDisclosure(isExpanded: $expanded) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(notes.history.notes) { note in
+                        VStack(alignment: .leading, spacing: 2) {
+                            if !note.version.isEmpty {
+                                Text(note.version)
+                                    .font(.wega(.subheadline, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(note.body)
+                                .font(.wega(.subheadline))
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    if notes.history.omitted > 0 {
+                        Text(trf("…i %@ wcześniejszych wydań", String(notes.history.omitted)))
+                            .font(.wega(.subheadline))
+                            .foregroundStyle(.tertiary)
+                    }
                 }
-                .frame(maxHeight: 160)
-            } label: {
-                Text(tr("Co nowego"))
-                    .font(.wega(.subheadline, weight: .medium))
-                    .foregroundStyle(.tertiary)
+                .padding(.top, 4)
             }
+            .frame(maxHeight: 160)
+        } label: {
+            Text(tr("Co nowego"))
+                .font(.wega(.subheadline, weight: .medium))
+                .foregroundStyle(.tertiary)
         }
     }
 }

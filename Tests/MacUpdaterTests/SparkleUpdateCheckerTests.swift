@@ -353,4 +353,31 @@ struct SparkleUpdateCheckerTests {
     @Test func aFeedWithNoUsableItemIsNoResultAtAll() {
         #expect(AppcastParser.parseResult(data: Data("not xml".utf8), installedVersion: "1.0.0") == nil)
     }
+
+    @Test func theCheckerHandsTheNotesOnRatherThanDroppingThem() async {
+        // `checker(_:)`, `app(bundleID:version:)`, `overrideBundleID` and `FakeHTTP` are the
+        // suite's existing helpers — see the "check(app:)" section of this file.
+        let xml = """
+        <?xml version="1.0"?>
+        <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+            <channel>
+                <item><sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+                      <description><![CDATA[<p>Old</p>]]></description></item>
+                <item><sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
+                      <description><![CDATA[<p>Fixes a crash</p>]]></description>
+                      <sparkle:releaseNotesLink>https://example.com/notes</sparkle:releaseNotesLink></item>
+            </channel>
+        </rss>
+        """
+
+        let result = await checker(FakeHTTP.client(ok: xml))
+            .check(app: app(bundleID: overrideBundleID, version: "1.0.0"))
+
+        guard case .outdated(let outdated) = result else {
+            Issue.record("expected .outdated, got \(result)"); return
+        }
+        #expect(outdated.releaseNotes?.history.notes.map(\.version) == ["2.0.0"])
+        #expect(outdated.releaseNotes?.history.notes.first?.body == "Fixes a crash")
+        #expect(outdated.releaseNotes?.link == URL(string: "https://example.com/notes"))
+    }
 }

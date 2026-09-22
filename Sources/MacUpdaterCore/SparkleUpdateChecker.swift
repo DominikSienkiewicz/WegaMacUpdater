@@ -19,14 +19,20 @@ public struct SparkleUpdateChecker: VendorUpdateChecker {
         guard feedURL.scheme?.lowercased() == "https" else { return nil }
 
         return VendorCheckPlan(request: HTTPRequest(url: feedURL, enableETag: true)) { data in
-            guard let latest = AppcastParser.parse(data: data) else { return .decided(.failed) }
-
             let installed = app.version ?? ""
+            guard let result = AppcastParser.parseResult(data: data, installedVersion: installed),
+                  let latest = result.latest.version else { return .decided(.failed) }
             guard !installed.isEmpty else { return .decided(.notApplicable) }
             // REL-10: compare versions, not strings. A plain `latest != installed` reports an
             // update whenever the feed lags behind the installed build, or merely formats the
             // version differently ("7.0.0" vs "7.0.0 (77593)") — both offer a downgrade.
-            return .candidate(VendorCandidate(latest: latest, installed: installed, recordedInstalled: app.version, source: .sparkle))
+            return .candidate(VendorCandidate(
+                latest: latest,
+                installed: installed,
+                recordedInstalled: app.version,
+                source: .sparkle,
+                releaseNotes: ReleaseNotes(history: result.history, link: result.latest.releaseNotesLink)
+            ))
         }
     }
 

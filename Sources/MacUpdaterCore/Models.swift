@@ -260,9 +260,10 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
     /// surfaced by a vendor checker (Postman, ChatGPT…) is still presented as Brew in
     /// both windows. Stamped by `ManualUpdateScanner`; defaults to `.manual`.
     public var origin: AppOrigin
-    /// FEAT-06: release notes (when a source provides them, e.g. GitHub `body`) —
-    /// fed to `ReleaseNotesTriage` for the advisory "possible security fix" badge.
-    public var releaseNotes: String?
+    /// FEAT-06: what this update brings, when the source publishes it — the release entries
+    /// themselves and/or a link to fetch on demand. Already plain text (see ``ReleaseNotes``).
+    /// Its joined body feeds `ReleaseNotesTriage` for the advisory "possible security fix" badge.
+    public var releaseNotes: ReleaseNotes?
     /// REL-11: the scanned app's bundle identifier, stamped centrally by
     /// `ManualUpdateScanner`. Combined with `path` it forms the stable policy key
     /// (`policyKey`), so an ignore/pin survives the vendor renaming the app across
@@ -282,7 +283,7 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
         availableVersion: String?,
         source: UpdateSource,
         origin: AppOrigin = .manual,
-        releaseNotes: String? = nil,
+        releaseNotes: ReleaseNotes? = nil,
         bundleIdentifier: String? = nil,
         rolledBack: Bool = false
     ) {
