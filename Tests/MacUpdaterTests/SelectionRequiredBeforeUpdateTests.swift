@@ -35,11 +35,25 @@ struct SelectionRequiredBeforeUpdateTests {
 
     /// The disabled state and the button's count must be read from the same value, or the
     /// button can offer "Update selected (0)" as a live control.
+    ///
+    /// This used to pin the literal `.disabled(scan.updating || updateTargets.isEmpty)`, which
+    /// held the shape of the expression rather than the rule inside it: the guard later grew a
+    /// third reason (a scan running underneath the list) and moved behind `ScanSelectionGate`,
+    /// and a test pinned to the old spelling failed on a change that kept its own guarantee
+    /// intact. It now follows the value instead — the button is disabled by `allowsUpdateRun`,
+    /// and `allowsUpdateRun` is fed by the very count the label shows.
     @Test func theButtonIsDisabledByTheSameEmptinessItCounts() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
+        // The house style aligns argument colons, so the gate's call site is matched with its
+        // runs of spaces collapsed — the rule is what is pinned here, not the alignment.
+        let unspaced = view.split(separator: " ").joined(separator: " ")
 
-        #expect(view.contains(".disabled(scan.updating || updateTargets.isEmpty)"),
-                "an empty selection must disable the batch-update button")
+        #expect(view.contains(".disabled(!allowsUpdateRun)"),
+                "the batch-update button must be disabled by the shared gate, not by its own rule")
+        #expect(unspaced.contains("hasTargets: !updateTargets.isEmpty"),
+                "an empty selection must be one of the reasons that gate refuses")
+        #expect(view.contains("Zaktualizuj wybrane (%@)"),
+                "and the label must count the same targets the gate is asked about")
         #expect(!view.contains("Zaktualizuj wszystkie"),
                 "no label may promise an upgrade the user did not select")
     }

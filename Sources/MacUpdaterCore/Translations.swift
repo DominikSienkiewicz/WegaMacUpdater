@@ -187,6 +187,12 @@ extension Translations {
         // Ciche odświeżenie po starcie: lista zostaje na ekranie, nagłówek mówi, że trwa skan.
         "odświeżam…": "refreshing…",
         "odświeżam… %@": "refreshing… %@",
+        // Nakładka nad listą na czas cichego odświeżenia — lista jest wtedy raportem, nie menu.
+        "Odświeżam listę…": "Refreshing the list…",
+        "Zaznaczanie wróci, gdy skan się skończy.": "Selecting comes back when the scan finishes.",
+        "Trwa skanowanie": "Scan in progress",
+        "Najpierw skończę skanowanie — lista zaraz się zmieni.":
+            "Let me finish the scan first — this list is about to change.",
         "Sprawdź ponownie": "Check again",
         "Zaktualizuj wybrane (%@)": "Update selected (%@)",
         // Nic zaznaczonego = przycisk nieaktywny; podpowiedź mówi, czego brakuje.

@@ -28,6 +28,16 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   disk to restore — a first launch — it is the ordinary full-screen scan, because there is
   no list to protect.
 
+- **A scan running under the list now says so, over the list** — the refresh above was
+  announced only by a line of small print in the header, above rows that looked exactly like
+  a finished result. A progress ring is now drawn over them, filled by the phase the scan is
+  genuinely in and captioned with the command it runs, and the rows underneath dim and stop
+  taking selections for its duration: what is on screen is the answer being replaced, so it
+  is a report until the scan lands, not a menu. The ring also turns slowly, which carries no
+  information and is not meant to — Homebrew is the first of four phases and by far the
+  longest, so a ring driven by progress alone would sit at 0% for most of a scan and read as
+  frozen. Under „Ogranicz ruch" it holds still and only the fill moves.
+
 ### Changed
 - **The menu bar shows Wega's head instead of a cardboard box** — the status item borrowed
   `shippingbox`, a parcel standing in for an app whose whole face is a dog. It is now the same
@@ -35,6 +45,11 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   inverted state it takes while the menu is open. The update count still sits beside it.
 
 ### Fixed
+- **An update can no longer be started against a list that is being replaced** — during the
+  launch refresh, „Update selected" and its ⌘⏎ shortcut stayed live, so a batch approved
+  against the restored rows would install whatever the scan had settled on by the time the
+  confirmation was answered. Both are now held until the scan lands, and the button's tooltip
+  names the scan as the reason rather than blaming an empty selection.
 - **A restored list no longer looks like a mock-up of itself** — app icons were resolved
   during a scan and dropped on quit, so a cold launch drew lettered placeholders where the
   finished scan had drawn icons. The scan's token → bundle map is now part of the saved

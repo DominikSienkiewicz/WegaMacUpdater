@@ -62,6 +62,22 @@ struct UpdateView: View {
     private var selectedVisibleCount: Int {
         scan.selected.intersection(visibleItems.map(\.key)).count
     }
+    /// One answer for the button and for ⌘⏎. They used to carry the condition separately and
+    /// had already drifted; both now miss the same way when a scan is running.
+    private var allowsUpdateRun: Bool {
+        ScanSelectionGate.allowsUpdateRun(
+            isRefreshing: scan.isRefreshing,
+            isUpdating:   scan.updating,
+            hasTargets:   !updateTargets.isEmpty
+        )
+    }
+    /// A disabled control has to say which of its two reasons is the live one — the tooltip
+    /// used to blame an empty selection even when the real answer was "a scan is running".
+    private var updateButtonHelp: String {
+        scan.isRefreshing
+            ? tr("Najpierw skończę skanowanie — lista zaraz się zmieni.")
+            : tr("Zaznacz przynajmniej jedną pozycję — Wega nie aktualizuje niczego, czego sam nie wskażesz.")
+    }
 
     var body: some View {
         content
@@ -132,7 +148,7 @@ struct UpdateView: View {
                 run: { scan.startCheck() }
             ))
             .focusedSceneValue(\.runUpdateAction, WegaMenuAction(
-                isEnabled: scan.status == .results && !scan.updating && !updateTargets.isEmpty,
+                isEnabled: scan.status == .results && allowsUpdateRun,
                 run: { requestUpdate() }
             ))
     }
@@ -251,7 +267,9 @@ struct UpdateView: View {
                     // row on the first click — the widest possible action, one click deep,
                     // reached by doing nothing. Now an empty selection disables it, and the
                     // hint beside it says why rather than leaving a dead control unexplained.
-                    if !scan.updating && updateTargets.isEmpty {
+                    // Silent during a refresh: the reason the button is dead there is the
+                    // scan, not an empty selection, and the overlay below already says so.
+                    if !scan.updating && !scan.isRefreshing && updateTargets.isEmpty {
                         Text(tr("Zaznacz, co mam zaktualizować"))
                             .font(.wega(.subheadline))
                             .foregroundStyle(.secondary)
@@ -266,8 +284,8 @@ struct UpdateView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(Color.wegaHoneyFill)
                     .foregroundStyle(Color.wegaInk)
-                    .disabled(scan.updating || updateTargets.isEmpty)
-                    .help(tr("Zaznacz przynajmniej jedną pozycję — Wega nie aktualizuje niczego, czego sam nie wskażesz."))
+                    .disabled(!allowsUpdateRun)
+                    .help(updateButtonHelp)
 
                     // REL-12 — the longest operation in the app finally has a stop button.
                     // It does not kill the package manager mid-install; it stops the run at
@@ -316,8 +334,20 @@ struct UpdateView: View {
 
             staleCaskCard
 
+            // The rows on screen are the ones the scan is in the middle of replacing, so for
+            // its duration they are a report, not a menu: dimmed, inert, and with the scan
+            // drawn over them. Without this the only sign of a launch refresh was a line of
+            // small print in the header, over a list that looked exactly like a finished one.
             listColumn
                 .frame(maxWidth: .infinity)
+                .disabled(!ScanSelectionGate.allowsSelection(isRefreshing: scan.isRefreshing))
+                .opacity(scan.isRefreshing ? ScanBusyOverlay.dimmedListOpacity : 1)
+                .overlay {
+                    if scan.isRefreshing {
+                        ScanBusyOverlay(presentation: ScanBusyPresentation(progress: scan.progress))
+                    }
+                }
+                .animation(.easeInOut(duration: 0.2), value: scan.isRefreshing)
         }
     }
 
