@@ -45,6 +45,17 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   inverted state it takes while the menu is open. The update count still sits beside it.
 
 ### Fixed
+- **„Aktualizuj przez Brew" no longer reports an update that never happened** — Homebrew exits 0
+  without touching the disk when its own Caskroom record already names the version the cask
+  offers, and Wega has caught that on the ordinary upgrade path since the Obsidian fix. The
+  force-reinstall path behind a manually-checked row stood the same check down outright, because
+  the stand-down was keyed on the command (`brew install --cask --force`) rather than on whether
+  the run was supposed to move the version. Observed with Discord: `Caskroom/discord/0.0.413`
+  recorded against an `/Applications/Discord.app` still reporting `0.0.412`, announced as applied
+  on 10, 15 and 22 September, with every following scan listing it as outdated again. The check
+  now asks what the run promised: a takeover („Przepnij pod Brew", which lands the version already
+  on disk) still stands down, while an update whose cask offers something newer is read as
+  `notUpgraded` — journaled as aborted, never committed, and reported as still outdated.
 - **An update can no longer be started against a list that is being replaced** — during the
   launch refresh, „Update selected" and its ⌘⏎ shortcut stayed live, so a batch approved
   against the restored rows would install whatever the scan had settled on by the time the

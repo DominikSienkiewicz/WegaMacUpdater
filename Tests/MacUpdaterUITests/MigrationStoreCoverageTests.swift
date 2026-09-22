@@ -450,6 +450,9 @@ struct MigrationStoreCoverageTests {
                 token: token,
                 snapshotURL: root.appendingPathComponent("snapshot.app"),
                 expectedTeamID: nil,
+                // Migration is a takeover: the cask ships the version already installed, so no
+                // version is expected to move and the arrival gate stands down as before.
+                expectedVersion: nil,
                 identity: CaskReplacementArtifactIdentity(
                     bundleIdentifier: app.bundleIdentifier,
                     appURL: app.path

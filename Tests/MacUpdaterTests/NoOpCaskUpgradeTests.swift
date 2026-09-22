@@ -95,6 +95,39 @@ struct NoOpCaskUpgradeTests {
             "a moved version is a real upgrade")
     }
 
+    /// When the reading may be applied at all, which is not the same for every brew command.
+    ///
+    /// `brew upgrade` always runs against a cask offering something the disk does not have, so
+    /// an unchanged bundle is a no-op outright. `brew install --cask --force` serves two
+    /// intents through one command, and only one of them expects the version to move — keying
+    /// the stand-down on the command rather than on that expectation is what let the Discord
+    /// loop through the force-reinstall path after Obsidian was fixed on the upgrade path.
+    @Test func onlyARunThatPromisedANewVersionCanBeANoOp() {
+        #expect(UpdateOperationRecoveryPlan.installedNothing(
+            evidence: .versionChange, installedVersion: "1.13.6", snapshotVersion: "1.13.6"),
+            "an upgrade offers a version the disk lacks, so an unchanged bundle is a no-op")
+
+        #expect(UpdateOperationRecoveryPlan.installedNothing(
+            evidence: .forcedReinstall(expectedVersion: "0.0.413"),
+            installedVersion: "0.0.412", snapshotVersion: "0.0.412"),
+            "the Discord case: 'Aktualizuj przez Brew' promised 0.0.413 and the disk kept 0.0.412")
+
+        #expect(UpdateOperationRecoveryPlan.installedNothing(
+            evidence: .forcedReinstall(expectedVersion: "3.0.2"),
+            installedVersion: "3.0.2", snapshotVersion: "3.0.2") == false,
+            "a takeover lands the version already on disk — that is the success, not a no-op")
+
+        #expect(UpdateOperationRecoveryPlan.installedNothing(
+            evidence: .forcedReinstall(expectedVersion: nil),
+            installedVersion: "3.0.2", snapshotVersion: "3.0.2") == false,
+            "no promised version means nothing was expected to move")
+
+        #expect(UpdateOperationRecoveryPlan.installedNothing(
+            evidence: .forcedReinstall(expectedVersion: "0.0.413"),
+            installedVersion: "0.0.413", snapshotVersion: "0.0.412") == false,
+            "the promised version arrived — the run did exactly what it said")
+    }
+
     /// An unreadable version is not evidence of a no-op. Treating it as one would turn every
     /// bundle Wega cannot parse into a failed upgrade.
     @Test func anUnreadableVersionIsNotTreatedAsANoOp() {

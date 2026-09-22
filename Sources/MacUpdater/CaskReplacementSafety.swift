@@ -9,6 +9,10 @@ enum CaskReplacementSafety {
         let token: String
         let snapshotURL: URL
         let expectedTeamID: String?
+        /// The version the cask offers, when this run is an *update* rather than a takeover.
+        /// `nil` for "Przepnij pod Brew", where the app on disk already is what the cask ships
+        /// and the bundle is not expected to change — see ``CaskArrivalEvidence``.
+        let expectedVersion: String?
         let identity: CaskReplacementArtifactIdentity
         /// LT-01 — the journaled operation this adoption runs inside; the caller marks
         /// `installing` before invoking brew.
@@ -56,7 +60,8 @@ enum CaskReplacementSafety {
     static func prepare(
         token: String,
         appURL: URL,
-        brewService: BrewService
+        brewService: BrewService,
+        expectedVersion: String? = nil
     ) async -> PreparationResult {
         // First, and before anything with a side effect: a cask that installs no app can
         // neither be snapshotted nor verified, and running brew on it only wastes a
@@ -130,6 +135,7 @@ enum CaskReplacementSafety {
             token: token,
             snapshotURL: snapshotURL,
             expectedTeamID: installedTeamID,
+            expectedVersion: expectedVersion,
             identity: CaskReplacementArtifactIdentity(
                 bundleIdentifier: bundleID,
                 appURL: appURL
@@ -211,8 +217,11 @@ enum CaskReplacementSafety {
             token: preparation.token,
             snapshotURL: preparation.snapshotURL,
             validationURL: installedAppURL,
-            expectedTeamID: preparation.expectedTeamID,
-            expectedBundleIdentifier: preparation.identity.bundleIdentifier,
+            expecting: CaskRollbackGuard.Expectation(
+                teamID: preparation.expectedTeamID,
+                bundleIdentifier: preparation.identity.bundleIdentifier,
+                version: preparation.expectedVersion
+            ),
             operation: preparation.operation
         )
     }

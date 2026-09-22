@@ -33,10 +33,10 @@ extension ScanStore {
         WegaLog.info(.homebrew, "Uruchamiam: brew \(installArgs.joined(separator: " "))")
         emitWegaState(WegaState(pose: .sniff, line: trf("Instaluję %@ przez Brew…", "\(token)")))
 
-        guard let appURL = manualOutdated.first(where: {
+        guard let target = manualOutdated.first(where: {
             if case .cask(let candidate) = $0.source { return candidate == token }
             return false
-        })?.path else {
+        }) else {
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
                                   message: tr("Nie udało się utworzyć wymaganego snapshotu.")))
             emitActivitySignal(.error)
@@ -49,8 +49,13 @@ extension ScanStore {
         let preparation: CaskReplacementSafety.Preparation?
         switch await CaskReplacementSafety.prepare(
             token: token,
-            appURL: appURL,
-            brewService: model.brewService
+            appURL: target.path,
+            brewService: model.brewService,
+            // This row exists because the cask offers something the bundle does not have, so
+            // the run is an update and the version is expected to move. Handing that version
+            // over is what lets the canary tell a real replacement from a brew that exited 0
+            // and wrote nothing — the loop Discord sat in for three "successful" updates.
+            expectedVersion: target.availableVersion
         ) {
         case .ready(let ready):
             preparation = ready
