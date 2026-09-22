@@ -14,6 +14,17 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 ## [Unreleased]
 
 ### Added
+
+- **Every update says what it brings, before you apply it** — Wega now keeps the release notes
+  it was already downloading. A Sparkle appcast's `<description>` was parsed and thrown away on
+  the next line; it is now shown in the row, one entry per release between the version you have
+  and the one on offer. Apps tracked through GitHub Releases gained the same history, from the
+  same single request. Where a feed publishes a link instead of the text, expanding the row
+  fetches that page — capped, stripped of markup, and never during a scan. Homebrew, App Store
+  and npm rows render the same disclosure when another source in the same scan found notes for
+  that exact version. The advisory security badge now reads the whole history rather than the
+  newest release alone.
+
 - **The scan log names casks it hid as already current** — an app with its own updater (Zed,
   Arc, Raycast, JetBrains Toolbox) rewrites its bundle behind Homebrew's back, so `brew
   outdated --greedy` keeps reporting a version that is no longer installed. Wega already
