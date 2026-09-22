@@ -84,7 +84,11 @@ sequential (brew → mas → npm → manual), the bar reports the phase it is ge
 That first scan runs *underneath* the restored list rather than replacing it, and for its
 duration the list is a report rather than a menu: a progress ring is drawn over the rows —
 filled by the phase the scan is actually in, captioned with the command it runs — while the
-rows themselves dim and stop accepting selections. **Update selected (N)** and its **⌘⏎**
+rows themselves dim and stop accepting selections. The ring's *fill* is the scan's real
+position; its slow *turn* carries nothing but "still running", and exists because Homebrew is
+the first of the four phases and by far the longest, so a ring driven by progress alone would
+sit at 0% for most of a scan. Under **Ogranicz ruch** the turn does not start at all (UX-03) —
+only the fill moves. **Update selected (N)** and its **⌘⏎**
 shortcut are held back by the same rule, because a batch approved against the restored rows
 would otherwise install whatever the scan had settled on by the time the dialog was answered;
 the button's tooltip names the running scan instead of blaming an empty selection.

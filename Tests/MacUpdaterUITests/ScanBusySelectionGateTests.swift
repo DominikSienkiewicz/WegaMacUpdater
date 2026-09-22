@@ -87,6 +87,21 @@ struct ScanBusySelectionGateTests {
                 "the list must be gated on the same flag the overlay is shown for")
     }
 
+    /// UX-03 — the ring's endless turn is an idle loop like the mascot's, so it answers
+    /// "Ogranicz ruch" through the one policy rather than through a condition of its own.
+    /// `ContinuousMotionTests` already forbids a raw `repeatForever`; this pins that the ring
+    /// also declines to *start* the loop, instead of starting one that cannot be seen.
+    @Test func theRingsEndlessTurnObeysTheReduceMotionPolicy() throws {
+        let overlay = executableSource(try source("Sources/MacUpdater/ScanBusyOverlay.swift"))
+
+        #expect(overlay.contains("ContinuousMotion.loopsIdleAnimations(reduceMotion: reduceMotion)"),
+                "the turn must not start at all under Ogranicz ruch")
+        #expect(overlay.contains("ContinuousMotion.forever("),
+                "and its animation must come from the shared policy")
+        #expect(overlay.contains("onChange(of: reduceMotion)"),
+                "switching the setting on mid-scan must stop a turn that is already running")
+    }
+
     // MARK: - Helpers
 
     private func packageRoot(file: String = #filePath) -> URL {

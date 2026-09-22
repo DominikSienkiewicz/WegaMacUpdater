@@ -33,7 +33,10 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   a finished result. A progress ring is now drawn over them, filled by the phase the scan is
   genuinely in and captioned with the command it runs, and the rows underneath dim and stop
   taking selections for its duration: what is on screen is the answer being replaced, so it
-  is a report until the scan lands, not a menu.
+  is a report until the scan lands, not a menu. The ring also turns slowly, which carries no
+  information and is not meant to — Homebrew is the first of four phases and by far the
+  longest, so a ring driven by progress alone would sit at 0% for most of a scan and read as
+  frozen. Under „Ogranicz ruch" it holds still and only the fill moves.
 
 ### Changed
 - **The menu bar shows Wega's head instead of a cardboard box** — the status item borrowed
