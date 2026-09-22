@@ -163,6 +163,16 @@ public final class BrewService: @unchecked Sendable {
         ["install", "--cask", "--force", "--", token]
     }
 
+    /// Arguments for "Przeinstaluj przez Brew" — the repair offered when an adoption exits 0
+    /// yet leaves the pre-upgrade bundle on disk. `install --force` trusts a Caskroom record
+    /// that already names the offered version ("Not upgrading …, the latest version is already
+    /// installed") and writes nothing; `reinstall` uninstalls and downloads the cask again, so
+    /// the record and the app are rebuilt together.
+    public static func reinstallCaskArguments(token: String) -> [String] {
+        // SEC-10: `--` fences the token off from Homebrew's option parsing.
+        ["reinstall", "--cask", "--", token]
+    }
+
     /// ARCH-05a: latest versions for many tokens in **one** `brew info` call.
     ///
     /// `caskLatestVersion(token:)` spawns a process per token, and the manual scanner called it

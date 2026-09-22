@@ -288,6 +288,8 @@ struct UpdateView: View {
                             // REL-05 — straight to the pane that grants the permission,
                             // not to Wega's own settings, which cannot grant anything.
                             NSWorkspace.shared.open(AppManagementSettings.paneURL)
+                        case .reinstallCask(let token):
+                            Task { await scan.reinstallManual(token: token) }
                         }
                     },
                     onClose: { scan.dismissBanner() }

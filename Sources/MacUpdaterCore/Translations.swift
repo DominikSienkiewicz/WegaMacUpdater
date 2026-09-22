@@ -266,6 +266,7 @@ extension Translations {
         "Ręcznie zainstalowane": "Manually installed",
         "Otwórz aplikację": "Open the application",
         "Aktualizuj przez Brew": "Update via Brew",
+        "Przeinstaluj przez Brew": "Reinstall via Brew",
         // REL-07 — label on a cask a prior auto-rollback reverted (kept visible for a retry).
         "cofnięto — ponów próbę": "rolled back — retry",
         "zaktualizuj w App Store": "update in the App Store",

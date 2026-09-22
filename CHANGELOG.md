@@ -51,6 +51,12 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   through it, because the point of the quiet refresh is that the restored result never leaves
   the window.
 
+- **"Nic nie zainstalowano" now carries its own fix** — when „Aktualizuj przez Brew" exits 0 but
+  leaves the old bundle on disk, the banner used to tell you to run `brew reinstall --cask <token>`
+  in a terminal. It now has a **„Przeinstaluj przez Brew"** button that runs exactly that, through
+  the same snapshot → verification → rollback transaction as the original action. A reinstall that
+  itself lands nothing does not offer the button a second time.
+
 ### Changed
 - **The menu bar shows Wega's head instead of a cardboard box** — the status item borrowed
   `shippingbox`, a parcel standing in for an app whose whole face is a dog. It is now the same
