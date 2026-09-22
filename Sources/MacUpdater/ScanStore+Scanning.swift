@@ -14,10 +14,12 @@ import MacUpdaterCore
 extension ScanStore {
     /// Kicks off a scan owned by the store. Idempotent: a second press while one is running
     /// is ignored rather than racing a second `brew update` against the first.
-    func startCheck() {
+    ///
+    /// `quiet` runs it underneath the result already on screen — see ``ScanStore/isRefreshing``.
+    func startCheck(quiet: Bool = false) {
         guard scanTask == nil else { return }
         scanTask = Task { @MainActor [weak self] in
-            await self?.runCheck()
+            await self?.runCheck(quiet: quiet)
             self?.scanTask = nil
         }
     }
@@ -46,13 +48,26 @@ extension ScanStore {
     /// `brew update` (metadata was refreshed minutes ago, at the start of the upgrade) and
     /// the stale-cask sweep (nothing has become stale in the meantime). What remains is a
     /// plain `brew outdated` re-query, which is all the post-upgrade list actually needs.
+    ///
+    /// `quiet` is the launch refresh: `status` stays on `.results` so the restored list keeps
+    /// the window, and the scan reports itself through `isRefreshing` instead of replacing
+    /// what the user is looking at. Every other caller still takes the window over.
     func runCheck(
         emitActivity: Bool = true,
         lightweight: Bool = false,
+        quiet: Bool = false,
         operationLease: OperationCoordinator.Lease? = nil
     ) async {
         guard let model else { return }
-        status = .checking
+        if quiet {
+            setRefreshing(true)
+        } else {
+            status = .checking
+        }
+        // Covers every way out of this function, including the early returns the cancellation
+        // checks take: a flag left standing would leave the toolbar offering to cancel a scan
+        // that has already stopped.
+        defer { setRefreshing(false) }
         errorMessage = nil
         // Nothing is confirmed until each source has answered in this scan — a scan that
         // gets cancelled half-way must not leave last time's confirmations standing.

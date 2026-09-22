@@ -3,13 +3,20 @@ import AppKit
 import MacUpdaterCore
 
 extension ScanStore {
+    /// Whether this process was started by the subprocess layout-regression test.
+    ///
+    /// Read in two places: the scenario itself, and `startLaunchRefresh()`, which stands down
+    /// for it — the scenario walks `status` through the transition by hand, and a real scan
+    /// racing it would be assigning the same property from the other side.
+    static var layoutRegressionScenarioRequested: Bool {
+        ProcessInfo.processInfo.environment["WEGA_LAYOUT_REGRESSION_TEST"] == "1"
+    }
+
     /// Drives the real app scene through the transition captured in the July 22 crash report.
     /// Enabled only in debug builds and only for the subprocess regression test.
     @MainActor
     func runLayoutRegressionScenarioIfRequested() async -> Bool {
-        guard ProcessInfo.processInfo.environment["WEGA_LAYOUT_REGRESSION_TEST"] == "1" else {
-            return false
-        }
+        guard Self.layoutRegressionScenarioRequested else { return false }
 
         try? await Task.sleep(for: .milliseconds(250))
         status = .checking

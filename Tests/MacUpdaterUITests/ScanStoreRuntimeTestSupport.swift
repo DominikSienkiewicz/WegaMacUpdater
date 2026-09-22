@@ -105,6 +105,7 @@ func makeScanStoreRuntimeHarness(
     runner: ScanStoreRuntimeProcessRunner,
     manualScan: @escaping ScanStoreDependencies.ManualScan = { _, _ in ([], 0) },
     applications: [RunningApplicationTarget] = [],
+    bundleExists: @escaping (URL) -> Bool = { _ in true },
     undoableUpdates: @escaping () -> [UndoableUpdate] = { [] }
 ) -> ScanStoreRuntimeHarness {
     let toolURL = URL(fileURLWithPath: "/bin/echo")
@@ -120,6 +121,7 @@ func makeScanStoreRuntimeHarness(
             userApplicationsDirectory: URL(fileURLWithPath: "/TestUserApplications"),
             fileExists: { _ in true }
         ),
+        bundleExists: bundleExists,
         manualScan: manualScan,
         reportWindowScan: { count, failedChecks, fingerprint in
             reports.record(count: count, failedChecks: failedChecks, fingerprint: fingerprint)

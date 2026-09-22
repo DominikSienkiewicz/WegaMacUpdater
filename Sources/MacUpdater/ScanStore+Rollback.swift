@@ -94,11 +94,12 @@ extension ScanStore {
     /// REL-03 — where the casks in this run keep their `.app` bundles, resolved at upgrade
     /// time and **returned** so the phases that need it are handed it explicitly.
     ///
-    /// `caskIconPaths` is only ever filled by a full `runCheck`, so in the most ordinary
-    /// session there is — launch, tick the restored list, press "Zaktualizuj wybrane" —
-    /// it was empty, `CaskRollbackGuard` cloned nothing and `verify` skipped every token.
-    /// Whatever the last scan did resolve for these tokens is kept as a fallback: a
-    /// `brew info` that cannot answer now must not take the net down with it.
+    /// `caskIconPaths` used to be filled by a full `runCheck` and by nothing else, so in the
+    /// most ordinary session there is — launch, tick the restored list, press "Zaktualizuj
+    /// wybrane" — it was empty, `CaskRollbackGuard` cloned nothing and `verify` skipped every
+    /// token. A restored scan now brings its paths back with it, but that is still last
+    /// time's answer, so it stays where it was: the fallback, never the answer. A `brew info`
+    /// that cannot respond now must not take the net down with it either.
     func resolveCaskAppPaths(_ tokens: [String]) async -> [String: URL] {
         guard let model, !tokens.isEmpty else { return [:] }
         let infos = (try? await model.brewService.caskInstallationInfo(tokens: tokens)) ?? []

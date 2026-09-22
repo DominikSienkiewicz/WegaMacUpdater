@@ -20,7 +20,20 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   compared the real bundle and dropped those entries; it now says which ones, so „checked and
   current" stops reading like „never checked".
 
+- **Wega refreshes itself when you open it, without taking the list away** — the window
+  already painted the previous scan the moment it opened, but nothing turned that into the
+  current answer until you pressed refresh. A scan now starts by itself on the first
+  appearance and runs *underneath* the restored list: the rows stay where they are, the
+  header says which phase it is on, and the toolbar offers to cancel it. With nothing on
+  disk to restore — a first launch — it is the ordinary full-screen scan, because there is
+  no list to protect.
+
 ### Fixed
+- **A restored list no longer looks like a mock-up of itself** — app icons were resolved
+  during a scan and dropped on quit, so a cold launch drew lettered placeholders where the
+  finished scan had drawn icons. The scan's token → bundle map is now part of the saved
+  result, re-checked against disk on restore so an app uninstalled in the meantime falls
+  back to its letter tile rather than showing the icon of something that is gone.
 - **A nightly or beta build is no longer offered its own stable release as an „update”** — the
   version parser dropped the component in front of a whitespace-separated word, so
   `6.5 nightly (7301)` read as `6.0.0` and the cask-drift detector listed Little Snitch's

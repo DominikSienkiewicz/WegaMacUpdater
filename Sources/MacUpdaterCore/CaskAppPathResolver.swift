@@ -5,11 +5,16 @@ import WegaHelperKit
 ///
 /// Both upgrade paths need it and both used to compute it themselves: the window filled a
 /// `caskIconPaths` map during a full scan and read it back at snapshot time, the background
-/// updater ran its own copy of the same loop. The window's copy was the bug — a scan
-/// restored from disk brings back the lists but not that map, so an upgrade started right
-/// after launch snapshotted nothing and verified nothing. Resolving through here, fresh,
-/// immediately before the snapshot, is what makes the rollback net independent of whether a
-/// full scan happened in this session.
+/// updater ran its own copy of the same loop. The window's copy was the bug — a scan restored
+/// from disk brought back the lists but nothing about where the bundles were, so an upgrade
+/// started right after launch snapshotted nothing and verified nothing. Resolving through
+/// here, fresh, immediately before the snapshot, is what makes the rollback net independent
+/// of whether a full scan happened in this session.
+///
+/// A restored scan now carries its own paths (`ScanSnapshot.caskAppPaths`, for the icons),
+/// which makes a better *fallback* than the empty map it replaced — but only a fallback. It
+/// says where a bundle stood when the scan ran; this says where it is now, and a snapshot
+/// taken against the wrong path protects nothing.
 ///
 /// Directories and the existence check are injected for the same reason `StaleCaskDetector`
 /// injects them: the resolution is pure and worth testing without a populated `/Applications`.
