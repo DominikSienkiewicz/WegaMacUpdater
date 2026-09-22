@@ -81,6 +81,14 @@ tint instead of a bare time. Progress during a scan is **real** — the scan is 
 sequential (brew → mas → npm → manual), the bar reports the phase it is genuinely in, and
 **Cancel** stops it where it stands. Live log streamed into an inline panel.
 
+That first scan runs *underneath* the restored list rather than replacing it, and for its
+duration the list is a report rather than a menu: a progress ring is drawn over the rows —
+filled by the phase the scan is actually in, captioned with the command it runs — while the
+rows themselves dim and stop accepting selections. **Update selected (N)** and its **⌘⏎**
+shortcut are held back by the same rule, because a batch approved against the restored rows
+would otherwise install whatever the scan had settled on by the time the dialog was answered;
+the button's tooltip names the running scan instead of blaming an empty selection.
+
 #### Running the update
 
 - **Selected updates run side by side.** A run no longer walks its selection one package at a
