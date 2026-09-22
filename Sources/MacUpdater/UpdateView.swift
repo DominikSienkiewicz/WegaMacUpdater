@@ -190,15 +190,11 @@ struct UpdateView: View {
 
     // MARK: Checking
     //
-    // The same scene the quiet launch refresh draws over the list — see `ScanProgressScene`.
-    // A scan reports the identical thing whichever of the two is on screen, so it wears one
-    // face and neither screen can be restyled without the other following.
+    // The same scene the quiet launch refresh draws over the list — see `ScanProgressScene`,
+    // which owns its own sizing and padding so this screen and that overlay cannot be given
+    // different ones.
     private var checkingView: some View {
         ScanProgressScene(progress: scan.progress)
-            // The whole checking screen fills the detail column and demands no minimum of its
-            // own, so the sidebar keeps the exact width (and inset) it has when idle.
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(24)
     }
 
     // MARK: Results
@@ -305,13 +301,13 @@ struct UpdateView: View {
             staleCaskCard
 
             // The rows on screen are the ones the scan is in the middle of replacing, so for
-            // its duration they are a report, not a menu: dimmed, inert, and with the scan
-            // drawn over them. Without this the only sign of a launch refresh was a line of
-            // small print in the header, over a list that looked exactly like a finished one.
+            // its duration they are a report, not a menu: inert, and with the scan drawn over
+            // them behind a material that stands them down. Without this the only sign of a
+            // launch refresh was a line of small print in the header, over a list that looked
+            // exactly like a finished one.
             listColumn
                 .frame(maxWidth: .infinity)
                 .disabled(!ScanSelectionGate.allowsSelection(isRefreshing: scan.isRefreshing))
-                .opacity(scan.isRefreshing ? ScanBusyOverlay.dimmedListOpacity : 1)
                 .overlay {
                     if scan.isRefreshing {
                         ScanBusyOverlay(progress: scan.progress)
