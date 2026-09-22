@@ -263,7 +263,7 @@ struct InspectorPane: View {
         // is plain text by contract — `ReleaseNotesText` ran in Core, at the source that
         // produced it. Notes that collapsed to nothing never became an entry, so they fall
         // through to the "no notes" line exactly as the list's disclosure does.
-        if let notes, !notes.history.notes.isEmpty {
+        if let notes, notes.hasRenderableNotes {
             VStack(alignment: .leading, spacing: 6) {
                 if ReleaseNotesTriage.heuristic(notes.plainText).isLikelySecurityFix {
                     Label(tr("możliwa poprawka bezpieczeństwa"), systemImage: "shield.lefthalf.filled")
@@ -271,18 +271,7 @@ struct InspectorPane: View {
                         .foregroundStyle(Color.wegaDanger)
                 }
                 ForEach(notes.history.notes) { note in
-                    VStack(alignment: .leading, spacing: 2) {
-                        if !note.version.isEmpty {
-                            Text(note.version)
-                                .font(.wega(.subheadline, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                        Text(note.body)
-                            .font(.wega(.callout))
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                    ReleaseNoteView(note: note, bodyFont: .wega(.callout))
                 }
             }
         } else {

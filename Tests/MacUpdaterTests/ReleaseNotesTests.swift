@@ -29,6 +29,20 @@ struct ReleaseNotesTests {
         #expect(notes.isEmpty == false)
     }
 
+    @Test func aLinkAloneHasNothingToRenderYet() {
+        let notes = ReleaseNotes(history: ReleaseHistory(notes: [], omitted: 0),
+                                 link: URL(string: "https://example.com/notes")!)
+
+        #expect(notes.isEmpty == false)
+        #expect(notes.hasRenderableNotes == false)
+    }
+
+    @Test func entriesMeanThereIsSomethingToRender() {
+        let notes = ReleaseNotes(html: "Fixed a crash", version: "2.0.0")
+
+        #expect(notes.hasRenderableNotes)
+    }
+
     @Test func plainTextJoinsEveryEntryForTriage() {
         let notes = ReleaseNotes(history: ReleaseHistory(notes: [
             ReleaseNote(version: "2.0.0", publishedAt: nil, body: "New icon"),

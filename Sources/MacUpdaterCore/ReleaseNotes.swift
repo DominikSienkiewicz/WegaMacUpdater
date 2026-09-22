@@ -34,6 +34,12 @@ public struct ReleaseNotes: Equatable, Sendable {
     /// Nothing to show and nothing to fetch.
     public var isEmpty: Bool { history.notes.isEmpty && link == nil }
 
+    /// Whether there is text to draw *right now*, without fetching anything. A value
+    /// carrying only a `link` is not empty — something can still be shown once it is
+    /// fetched — but it has nothing to render yet, and the two questions have different
+    /// answers often enough that each caller must say which one it is asking.
+    public var hasRenderableNotes: Bool { !history.notes.isEmpty }
+
     /// Every entry's body, joined — the input `ReleaseNotesTriage` reads. Joining rather
     /// than taking the newest is the point: a security fix published two releases back is
     /// still a security fix the user has not got yet.

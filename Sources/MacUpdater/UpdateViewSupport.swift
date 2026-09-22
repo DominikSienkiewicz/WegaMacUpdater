@@ -666,34 +666,33 @@ struct ManualUpdateActionView: View {
 /// The bodies arrived plain: `ReleaseNotes` is sanitised in Core, at the source that produced
 /// it, so nothing here ever holds vendor HTML. Long histories are truncated in place with a
 /// scroll rather than pushing the update list off screen.
+///
+/// A feed that publishes only a link (`ReleaseNotes.link`, no inline history) is fetched here,
+/// once, the first time the row is expanded — never during a scan (`ReleaseNotesLoader`).
 private struct ReleaseNotesDisclosure: View {
     let notes: ReleaseNotes
 
     @State private var expanded = false
+    @StateObject private var loader = ReleaseNotesLoader()
 
     var body: some View {
         WegaDisclosure(isExpanded: $expanded) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(notes.history.notes) { note in
-                        VStack(alignment: .leading, spacing: 2) {
-                            if !note.version.isEmpty {
-                                Text(note.version)
-                                    .font(.wega(.subheadline, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Text(note.body)
+                    // Guarded, not merely empty-looping: a link-only value has no entries
+                    // and no omitted count, and without this the disclosure would render an
+                    // empty stack the user expands to nothing.
+                    if notes.hasRenderableNotes {
+                        ForEach(notes.history.notes) { note in
+                            ReleaseNoteView(note: note, bodyFont: .wega(.subheadline))
+                        }
+                        if notes.history.omitted > 0 {
+                            Text(trf("…i %@ wcześniejszych wydań", String(notes.history.omitted)))
                                 .font(.wega(.subheadline))
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .foregroundStyle(.tertiary)
                         }
                     }
-                    if notes.history.omitted > 0 {
-                        Text(trf("…i %@ wcześniejszych wydań", String(notes.history.omitted)))
-                            .font(.wega(.subheadline))
-                            .foregroundStyle(.tertiary)
-                    }
+                    linkedNotes
                 }
                 .padding(.top, 4)
             }
@@ -702,6 +701,58 @@ private struct ReleaseNotesDisclosure: View {
             Text(tr("Co nowego"))
                 .font(.wega(.subheadline, weight: .medium))
                 .foregroundStyle(.tertiary)
+        }
+        // The fetch belongs to the expansion, not to the scan: a row nobody opens costs
+        // nothing. `.task(id:)` re-runs on collapse too, which `loadIfNeeded` absorbs.
+        .task(id: expanded) {
+            guard expanded else { return }
+            await loader.loadIfNeeded(from: notes.link)
+        }
+    }
+
+    /// The branch for a feed that published a link instead of a body.
+    @ViewBuilder
+    private var linkedNotes: some View {
+        switch loader.state {
+        case .idle:
+            EmptyView()
+        case .loading:
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text(tr("Pobieram notatki wydania…"))
+                    .font(.wega(.subheadline))
+                    .foregroundStyle(.tertiary)
+            }
+        case .loaded(let text, let truncated):
+            VStack(alignment: .leading, spacing: 4) {
+                Text(text)
+                    .font(.wega(.subheadline))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if truncated, let link = notes.link {
+                    HStack(spacing: 6) {
+                        Text(tr("Notatki są dłuższe — to początek"))
+                            .font(.wega(.footnote))
+                            .foregroundStyle(.tertiary)
+                        Link(tr("Zobacz pełne notatki"), destination: link)
+                            .font(.wega(.footnote))
+                    }
+                }
+            }
+        case .failed:
+            HStack(spacing: 6) {
+                Text(tr("Nie udało się pobrać notatek wydania"))
+                    .font(.wega(.subheadline))
+                    .foregroundStyle(.tertiary)
+                Button(tr("Spróbuj ponownie")) {
+                    Task { await loader.retry(from: notes.link) }
+                }
+                .controlSize(.small)
+                if let link = notes.link {
+                    Link(tr("Zobacz u wydawcy"), destination: link).font(.wega(.subheadline))
+                }
+            }
         }
     }
 }
