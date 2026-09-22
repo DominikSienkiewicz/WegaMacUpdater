@@ -198,6 +198,12 @@ the first fix did not cover: Discord, `Caskroom/discord/0.0.413` recorded agains
 `/Applications/Discord.app` still reporting `0.0.412`, announced as applied on 10, 15 and 22
 September while every following scan listed it as outdated again.
 
+When the check fires on an adoption, the "Nic nie zainstalowano" banner offers **„Przeinstaluj
+przez Brew"**: `brew reinstall --cask -- <token>` run through the same protected transaction.
+Unlike `install --force`, `reinstall` does not trust the stale Caskroom record — it removes the
+cask and downloads it again, rebuilding the record and the bundle together. If that run lands
+nothing either, the banner reports it without offering the same repair again.
+
 #### Launch smoke test
 
 The identity, Gatekeeper and publisher gates all describe what the new bundle **is**; none

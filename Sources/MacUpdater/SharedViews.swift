@@ -630,7 +630,11 @@ func selectionToggleBinding(
 
 // MARK: - BannerData + BannerView
 
-enum BannerAction: Equatable { case openLogs, openSettings, openAppManagementSettings }
+enum BannerAction: Equatable {
+    case openLogs, openSettings, openAppManagementSettings
+    /// Runs `brew reinstall --cask` for the token through the protected adoption flow.
+    case reinstallCask(token: String)
+}
 
 struct BannerData: Equatable {
     enum Variant { case success, danger }
@@ -701,10 +705,15 @@ struct BannerView: View {
                     case .openLogs:     return tr("Zobacz w logach")
                     case .openSettings: return tr("Włącz Touch ID")
                     case .openAppManagementSettings: return tr("Otwórz ustawienia prywatności")
+                    case .reinstallCask: return tr("Przeinstaluj przez Brew")
                     }
                 }()
+                let actionIcon: String = {
+                    if case .reinstallCask = action { return "arrow.clockwise.circle" }
+                    return "info.circle"
+                }()
                 Button { onAction?(action) } label: {
-                    Label(actionLabel, systemImage: "info.circle")
+                    Label(actionLabel, systemImage: actionIcon)
                         .font(.wega(.callout, weight: .medium))
                 }
                 .buttonStyle(.plain)

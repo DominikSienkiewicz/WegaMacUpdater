@@ -10,11 +10,19 @@ import MacUpdaterCore
 extension ScanStore {
     func installManual(token: String) async {
         await dependencies.upgrades.performWrite(.manualInstall) {
-            await self.installManualCoordinated(token: token)
+            await self.installManualCoordinated(token: token, installArgs: BrewService.adoptCaskArguments(token: token))
         }
     }
 
-    private func installManualCoordinated(token: String) async {
+    /// The banner's repair for a `.notUpgraded` adoption: the same protected transaction, with
+    /// `brew reinstall` in place of `install --force`.
+    func reinstallManual(token: String) async {
+        await dependencies.upgrades.performWrite(.manualInstall) {
+            await self.installManualCoordinated(token: token, installArgs: BrewService.reinstallCaskArguments(token: token))
+        }
+    }
+
+    private func installManualCoordinated(token: String, installArgs: [String]) async {
         guard let model, manualBusy == nil else { return }
         guard UpgradeMutex.shared.acquire() else {
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja w toku"),
@@ -27,7 +35,6 @@ extension ScanStore {
         let ticket = MutationGuard.shared.begin(trf("instalacja %@", "\(token)"))
         defer { MutationGuard.shared.end(ticket) }
         emitActivitySignal(.scanning)
-        let installArgs = BrewService.adoptCaskArguments(token: token)
         brewLog = ["$ brew " + installArgs.joined(separator: " ")]
         showLog = true
         WegaLog.info(.homebrew, "Uruchamiam: brew \(installArgs.joined(separator: " "))")
@@ -121,7 +128,7 @@ extension ScanStore {
                 preparation,
                 installedAppURL: installedAppURL
             )
-            guard reportManualReplacementVerification(verification, token: token) else { return }
+            guard reportManualReplacementVerification(verification, token: token, installArgs: installArgs) else { return }
         }
 
         if let installError {
@@ -155,10 +162,12 @@ extension ScanStore {
 
     private func reportManualReplacementVerification(
         _ verdict: CaskValidationVerdict,
-        token: String
+        token: String,
+        installArgs: [String]
     ) -> Bool {
         let title: String
         let message: String
+        var action: BannerAction?
         switch verdict {
         case .healthy:
             return true
@@ -185,9 +194,13 @@ extension ScanStore {
                 "%@: brew zakończył się sukcesem, ale na dysku została wersja sprzed aktualizacji. Wpis Homebrew rozjechał się z aplikacją — pomoże brew reinstall --cask %@.",
                 "\(token)", "\(token)"
             )
+            // A reinstall that itself installed nothing would only offer itself again.
+            if installArgs != BrewService.reinstallCaskArguments(token: token) {
+                action = .reinstallCask(token: token)
+            }
         }
         brewLog.append("⚠️ " + message)
-        showBanner(BannerData(variant: .danger, title: title, message: message))
+        showBanner(BannerData(variant: .danger, title: title, message: message, action: action))
         emitActivitySignal(.error)
         emitWegaState(WegaState(pose: .alert, line: trf("Coś poszło nie tak z %@.", "\(token)")))
         WegaLog.error(.homebrew, message)
