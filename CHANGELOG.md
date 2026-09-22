@@ -28,6 +28,12 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   disk to restore — a first launch — it is the ordinary full-screen scan, because there is
   no list to protect.
 
+### Changed
+- **The menu bar shows Wega's head instead of a cardboard box** — the status item borrowed
+  `shippingbox`, a parcel standing in for an app whose whole face is a dog. It is now the same
+  head as the app icon, drawn as a template image so the bar tints it for light, dark and the
+  inverted state it takes while the menu is open. The update count still sits beside it.
+
 ### Fixed
 - **A restored list no longer looks like a mock-up of itself** — app icons were resolved
   during a scan and dropped on quit, so a cold launch drew lettered placeholders where the
