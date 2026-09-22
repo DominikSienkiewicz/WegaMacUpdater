@@ -322,6 +322,25 @@ struct UpdatePlannerAttachingReleaseNotesTests {
         #expect(joined.first?.releaseNotes == nil)
     }
 
+    @Test func aNonCaskRowIsLeftAloneEvenWhenEverythingElseWouldMatch() {
+        // A formula named like a cask token that really does resolve: every guard in the
+        // chain passes except `kind`, so this is the case that fails if `kind` is dropped.
+        let appPath = URL(fileURLWithPath: "/Applications/Example.app")
+        let items = [OutdatedItem(key: "f:example", name: "example", from: "1.0.0", to: "2.0.0", kind: .formula)]
+        let manual = [ManualOutdatedApp(
+            name: "Example", path: appPath,
+            installedVersion: "1.0.0", availableVersion: "2.0.0",
+            source: .sparkle,
+            releaseNotes: ReleaseNotes(html: "Notes for the app, not the formula", version: "2.0.0")
+        )]
+
+        let joined = UpdatePlanner.attachingReleaseNotes(
+            to: items, manual: manual, caskAppPaths: ["example": appPath]
+        )
+
+        #expect(joined.first?.releaseNotes == nil)
+    }
+
     @Test func sourcesWithNoAppPathAreLeftAlone() {
         let items = [
             OutdatedItem(key: "f:jq", name: "jq", from: "1.6", to: "1.7", kind: .formula),
