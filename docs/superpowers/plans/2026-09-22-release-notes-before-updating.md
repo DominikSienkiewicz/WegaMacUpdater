@@ -946,7 +946,12 @@ becomes
 
 - [ ] **Step 10: Run the tests to verify they pass**
 
-Run: `swift test --filter "SparkleUpdateChecker|GitHubReleases|InspectorTrustWiring|ManualUpdateScanner"`
+Run: `swift test --filter "SparkleUpdateChecker|CheckFailureDistinction|InspectorTrustWiring|ManualUpdateScanner"`
+
+`CheckFailureDistinction`, not `GitHubReleases`: the GitHub checker's only behavioural tests live
+in `Tests/MacUpdaterTests/CheckFailureDistinctionTests.swift`, an `XCTestCase` with no `@Suite`
+name, so a `GitHubReleases` filter matches nothing and silently skips exactly the code this step
+changed.
 Expected: PASS.
 
 - [ ] **Step 11: Build and lint**
@@ -1127,12 +1132,22 @@ git commit -m "feat(core): fetch a linked release-notes page on demand, capped a
 
 **Files:**
 - Create: `Sources/MacUpdater/ReleaseNotesLoader.swift`
+- Create: `Sources/MacUpdater/ReleaseNoteView.swift`
+- Modify: `Sources/MacUpdaterCore/ReleaseNotes.swift` (add `hasRenderableNotes`)
 - Modify: `Sources/MacUpdater/UpdateViewSupport.swift` (`ReleaseNotesDisclosure` from Task 4)
+- Modify: `Sources/MacUpdater/InspectorPane.swift` (`whatsNewContent` uses the shared note view)
 - Test: `Tests/MacUpdaterUITests/ReleaseNotesLoaderTests.swift`
+- Test: `Tests/MacUpdaterTests/ReleaseNotesTests.swift` (add the `hasRenderableNotes` cases)
 
 **Interfaces:**
 - Consumes: `ReleaseNotes` (Task 1), `ReleaseNotesLinkFetcher` (Task 5).
-- Produces: `ReleaseNotesLoader` (`@MainActor`, `ObservableObject`) with `State { idle, loading, loaded(text:truncated:), failed }`, `init(fetch:)` taking a non-`@Sendable` main-actor closure, `func loadIfNeeded(from link: URL?) async`, `func retry(from link: URL?) async`.
+- Produces: `ReleaseNotesLoader` (`@MainActor`, `ObservableObject`) with `State { idle, loading, loaded(text:truncated:), failed }`, `init(fetch:)` taking a non-`@Sendable` main-actor closure, `func loadIfNeeded(from link: URL?) async`, `func retry(from link: URL?) async`; `ReleaseNotes.hasRenderableNotes`; `ReleaseNoteView(note:bodyFont:)`.
+
+**Why this task grew** (Task 4's review, three findings ruled by the controller):
+
+1. A `ReleaseNotes` carrying *only* a link passes `!isEmpty`, so Task 4's disclosure renders a control that expands to nothing. That shape is ordinary — a Sparkle feed with `<sparkle:releaseNotesLink>` and no inline `<description>` produces exactly it.
+2. The row asked `!notes.isEmpty` (a link counts) while the inspector asked `!notes.history.notes.isEmpty` (a link does not), so the same app could show a disclosure in the list and "Brak informacji o zmianach" in the inspector. Both compile; neither says which question it is asking.
+3. The per-note rendering block was duplicated near-verbatim between the row and the inspector. The spec makes `ReleaseNotes` the single description of what an update brings; three renderings of it contradict that.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1270,9 +1285,79 @@ final class ReleaseNotesLoader: ObservableObject {
 Run: `swift test --filter ReleaseNotesLoader`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Wire the loader into the disclosure**
+- [ ] **Step 5: Name the two questions, and draw a note in one place**
 
-In `Sources/MacUpdater/UpdateViewSupport.swift`, extend `ReleaseNotesDisclosure` from Task 4. Add the state and the linked-page branch; the history rendering stays exactly as it is:
+In `Sources/MacUpdaterCore/ReleaseNotes.swift`, add the second predicate beside `isEmpty`:
+
+```swift
+    /// Whether there is text to draw *right now*, without fetching anything. A value
+    /// carrying only a `link` is not empty — something can still be shown once it is
+    /// fetched — but it has nothing to render yet, and the two questions have different
+    /// answers often enough that each caller must say which one it is asking.
+    public var hasRenderableNotes: Bool { !history.notes.isEmpty }
+```
+
+Add the two cases to `Tests/MacUpdaterTests/ReleaseNotesTests.swift`:
+
+```swift
+    @Test func aLinkAloneHasNothingToRenderYet() {
+        let notes = ReleaseNotes(history: ReleaseHistory(notes: [], omitted: 0),
+                                 link: URL(string: "https://example.com/notes")!)
+
+        #expect(notes.isEmpty == false)
+        #expect(notes.hasRenderableNotes == false)
+    }
+
+    @Test func entriesMeanThereIsSomethingToRender() {
+        let notes = ReleaseNotes(html: "Fixed a crash", version: "2.0.0")
+
+        #expect(notes.hasRenderableNotes)
+    }
+```
+
+Then create `Sources/MacUpdater/ReleaseNoteView.swift` — one rendering of one release, so the row and the inspector cannot drift apart:
+
+```swift
+import MacUpdaterCore
+import SwiftUI
+
+/// One release's notes: its version, then its body.
+///
+/// The row and the inspector show the same thing at different sizes, so only the body font
+/// varies. Keeping it one view is what stops a change to how a release reads from having to
+/// be made twice and being made once.
+///
+/// `note.body` arrived plain — `ReleaseNotes` is sanitised in Core, at the source that
+/// produced it — so nothing here strips markup (UX-05).
+struct ReleaseNoteView: View {
+    let note: ReleaseNote
+    var bodyFont: Font
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            // A version is missing only for notes decoded from the pre-`ReleaseNotes`
+            // snapshot shape, which recorded none. Better no heading than an empty one.
+            if !note.version.isEmpty {
+                Text(note.version)
+                    .font(.wega(.subheadline, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            Text(note.body)
+                .font(bodyFont)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+```
+
+Replace the per-note `VStack` inside `InspectorPane.whatsNewContent`'s `ForEach` with `ReleaseNoteView(note: note, bodyFont: .wega(.callout))`, and change that function's guard from `!notes.history.notes.isEmpty` to `notes.hasRenderableNotes` so it states the question it is asking.
+
+- [ ] **Step 6: Wire the loader into the disclosure**
+
+In `Sources/MacUpdater/UpdateViewSupport.swift`, extend `ReleaseNotesDisclosure` from Task 4: it renders the history through the shared view, and gains the linked-page branch. Note the `if notes.hasRenderableNotes` guard around the list — without it, a link-only value renders an empty `VStack` and the user expands a control to nothing.
 
 ```swift
 struct ReleaseNotesDisclosure: View {
@@ -1285,24 +1370,18 @@ struct ReleaseNotesDisclosure: View {
         WegaDisclosure(isExpanded: $expanded) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(notes.history.notes) { note in
-                        VStack(alignment: .leading, spacing: 2) {
-                            if !note.version.isEmpty {
-                                Text(note.version)
-                                    .font(.wega(.subheadline, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Text(note.body)
-                                .font(.wega(.subheadline))
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                    // Guarded, not merely empty-looping: a link-only value has no entries
+                    // and no omitted count, and without this the disclosure would render an
+                    // empty stack the user expands to nothing.
+                    if notes.hasRenderableNotes {
+                        ForEach(notes.history.notes) { note in
+                            ReleaseNoteView(note: note, bodyFont: .wega(.subheadline))
                         }
-                    }
-                    if notes.history.omitted > 0 {
-                        Text(trf("…i %@ wcześniejszych wydań", String(notes.history.omitted)))
-                            .font(.wega(.subheadline))
-                            .foregroundStyle(.tertiary)
+                        if notes.history.omitted > 0 {
+                            Text(trf("…i %@ wcześniejszych wydań", String(notes.history.omitted)))
+                                .font(.wega(.subheadline))
+                                .foregroundStyle(.tertiary)
+                        }
                     }
                     linkedNotes
                 }
@@ -1370,16 +1449,21 @@ struct ReleaseNotesDisclosure: View {
 }
 ```
 
-- [ ] **Step 6: Build and lint**
+- [ ] **Step 7: Run the tests to verify they pass**
+
+Run: `swift test --filter "ReleaseNotesLoader|ReleaseNotes"`
+Expected: PASS — the loader's four cases plus the two new `hasRenderableNotes` cases, and every pre-existing `ReleaseNotes` case still green.
+
+- [ ] **Step 8: Build and lint**
 
 ```bash
 swift build && swiftlint lint --strict
 ```
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add Sources/MacUpdater/ReleaseNotesLoader.swift Sources/MacUpdater/UpdateViewSupport.swift Tests/MacUpdaterUITests/ReleaseNotesLoaderTests.swift
+git add Sources/MacUpdaterCore/ReleaseNotes.swift Sources/MacUpdater/ReleaseNotesLoader.swift Sources/MacUpdater/ReleaseNoteView.swift Sources/MacUpdater/UpdateViewSupport.swift Sources/MacUpdater/InspectorPane.swift Tests/MacUpdaterUITests/ReleaseNotesLoaderTests.swift Tests/MacUpdaterTests/ReleaseNotesTests.swift
 git commit -m "feat(ui): load a linked release-notes page when the row is expanded"
 ```
 
@@ -1575,6 +1659,23 @@ The bespoke "Informacje o zmianach niedostępne dla tego źródła" line for thi
 is now the truthful answer for a batch row too. Leave the string in `Translations.swift` —
 `LocalizationCompletenessTests` only fails on untranslated keys, never on unused ones.
 
+While you are in that function: "nothing to render" and "nothing at all" are not the same, and
+the inspector does not fetch. Replace its bare `else` branch so a value that carries only a link
+offers the link instead of claiming there are no notes:
+
+```swift
+        } else if let link = notes?.link {
+            Link(tr("Zobacz notatki wydania"), destination: link)
+                .font(.wega(.callout))
+        } else {
+            Text(tr("Brak informacji o zmianach"))
+                .font(.wega(.subheadline))
+                .foregroundStyle(.tertiary)
+        }
+```
+
+`"Zobacz notatki wydania"` is a new `tr(...)` literal — Task 8 adds its English counterpart.
+
 - [ ] **Step 7: Run the tests to verify they pass**
 
 Run: `swift test --filter UpdatePlanner`
@@ -1622,6 +1723,7 @@ In `Sources/MacUpdaterCore/Translations.swift`, beside the existing `"Co nowego"
         "Notatki są dłuższe — to początek": "The notes are longer — this is the start",
         "Zobacz pełne notatki": "See the full notes",
         "Zobacz u wydawcy": "See at the publisher",
+        "Zobacz notatki wydania": "See the release notes",
         "Spróbuj ponownie": "Try again",
 ```
 
