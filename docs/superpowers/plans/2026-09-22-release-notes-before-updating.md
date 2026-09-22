@@ -1132,7 +1132,7 @@ git commit -m "feat(core): fetch a linked release-notes page on demand, capped a
 
 **Interfaces:**
 - Consumes: `ReleaseNotes` (Task 1), `ReleaseNotesLinkFetcher` (Task 5).
-- Produces: `ReleaseNotesLoader` (`@MainActor`, `ObservableObject`) with `State { idle, loading, loaded(text:truncated:), failed }`, `init(fetch:)`, `func loadIfNeeded(from link: URL?) async`.
+- Produces: `ReleaseNotesLoader` (`@MainActor`, `ObservableObject`) with `State { idle, loading, loaded(text:truncated:), failed }`, `init(fetch:)` taking a non-`@Sendable` main-actor closure, `func loadIfNeeded(from link: URL?) async`, `func retry(from link: URL?) async`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1227,9 +1227,12 @@ final class ReleaseNotesLoader: ObservableObject {
 
     @Published private(set) var state: State = .idle
 
-    private let fetch: @Sendable (URL) async -> ReleaseNotesLinkFetcher.Outcome
+    // Not `@Sendable`: the class is already `@MainActor`, so the closure is main-actor
+    // isolated and needs no extra guarantee. Marking it `@Sendable` would also forbid the
+    // tests from counting calls in a captured local.
+    private let fetch: (URL) async -> ReleaseNotesLinkFetcher.Outcome
 
-    init(fetch: @escaping @Sendable (URL) async -> ReleaseNotesLinkFetcher.Outcome) {
+    init(fetch: @escaping (URL) async -> ReleaseNotesLinkFetcher.Outcome) {
         self.fetch = fetch
     }
 
