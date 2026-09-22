@@ -54,4 +54,14 @@ struct ReleaseNotesLoaderTests {
         await loader.retry(from: link)
         #expect(loader.state == .loaded(text: "Second time lucky", truncated: false))
     }
+
+    @Test func aCancelledLoadDoesNotMasqueradeAsAFailure() async {
+        let loader = ReleaseNotesLoader { _ in .unavailable }
+
+        let task = Task { await loader.loadIfNeeded(from: link) }
+        task.cancel()
+        await task.value
+
+        #expect(loader.state == .idle)
+    }
 }

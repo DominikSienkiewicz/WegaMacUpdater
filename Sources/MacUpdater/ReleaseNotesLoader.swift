@@ -45,7 +45,16 @@ final class ReleaseNotesLoader: ObservableObject {
     private func load(from link: URL?) async {
         guard let link else { return }
         state = .loading
-        switch await fetch(link) {
+        let outcome = await fetch(link)
+        // The user collapsing the row cancels this task, and a cancelled transport error is
+        // indistinguishable from a real one by the time it reaches here. Reporting it as a
+        // failure would blame the vendor for something the user did; going back to .idle
+        // lets the next expansion simply try again.
+        guard !Task.isCancelled else {
+            state = .idle
+            return
+        }
+        switch outcome {
         case .notes(let text, let truncated):
             state = .loaded(text: text, truncated: truncated)
         case .unavailable:
