@@ -185,6 +185,20 @@ public struct UndoableUpdate: Equatable, Sendable, Identifiable {
     }
 }
 
+/// What a run promised to change, which decides whether an unchanged bundle afterwards is
+/// evidence that nothing was installed — see ``UpdateOperationRecoveryPlan/installedNothing``.
+public enum CaskArrivalEvidence: Equatable, Sendable {
+    /// `brew upgrade`. The cask offers a version the disk does not have, by definition of the
+    /// item being outdated, so the version is expected to move.
+    case versionChange
+    /// `brew install --cask --force`, which no Caskroom record can make skip.
+    ///
+    /// `expectedVersion` is what the cask offers. `nil` — or the version already on disk —
+    /// means a takeover rather than an update: the bundle is not expected to change, so an
+    /// unchanged one proves nothing either way.
+    case forcedReinstall(expectedVersion: String?)
+}
+
 /// The pure half of crash recovery: given where an item's journal stopped, what should
 /// the app layer do about it? Pure so every branch is unit-testable without a filesystem
 /// full of fake apps — the runner (`UpdateOperationRecovery`, app layer) only executes.
@@ -250,6 +264,39 @@ public enum UpdateOperationRecoveryPlan {
     public static func bundleWasReplaced(installedVersion: String?, snapshotVersion: String?) -> Bool {
         guard let installed = installedVersion, let before = snapshotVersion else { return true }
         return !versionsEqual(installed, before)
+    }
+
+    /// Whether a run that brew reported as successful in fact wrote nothing to disk.
+    ///
+    /// ``bundleWasReplaced`` asks the question; this decides when the question may be asked at
+    /// all, which is not the same for every command. `brew upgrade` only ever runs against a
+    /// cask offering a version the disk does not have, so an unchanged bundle is a no-op with
+    /// nothing further to check. `brew install --cask --force` is asked for two different
+    /// reasons, and only one of them expects the version to move:
+    ///
+    /// - a **takeover** ("Przepnij pod Brew") adopts an app that is already the version the
+    ///   cask ships, so an unchanged bundle is the successful outcome;
+    /// - an **update** ("Aktualizuj przez Brew") runs against a cask offering something newer,
+    ///   so an unchanged bundle is the same no-op an upgrade would have caught.
+    ///
+    /// Keying the stand-down on the command rather than on the expected version is what let
+    /// the Discord loop through: `/opt/homebrew/Caskroom/discord/0.0.413` recorded against an
+    /// `/Applications/Discord.app` still reporting `0.0.412`, announced as applied three times.
+    public static func installedNothing(
+        evidence: CaskArrivalEvidence,
+        installedVersion: String?,
+        snapshotVersion: String?
+    ) -> Bool {
+        if case .forcedReinstall(let expectedVersion) = evidence {
+            guard let expectedVersion,
+                  let snapshotVersion,
+                  !versionsEqual(expectedVersion, snapshotVersion)
+            else { return false }
+        }
+        return !bundleWasReplaced(
+            installedVersion: installedVersion,
+            snapshotVersion: snapshotVersion
+        )
     }
 
     /// `CFBundleShortVersionString` read straight from the plist, deliberately not through

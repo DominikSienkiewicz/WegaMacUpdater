@@ -81,25 +81,6 @@ enum CaskRollbackGuard {
         case expected(String?)
     }
 
-    /// What "the version on disk did not change" is allowed to prove about whether an
-    /// artifact actually arrived.
-    ///
-    /// It is evidence for `brew upgrade` and only for it: the target version differs from the
-    /// installed one by definition, so an unchanged `CFBundleShortVersionString` means brew
-    /// exited 0 on a Caskroom record that already named the new version and never touched the
-    /// disk. Adoption runs `brew install --cask --force`, which no record can make skip, and
-    /// lands the version already on disk on purpose — reading that as "nothing was installed"
-    /// turned a successful takeover into a red banner (Proton Drive 3.0.2, 2026-08-20, see
-    /// `AdoptionSameVersionVerificationTests`). What adoption needs answered instead —
-    /// *is there an app where the cask says it put one* — is already answered before this,
-    /// by `CaskReplacementSafety.resolveInstalledAppURL`, whose `nil` never reaches here.
-    /// `.versionChange` is the default on purpose: a caller that says nothing keeps the
-    /// strict reading, so the gate can only ever be stood down deliberately.
-    private enum ArrivalEvidence {
-        case versionChange
-        case forcedReinstall
-    }
-
     /// Reads the installed publishers before any snapshot or package-manager mutation.
     /// A bundle that already differs from the trusted ledger is not a safe rollback source,
     /// so callers must exclude every returned token from the upgrade command.
@@ -251,6 +232,25 @@ enum CaskRollbackGuard {
         return outcomes
     }
 
+    /// What a forced reinstall was supposed to produce: the publisher and bundle id read
+    /// before the mutation, and the version the cask offers.
+    ///
+    /// Grouped rather than passed loose because the three are one answer to one question —
+    /// "what should be standing here when brew is done" — and because `version` is the member
+    /// whose absence has a meaning of its own: `nil` marks a takeover, where nothing was
+    /// expected to move. See ``CaskArrivalEvidence``.
+    struct Expectation: Sendable {
+        let teamID: String?
+        let bundleIdentifier: String?
+        let version: String?
+
+        init(teamID: String?, bundleIdentifier: String?, version: String?) {
+            self.teamID = teamID
+            self.bundleIdentifier = bundleIdentifier
+            self.version = version
+        }
+    }
+
     /// Verifies a replacement against the publisher read before mutation. The snapshot can
     /// originate in `~/Applications` while the installed artifact now lives in `/Applications`;
     /// validation and rollback therefore intentionally use `validationURL`, not the old path.
@@ -258,17 +258,16 @@ enum CaskRollbackGuard {
         token: String,
         snapshotURL: URL,
         validationURL: URL,
-        expectedTeamID: String?,
-        expectedBundleIdentifier: String?,
+        expecting: Expectation,
         operation: UpdateOperationSession? = nil
     ) async -> Outcome {
         let outcome = await verify(
             token: token,
             snapshotURL: snapshotURL,
             validationURL: validationURL,
-            publisherBaseline: .expected(expectedTeamID),
-            bundleIdentityBaseline: .expected(expectedBundleIdentifier),
-            arrivalEvidence: .forcedReinstall
+            publisherBaseline: .expected(expecting.teamID),
+            bundleIdentityBaseline: .expected(expecting.bundleIdentifier),
+            arrivalEvidence: .forcedReinstall(expectedVersion: expecting.version)
         )
         // REL-07 — the conscious "Aktualizuj przez Brew" retry lands here: a healthy result
         // clears the mark (the force-reinstall repaired the Caskroom metadata in the same pass),
@@ -282,8 +281,7 @@ enum CaskRollbackGuard {
         token: String,
         snapshotURL: URL,
         validationURL: URL,
-        expectedTeamID: String?,
-        expectedBundleIdentifier: String?,
+        expecting: Expectation,
         operation: UpdateOperationSession? = nil,
         dependencies: Dependencies = .live
     ) async -> Outcome {
@@ -291,9 +289,9 @@ enum CaskRollbackGuard {
             token: token,
             snapshotURL: snapshotURL,
             validationURL: validationURL,
-            publisherBaseline: .expected(expectedTeamID),
-            bundleIdentityBaseline: .expected(expectedBundleIdentifier),
-            arrivalEvidence: .forcedReinstall,
+            publisherBaseline: .expected(expecting.teamID),
+            bundleIdentityBaseline: .expected(expecting.bundleIdentifier),
+            arrivalEvidence: .forcedReinstall(expectedVersion: expecting.version),
             dependencies: dependencies
         )
         dependencies.applyRollbackLedger(token, outcome)
@@ -307,7 +305,7 @@ enum CaskRollbackGuard {
         validationURL: URL,
         publisherBaseline: PublisherBaseline,
         bundleIdentityBaseline: BundleIdentityBaseline,
-        arrivalEvidence: ArrivalEvidence = .versionChange,
+        arrivalEvidence: CaskArrivalEvidence = .versionChange,
         dependencies: Dependencies? = nil
     ) async -> Outcome {
         func restoreSnapshot(
@@ -433,9 +431,12 @@ enum CaskRollbackGuard {
             // *old* app, pass it, and talk a no-op up into "zaktualizowano" (Obsidian 1.13.6,
             // reported updated twice while never moving — see `NoOpCaskUpgradeTests`).
             //
-            // Only an upgrade can be answered this way — see ``ArrivalEvidence``.
-            if case .versionChange = arrivalEvidence,
-               !UpdateOperationRecoveryPlan.bundleWasReplaced(
+            // Whether the question may be asked at all depends on what the run promised to
+            // change, not on which brew command ran it — see ``CaskArrivalEvidence``. Keying
+            // it on the command is what let the same loop through a second time on the
+            // force-reinstall path (Discord 0.0.412, see `ForcedReinstallNoOpTests`).
+            if UpdateOperationRecoveryPlan.installedNothing(
+                evidence: arrivalEvidence,
                 installedVersion: UpdateOperationRecoveryPlan.bundleShortVersion(at: validationURL),
                 snapshotVersion: UpdateOperationRecoveryPlan.bundleShortVersion(at: snapshotURL)
             ) {

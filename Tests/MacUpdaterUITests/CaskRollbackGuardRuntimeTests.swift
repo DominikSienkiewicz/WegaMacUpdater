@@ -160,8 +160,7 @@ struct CaskRollbackGuardRuntimeTests {
             token: "identity",
             snapshotURL: snapshot,
             validationURL: installed,
-            expectedTeamID: "TEAM",
-            expectedBundleIdentifier: "com.expected",
+            expecting: .init(teamID: "TEAM", bundleIdentifier: "com.expected", version: nil),
             dependencies: dependencies(
                 recorder: recorder,
                 bundleIdentifier: { _ in "com.other" }
@@ -179,8 +178,7 @@ struct CaskRollbackGuardRuntimeTests {
             token: "publisher",
             snapshotURL: URL(fileURLWithPath: "/tmp/publisher.app"),
             validationURL: URL(fileURLWithPath: "/Applications/publisher.app"),
-            expectedTeamID: "OLD",
-            expectedBundleIdentifier: "com.example.app",
+            expecting: .init(teamID: "OLD", bundleIdentifier: "com.example.app", version: nil),
             dependencies: dependencies(
                 recorder: recorder,
                 teamIDAfterMutation: { _ in "NEW" },
@@ -219,8 +217,7 @@ struct CaskRollbackGuardRuntimeTests {
             token: "smoke",
             snapshotURL: URL(fileURLWithPath: "/tmp/smoke.app"),
             validationURL: URL(fileURLWithPath: "/Applications/smoke.app"),
-            expectedTeamID: "TEAM",
-            expectedBundleIdentifier: "com.example.app",
+            expecting: .init(teamID: "TEAM", bundleIdentifier: "com.example.app", version: nil),
             dependencies: dependencies(
                 recorder: recorder,
                 smokeTestIsEnabled: { true },

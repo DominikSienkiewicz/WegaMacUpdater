@@ -50,7 +50,7 @@ struct CaskReplacementArtifactIdentityTests {
         #expect(source.contains("let identity: CaskReplacementArtifactIdentity"))
         #expect(source.contains("identity: CaskReplacementArtifactIdentity("))
         #expect(source.contains("preparation.identity.matchingArtifact("))
-        #expect(source.contains("expectedBundleIdentifier: preparation.identity.bundleIdentifier"))
+        #expect(source.contains("bundleIdentifier: preparation.identity.bundleIdentifier"))
     }
 
     private func packageRoot() -> URL {

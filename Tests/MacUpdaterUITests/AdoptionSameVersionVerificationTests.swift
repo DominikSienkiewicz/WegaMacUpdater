@@ -14,11 +14,16 @@ import Testing
 /// Homebrew already owned it.
 ///
 /// The arrival gate infers "an artifact arrived" from a changed `CFBundleShortVersionString`.
-/// That reading is only valid for `brew upgrade`, where the target version differs by
-/// definition and an unchanged one means brew exited 0 on a stale Caskroom record. Adoption
+/// That reading needs a run which promised to change the version. `brew upgrade` always does,
+/// so an unchanged one there means brew exited 0 on a stale Caskroom record. A **takeover**
 /// runs `brew install --cask --force`, which cannot be skipped by any record, and deliberately
 /// installs the *same* version — so there the version string carries no information about
 /// whether the bundle was replaced, and the healthy outcome is exactly the one flagged.
+///
+/// The same command also serves "Aktualizuj przez Brew", where the cask *does* offer something
+/// newer; that half is pinned by `ForcedReinstallNoOpTests`. Which of the two a run is is
+/// carried by the expected version, not by the command — hence the explicit `version: nil`
+/// below, which is what marks this one as a takeover.
 @Suite("Adoption installs the same version on purpose")
 @MainActor
 struct AdoptionSameVersionVerificationTests {
@@ -77,8 +82,11 @@ struct AdoptionSameVersionVerificationTests {
             token: "proton-drive",
             snapshotURL: snapshot,
             validationURL: installed,
-            expectedTeamID: "TEAM",
-            expectedBundleIdentifier: "com.example.app",
+            // The takeover this suite is about: the cask ships the version already on disk, so
+            // nothing is expected to move and the arrival gate has nothing to read. Spelled out
+            // rather than defaulted, because the same entry point now also serves "Aktualizuj
+            // przez Brew", where a version *is* expected and an unchanged bundle is a no-op.
+            expecting: .init(teamID: "TEAM", bundleIdentifier: "com.example.app", version: nil),
             dependencies: passingDependencies()
         )
 

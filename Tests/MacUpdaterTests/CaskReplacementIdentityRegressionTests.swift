@@ -30,7 +30,7 @@ struct CaskReplacementIdentityRegressionTests {
         #expect(safety.contains("let expectedTeamID: String?"))
         #expect(safety.contains("expectedTeamID: installedTeamID"))
         #expect(safety.contains("CaskRollbackGuard.verify("))
-        #expect(safety.contains("expectedTeamID: preparation.expectedTeamID"))
+        #expect(safety.contains("teamID: preparation.expectedTeamID"))
         #expect(guardSource.contains("snapshotURL: URL"))
         #expect(guardSource.contains("validationURL: URL"))
         #expect(guardSource.contains("case expected(String?)"))

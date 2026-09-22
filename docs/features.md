@@ -177,13 +177,24 @@ would inspect the *old* app, pass it, and talk the no-op up into a success. An u
 version on either side counts as replaced — absence of evidence must not turn every unparsable
 bundle into a failed upgrade.
 
-The reading holds for `brew upgrade` and only for it, because there the target version differs
-from the installed one by definition. Adoption — "Przepnij pod Brew" and "Aktualizuj przez
-Brew" — runs `brew install --cask --force`, which no Caskroom record can make skip, and lands
-the version already on disk whenever the cask offers exactly that version. An unchanged version
-there says nothing about whether the bundle was replaced, so the check stands down and the
-takeover is reported as the success it is; that the app arrived where the cask says it did is
-already established before validation, by artifact resolution, whose failure fails closed.
+What decides whether the reading may be applied is not which brew command ran, but whether the
+run promised to move the version at all. `brew upgrade` always does, by definition of the item
+being outdated. `brew install --cask --force` — which no Caskroom record can make skip — serves
+two intents through one command, and only one of them makes that promise:
+
+- **"Przepnij pod Brew"** adopts an app that already *is* the version the cask ships. Nothing is
+  expected to move, an unchanged version says nothing about whether the bundle was replaced, and
+  the check stands down so the takeover is reported as the success it is. That the app arrived
+  where the cask says it did is established before validation, by artifact resolution, whose
+  failure fails closed.
+- **"Aktualizuj przez Brew"** runs against a cask offering something newer than the bundle, so
+  an unchanged version afterwards is the same no-op an upgrade would have caught, and is read
+  as one.
+
+Keying the stand-down on the command instead let the loop through a second time, on the path
+the first fix did not cover: Discord, `Caskroom/discord/0.0.413` recorded against an
+`/Applications/Discord.app` still reporting `0.0.412`, announced as applied on 10, 15 and 22
+September while every following scan listed it as outdated again.
 
 #### Launch smoke test
 

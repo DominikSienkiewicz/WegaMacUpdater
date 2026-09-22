@@ -198,13 +198,17 @@ struct QA01IRollbackVerifyMatrixTests {
             && batch.contains("bundleIdentityBaseline: .unchecked"),
                 "matrix: the batch canary uses the ledger and skips the identity gate")
 
+        // The three expectations the direct entry is given are grouped into one value
+        // (`Expectation`), so its declaration is what anchors this region now. The values
+        // carried are unchanged — publisher read before the mutation, the artifact's bundle
+        // id, and the version the cask offers.
         let direct = try slice(
             source,
-            from: "expectedTeamID: String?,",
+            from: "expecting: Expectation,",
             to: "private static func verify("
         )
-        #expect(direct.contains("publisherBaseline: .expected(expectedTeamID),")
-            && direct.contains("bundleIdentityBaseline: .expected(expectedBundleIdentifier)"),
+        #expect(direct.contains("publisherBaseline: .expected(expecting.teamID),")
+            && direct.contains("bundleIdentityBaseline: .expected(expecting.bundleIdentifier)"),
                 "matrix: the direct replacement entry checks both the expected publisher and identifier")
     }
 
@@ -228,9 +232,13 @@ struct QA01IRollbackVerifyMatrixTests {
         #expect(batch.contains("CaskRollbackLedger.shared.apply(token: token, verdict:"),
                 "REL-07: the batch canary records/clears the rolled-back mark for every token it verifies")
 
+        // The three expectations the direct entry is given are grouped into one value
+        // (`Expectation`), so its declaration is what anchors this region now. The values
+        // carried are unchanged — publisher read before the mutation, the artifact's bundle
+        // id, and the version the cask offers.
         let direct = try slice(
             source,
-            from: "expectedTeamID: String?,",
+            from: "expecting: Expectation,",
             to: "private static func verify("
         )
         #expect(direct.contains("CaskRollbackLedger.shared.apply(token: token, verdict:"),

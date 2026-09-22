@@ -170,6 +170,9 @@ struct CaskReplacementSafetyCoverageTests {
             token: "acme",
             snapshotURL: root.appendingPathComponent("snapshot/\(artifactName)"),
             expectedTeamID: "TEAM",
+            // This fixture exercises artifact resolution, not the arrival gate; `nil` is the
+            // takeover reading, under which that gate stands down exactly as it did before.
+            expectedVersion: nil,
             identity: CaskReplacementArtifactIdentity(bundleIdentifier: "com.example.acme", appURL: appURL),
             operation: operation
         )
