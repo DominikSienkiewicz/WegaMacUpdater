@@ -83,10 +83,13 @@ sequential (brew → mas → npm → manual), the bar reports the phase it is ge
 
 That first scan runs *underneath* the restored list rather than replacing it, and for its
 duration the list is a report rather than a menu: the scan is drawn over the rows — the same
-scene the full-screen scan uses, scaled down, with the progress bar, the command the current
-phase runs and Wega sniffing across the binary stream — while the rows themselves dim and stop
-accepting selections. One view (`ScanProgressScene`) serves both screens, so a scan looks the
-same wherever it runs and neither screen can be restyled without the other following.
+scene the full-screen scan uses, at the same size, with the progress bar, the command the
+current phase runs and Wega sniffing across the binary stream — over a material that covers the
+list area and stands the rows down, and they stop accepting selections. One view
+(`ScanProgressScene`) serves both screens and owns its own sizing and padding, so neither can be
+restyled — or scaled — without the other following. The material is deliberately not opaque:
+the rows stay faintly visible, because the point of the quiet refresh is that the restored
+result never leaves the window.
 **Update selected (N)** and its **⌘⏎**
 shortcut are held back by the same rule, because a batch approved against the restored rows
 would otherwise install whatever the scan had settled on by the time the dialog was answered;

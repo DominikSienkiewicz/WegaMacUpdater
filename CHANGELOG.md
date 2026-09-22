@@ -35,8 +35,10 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   taking selections for its duration: what is on screen is the answer being replaced, so it
   is a report until the scan lands, not a menu. It is drawn as the same scene the full-screen
   scan uses — Wega sniffing across the binary stream, over the progress bar and the phase label
-  — only scaled down, so a scan looks the same wherever it is running rather than wearing a
-  different face on each screen.
+  — at the same size and over a material covering the list, so a scan looks the same wherever it
+  is running rather than wearing a different face on each screen. The rows stay faintly visible
+  through it, because the point of the quiet refresh is that the restored result never leaves
+  the window.
 
 ### Changed
 - **The menu bar shows Wega's head instead of a cardboard box** — the status item borrowed
