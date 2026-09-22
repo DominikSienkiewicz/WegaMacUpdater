@@ -153,8 +153,10 @@ Everything here is third-party text, fetched over the network, rendered inside W
 
 ### 8. Testing
 
-Written, not executed — per the project's working agreement, the gate is the formatter and the
-linter, and test runs are opt-in. The handoff will name what is left to run.
+Each suite is run focused (`swift test --filter`) by the task that writes it, so a test's
+RED/GREEN cycle is real rather than asserted. The full suite is not run here — the project's
+working agreement keeps whole-suite and `check.sh` runs opt-in, and the handoff names them as
+outstanding.
 
 Core:
 

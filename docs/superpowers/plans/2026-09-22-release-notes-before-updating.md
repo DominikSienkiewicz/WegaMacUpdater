@@ -18,7 +18,7 @@
 - **History cap: 10 entries**, with the remainder reported as `ReleaseHistory.omitted`. Same value `ReleaseHistoryFetcher` already uses.
 - **Fetched page caps: 256 KB response, 20 000 characters of text.** Over the byte cap the page is refused; over the character cap it is truncated and the truncation is stated on screen.
 - **UI strings are Polish base + English in `Sources/MacUpdaterCore/Translations.swift`.** `LocalizationCompletenessTests` fails the build for any `tr(...)`/`trf(...)` literal with no English counterpart.
-- **Tests are written, not run.** The gate for each commit is `swift build` + `swiftlint lint --strict`. `scripts/check.sh` also runs the full suite; that is the owner's call, not this plan's.
+- **Focused test runs only.** Each task runs `swift test --filter <Suite>` exactly where its steps say so — the RED/GREEN cycle is what proves a test tests anything. The commit gate is that filter plus `swift build` and `swiftlint lint --strict`. Never run the whole `swift test`, and never `scripts/check.sh` (it bundles build, the full suite and lint): the full suite is the owner's call, and the handoff names it as outstanding.
 - **No AI attribution** in any commit message.
 
 ---
@@ -1686,4 +1686,4 @@ git commit -m "docs(release-notes): document what an update now tells you before
 - [ ] `swift build` clean
 - [ ] `swiftlint lint --strict` clean
 - [ ] `git status --short --untracked-files=all --ignored=matching` reviewed — nothing uncommitted except regenerable build output
-- [ ] Handoff states plainly that **no test suite was executed**, and names what is outstanding: `swift test` in full, and `scripts/check.sh` (which runs build, the full suite, and SwiftLint together)
+- [ ] Handoff states plainly which suites were run under `--filter` and that **the full suite was never run**, naming what is outstanding: `swift test` in full, and `scripts/check.sh` (which runs build, the full suite, and SwiftLint together)
