@@ -157,8 +157,10 @@ npm uses, so a log you paste into a bug report stays searchable by it.
 
 ### Stopping an update
 
-An update in progress can be stopped: while it runs, the **Update** button is joined by
-**Cancel**. Wega stops at the **next package boundary** — the installs already running are
+While an update runs, the Updates screen belongs to it: the list, its checkboxes, banner
+actions and manual installs are greyed out behind an overlay that shows the progress, the
+package being installed and the live log. Nothing can be selected or started until the run
+lands. The one control the overlay keeps is **Cancel**. Wega stops at the **next package boundary** — the installs already running are
 allowed to finish, because a package manager killed halfway through a download or an app
 replacement is exactly how a broken app happens. Nothing new is started and everything still
 queued is skipped, and the summary says how many packages were updated and how many were

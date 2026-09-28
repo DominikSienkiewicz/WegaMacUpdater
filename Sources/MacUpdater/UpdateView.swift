@@ -252,30 +252,48 @@ struct UpdateView: View {
                     .foregroundStyle(Color.wegaInk)
                     .disabled(!allowsUpdateRun)
                     .help(updateButtonHelp)
-
-                    // REL-12 — the longest operation in the app finally has a stop button.
-                    // It does not kill the package manager mid-install; it stops the run at
-                    // the next package boundary, which is the only safe place to stop.
-                    if scan.updating {
-                        Button(scan.updateInterruption.isRequested
-                               ? tr("Przerywam…")
-                               : tr("Anuluj")) {
-                            scan.cancelUpdate()
-                        }
-                        .disabled(scan.updateInterruption.isRequested)
-                        .help(tr("Zatrzymam po bieżącym pakiecie — trwającej instalacji nie przerywam w połowie."))
-                    }
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
 
-            if scan.updating, let progress = scan.upgradeProgress {
-                UpgradeProgressBar(progress: progress)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
-            }
+            // Everything below the header is what a running update could be raced by, so for
+            // the run's duration it is inert and covered by the run itself — see
+            // `UpdateRunOverlay`. The overlay sits outside `.disabled`, so its stop button
+            // stays live.
+            screenBody
+                .disabled(!ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating))
+                .accessibilityHidden(scan.updating)
+                .overlay {
+                    if scan.updating {
+                        updateRunOverlay
+                    }
+                }
+                .animation(.easeInOut(duration: 0.2), value: scan.updating)
+        }
+    }
 
+    /// REL-12 — the longest operation in the app has a stop button. It does not kill the
+    /// package manager mid-install; it stops the run at the next package boundary, which is
+    /// the only safe place to stop.
+    private var updateRunOverlay: some View {
+        UpdateRunOverlay(
+            isStopping: scan.updateInterruption.isRequested,
+            logLines:   scan.showLog ? scan.brewLog : nil,
+            onCancel:   { scan.cancelUpdate() },
+            onShowLog:  { scan.showLog = true },
+            onHideLog:  { scan.showLog = false },
+            progress:   {
+                if scan.updating, let progress = scan.upgradeProgress {
+                    UpgradeProgressBar(progress: progress)
+                }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var screenBody: some View {
+        VStack(spacing: 0) {
             if let b = scan.banner {
                 BannerView(
                     data: b,
@@ -448,7 +466,9 @@ struct UpdateView: View {
                                 onRestart: { info in Task { await scan.restartApp(info) } }
                             )
                         }
-                        if scan.showLog {
+                        // During a run the log lives in `UpdateRunOverlay`; a second copy
+                        // under it would only be covered.
+                        if scan.showLog && !scan.updating {
                             BrewLogPanel(lines: scan.brewLog) { scan.showLog = false }
                         }
                     }

@@ -14,6 +14,13 @@ enum ScanSelectionGate {
         !isRefreshing
     }
 
+    /// Whether anything on the Updates screen below its header accepts input right now — rows,
+    /// banner actions, the plan preview, the stale-cask card and the manual installs. A running
+    /// update owns the whole screen until it lands; only its own overlay stays live.
+    static func allowsScreenInteraction(isUpdating: Bool) -> Bool {
+        !isUpdating
+    }
+
     /// Whether a batch update may be started right now — by the button or by ⌘⏎.
     static func allowsUpdateRun(isRefreshing: Bool, isUpdating: Bool, hasTargets: Bool) -> Bool {
         !isRefreshing && !isUpdating && hasTargets
