@@ -20,7 +20,7 @@ public actor OperationCoordinator {
 
         public var errorDescription: String? {
             guard self == .externalInstallationPending else { return nil }
-            return tr("Wynik instalacji jest nieznany. Dalsze zmiany są zablokowane — sprawdź stan instalacji w Ustawieniach.")
+            return "Wynik instalacji jest nieznany. Dalsze zmiany są zablokowane — sprawdź stan instalacji w Ustawieniach."
         }
     }
 

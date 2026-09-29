@@ -134,7 +134,7 @@ public struct UpdateOperation: Codable, Equatable, Sendable, Identifiable {
 public struct UpdateOperationPersistenceError: Error, LocalizedError, Sendable {
     public let detail: String
     public var errorDescription: String? {
-        tr("Nie można zapisać dziennika odzyskiwania. Aktualizacja została odroczona — sprawdź wolne miejsce i uprawnienia. Szczegóły w logach.")
+        "Nie można zapisać dziennika odzyskiwania. Aktualizacja została odroczona — sprawdź wolne miejsce i uprawnienia. Szczegóły w logach."
     }
 }
 
