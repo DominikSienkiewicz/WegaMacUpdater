@@ -344,6 +344,25 @@ helper, Wega installs it for you and then asks you to restart; without it, the s
 handed to you to run yourself. A release that publishes neither offers no update button at
 all rather than something Wega cannot verify.
 
+### When a self-update cannot be confirmed
+
+If a self-update loses contact with the helper, **Settings** shows **Installation completion
+is unconfirmed**. The installer may still be running. Wega keeps further changes blocked,
+including after Wega is closed and opened again. Use **Check installation status** to query
+the same operation; this does not start another installer. A confirmed terminal result
+releases the block. If the helper itself restarted, its previous installer cannot safely
+be assumed to have stopped: inspect **Logs**, and restart macOS before checking the state
+again if completion cannot be established. Wega does not kill the installer on a timeout.
+This recovery path requires helper protocol 4; after replacing an older Wega build,
+update and re-register its bundled helper.
+
+### Multiple installations
+
+Manually detected update rows show the installed path. Separate copies of the same app
+are checked independently and can have separate ignore/pin policies. If several copies
+match one Homebrew cask, only the resolved Homebrew installation keeps that cask action;
+other copies use their vendor's update source when one is available.
+
 ### Export diagnostics
 
 **Settings → System diagnostics → Export diagnostics** (also in the **Logs** toolbar)

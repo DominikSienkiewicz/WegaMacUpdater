@@ -5,17 +5,23 @@ import Foundation
 /// Reads may overlap while writes are exclusive. Once a write is queued, later reads
 /// wait behind it so periodic scans cannot starve a user-initiated mutation.
 public actor OperationCoordinator {
-    public static let shared = OperationCoordinator()
+    public static let shared = OperationCoordinator(pendingInstallationStore: .shared)
 
     public enum Access: Sendable {
         case read
         case write
     }
 
-    public enum LeaseError: Error, Equatable, Sendable {
+    public enum LeaseError: Error, Equatable, Sendable, LocalizedError {
         case foreignCoordinator
         case expired
         case insufficientAccess
+        case externalInstallationPending
+
+        public var errorDescription: String? {
+            guard self == .externalInstallationPending else { return nil }
+            return tr("Wynik instalacji jest nieznany. Dalsze zmiany są zablokowane — sprawdź stan instalacji w Ustawieniach.")
+        }
     }
 
     /// Explicit proof that the caller already owns this coordinator's read or write slot.
@@ -31,9 +37,10 @@ public actor OperationCoordinator {
         public let activeWrite: String?
         public let queuedReads: Int
         public let queuedWrites: Int
+        public let externalInstallationPending: Bool
 
-        public var isWriting: Bool { activeWrite != nil }
-        public var isIdle: Bool { activeReads == 0 && activeWrite == nil }
+        public var isWriting: Bool { activeWrite != nil || externalInstallationPending }
+        public var isIdle: Bool { activeReads == 0 && activeWrite == nil && !externalInstallationPending }
     }
 
     private struct Waiter {
@@ -54,17 +61,21 @@ public actor OperationCoordinator {
     private var activeWrite: String?
     private var activeOperations: [UUID: ActiveOperation] = [:]
     private var waiters: [Waiter] = []
+    private let pendingInstallationStore: PendingHelperInstallationStore?
 
-    public init() {
-        // Actor state is fully initialized by the stored-property defaults above.
+    public init(pendingInstallationStore: PendingHelperInstallationStore? = nil) {
+        self.pendingInstallationStore = pendingInstallationStore
     }
+
+    public nonisolated var hasUnresolvedExternalMutation: Bool { pendingInstallationStore?.hasPending == true }
 
     public func snapshot() -> Snapshot {
         Snapshot(
             activeReads: activeReads,
             activeWrite: activeWrite,
             queuedReads: waiters.count { $0.access == .read },
-            queuedWrites: waiters.count { $0.access == .write }
+            queuedWrites: waiters.count { $0.access == .write },
+            externalInstallationPending: hasUnresolvedExternalMutation
         )
     }
 
@@ -161,6 +172,7 @@ public actor OperationCoordinator {
         operation: @Sendable (Lease) async throws -> Result
     ) async throws -> Result {
         guard let lease = await acquire(access: access, label: label) else {
+            if hasUnresolvedExternalMutation { throw LeaseError.externalInstallationPending }
             throw CancellationError()
         }
         defer { releaseRootOperation(lease) }
@@ -169,7 +181,7 @@ public actor OperationCoordinator {
     }
 
     private func acquire(access: Access, label: String) async -> Lease? {
-        guard !Task.isCancelled else { return nil }
+        guard !Task.isCancelled, !hasUnresolvedExternalMutation else { return nil }
         if canStartImmediately(access) {
             return start(access: access, label: label)
         }
@@ -274,6 +286,12 @@ public actor OperationCoordinator {
 
     private func drainWaitersIfPossible() {
         guard activeReads == 0, activeWrite == nil, !waiters.isEmpty else { return }
+        if hasUnresolvedExternalMutation {
+            let blocked = waiters
+            waiters.removeAll()
+            for waiter in blocked { waiter.continuation.resume(returning: nil) }
+            return
+        }
 
         if waiters[0].access == .write {
             let waiter = waiters.removeFirst()

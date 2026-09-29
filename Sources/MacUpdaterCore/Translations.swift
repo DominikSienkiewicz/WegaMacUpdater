@@ -19,6 +19,12 @@ extension Translations {
     static let base: [String: String] = [
         // UI — natywna scena Settings (⌘,).
         "Ustawienia": "Settings",
+        "Nie potwierdzono zakończenia instalacji": "Installation completion is unconfirmed",
+        "Instalator może nadal działać. Dalsze zmiany są zablokowane; nie uruchamiaj drugiego instalatora.":
+            "The installer may still be running. Further changes are blocked; do not start another installer.",
+        "Sprawdź stan instalacji": "Check installation status",
+        "Wynik instalacji jest nieznany. Dalsze zmiany są zablokowane — sprawdź stan instalacji w Ustawieniach.":
+            "The installation outcome is unknown. Further changes are blocked — check the installation status in Settings.",
         // UI — toolbar toggle for the .inspector() panel.
         "Panel szczegółów": "Details panel",
         // FEAT-02 — confidence dopasowania migracji.

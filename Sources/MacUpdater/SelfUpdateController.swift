@@ -13,6 +13,7 @@ final class SelfUpdateController: ObservableObject {
         /// Terminal state of a headless install: the new bundle is on disk, the running process
         /// is still the old one. Only a user click leaves this state.
         case installedPendingRestart(version: String)
+        case installationUncertain
     }
 
     struct Dependencies: Sendable {
@@ -21,7 +22,7 @@ final class SelfUpdateController: ObservableObject {
         /// SEC-04 — the second argument is the version the release promised, so the payload
         /// is pinned to the update the user was actually shown, not just to a valid signature.
         var verify: @Sendable (URL, String?) throws -> Void
-        var installOrOpen: @MainActor @Sendable (SelfUpdateAction, URL) async -> Bool
+        var installOrOpen: @MainActor @Sendable (SelfUpdateAction, URL) async throws -> Bool
         var openFallback: @MainActor @Sendable () -> Void
         /// Quit and come back on the freshly installed bundle.
         var relaunch: @MainActor @Sendable () -> Void
@@ -30,6 +31,9 @@ final class SelfUpdateController: ObservableObject {
         var isBusy: @MainActor @Sendable () -> Bool
         /// The cumulative notes between the installed version and the newest one.
         var fetchHistory: @Sendable (String) async -> ReleaseHistoryFetcher.Outcome
+        var installTracked: (@MainActor @Sendable (URL, String) async throws -> Bool)? = nil
+        var hasPendingInstallation: @MainActor @Sendable () -> Bool = { false }
+        var reconcileInstallation: (@MainActor @Sendable () async throws -> PendingHelperInstallation?)? = nil
 
         static let live = Dependencies(
             check: { await WegaSelfUpdateChecker().check() },
@@ -67,9 +71,8 @@ final class SelfUpdateController: ObservableObject {
                         .helper,
                         "Instalacja przez helper nie powiodła się: \(error.localizedDescription)"
                     )
+                    throw error
                 }
-                NSWorkspace.shared.open(destination)
-                return false
             },
             openFallback: {
                 NSWorkspace.shared.open(AppEndpoints.shared.projectRepositoryURL)
@@ -91,6 +94,14 @@ final class SelfUpdateController: ObservableObject {
             isBusy: { UpgradeCoordinator.shared.state != .idle },
             fetchHistory: { installed in
                 await ReleaseHistoryFetcher().notesNewerThan(installed)
+            },
+            installTracked: { destination, version in
+                try await PrivilegedHelperClient.shared.installVerifiedPackage(at: destination.path, version: version)
+                return true
+            },
+            hasPendingInstallation: { PendingHelperInstallationStore.shared.hasPending },
+            reconcileInstallation: {
+                try await PrivilegedHelperClient.shared.reconcilePackageInstallation()
             }
         )
     }
@@ -98,6 +109,7 @@ final class SelfUpdateController: ObservableObject {
     @Published private(set) var state: State = .idle
     /// `nil` until an update is found — there is nothing to explain when the app is current.
     @Published private(set) var history: ReleaseHistoryFetcher.Outcome?
+    @Published private(set) var isReconcilingInstallation = false
 
     private let dependencies: Dependencies
     private let upgrades: UpgradeCoordinator
@@ -108,13 +120,14 @@ final class SelfUpdateController: ObservableObject {
     ) {
         self.dependencies = dependencies
         self.upgrades = upgrades
+        if dependencies.hasPendingInstallation() { state = .installationUncertain }
     }
 
     var result: WegaSelfUpdateChecker.Result? {
         switch state {
         case .result(let result): return result
         case .downloading(let result): return result
-        case .idle, .checking, .installedPendingRestart: return nil
+        case .idle, .checking, .installedPendingRestart, .installationUncertain: return nil
         }
     }
 
@@ -126,7 +139,7 @@ final class SelfUpdateController: ObservableObject {
     }
 
     func check() async {
-        guard !isChecking else { return }
+        guard !isChecking, !isDownloading, state != .installationUncertain else { return }
         // The doc comment on `installedPendingRestart` above promises only a user click leaves
         // that state. `InfoView.onAppear`'s `if case .idle` gate is one caller honouring that —
         // but the invariant belongs to the controller that owns the state, not to every caller.
@@ -159,12 +172,43 @@ final class SelfUpdateController: ObservableObject {
         dependencies.relaunch()
     }
 
+    func reconcileInstallation(onWegaState: @MainActor (WegaState) -> Void) async {
+        guard !isReconcilingInstallation, let reconcile = dependencies.reconcileInstallation else { return }
+        isReconcilingInstallation = true
+        defer {
+            isReconcilingInstallation = false
+            upgrades.refreshExternalMutationState()
+        }
+        do {
+            if let pending = try await reconcile() {
+                state = .installedPendingRestart(version: pending.version)
+                onWegaState(WegaState(pose: .happy, line: SelfUpdatePresentation.message(for: .installed)))
+            } else {
+                state = .idle
+            }
+        } catch {
+            WegaLog.error(.helper, "Odczyt wyniku instalacji: \(error.localizedDescription)")
+            let pending = dependencies.hasPendingInstallation()
+            state = pending ? .installationUncertain : .idle
+            onWegaState(WegaState(pose: .alert, line: pending ? Self.uncertainMessage : SelfUpdatePresentation.message(for: .failed)))
+        }
+    }
+
+    private static var uncertainMessage: String {
+        tr("Wynik instalacji jest nieznany. Dalsze zmiany są zablokowane — sprawdź stan instalacji w Ustawieniach.")
+    }
+
     func apply(
         _ action: SelfUpdateAction,
         version: String,
         onWegaState: @MainActor (WegaState) -> Void
     ) async {
         guard !isDownloading else { return }
+        guard state != .installationUncertain, !dependencies.hasPendingInstallation() else {
+            state = .installationUncertain
+            onWegaState(WegaState(pose: .alert, line: Self.uncertainMessage))
+            return
+        }
         let previousResult = result
         state = .downloading(previousResult)
         var finalState: State = previousResult.map(State.result) ?? .idle
@@ -204,12 +248,21 @@ final class SelfUpdateController: ObservableObject {
             installed = try await upgrades.performWrite(.selfUpdate) {
                 let ticket = MutationGuard.shared.begin("self-update")
                 defer { MutationGuard.shared.end(ticket) }
-                return await self.dependencies.installOrOpen(action, destination)
+                if case .install = action, let install = self.dependencies.installTracked {
+                    return try await install(destination, previousResult?.availableVersion ?? version)
+                }
+                return try await self.dependencies.installOrOpen(action, destination)
             }
         } catch is CancellationError {
             return
         } catch {
-            WegaLog.error(.app, "Self-update — koordynacja instalacji: \(error.localizedDescription)")
+            WegaLog.error(.helper, "Instalacja przez helper nie powiodła się: \(error.localizedDescription)")
+            if dependencies.hasPendingInstallation() {
+                finalState = .installationUncertain
+                onWegaState(WegaState(pose: .alert, line: Self.uncertainMessage))
+            } else {
+                onWegaState(WegaState(pose: .alert, line: SelfUpdatePresentation.message(for: .failed)))
+            }
             return
         }
 

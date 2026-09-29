@@ -158,12 +158,13 @@ public struct MenuBarUpdateChecker: Sendable {
                 await availableUpdateCountCoordinated(policies: policies)
             }
         } catch {
+            WegaLog.error(.helper, "Skan wstrzymany: \(error.localizedDescription)")
             return MenuBarScanResult(
                 brew: nil,
                 mas: [],
                 npm: [],
                 manualApps: [],
-                failedChecks: 0,
+                failedChecks: 1,
                 scannedAt: Date(),
                 total: 0
             )

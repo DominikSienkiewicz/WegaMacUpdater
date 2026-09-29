@@ -450,6 +450,12 @@ struct ManualUpdateSection: View {
                     AppIcon(path: item.path, size: 32)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.name).font(.wega(.body, weight: .medium))
+                        Text((item.path.path as NSString).abbreviatingWithTildeInPath)
+                            .font(.wega(.footnote))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help(item.path.path)
                         let isSecurity = item.releaseNotes.map { ReleaseNotesTriage.heuristic($0.plainText).isLikelySecurityFix } ?? false
                         VersionArrow(
                             from: item.installedVersion ?? "—",

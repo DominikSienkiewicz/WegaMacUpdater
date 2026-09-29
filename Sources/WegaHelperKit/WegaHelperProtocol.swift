@@ -24,10 +24,12 @@ import Foundation
     /// password dialog, because the helper is already root.
     func enableTouchIDForSudo(withReply reply: @escaping @Sendable (Bool, String?) -> Void)
 
-    /// Installs a `.pkg` at `path` as root via `/usr/sbin/installer`, but ONLY
-    /// after the helper itself re-verifies the package signature/notarization +
-    /// Team ID (defense in depth — never trust the client's path blindly).
-    func installVerifiedPackage(atPath path: String, withReply reply: @escaping @Sendable (Bool, String?) -> Void)
+    /// Reserves a durable operation before starting the verified installer on a worker queue.
+    /// Replies carry JSON-encoded `PackageInstallationStatus`; a transport error is not a result.
+    func beginPackageInstallation(atPath path: String, operationID: String, withReply reply: @escaping @Sendable (Data?, String?) -> Void)
+
+    /// A missing ID is durably marked not-started, preventing a delayed start request.
+    func packageInstallationStatus(operationID: String, withReply reply: @escaping @Sendable (Data?, String?) -> Void)
 
     /// FEAT-05 rollback for protected locations: atomically replaces the `.app`
     /// at `targetPath` with the clone at `snapshotPath`, as root. The helper
@@ -55,7 +57,7 @@ public enum WegaHelper {
     /// Main app bundle identifier.
     public static let appBundleID = AppMetadata.bundleIdentifier
     /// Helper protocol version (bump on breaking interface changes).
-    public static let version = "2"
+    public static let version = "4"
 
     /// Apple Developer Team ID — pinned by XPC (both directions) and self-update
     /// verification. Must match the Developer ID certificate the app is signed with.

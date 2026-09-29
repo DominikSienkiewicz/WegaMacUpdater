@@ -47,14 +47,12 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         }
     }
 
-    /// Per-operation XPC deadlines. The handshake/version probe is short (a dead
-    /// helper should be detected fast); the mutating verbs are generous because
-    /// the helper runs a real installer / bundle copy before replying — but they
-    /// are still finite, so a hung daemon can never block the app forever.
+    /// XPC observation deadlines. Installations return a durable ID immediately and
+    /// are polled separately; a query timing out never means that the installer stopped.
     private enum Deadline {
         static let handshake: Duration = .seconds(10)
         static let enableTouchID: Duration = .seconds(60)
-        static let installPackage: Duration = .seconds(1800)
+        static let installationStatus: Duration = .seconds(10)
         static let replaceBundle: Duration = .seconds(600)
     }
 
@@ -140,13 +138,40 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         }
     }
 
-    public func installVerifiedPackage(at path: String) async throws {
-        try await performHandshake()
-        _ = try await call(deadline: Deadline.installPackage) { (proxy, done: @escaping @Sendable (sending Result<Bool, Error>) -> Void) in
-            proxy.installVerifiedPackage(atPath: path) { ok, message in
-                done(ok ? .success(true) : .failure(HelperError.operationFailed(message ?? "installVerifiedPackage failed")))
+    public func installVerifiedPackage(at path: String, version: String = AppMetadata.version) async throws {
+        try await trackedInstaller.install(at: path, version: version)
+    }
+
+    public func reconcilePackageInstallation() async throws -> PendingHelperInstallation? {
+        try await trackedInstaller.reconcile()
+    }
+
+    private var trackedInstaller: HelperPackageInstallation {
+        HelperPackageInstallation(
+            handshake: { _ = try await self.performHandshake() },
+            begin: { id, path in
+                try await self.installationReply { proxy, reply in
+                    proxy.beginPackageInstallation(atPath: path, operationID: id.uuidString, withReply: reply)
+                }
+            },
+            status: { id in
+                try await self.installationReply { proxy, reply in
+                    proxy.packageInstallationStatus(operationID: id.uuidString, withReply: reply)
+                }
+            }
+        )
+    }
+
+    private func installationReply(
+        _ request: @escaping @Sendable (WegaPrivilegedOps, @escaping @Sendable (Data?, String?) -> Void) -> Void
+    ) async throws -> PackageInstallationStatus {
+        let data: Data = try await call(deadline: Deadline.installationStatus) { proxy, done in
+            request(proxy) { data, error in
+                if let data { done(.success(data)) }
+                else { done(.failure(HelperError.operationFailed(error ?? "Nie można odczytać stanu instalacji."))) }
             }
         }
+        return try JSONDecoder().decode(PackageInstallationStatus.self, from: data)
     }
 
     /// FEAT-05: atomic bundle rollback as root (protected locations).

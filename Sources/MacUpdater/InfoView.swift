@@ -429,6 +429,22 @@ extension InfoView {
             // `.installedPendingRestart` alike, so that terminal state needs its own case here —
             // otherwise it could never render (it would fall into the bare check button below).
             switch selfUpdateState {
+            case .installationUncertain:
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.wegaDanger)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(tr("Nie potwierdzono zakończenia instalacji"))
+                        .font(.wega(.callout, weight: .semibold))
+                    Text(tr("Instalator może nadal działać. Dalsze zmiany są zablokowane; nie uruchamiaj drugiego instalatora."))
+                        .font(.wega(.footnote))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                Button(tr("Sprawdź stan instalacji")) {
+                    Task {
+                        await selfUpdateController.reconcileInstallation { state in onWegaState?(state) }
+                    }
+                }
+                .disabled(selfUpdateController.isReconcilingInstallation)
             case .installedPendingRestart(let version):
                 Image(systemName: "arrow.clockwise.circle.fill").foregroundStyle(Color.wegaHoney)
                 Text(trf("Zainstalowano wersję %@", version))
