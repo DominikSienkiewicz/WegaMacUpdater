@@ -23,6 +23,14 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   and update rows show their paths. A shared cask match does not authorize installing into
   another copy through the same Homebrew token.
 
+### Changed
+- **The Updates screen is locked while an update runs** — once a batch starts, everything below
+  the header (rows, checkboxes, banner actions, manual installs, the stale-cask card) is greyed
+  out behind an overlay showing the run's progress and live log. The overlay carries the only
+  control left: **Cancel**, which finishes the package being installed and starts none of the
+  ones queued after it. Previously the list stayed live, so a selection could change under a
+  running batch or a second install could be started mid-run.
+
 ## [0.4.0] — 2026-09-23
 
 ### Added

@@ -770,6 +770,14 @@ extension Translations {
         "Zatrzymam po bieżącym pakiecie — trwającej instalacji nie przerywam w połowie.":
             "I'll stop after the current package — an install already running is never cut in half.",
         "Aktualizacja przerwana": "Update stopped",
+        // Nakładka aktualizacji: ekran jest zablokowany do końca przebiegu.
+        "Aktualizuję wybrane pakiety": "Updating the selected packages",
+        "Przerywam po bieżącym pakiecie — kolejne nie wystartują.":
+            "Stopping after the current package — the rest won't start.",
+        "Do końca aktualizacji lista jest zablokowana. Możesz ją przerwać — bieżący pakiet dokończę, kolejnych nie zacznę.":
+            "The list is locked until the update finishes. You can stop it — I'll finish the current package and won't start the rest.",
+        "Pokaż log": "Show log",
+        "Trwa aktualizacja": "Update in progress",
         "Zatrzymano po bieżącym pakiecie: zaktualizowano %@, pominięto %@. Nic nie zostało przerwane w połowie.":
             "Stopped after the current package: %@ updated, %@ skipped. Nothing was cut off halfway.",
         "Przerwałam aktualizację.": "I stopped the update.",
