@@ -86,6 +86,7 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
     /// bump exists to prevent, so it is rejected and the next scan writes a fresh one.
     public static let currentSchemaVersion = 2
 
+    public var installationChecks: [InstallationCheck]
     public var schemaVersion: Int
     public var scannedAt: Date
     /// `nil` when Brew never answered — which is **not** the same as an empty list, and was
@@ -119,8 +120,10 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
         manual: [ManualOutdatedApp],
         caskAppPaths: [String: URL] = [:],
         sources: ScanSourceReports = ScanSourceReports(),
-        isComplete: Bool? = nil
+        isComplete: Bool? = nil,
+        installationChecks: [InstallationCheck] = []
     ) {
+        self.installationChecks = installationChecks
         self.scannedAt = scannedAt
         self.brew = brew
         self.mas = mas
@@ -155,7 +158,7 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, scannedAt, brew, mas, npm, manual, caskAppPaths, sources, isComplete
+        case schemaVersion, scannedAt, brew, mas, npm, manual, caskAppPaths, sources, isComplete, installationChecks
     }
 
     /// Decodes a schema-1 file too — it carries the lists but neither `sources` nor
@@ -164,6 +167,7 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
     /// taken to have said so. ``ScanResultStore/load()`` stamps the migrated value.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        installationChecks = try container.decodeIfPresent([InstallationCheck].self, forKey: .installationChecks) ?? []
         schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
         scannedAt = try container.decode(Date.self, forKey: .scannedAt)
         brew = try container.decodeIfPresent(BrewOutdated.self, forKey: .brew)

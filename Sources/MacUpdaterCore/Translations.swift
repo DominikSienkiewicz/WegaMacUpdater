@@ -17,6 +17,27 @@ public enum Translations {
 /// Settings, inspector, migration, updates — the long-standing UI surface.
 extension Translations {
     static let base: [String: String] = [
+        "Sprawdź notatki wydania": "Check release notes",
+        "Brak jednoznacznych notatek dla tej wersji": "No unambiguous notes for this version",
+        "Brak potwierdzenia": "Not confirmed",
+        "Sprawdzona — aktualna": "Checked — up to date",
+        "Dostępna aktualizacja": "Update available",
+        "Sprawdzenie niepełne": "Check incomplete",
+        "Brak rozpoznanego źródła": "No recognized source",
+        "Ukryte przez politykę": "Hidden by policy",
+        "Wynik nieaktualny": "Stale result",
+        "Aktualizacja; sprawdzenie niepełne": "Update available; check incomplete",
+        "Źródła i czas ostatniego sprawdzenia": "Sources and last check time",
+        "Ostatnia próba: %@": "Last attempt: %@",
+        "Ostatnie pełne sprawdzenie: %@": "Last complete check: %@",
+        "Status pochodzi ze sprawdzania aktualizacji. Odświeżenie spisu tylko odczytuje zainstalowane aplikacje.": "Status comes from update checks. Refreshing inventory only reads installed applications.",
+        "aktualna": "up to date",
+        "dostępna aktualizacja": "update available",
+        "źródło nie odpowiedziało poprawnie": "source did not respond correctly",
+        "brak wyniku dla tej instalacji": "no result for this installation",
+        "Wymaga sprawdzenia": "Needs checking",
+        "Sprawdzenie": "Check status",
+        "Dane skanowania": "Scan metadata",
         // UI — natywna scena Settings (⌘,).
         "Ustawienia": "Settings",
         "Nie można zapisać dziennika odzyskiwania. Aktualizacja została odroczona — sprawdź wolne miejsce i uprawnienia. Szczegóły w logach.":

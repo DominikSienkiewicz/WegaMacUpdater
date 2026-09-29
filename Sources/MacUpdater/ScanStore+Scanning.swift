@@ -230,10 +230,7 @@ extension ScanStore {
         manualOutdated = scan.apps
         failed += scan.failedChecks
         if scan.failedChecks > 0 { silentSources.append("ręczne checki (\(scan.failedChecks))") }
-        reports.manual = scan.failedChecks > 0
-            ? ScanSourceReport(outcome: .failed("ręczne checki"),
-                               error: "ręczne checki: \(scan.failedChecks) źródeł nie odpowiedziało")
-            : ScanSourceReport(outcome: .succeeded)
+        reports.manual = scan.sourceReport
 
         // Resolve icon paths for outdated casks, and drop entries whose real
         // bundle version already matches `current_version` (self-updating apps
@@ -268,6 +265,11 @@ extension ScanStore {
 
         await resolveRollbackProtection()
 
+        if await bailIfCancelled(at: .manual, emitActivity: emitActivity) { return }
+        installationChecks = InstallationCheck.retainingLastSuccess(
+            InstallationCheck.resolvingManagers(scan.installations, reports: reports, brew: brewOutdated),
+            previous: installationChecks
+        )
         lastCheck = Date()
         status    = .results
         progress  = .finished
@@ -366,8 +368,10 @@ extension ScanStore {
         persistLastScan()
     }
 
-    private func scanManualUpdates(brewOutdatedCasks: Set<String> = []) async -> (apps: [ManualOutdatedApp], failedChecks: Int) {
-        guard let model else { return ([], 0) }
-        return await dependencies.manualScan(model.brewService, brewOutdatedCasks)
+    private func scanManualUpdates(brewOutdatedCasks: Set<String> = []) async -> ManualScanReport {
+        guard let model else { return ManualScanReport(apps: [], failedChecks: 0) }
+        if let scan = dependencies.detailedManualScan { return await scan(model.brewService, brewOutdatedCasks) }
+        let legacy = await dependencies.manualScan(model.brewService, brewOutdatedCasks)
+        return ManualScanReport(apps: legacy.apps, failedChecks: legacy.failedChecks)
     }
 }

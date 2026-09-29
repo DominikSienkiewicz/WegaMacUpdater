@@ -156,11 +156,15 @@ final class AppcastParser: NSObject, XMLParserDelegate {
     /// Every item Sparkle would offer this user: the default channel when the feed has one,
     /// otherwise all items. An item carrying `<sparkle:channel>` is offered by Sparkle only
     /// to users who opted into that channel.
-    private static func candidates(data: Data) -> [AppcastItem] {
+    static func candidates(data: Data) -> [AppcastItem] {
+        parsedCandidates(data: data) ?? []
+    }
+
+    static func parsedCandidates(data: Data) -> [AppcastItem]? {
         let delegate = AppcastParser()
         let parser = XMLParser(data: data)
         parser.delegate = delegate
-        guard parser.parse() else { return [] }
+        guard parser.parse() else { return nil }
         let defaultChannel = delegate.items.filter { $0.channel == nil }
         return (defaultChannel.isEmpty ? delegate.items : defaultChannel).map(\.item)
     }

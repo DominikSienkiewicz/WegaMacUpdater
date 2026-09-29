@@ -4,7 +4,7 @@ import Foundation
 /// Antigravity, Parallels, Google Drive, ChatGPT, Postman, Discord, Signal, Chrome,
 /// Obsidian, Adobe Creative Cloud) plus the brew-cask version check
 /// over every installed app, and returns the outdated ones deduplicated by source
-/// priority — together with the number of checks that genuinely failed.
+/// priority — together with source failures, temporary outages and per-installation evidence.
 ///
 /// Extracted out of `UpdateView` so the menu-bar agent's background check and the
 /// main window share one implementation.
@@ -76,15 +76,6 @@ public struct ManualUpdateScanner: Sendable {
         )
     }
 
-    private func selfUpdateOutdatedApp() async -> ManualOutdatedApp? {
-        Self.selfUpdateApp(
-            from: await selfUpdateChecker.check(),
-            appPath: Bundle.main.bundleURL,
-            installedVersion: AppMetadata.version,
-            bundleIdentifier: AppMetadata.bundleIdentifier
-        )
-    }
-
     /// Opakowuje check tak, by zalogować, które źródło dla której aplikacji
     /// zamilkło: `.failed` na poziomie ERROR (prawdziwy błąd), `.unavailable` na
     /// poziomie WARNING (chwilowa niedostępność źródła — nie nasz problem).
@@ -133,6 +124,24 @@ public struct ManualUpdateScanner: Sendable {
         }
     }
 
+    static func observed(
+        _ source: String, _ app: ApplicationInfo, checker: some VendorUpdateChecker
+    ) -> @Sendable () async -> ManualCheckObservation {
+        return {
+            let plan = checker.plan(for: app)
+            let check = logged(source, app) { await checker.check(app: app, plan: plan) }
+            return ManualCheckObservation(app: app, source: source, result: await check(), wasApplicable: plan != nil)
+        }
+    }
+
+    static func observed(
+        _ source: String, _ app: ApplicationInfo, applicable: Bool = false,
+        _ run: @escaping @Sendable () async -> ManualCheckResult
+    ) -> @Sendable () async -> ManualCheckObservation {
+        let check = logged(source, app, run)
+        return { ManualCheckObservation(app: app, source: source, result: await check(), wasApplicable: applicable) }
+    }
+
     /// The "Homebrew knows a newer version than the bundle on disk" check, for one app that
     /// brew does not already own.
     ///
@@ -140,18 +149,19 @@ public struct ManualUpdateScanner: Sendable {
     /// members are discovered and in which vendor checkers apply to them, but this comparison
     /// is identical, and duplicating it is how the two would drift apart. Returns `nil` for an
     /// app no cask matches, so a machine full of unpackaged apps queues no no-op work.
-    private static func caskVersionCheck(
+    static func caskVersionCheck(
         app: ApplicationInfo,
         brewTrackedVersion: String?,
         latestCaskVersions: [String: String]
-    ) -> (@Sendable () async -> ManualCheckResult)? {
+    ) -> (@Sendable () async -> ManualCheckObservation)? {
         guard let token = app.caskToken else { return nil }
-        return Self.logged("Cask", app) {
-            guard let latest = latestCaskVersions[token] else { return .upToDate }
+        return Self.observed("Cask", app, applicable: true) {
+            guard let latest = latestCaskVersions[token] else { return .unavailable }
             let reference = brewTrackedVersion ?? app.version
-            guard let installed = reference,
-                  !versionsEqual(latest, installed),
-                  isUpgrade(installed: installed, latest: latest) else { return .upToDate }
+            guard let installed = reference, !installed.isEmpty else { return .notApplicable }
+            if versionsEqual(latest, installed) { return .upToDate }
+            guard compareVersions(installed, latest, scheme: .buildNumbered) != .unknown else { return .failed }
+            guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
             return .outdated(ManualOutdatedApp(
                 name: app.name, path: app.path,
                 installedVersion: app.version ?? installed,
@@ -188,16 +198,43 @@ public struct ManualUpdateScanner: Sendable {
     }
 
     public func scan(brewOutdatedCasks: Set<String> = []) async -> (apps: [ManualOutdatedApp], failedChecks: Int) {
-        let casks = (try? await CaskDatabaseClient.caskCatalog(cacheURL: caskCacheURL).fetchCasks()) ?? []
-        let installedCasks = (try? await brewService.installedCasks()) ?? []
+        let report = await scanReport(brewOutdatedCasks: brewOutdatedCasks)
+        return (report.apps, report.failedChecks)
+    }
+
+    public func scanReport(brewOutdatedCasks: Set<String> = []) async -> ManualScanReport {
+        var uncheckedSources: [String] = []
+        var brewAvailable = true
+        func read<Value: Sendable>(source: String, fallback: Value, _ load: () async throws -> Value) async -> Value {
+            do { return try await load() }
+            catch BrewServiceError.brewNotFound { brewAvailable = false; return fallback }
+            catch {
+                if !Task.isCancelled {
+                    uncheckedSources.append(source)
+                    WegaLog.warning(.scanner, "\(source): \(error.localizedDescription)")
+                }
+                return fallback
+            }
+        }
+        let casks = await read(source: "Homebrew catalog", fallback: [BrewCask]()) {
+            try await CaskDatabaseClient.caskCatalog(cacheURL: caskCacheURL).fetchCasks()
+        }
+        let installedCasks = await read(source: "Homebrew casks", fallback: Set<String>()) {
+            try await brewService.installedCasks()
+        }
         // brew-tracked versions (from `brew list --cask --versions`); used as ground truth
         // for brew-managed apps instead of bundle version to avoid versioning scheme mismatches.
         // DEBT-05: robust JSON installed-versions (token→version) zamiast kruchego
         // parsowania tekstu `brew list --cask --versions`.
-        let brewCaskVersions = (try? await brewService.caskInstalledVersions()) ?? [:]
+        let brewCaskVersions = await read(source: "Homebrew versions", fallback: [String: String]()) {
+            try await brewService.caskInstalledVersions()
+        }
 
         // Drop CLI-only casks (e.g. `codex`) from the set we feed to CaskMatcher.
-        let installInfo = (try? await brewService.caskInstallationInfo(tokens: Array(installedCasks))) ?? []
+        let installInfo = await read(source: "Homebrew installation paths", fallback: [BrewCaskInstallationInfo]()) {
+            try await brewService.caskInstallationInfo(tokens: Array(installedCasks))
+        }
+        let caskPaths = CaskAppPathResolver().appPaths(from: installInfo)
         let appProducingTokens: Set<String> = {
             let producers = Set(installInfo.filter { !$0.appArtifacts.isEmpty }.map(\.token))
             // If brew info failed for everything (offline?), don't accidentally hide all matches.
@@ -208,13 +245,17 @@ public struct ManualUpdateScanner: Sendable {
         var seen = Set<InstallationIdentity>()
         var appsToCheck: [ApplicationInfo] = []
         for dir in scanDirectories {
-            let found = (try? scanner.scanApplications(in: dir, installedCasks: appProducingTokens, availableCasks: casks)) ?? []
-            for app in found where !app.isManagedByMas {
+            let found = await read(source: dir.path, fallback: [ApplicationInfo]()) {
+                do { return try scanner.scanApplications(in: dir, installedCasks: appProducingTokens, availableCasks: casks) }
+                catch CocoaError.fileReadNoSuchFile { return [] }
+            }
+            for app in found {
                 if seen.insert(app.installation).inserted { appsToCheck.append(app) }
             }
         }
+        let allInstallations = Self.routeDistinctInstallations(appsToCheck, caskAppPaths: caskPaths, brewOutdatedCasks: [])
         appsToCheck = Self.routeDistinctInstallations(
-            appsToCheck, caskAppPaths: CaskAppPathResolver().appPaths(from: installInfo), brewOutdatedCasks: brewOutdatedCasks
+            allInstallations.filter { !$0.isManagedByMas }, caskAppPaths: caskPaths, brewOutdatedCasks: brewOutdatedCasks
         )
 
         // JDKs live outside every Applications root and are not `.app` bundles, so the scan
@@ -227,10 +268,13 @@ public struct ManualUpdateScanner: Sendable {
 
         // One catalog and one inventory read for the whole scan (see `AdobeUpdateChecker`).
         let adobeInventory = AdobeProductInventory.installedProducts(in: adobeUninstallDirectory)
-        let adobeChecker = adobeInventory.isEmpty ? nil : AdobeUpdateChecker(
-            catalog: (try? await adobeCatalogClient.fetchCatalog()) ?? AdobeProductCatalog(),
-            inventory: adobeInventory
-        )
+        var adobeChecker: AdobeUpdateChecker?
+        if !adobeInventory.isEmpty {
+            let catalog = await read(source: "Adobe catalog", fallback: AdobeProductCatalog()) {
+                try await adobeCatalogClient.fetchCatalog()
+            }
+            adobeChecker = AdobeUpdateChecker(catalog: catalog, inventory: adobeInventory)
+        }
 
         let sparkleChecker = self.sparkleChecker
         let jetbrainsChecker = JetBrainsUpdateChecker()
@@ -277,8 +321,8 @@ public struct ManualUpdateScanner: Sendable {
             .compactMap(\.caskToken)
         let latestCaskVersions = await brew.caskLatestVersions(tokens: Array(Set(candidateTokens)))
 
-        var work: [@Sendable () async -> ManualCheckResult] = []
-        for runtime in javaRuntimes where !isBrewManaged(runtime) {
+        var work: [@Sendable () async -> ManualCheckObservation] = []
+        for runtime in javaRuntimes where brewAvailable && !isBrewManaged(runtime) {
             if let check = Self.caskVersionCheck(
                 app: runtime,
                 brewTrackedVersion: runtime.caskToken.flatMap { brewCaskVersions[$0] },
@@ -291,7 +335,7 @@ public struct ManualUpdateScanner: Sendable {
             if !isBrewManaged(app) {
                 // Non-brew apps only: cask-version check (adoption candidates) plus the
                 // cask-lag special checkers.
-                if let check = Self.caskVersionCheck(
+                if brewAvailable, let check = Self.caskVersionCheck(
                     app: app,
                     brewTrackedVersion: app.caskToken.flatMap { brewCaskVersions[$0] },
                     latestCaskVersions: latestCaskVersions
@@ -299,45 +343,47 @@ public struct ManualUpdateScanner: Sendable {
                     work.append(check)
                 }
                 if let adobeChecker {
-                    work.append(Self.logged("Adobe", app) { adobeChecker.check(app: app) })
+                    work.append(Self.observed("Adobe", app) { adobeChecker.check(app: app) })
                 }
-                work.append(Self.logged("JetBrains", app) { await jetbrainsChecker.check(app: app) })
-                work.append(Self.logged("GitHub", app) { await githubChecker.check(app: app) })
-                work.append(Self.logged("Synology", app) { await synologyChecker.check(app: app) })
-                work.append(Self.logged("Antigravity", app) { await antigravityChecker.check(app: app) })
-                work.append(Self.logged("Parallels", app) { await parallelsChecker.check(app: app) })
-                work.append(Self.logged("Google Drive", app) { await googleDriveChecker.check(app: app) })
-                work.append(Self.logged("ChatGPT", app) { await chatGPTChecker.check(app: app) })
-                work.append(Self.logged("Postman", app) { await postmanChecker.check(app: app) })
-                work.append(Self.logged("Discord", app) { await discordChecker.check(app: app) })
-                work.append(Self.logged("Signal", app) { await signalChecker.check(app: app) })
-                work.append(Self.logged("Chrome", app) { await chromeChecker.check(app: app) })
+                work.append(Self.observed("JetBrains", app, checker: jetbrainsChecker))
+                work.append(Self.observed("GitHub", app, checker: githubChecker))
+                work.append(Self.observed("Synology", app, checker: synologyChecker))
+                work.append(Self.observed("Antigravity", app, checker: antigravityChecker))
+                work.append(Self.observed("Parallels", app, checker: parallelsChecker))
+                work.append(Self.observed("Google Drive", app, checker: googleDriveChecker))
+                work.append(Self.observed("ChatGPT", app, checker: chatGPTChecker))
+                work.append(Self.observed("Postman", app, checker: postmanChecker))
+                work.append(Self.observed("Discord", app, checker: discordChecker))
+                work.append(Self.observed("Signal", app, checker: signalChecker))
+                work.append(Self.observed("Chrome", app, checker: chromeChecker))
             }
             // Obsidian self-updates its ASAR package independently of its installer.
             // Run this even when Homebrew owns the current cask: brew may correctly report
             // the installer as current while an insider package update is still available.
             if app.bundleIdentifier == ObsidianUpdateChecker.bundleIdentifier {
-                work.append(Self.logged("Obsidian", app) { await obsidianChecker.check(app: app) })
+                work.append(Self.observed("Obsidian", app, checker: obsidianChecker))
             }
             // Sparkle ALWAYS — it's the app's own appcast, independent of Homebrew. Also
             // keeps working for an app that merely shares a name with a CLI-only cask
             // (e.g. Codex.app vs. the `codex` binary cask), which isn't really brew's app.
-            work.append(Self.logged("Sparkle", app) { await sparkleChecker.check(app: app) })
+            work.append(Self.observed("Sparkle", app, checker: sparkleChecker))
         }
 
-        var collected: [ManualOutdatedApp] = []
-        var failedChecks = 0
-        for result in await runBounded(limit: maxConcurrentChecks, work) {
-            switch result {
-            case .outdated(let item): collected.append(item)
-            case .failed:             failedChecks += 1
-            case .unavailable:        break
-            case .upToDate, .notApplicable: break
-            }
+        var observations = await runBounded(limit: maxConcurrentChecks, work)
+        let selfResult = await selfUpdateChecker.check()
+        let selfApp = allInstallations.first { $0.installation == InstallationIdentity(path: Bundle.main.bundleURL) } ?? ApplicationInfo(
+            path: Bundle.main.bundleURL, name: "Wega", bundleIdentifier: AppMetadata.bundleIdentifier,
+            version: AppMetadata.version, buildVersion: Bundle.main.infoDictionary?["CFBundleVersion"] as? String,
+            installDate: nil, updateDate: nil, isManagedByBrew: false, caskToken: nil
+        )
+        let selfUpdate = Self.selfUpdateApp(from: selfResult, appPath: selfApp.path,
+                                           installedVersion: AppMetadata.version, bundleIdentifier: AppMetadata.bundleIdentifier)
+        observations.append(ManualCheckObservation(app: selfApp, source: "GitHub",
+                                                  result: selfUpdate.map { .outdated($0) } ?? (selfResult == .failed ? .failed : .upToDate)))
+        var collected = observations.compactMap { observation -> ManualOutdatedApp? in
+            if case .outdated(let item) = observation.result { return item }
+            return nil
         }
-        // UX-15 — fold Wega's own update in before dedup so it participates in path-based
-        // deduplication like any other app and reaches every surface counting this list.
-        if let selfUpdate = await selfUpdateOutdatedApp() { collected.append(selfUpdate) }
         // REL-07 — force any auto-rolled-back cask back onto the list. `brew outdated` no longer
         // reports it (its Caskroom records the new version) and it is brew-managed, so both the
         // brew list and the cask-version check above skip it; without this the reverted version
@@ -368,7 +414,51 @@ public struct ManualUpdateScanner: Sendable {
             brewCaskVersions: brewCaskVersions,
             alreadyListedTokens: listedCaskTokens()
         ))
-        return (UpdatePlanner.dedupedByPriority(collected), failedChecks)
+        return Self.makeReport(
+            collected: collected, observations: observations, installations: allInstallations + javaRuntimes + [selfApp],
+            brewOwnership: BrewOwnership(paths: caskPaths, tracked: brewTrackedTokens.union(brewOutdatedCasks), available: brewAvailable),
+            uncheckedSources: uncheckedSources
+        )
+    }
+
+    private struct BrewOwnership {
+        let paths: [String: URL]
+        let tracked: Set<String>
+        let available: Bool
+    }
+
+    private static func makeReport(
+        collected: [ManualOutdatedApp], observations: [ManualCheckObservation], installations: [ApplicationInfo],
+        brewOwnership: BrewOwnership, uncheckedSources: [String]
+    ) -> ManualScanReport {
+        let apps = InstallationInventory.deduplicated(installations)
+        var report = ManualScanReport(apps: UpdatePlanner.dedupedByPriority(collected), observations: observations,
+                                      installations: apps, checkedAt: Date())
+        report.failedChecks += uncheckedSources.count
+        report.uncheckedSources = (report.uncheckedSources + uncheckedSources).sorted()
+        report.installations = zip(apps, report.installations).map { app, check in
+            var record = check
+            if let token = app.caskToken, brewOwnership.tracked.contains(token),
+               brewOwnership.paths[token].map({ InstallationIdentity(path: $0) }) == app.installation {
+                record.caskToken = token
+                record.sources.append(.init(source: "Homebrew", outcome: .notChecked))
+            } else if app.isManagedByBrew || (!brewOwnership.available && app.caskToken != nil && record.sources.isEmpty) {
+                record.sources.append(.init(source: "Homebrew", outcome: .notChecked))
+            }
+            if app.isManagedByMas { record.sources.append(.init(source: "App Store", outcome: .notChecked)) }
+            if !uncheckedSources.isEmpty { record.sources.append(.init(source: "Dane skanowania", outcome: .failed)) }
+            // Forced rollback/drift rows are evidence too, even when no vendor reported an update.
+            for update in report.apps where InstallationIdentity(path: update.path) == app.installation {
+                let source = InstallationSourceCheck(source: "Wega", result: .outdated(update))
+                if !record.sources.contains(where: { $0.outcome == .outdated && $0.policyKey == source.policyKey }) {
+                    record.sources.append(source)
+                }
+            }
+            record.lastSuccessfulCheck = nil
+            record.stampSuccess()
+            return record
+        }
+        return report
     }
 
     /// Multiple copies may share a cask match, but only its resolved target can inherit Brew's

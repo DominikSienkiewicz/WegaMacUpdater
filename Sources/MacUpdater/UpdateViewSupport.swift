@@ -260,6 +260,11 @@ struct UpdateSection: View {
                         ReleaseNotesDisclosure(notes: notes)
                             .padding(.horizontal, 14)
                             .padding(.bottom, 10)
+                    } else if let request = CaskReleaseNotesRequest(item: item, appPath: iconPaths[item.name]) {
+                        CaskReleaseNotesView(request: request)
+                            .id(request)
+                            .padding(.horizontal, 14)
+                            .padding(.bottom, 10)
                     }
                 }
                 .contextMenu {
@@ -684,11 +689,16 @@ struct ManualUpdateActionView: View {
 ///
 /// A feed that publishes only a link (`ReleaseNotes.link`, no inline history) is fetched here,
 /// once, the first time the row is expanded — never during a scan (`ReleaseNotesLoader`).
-private struct ReleaseNotesDisclosure: View {
+struct ReleaseNotesDisclosure: View {
     let notes: ReleaseNotes
 
     @State private var expanded = false
     @StateObject private var loader = ReleaseNotesLoader()
+
+    init(notes: ReleaseNotes, expanded: Bool = false) {
+        self.notes = notes
+        _expanded = State(initialValue: expanded)
+    }
 
     var body: some View {
         WegaDisclosure(isExpanded: $expanded) {
