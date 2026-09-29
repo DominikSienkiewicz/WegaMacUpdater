@@ -248,6 +248,8 @@ final class SelfUpdateController: ObservableObject {
             if dependencies.hasPendingInstallation() {
                 finalState = .installationUncertain
                 onWegaState(WegaState(pose: .alert, line: Self.uncertainMessage))
+            } else if await openVerifiedPackage(for: action, at: destination) {
+                onWegaState(WegaState(pose: .happy, line: SelfUpdatePresentation.message(for: .opened)))
             } else {
                 onWegaState(WegaState(pose: .alert, line: SelfUpdatePresentation.message(for: .failed)))
             }
@@ -261,5 +263,18 @@ final class SelfUpdateController: ObservableObject {
             pose: .happy,
             line: SelfUpdatePresentation.message(for: installed ? .installed : .opened)
         ))
+    }
+
+    /// Hands an already verified package to Installer.app after the helper refused it before
+    /// anything was submitted, so a broken helper never blocks the update.
+    private func openVerifiedPackage(for action: SelfUpdateAction, at destination: URL) async -> Bool {
+        guard case .install(let pkg) = action, dependencies.installTracked != nil else { return false }
+        do {
+            _ = try await dependencies.installOrOpen(.downloadAndOpen(asset: pkg), destination)
+            return true
+        } catch {
+            WegaLog.error(.app, "Self-update — otwarcie instalatora: \(error.localizedDescription)")
+            return false
+        }
     }
 }
