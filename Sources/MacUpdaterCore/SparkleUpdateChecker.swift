@@ -19,21 +19,25 @@ public struct SparkleUpdateChecker: VendorUpdateChecker {
         guard feedURL.scheme?.lowercased() == "https" else { return nil }
 
         return VendorCheckPlan(request: HTTPRequest(url: feedURL, enableETag: true)) { data in
-            let installed = app.version ?? ""
-            guard let result = AppcastParser.parseResult(data: data, installedVersion: installed),
-                  let latest = result.latest.version else { return .decided(.failed) }
-            guard !installed.isEmpty else { return .decided(.notApplicable) }
-            // REL-10: compare versions, not strings. A plain `latest != installed` reports an
-            // update whenever the feed lags behind the installed build, or merely formats the
-            // version differently ("7.0.0" vs "7.0.0 (77593)") — both offer a downgrade.
-            return .candidate(VendorCandidate(
-                latest: latest,
-                installed: installed,
-                recordedInstalled: app.version,
-                source: .sparkle,
-                releaseNotes: ReleaseNotes(history: result.history, link: result.latest.releaseNotesLink)
-            ))
+            Self.evaluate(data: data, app: app, source: .sparkle)
         }
+    }
+
+    static func evaluate(data: Data, app: ApplicationInfo, source: ManualOutdatedApp.UpdateSource) -> VendorEvaluation {
+        guard let result = AppcastParser.parseResult(
+            data: data, installedVersion: app.version ?? "", installedBuildVersion: app.buildVersion
+        ), let latest = result.latest.comparisonVersion(usingBuild: result.usesBuildVersion)
+        else { return .decided(.failed) }
+        let installed = (result.usesBuildVersion ? app.buildVersion : app.version) ?? ""
+        guard !installed.isEmpty else { return .decided(.notApplicable) }
+        let scheme: VersionScheme = result.usesBuildVersion ? .numericBuild : .buildNumbered
+        guard compareVersions(installed, latest, scheme: scheme) != .unknown else { return .decided(.failed) }
+        return .candidate(VendorCandidate(
+            latest: latest, installed: installed,
+            recordedInstalled: AppcastItem.label(version: app.version, build: result.usesBuildVersion ? app.buildVersion : nil),
+            source: source, releaseNotes: ReleaseNotes(history: result.history, link: result.latest.releaseNotesLink), scheme: scheme,
+            recordedLatest: result.latest.label(includingBuild: result.usesBuildVersion)
+        ))
     }
 
     /// Lookup order, first hit wins:
@@ -88,30 +92,46 @@ public enum SparkleFeedOverrides {
 /// HTML, often CDATA) handed back untouched — sanitizing / AttributedString conversion
 /// is a UI concern, not the parser's. `releaseNotesLink` obeys SEC-09: HTTPS only.
 struct AppcastItem: Equatable {
-    var version: String?
+    var shortVersion: String?
+    var buildVersion: String?
+    var version: String? { shortVersion ?? buildVersion }
     var descriptionHTML: String?
     var releaseNotesLink: URL?
     /// RSS `<pubDate>` (RFC 822), when the feed carries one.
     var publishedAt: Date?
+
+    func comparisonVersion(usingBuild: Bool) -> String? { usingBuild ? buildVersion : version }
+    func label(includingBuild: Bool) -> String? {
+        Self.label(version: version, build: includingBuild ? buildVersion : nil)
+    }
+    static func label(version: String?, build: String?) -> String? {
+        guard let version else { return build }
+        guard let build, build != version, !version.hasSuffix(" (\(build))") else { return version }
+        return "\(version) (\(build))"
+    }
 }
 
 /// What one appcast says: which item to offer, and everything published on the way to it.
 struct AppcastResult: Equatable {
     var latest: AppcastItem
     var history: ReleaseHistory
+    var usesBuildVersion: Bool
 }
 
 final class AppcastParser: NSObject, XMLParserDelegate {
     /// Every `<item>` that carried a version, in document order, with the channel it was
     /// published on — `nil` is Sparkle's default channel.
     private var items: [(item: AppcastItem, channel: String?)] = []
-    private var version: String?
+    private var shortVersion: String?
+    private var buildVersion: String?
+    private var enclosureShortVersion: String?
+    private var enclosureBuildVersion: String?
     private var descriptionHTML: String?
     private var releaseNotesLink: URL?
     private var publishedAt: Date?
     private var channel: String?
     private var inItem = false
-    private var enclosureVersionFound = false
+    private var elementStack: [String] = []
     private var currentChars = ""
 
     /// RSS dates are RFC 822. Fixed locale and zero time zone so a user's regional
@@ -140,7 +160,7 @@ final class AppcastParser: NSObject, XMLParserDelegate {
         let delegate = AppcastParser()
         let parser = XMLParser(data: data)
         parser.delegate = delegate
-        parser.parse()
+        guard parser.parse() else { return [] }
         let defaultChannel = delegate.items.filter { $0.channel == nil }
         return (defaultChannel.isEmpty ? delegate.items : defaultChannel).map(\.item)
     }
@@ -152,9 +172,11 @@ final class AppcastParser: NSObject, XMLParserDelegate {
     /// default-channel item at all. Incomparable versions keep document order. `nil` when
     /// no item carries a version — mirroring `parse`'s nil contract exactly.
     static func parseItem(data: Data) -> AppcastItem? {
-        // max(by:) wants an ascending predicate: $0 precedes $1 when $1 is the newer version.
-        candidates(data: data).max { lhs, rhs in
-            isUpgrade(installed: lhs.version ?? "", latest: rhs.version ?? "")
+        let items = candidates(data: data)
+        let usesBuild = items.contains { $0.buildVersion != nil }
+        return items.filter { !usesBuild || $0.buildVersion != nil }.max { lhs, rhs in
+            isUpgrade(installed: lhs.comparisonVersion(usingBuild: usesBuild) ?? "", latest: rhs.comparisonVersion(usingBuild: usesBuild) ?? "",
+                      scheme: usesBuild ? .numericBuild : .buildNumbered)
         }
     }
 
@@ -164,21 +186,24 @@ final class AppcastParser: NSObject, XMLParserDelegate {
     ///
     /// Entries whose description collapses to nothing are left out rather than listed
     /// empty; `omitted` counts only what the cap dropped.
-    static func parseResult(data: Data, installedVersion: String, limit: Int = 10) -> AppcastResult? {
+    static func parseResult(data: Data, installedVersion: String, limit: Int = 10, installedBuildVersion: String? = nil) -> AppcastResult? {
         let items = candidates(data: data)
-        guard let latest = items.max(by: { isUpgrade(installed: $0.version ?? "", latest: $1.version ?? "") })
+        let usesBuild = installedBuildVersion?.isEmpty == false && items.contains { $0.buildVersion != nil }
+        let comparable = items.filter { $0.comparisonVersion(usingBuild: usesBuild) != nil }
+        let installed = usesBuild ? installedBuildVersion ?? "" : installedVersion
+        let scheme: VersionScheme = usesBuild ? .numericBuild : .buildNumbered
+        func version(_ item: AppcastItem) -> String { item.comparisonVersion(usingBuild: usesBuild) ?? "" }
+        guard let latest = comparable.max(by: { isUpgrade(installed: version($0), latest: version($1), scheme: scheme) })
         else { return nil }
 
-        let newer = items
-            .filter { isUpgrade(installed: installedVersion, latest: $0.version ?? "") }
+        let newer = comparable
+            .filter { isUpgrade(installed: installed, latest: version($0), scheme: scheme) }
             .filter { !ReleaseNotesText.plain(fromHTML: $0.descriptionHTML ?? "").isEmpty }
-            // `compareVersions` takes no default scheme — appcasts are `.buildNumbered`,
-            // the same scheme `isUpgrade(installed:latest:)` applies above.
-            .sorted { compareVersions($0.version ?? "", $1.version ?? "", scheme: .buildNumbered) == .orderedDescending }
+            .sorted { compareVersions(version($0), version($1), scheme: scheme) == .orderedDescending }
 
         let kept = newer.prefix(limit).map { entry in
             ReleaseNote(
-                version: entry.version ?? "",
+                version: entry.label(includingBuild: usesBuild) ?? "",
                 publishedAt: entry.publishedAt,
                 body: ReleaseNotesText.plain(fromHTML: entry.descriptionHTML ?? "")
             )
@@ -186,7 +211,8 @@ final class AppcastParser: NSObject, XMLParserDelegate {
 
         return AppcastResult(
             latest: latest,
-            history: ReleaseHistory(notes: Array(kept), omitted: max(0, newer.count - kept.count))
+            history: ReleaseHistory(notes: Array(kept), omitted: max(0, newer.count - kept.count)),
+            usesBuildVersion: usesBuild
         )
     }
 
@@ -197,20 +223,22 @@ final class AppcastParser: NSObject, XMLParserDelegate {
         qualifiedName _: String?,
         attributes attrs: [String: String]
     ) {
-        if el == "item" {
+        let local = el.components(separatedBy: ":").last ?? el
+        elementStack.append(local)
+        if local == "item" {
             inItem = true
-            version = nil
+            shortVersion = nil
+            buildVersion = nil
+            enclosureShortVersion = nil
+            enclosureBuildVersion = nil
             descriptionHTML = nil
             releaseNotesLink = nil
             publishedAt = nil
             channel = nil
-            enclosureVersionFound = false
         }
-        // Handle both "sparkle:…" and plain (namespace-unaware) local names.
-        let local = el.components(separatedBy: ":").last ?? el
-        if inItem, !enclosureVersionFound, local == "enclosure",
-           let v = attrs["sparkle:shortVersionString"] ?? attrs["sparkle:version"] {
-            version = v; enclosureVersionFound = true
+        if inItem, elementStack.dropLast().last == "item", local == "enclosure" {
+            enclosureShortVersion = enclosureShortVersion ?? Self.nonempty(attrs["sparkle:shortVersionString"])
+            enclosureBuildVersion = enclosureBuildVersion ?? Self.nonempty(attrs["sparkle:version"])
         }
         currentChars = ""
     }
@@ -231,10 +259,13 @@ final class AppcastParser: NSObject, XMLParserDelegate {
     ) {
         let trimmed = currentChars.trimmingCharacters(in: .whitespacesAndNewlines)
         let local = el.components(separatedBy: ":").last ?? el
-        if inItem {
+        defer { if !elementStack.isEmpty { elementStack.removeLast() } }
+        if inItem, elementStack.dropLast().last == "item" {
             switch local {
+            case "version":
+                if buildVersion == nil { buildVersion = Self.nonempty(trimmed) }
             case "shortVersionString":
-                if version == nil, !trimmed.isEmpty { version = trimmed }
+                if shortVersion == nil { shortVersion = Self.nonempty(trimmed) }
             case "description":
                 if descriptionHTML == nil, !trimmed.isEmpty { descriptionHTML = trimmed }
             case "releaseNotesLink":
@@ -253,10 +284,12 @@ final class AppcastParser: NSObject, XMLParserDelegate {
                 break
             }
         }
-        if el == "item" {
-            if let version {
+        if local == "item" {
+            let shortVersion = shortVersion ?? enclosureShortVersion
+            let buildVersion = buildVersion ?? enclosureBuildVersion
+            if shortVersion != nil || buildVersion != nil {
                 items.append((
-                    AppcastItem(version: version, descriptionHTML: descriptionHTML,
+                    AppcastItem(shortVersion: shortVersion, buildVersion: buildVersion, descriptionHTML: descriptionHTML,
                                 releaseNotesLink: releaseNotesLink, publishedAt: publishedAt),
                     channel
                 ))
@@ -264,5 +297,10 @@ final class AppcastParser: NSObject, XMLParserDelegate {
             inItem = false
         }
         currentChars = ""
+    }
+
+    private static func nonempty(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+        return value
     }
 }

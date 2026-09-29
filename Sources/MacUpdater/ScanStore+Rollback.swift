@@ -51,7 +51,17 @@ extension ScanStore {
         // reads as "brew never ran here", and each confirmed clone advances to `snapshotted`.
         let operation = UpdateOperationStore.shared.begin(trigger: .manual)
         operation.recordPlanned(tokens: caskNames, appPaths: appPaths)
+        do { try operation.requirePersisted() }
+        catch {
+            reportJournalFailure(error)
+            return .blocked(publisherVetoes: publisherVetoes)
+        }
         let snapshots = snapshotCasks(caskNames, appPaths: appPaths, operation: operation)
+        do { try operation.requirePersisted() }
+        catch {
+            reportJournalFailure(error)
+            return .blocked(publisherVetoes: publisherVetoes)
+        }
         let missing = caskNames.filter { appPaths[$0] != nil && snapshots[$0] == nil }
         guard missing.isEmpty else {
             // Nothing mutated, so nothing here is worth the retention window: settle the
@@ -73,6 +83,14 @@ extension ScanStore {
             publisherVetoes: publisherVetoes,
             operation: operation
         ))
+    }
+
+    func reportJournalFailure(_ error: Error) {
+        brewLog.append("⏸ " + error.localizedDescription)
+        showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
+                              message: error.localizedDescription, action: .openLogs))
+        emitActivitySignal(.error)
+        emitWegaState(WegaState(pose: .alert, line: error.localizedDescription))
     }
 
     func foregroundResourceDecision(

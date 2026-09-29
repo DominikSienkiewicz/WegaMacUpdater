@@ -24,6 +24,7 @@ enum CaskReplacementSafety {
         case resourcePostponed(String)
         case publisherRejected(old: String, new: String?)
         case snapshotFailed
+        case journalUnavailable(String)
         /// The cask installs no `.app`, so there is nothing to adopt, snapshot or verify.
         case caskInstallsNoApp
     }
@@ -125,7 +126,11 @@ enum CaskReplacementSafety {
         // recoverable, exactly like a batch upgrade.
         let operation = UpdateOperationStore.shared.begin(trigger: .adoption)
         operation.recordPlanned(tokens: [token], appPaths: appPaths)
+        do { try operation.requirePersisted() }
+        catch { return .journalUnavailable(error.localizedDescription) }
         let snapshots = CaskRollbackGuard.snapshot(tokens: [token], appPaths: appPaths, operation: operation)
+        do { try operation.requirePersisted() }
+        catch { return .journalUnavailable(error.localizedDescription) }
         guard let snapshotURL = snapshots[token] else {
             operation.abortUnfinished()
             UpdateOperationStore.shared.removeOperation(id: operation.operation.id)

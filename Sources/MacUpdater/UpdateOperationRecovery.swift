@@ -96,14 +96,24 @@ final class UpdateOperationRecovery {
             for item in session.operation.items where !item.phase.isTerminal {
                 guard item.recoveryAttempts == 0 else { continue }
                 session.noteRecoveryAttempt(token: item.token)
+                do { try session.requirePersisted() }
+                catch {
+                    report.unrecoverableTokens.append(item.token)
+                    continue
+                }
+                if !session.operation.hasDurablePhaseContract,
+                   item.phase == .planned || item.phase == .snapshotted {
+                    WegaLog.error(.homebrew, "Zachowano kopię \(item.token): starszy dziennik \(operation.id) nie potwierdza, czy instalacja wystartowała.")
+                    report.unrecoverableTokens.append(item.token)
+                    continue
+                }
                 switch UpdateOperationRecoveryPlan.action(for: item.phase) {
                 case .abortWithoutMutation:
-                    deleteSnapshot(of: item, operationID: operation.id)
-                    session.markAborted(token: item.token)
-                    report.abortedTokens.append(item.token)
+                    settleWithoutMutation(item: item, session: session, report: &report)
                 case .commitVerified:
                     session.markCommitted(token: item.token)
-                    report.committedTokens.append(item.token)
+                    if (try? session.requirePersisted()) != nil { report.committedTokens.append(item.token) }
+                    else { report.unrecoverableTokens.append(item.token) }
                 case .probeInstalledApp:
                     await settleInterruptedInstall(item: item, session: session, report: &report)
                 case .settle:
@@ -141,9 +151,7 @@ final class UpdateOperationRecovery {
             preUpgradeVersion: item.preUpgradeVersion
         ) {
         case .untouched:
-            deleteSnapshot(of: item, operationID: session.operation.id)
-            session.markAborted(token: item.token)
-            report.abortedTokens.append(item.token)
+            settleWithoutMutation(item: item, session: session, report: &report)
         case .mutated:
             // The upgrade landed but was never validated: run it through the same canary
             // chain as a live upgrade — Gatekeeper, publisher baseline, rollback on
@@ -198,6 +206,18 @@ final class UpdateOperationRecovery {
     }
 
     // MARK: - helpers
+
+    private func settleWithoutMutation(
+        item: UpdateOperationItem, session: UpdateOperationSession, report: inout Report
+    ) {
+        session.markAborted(token: item.token)
+        guard (try? session.requirePersisted()) != nil else {
+            report.unrecoverableTokens.append(item.token)
+            return
+        }
+        deleteSnapshot(of: item, operationID: session.operation.id)
+        report.abortedTokens.append(item.token)
+    }
 
     private func snapshotMap(for item: UpdateOperationItem, operationID: UUID) -> [String: URL] {
         guard let name = item.snapshotName else { return [:] }

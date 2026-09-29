@@ -240,6 +240,11 @@ final class BackgroundUpdater {
             }
             let operation = dependencies?.beginOperation() ?? beginLiveOperation()
             operation.recordPlanned(tokens: lockedTokens, appPaths: appPaths)
+            do { try operation.requirePersisted() }
+            catch {
+                WegaLog.error(.homebrew, "Aktualizacja w tle odroczona — \(error.localizedDescription)")
+                return []
+            }
             func liveSnapshots() -> [String: URL] {
                 CaskRollbackGuard.snapshot(
                     tokens: lockedTokens,
@@ -249,6 +254,11 @@ final class BackgroundUpdater {
             }
             let snapshots = dependencies?.snapshot(lockedTokens, appPaths, operation)
                 ?? liveSnapshots()
+            do { try operation.requirePersisted() }
+            catch {
+                WegaLog.error(.homebrew, "Aktualizacja w tle odroczona — \(error.localizedDescription)")
+                return []
+            }
             let tokens = BackgroundUpdateSafety.snapshotBackedTokens(lockedTokens, snapshots: snapshots)
             var run = UpdateRunOutcome()
             run.recordPublisherVetoes(eligibleLockedTokens.map(Self.caskItem), audits: publisherVetoes)
@@ -325,6 +335,11 @@ final class BackgroundUpdater {
             // LT-01 — `installing` is the last journal write before brew; after a crash it
             // is what recovery probes.
             operation.recordInstalling()
+            do { try operation.requirePersisted() }
+            catch {
+                WegaLog.error(.homebrew, "Aktualizacja w tle odroczona — \(error.localizedDescription)")
+                return []
+            }
             func runLiveBrew(arguments: [String]) async -> BrewUpgradeOutcome {
                 var caskOutcome = await runBrew(arguments: arguments)
                 caskOutcome = await recoveringLeftover(from: caskOutcome) { forcedArguments in

@@ -8,54 +8,12 @@ import Foundation
 ///
 /// The feed items are NOT reliably ordered: older builds can carry a more
 /// recent `pubDate` than the newest version (Homebrew's `chatgpt` cask warns
-/// about this too). So we take the max `sparkle:shortVersionString` across
-/// every `<item>`, never just the first.
+/// about this too). Item selection uses the shared Sparkle build ordering.
 public enum ChatGPTUpdateParser {
 
-    /// Returns the highest `sparkle:shortVersionString` across all `<item>`
-    /// elements, or nil when the feed has no parseable item.
+    /// The display version of the newest appcast item; retained for existing callers.
     public static func latestVersion(fromAppcast data: Data) -> String? {
-        let delegate = AppcastParser()
-        let parser = XMLParser(data: data)
-        parser.delegate = delegate
-        parser.parse()
-        // max(by:) wants an ascending predicate: $0 precedes $1 when $1 is the
-        // newer version, i.e. $0 → $1 is an upgrade.
-        return delegate.versions.max { isUpgrade(installed: $0, latest: $1) }
-    }
-
-    private final class AppcastParser: NSObject, XMLParserDelegate {
-        var versions: [String] = []
-        private var current = ""
-        private var capturing = false
-
-        func parser(_: XMLParser,
-                    didStartElement element: String,
-                    namespaceURI _: String?,
-                    qualifiedName _: String?,
-                    attributes _: [String: String]) {
-            // Match both namespace-qualified and bare element names.
-            let local = element.components(separatedBy: ":").last ?? element
-            capturing = (local == "shortVersionString")
-            current = ""
-        }
-
-        func parser(_: XMLParser, foundCharacters string: String) {
-            if capturing { current += string }
-        }
-
-        func parser(_: XMLParser,
-                    didEndElement element: String,
-                    namespaceURI _: String?,
-                    qualifiedName _: String?) {
-            let local = element.components(separatedBy: ":").last ?? element
-            if local == "shortVersionString" {
-                let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty { versions.append(trimmed) }
-            }
-            capturing = false
-            current = ""
-        }
+        AppcastParser.parse(data: data)
     }
 }
 
@@ -63,7 +21,7 @@ public enum ChatGPTUpdateParser {
 /// is marked `auto_updates` and whose metadata lags OpenAI's public release
 /// channel by days. The app self-updates via Sparkle from a runtime-resolved
 /// feed, so neither brew nor the generic Sparkle path surfaces the newer build.
-/// Queries OpenAI's public appcast directly and compares the short version.
+/// Queries OpenAI's public appcast with the same build semantics as the generic checker.
 public struct ChatGPTUpdateChecker: VendorUpdateChecker {
     /// Bundle identifier of `/Applications/ChatGPT.app`.
     public static let bundleIdentifier = "com.openai.chat"
@@ -80,11 +38,10 @@ public struct ChatGPTUpdateChecker: VendorUpdateChecker {
 
     public func plan(for app: ApplicationInfo) -> VendorCheckPlan? {
         guard app.bundleIdentifier == Self.bundleIdentifier,
-              let installed = app.version, !installed.isEmpty else { return nil }
+              app.version?.isEmpty == false || app.buildVersion?.isEmpty == false else { return nil }
 
         return VendorCheckPlan(request: HTTPRequest(url: Self.appcastURL, enableETag: true)) { data in
-            guard let latest = ChatGPTUpdateParser.latestVersion(fromAppcast: data) else { return .decided(.failed) }
-            return .candidate(VendorCandidate(latest: latest, installed: installed, source: .chatgpt))
+            SparkleUpdateChecker.evaluate(data: data, app: app, source: .chatgpt)
         }
     }
 }

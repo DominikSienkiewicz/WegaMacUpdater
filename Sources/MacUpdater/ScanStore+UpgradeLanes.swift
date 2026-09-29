@@ -158,6 +158,11 @@ extension ScanStore {
         // unknown, probe me", a crash before it reads as "never ran". It has to be written
         // once, before the first process starts, not once per cask.
         preparation.operation.recordInstalling()
+        do { try preparation.operation.requirePersisted() }
+        catch {
+            reportJournalFailure(error)
+            return []
+        }
 
         let lanes = CaskUpgradeLanes(tokens: preparation.trustedCaskNames, profiles: caskProfiles)
         let itemsByToken = Dictionary(

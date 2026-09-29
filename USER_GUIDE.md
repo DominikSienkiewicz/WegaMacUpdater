@@ -208,10 +208,14 @@ update back; take it, and the step before it becomes the next offer, for as long
 is still retained. Undoing restores the previous app and **pins that version**, so the update
 you just took back is not offered again until you lift the pin in Settings.
 
-Every upgrade also writes a **journal** of its phases, so a crash or power cut in the
-middle does not leave an app half-installed: at the next launch Wega settles what was
-interrupted — finishes or rolls back the landed upgrade, puts back an app that went
-missing, and tells you whenever it restored something.
+Protected cask upgrades write a **journal** before starting the package manager. If that
+write fails, Wega postpones the update and reports the reason; background updates also
+stop before starting Brew. This applies to adopting and migrating an existing app too.
+At the next launch, the journal helps Wega inspect an interrupted operation and restore
+a missing or rejected app from its snapshot. An unreadable journal, or an older journal
+whose recorded phase cannot prove that installation never started, does not authorize
+deleting its snapshots. Those copies remain available for investigation in
+`~/Library/Application Support/WegaMacUpdater/update-operations/`; check Logs for details.
 
 ### What "updating" means per source
 
@@ -362,6 +366,17 @@ Manually detected update rows show the installed path. Separate copies of the sa
 are checked independently and can have separate ignore/pin policies. If several copies
 match one Homebrew cask, only the resolved Homebrew installation keeps that cask action;
 other copies use their vendor's update source when one is available.
+
+### Sparkle versions
+
+Sparkle checks compare the app's build number (`CFBundleVersion`) with the feed's
+`sparkle:version`. The visible version is a separate label: for example, `1.0 (101)`
+can be newer than `1.0 (100)`. Release notes retain those builds separately and use
+the same ordering. Wega accepts both XML elements and enclosure attributes, including
+feeds that publish a build without a short version. ChatGPT's dedicated appcast checker
+uses the same rules. Build comparisons support dotted numeric identifiers. Non-numeric
+builds and app-specific custom comparators are not inferred; an unparseable comparison
+is reported as a failed check.
 
 ### Export diagnostics
 

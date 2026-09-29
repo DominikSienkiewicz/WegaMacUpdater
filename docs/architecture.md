@@ -4,6 +4,24 @@ Module tree and the sudo/helper boundary. For what the app does with it, see [fe
 
 ## Architecture
 
+Protected cask operations require acknowledged journal writes before cloning and before
+launching Brew. `UpdateOperationSession.requirePersisted()` rejects a session after any
+write failure, even if a later write succeeds. Foreground batches, background rounds,
+adoption and migration all check this gate after `recordInstalling()`.
+The journal stores `persistenceVersion: 1`; legacy journals decode without this optional
+field, but their planned/snapshotted phases cannot prove absence of a mutation. Recovery
+preserves those snapshots and reports the unresolved operation. Corrupt journals remain
+untouched. A failed completion write leaves the earlier durable phase for recovery.
+
+Sparkle appcasts keep build and display versions separately. Detection and release-history
+ordering use `sparkle:version` against `CFBundleVersion` when both exist; display labels
+include the build so two builds of one release remain distinguishable. XML child elements
+take precedence over enclosure attributes; delta enclosures are not independent releases.
+Numeric build comparison includes every dotted component and does not reuse the optional
+build-metadata rules of other vendors. Unsupported build formats yield an unknown comparison,
+reported as a failed check. The dedicated ChatGPT checker delegates to the same parser and comparison.
+See [Sparkle's appcast contract](https://sparkle-project.org/documentation/api-reference/Classes/SUAppcastItem.html).
+
 Self-update operation lifetime crosses the XPC connection boundary. Protocol 4 reserves an
 operation ID in the helper's root-owned registry before dispatching the installer. A status
 query can return running, succeeded, failed, not-started or unknown. Querying an unseen ID
