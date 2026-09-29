@@ -46,7 +46,9 @@ Security-relevant areas most worth a look include:
   `ConfigOverlayTrust`). Signature bypasses or fail-open behaviour are high value.
 - **Privileged execution** — the compiled askpass and `sudo` shim, their path/signature
   validation (`AuthorizationComponentResolver`, `AuthorizationEnvironment`), the Touch ID
-  `sudo_local` writer, and the future XPC helper.
+  `sudo_local` writer, and the XPC helper. Installation status is recorded in a root-owned
+  registry; losing XPC does not stop the installer or authorize a second installation.
+  The client retains its mutation block until a matching terminal result is confirmed.
 - **Publisher pinning & rollback** — Team ID baseline checks and the
   snapshot → canary → auto-rollback chain that guards cask upgrades.
 - **Update/action execution** — anywhere Wega decides *what* to run against Homebrew,

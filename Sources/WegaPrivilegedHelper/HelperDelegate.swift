@@ -7,6 +7,15 @@ private enum HelperAuditLog {
     static let logger = Logger(subsystem: WegaHelper.helperSigningID, category: "PrivilegedHelper")
 }
 
+private enum HelperInstallations {
+    static let registry: Result<PackageInstallationRegistry, Error> = Result {
+        try PackageInstallationRegistry(
+            fileURL: URL(fileURLWithPath: "/var/db/com.wega.WegaMacUpdater/installations.json"),
+            bootID: PackageInstallationRegistry.currentBootID()
+        )
+    }
+}
+
 /// Accepts XPC connections only from the genuine, correctly-signed app, then
 /// vends the whitelisted operations object.
 final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
@@ -47,7 +56,39 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
         }
     }
 
-    func installVerifiedPackage(atPath path: String, withReply reply: @escaping @Sendable (Bool, String?) -> Void) {
+    func beginPackageInstallation(
+        atPath path: String, operationID: String, withReply reply: @escaping @Sendable (Data?, String?) -> Void
+    ) {
+        guard let id = UUID(uuidString: operationID) else { reply(nil, "Niepoprawny identyfikator instalacji."); return }
+        do {
+            let registry = try HelperInstallations.registry.get()
+            let shouldStart = try registry.begin(id)
+            let state = try registry.status(id)
+            if shouldStart {
+                DispatchQueue.global(qos: .utility).async {
+                    self.installVerifiedPackage(atPath: path) { succeeded, message in
+                        do { try registry.finish(id, succeeded: succeeded, message: message) }
+                        catch { HelperAuditLog.logger.error("Nie zapisano końcowego stanu instalacji: \(id.uuidString, privacy: .public)") }
+                    }
+                }
+            }
+            reply(try JSONEncoder().encode(state), nil)
+        } catch {
+            reply(nil, error.localizedDescription)
+        }
+    }
+
+    func packageInstallationStatus(operationID: String, withReply reply: @escaping @Sendable (Data?, String?) -> Void) {
+        guard let id = UUID(uuidString: operationID) else { reply(nil, "Niepoprawny identyfikator instalacji."); return }
+        do {
+            let status = try HelperInstallations.registry.get().status(id)
+            reply(try JSONEncoder().encode(status), nil)
+        } catch {
+            reply(nil, error.localizedDescription)
+        }
+    }
+
+    private func installVerifiedPackage(atPath path: String, withReply reply: @escaping @Sendable (Bool, String?) -> Void) {
         // SEC-03: the client's path points into a directory user processes can write to, so it
         // is never verified and never installed. It is only ever *copied from* — once — and
         // everything after that happens on the helper's own copy.
@@ -96,20 +137,15 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
             reply(false, Self.message(for: .identityChanged)); return
         }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/sbin/installer")
-        process.arguments = ["-pkg", staged.path, "-target", "/"]
-        let stderrPipe = Pipe()
-        process.standardError = stderrPipe
         do {
-            try process.run()
-            process.waitUntilExit()
-            if process.terminationStatus == 0 {
+            let result = try InstallerProcess.run(
+                executable: URL(fileURLWithPath: "/usr/sbin/installer"), arguments: ["-pkg", staged.path, "-target", "/"]
+            )
+            if result.exitCode == 0 {
                 HelperAuditLog.logger.info("installVerifiedPackage: sukces")
                 reply(true, nil)
             } else {
-                let data = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-                let message = String(data: data, encoding: .utf8) ?? "installer zakończył się kodem \(process.terminationStatus)"
+                let message = result.standardError.isEmpty ? "installer zakończył się kodem \(result.exitCode)" : result.standardError
                 HelperAuditLog.logger.error("installVerifiedPackage: błąd")
                 reply(false, message)
             }
@@ -120,6 +156,8 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
     }
 
     func replaceBundle(atPath targetPath: String, withSnapshotAtPath snapshotPath: String, withReply reply: @escaping @Sendable (Bool, String?) -> Void) {
+        do { try HelperInstallations.registry.get().requireNoUnresolvedInstallation() }
+        catch { reply(false, error.localizedDescription); return }
         let fileManager = FileManager.default
         let target = URL(fileURLWithPath: targetPath)
         let snapshot = URL(fileURLWithPath: snapshotPath)

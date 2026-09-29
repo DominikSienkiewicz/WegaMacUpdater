@@ -13,6 +13,16 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Fixed
+- A lost XPC reply or installation timeout no longer opens a second installer or releases
+  Wega's mutation protection. Installation IDs and outcomes survive client restarts;
+  Settings can query the existing operation. Helper protocol 4 drains installer output
+  continuously and keeps an unresolved operation blocked after a helper restart.
+- Manual scans now identify installations by their standardized paths. Two copies with the
+  same bundle identifier are checked separately, overlapping scan roots stay deduplicated,
+  and update rows show their paths. A shared cask match does not authorize installing into
+  another copy through the same Homebrew token.
+
 ## [0.4.0] — 2026-09-23
 
 ### Added

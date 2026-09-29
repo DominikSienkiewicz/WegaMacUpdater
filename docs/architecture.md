@@ -4,6 +4,26 @@ Module tree and the sudo/helper boundary. For what the app does with it, see [fe
 
 ## Architecture
 
+Self-update operation lifetime crosses the XPC connection boundary. Protocol 4 reserves an
+operation ID in the helper's root-owned registry before dispatching the installer. A status
+query can return running, succeeded, failed, not-started or unknown. Querying an unseen ID
+writes a not-started tombstone, so a late start request cannot invalidate that answer.
+Installer stdout/stderr are drained concurrently; only a bounded stderr tail is retained.
+A timeout never kills the installer. After a helper restart, unfinished records stay unknown
+for the same macOS boot session; a different boot proves the old processes ended and marks
+those operations failed, without claiming that their effects were rolled back.
+
+The client saves `pending-helper-installation.json` before sending the start request.
+`OperationCoordinator.shared` refuses new operations while that receipt exists, including
+after a client restart or if the receipt cannot be read. Settings queries the original ID;
+only a terminal result with a matching ID clears the receipt. This recovery query deliberately
+bypasses the mutation gate. A failure before the initial handshake completes creates no receipt.
+
+Manual scan deduplication uses `InstallationIdentity`, matching inventory and policy keys.
+If multiple paths match one cask, only the path resolved by `CaskAppPathResolver` keeps its
+cask association. Other copies continue through vendor/Sparkle checks; this does not extend
+Homebrew to installing into arbitrary duplicate locations.
+
 ```
 WegaMacUpdater (SwiftUI app target)
 ├── ContentView          — sidebar + tab routing; brew-not-found gate; toolbar `SettingsLink` (gear → Settings window). The sidebar's helper chip reports the privileged helper's **real** `SMAppService` status in three states (active / needs approval / inactive, mapped by `HelperChipState` in Core) — a green dot is earned, not hard-coded, and the "needs approval" state opens Login Items on click

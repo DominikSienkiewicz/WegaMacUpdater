@@ -33,6 +33,14 @@ final class UpgradeCoordinator: ObservableObject {
 
     init(operations: OperationCoordinator = .shared) {
         self.operations = operations
+        refreshExternalMutationState()
+    }
+
+    func refreshExternalMutationState() {
+        guard runningRequestID == nil else { return }
+        state = operations.hasUnresolvedExternalMutation
+            ? .running(.selfUpdate)
+            : requests.first.map { .waiting($0.flow) } ?? .idle
     }
 
     func performWrite(
@@ -77,7 +85,7 @@ final class UpgradeCoordinator: ObservableObject {
     private func begin(_ flow: Flow) -> UUID {
         let requestID = UUID()
         requests.append((requestID, flow))
-        if runningRequestID == nil { state = .waiting(flow) }
+        refreshExternalMutationState()
         return requestID
     }
 
@@ -95,7 +103,7 @@ final class UpgradeCoordinator: ObservableObject {
            let running = requests.first(where: { $0.id == runningRequestID }) {
             state = .running(running.flow)
         } else {
-            state = requests.first.map { .waiting($0.flow) } ?? .idle
+            refreshExternalMutationState()
         }
     }
 }

@@ -20,6 +20,7 @@ public struct ManualUpdateScanner: Sendable {
     private let packageReceiptLocator: PackageReceiptLocator
     private let adobeCatalogClient: AdobeCatalogClient
     private let adobeUninstallDirectory: URL
+    private let sparkleChecker: SparkleUpdateChecker
 
     public init(
         brewService: BrewService = BrewService(),
@@ -32,7 +33,8 @@ public struct ManualUpdateScanner: Sendable {
         javaRuntimeDirectories: [URL] = JavaRuntimeScanner.scanDirectories(),
         packageReceiptLocator: PackageReceiptLocator = PackageReceiptLocator(),
         adobeCatalogClient: AdobeCatalogClient = .productCatalog(),
-        adobeUninstallDirectory: URL = SystemPaths.adobeUninstallDirectory
+        adobeUninstallDirectory: URL = SystemPaths.adobeUninstallDirectory,
+        sparkleChecker: SparkleUpdateChecker = SparkleUpdateChecker()
     ) {
         self.brewService = brewService
         self.scanDirectories = scanDirectories
@@ -45,6 +47,7 @@ public struct ManualUpdateScanner: Sendable {
         self.packageReceiptLocator = packageReceiptLocator
         self.adobeCatalogClient = adobeCatalogClient
         self.adobeUninstallDirectory = adobeUninstallDirectory
+        self.sparkleChecker = sparkleChecker
     }
 
     /// UX-15 — Wega dogfoods its own update path. A self-update maps to the same
@@ -202,16 +205,17 @@ public struct ManualUpdateScanner: Sendable {
         }()
 
         let scanner = ApplicationScanner()
-        var seen = Set<String>()
+        var seen = Set<InstallationIdentity>()
         var appsToCheck: [ApplicationInfo] = []
         for dir in scanDirectories {
             let found = (try? scanner.scanApplications(in: dir, installedCasks: appProducingTokens, availableCasks: casks)) ?? []
             for app in found where !app.isManagedByMas {
-                if let token = app.caskToken, brewOutdatedCasks.contains(token) { continue }
-                let key = app.bundleIdentifier ?? app.path.path
-                if seen.insert(key).inserted { appsToCheck.append(app) }
+                if seen.insert(app.installation).inserted { appsToCheck.append(app) }
             }
         }
+        appsToCheck = Self.routeDistinctInstallations(
+            appsToCheck, caskAppPaths: CaskAppPathResolver().appPaths(from: installInfo), brewOutdatedCasks: brewOutdatedCasks
+        )
 
         // JDKs live outside every Applications root and are not `.app` bundles, so the scan
         // above cannot see them; they are resolved to a cask through their installer receipt
@@ -219,7 +223,7 @@ public struct ManualUpdateScanner: Sendable {
         // Kept in their own list because none of the vendor checkers apply to a runtime —
         // there is no appcast, no JetBrains code and no GitHub repo to ask.
         let javaRuntimes = await javaRuntimesWithCaskTokens(casks: casks, brewOutdatedCasks: brewOutdatedCasks)
-            .filter { seen.insert($0.path.path).inserted }
+            .filter { seen.insert($0.installation).inserted }
 
         // One catalog and one inventory read for the whole scan (see `AdobeUpdateChecker`).
         let adobeInventory = AdobeProductInventory.installedProducts(in: adobeUninstallDirectory)
@@ -228,7 +232,7 @@ public struct ManualUpdateScanner: Sendable {
             inventory: adobeInventory
         )
 
-        let sparkleChecker = SparkleUpdateChecker()
+        let sparkleChecker = self.sparkleChecker
         let jetbrainsChecker = JetBrainsUpdateChecker()
         let githubChecker = GitHubReleasesChecker()
         let synologyChecker = SynologyUpdateChecker()
@@ -365,6 +369,28 @@ public struct ManualUpdateScanner: Sendable {
             alreadyListedTokens: listedCaskTokens()
         ))
         return (UpdatePlanner.dedupedByPriority(collected), failedChecks)
+    }
+
+    /// Multiple copies may share a cask match, but only its resolved target can inherit Brew's
+    /// version or install action. The other copies continue through their own vendor feeds.
+    static func routeDistinctInstallations(
+        _ apps: [ApplicationInfo], caskAppPaths: [String: URL], brewOutdatedCasks: Set<String>
+    ) -> [ApplicationInfo] {
+        var copyCounts: [String: Int] = [:]
+        for app in apps {
+            if let token = app.caskToken { copyCounts[token, default: 0] += 1 }
+        }
+        return apps.compactMap { app in
+            var routed = app
+            if let token = app.caskToken, copyCounts[token, default: 0] > 1,
+               caskAppPaths[token].map({ InstallationIdentity(path: $0) }) != app.installation {
+                routed.caskToken = nil
+                routed.caskMatchProvenance = nil
+                routed.isManagedByBrew = false
+            }
+            if let token = routed.caskToken, brewOutdatedCasks.contains(token) { return nil }
+            return routed
+        }
     }
 
     /// REL-07 — synthesises the forced list rows for casks a prior auto-rollback reverted.
