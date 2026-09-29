@@ -17,8 +17,8 @@ import Security
 /// - `.app` → `SecStaticCode` + a code requirement pinning `anchor apple generic`
 ///   and the leaf certificate's Team ID.
 /// - `.pkg` → Gatekeeper install assessment **plus** the Team ID parsed from
-///   `pkgutil --check-signature`. A package whose Team ID cannot be read is
-///   **rejected**: an unreadable pin is not a weaker pin, it is no pin at all.
+///   `pkgutil --check-signature`, followed by package identity/version and signed
+///   app payload verification. The expected bundle ID and version are required.
 /// - `.dmg` → Gatekeeper open assessment, the Team ID of the image's own signature,
 ///   and — after mounting the image **read-only** — a full `SecStaticCode` pin
 ///   (Team ID + bundle ID) of the single `.app` it carries.
@@ -118,6 +118,9 @@ public enum CodeSignatureVerifier {
             guard found == expectedTeamID else {
                 throw VerifyError.teamIDMismatch(found: found, expected: expectedTeamID)
             }
+            try PackagePayloadVerifier.verify(
+                at: url, teamID: expectedTeamID, bundleID: bundleID, expectedVersion: expectedVersion
+            )
         case .dmg:
             try verifyDiskImage(
                 at: url,
@@ -226,7 +229,8 @@ public enum CodeSignatureVerifier {
         return dictionary["CFBundleShortVersionString"] as? String
     }
 
-    private static func verifyVersion(ofBundleAt url: URL, expectedVersion: String?) throws {
+    /// Reads the plist directly, including after an in-place installation.
+    public static func verifyVersion(ofBundleAt url: URL, expectedVersion: String?) throws {
         guard let expectedVersion else { return }
         let found = shortVersion(ofBundleAt: url)
         guard found == expectedVersion else {

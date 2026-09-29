@@ -74,6 +74,7 @@ public struct VendorUpdateCompletionChecker: Sendable {
         case .outdated(var updated):
             updated.origin = item.origin
             updated.bundleIdentifier = app.bundleIdentifier
+            updated.caskPolicyToken = item.caskPolicyToken
             return .init(app: app, outcome: .stillOutdated(updated))
         case .notApplicable, .failed, .unavailable:
             return .init(app: app, outcome: .unconfirmed(.sourceUnavailable))

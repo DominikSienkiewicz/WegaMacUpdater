@@ -432,14 +432,18 @@ public struct ManualUpdateScanner: Sendable {
         brewOwnership: BrewOwnership, uncheckedSources: [String]
     ) -> ManualScanReport {
         let apps = InstallationInventory.deduplicated(installations)
-        var report = ManualScanReport(apps: UpdatePlanner.dedupedByPriority(collected), observations: observations,
+        let policyPaths = brewOwnership.paths.filter { brewOwnership.tracked.contains($0.key) }
+        let policyTokens = UpdatePlanner.resolvedCaskPolicyTokens(appPaths: policyPaths)
+        let rows = UpdatePlanner.attachingCaskPolicies(
+            to: UpdatePlanner.dedupedByPriority(collected), appPaths: policyPaths
+        )
+        var report = ManualScanReport(apps: rows, observations: observations,
                                       installations: apps, checkedAt: Date())
         report.failedChecks += uncheckedSources.count
         report.uncheckedSources = (report.uncheckedSources + uncheckedSources).sorted()
         report.installations = zip(apps, report.installations).map { app, check in
             var record = check
-            if let token = app.caskToken, brewOwnership.tracked.contains(token),
-               brewOwnership.paths[token].map({ InstallationIdentity(path: $0) }) == app.installation {
+            if let token = policyTokens[app.installation] {
                 record.caskToken = token
                 record.sources.append(.init(source: "Homebrew", outcome: .notChecked))
             } else if app.isManagedByBrew || (!brewOwnership.available && app.caskToken != nil && record.sources.isEmpty) {

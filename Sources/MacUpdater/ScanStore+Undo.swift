@@ -73,7 +73,7 @@ extension ScanStore {
             return
         }
 
-        let restoredVersion = (Bundle(url: appURL)?.infoDictionary?["CFBundleShortVersionString"] as? String)
+        let restoredVersion = UpdateOperationRecoveryPlan.bundleShortVersion(at: appURL)
             ?? item.preUpgradeVersion
         store.markUndoneByUser(operationID: operation.id, token: undoable.token)
         // Auto-pin (LT-01): the restored version is held until the user lifts the pin —

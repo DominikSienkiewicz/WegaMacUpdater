@@ -60,11 +60,13 @@ ordering use `sparkle:version` against `CFBundleVersion` when both exist; displa
 include the build so two builds of one release remain distinguishable. XML child elements
 take precedence over enclosure attributes; delta enclosures are not independent releases.
 Numeric build comparison includes every dotted component and does not reuse the optional
-build-metadata rules of other vendors. Unsupported build formats yield an unknown comparison,
-reported as a failed check. The dedicated ChatGPT checker delegates to the same parser and comparison.
+build-metadata rules of other vendors. Without a local build, only explicit short versions
+can be compared; a feed-only build is never compared with the installed marketing version.
+Unsupported or incomparable formats are reported as a failed check. The dedicated ChatGPT
+checker delegates to the same parser and comparison.
 See [Sparkle's appcast contract](https://sparkle-project.org/documentation/api-reference/Classes/SUAppcastItem.html).
 
-Self-update operation lifetime crosses the XPC connection boundary. Protocol 4 reserves an
+Self-update operation lifetime crosses the XPC connection boundary. Protocol 5 reserves an
 operation ID in the helper's root-owned registry before dispatching the installer. A status
 query can return running, succeeded, failed, not-started or unknown. Querying an unseen ID
 writes a not-started tombstone, so a late start request cannot invalidate that answer.
@@ -79,10 +81,28 @@ after a client restart or if the receipt cannot be read. Settings queries the or
 only a terminal result with a matching ID clears the receipt. This recovery query deliberately
 bypasses the mutation gate. A failure before the initial handshake completes creates no receipt.
 
+The start request carries the offered version through to the helper. Before installation,
+`CodeSignatureVerifier` authenticates the package publisher and `PackagePayloadVerifier`
+expands the flat component package without running its scripts. It requires the expected
+package identifier, version and root install location, then verifies the payload app's
+bundle identifier, signature and version. The helper repeats this on its root-owned staged
+copy. After installer exit 0, both helper and client check the signed app at
+`/Applications/WegaMacUpdater.app`; recovery also checks that app before reporting success.
+A terminal failure clears the operation block without claiming that the update succeeded.
+Older helpers fail the version handshake and must be updated and re-registered.
+
 Manual scan deduplication uses `InstallationIdentity`, matching inventory and policy keys.
 If multiple paths match one cask, only the path resolved by `CaskAppPathResolver` keeps its
 cask association. Other copies continue through vendor/Sparkle checks; this does not extend
 Homebrew to installing into arbitrary duplicate locations.
+
+`ManualOutdatedApp.caskPolicyToken` is an optional policy alias, separate from the source
+that offers an update. The scanner assigns it only for an unambiguous resolved path owned
+by a tracked cask. That copy's vendor and metadata-repair rows honor both manual and cask
+policies, including the pin created by Undo. The association survives scan snapshots and
+targeted vendor checks; old pending vendor handoffs regain it from the installation evidence.
+The inventory status uses the same cask association. Missing or ambiguous ownership does
+not transfer policies based on a name or bundle identifier alone.
 
 ```
 WegaMacUpdater (SwiftUI app target)

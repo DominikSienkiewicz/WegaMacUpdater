@@ -83,6 +83,38 @@ extension UpdatePlanner {
 
     public static func applyPolicies(_ apps: [ManualOutdatedApp], policies: [String: UpdatePolicy]) -> [ManualOutdatedApp] {
         guard !policies.isEmpty else { return apps }
-        return apps.filter { !isSuppressed(key: $0.policyKey, availableVersion: $0.availableVersion, policies: policies) }
+        return apps.filter { app in
+            let keys = [app.policyKey] + (app.caskPolicyToken.map { [key(name: $0, kind: .cask)] } ?? [])
+            return !keys.contains { isSuppressed(key: $0, availableVersion: app.availableVersion, policies: policies) }
+        }
+    }
+
+    /// Resolves policy aliases from installed paths, never from a catalog name match.
+    public static func attachingCaskPolicies(to apps: [ManualOutdatedApp], appPaths: [String: URL]) -> [ManualOutdatedApp] {
+        let tokensByPath = resolvedCaskPolicyTokens(appPaths: appPaths)
+        return apps.map { app in
+            var associated = app
+            associated.caskPolicyToken = tokensByPath[InstallationIdentity(path: app.path)]
+            return associated
+        }
+    }
+
+    static func resolvedCaskPolicyTokens(appPaths: [String: URL]) -> [InstallationIdentity: String] {
+        let installations = appPaths.map { (token: $0.key, path: InstallationIdentity(path: $0.value)) }
+        return Dictionary(grouping: installations, by: \.path).compactMapValues { tokens in
+            tokens.count == 1 ? tokens.first?.token : nil
+        }
+    }
+
+    /// Refreshes saved vendor handoffs from the latest scan's evidence for the same installation.
+    public static func attachingCaskPolicies(to apps: [ManualOutdatedApp], installationChecks: [InstallationCheck]) -> [ManualOutdatedApp] {
+        let byPath = Dictionary(installationChecks.map { (InstallationIdentity(path: $0.path), $0) },
+                                uniquingKeysWith: { _, last in last })
+        return apps.map { app in
+            guard let check = byPath[InstallationIdentity(path: app.path)] else { return app }
+            var associated = app
+            associated.caskPolicyToken = check.bundleIdentifier == app.bundleIdentifier ? check.caskToken : nil
+            return associated
+        }
     }
 }

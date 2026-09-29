@@ -138,7 +138,7 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         }
     }
 
-    public func installVerifiedPackage(at path: String, version: String = AppMetadata.version) async throws {
+    public func installVerifiedPackage(at path: String, version: String) async throws {
         try await trackedInstaller.install(at: path, version: version)
     }
 
@@ -149,15 +149,21 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
     private var trackedInstaller: HelperPackageInstallation {
         HelperPackageInstallation(
             handshake: { _ = try await self.performHandshake() },
-            begin: { id, path in
+            begin: { id, path, version in
                 try await self.installationReply { proxy, reply in
-                    proxy.beginPackageInstallation(atPath: path, operationID: id.uuidString, withReply: reply)
+                    proxy.beginPackageInstallation(atPath: path, operationID: id.uuidString, expectedVersion: version, withReply: reply)
                 }
             },
             status: { id in
                 try await self.installationReply { proxy, reply in
                     proxy.packageInstallationStatus(operationID: id.uuidString, withReply: reply)
                 }
+            },
+            verifyInstalled: { version in
+                try CodeSignatureVerifier.verify(
+                    installerAt: PackagePayloadVerifier.installedAppURL, expectedTeamID: WegaHelper.teamIdentifier,
+                    bundleID: WegaHelper.appBundleID, expectedVersion: version
+                )
             }
         )
     }

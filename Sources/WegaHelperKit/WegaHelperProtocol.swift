@@ -26,7 +26,7 @@ import Foundation
 
     /// Reserves a durable operation before starting the verified installer on a worker queue.
     /// Replies carry JSON-encoded `PackageInstallationStatus`; a transport error is not a result.
-    func beginPackageInstallation(atPath path: String, operationID: String, withReply reply: @escaping @Sendable (Data?, String?) -> Void)
+    func beginPackageInstallation(atPath path: String, operationID: String, expectedVersion: String, withReply reply: @escaping @Sendable (Data?, String?) -> Void)
 
     /// A missing ID is durably marked not-started, preventing a delayed start request.
     func packageInstallationStatus(operationID: String, withReply reply: @escaping @Sendable (Data?, String?) -> Void)
@@ -57,7 +57,7 @@ public enum WegaHelper {
     /// Main app bundle identifier.
     public static let appBundleID = AppMetadata.bundleIdentifier
     /// Helper protocol version (bump on breaking interface changes).
-    public static let version = "4"
+    public static let version = "5"
 
     /// Apple Developer Team ID — pinned by XPC (both directions) and self-update
     /// verification. Must match the Developer ID certificate the app is signed with.

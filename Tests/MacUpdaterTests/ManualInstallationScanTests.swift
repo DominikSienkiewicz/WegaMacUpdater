@@ -60,7 +60,7 @@ struct ManualInstallationScanTests {
             for (app, version) in zip(apps, versions) {
                 let contents = app.appendingPathComponent("Contents")
                 try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
-                var info = ["CFBundleName": "Example", "CFBundleShortVersionString": version,
+                var info = ["CFBundleName": "Example", "CFBundleShortVersionString": version, "CFBundleVersion": version,
                             "SUFeedURL": "https://example.invalid/feed.xml"]
                 info["CFBundleIdentifier"] = bundleID
                 try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)

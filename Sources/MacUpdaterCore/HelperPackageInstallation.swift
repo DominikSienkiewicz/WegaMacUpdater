@@ -18,8 +18,9 @@ public struct HelperPackageInstallation: Sendable {
 
     private let store: PendingHelperInstallationStore
     private let handshake: @Sendable () async throws -> Void
-    private let begin: @Sendable (UUID, String) async throws -> PackageInstallationStatus
+    private let begin: @Sendable (UUID, String, String) async throws -> PackageInstallationStatus
     private let status: @Sendable (UUID) async throws -> PackageInstallationStatus
+    private let verifyInstalled: @Sendable (String) throws -> Void
 
     public init(
         store: PendingHelperInstallationStore = .shared,
@@ -27,10 +28,22 @@ public struct HelperPackageInstallation: Sendable {
         begin: @escaping @Sendable (UUID, String) async throws -> PackageInstallationStatus,
         status: @escaping @Sendable (UUID) async throws -> PackageInstallationStatus
     ) {
+        self.init(store: store, handshake: handshake, begin: { id, path, _ in try await begin(id, path) },
+                  status: status, verifyInstalled: { _ in })
+    }
+
+    public init(
+        store: PendingHelperInstallationStore = .shared,
+        handshake: @escaping @Sendable () async throws -> Void,
+        begin: @escaping @Sendable (UUID, String, String) async throws -> PackageInstallationStatus,
+        status: @escaping @Sendable (UUID) async throws -> PackageInstallationStatus,
+        verifyInstalled: @escaping @Sendable (String) throws -> Void
+    ) {
         self.store = store
         self.handshake = handshake
         self.begin = begin
         self.status = status
+        self.verifyInstalled = verifyInstalled
     }
 
     public func install(at path: String, version: String, timeout: Duration = .seconds(1800)) async throws {
@@ -43,7 +56,7 @@ public struct HelperPackageInstallation: Sendable {
         do {
             let clock = ContinuousClock()
             let deadline = clock.now.advanced(by: timeout)
-            var observed = try await begin(pending.operationID, path)
+            var observed = try await begin(pending.operationID, path, version)
             while !observed.phase.isTerminal, observed.phase != .unknown, clock.now < deadline {
                 try await Task.sleep(for: .seconds(2))
                 observed = try await status(pending.operationID)
@@ -81,5 +94,6 @@ public struct HelperPackageInstallation: Sendable {
         guard result.phase == .succeeded else {
             throw Failure.rejected(result.message ?? "Instalacja nie została potwierdzona jako udana.")
         }
+        try verifyInstalled(pending.version)
     }
 }
