@@ -59,7 +59,7 @@ public enum VersionOrder: Equatable, Sendable {
 /// per source, which is why one shared tolerant parser was wrong: a `-NNN` hyphen is
 /// a SemVer *prerelease* for npm and GitHub (ranking *below* the release), but a
 /// *build number* for vendors like Parallels (a later build of the same release).
-public enum VersionScheme: Sendable {
+public enum VersionScheme: String, Codable, Sendable {
     /// Strict SemVer 2.0.0 — npm and GitHub. `X.Y.Z-prerelease+build`. A prerelease
     /// ranks below the same release; build metadata (`+…`) never affects precedence.
     case semver

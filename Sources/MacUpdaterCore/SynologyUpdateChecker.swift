@@ -75,7 +75,8 @@ public struct SynologyUpdateChecker: VendorUpdateChecker {
                 path: app.path,
                 installedVersion: app.version,
                 availableVersion: latest.version,
-                source: .synology(downloadPage: mapping.downloadPage)
+                source: .synology(downloadPage: mapping.downloadPage),
+                completionRequirement: .init(version: String(latest.build), field: .buildVersion, scheme: .numericBuild)
             )))
         }
     }

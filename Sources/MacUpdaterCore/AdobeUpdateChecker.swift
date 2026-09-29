@@ -38,7 +38,8 @@ public struct AdobeUpdateChecker: Sendable {
             path: app.path,
             installedVersion: product.version,
             availableVersion: latest,
-            source: .adobe(sapCode: product.sapCode)
+            source: .adobe(sapCode: product.sapCode),
+            completionRequirement: .init(version: latest)
         ))
     }
 }

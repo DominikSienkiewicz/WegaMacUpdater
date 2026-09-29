@@ -552,18 +552,28 @@ struct ManualUpdateActionView: View {
     let onInstall: (String) -> Void
 
     @Environment(\.openSettings) private var openSettings
+    @EnvironmentObject private var scan: ScanStore
+    @ObservedObject private var upgrades = UpgradeCoordinator.shared
 
     var body: some View {
-        HStack(spacing: 8) {
-            WegaBadge(label: item.source.badgeLabel, color: item.source.provenance.badgeColor)
-            // REL-07 — a cask a prior auto-rollback reverted is forced back onto the list with
-            // this label so the user sees it is not current; the Brew action below is the retry
-            // (a force-reinstall that repairs Homebrew's metadata on a healthy result).
-            if item.rolledBack {
-                WegaBadge(label: tr("cofnięto — ponów próbę"), variant: .danger)
+        VStack(alignment: .trailing, spacing: 8) {
+            HStack(spacing: 8) {
+                WegaBadge(label: item.source.badgeLabel, color: item.source.provenance.badgeColor)
+                // REL-07: the Brew action retries a prior auto-rollback with a force-reinstall.
+                if item.rolledBack {
+                    WegaBadge(label: tr("cofnięto — ponów próbę"), variant: .danger)
+                }
+                actionControl
             }
-            actionControl
+            .disabled(item.source.supportsVendorCompletion && (!scan.allowsVendorCheck || upgrades.state != .idle))
+            if item.source.supportsVendorCompletion {
+                VendorUpdateCompletionControls(item: item)
+            }
         }
+    }
+
+    private func openVendor(_ url: URL?) {
+        scan.vendorOpened(item, succeeded: url.map { NSWorkspace.shared.open($0) } ?? false)
     }
 
     @ViewBuilder
@@ -578,7 +588,7 @@ struct ManualUpdateActionView: View {
             // updater then applies the staged build) — instead of promising an install Wega
             // does not perform.
             Button {
-                NSWorkspace.shared.open(item.path)
+                openVendor(item.path)
             } label: {
                 Label(tr("Otwórz aplikację"), systemImage: "arrow.up.forward.app")
             }
@@ -588,14 +598,14 @@ struct ManualUpdateActionView: View {
             // zostaje obok jako wyjście awaryjne, kontrolką wyraźnie drugorzędną, żeby
             // hierarchia była czytelna na pierwszy rzut oka.
             Button {
-                NSWorkspace.shared.open(item.path)
+                openVendor(item.path)
             } label: {
                 Label(tr("Otwórz aplikację"), systemImage: "arrow.up.forward.app")
             }
             .controlSize(.small)
             if let releasesURL {
                 Button {
-                    NSWorkspace.shared.open(releasesURL)
+                    openVendor(releasesURL)
                 } label: {
                     Text(tr("GitHub Releases"))
                 }
@@ -621,7 +631,7 @@ struct ManualUpdateActionView: View {
                 .foregroundStyle(.tertiary)
         case .openURL(let url, let style):
             Button {
-                if let url { NSWorkspace.shared.open(url) }
+                openVendor(url)
             } label: {
                 switch style {
                 case .githubReleases:
@@ -643,7 +653,9 @@ struct ManualUpdateActionView: View {
                         .appendingPathComponent("Applications/JetBrains Toolbox.app").path
                 ]
                 if let path = toolboxPaths.first(where: { FileManager.default.fileExists(atPath: $0) }) {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: path))
+                    openVendor(URL(fileURLWithPath: path))
+                } else {
+                    openVendor(nil)
                 }
             } label: {
                 Label(tr("Otwórz Toolbox"), systemImage: "arrow.down.circle")
@@ -659,9 +671,11 @@ struct ManualUpdateActionView: View {
                     NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
                 }
                 if let installed {
-                    NSWorkspace.shared.open(installed)
+                    openVendor(installed)
                 } else if let fallbackURL {
-                    NSWorkspace.shared.open(fallbackURL)
+                    openVendor(fallbackURL)
+                } else {
+                    openVendor(nil)
                 }
             } label: {
                 Label(tr("Otwórz Creative Cloud"), systemImage: "arrow.down.circle")

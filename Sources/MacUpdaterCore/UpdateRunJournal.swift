@@ -69,6 +69,8 @@ public struct UpdateJournalEntry: Codable, Equatable, Sendable {
         case manual
         /// An unattended background round.
         case background
+        /// Verified on disk after an update performed outside Wega.
+        case external
     }
 
     public let finishedAt: Date

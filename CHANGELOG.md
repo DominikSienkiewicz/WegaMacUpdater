@@ -14,6 +14,9 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 ## [Unreleased]
 
 ### Added
+- Vendor update handoffs now offer an on-demand check of the exact installation, retain
+  pending work across Wega restarts and record confirmed updates as performed outside Wega.
+  Source failures, missing bundles and unmet target builds remain explicitly unconfirmed.
 - Inventory shows per-installation update-check status, source details, attempt and last
   complete-check times, plus a “Needs checking” filter. Results survive saved-scan restore;
   unknown, stale and policy-hidden outcomes remain distinct.

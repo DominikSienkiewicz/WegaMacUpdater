@@ -12,6 +12,50 @@ public enum Translations {
     /// Composed from two sections so neither declaration grows past the
     /// `type_body_length` ceiling. Sections are additive — keys never overlap.
     public static let en: [String: String] = base.merging(operations) { first, _ in first }
+        .merging(vendorCompletion) { first, _ in first }
+}
+
+extension Translations {
+    static let vendorCompletion: [String: String] = [
+        "Dokończ u producenta, potem sprawdź tę aplikację.":
+            "Finish with the vendor, then check this app.",
+        "Sprawdzam tę instalację…":
+            "Checking this installation…",
+        "Sprawdź tę aplikację":
+            "Check this app",
+        "Zakończ śledzenie":
+            "Stop tracking",
+        "Odczytaj wersję pod tą ścieżką i sprawdź źródło producenta, bez pełnego skanu.":
+            "Read the version at this path and check the vendor source without a full scan.",
+        "Kończy oczekiwanie. Nie potwierdza aktualizacji ani nie usuwa aplikacji.":
+            "Stops waiting. Does not confirm an update or remove the app.",
+        "Nie udało się otworzyć aplikacji lub strony producenta.":
+            "Could not open the app or vendor page.",
+        "Sprawdzenie anulowane. Aktualizacja nie została potwierdzona.":
+            "Check cancelled. The update was not confirmed.",
+        "Nie można teraz sprawdzić aplikacji. Spróbuj ponownie po zakończeniu bieżącej operacji.":
+            "Cannot check the app now. Try again after the current operation finishes.",
+        "Wykonano poza Wegą":
+            "Updated outside Wega",
+        "%@ — potwierdzono wersję na dysku. Podpis i działający proces nie były sprawdzane.":
+            "%@ — verified the version on disk. The signature and running process were not checked.",
+        "Nadal dostępna aktualizacja. Dokończ ją u producenta, w razie potrzeby uruchom aplikację ponownie.":
+            "An update is still available. Finish with the vendor and restart the app if needed.",
+        "Nie można odczytać tej instalacji. Mogła zostać usunięta lub przeniesiona.":
+            "Cannot read this installation. It may have been removed or moved.",
+        "Pod tą ścieżką jest inna aplikacja. Aktualizacja nie została potwierdzona.":
+            "A different app is at this path. The update was not confirmed.",
+        "Źródło nie potwierdziło aktualności. Spróbuj ponownie, gdy będzie dostępne.":
+            "The source could not confirm the version. Try again when it is available.",
+        "Starszy wynik nie zawiera wersji do weryfikacji. Zakończ śledzenie i wykonaj pełne sprawdzenie.":
+            "This older result has no verification target. Stop tracking and run a full check.",
+        "Ta instalacja nie osiągnęła wersji docelowej. Dokończ aktualizację i sprawdź ponownie.":
+            "This installation has not reached the target version. Finish the update and check again.",
+        "Wspólny pakiet aplikacji nie potwierdza wersji tej kopii. Sprawdź wersję w aplikacji po jej restarcie.":
+            "A shared app package does not confirm this copy's version. Check the version inside the app after restarting it.",
+        "Aplikacja zmieniła się podczas sprawdzania. Poczekaj na koniec aktualizacji i spróbuj ponownie.":
+            "The app changed during the check. Wait for the update to finish and try again.",
+    ]
 }
 
 /// Settings, inspector, migration, updates — the long-standing UI surface.

@@ -59,6 +59,8 @@ extension ScanStore {
         operationLease: OperationCoordinator.Lease? = nil
     ) async {
         guard let model else { return }
+        vendorCheckGeneration += 1
+        vendorCheckTask?.cancel()
         if quiet {
             setRefreshing(true)
         } else {

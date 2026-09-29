@@ -35,6 +35,7 @@ public struct VendorCandidate: Sendable {
     /// most vendors use; sources that publish SemVer tags (GitHub) must say so, or a
     /// prerelease outranks its own release (REL-11).
     public var scheme: VersionScheme
+    public var installedVersionField: VendorUpdateRequirement.Field
 
     public init(
         latest: String,
@@ -43,7 +44,8 @@ public struct VendorCandidate: Sendable {
         source: ManualOutdatedApp.UpdateSource,
         releaseNotes: ReleaseNotes? = nil,
         scheme: VersionScheme = .buildNumbered,
-        recordedLatest: String? = nil
+        recordedLatest: String? = nil,
+        installedVersionField: VendorUpdateRequirement.Field = .shortVersion
     ) {
         self.latest = latest
         self.installed = installed
@@ -52,6 +54,7 @@ public struct VendorCandidate: Sendable {
         self.releaseNotes = releaseNotes
         self.scheme = scheme
         self.recordedLatest = recordedLatest
+        self.installedVersionField = installedVersionField
     }
 }
 
@@ -122,7 +125,9 @@ public extension VendorUpdateChecker {
                 installedVersion: candidate.recordedInstalled ?? candidate.installed,
                 availableVersion: candidate.recordedLatest ?? candidate.latest,
                 source: candidate.source,
-                releaseNotes: candidate.releaseNotes
+                releaseNotes: candidate.releaseNotes,
+                completionRequirement: VendorUpdateRequirement(version: candidate.latest,
+                    field: candidate.installedVersionField, scheme: candidate.scheme)
             ))
         }
     }

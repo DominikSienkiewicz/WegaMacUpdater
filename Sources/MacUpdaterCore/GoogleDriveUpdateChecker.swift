@@ -70,7 +70,8 @@ public struct GoogleDriveUpdateChecker: VendorUpdateChecker {
         // (`126.0`). Omaha compares lexicographically so the short form
         // would always read as "older" and produce a false positive when
         // Drive is genuinely up to date.
-        let installed = bundleVersion(at: app.path) ?? app.version ?? ""
+        let build = bundleVersion(at: app.path)
+        let installed = build ?? app.version ?? ""
         guard !installed.isEmpty else { return nil }
         let recordedInstalled = app.version ?? installed
 
@@ -85,7 +86,8 @@ public struct GoogleDriveUpdateChecker: VendorUpdateChecker {
             // Omaha omits <manifest> when there's no update (status="noupdate"), so a
             // missing version here means "current", not a failure.
             guard let latest = GoogleDriveUpdateParser.latestVersion(fromOmahaResponse: data) else { return .decided(.upToDate) }
-            return .candidate(VendorCandidate(latest: latest, installed: installed, recordedInstalled: recordedInstalled, source: .googleDrive))
+            return .candidate(VendorCandidate(latest: latest, installed: installed, recordedInstalled: recordedInstalled,
+                                              source: .googleDrive, installedVersionField: build == nil ? .shortVersion : .buildVersion))
         }
     }
 
