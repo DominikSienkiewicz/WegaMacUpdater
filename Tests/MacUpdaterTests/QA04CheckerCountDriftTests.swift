@@ -22,14 +22,14 @@ import Testing
 @Suite("QA-04 — README counts track the code")
 struct QA04CheckerCountDriftTests {
 
-    /// The prose number and the number of checkers the scanner actually builds.
+    /// The prose number and the number of sources scheduled in the app-checking fan-out.
     ///
     /// Red before the fix: the scanner instantiated 13 checkers while README said *"all nine
     /// manual checkers"* — the exact claim the card cites, still stale four checkers later.
     @Test func readmeStatesTheNumberOfCheckersTheScannerActuallyRuns() throws {
-        let built = try instantiatedCheckerNames()
+        let built = try scheduledCheckerNames()
 
-        #expect(built.count >= 9, "sanity: the scanner factory was found and parsed")
+        #expect(built.count >= 9, "sanity: the scanner fan-out was found and parsed")
 
         let claimed = try #require(
             try firstMatch(in: readme(), pattern: #"runs all (\d+) manual checkers"#),
@@ -41,7 +41,7 @@ struct QA04CheckerCountDriftTests {
 
         #expect(Int(claimed) == built.count,
                 """
-                QA-04: README says \(claimed) manual checkers, ManualUpdateScanner builds \
+                QA-04: README says \(claimed) manual checkers, ManualUpdateScanner schedules \
                 \(built.count) (\(built.sorted().joined(separator: ", "))). \
                 Update the README sentence in the same change that adds or removes a checker.
                 """)
@@ -50,8 +50,8 @@ struct QA04CheckerCountDriftTests {
     /// The same drift, one level down: the scanner's own doc comment lists the checkers by
     /// name, and that list had gone stale too — it named nine while the factory built
     /// thirteen, which is where the README's "nine" came from in the first place.
-    @Test func theScannerDocCommentListsEveryCheckerItBuilds() throws {
-        let built = try instantiatedCheckerNames()
+    @Test func theScannerDocCommentListsEveryCheckerItSchedules() throws {
+        let built = try scheduledCheckerNames()
         let header = try slice(scannerSource(), from: "manual-app update checkers", to: "public struct")
 
         let missing = built.filter { !header.localizedCaseInsensitiveContains(prose(for: $0)) }
@@ -100,16 +100,7 @@ struct QA04CheckerCountDriftTests {
                 """)
     }
 
-    /// The counter has to recognise a checker by the fact that it is *built*, not by the shape
-    /// of the line that builds it.
-    ///
-    /// Red before the fix: the pattern required an empty argument list, so `AdobeUpdateChecker`
-    /// — constructed with a catalog and an inventory, and only when Creative Cloud is installed
-    /// — was invisible. The guard counted 13, README said 13, and the two agreed on a number the
-    /// scanner had already outgrown: a drift guard that reads past the drift is worse than none,
-    /// because it certifies the stale claim. Every argument-taking checker added after this one
-    /// would have been missed the same way.
-    @Test func countsCheckersBuiltWithArgumentsOrBehindAConditional() throws {
+    @Test func countsScheduledCheckersWithArgumentsOrBehindAConditional() throws {
         let source = """
             let plainChecker = PlainUpdateChecker()
             let renamedChecker = GitHubReleasesChecker()
@@ -120,20 +111,21 @@ struct QA04CheckerCountDriftTests {
             let conditionalChecker = inventory.isEmpty ? nil : ConditionalUpdateChecker(
                 inventory: inventory
             )
+            work.append(Self.observed("Plain", app, checker: plainChecker))
+            work.append(Self.observed("GitHub", app, checker: renamedChecker))
+            work.append(Self.observed("Argument", app, checker: argumentChecker))
+            if let conditionalChecker {
+                work.append(Self.observed(
+                    "Conditional", app, checker: conditionalChecker
+                ))
+            }
             """
 
-        #expect(try checkerNames(in: source) == ["plain", "githubreleases", "argument", "conditional"])
+        #expect(try checkerNames(in: source) == ["plain", "github", "argument", "conditional"])
     }
 
-    /// The other half of that contract: a checker the scanner *takes* is not a checker the
-    /// scanner *builds*.
-    ///
-    /// `WegaSelfUpdateChecker` is injected through `init` and asks about Wega itself rather than
-    /// about an installed app; UX-15 folds its single result in beside the per-app fan-out, and
-    /// both README and the scanner's doc comment describe it separately from the manual checkers.
-    /// Counting the parameter's default value would inflate the number the README has to match —
-    /// so the pattern reads assignments, not every mention of a checker type.
-    @Test func ignoresCheckersInjectedThroughTheInitialiser() throws {
+    /// Wega's own check is outside the per-app fan-out and is documented separately.
+    @Test func ignoresAnInjectedSelfUpdateCheckerOutsideTheAppFanOut() throws {
         let source = """
             private let selfUpdateChecker: WegaSelfUpdateChecker
             public init(
@@ -141,32 +133,46 @@ struct QA04CheckerCountDriftTests {
             ) {
                 self.selfUpdateChecker = selfUpdateChecker
             }
+            let result = await selfUpdateChecker.check()
+            observations.append(ManualCheckObservation(app: selfApp, source: "GitHub", result: result))
             """
 
         #expect(try checkerNames(in: source).isEmpty)
     }
 
+    @Test func countsInjectedAndConditionallyAssignedCheckersOnlyWhenScheduled() throws {
+        let source = """
+            let sparkleChecker = self.sparkleChecker
+            var adobeChecker: AdobeUpdateChecker?
+            if !inventory.isEmpty {
+                adobeChecker = AdobeUpdateChecker(catalog: catalog, inventory: inventory)
+            }
+            let unusedChecker = UnusedUpdateChecker()
+            work.append(Self.observed("Sparkle", app, checker: sparkleChecker))
+            if let adobeChecker {
+                work.append(Self.observed("Adobe", app) { adobeChecker.check(app: app) })
+            }
+            observations.append(ManualCheckObservation(app: selfApp, source: "GitHub", result: selfResult))
+            """
+        #expect(try checkerNames(in: source) == ["sparkle", "adobe"])
+        let withoutAdobe = source.replacingOccurrences(
+            of: #"work.append(Self.observed("Adobe", app) { adobeChecker.check(app: app) })"#, with: ""
+        )
+        #expect(try checkerNames(in: withoutAdobe) == ["sparkle"])
+    }
+
     // MARK: Helpers
 
-    /// The checkers the scanner builds, as their type-name stems (`sparkle`, `jetbrains`, …).
-    private func instantiatedCheckerNames() throws -> [String] {
+    private func scheduledCheckerNames() throws -> [String] {
         try checkerNames(in: scannerSource())
     }
 
-    /// Anchored on the *binding*, not on the call. Everything between `=` and the type name is
-    /// unconstrained, so a checker built with arguments — or only when its vendor is installed,
-    /// as in `adobeInventory.isEmpty ? nil : AdobeUpdateChecker(catalog:inventory:)` — is counted
-    /// like any other. The previous pattern demanded a literal `()` and so read straight past
-    /// both, which is this guard suffering the drift it exists to catch: it counted 13, README
-    /// said 13, and the scanner ran 14. `Update` is optional in the middle because
-    /// `GitHubReleasesChecker` does not carry it.
-    ///
-    /// A binding is required, though, so that a checker the scanner *takes* is not mistaken for
-    /// one it *builds*: `WegaSelfUpdateChecker` arrives as an `init` default, asks about Wega
-    /// rather than about an installed app, and is documented separately from the manual checkers.
+    /// Counts named checks appended for an app, independently of how their dependencies are created.
     private func checkerNames(in source: String) throws -> [String] {
-        try matches(in: source, pattern: #"\b(?:let|var)\s+\w+\s*(?::[^=\n]+)?=\s*[^\n]*?\b([A-Z]\w*?)(?:Update)?Checker\("#)
-            .map { $0.lowercased() }
+        var seen = Set<String>()
+        return try matches(in: source, pattern: #"\bwork\s*\.\s*append\s*\(\s*Self\.observed\s*\(\s*"([^"]+)"\s*,\s*app\b"#)
+            .map { $0.replacingOccurrences(of: " ", with: "").lowercased() }
+            .filter { seen.insert($0).inserted }
     }
 
     /// Type stems and prose spellings are not the same word. Only the ones that actually

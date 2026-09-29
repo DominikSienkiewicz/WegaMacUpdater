@@ -34,9 +34,14 @@ struct ForegroundPublisherVetoPersistenceTests {
         let veto = try #require(preparation.range(
             of: "let publisherVetoes = CaskRollbackGuard.publisherVetoes("))
         let snapshot = try #require(preparation.range(of: "let snapshots = snapshotCasks("))
+        let missingSnapshot = try #require(preparation.range(of: "guard missing.isEmpty else {"))
+        let ready = try #require(preparation.range(of: "return .ready(ForegroundCaskPreparation("))
         let blocked = try #require(preparation.range(
-            of: "return .blocked(publisherVetoes: publisherVetoes)"))
+            of: "return .blocked(publisherVetoes: publisherVetoes)",
+            range: missingSnapshot.upperBound..<ready.lowerBound
+        ))
         #expect(veto.lowerBound < snapshot.lowerBound)
+        #expect(snapshot.lowerBound < missingSnapshot.lowerBound)
         #expect(snapshot.lowerBound < blocked.lowerBound)
 
         let updateStart = try #require(source.range(of: "func runUpdate(targetKeys: Set<String>) async"))
@@ -56,5 +61,26 @@ struct ForegroundPublisherVetoPersistenceTests {
         #expect(record.lowerBound < report.lowerBound)
         #expect(report.lowerBound < brew.lowerBound,
                 "SEC-02: the mismatch must be displayed before the mutation phase")
+    }
+
+    @Test(arguments: [false, true])
+    func journalFailurePreservesPublisherVetoBeforeOrAfterSnapshot(afterSnapshot: Bool) throws {
+        let source = try String(
+            contentsOf: packageRoot().appendingPathComponent("Sources/MacUpdater/ScanStore+Rollback.swift"),
+            encoding: .utf8
+        )
+        let veto = try #require(source.range(of: "let publisherVetoes = CaskRollbackGuard.publisherVetoes("))
+        let snapshot = try #require(source.range(of: "let snapshots = snapshotCasks("))
+        let missing = try #require(source.range(of: "let missing = caskNames.filter"))
+        let section = afterSnapshot
+            ? source[snapshot.upperBound..<missing.lowerBound]
+            : source[veto.upperBound..<snapshot.lowerBound]
+        let persisted = try #require(section.range(of: "try operation.requirePersisted()"))
+        let caught = try #require(section.range(of: "catch {", range: persisted.upperBound..<section.endIndex))
+        let catchEnd = try #require(section.range(of: "}", range: caught.upperBound..<section.endIndex))
+        let failure = section[caught.upperBound..<catchEnd.lowerBound]
+        let report = try #require(failure.range(of: "reportJournalFailure(error)"))
+        let blocked = try #require(failure.range(of: "return .blocked(publisherVetoes: publisherVetoes)"))
+        #expect(report.lowerBound < blocked.lowerBound)
     }
 }
