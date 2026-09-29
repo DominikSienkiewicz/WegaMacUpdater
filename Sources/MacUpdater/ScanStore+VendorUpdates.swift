@@ -114,7 +114,8 @@ extension ScanStore {
         let otherSources = (previous?.sources ?? []).filter { $0.source != source }.map {
             InstallationSourceCheck(source: $0.source, outcome: .notChecked)
         }
-        let check = InstallationCheck(app: app, sources: otherSources + [evidence], checkedAt: date)
+        var check = InstallationCheck(app: app, sources: otherSources + [evidence], checkedAt: date)
+        check.caskToken = item.caskPolicyToken
         return InstallationCheck.retainingLastSuccess([check], previous: previous.map { [$0] } ?? []).first
     }
 }

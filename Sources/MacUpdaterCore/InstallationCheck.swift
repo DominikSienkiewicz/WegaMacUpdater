@@ -76,7 +76,8 @@ public struct InstallationCheck: Codable, Equatable, Sendable {
         let updates = sources.filter { $0.outcome == .outdated }
         if updates.contains(where: { check in
             guard let key = check.policyKey else { return true }
-            return !UpdatePlanner.isSuppressed(key: key, availableVersion: check.availableVersion, policies: policies)
+            let keys = [key] + (caskToken.map { [UpdatePlanner.key(name: $0, kind: .cask)] } ?? [])
+            return !keys.contains { UpdatePlanner.isSuppressed(key: $0, availableVersion: check.availableVersion, policies: policies) }
         }) { return .updateAvailable }
         if sources.contains(where: { $0.outcome == .failed }) { return .failed }
         if !updates.isEmpty { return .excluded }

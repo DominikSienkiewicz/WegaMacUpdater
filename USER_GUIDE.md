@@ -276,6 +276,8 @@ updated several times inside those 7 days therefore appears once, offering the m
 update back; take it, and the step before it becomes the next offer, for as long as its copy
 is still retained. Undoing restores the previous app and **pins that version**, so the update
 you just took back is not offered again until you lift the pin in Settings.
+That pin also covers vendor-feed and Homebrew metadata-repair offers for the same resolved
+installation. A second copy at another path keeps its own update offers.
 
 Protected cask upgrades write a **journal** before starting the package manager. If that
 write fails, Wega postpones the update and reports the reason; background updates also
@@ -411,11 +413,13 @@ holds up the update itself.
 
 Wega always downloads the **`.pkg`** when a release publishes one, and falls back to the
 `.dmg` only when it does not. That is a security choice, not a convenience one: the `.pkg`
-is the only artifact Wega can check all the way back to its own developer certificate. What
+and the fallback DMG are both checked against Wega's developer certificate. What
 changes when the privileged helper is switched on is only *who finishes the job* — with the
 helper, Wega installs it for you and then asks you to restart; without it, the same file is
 handed to you to run yourself. A release that publishes neither offers no update button at
-all rather than something Wega cannot verify.
+all rather than something Wega cannot verify. Before opening or installing a package, Wega
+checks its product identity, promised version and signed app payload. A helper installation
+is reported as successful only after checking the expected app and version on disk.
 
 ### When a self-update cannot be confirmed
 
@@ -426,7 +430,7 @@ the same operation; this does not start another installer. A confirmed terminal 
 releases the block. If the helper itself restarted, its previous installer cannot safely
 be assumed to have stopped: inspect **Logs**, and restart macOS before checking the state
 again if completion cannot be established. Wega does not kill the installer on a timeout.
-This recovery path requires helper protocol 4; after replacing an older Wega build,
+This recovery path requires helper protocol 5; after replacing an older Wega build,
 update and re-register its bundled helper.
 
 ### Multiple installations
@@ -442,7 +446,9 @@ Sparkle checks compare the app's build number (`CFBundleVersion`) with the feed'
 `sparkle:version`. The visible version is a separate label: for example, `1.0 (101)`
 can be newer than `1.0 (100)`. Release notes retain those builds separately and use
 the same ordering. Wega accepts both XML elements and enclosure attributes, including
-feeds that publish a build without a short version. ChatGPT's dedicated appcast checker
+feeds that publish a build without a short version when the local app also exposes its build.
+Without a local build, only explicit short versions are comparable; a build-only feed leaves
+the check unconfirmed. ChatGPT's dedicated appcast checker
 uses the same rules. Build comparisons support dotted numeric identifiers. Non-numeric
 builds and app-specific custom comparators are not inferred; an unparseable comparison
 is reported as a failed check.

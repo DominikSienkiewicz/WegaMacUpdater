@@ -57,7 +57,7 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
     }
 
     func beginPackageInstallation(
-        atPath path: String, operationID: String, withReply reply: @escaping @Sendable (Data?, String?) -> Void
+        atPath path: String, operationID: String, expectedVersion: String, withReply reply: @escaping @Sendable (Data?, String?) -> Void
     ) {
         guard let id = UUID(uuidString: operationID) else { reply(nil, "Niepoprawny identyfikator instalacji."); return }
         do {
@@ -66,7 +66,7 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
             let state = try registry.status(id)
             if shouldStart {
                 DispatchQueue.global(qos: .utility).async {
-                    self.installVerifiedPackage(atPath: path) { succeeded, message in
+                    self.installVerifiedPackage(atPath: path, expectedVersion: expectedVersion) { succeeded, message in
                         do { try registry.finish(id, succeeded: succeeded, message: message) }
                         catch { HelperAuditLog.logger.error("Nie zapisano końcowego stanu instalacji: \(id.uuidString, privacy: .public)") }
                     }
@@ -88,7 +88,7 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
         }
     }
 
-    private func installVerifiedPackage(atPath path: String, withReply reply: @escaping @Sendable (Bool, String?) -> Void) {
+    private func installVerifiedPackage(atPath path: String, expectedVersion: String, withReply reply: @escaping @Sendable (Bool, String?) -> Void) {
         // SEC-03: the client's path points into a directory user processes can write to, so it
         // is never verified and never installed. It is only ever *copied from* — once — and
         // everything after that happens on the helper's own copy.
@@ -119,7 +119,10 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
 
         // Defense in depth: the helper re-verifies the package as root before installing.
         do {
-            try CodeSignatureVerifier.verify(installerAt: staged, expectedTeamID: WegaHelper.teamIdentifier)
+            try CodeSignatureVerifier.verify(
+                installerAt: staged, expectedTeamID: WegaHelper.teamIdentifier,
+                bundleID: WegaHelper.appBundleID, expectedVersion: expectedVersion
+            )
         } catch {
             HelperAuditLog.logger.error("installVerifiedPackage: błąd")
             reply(false, "Weryfikacja pakietu nie powiodła się: \(error.localizedDescription)")
@@ -142,6 +145,10 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
                 executable: URL(fileURLWithPath: "/usr/sbin/installer"), arguments: ["-pkg", staged.path, "-target", "/"]
             )
             if result.exitCode == 0 {
+                try CodeSignatureVerifier.verify(
+                    installerAt: PackagePayloadVerifier.installedAppURL, expectedTeamID: WegaHelper.teamIdentifier,
+                    bundleID: WegaHelper.appBundleID, expectedVersion: expectedVersion
+                )
                 HelperAuditLog.logger.info("installVerifiedPackage: sukces")
                 reply(true, nil)
             } else {

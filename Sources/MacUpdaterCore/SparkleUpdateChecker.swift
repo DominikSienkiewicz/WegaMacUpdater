@@ -101,7 +101,7 @@ struct AppcastItem: Equatable {
     /// RSS `<pubDate>` (RFC 822), when the feed carries one.
     var publishedAt: Date?
 
-    func comparisonVersion(usingBuild: Bool) -> String? { usingBuild ? buildVersion : version }
+    func comparisonVersion(usingBuild: Bool) -> String? { usingBuild ? buildVersion : shortVersion }
     func label(includingBuild: Bool) -> String? {
         Self.label(version: version, build: includingBuild ? buildVersion : nil)
     }

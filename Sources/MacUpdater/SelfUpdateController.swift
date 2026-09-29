@@ -54,25 +54,9 @@ final class SelfUpdateController: ObservableObject {
                 )
             },
             installOrOpen: { action, destination in
-                // UX-06 — the same decision the button label is built from, so "install" and
-                // "download and open" always describe the operation that actually runs. The
-                // decision itself is made exactly once, by the caller that planned `action`;
-                // this only executes it — no re-deriving install-vs-open from the file or from
-                // `PrivilegedHelperClient.shared.isEnabled` a second time.
-                guard case .install = action else {
-                    NSWorkspace.shared.open(destination)
-                    return false
-                }
-                do {
-                    try await PrivilegedHelperClient.shared.installVerifiedPackage(at: destination.path)
-                    return true
-                } catch {
-                    WegaLog.error(
-                        .helper,
-                        "Instalacja przez helper nie powiodła się: \(error.localizedDescription)"
-                    )
-                    throw error
-                }
+                guard case .downloadAndOpen = action else { throw PackagePayloadVerifier.Failure.missingExpectation }
+                NSWorkspace.shared.open(destination)
+                return false
             },
             openFallback: {
                 NSWorkspace.shared.open(AppEndpoints.shared.projectRepositoryURL)
@@ -210,6 +194,7 @@ final class SelfUpdateController: ObservableObject {
             return
         }
         let previousResult = result
+        let expectedVersion = previousResult?.availableVersion ?? version
         state = .downloading(previousResult)
         var finalState: State = previousResult.map(State.result) ?? .idle
         defer { state = finalState }
@@ -231,7 +216,10 @@ final class SelfUpdateController: ObservableObject {
         }
 
         do {
-            try dependencies.verify(destination, previousResult?.availableVersion)
+            let verify = dependencies.verify
+            try await Task.detached(priority: .userInitiated) {
+                try verify(destination, expectedVersion)
+            }.value
         } catch {
             WegaLog.error(.app, "Self-update odrzucony: \(error.localizedDescription)")
             try? FileManager.default.removeItem(at: destination)
@@ -249,7 +237,7 @@ final class SelfUpdateController: ObservableObject {
                 let ticket = MutationGuard.shared.begin("self-update")
                 defer { MutationGuard.shared.end(ticket) }
                 if case .install = action, let install = self.dependencies.installTracked {
-                    return try await install(destination, previousResult?.availableVersion ?? version)
+                    return try await install(destination, expectedVersion)
                 }
                 return try await self.dependencies.installOrOpen(action, destination)
             }
@@ -268,7 +256,7 @@ final class SelfUpdateController: ObservableObject {
 
         // UX-06 — `install` (headless, via the helper) and `open` (the user finishes a
         // downloaded installer) are separate outcomes with separate messages.
-        if installed { finalState = .installedPendingRestart(version: version) }
+        if installed { finalState = .installedPendingRestart(version: expectedVersion) }
         onWegaState(WegaState(
             pose: .happy,
             line: SelfUpdatePresentation.message(for: installed ? .installed : .opened)

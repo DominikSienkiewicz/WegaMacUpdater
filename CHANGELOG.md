@@ -22,6 +22,14 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   unknown, stale and policy-hidden outcomes remain distinct.
 
 ### Fixed
+- Self-update packages must match Wega's product identity and offered version, including
+  the signed app inside the package. Helper protocol 5 carries that version end to end;
+  both installation and recovery verify the resulting app before reporting success.
+- Undo's version pin also suppresses vendor-feed and metadata-repair offers for the exact
+  Homebrew installation, across snapshots, pending vendor checks and inventory status.
+  Other installed copies keep their independent offers.
+- Sparkle no longer compares a feed-only build with a local marketing version when the
+  installed app has no build number; such checks remain incomplete.
 - Brew install, upgrade and reinstall requests explicitly disable automatic cleanup,
   retaining cached artifacts for repair without disabling dependency checks.
 - Cask rows and the inspector can fetch Sparkle/GitHub release notes on demand for the

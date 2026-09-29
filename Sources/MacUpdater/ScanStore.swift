@@ -453,7 +453,8 @@ final class ScanStore: ObservableObject {
     /// Manual updates with ignore/pin rules applied.
     var visibleManual: [ManualOutdatedApp] {
         let pendingPaths = Set(vendorHandoffs.map { InstallationIdentity(path: $0.path) })
-        let rows = manualOutdated.filter { !pendingPaths.contains(InstallationIdentity(path: $0.path)) } + vendorHandoffs
+        let pending = UpdatePlanner.attachingCaskPolicies(to: vendorHandoffs, installationChecks: installationChecks)
+        let rows = manualOutdated.filter { !pendingPaths.contains(InstallationIdentity(path: $0.path)) } + pending
         return UpdatePlanner.applyPolicies(rows, policies: UpdatePolicyStore.shared.policiesMap)
     }
 

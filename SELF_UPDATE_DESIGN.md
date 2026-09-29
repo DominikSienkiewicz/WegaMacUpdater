@@ -1,5 +1,11 @@
 # Self-update design
 
+Implementation note: the design below is historical. The current package path pins
+product and version as well as publisher: the client and protocol-5 helper validate
+`PackageInfo` and the signed app payload before installation, then verify the installed
+bundle before success. A recovered operation undergoes the same installed-bundle check.
+See [architecture.md](docs/architecture.md) for the current operation and recovery contract.
+
 How Wega notices, presents and installs a newer version of **itself** — the path from a
 published `v1.0.1` tag to that build running on the user's Mac.
 

@@ -278,6 +278,8 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
     /// Machine-readable target for verifying an update performed by the vendor.
     /// Absent in snapshots saved before vendor completion was introduced.
     public var completionRequirement: VendorUpdateRequirement?
+    /// Assigned only when Brew's resolved installation path identifies this copy.
+    public var caskPolicyToken: String?
 
     public init(
         name: String,
@@ -289,7 +291,8 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
         releaseNotes: ReleaseNotes? = nil,
         bundleIdentifier: String? = nil,
         rolledBack: Bool = false,
-        completionRequirement: VendorUpdateRequirement? = nil
+        completionRequirement: VendorUpdateRequirement? = nil,
+        caskPolicyToken: String? = nil
     ) {
         self.name = name
         self.path = path
@@ -301,6 +304,7 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
         self.bundleIdentifier = bundleIdentifier
         self.rolledBack = rolledBack
         self.completionRequirement = completionRequirement
+        self.caskPolicyToken = caskPolicyToken
     }
 }
 
