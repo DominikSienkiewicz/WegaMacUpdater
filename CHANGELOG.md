@@ -13,51 +13,26 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
-### Added
-- Vendor update handoffs now offer an on-demand check of the exact installation, retain
-  pending work across Wega restarts and record confirmed updates as performed outside Wega.
-  Source failures, missing bundles and unmet target builds remain explicitly unconfirmed.
-- Inventory shows per-installation update-check status, source details, attempt and last
-  complete-check times, plus a “Needs checking” filter. Results survive saved-scan restore;
-  unknown, stale and policy-hidden outcomes remain distinct.
+## [0.5.0] — 2026-09-29
 
-### Fixed
-- Self-update packages must match Wega's product identity and offered version, including
-  the signed app inside the package. Helper protocol 5 carries that version end to end;
-  both installation and recovery verify the resulting app before reporting success.
-- Undo's version pin also suppresses vendor-feed and metadata-repair offers for the exact
-  Homebrew installation, across snapshots, pending vendor checks and inventory status.
-  Other installed copies keep their independent offers.
-- Sparkle no longer compares a feed-only build with a local marketing version when the
-  installed app has no build number; such checks remain incomplete.
-- Brew install, upgrade and reinstall requests explicitly disable automatic cleanup,
-  retaining cached artifacts for repair without disabling dependency checks.
-- Cask rows and the inspector can fetch Sparkle/GitHub release notes on demand for the
-  exact offered release, independently of duplicate-update suppression. Ambiguous builds
-  do not receive guessed notes.
-- Temporary manual-source outages, missing cask-version data and self-update failures
-  remain incomplete in window/menu-bar scan reports instead of becoming “up to date”.
-- Sparkle and ChatGPT appcasts compare build versions separately from display versions,
-  parse version elements and attributes, and retain release notes for each newer build.
-- Protected cask updates, adoption and migration stop before launching Brew if recovery
-  journal writes fail. Recovery preserves snapshots whose legacy journal cannot prove
-  that installation never started.
-- A lost XPC reply or installation timeout no longer opens a second installer or releases
-  Wega's mutation protection. Installation IDs and outcomes survive client restarts;
-  Settings can query the existing operation. Helper protocol 4 drains installer output
-  continuously and keeps an unresolved operation blocked after a helper restart.
-- Manual scans now identify installations by their standardized paths. Two copies with the
-  same bundle identifier are checked separately, overlapping scan roots stay deduplicated,
-  and update rows show their paths. A shared cask match does not authorize installing into
-  another copy through the same Homebrew token.
+### Added
+- Wega can check whether an update done by the app's own updater actually landed. Pending
+  checks survive a restart.
+- Inventory shows when and where each app was last checked, with a “Needs checking” filter.
+- Cask rows can fetch release notes for the exact version on offer.
 
 ### Changed
-- **The Updates screen is locked while an update runs** — once a batch starts, everything below
-  the header (rows, checkboxes, banner actions, manual installs, the stale-cask card) is greyed
-  out behind an overlay showing the run's progress and live log. The overlay carries the only
-  control left: **Cancel**, which finishes the package being installed and starts none of the
-  ones queued after it. Previously the list stayed live, so a selection could change under a
-  running batch or a second install could be started mid-run.
+- The Updates screen is locked while an update runs; only Cancel stays available.
+
+### Fixed
+- Self-updates confirm the installed app and version before reporting success.
+- A lost helper reply or a timeout no longer starts a second installer.
+- Two copies of the same app are checked and updated separately.
+- Sparkle builds are compared by build number, not display version.
+- A version pinned by Undo stays pinned across every update source.
+- Failed or incomplete checks no longer show as “up to date”.
+- Updates stop safely if the recovery journal can't be saved.
+- Brew keeps downloaded files so a failed update can be repaired.
 
 ## [0.4.0] — 2026-09-23
 
@@ -365,7 +340,8 @@ their terms are still theirs.
   what changed in it, because there is no published predecessor to have changed from.
 -->
 
-[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.2.0...v0.3.0
 
