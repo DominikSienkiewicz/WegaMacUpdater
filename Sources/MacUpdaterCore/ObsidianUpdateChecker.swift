@@ -40,7 +40,7 @@ public struct ObsidianUpdateChecker: VendorUpdateChecker {
             let latest = insider
                 ? releases.beta?.latestVersion ?? releases.latestVersion
                 : releases.latestVersion
-            return .candidate(VendorCandidate(latest: latest, installed: installed, source: .obsidian))
+            return .candidate(VendorCandidate(latest: latest, installed: installed, source: .obsidian, installedVersionField: .sharedPackage))
         }
     }
 

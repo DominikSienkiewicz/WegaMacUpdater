@@ -275,6 +275,9 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
     /// "cofnięto — ponów próbę", and its Brew action force-reinstalls (repairing the Caskroom
     /// metadata) through the safe canary/rollback path. `false` for every ordinary result.
     public var rolledBack: Bool
+    /// Machine-readable target for verifying an update performed by the vendor.
+    /// Absent in snapshots saved before vendor completion was introduced.
+    public var completionRequirement: VendorUpdateRequirement?
 
     public init(
         name: String,
@@ -285,7 +288,8 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
         origin: AppOrigin = .manual,
         releaseNotes: ReleaseNotes? = nil,
         bundleIdentifier: String? = nil,
-        rolledBack: Bool = false
+        rolledBack: Bool = false,
+        completionRequirement: VendorUpdateRequirement? = nil
     ) {
         self.name = name
         self.path = path
@@ -296,6 +300,7 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
         self.releaseNotes = releaseNotes
         self.bundleIdentifier = bundleIdentifier
         self.rolledBack = rolledBack
+        self.completionRequirement = completionRequirement
     }
 }
 

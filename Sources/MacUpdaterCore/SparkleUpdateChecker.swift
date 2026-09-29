@@ -36,7 +36,8 @@ public struct SparkleUpdateChecker: VendorUpdateChecker {
             latest: latest, installed: installed,
             recordedInstalled: AppcastItem.label(version: app.version, build: result.usesBuildVersion ? app.buildVersion : nil),
             source: source, releaseNotes: ReleaseNotes(history: result.history, link: result.latest.releaseNotesLink), scheme: scheme,
-            recordedLatest: result.latest.label(includingBuild: result.usesBuildVersion)
+            recordedLatest: result.latest.label(includingBuild: result.usesBuildVersion),
+            installedVersionField: result.usesBuildVersion ? .buildVersion : .shortVersion
         ))
     }
 

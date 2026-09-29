@@ -34,10 +34,14 @@ struct ScanStoreDependencies {
     let bundleExists: (URL) -> Bool
     let manualScan: ManualScan
     let reportWindowScan: (Int, Int, String) -> Void
-    let recordUpdateRun: (UpdateJournalEntry) -> Void
+    var recordUpdateRun: (UpdateJournalEntry) -> Void
     let settleAppManagementPermission: ((Bool) -> Void)?
     let undoableUpdates: () -> [UndoableUpdate]
     var detailedManualScan: ((BrewService, Set<String>) async -> ManualScanReport)? = nil
+    var checkVendorUpdate: @Sendable (ManualOutdatedApp) async throws -> VendorUpdateCompletionResult = {
+        try await VendorUpdateCompletionChecker().check($0)
+    }
+    var reportVendorCheck: (ManualOutdatedApp, ManualOutdatedApp?, InstallationCheck?, Int, String) -> Void = { _, _, _, _, _ in }
 
     static let live = ScanStoreDependencies(
         operations: .shared,
@@ -61,6 +65,9 @@ struct ScanStoreDependencies {
         undoableUpdates: { UpdateOperationStore.shared.undoableUpdates() },
         detailedManualScan: { brew, outdated in
             await ManualUpdateScanner(brewService: brew).scanReport(brewOutdatedCasks: outdated)
+        },
+        reportVendorCheck: { item, remaining, check, count, fingerprint in
+            MenuBarAgent.shared.reportVendorCheck(item: item, remaining: remaining, check: check, count: count, fingerprint: fingerprint)
         }
     )
 }
@@ -85,6 +92,11 @@ final class ScanStore: ObservableObject {
     @Published var npmOutdated:       [NpmGlobalOutdated] = []
     @Published var manualOutdated:    [ManualOutdatedApp] = []
     @Published var manualBusy:        String?
+    @Published var vendorHandoffs: [ManualOutdatedApp] = []
+    @Published var vendorCheckPath: String?
+    @Published var vendorMessages: [String: String] = [:]
+    var vendorCheckTask: Task<Void, Never>?
+    var vendorCheckGeneration = 0
     @Published var brewLog:           [String]            = []
     @Published var showLog:           Bool                = false
     @Published var selected:          Set<String>         = []
@@ -256,6 +268,7 @@ final class ScanStore: ObservableObject {
         restoredLastScan = true
 
         let snapshot = resultStore.load()
+        vendorHandoffs = snapshot?.vendorHandoffs ?? []
         let background = MenuBarAgent.shared.lastResult
 
         // Prefer whichever was taken later; a nil timestamp can never win.
@@ -392,7 +405,8 @@ final class ScanStore: ObservableObject {
             // accumulate a path for every cask ever updated on this machine.
             caskAppPaths: caskIconPaths.filter(isOutdatedCask),
             sources: sourceReports,
-            installationChecks: installationChecks
+            installationChecks: installationChecks,
+            vendorHandoffs: vendorHandoffs
         )
         do { try resultStore.save(snapshot) }
         catch { WegaLog.error(.app, "Nie udało się zapisać wyniku skanu: \(error.localizedDescription)") }
@@ -438,7 +452,9 @@ final class ScanStore: ObservableObject {
 
     /// Manual updates with ignore/pin rules applied.
     var visibleManual: [ManualOutdatedApp] {
-        UpdatePlanner.applyPolicies(manualOutdated, policies: UpdatePolicyStore.shared.policiesMap)
+        let pendingPaths = Set(vendorHandoffs.map { InstallationIdentity(path: $0.path) })
+        let rows = manualOutdated.filter { !pendingPaths.contains(InstallationIdentity(path: $0.path)) } + vendorHandoffs
+        return UpdatePlanner.applyPolicies(rows, policies: UpdatePolicyStore.shared.policiesMap)
     }
 
     /// The update currently shown in the inspector pane, resolved from `inspectedKey`

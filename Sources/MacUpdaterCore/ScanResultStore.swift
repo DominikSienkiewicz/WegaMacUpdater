@@ -111,6 +111,8 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
     /// derived on read, so a file written by a build with a different idea of completeness
     /// still means what it said at the time; defaults to what `sources` implies.
     public var isComplete: Bool
+    /// Updates handed to a vendor and awaiting an explicit single-installation check.
+    public var vendorHandoffs: [ManualOutdatedApp]
 
     public init(
         scannedAt: Date,
@@ -121,9 +123,11 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
         caskAppPaths: [String: URL] = [:],
         sources: ScanSourceReports = ScanSourceReports(),
         isComplete: Bool? = nil,
-        installationChecks: [InstallationCheck] = []
+        installationChecks: [InstallationCheck] = [],
+        vendorHandoffs: [ManualOutdatedApp] = []
     ) {
         self.installationChecks = installationChecks
+        self.vendorHandoffs = vendorHandoffs
         self.scannedAt = scannedAt
         self.brew = brew
         self.mas = mas
@@ -159,6 +163,7 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, scannedAt, brew, mas, npm, manual, caskAppPaths, sources, isComplete, installationChecks
+        case vendorHandoffs
     }
 
     /// Decodes a schema-1 file too — it carries the lists but neither `sources` nor
@@ -168,6 +173,7 @@ public struct ScanSnapshot: Codable, Equatable, Sendable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         installationChecks = try container.decodeIfPresent([InstallationCheck].self, forKey: .installationChecks) ?? []
+        vendorHandoffs = try container.decodeIfPresent([ManualOutdatedApp].self, forKey: .vendorHandoffs) ?? []
         schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
         scannedAt = try container.decode(Date.self, forKey: .scannedAt)
         brew = try container.decodeIfPresent(BrewOutdated.self, forKey: .brew)

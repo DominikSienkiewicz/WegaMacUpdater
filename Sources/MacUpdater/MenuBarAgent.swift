@@ -207,6 +207,27 @@ final class MenuBarAgent: ObservableObject {
         updateDockBadge()
     }
 
+    /// Reconciles one vendor result without changing the full-scan timestamp.
+    func reportVendorCheck(
+        item: ManualOutdatedApp, remaining: ManualOutdatedApp?, check: InstallationCheck?, count: Int, fingerprint: String
+    ) {
+        if var result = lastResult {
+            result.manualApps.removeAll { $0.path == item.path && $0.bundleIdentifier == item.bundleIdentifier }
+            if let remaining { result.manualApps.append(remaining) }
+            if let check {
+                result.installationChecks.removeAll { InstallationIdentity(path: $0.path) == InstallationIdentity(path: check.path) }
+                result.installationChecks.append(check)
+            }
+            result.total = count
+            lastResult = result
+            lastCheckFailed = count == 0 && result.failedChecks > 0
+        }
+        updateCount = count
+        rememberNotified(fingerprint)
+        persist()
+        updateDockBadge()
+    }
+
     /// Move the notification watermark to this exact set of updates.
     private func rememberNotified(_ fingerprint: String) {
         lastNotifiedFingerprint = fingerprint

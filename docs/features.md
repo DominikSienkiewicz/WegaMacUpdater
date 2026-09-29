@@ -6,6 +6,12 @@ Every screen and every guard, in the order you meet them. The pipeline underneat
 
 ### Update
 
+Vendor handoffs retain pending state and offer **Check this app** in both the update row
+and inspector. Verification targets one path and source, confirms the offered version/build
+on disk and records an external update in diagnostic history. Failure remains actionable;
+no full Brew scan or background updater monitoring is started. See the
+[completion workflow and limitations](../USER_GUIDE.md#finishing-an-update-with-the-vendor).
+
 One screen that checks every source in one pass, shows the exact commands before running
 them, and reports one honest outcome per item afterwards.
 

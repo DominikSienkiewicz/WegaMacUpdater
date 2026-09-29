@@ -4,6 +4,21 @@ Module tree and the sudo/helper boundary. For what the app does with it, see [fe
 
 ## Architecture
 
+`VendorUpdateRequirement` preserves the comparison target, version field and scheme next
+to each vendor-produced `ManualOutdatedApp`; display labels are never reverse-parsed.
+`VendorUpdateCompletionChecker` rereads the exact Info.plist without Bundle caching, checks
+bundle identity, routes to only the selected source and rereads the bundle after the request.
+It requires both a current source result and a reached local target before confirming.
+Shared Obsidian package data alone cannot confirm an individual bundle's active version.
+
+`ScanStore+VendorUpdates` owns the cancellable task under an `OperationCoordinator` read
+lease. A full scan invalidates an in-flight verification. Pending rows are persisted as the
+additive `ScanSnapshot.vendorHandoffs` field and remain visible until explicitly resolved
+or dismissed. One-app results update their installation evidence and menu-bar count without
+advancing full-scan timestamps or claiming other sources were checked. Confirmed results use
+`UpdateJournalEntry.Trigger.external`; they do not run Wega installation, signature-validation
+or rollback machinery. New optional targets and pending arrays decode older snapshots safely.
+
 `ManualUpdateScanner.scanReport()` preserves observations by `InstallationIdentity`, with
 source applicability and outcomes independent of the selected update row. The legacy tuple
 `scan()` and a default `ManualScanning.scanReport()` adapter retain existing consumer and

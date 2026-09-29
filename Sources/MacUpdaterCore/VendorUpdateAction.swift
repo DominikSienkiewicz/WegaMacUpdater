@@ -46,6 +46,21 @@ public enum OpenURLStyle: Equatable, Sendable {
 }
 
 public extension ManualOutdatedApp.UpdateSource {
+    var supportsVendorCompletion: Bool {
+        switch updateActionKind {
+        case .launchApp, .launchAppWithReleases, .openURL, .jetBrainsToolbox, .creativeCloud: true
+        case .brewInstall, .appStore, .openSelfUpdate: false
+        }
+    }
+
+    var completionSourceLabel: String {
+        switch self {
+        case .jetbrains: "JetBrains"
+        case .adobe: "Adobe"
+        default: badgeLabel
+        }
+    }
+
     /// The badge text shown next to the action — brand name for self-updating vendors, the
     /// concrete token/id for the sources that carry one. Single source of truth for both the
     /// list row and the inspector pane.

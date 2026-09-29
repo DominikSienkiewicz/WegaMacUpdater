@@ -127,6 +127,34 @@ A display-only `1.0` shared by several feed builds is ambiguous, so Wega withhol
 GitHub tags must match the offered version after removing the tag prefix. Missing notes
 are shown separately from a failed request; failed requests offer Retry.
 
+### Finishing an update with the vendor
+
+For apps updated through their own updater, Toolbox, Creative Cloud or a vendor download
+page, opening the destination leaves a pending handoff in Wega. Finish the update there,
+then choose **“Check this app”** in the row or inspector. The check is also available when
+you have already updated the app outside Wega. It reads this exact bundle from disk and
+contacts only its selected vendor source; it does not refresh Homebrew or scan other apps.
+
+An update is confirmed only when the bundle identifier still matches, the source reports
+it current and the on-disk version reaches the offered target using the source's version
+semantics (including Sparkle build numbers). The row then disappears and the diagnostic
+update history records an **external** update. This verifies the version on disk; it does
+not validate the signature or prove that an already-running process has restarted.
+
+If the source fails, the app moves or disappears, the version stays too old, or the bundle
+changes during the check, the row remains with a reason and a retry action. A newer release
+reported by the source updates the pending row. Checks use the existing bounded HTTP retry
+and timeout policy; Wega does not poll the vendor updater. **Cancel** stops verification,
+not the external updater. Pending handoffs survive restarting Wega and language changes.
+**Stop tracking** dismisses the handoff without recording success or removing the app; an
+outdated row remains until a subsequent check resolves it.
+
+Older saved scan results lack a machine-readable verification target. They can be checked
+again to refresh an outdated offer; if already current, stop tracking and run a full check.
+Obsidian's shared ASAR package alone cannot prove that this particular copy has loaded the
+update: unless the bundle itself reaches the target, Wega leaves the result unconfirmed
+and asks you to inspect the version inside Obsidian after restarting it.
+
 ### Brew cache retention
 
 Wega's Brew requests set `HOMEBREW_NO_INSTALL_CLEANUP=1`, including streamed adoption and
