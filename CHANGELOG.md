@@ -13,8 +13,11 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+## [0.5.2] — 2026-09-29
+
 ### Fixed
 - When GitHub's rate limit is used up, scans no longer wait minutes for it to reset.
+- Stop retrying when the server asks for a wait longer than a minute. (a030fb6)
 
 ## [0.5.1] — 2026-09-29
 
@@ -348,7 +351,8 @@ their terms are still theirs.
   what changed in it, because there is no published predecessor to have changed from.
 -->
 
-[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.3.0...v0.4.0
