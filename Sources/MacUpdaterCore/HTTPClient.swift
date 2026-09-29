@@ -229,6 +229,13 @@ public final class HTTPClient: @unchecked Sendable {
                 if let http = response as? HTTPURLResponse,
                    shouldRetry(http),
                    attempt < maxRetries {
+                    if let wait = serverRequestedWait(http), wait > Self.maxRetryWait {
+                        WegaLog.warning(
+                            .network,
+                            "HTTP \(http.statusCode) from \(target) — serwer każe czekać \(Int(wait))s, bez ponawiania"
+                        )
+                        return (data, response)
+                    }
                     attempt += 1
                     let delay = retryDelay(http: http, attempt: attempt)
                     WegaLog.warning(
@@ -284,19 +291,28 @@ public final class HTTPClient: @unchecked Sendable {
     /// `X-RateLimit-Reset` (epoch). W przeciwnym razie exponential backoff z
     /// pełnym jitterem. Wszystko zacapowane do 60 s, by uniknąć absurdalnych czekań.
     private func retryDelay(http: HTTPURLResponse?, attempt: Int) -> TimeInterval {
-        let cap: TimeInterval = 60
-        if let http {
-            if let raw = http.value(forHTTPHeaderField: "Retry-After"), let seconds = TimeInterval(raw) {
-                return min(max(0, seconds), cap)
-            }
-            if let raw = http.value(forHTTPHeaderField: "X-RateLimit-Reset"), let reset = TimeInterval(raw) {
-                let wait = reset - Date().timeIntervalSince1970
-                if wait > 0 { return min(wait, cap) }
-            }
+        let cap = Self.maxRetryWait
+        if let http, let wait = serverRequestedWait(http) {
+            return min(wait, cap)
         }
         guard retryBaseDelay > 0 else { return 0 }   // utrzymuje testy (retryBaseDelay: 0) natychmiastowe
         let base = retryBaseDelay * pow(2.0, Double(max(0, attempt - 1)))
         return min(base + Double.random(in: 0...base), cap)   // full jitter
+    }
+
+    /// Longer server-requested waits cannot be sat out inside a scan; the response is returned as is.
+    private static let maxRetryWait: TimeInterval = 60
+
+    /// The wait the server asked for: `Retry-After` (seconds), else a future `X-RateLimit-Reset`.
+    private func serverRequestedWait(_ http: HTTPURLResponse) -> TimeInterval? {
+        if let raw = http.value(forHTTPHeaderField: "Retry-After"), let seconds = TimeInterval(raw) {
+            return max(0, seconds)
+        }
+        if let raw = http.value(forHTTPHeaderField: "X-RateLimit-Reset"), let reset = TimeInterval(raw) {
+            let wait = reset - Date().timeIntervalSince1970
+            if wait > 0 { return wait }
+        }
+        return nil
     }
 
     private func sleepFor(_ seconds: TimeInterval) async throws {
