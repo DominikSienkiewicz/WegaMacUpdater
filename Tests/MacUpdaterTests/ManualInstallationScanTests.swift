@@ -8,7 +8,7 @@ struct ManualInstallationScanTests {
         let fixture = try Fixture(versions: ["2.0", "1.0"])
         defer { fixture.remove() }
         let result = await fixture.scanner.scan()
-        #expect(result.apps.map { $0.path.path } == [fixture.apps[1].path])
+        #expect(result.apps.map { InstallationIdentity(path: $0.path) } == [InstallationIdentity(path: fixture.apps[1])])
         #expect(result.apps.first?.installedVersion == "1.0")
     }
 
@@ -16,18 +16,18 @@ struct ManualInstallationScanTests {
         let fixture = try Fixture(versions: ["1.0", "1.1"])
         defer { fixture.remove() }
         let result = await fixture.scanner.scan()
-        #expect(Set(result.apps.map { $0.path.path }) == Set(fixture.apps.map(\.path)))
+        #expect(Set(result.apps.map { InstallationIdentity(path: $0.path) }) == Set(fixture.apps.map { InstallationIdentity(path: $0) }))
         #expect(result.apps.count == 2)
-        let first = try #require(result.apps.first { $0.path.path == fixture.apps[0].path })
+        let first = try #require(result.apps.first { InstallationIdentity(path: $0.path) == InstallationIdentity(path: fixture.apps[0]) })
         let visible = UpdatePlanner.applyPolicies(result.apps, policies: [first.policyKey: .pinned(version: "1.0")])
-        #expect(visible.map { $0.path.path } == [fixture.apps[1].path])
+        #expect(visible.map { InstallationIdentity(path: $0.path) } == [InstallationIdentity(path: fixture.apps[1])])
     }
 
     @Test func missingBundleIdentifiersStillUseDistinctPaths() async throws {
         let fixture = try Fixture(versions: ["1.0", "1.1"], bundleID: nil)
         defer { fixture.remove() }
         let result = await fixture.scanner.scan()
-        #expect(Set(result.apps.map { $0.path.path }) == Set(fixture.apps.map(\.path)))
+        #expect(Set(result.apps.map { InstallationIdentity(path: $0.path) }) == Set(fixture.apps.map { InstallationIdentity(path: $0) }))
         #expect(result.apps.count == 2)
     }
 
