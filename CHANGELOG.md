@@ -13,6 +13,9 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Fixed
+- When GitHub's rate limit is used up, scans no longer wait minutes for it to reset.
+
 ## [0.5.1] — 2026-09-29
 
 ### Fixed

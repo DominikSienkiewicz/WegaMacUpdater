@@ -119,6 +119,37 @@ final class HTTPClientTests: XCTestCase {
         XCTAssertEqual(transport.requestCount, 3, "1 initial + 2 retries")
     }
 
+    func testExhaustedRateLimitResettingLaterThanTheWaitCapIsNotRetried() async throws {
+        let resetInAnHour = String(Int(Date().timeIntervalSince1970) + 3600)
+        let transport = FakeTransport([
+            ok("", status: 403, headers: ["X-RateLimit-Remaining": "0", "X-RateLimit-Reset": resetInAnHour])
+        ])
+        let client = HTTPClient(transport: transport, maxRetries: 2, retryBaseDelay: 0)
+        let response = try await client.get(url)
+        XCTAssertEqual(response.statusCode, 403)
+        XCTAssertEqual(transport.requestCount, 1, "a retry within the wait cap cannot outlast the reset")
+    }
+
+    func testRetryAfterLongerThanTheWaitCapIsNotRetried() async throws {
+        let transport = FakeTransport([ok("", status: 429, headers: ["Retry-After": "3600"])])
+        let client = HTTPClient(transport: transport, maxRetries: 2, retryBaseDelay: 0)
+        let response = try await client.get(url)
+        XCTAssertEqual(response.statusCode, 429)
+        XCTAssertEqual(transport.requestCount, 1)
+    }
+
+    func testExhaustedRateLimitThatHasAlreadyResetIsRetried() async throws {
+        let resetInThePast = String(Int(Date().timeIntervalSince1970) - 1)
+        let transport = FakeTransport([
+            ok("", status: 403, headers: ["X-RateLimit-Remaining": "0", "X-RateLimit-Reset": resetInThePast]),
+            ok("recovered")
+        ])
+        let client = HTTPClient(transport: transport, maxRetries: 2, retryBaseDelay: 0)
+        let response = try await client.get(url)
+        XCTAssertEqual(response.statusCode, 200)
+        XCTAssertEqual(transport.requestCount, 2)
+    }
+
     // MARK: POST
 
     func testPostSendsBodyAndContentType() async throws {
