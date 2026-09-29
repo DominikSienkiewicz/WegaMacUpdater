@@ -27,6 +27,8 @@ public struct MenuBarScanResult: Equatable, Sendable {
     /// Policy-filtered badge count: package items (ignore/pin honoured) plus visible
     /// manual updates.
     public var total: Int
+    public var installationChecks: [InstallationCheck]
+    public var sources: ScanSourceReports
 
     public init(
         brew: BrewOutdated?,
@@ -35,7 +37,9 @@ public struct MenuBarScanResult: Equatable, Sendable {
         manualApps: [ManualOutdatedApp],
         failedChecks: Int,
         scannedAt: Date,
-        total: Int
+        total: Int,
+        installationChecks: [InstallationCheck] = [],
+        sources: ScanSourceReports = ScanSourceReports()
     ) {
         self.brew = brew
         self.mas = mas
@@ -44,6 +48,8 @@ public struct MenuBarScanResult: Equatable, Sendable {
         self.failedChecks = failedChecks
         self.scannedAt = scannedAt
         self.total = total
+        self.installationChecks = installationChecks
+        self.sources = sources
     }
 
     /// UX-11g — the display names of everything this check found outdated, so the menu-bar
@@ -81,6 +87,7 @@ public struct MenuBarScanResult: Equatable, Sendable {
         guard !upgraded.isEmpty, let brew else { return self }
         let done = Set(upgraded)
         var trimmed = self
+        trimmed.installationChecks.removeAll { check in check.caskToken.map(done.contains) ?? false }
         trimmed.brew = BrewOutdated(
             formulae: brew.formulae,
             casks: brew.casks.filter { !done.contains($0.name) }
@@ -116,6 +123,14 @@ public protocol NpmOutdatedProviding: Sendable {
 /// The manual-scan seam. `ManualUpdateScanner` conforms.
 public protocol ManualScanning: Sendable {
     func scan(brewOutdatedCasks: Set<String>) async -> (apps: [ManualOutdatedApp], failedChecks: Int)
+    func scanReport(brewOutdatedCasks: Set<String>) async -> ManualScanReport
+}
+
+public extension ManualScanning {
+    func scanReport(brewOutdatedCasks: Set<String>) async -> ManualScanReport {
+        let result = await scan(brewOutdatedCasks: brewOutdatedCasks)
+        return ManualScanReport(apps: result.apps, failedChecks: result.failedChecks)
+    }
 }
 
 extension BrewService: BrewOutdatedProviding {}
@@ -175,30 +190,34 @@ public struct MenuBarUpdateChecker: Sendable {
         policies: [String: UpdatePolicy]
     ) async -> MenuBarScanResult {
         var failed = 0
+        var reports = ScanSourceReports()
 
         // F4 — brew missing is "not applicable", exactly as for mas and npm below. Counting
         // it as a failure made the background badge permanently red on machines without it.
         var brew: BrewOutdated?
-        do { brew = try await brewService.outdatedGreedy() }
-        catch BrewServiceError.brewNotFound { /* Homebrew not installed — nothing to report, not a failure */ }
+        do { brew = try await brewService.outdatedGreedy(); reports.brew = ScanSourceReport(outcome: .succeeded) }
+        catch BrewServiceError.brewNotFound { reports.brew = ScanSourceReport(outcome: .notInstalled) }
         catch {
             failed += 1
+            reports.brew = ScanSourceReport(outcome: .failed("Homebrew"))
             WegaLog.error(.homebrew, "Skan z paska menu — brew outdated: \(error.localizedDescription)")
         }
 
         var mas: [MasOutdatedApp] = []
-        do { mas = try await masService.outdated() }
-        catch MasServiceError.masNotFound { /* mas not installed — no App Store updates to report, not a failure */ }
+        do { mas = try await masService.outdated(); reports.mas = ScanSourceReport(outcome: .succeeded) }
+        catch MasServiceError.masNotFound { reports.mas = ScanSourceReport(outcome: .notInstalled) }
         catch {
             failed += 1
+            reports.mas = ScanSourceReport(outcome: .failed("App Store"))
             WegaLog.error(.app, "Skan z paska menu — mas outdated: \(error.localizedDescription)")
         }
 
         var npm: [NpmGlobalOutdated] = []
-        do { npm = try await npmService.outdated() }
-        catch NpmServiceError.npmNotFound { /* npm not installed — no global packages to report, not a failure */ }
+        do { npm = try await npmService.outdated(); reports.npm = ScanSourceReport(outcome: .succeeded) }
+        catch NpmServiceError.npmNotFound { reports.npm = ScanSourceReport(outcome: .notInstalled) }
         catch {
             failed += 1
+            reports.npm = ScanSourceReport(outcome: .failed("npm"))
             WegaLog.error(.network, "Skan z paska menu — npm outdated: \(error.localizedDescription)")
         }
 
@@ -208,8 +227,9 @@ public struct MenuBarUpdateChecker: Sendable {
         )
 
         let brewOutdatedCasks = Set(brew?.casks.map(\.name) ?? [])
-        let manual = await scanner.scan(brewOutdatedCasks: brewOutdatedCasks)
+        let manual = await scanner.scanReport(brewOutdatedCasks: brewOutdatedCasks)
         failed += manual.failedChecks
+        reports.manual = manual.sourceReport
         let visibleManual = UpdatePlanner.applyPolicies(manual.apps, policies: policies)
 
         return MenuBarScanResult(
@@ -219,7 +239,9 @@ public struct MenuBarUpdateChecker: Sendable {
             manualApps: manual.apps,
             failedChecks: failed,
             scannedAt: Date(),
-            total: items.count + visibleManual.count
+            total: items.count + visibleManual.count,
+            installationChecks: InstallationCheck.resolvingManagers(manual.installations, reports: reports, brew: brew),
+            sources: reports
         )
     }
 }

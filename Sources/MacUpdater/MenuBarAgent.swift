@@ -174,6 +174,8 @@ final class MenuBarAgent: ObservableObject {
             current = current.removingUpgradedCasks(upgraded, policies: policies)
         }
 
+        guard !Task.isCancelled else { return }
+        current.installationChecks = InstallationCheck.retainingLastSuccess(current.installationChecks, previous: lastResult?.installationChecks ?? [])
         lastResult = current
         updateCount = current.total
         lastCheckFailed = current.total == 0 && current.failedChecks > 0

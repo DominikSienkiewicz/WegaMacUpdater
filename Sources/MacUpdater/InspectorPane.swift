@@ -248,8 +248,13 @@ struct InspectorPane: View {
             sectionHeading(tr("Co nowego"))
             switch update {
             // `InspectedUpdate.outdated(OutdatedItem, iconPath: URL?)` — see UpdateView.swift:9.
-            case .outdated(let item, _):
-                whatsNewContent(notes: item.releaseNotes)
+            case .outdated(let item, let path):
+                if item.releaseNotes?.isEmpty != false,
+                   let request = CaskReleaseNotesRequest(item: item, appPath: path) {
+                    CaskReleaseNotesView(request: request).id(request)
+                } else {
+                    whatsNewContent(notes: item.releaseNotes)
+                }
             case .manual(let app):
                 whatsNewContent(notes: app.releaseNotes)
             }

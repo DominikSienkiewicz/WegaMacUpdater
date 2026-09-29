@@ -12,6 +12,10 @@ struct InventoryView: View {
     var onWegaState: ((WegaState) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
+    @EnvironmentObject private var scanStore: ScanStore
+    @ObservedObject private var menuBar = MenuBarAgent.shared
+    @ObservedObject private var policies = UpdatePolicyStore.shared
+    @State private var needsCheckingOnly = false
     /// UX-10 — ⌘F ("Znajdź w spisie aplikacji") asks, through here, for the `.searchable`
     /// field to take focus.
     @EnvironmentObject private var commandCenter: WegaCommandCenter
@@ -24,6 +28,17 @@ struct InventoryView: View {
     /// UX-11f — set when a chosen export destination cannot be written; shown as a banner.
     @State private var exportError:  String?           = nil
     @FocusState private var searchFocused: Bool
+
+    private var checksByPath: [InstallationIdentity: InstallationCheck] {
+        let background = menuBar.lastResult
+        let checks = (background?.scannedAt ?? .distantPast) > (scanStore.lastCheck ?? .distantPast)
+            ? background?.installationChecks ?? [] : scanStore.installationChecks
+        return Dictionary(checks.map { (InstallationIdentity(path: $0.path), $0) }, uniquingKeysWith: { _, last in last })
+    }
+
+    private func presentation(for app: ApplicationInfo, checks: [InstallationIdentity: InstallationCheck], now: Date) -> InventoryCheckPresentation {
+        InventoryCheckPresentation(app: app, check: checks[app.installation], policies: policies.policiesMap, now: now)
+    }
 
     private var apps: [ApplicationInfo] { inventory.apps }
     private var npmGlobals: [NpmGlobalPackage] { inventory.npmGlobals }
@@ -65,7 +80,14 @@ struct InventoryView: View {
     }
 
     var body: some View {
-        let rows = filtered
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            content(now: context.date)
+        }
+    }
+
+    private func content(now: Date) -> some View {
+        let checks = checksByPath
+        let rows = filtered.filter { !needsCheckingOnly || presentation(for: $0, checks: checks, now: now).needsAttention }
         return VStack(spacing: 0) {
             // Stat cards
             HStack(spacing: 10) {
@@ -82,6 +104,9 @@ struct InventoryView: View {
             // Toolbar
             HStack(spacing: 10) {
                 FilterPills(selection: $filter)
+                Toggle(tr("Wymaga sprawdzenia"), isOn: $needsCheckingOnly)
+                    .toggleStyle(.button)
+                    .controlSize(.small)
 
                 Spacer()
 
@@ -128,6 +153,7 @@ struct InventoryView: View {
                     SortHeaderCell(label: "Bundle ID",   key: .bundleId,   sortKey: $sortKey, sortAsc: $sortAsc)
                     SortHeaderCell(label: tr("Źródło"),      key: .source,     sortKey: $sortKey, sortAsc: $sortAsc)
                     SortHeaderCell(label: tr("Aktualizacja"),key: .updateDate, sortKey: $sortKey, sortAsc: $sortAsc)
+                    Text(tr("Sprawdzenie")).font(.wega(.footnote, weight: .semibold))
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
@@ -166,7 +192,8 @@ struct InventoryView: View {
                                 InventoryRow(
                                     app: app,
                                     isAlt: i % 2 == 1,
-                                    showsLocation: app.bundleIdentifier.map(ambiguousBundleIds.contains) ?? false
+                                    showsLocation: app.bundleIdentifier.map(ambiguousBundleIds.contains) ?? false,
+                                    checkPresentation: presentation(for: app, checks: checks, now: now)
                                 )
                                 Divider().opacity(0.3)
                             }
@@ -188,7 +215,7 @@ struct InventoryView: View {
         // `.searchFocused` keeps UX-10's ⌘F able to move focus into it.
         .searchable(text: $search, prompt: tr("Szukaj po nazwie lub bundle ID…"))
         .searchFocused($searchFocused)
-        .task { await scan() }
+        .task { scanStore.restoreLastScan(); await scan() }
         // UX-10 — ⌘F pressed while already here fires `.onChange`; pressed from another
         // destination it navigates here first, so the request is instead consumed on appear.
         .onAppear { focusSearchIfRequested() }
@@ -424,11 +451,12 @@ private struct InventoryRow: View {
     /// REL-16: only shown for an app installed in more than one place — an
     /// unambiguous row doesn't need its folder spelled out.
     var showsLocation: Bool = false
+    var checkPresentation: InventoryCheckPresentation?
 
     @State private var hovered = false
 
     /// Column weights, shared with the table header so the two never drift apart.
-    static let columnWeights: [CGFloat] = [1.6, 0.6, 1.2, 0.8, 1.2]
+    static let columnWeights: [CGFloat] = [1.5, 0.6, 1.0, 0.8, 1.0, 1.5]
     static let columnSpacing: CGFloat = 12
 
     /// Row background: hover wins, otherwise alternating rows get a faint tint.
@@ -507,6 +535,7 @@ private struct InventoryRow: View {
             // Update date
             UpdateDateCell(date: app.updateDate)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            InventoryCheckCell(presentation: checkPresentation ?? InventoryCheckPresentation(app: app, check: nil, policies: [:]))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)

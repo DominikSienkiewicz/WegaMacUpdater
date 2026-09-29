@@ -13,7 +13,19 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Added
+- Inventory shows per-installation update-check status, source details, attempt and last
+  complete-check times, plus a “Needs checking” filter. Results survive saved-scan restore;
+  unknown, stale and policy-hidden outcomes remain distinct.
+
 ### Fixed
+- Brew install, upgrade and reinstall requests explicitly disable automatic cleanup,
+  retaining cached artifacts for repair without disabling dependency checks.
+- Cask rows and the inspector can fetch Sparkle/GitHub release notes on demand for the
+  exact offered release, independently of duplicate-update suppression. Ambiguous builds
+  do not receive guessed notes.
+- Temporary manual-source outages, missing cask-version data and self-update failures
+  remain incomplete in window/menu-bar scan reports instead of becoming “up to date”.
 - Sparkle and ChatGPT appcasts compare build versions separately from display versions,
   parse version elements and attributes, and retain release notes for each newer build.
 - Protected cask updates, adoption and migration stop before launching Brew if recovery

@@ -37,6 +37,7 @@ struct ScanStoreDependencies {
     let recordUpdateRun: (UpdateJournalEntry) -> Void
     let settleAppManagementPermission: ((Bool) -> Void)?
     let undoableUpdates: () -> [UndoableUpdate]
+    var detailedManualScan: ((BrewService, Set<String>) async -> ManualScanReport)? = nil
 
     static let live = ScanStoreDependencies(
         operations: .shared,
@@ -57,7 +58,10 @@ struct ScanStoreDependencies {
         },
         recordUpdateRun: { UpdateRunJournal().record($0) },
         settleAppManagementPermission: nil,
-        undoableUpdates: { UpdateOperationStore.shared.undoableUpdates() }
+        undoableUpdates: { UpdateOperationStore.shared.undoableUpdates() },
+        detailedManualScan: { brew, outdated in
+            await ManualUpdateScanner(brewService: brew).scanReport(brewOutdatedCasks: outdated)
+        }
     )
 }
 
@@ -86,6 +90,7 @@ final class ScanStore: ObservableObject {
     @Published var selected:          Set<String>         = []
     @Published var updating:          Bool                = false
     @Published var errorMessage:      String?
+    @Published var installationChecks: [InstallationCheck] = []
     @Published var lastCheck:         Date?
     @Published private(set) var banners = BannerQueue<BannerData>()
     @Published var restartCandidates: [RestartInfo]       = []
@@ -267,17 +272,18 @@ final class ScanStore: ObservableObject {
             masOutdated    = background.mas
             npmOutdated    = background.npm
             manualOutdated = background.manualApps
+            installationChecks = InstallationCheck.retainingLastSuccess(background.installationChecks, previous: snapshot?.installationChecks ?? [])
             lastCheck      = background.scannedAt
             failedSources  = background.failedChecks
-            // The agent keeps a count, not per-source detail — enough to know the result is
-            // not the whole picture, which is the part that must not be lost.
-            sourceReports     = ScanSourceReports()
+            // Background checks carry the same evidence as the window scan.
+            sourceReports     = background.sources
             lastScanComplete  = background.failedChecks == 0
         } else if let snapshot {
             brewOutdated   = snapshot.brew
             masOutdated    = snapshot.mas
             npmOutdated    = snapshot.npm
             manualOutdated = snapshot.manual
+            installationChecks = snapshot.installationChecks
             lastCheck      = snapshot.scannedAt
             // REL-09 — a scan that went half-blind stays visibly half-blind across a
             // relaunch. Without this an outage read exactly like "everything is current".
@@ -385,7 +391,8 @@ final class ScanStore: ObservableObject {
             // scan that finds nothing outdated, so persisting it whole would let the file
             // accumulate a path for every cask ever updated on this machine.
             caskAppPaths: caskIconPaths.filter(isOutdatedCask),
-            sources: sourceReports
+            sources: sourceReports,
+            installationChecks: installationChecks
         )
         do { try resultStore.save(snapshot) }
         catch { WegaLog.error(.app, "Nie udało się zapisać wyniku skanu: \(error.localizedDescription)") }

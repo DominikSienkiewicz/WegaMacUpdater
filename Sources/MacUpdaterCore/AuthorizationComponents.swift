@@ -246,7 +246,7 @@ public enum AuthorizationEnvironment {
         "HOME", "LANG", "LC_ALL", "LC_CTYPE", "LOGNAME", "TMPDIR", "USER"
     ]
     private static let overrideOnlyKeys: Set<String> = [
-        "PATH", "SUDO_ASKPASS"
+        "PATH", "SUDO_ASKPASS", "HOMEBREW_NO_INSTALL_CLEANUP"
     ]
 
     public static func sanitized(

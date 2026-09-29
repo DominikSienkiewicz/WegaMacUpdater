@@ -220,7 +220,7 @@ public final class BrewService: @unchecked Sendable {
             for: ProcessRequest(
                 executableURL: brewURL,
                 arguments: arguments,
-                environment: HomebrewEnvironment.environment,
+                environment: HomebrewEnvironment.brewEnvironment,
                 inheritParentEnvironment: false,
                 timeouts: .download
             )
@@ -239,7 +239,7 @@ public final class BrewService: @unchecked Sendable {
             ProcessRequest(
                 executableURL: brewURL,
                 arguments: arguments,
-                environment: HomebrewEnvironment.environment,
+                environment: HomebrewEnvironment.brewEnvironment,
                 inheritParentEnvironment: false,
                 timeouts: timeouts
             )

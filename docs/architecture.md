@@ -4,6 +4,33 @@ Module tree and the sudo/helper boundary. For what the app does with it, see [fe
 
 ## Architecture
 
+`ManualUpdateScanner.scanReport()` preserves observations by `InstallationIdentity`, with
+source applicability and outcomes independent of the selected update row. The legacy tuple
+`scan()` and a default `ManualScanning.scanReport()` adapter retain existing consumer and
+test contracts. `ScanStore` and `MenuBarUpdateChecker` resolve authoritative Brew outcomes
+only against the scanner's verified token-to-path map. Inventory consumes this evidence;
+it performs no update-source requests. `InstallationCheck` compares the saved bundle ID,
+path, version/build and timestamp before presenting a status. Policy filtering affects
+visibility, not whether a check ran. App Store per-path evidence remains explicitly unknown.
+
+`ScanSnapshot.installationChecks` is additive in schema 2: missing data decodes as an empty
+collection, never a set of successful checks. Window results persist it in the existing
+private snapshot file; the menu-bar result carries it in memory. Last complete-check times
+survive a later failure for the same installation/version. Confirmed background upgrades
+invalidate their pre-upgrade installation evidence.
+
+`CaskReleaseNotesProvider` is separate from update detection and execution. The row and
+inspector resolve a request from the offered version and the cask's exact app path. On
+demand, it reuses Sparkle/GitHub endpoint resolution and the HTTP client's timeout/retry/ETag
+policy, selects only an unambiguous matching release and sanitizes its text. It makes no
+update-selection or policy changes. Request identity includes path and target version so
+view reuse cannot display notes for a previous target.
+
+`HomebrewEnvironment.brewEnvironment` adds the trusted cleanup override after resolving the
+shared authorization environment. Only `BrewService` uses it; MAS retains the base environment.
+`AuthorizationEnvironment` permits the cleanup key only as an explicit override and still
+rejects arbitrary inherited Brew settings.
+
 Protected cask operations require acknowledged journal writes before cloning and before
 launching Brew. `UpdateOperationSession.requirePersisted()` rejects a session after any
 write failure, even if a later write succeeds. Foreground batches, background rounds,
@@ -68,7 +95,7 @@ MacUpdaterCore (library target — no SwiftUI dependency)
 ├── BrewService          — brew outdated (greedy), install, uninstall, cask versions
 ├── MasService           — mas outdated, list, search, upgrade
 ├── HTTPClient           — one shared HTTP client behind all 14 vendor checkers + CaskDatabaseClient: uniform 15s/30s timeouts, a single `User-Agent` (`WegaMacUpdater/<version>`), transient-failure retry with exponential backoff (429 + 5xx + network errors), and ETag conditional requests. The GitHub checker enables ETag so a `304 Not Modified` reuses the cached body **and does not count against GitHub's unauthenticated 60-req/h rate limit**. The transport is a protocol seam (`HTTPTransport`) so the retry/ETag logic is unit-tested with a fake, no network
-├── ManualCheckResult    — every manual checker returns `.notApplicable` / `.upToDate` / `.outdated` / `.unavailable` / `.failed` instead of a bare `Optional`, so a network failure is no longer indistinguishable from "current". `.unavailable` (a transport error or 5xx server response) is a transient upstream outage: it logs at WARNING and is **not** counted toward the "list may be incomplete" banner, while `.failed` (a 4xx, or a 200 we couldn't parse) logs at ERROR and is counted. `UpdatePlanner.scanState` folds the totals into `upToDate` / `outdated` / `checkFailed` / `partialFailure`, and the Update screen shows "couldn't check — check your connection" instead of a false "everything up to date" when offline
+├── ManualCheckResult    — every manual checker returns `.notApplicable` / `.upToDate` / `.outdated` / `.unavailable` / `.failed` instead of a bare `Optional`, so a network failure is no longer indistinguishable from "current". `.unavailable` (a transport error or 5xx server response) is a transient upstream outage: it logs at WARNING and **is** counted toward the "list may be incomplete" banner, while `.failed` (a 4xx, or a 200 we couldn't parse) logs at ERROR and is counted. `UpdatePlanner.scanState` folds the totals into `upToDate` / `outdated` / `checkFailed` / `partialFailure`, and the Update screen shows "couldn't check — check your connection" instead of a false "everything up to date" when offline
 ├── UpdatePlanner        — pure orchestration logic lifted out of UpdateView: builds the selectable outdated list (with load-bearing source-tagged keys), routes a selection back to per-manager upgrade commands, dedupes manual results by source priority, groups them by install origin (`groupManual`, so the Updates window's sections match the Inventory badges), derives the post-scan `ScanState`, and flags outdated casks Homebrew will install **without** a checksum (`casksWithoutChecksum`, the FEAT-03 "no checksum" banner — matched by cask **token**, since a cask row's `.name` carries the token while its `.key` carries the `c:` source tag) — all unit-tested without SwiftUI
 ├── AppOrigin            — the **single** install-origin classifier (Brew / App Store / npm / manual) shared by both windows: the Inventory badge and the Updates-window grouping (`UpdatePlanner.groupManual`) both derive from `AppOrigin.of(_:)`, so the two can never disagree about where an app came from (the Docker "Brew in one window, Manually installed in the other" class of bug). `ManualUpdateScanner` stamps it onto every outdated result; pinned by `AppOriginTests` + the grouping tests
 ├── InventoryExport      — **UX-11f**: pure, view-independent generation of the two inventory exports offered by the Inventory toolbar — a **Brewfile** (`brew bundle` manifest: Homebrew casks and Mac App Store apps as installable `cask` / `mas` entries, everything `brew` cannot address de-duplicated and sorted into comments) and an RFC 4180 **CSV** (one row per app, then the npm globals). Deterministic and locale-independent, so re-exporting an unchanged inventory yields byte-identical output; `InventoryView` only chooses a destination and writes the string. Pinned by `InventoryExportTests`

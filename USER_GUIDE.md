@@ -95,6 +95,47 @@ Wega goes and gets them anyway:
   result is stale it says so — e.g. *"Found 12 Jul, 21:14"* in a warning tint — rather than
   passing an old result off as fresh.
 
+### Checking status in Inventory
+
+The **Sprawdzenie** (Check status) column describes an update check of that particular
+installed copy, separately from its Brew/App Store/manual origin. Click the status for
+the sources, last attempt and last complete check. **Wymaga sprawdzenia** (Needs checking)
+filters missing evidence, unknown sources, partial failures and stale results, including
+updates found alongside a source failure. Ignored, pinned or skipped available updates
+read **Ukryte przez politykę** (Hidden by policy); the check itself still ran.
+
+A result is stale after 24 hours or when a refreshed inventory finds a changed version/build. Moving an
+app or replacing it with another bundle ID requires a new check. Old saved scans without
+per-installation evidence show **Brak potwierdzenia** (Not confirmed), never “current”.
+Refreshing Inventory reads local installations; use **Check now** in Updates for a new
+update check. Opening this status does not add network requests.
+
+An App Store receipt alone, a cask name match without a resolved installation path, or a
+missing comparison version cannot prove that a specific copy is current. These cases
+remain unconfirmed. In particular, the current `mas outdated` integration does not supply
+a verified per-path result; its package update list still appears in Updates.
+
+### Release notes for Homebrew casks
+
+Click **Sprawdź notatki wydania** (Check release notes) under a cask row or in its inspector.
+Wega reads the resolved app's Sparkle feed or its catalogued GitHub releases only on request;
+it does not add another update or change the Brew installation route. Notes describe the
+offered release, which can be older than the newest release in the feed.
+
+A Sparkle display version and build are distinct: `1.0,101` from Brew matches `1.0 (101)`.
+A display-only `1.0` shared by several feed builds is ambiguous, so Wega withholds the notes.
+GitHub tags must match the offered version after removing the tag prefix. Missing notes
+are shown separately from a failed request; failed requests offer Retry.
+
+### Brew cache retention
+
+Wega's Brew requests set `HOMEBREW_NO_INSTALL_CLEANUP=1`, including streamed adoption and
+reinstall operations. This prevents Brew's automatic post-install cleanup; it does not
+disable dependency checks or guarantee that every package can be rolled back. MAS and npm
+do not receive this Wega-specific Brew setting. Cached downloads and old package versions
+can occupy more disk space. You may run `brew cleanup` yourself when you no longer need
+those artifacts. See the [Homebrew manual](https://docs.brew.sh/Manpage#environment).
+
 ### The menu-bar agent
 
 Wega's head lives in your menu bar, **badged with the number of available updates**. It is

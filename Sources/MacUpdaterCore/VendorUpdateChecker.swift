@@ -100,7 +100,11 @@ public extension VendorUpdateChecker {
     /// the request, apply the single shared status classification, and hand a successful
     /// body to the vendor's `evaluate`.
     func check(app: ApplicationInfo) async -> ManualCheckResult {
-        guard let plan = plan(for: app) else { return .notApplicable }
+        await check(app: app, plan: plan(for: app))
+    }
+
+    internal func check(app: ApplicationInfo, plan: VendorCheckPlan?) async -> ManualCheckResult {
+        guard let plan else { return .notApplicable }
         guard let response = try? await client.send(plan.request) else { return .unavailable }
         if plan.upToDateStatusCodes.contains(response.statusCode) { return .upToDate }
         guard response.statusCode == 200 else {

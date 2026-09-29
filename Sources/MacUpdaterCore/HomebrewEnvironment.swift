@@ -4,6 +4,13 @@ import WegaHelperKit
 public enum HomebrewEnvironment {
     public static let processPath = SystemPaths.homebrewProcessPath
 
+    /// Brew retains its cache after install/upgrade/reinstall; MAS keeps the shared base environment.
+    public static var brewEnvironment: [String: String] {
+        var overrides = environment
+        overrides["HOMEBREW_NO_INSTALL_CLEANUP"] = "1"
+        return AuthorizationEnvironment.sanitized(inherited: [:], overrides: overrides)
+    }
+
     /// DEBT-04: shared process-wide state lives behind a lock instead of
     /// `nonisolated(unsafe)` (which silenced Swift 6 concurrency checking). The
     /// public surface is unchanged — `static var` get/set forwards to the holder.
