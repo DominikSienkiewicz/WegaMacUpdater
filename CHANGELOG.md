@@ -13,6 +13,9 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Fixed
+- When the helper can't be reached, self-update opens the verified installer instead of stopping.
+
 ## [0.5.0] — 2026-09-29
 
 ### Added
