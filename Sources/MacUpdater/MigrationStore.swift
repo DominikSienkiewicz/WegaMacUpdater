@@ -473,6 +473,11 @@ final class MigrationStore: ObservableObject {
                 line: tr("Zmienił się wydawca aplikacji — sprawdź.")
             ))
             return
+        case .journalUnavailable(let message):
+            errorMessage = message
+            logLines.append("⏸ " + message)
+            onWegaState?(WegaState(pose: .alert, line: message))
+            return
         case .snapshotFailed:
             errorMessage = tr("Nie udało się utworzyć wymaganego snapshotu.")
             onWegaState?(WegaState(pose: .alert, line: tr("Aktualizacja odroczona")))
@@ -490,6 +495,13 @@ final class MigrationStore: ObservableObject {
         // LT-01 — the journal's last word before brew replaces the bundle: a crash from
         // here on reads as "disk state unknown" at the next launch.
         preparation.operation.recordInstalling()
+        do { try preparation.operation.requirePersisted() }
+        catch {
+            errorMessage = error.localizedDescription
+            logLines.append("⏸ " + error.localizedDescription)
+            onWegaState?(WegaState(pose: .alert, line: error.localizedDescription))
+            return
+        }
         do {
             let stream = try model.brewService.events(
                 // SEC-10: `--` fences the token off from Homebrew's option parsing.

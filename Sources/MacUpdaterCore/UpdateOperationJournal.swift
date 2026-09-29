@@ -116,15 +116,26 @@ public struct UpdateOperation: Codable, Equatable, Sendable, Identifiable {
     public let startedAt: Date
     public let trigger: UpdateOperationTrigger
     public internal(set) var items: [UpdateOperationItem]
+    /// Missing on journals written before persistence became an admission condition.
+    public let persistenceVersion: Int?
+    public var hasDurablePhaseContract: Bool { persistenceVersion == 1 }
 
     public init(id: UUID, startedAt: Date, trigger: UpdateOperationTrigger, items: [UpdateOperationItem] = []) {
         self.id = id
         self.startedAt = startedAt
         self.trigger = trigger
         self.items = items
+        self.persistenceVersion = 1
     }
 
     public var isFinished: Bool { items.allSatisfy { $0.phase.isTerminal } }
+}
+
+public struct UpdateOperationPersistenceError: Error, LocalizedError, Sendable {
+    public let detail: String
+    public var errorDescription: String? {
+        tr("Nie można zapisać dziennika odzyskiwania. Aktualizacja została odroczona — sprawdź wolne miejsce i uprawnienia. Szczegóły w logach.")
+    }
 }
 
 /// An update the user can still undo: the operation committed it, the snapshot is on
@@ -326,11 +337,16 @@ public final class UpdateOperationStore: @unchecked Sendable {
 
     private let rootDirectory: URL
     private let lock = NSLock()
+    private let writeJournal: (@Sendable (Data, URL) throws -> Void)?
 
     /// `rootDirectory` is injectable so tests run against a throwaway tree instead of
     /// the user's Application Support.
-    public init(rootDirectory: URL = UpdateOperationStore.defaultRootDirectory) {
+    public init(
+        rootDirectory: URL = UpdateOperationStore.defaultRootDirectory,
+        writeJournal: (@Sendable (Data, URL) throws -> Void)? = nil
+    ) {
         self.rootDirectory = rootDirectory
+        self.writeJournal = writeJournal
     }
 
     /// `~/Library/Application Support/WegaMacUpdater/update-operations/`. **Not** the
@@ -350,12 +366,12 @@ public final class UpdateOperationStore: @unchecked Sendable {
     public func begin(trigger: UpdateOperationTrigger, now: Date = Date()) -> UpdateOperationSession {
         let operation = UpdateOperation(id: UUID(), startedAt: now, trigger: trigger)
         let session = UpdateOperationSession(store: self, operation: operation)
-        persist(session.operation)
+        session.persistCurrentState()
         return session
     }
 
     /// Every operation on disk, oldest first. Corrupt or unreadable journals are
-    /// skipped — a broken file may never block an upgrade or recovery.
+    /// preserved and skipped; their snapshots are never pruned without a readable journal.
     public func operations() -> [UpdateOperation] {
         lock.lock(); defer { lock.unlock() }
         return loadAllOperations()
@@ -479,9 +495,10 @@ public final class UpdateOperationStore: @unchecked Sendable {
 
     // MARK: - Session write-through (called by UpdateOperationSession only)
 
-    func persist(_ operation: UpdateOperation) {
+    @discardableResult
+    func persist(_ operation: UpdateOperation) -> UpdateOperationPersistenceError? {
         lock.lock(); defer { lock.unlock() }
-        persistLocked(operation)
+        return persistLocked(operation)
     }
 
     func loadOperation(id: UUID) -> UpdateOperation? {
@@ -491,7 +508,8 @@ public final class UpdateOperationStore: @unchecked Sendable {
 
     // MARK: - Locked internals
 
-    private func persistLocked(_ operation: UpdateOperation) {
+    @discardableResult
+    private func persistLocked(_ operation: UpdateOperation) -> UpdateOperationPersistenceError? {
         let directory = operationDirectory(id: operation.id)
         do {
             try FileManager.default.createDirectory(
@@ -503,14 +521,15 @@ public final class UpdateOperationStore: @unchecked Sendable {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(operation)
             let fileURL = directory.appendingPathComponent("operation.json")
-            try data.write(to: fileURL, options: .atomic)
+            if let writeJournal { try writeJournal(data, fileURL) }
+            else { try data.write(to: fileURL, options: .atomic) }
             try FileManager.default.setAttributes(
                 [.posixPermissions: NSNumber(value: 0o600)], ofItemAtPath: fileURL.path
             )
+            return nil
         } catch {
-            // A journal that cannot be written must never break the upgrade itself —
-            // the in-memory chain still protects this run; the log says what was lost.
             WegaLog.error(.app, "LT-01: nie udało się zapisać journalu operacji: \(error.localizedDescription)")
+            return UpdateOperationPersistenceError(detail: error.localizedDescription)
         }
     }
 
@@ -549,6 +568,17 @@ public final class UpdateOperationStore: @unchecked Sendable {
 public final class UpdateOperationSession {
     public let store: UpdateOperationStore
     public private(set) var operation: UpdateOperation
+    private var persistenceError: UpdateOperationPersistenceError?
+
+    /// Every protected mutation must pass this gate after recording its admitting phase.
+    /// A failed write poisons the session even if a later write happens to succeed.
+    public func requirePersisted() throws {
+        if let persistenceError { throw persistenceError }
+    }
+
+    fileprivate func persistCurrentState() {
+        if let error = store.persist(operation), persistenceError == nil { persistenceError = error }
+    }
 
     /// Where this operation's clones live — the guard snapshots straight into it.
     public var snapshotsDirectory: URL { store.snapshotsDirectory(operationID: operation.id) }
@@ -586,7 +616,7 @@ public final class UpdateOperationSession {
             UpdateOperationStore.transition(&item, to: .planned, at: now)
             operation.items.append(item)
         }
-        store.persist(operation)
+        persistCurrentState()
     }
 
     /// The snapshot for one token exists. `name` is relative to `snapshotsDirectory`.
@@ -603,7 +633,7 @@ public final class UpdateOperationSession {
         for index in operation.items.indices where operation.items[index].phase == .snapshotted {
             UpdateOperationStore.transition(&operation.items[index], to: .installing, at: now)
         }
-        store.persist(operation)
+        persistCurrentState()
     }
 
     /// The canary spoke for one item: `verified` is recorded first (the canary passed),
@@ -640,7 +670,7 @@ public final class UpdateOperationSession {
             UpdateOperationStore.transition(&operation.items[index], to: .aborted, at: now)
             changed = true
         }
-        if changed { store.persist(operation) }
+        if changed { persistCurrentState() }
     }
 
     /// Settles one item as `aborted` — recovery's verdict for an operation the journal
@@ -677,6 +707,6 @@ public final class UpdateOperationSession {
     private func mutate(token: String, _ body: (inout UpdateOperationItem) -> Void) {
         guard let index = operation.items.firstIndex(where: { $0.token == token }) else { return }
         body(&operation.items[index])
-        store.persist(operation)
+        persistCurrentState()
     }
 }

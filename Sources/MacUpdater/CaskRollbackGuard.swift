@@ -160,6 +160,7 @@ enum CaskRollbackGuard {
     ) -> [String: URL] {
         var snapshots: [String: URL] = [:]
         for token in tokens {
+            guard (try? operation.requirePersisted()) != nil else { break }
             guard let appURL = appPaths[token] else { continue }
             let name = UpdateOperationSession.snapshotDirectoryName(for: token)
             let dest = operation.snapshotsDirectory.appendingPathComponent(name, isDirectory: true)

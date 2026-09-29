@@ -19,6 +19,8 @@ extension Translations {
     static let base: [String: String] = [
         // UI — natywna scena Settings (⌘,).
         "Ustawienia": "Settings",
+        "Nie można zapisać dziennika odzyskiwania. Aktualizacja została odroczona — sprawdź wolne miejsce i uprawnienia. Szczegóły w logach.":
+            "The recovery journal could not be saved. The update was postponed — check free space and permissions. See the logs for details.",
         "Nie potwierdzono zakończenia instalacji": "Installation completion is unconfirmed",
         "Instalator może nadal działać. Dalsze zmiany są zablokowane; nie uruchamiaj drugiego instalatora.":
             "The installer may still be running. Further changes are blocked; do not start another installer.",

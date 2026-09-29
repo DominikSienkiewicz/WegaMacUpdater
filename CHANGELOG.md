@@ -14,6 +14,11 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 ## [Unreleased]
 
 ### Fixed
+- Sparkle and ChatGPT appcasts compare build versions separately from display versions,
+  parse version elements and attributes, and retain release notes for each newer build.
+- Protected cask updates, adoption and migration stop before launching Brew if recovery
+  journal writes fail. Recovery preserves snapshots whose legacy journal cannot prove
+  that installation never started.
 - A lost XPC reply or installation timeout no longer opens a second installer or releases
   Wega's mutation protection. Installation IDs and outcomes survive client restarts;
   Settings can query the existing operation. Helper protocol 4 drains installer output

@@ -69,6 +69,9 @@ public enum VersionScheme: Sendable {
     /// is encoding noise). An alphabetic `-beta`/`-rc` suffix is still a prerelease and
     /// ranks below the release.
     case buildNumbered
+    /// A complete dotted numeric build identifier. Every component participates;
+    /// none is discarded as optional marketing-version metadata.
+    case numericBuild
 }
 
 /// A version decomposed for comparison: the numeric `primary` core, an optional
@@ -85,6 +88,12 @@ private func parseVersion(_ v: String, scheme: VersionScheme) -> ParsedVersion? 
     switch scheme {
     case .semver:        return parseSemver(v)
     case .buildNumbered: return parseBuildNumbered(v)
+    case .numericBuild:
+        let components = v.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ".", omittingEmptySubsequences: false)
+        guard !components.isEmpty, components.allSatisfy({ !$0.isEmpty && $0.utf8.allSatisfy { (48...57).contains($0) } }) else { return nil }
+        let numbers = components.compactMap { Int($0) }
+        guard numbers.count == components.count else { return nil }
+        return ParsedVersion(primary: numbers, prerelease: [], build: [])
     }
 }
 

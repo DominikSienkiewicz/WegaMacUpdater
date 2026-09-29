@@ -27,6 +27,8 @@ public struct VendorCandidate: Sendable {
     /// (Google Drive compares a bundle build but records the short version). Defaults to
     /// `installed`.
     public var recordedInstalled: String?
+    /// The user-facing label when comparison uses a separate build identifier.
+    public var recordedLatest: String?
     public var source: ManualOutdatedApp.UpdateSource
     public var releaseNotes: ReleaseNotes?
     /// How to order `installed` against `latest`. Defaults to the build-numbered scheme
@@ -40,7 +42,8 @@ public struct VendorCandidate: Sendable {
         recordedInstalled: String? = nil,
         source: ManualOutdatedApp.UpdateSource,
         releaseNotes: ReleaseNotes? = nil,
-        scheme: VersionScheme = .buildNumbered
+        scheme: VersionScheme = .buildNumbered,
+        recordedLatest: String? = nil
     ) {
         self.latest = latest
         self.installed = installed
@@ -48,6 +51,7 @@ public struct VendorCandidate: Sendable {
         self.source = source
         self.releaseNotes = releaseNotes
         self.scheme = scheme
+        self.recordedLatest = recordedLatest
     }
 }
 
@@ -112,7 +116,7 @@ public extension VendorUpdateChecker {
                 name: app.name,
                 path: app.path,
                 installedVersion: candidate.recordedInstalled ?? candidate.installed,
-                availableVersion: candidate.latest,
+                availableVersion: candidate.recordedLatest ?? candidate.latest,
                 source: candidate.source,
                 releaseNotes: candidate.releaseNotes
             ))

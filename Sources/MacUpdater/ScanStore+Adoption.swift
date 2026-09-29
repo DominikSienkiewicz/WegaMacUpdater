@@ -79,6 +79,11 @@ extension ScanStore {
             showBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"), message: message))
             emitActivitySignal(.error)
             return
+        case .journalUnavailable(let message):
+            showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
+                                  message: message, action: .openLogs))
+            emitActivitySignal(.error)
+            return
         case .snapshotFailed:
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
                                   message: tr("Nie udało się utworzyć wymaganego snapshotu.")))
@@ -103,6 +108,8 @@ extension ScanStore {
         // LT-01 — the journal's last word before brew replaces the bundle: a crash from
         // here on reads as "disk state unknown" at the next launch.
         preparation?.operation.recordInstalling()
+        do { try preparation?.operation.requirePersisted() }
+        catch { reportJournalFailure(error); return }
         do {
             let stream = try model.brewService.events(arguments: installArgs)
             exitCode = try await ProcessEventStream.drain(stream) { chunk in
