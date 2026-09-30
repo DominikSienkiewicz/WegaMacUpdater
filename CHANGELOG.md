@@ -13,6 +13,9 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Fixed
+- A full scan that finds a vendor-updated app current now closes its pending check.
+
 ## [0.5.2] — 2026-09-29
 
 ### Fixed

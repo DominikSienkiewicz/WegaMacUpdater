@@ -273,6 +273,7 @@ extension ScanStore {
             previous: installationChecks
         )
         lastCheck = Date()
+        closeVendorHandoffsConfirmedByScan()
         status    = .results
         progress  = .finished
         // REL-09 — the per-source picture is part of the result from here on: it decides

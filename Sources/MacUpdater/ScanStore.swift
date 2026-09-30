@@ -311,6 +311,7 @@ final class ScanStore: ObservableObject {
         // by cask token, so every token the two have in common gets its icon, and one the file
         // has never heard of simply keeps its letter tile.
         caskIconPaths = survivingCaskAppPaths(snapshot?.caskAppPaths ?? [:])
+        closeVendorHandoffsConfirmedByScan()
 
         status = .results
         if !lastScanComplete { warnAboutIncompleteScan() }

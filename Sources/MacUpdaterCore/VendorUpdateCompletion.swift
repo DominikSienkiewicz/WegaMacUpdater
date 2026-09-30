@@ -39,6 +39,27 @@ public struct VendorUpdateCompletionResult: Equatable, Sendable {
     public init(app: ApplicationInfo?, outcome: Outcome) { self.app = app; self.outcome = outcome }
 }
 
+/// Decides which vendor handoffs a completed full scan has positively confirmed.
+public enum VendorHandoffScanEvidence {
+    /// Handoffs whose exact installation and bundle the scan checked with the handoff's own
+    /// source answering `.current`, and which the scan does not list as outdated.
+    /// Failed, unchecked, missing or foreign evidence never closes a handoff.
+    public static func confirmedCurrent(
+        _ handoffs: [ManualOutdatedApp], installationChecks: [InstallationCheck], stillOutdated: [ManualOutdatedApp]
+    ) -> [ManualOutdatedApp] {
+        let outdated = Set(stillOutdated.map { InstallationIdentity(path: $0.path) })
+        return handoffs.filter { item in
+            let installation = InstallationIdentity(path: item.path)
+            guard !outdated.contains(installation), let bundleIdentifier = item.bundleIdentifier,
+                  let check = installationChecks.last(where: { InstallationIdentity(path: $0.path) == installation })
+            else { return false }
+            return check.bundleIdentifier == bundleIdentifier && check.sources.contains {
+                $0.source == item.source.completionSourceLabel && $0.outcome == .current
+            }
+        }
+    }
+}
+
 /// Rechecks only the selected vendor and exact bundle. Never invokes a package manager.
 public struct VendorUpdateCompletionChecker: Sendable {
     private let readApplication: @Sendable (URL) -> ApplicationInfo?
