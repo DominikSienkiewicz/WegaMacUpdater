@@ -13,9 +13,11 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+## [0.5.3] — 2026-09-30
+
 ### Fixed
-- A full scan that finds a vendor-updated app current now closes its pending check.
-- Checking Obsidian by hand now confirms an in-app update.
+- Apps updated in-app no longer stay listed once a scan finds them current.
+- Checking Obsidian by hand now confirms its in-app update.
 
 ## [0.5.2] — 2026-09-29
 
@@ -355,7 +357,8 @@ their terms are still theirs.
   what changed in it, because there is no published predecessor to have changed from.
 -->
 
-[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.4.0...v0.5.0
