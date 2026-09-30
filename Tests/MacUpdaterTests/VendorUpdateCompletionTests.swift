@@ -37,9 +37,9 @@ struct VendorUpdateCompletionTests {
         #expect(result.outcome == .stillOutdated(newer))
     }
 
-    @Test func sharedPackageIsNotProofThatThisCopyWasUpdated() async throws {
+    @Test func sharedPackageIsConfirmedByTheSourceAnswer() async throws {
         let old = item(requirement: .init(version: "2.0", field: .sharedPackage, scheme: .buildNumbered))
-        #expect(try await checker(app: app(build: "200"), result: .upToDate).check(old).outcome == .unconfirmed(.sharedPackage))
+        #expect(try await checker(app: app(build: "200"), result: .upToDate).check(old).outcome == .confirmed)
     }
 
     @Test func versionsChangedDuringNetworkRequestNeedAnotherCheck() async throws {

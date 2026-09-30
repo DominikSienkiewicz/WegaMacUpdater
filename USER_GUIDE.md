@@ -154,10 +154,9 @@ failed or skipped source leaves the handoff pending.
 
 Older saved scan results lack a machine-readable verification target. They can be checked
 again to refresh an outdated offer; if already current, run a full check.
-Obsidian's shared ASAR package alone cannot prove that this particular copy has loaded the
-update: unless the bundle itself reaches the target, Wega leaves the result unconfirmed
-and asks you to inspect the version inside Obsidian after restarting it. A full scan that
-reads the newer package as current still closes the handoff, as described above.
+Obsidian loads in-app updates from a shared ASAR package while its app bundle keeps the
+installer version, so for Obsidian the source reading that package as current confirms the
+update; the bundle version is not compared.
 
 ### Brew cache retention
 
