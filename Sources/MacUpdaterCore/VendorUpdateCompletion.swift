@@ -103,7 +103,7 @@ public struct VendorUpdateCompletionChecker: Sendable {
             guard let requirement = item.completionRequirement else {
                 return .init(app: app, outcome: .unconfirmed(.unknownTarget))
             }
-            guard requirement.isReached(in: app) else {
+            guard requirement.field == .sharedPackage || requirement.isReached(in: app) else {
                 let reason: VendorUpdateCompletionResult.Reason = requirement.field == .sharedPackage ? .sharedPackage : .targetNotReached
                 return .init(app: app, outcome: .unconfirmed(reason))
             }

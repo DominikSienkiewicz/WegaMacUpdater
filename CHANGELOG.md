@@ -15,6 +15,7 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ### Fixed
 - A full scan that finds a vendor-updated app current now closes its pending check.
+- Checking Obsidian by hand now confirms an in-app update.
 
 ## [0.5.2] — 2026-09-29
 
