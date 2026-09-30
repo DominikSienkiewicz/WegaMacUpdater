@@ -147,13 +147,17 @@ reported by the source updates the pending row. Checks use the existing bounded 
 and timeout policy; Wega does not poll the vendor updater. **Cancel** stops verification,
 not the external updater. Pending handoffs survive restarting Wega and language changes.
 **Stop tracking** dismisses the handoff without recording success or removing the app; an
-outdated row remains until a subsequent check resolves it.
+outdated row remains until a subsequent check resolves it. A full scan also closes the
+handoff when its selected source reports this exact bundle current and the scan does not
+list it as outdated; the history records an **external** update, without a banner. A
+failed or skipped source leaves the handoff pending.
 
 Older saved scan results lack a machine-readable verification target. They can be checked
-again to refresh an outdated offer; if already current, stop tracking and run a full check.
+again to refresh an outdated offer; if already current, run a full check.
 Obsidian's shared ASAR package alone cannot prove that this particular copy has loaded the
 update: unless the bundle itself reaches the target, Wega leaves the result unconfirmed
-and asks you to inspect the version inside Obsidian after restarting it.
+and asks you to inspect the version inside Obsidian after restarting it. A full scan that
+reads the newer package as current still closes the handoff, as described above.
 
 ### Brew cache retention
 

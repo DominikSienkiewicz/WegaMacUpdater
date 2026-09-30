@@ -8,7 +8,8 @@ Every screen and every guard, in the order you meet them. The pipeline underneat
 
 Vendor handoffs retain pending state and offer **Check this app** in both the update row
 and inspector. Verification targets one path and source, confirms the offered version/build
-on disk and records an external update in diagnostic history. Failure remains actionable;
+on disk and records an external update in diagnostic history; a full scan whose selected
+source finds the same bundle current closes the handoff the same way. Failure remains actionable;
 no full Brew scan or background updater monitoring is started. See the
 [completion workflow and limitations](../USER_GUIDE.md#finishing-an-update-with-the-vendor).
 
