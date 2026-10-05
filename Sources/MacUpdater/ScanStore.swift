@@ -42,6 +42,13 @@ struct ScanStoreDependencies {
         try await VendorUpdateCompletionChecker().check($0)
     }
     var reportVendorCheck: (ManualOutdatedApp, ManualOutdatedApp?, InstallationCheck?, Int, String) -> Void = { _, _, _, _, _ in }
+    var teamIDOfApp: @Sendable (URL) async -> String? = { appURL in
+        await Task.detached { CodeSignatureVerifier.teamID(ofAppAt: appURL) }.value
+    }
+    var bundleIdentifierOfApp: (URL) -> String? = { CaskReplacementArtifactIdentity.bundleIdentifier(at: $0) }
+    var teamIDLedger: TeamIDLedger = .shared
+    var rollbackLedger: CaskRollbackLedger = .shared
+    var confirmPublisherChange: @MainActor (ScanStore.PublisherChangePrompt) -> Bool = { PublisherChangeAlert.confirm($0) }
 
     static let live = ScanStoreDependencies(
         operations: .shared,

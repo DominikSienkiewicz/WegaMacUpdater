@@ -13,6 +13,11 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Fixed
+- A cask whose vendor moved to a new Developer ID (e.g. Proton Mail) is no longer blocked forever:
+  the publisher warning and the rolled-back row offer **Trust the new publisher**, which, after
+  confirmation, makes the Team ID now signing the installed app the trusted baseline.
+
 ## [0.5.3] — 2026-09-30
 
 ### Fixed

@@ -231,12 +231,14 @@ extension ScanStore {
             let old: String
             let new: String?
             let message: String
+            var action: BannerAction?
             switch outcome.verdict {
             case .publisherChanged(let previous, let current):
                 old = previous
                 new = current
                 message = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
                               "\(outcome.name)", "\(old)", "\(new ?? "—")")
+                action = trustPublisherAction(for: outcome, teamID: new)
             case .publisherChangedAndRolledBack(let previous, let current):
                 old = previous
                 new = current
@@ -247,11 +249,12 @@ extension ScanStore {
                 new = current
                 message = trf("%@: Team ID już różnił się od zaufanego baseline (%@ → %@). Aktualizację zablokowano przed uruchomieniem.",
                               "\(outcome.name)", "\(old)", "\(new ?? "—")")
+                action = trustPublisherAction(for: outcome, teamID: new)
             default:
                 continue
             }
             showStickyBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"),
-                                        message: message))
+                                        message: message, action: action))
         }
 
         // REL-05 — the permission is Wega's, not this run's, so the gate is settled from what

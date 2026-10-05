@@ -634,6 +634,9 @@ enum BannerAction: Equatable {
     case openLogs, openSettings, openAppManagementSettings
     /// Runs `brew reinstall --cask` for the token through the protected adoption flow.
     case reinstallCask(token: String)
+    /// Accepts the cask's new publisher Team ID after the user confirms it. `teamID` is the ID
+    /// the warning showed, so a bundle re-signed since then is refused rather than trusted.
+    case trustPublisher(token: String, teamID: String?)
 }
 
 struct BannerData: Equatable {
@@ -706,11 +709,15 @@ struct BannerView: View {
                     case .openSettings: return tr("Włącz Touch ID")
                     case .openAppManagementSettings: return tr("Otwórz ustawienia prywatności")
                     case .reinstallCask: return tr("Przeinstaluj przez Brew")
+                    case .trustPublisher: return tr("Zaufaj nowemu wydawcy")
                     }
                 }()
                 let actionIcon: String = {
-                    if case .reinstallCask = action { return "arrow.clockwise.circle" }
-                    return "info.circle"
+                    switch action {
+                    case .reinstallCask: return "arrow.clockwise.circle"
+                    case .trustPublisher: return "checkmark.shield"
+                    case .openLogs, .openSettings, .openAppManagementSettings: return "info.circle"
+                    }
                 }()
                 Button { onAction?(action) } label: {
                     Label(actionLabel, systemImage: actionIcon)

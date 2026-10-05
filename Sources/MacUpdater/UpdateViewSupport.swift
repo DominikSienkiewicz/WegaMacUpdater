@@ -563,6 +563,7 @@ struct ManualUpdateActionView: View {
                 if item.rolledBack {
                     WegaBadge(label: tr("cofnięto — ponów próbę"), variant: .danger)
                 }
+                trustPublisherControl
                 actionControl
             }
             .disabled(item.source.supportsVendorCompletion && (!scan.allowsVendorCheck || upgrades.state != .idle))
@@ -574,6 +575,22 @@ struct ManualUpdateActionView: View {
 
     private func openVendor(_ url: URL?) {
         scan.vendorOpened(item, succeeded: url.map { NSWorkspace.shared.open($0) } ?? false)
+    }
+
+    /// A cask the watchdog rolled back over a publisher change can only move on once the user
+    /// accepts the new Team ID — retrying the Brew action alone would be refused every time.
+    @ViewBuilder
+    private var trustPublisherControl: some View {
+        if item.rolledBack, case .brewInstall(let token) = item.source.updateActionKind,
+           scan.dependencies.rollbackLedger.reason(forToken: token) == .publisherChanged {
+            Button {
+                Task { await scan.trustNewPublisher(token: token, reportedTeamID: nil) }
+            } label: {
+                Label(tr("Zaufaj nowemu wydawcy"), systemImage: "checkmark.shield")
+            }
+            .controlSize(.small)
+            .disabled(busyToken != nil)
+        }
     }
 
     @ViewBuilder
