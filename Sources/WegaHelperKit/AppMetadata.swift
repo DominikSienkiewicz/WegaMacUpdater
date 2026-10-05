@@ -1,5 +1,5 @@
 public enum AppMetadata {
     public static let displayName = "Wega Mac Updater"
-    public static let version = "0.5.3"
+    public static let version = "0.5.4"
     public static let bundleIdentifier = "com.wega.WegaMacUpdater"
 }

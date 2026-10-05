@@ -13,10 +13,11 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+## [0.5.4] — 2026-10-05
+
 ### Fixed
-- A cask whose vendor moved to a new Developer ID (e.g. Proton Mail) is no longer blocked forever:
-  the publisher warning and the rolled-back row offer **Trust the new publisher**, which, after
-  confirmation, makes the Team ID now signing the installed app the trusted baseline.
+- Apps whose vendor changed its Developer ID (e.g. Proton Mail) can be trusted again with
+  **Trust the new publisher** instead of staying blocked.
 
 ## [0.5.3] — 2026-09-30
 
@@ -362,7 +363,8 @@ their terms are still theirs.
   what changed in it, because there is no published predecessor to have changed from.
 -->
 
-[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.0...v0.5.1
