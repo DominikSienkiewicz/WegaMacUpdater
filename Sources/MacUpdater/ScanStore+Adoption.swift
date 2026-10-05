@@ -76,7 +76,8 @@ extension ScanStore {
             let message = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
                               "\(token)", "\(old)", "\(new ?? "—")")
             brewLog.append("⏸ " + message)
-            showBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"), message: message))
+            showBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"), message: message,
+                                  action: .trustPublisher(token: token, teamID: new)))
             emitActivitySignal(.error)
             return
         case .journalUnavailable(let message):
@@ -191,6 +192,7 @@ extension ScanStore {
             title = tr("Zmiana wydawcy")
             message = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
                           "\(token)", "\(old)", "\(new ?? "—")")
+            action = .trustPublisher(token: token, teamID: new)
         case .publisherChangedAndRolledBack(let old, let new):
             title = tr("Zmiana wydawcy")
             message = trf("%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",

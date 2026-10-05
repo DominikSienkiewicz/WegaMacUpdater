@@ -308,6 +308,8 @@ struct UpdateView: View {
                             NSWorkspace.shared.open(AppManagementSettings.paneURL)
                         case .reinstallCask(let token):
                             Task { await scan.reinstallManual(token: token) }
+                        case .trustPublisher(let token, let teamID):
+                            Task { await scan.trustNewPublisher(token: token, reportedTeamID: teamID) }
                         }
                     },
                     onClose: { scan.dismissBanner() }

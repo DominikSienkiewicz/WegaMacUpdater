@@ -82,6 +82,18 @@ public final class TeamIDLedger: @unchecked Sendable {
         return audit
     }
 
+    /// Re-baselines every key in `keys` to `teamID`. The only path that may replace a known
+    /// publisher, reserved for the user's explicit acceptance of a change the watchdog reported
+    /// (see `PublisherChangeAcceptance`); `record` never does this on its own. An empty Team ID
+    /// is ignored, so acceptance cannot erase a baseline.
+    public func acceptPublisherChange(keys: [String], teamID: String) {
+        guard !teamID.isEmpty else { return }
+        lock.lock(); defer { lock.unlock() }
+        var map = (defaults.dictionary(forKey: defaultsKey) as? [String: String]) ?? [:]
+        for key in keys { map[key] = teamID }
+        defaults.set(map, forKey: defaultsKey)
+    }
+
     /// Last known Team ID for a bundle id (feeds FEAT-02 corroboration).
     public func teamID(forBundleID bundleID: String) -> String? {
         lock.lock(); defer { lock.unlock() }
