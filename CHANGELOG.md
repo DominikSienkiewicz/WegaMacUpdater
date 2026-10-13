@@ -13,6 +13,10 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Fixed
+- Parallels and other Homebrew updates blocked by an App Management ownership error now
+  show the privacy settings action and pause repeated background attempts.
+
 ## [0.5.4] — 2026-10-05
 
 ### Fixed
