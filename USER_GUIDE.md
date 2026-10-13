@@ -488,11 +488,15 @@ you are sharing.
   instead of falsely reporting *"everything up to date."* This state survives a restart.
 - **"App Management permission missing."** Since macOS 13, replacing an app in
   `/Applications` requires the **App Management** permission, and it covers the tools Wega
-  runs — so without it `brew` fails with `ditto: /Applications/X.app: Operation not
-  permitted` and nothing is updated. Click **Open privacy settings** on the banner (or the
-  link in Settings diagnostics), enable **Wega** under **Privacy & Security → App
-  Management**, then run the update again. Until it is granted, background updates pause
-  for 24 hours at a time instead of retrying — and failing — on every scheduled check.
+  runs — so without it `brew` can fail with `ditto: /Applications/X.app: Operation not
+  permitted` or an explicit ownership error saying the terminal does not have App
+  Management permissions (for example, when updating Parallels Desktop). Wega recognizes
+  both refusals and shows the permission banner. Click **Open privacy settings** on the
+  banner (or the link in Settings diagnostics), enable **Wega** under **Privacy & Security → App
+  Management**, then run the update again. If macOS attributes the operation to a terminal
+  used to launch Wega, enable that terminal instead. `sudo` does not bypass this permission.
+  Until it is granted, background updates pause for 24 hours at a time instead of retrying
+  — and failing — on every scheduled check.
 - **An incomplete scan banner.** If a scan finished but some sources stayed silent, Wega
   marks the list as partial rather than passing it off as complete. Open **Logs** (filtered
   to errors) to see which source failed.

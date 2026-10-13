@@ -105,11 +105,14 @@ public struct BrewUpgradeOutcome: Equatable, Sendable {
         )
     }
 
-    /// Recognizes the "App Management" refusal: `Operation not permitted` reported
-    /// *against an application bundle*. Both halves are required — the errno text alone
-    /// also covers a plain permission problem on an ordinary file, which is a different
-    /// failure with a different fix.
+    /// Recognizes Homebrew's explicit ownership refusal or `Operation not permitted`
+    /// against an application bundle. A quarantine fallback warning also mentions App
+    /// Management, so the permission name alone is not evidence of a failed upgrade.
     static func isAppManagementDenial(_ line: String) -> Bool {
+        if line.contains("Cannot change the ownership of") &&
+           line.contains("because your terminal does not have App Management permissions") {
+            return true
+        }
         guard line.contains("Operation not permitted") else { return false }
         return line.contains(".app/") || line.contains(".app:") ||
                line.contains(".app'") || line.contains(".app\"") ||
