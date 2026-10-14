@@ -233,6 +233,12 @@ extension ScanStore {
         failed += scan.failedChecks
         if scan.failedChecks > 0 { silentSources.append("ręczne checki (\(scan.failedChecks))") }
         reports.manual = scan.sourceReport
+        let manualFailureMessage = scan.uncheckedSources.isEmpty
+            ? nil : trf("Nie udało się sprawdzić: %@", scan.uncheckedSources.joined(separator: ", "))
+        if let manualFailureMessage {
+            reports.manual?.error = manualFailureMessage
+            WegaLog.error(.scanner, manualFailureMessage)
+        }
 
         // Resolve icon paths for outdated casks, and drop entries whose real
         // bundle version already matches `current_version` (self-updating apps
@@ -280,7 +286,8 @@ extension ScanStore {
         // what gets persisted, and whether an empty list may call itself "up to date".
         applyScanSourceReports(reports)
 
-        finishScan(emitActivity: emitActivity, silentSources: silentSources, failedSources: failed)
+        finishScan(emitActivity: emitActivity, silentSources: silentSources, failedSources: failed,
+                   manualFailureMessage: manualFailureMessage)
     }
 
     /// REL-09 — refresh Homebrew's metadata and **report** what happened.
@@ -314,7 +321,7 @@ extension ScanStore {
     /// Reports a finished scan: structured log (breakdown + per-item lines), the tab-icon
     /// status (green/red, unless suppressed for the upgrade flow), the result banner, and
     /// the badge/error counts. Split out of `runCheck` to keep that method's complexity down.
-    private func finishScan(emitActivity: Bool, silentSources: [String], failedSources sources: Int) {
+    private func finishScan(emitActivity: Bool, silentSources: [String], failedSources sources: Int, manualFailureMessage: String?) {
         failedSources = sources
         let total = allItems.count + visibleManual.count
         let breakdown = ScanLog.breakdown(items: allItems, manual: visibleManual)
@@ -349,7 +356,8 @@ extension ScanStore {
         case .checkFailed:
             showBanner(BannerData(variant: .danger,
                                   title: tr("Nie udało się sprawdzić aktualizacji"),
-                                  message: errorMessage ?? tr("Część źródeł nie odpowiedziała — sprawdź połączenie z internetem i spróbuj ponownie."),
+                                  message: errorMessage ?? manualFailureMessage
+                                    ?? tr("Część źródeł nie odpowiedziała — sprawdź połączenie z internetem i spróbuj ponownie."),
                                   action: .openLogs))
             emitWegaState(WegaState(pose: .sad, line: tr("Nie dowęszyłam się — chyba nie ma internetu.")))
         case .partialFailure(let updates, let failed):

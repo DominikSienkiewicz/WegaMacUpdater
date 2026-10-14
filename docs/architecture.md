@@ -28,11 +28,18 @@ it performs no update-source requests. `InstallationCheck` compares the saved bu
 path, version/build and timestamp before presenting a status. Policy filtering affects
 visibility, not whether a check ran. App Store per-path evidence remains explicitly unknown.
 
-`ScanSnapshot.installationChecks` is additive in schema 2: missing data decodes as an empty
+`ScanSnapshot.installationChecks` was added in schema 2: missing data decodes as an empty
 collection, never a set of successful checks. Window results persist it in the existing
 private snapshot file; the menu-bar result carries it in memory. Last complete-check times
 survive a later failure for the same installation/version. Confirmed background upgrades
 invalidate their pre-upgrade installation evidence.
+
+Schema 3 migrates schema-1 and schema-2 snapshots without discarding their lists. Both are
+marked incomplete until refreshed because older scans cannot certify that every manual-source
+outage was counted. Schema-2 source reports and installation evidence are retained. Persisting
+a restored scan keeps its explicit completeness instead of deriving a new claim from its
+older source reports. Failed foreground manual checks carry the affected source/app names
+into the failure banner, error log and saved report.
 
 `CaskReleaseNotesProvider` is separate from update detection and execution. The row and
 inspector resolve a request from the offered version and the cask's exact app path. On

@@ -14,6 +14,8 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 ## [Unreleased]
 
 ### Fixed
+- Older cached scans stay unconfirmed until refreshed, including after being saved again.
+- Failed manual checks name the affected sources in the failure banner and error log.
 - Parallels and other Homebrew updates blocked by an App Management ownership error now
   show the privacy settings action and pause repeated background attempts.
 
