@@ -74,17 +74,17 @@ public struct ScanSourceReports: Codable, Equatable, Sendable {
 /// honest freshness stamp ("znaleziono wczoraj o 21:14") from ``scannedAt`` — instead
 /// of showing an empty window and re-scanning from zero.
 ///
-/// `schemaVersion` is the forward-compatibility guard: a file written by a newer
-/// build (or an older shape) is rejected on read (see ``ScanResultStore/load()``)
-/// rather than decoded into a struct it no longer matches.
+/// `schemaVersion` is the compatibility guard: supported older schemas are migrated,
+/// while unsupported versions are rejected on read (see ``ScanResultStore/load()``).
 public struct ScanSnapshot: Codable, Equatable, Sendable {
-    /// The schema this build reads and writes. Bump when the payload shape changes
-    /// incompatibly; older/newer files then fail soft to `nil` on load.
+    /// The schema this build writes. Bump when the payload shape or evidence contract
+    /// changes; unsupported versions fail soft to `nil` on load.
     ///
     /// 2 — REL-09 added the per-source results and the completeness flag. A version-1 file
-    /// carries neither, and reading it as complete is exactly the false reassurance this
-    /// bump exists to prevent, so it is rejected and the next scan writes a fresh one.
-    public static let currentSchemaVersion = 2
+    /// carries neither, so migration retains its lists without certifying completeness.
+    /// 3 — older cached scans cannot certify that temporary manual-source outages were
+    /// counted. Their lists and evidence survive migration, but remain incomplete until refreshed.
+    public static let currentSchemaVersion = 3
 
     public var installationChecks: [InstallationCheck]
     public var schemaVersion: Int
@@ -259,7 +259,9 @@ public struct ScanResultStore {
     /// perfectly good thing to put on screen, and throwing them away would greet the user
     /// with an empty window for no gain. What it cannot supply is the per-source detail, so
     /// the migrated snapshot is marked incomplete — the honest reading of a file that has no
-    /// way to say whether every source answered. A file from a *newer* build still fails
+    /// way to say whether every source answered. Schema 2 retains its source reports but
+    /// also becomes incomplete: older builds did not count every manual-source outage.
+    /// A file from a *newer* build still fails
     /// soft: its payload may be a shape this build cannot decode at all.
     public func load() -> ScanSnapshot? {
         guard let data = try? io.read() else { return nil }
@@ -270,6 +272,10 @@ public struct ScanResultStore {
         case 1:
             snapshot.schemaVersion = ScanSnapshot.currentSchemaVersion
             snapshot.sources = ScanSourceReports()
+            snapshot.isComplete = false
+            return snapshot
+        case 2:
+            snapshot.schemaVersion = ScanSnapshot.currentSchemaVersion
             snapshot.isComplete = false
             return snapshot
         default:

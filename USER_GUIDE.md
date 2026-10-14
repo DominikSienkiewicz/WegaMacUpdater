@@ -500,6 +500,10 @@ you are sharing.
 - **An incomplete scan banner.** If a scan finished but some sources stayed silent, Wega
   marks the list as partial rather than passing it off as complete. Open **Logs** (filtered
   to errors) to see which source failed.
+  When manual checks find no updates because sources failed, the failure banner names the
+  affected sources and apps. Temporary network failures and a failed check for Wega itself
+  count too. Older cached scans retain their lists but stay unconfirmed until refreshed;
+  saving or reopening them does not make them complete.
 ### Crash reporting (off by default)
 
 The **Crash reporting** card in Settings can collect Wega's own crash and hang reports, so

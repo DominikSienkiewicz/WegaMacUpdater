@@ -413,6 +413,7 @@ final class ScanStore: ObservableObject {
             // accumulate a path for every cask ever updated on this machine.
             caskAppPaths: caskIconPaths.filter(isOutdatedCask),
             sources: sourceReports,
+            isComplete: lastScanComplete,
             installationChecks: installationChecks,
             vendorHandoffs: vendorHandoffs
         )

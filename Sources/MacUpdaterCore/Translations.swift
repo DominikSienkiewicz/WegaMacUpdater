@@ -84,6 +84,7 @@ extension Translations {
         "Dane skanowania": "Scan metadata",
         // UI — natywna scena Settings (⌘,).
         "Ustawienia": "Settings",
+        "Nie udało się sprawdzić: %@": "Could not check: %@",
         "Nie można zapisać dziennika odzyskiwania. Aktualizacja została odroczona — sprawdź wolne miejsce i uprawnienia. Szczegóły w logach.":
             "The recovery journal could not be saved. The update was postponed — check free space and permissions. See the logs for details.",
         "Nie potwierdzono zakończenia instalacji": "Installation completion is unconfirmed",
