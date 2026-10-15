@@ -18,8 +18,9 @@ set -euo pipefail
 #                                     not from any line of the message body
 #   0i. test-release-headings-guard — release.sh republishes a hand-written changelog
 #                                     heading exactly as written
+#   0j. test-timing-suites-guard — wall-clock suites are listed and run apart, serially
 #   1. swift build              — compiles app + helper + core
-#   2. swift test               — full unit-test suite
+#   2. swift test               — wall-clock suites serially, then the rest of the suite
 #   3. swiftlint lint --strict  — zero lint violations (warnings fail too)
 #
 # Note: this gate requires a full Xcode toolchain — Command Line Tools alone do
@@ -98,6 +99,12 @@ echo "→ ./scripts/test-release-headings-guard.sh"
 echo "→ ./scripts/test-release-signing-guard.sh"
 ./scripts/test-release-signing-guard.sh
 
+# Suites that hold a real process or the async runtime to a wall-clock limit overran it when
+# they ran in parallel with the rest of the suite. The list lives in one script; this guard
+# fails when a new wall-clock assertion lands outside it, or the serial step goes missing.
+echo "→ ./scripts/test-timing-suites-guard.sh"
+./scripts/test-timing-suites-guard.sh
+
 # Fail fast on a CommandLineTools-only toolchain: it lacks a SourceKit that SwiftLint
 # can load, so the lint step breaks with confusing errors after build and test have
 # already spent their minutes.
@@ -113,8 +120,11 @@ fi
 echo "→ swift build"
 swift build
 
-echo "→ swift test"
-swift test
+echo "→ swift test (wall-clock suites, serially)"
+swift test --no-parallel --filter "$(./scripts/timing-sensitive-suites.sh)"
+
+echo "→ swift test (the rest)"
+swift test --skip "$(./scripts/timing-sensitive-suites.sh)"
 
 echo "→ swiftlint lint --strict"
 if ! command -v swiftlint >/dev/null 2>&1; then
