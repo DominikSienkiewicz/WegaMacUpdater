@@ -41,8 +41,33 @@ jobs:
       - name: Build (incl. tests)
         run: swift build --build-tests --enable-code-coverage
 
+      - name: Regression test — wall-clock suites run serially
+        run: ./scripts/test-timing-suites-guard.sh
+
+      # Suites that hold a real process or the async runtime to a wall-clock limit overran it
+      # whenever they shared the runner with ~1,200 parallel tests (29.09, 05.10, 14.10.2026),
+      # a different test each time on the same code and image. They run first, alone and
+      # serially. Their coverage goes to its own directory, because the coverage run below
+      # recreates codecov/ from scratch, and is merged back before the report.
+      - name: Test — wall-clock suites, serially
+        run: |
+          mkdir -p "$RUNNER_TEMP/serial-coverage"
+          LLVM_PROFILE_FILE="$RUNNER_TEMP/serial-coverage/%m_%p.profraw" \
+            swift test --skip-build --no-parallel --filter "$(./scripts/timing-sensitive-suites.sh)"
+
       - name: Test
-        run: swift test --skip-build --enable-code-coverage
+        run: swift test --skip-build --enable-code-coverage --skip "$(./scripts/timing-sensitive-suites.sh)"
+
+      - name: Merge the serial suites' coverage
+        run: |
+          profdata="$(swift build --show-bin-path)/codecov/default.profdata"
+          shopt -s nullglob
+          raw=("$RUNNER_TEMP"/serial-coverage/*.profraw)
+          if [ ${#raw[@]} -eq 0 ]; then
+            echo "::error::The serial test step wrote no coverage profile; the report would drop its suites."
+            exit 1
+          fi
+          xcrun llvm-profdata merge -sparse "$profdata" "${raw[@]}" -o "$profdata"
 
       - name: Regression test — coverage includes the app target
         run: ./scripts/test-coverage-bundle-guard.sh

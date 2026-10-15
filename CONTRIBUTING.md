@@ -41,8 +41,9 @@ enforces, plus the pure-bash guard tests:
 guard-rail tests, the source-path guard, the `clean.sh` guard, the artifact-gate guard
 (`verify-bundle.sh` still recognises a Developer ID, and therefore still enforces
 notarization), the coverage-bundle guard (the SonarQube coverage step resolves a test
-bundle covering the app target under both SwiftPM build-system layouts), then
-`swift build`, `swift test` and `swiftlint lint --strict`. If your machine has no full Xcode toolchain,
+bundle covering the app target under both SwiftPM build-system layouts), the
+wall-clock-suites guard (below), then `swift build`, `swift test` — the wall-clock suites
+serially, then the rest — and `swiftlint lint --strict`. If your machine has no full Xcode toolchain,
 `check.sh` stops early and tells you so — push the branch and let CI run the
 build/test/lint jobs.
 
@@ -63,6 +64,16 @@ XCTest stays where its features have no Swift Testing equivalent — `XCTWaiter`
 tests that spawn and wait on a real process, for example
 `Tests/MacUpdaterUITests/ScanControlLayoutTests.swift`. Those are a deliberate exception,
 not leftovers, so do not "finish the migration" by rewriting them.
+
+### Tests with a wall-clock limit
+
+A suite that holds a real process or the async runtime to a wall-clock limit
+(`#expect(elapsed < …)`) must be listed in `scripts/timing-sensitive-suites.sh`. Run in
+parallel with the rest of the suite, those limits failed on a loaded runner — a different
+test each time, on unchanged code. CI and `scripts/check.sh` therefore run the listed suites
+first, alone and with `--no-parallel`, and skip them in the main run;
+`scripts/test-timing-suites-guard.sh` fails when such an assertion sits outside the list.
+Do not raise a limit to make a test pass on a busy machine.
 
 ### Isolated `UserDefaults`
 
@@ -113,7 +124,7 @@ Every pull request to `main` runs the jobs defined in the **reusable workflow** 
 
 | Job | What it checks |
 | --- | --- |
-| **Build & Test** | `swift build --build-tests` + `swift test`, with coverage |
+| **Build & Test** | `swift build --build-tests` + `swift test`, with coverage: the wall-clock suites serially first, then the rest; both runs feed the coverage report |
 | **SwiftLint** | `swiftlint lint --strict` (warnings fail), pinned SwiftLint 0.65.0 |
 | **Package** | `scripts/build-pkg.sh` builds a universal `.pkg`, then `scripts/verify-bundle.sh` gates bundle layout, helper signature and required resources (notarization/stapling on signed release builds) |
 | **Catalog signature** | verifies the catalog's Ed25519 signature, in whichever shape it ships — see below |
