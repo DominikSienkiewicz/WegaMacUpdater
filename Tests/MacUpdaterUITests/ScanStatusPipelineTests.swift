@@ -36,7 +36,9 @@ final class ScanStatusPipelineTests: XCTestCase {
         XCTAssertFalse(store.lastScanComplete)
         let snapshot = try JSONDecoder().decode(ScanSnapshot.self, from: XCTUnwrap(harness.snapshots.data))
         XCTAssertEqual(snapshot.installationChecks, store.installationChecks)
-        XCTAssertEqual(snapshot.sources.manual, report.sourceReport)
+        var savedManual = report.sourceReport
+        savedManual.error = trf("Nie udało się sprawdzić: %@", report.uncheckedSources.joined(separator: ", "))
+        XCTAssertEqual(snapshot.sources.manual, savedManual)
         XCTAssertFalse(snapshot.isComplete)
     }
 }
