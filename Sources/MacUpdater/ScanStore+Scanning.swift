@@ -233,10 +233,11 @@ extension ScanStore {
         failed += scan.failedChecks
         if scan.failedChecks > 0 { silentSources.append("ręczne checki (\(scan.failedChecks))") }
         reports.manual = scan.sourceReport
+        // The persisted report keeps the bare source list that restore and diagnostics read
+        // as data; only the banner and the log get the localized sentence.
         let manualFailureMessage = scan.uncheckedSources.isEmpty
             ? nil : trf("Nie udało się sprawdzić: %@", scan.uncheckedSources.joined(separator: ", "))
         if let manualFailureMessage {
-            reports.manual?.error = manualFailureMessage
             WegaLog.error(.scanner, manualFailureMessage)
         }
 
