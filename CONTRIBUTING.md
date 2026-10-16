@@ -284,3 +284,10 @@ Merges into `main` go through `./scripts/merge.sh <branch> "<merge message>"`, w
 fetches `origin/main`, rehearses the merge, runs the quality gate on the merged result,
 and only then completes the `--no-ff` merge. See the "Integrating a feature branch"
 section of [`README.md`](README.md) for details.
+
+## Local project concepts
+
+Keep feature proposals, plans, audits, and backlog material in local
+`docs/concepts/`, which is ignored by Git. Maintained guides stay versioned
+elsewhere under `docs/`. Earlier plans and backlog files now live under
+`docs/concepts/superpowers/` and `docs/concepts/backlog/`.
