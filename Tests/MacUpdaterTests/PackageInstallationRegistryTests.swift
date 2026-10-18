@@ -59,6 +59,47 @@ struct PackageInstallationRegistryTests {
         #expect(throws: (any Error).self) { try registry.begin(UUID()) }
     }
 
+    @Test func theUnresolvedInstallationGateOpensOnlyOnceTheInstallerFinished() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try fixture.registry.requireNoUnresolvedInstallation()
+        let id = UUID()
+        #expect(try fixture.registry.begin(id))
+        #expect(throws: PackageInstallationRegistry.Failure.anotherInstallationUnresolved) {
+            try fixture.registry.requireNoUnresolvedInstallation()
+        }
+        try fixture.registry.finish(id, succeeded: true, message: nil)
+        try fixture.registry.requireNoUnresolvedInstallation()
+    }
+
+    @Test func aResultIsRecordedOnlyForAnInstallationThatIsStillRunning() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        #expect(throws: PackageInstallationRegistry.Failure.missingOperation) {
+            try fixture.registry.finish(UUID(), succeeded: true, message: nil)
+        }
+        let id = UUID()
+        #expect(try fixture.registry.begin(id))
+        try fixture.registry.finish(id, succeeded: true, message: nil)
+        #expect(throws: PackageInstallationRegistry.Failure.missingOperation) {
+            try fixture.registry.finish(id, succeeded: false, message: "late failure")
+        }
+        #expect(try fixture.registry.status(id).phase == .succeeded)
+    }
+
+    @Test func theBootIdentityIsReadFromTheRunningSystem() throws {
+        let bootID = try PackageInstallationRegistry.currentBootID()
+        #expect(!bootID.isEmpty)
+        #expect(try PackageInstallationRegistry.currentBootID() == bootID)
+    }
+
+    @Test func everyFailureExplainsItselfToTheUser() {
+        let failures: [PackageInstallationRegistry.Failure] = [.anotherInstallationUnresolved, .missingOperation, .bootIdentityUnavailable]
+        let descriptions = failures.compactMap(\.errorDescription)
+        #expect(descriptions.count == failures.count)
+        #expect(Set(descriptions).count == failures.count)
+    }
+
     private struct Fixture {
         let root: URL
         let file: URL

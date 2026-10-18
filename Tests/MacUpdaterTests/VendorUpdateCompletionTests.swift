@@ -120,6 +120,19 @@ struct VendorUpdateCompletionTests {
         #expect(!VendorUpdateRequirement(version: "101", field: .buildVersion, scheme: .numericBuild).isReached(in: installed))
     }
 
+    @Test func sourcesWithoutAVendorRecheckAreNotApplicable() async throws {
+        let installed = app(build: "101")
+        let releaseURL = try #require(URL(string: "https://github.com/example/example/releases/latest"))
+        let managed: [ManualOutdatedApp.UpdateSource] = [.cask(token: "example"), .mas(appStoreID: "1"), .wega(releaseURL: releaseURL)]
+        for source in managed {
+            #expect(await VendorUpdateSourceCheck.check(app: installed, source: source) == .notApplicable)
+        }
+        var anonymous = installed
+        anonymous.bundleIdentifier = nil
+        #expect(await VendorUpdateSourceCheck.check(app: anonymous, source: .github(repo: "example/example", selfUpdates: true)) == .notApplicable)
+        #expect(await VendorUpdateSourceCheck.check(app: installed, source: .adobe(sapCode: "PHSP")) == .notApplicable)
+    }
+
     private func checker(app: ApplicationInfo?, result: ManualCheckResult) -> VendorUpdateCompletionChecker {
         VendorUpdateCompletionChecker(readApplication: { _ in app }, checkSource: { _, _ in result })
     }

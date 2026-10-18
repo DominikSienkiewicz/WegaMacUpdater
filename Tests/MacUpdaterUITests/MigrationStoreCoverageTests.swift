@@ -221,6 +221,39 @@ struct MigrationStoreCoverageTests {
         #expect(snapshot.migrating == nil)
     }
 
+    @Test func anUnwritableRecoveryJournalPostponesTheMigrationBeforeBrewRuns() async throws {
+        let candidate = app("Figma", token: "figma", provenance: .token)
+
+        var journalDependencies = inertDependencies()
+        journalDependencies.prepareReplacement = { _, _, _ in .journalUnavailable("journal locked") }
+        let journal = MigrationStore(
+            publisherCorrelator: unknownPublisherCorrelator(),
+            dependencies: journalDependencies
+        )
+        var states: [WegaState] = []
+        await journal.migrate(candidate, model: model(), onWegaState: { states.append($0) })
+        #expect(journal.errorMessage == "journal locked")
+        #expect(journal.logLines.contains("⏸ journal locked"))
+        #expect(states.last?.pose == .alert)
+        #expect(journal.migrating == nil)
+
+        let fixture = try preparation(for: candidate)
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        try FileManager.default.removeItem(at: fixture.root)
+        try Data().write(to: fixture.root)
+        var persistenceDependencies = inertDependencies()
+        persistenceDependencies.prepareReplacement = { _, _, _ in .ready(fixture.value) }
+        let persistence = MigrationStore(
+            publisherCorrelator: unknownPublisherCorrelator(),
+            dependencies: persistenceDependencies
+        )
+        await persistence.migrate(candidate, model: model(), onWegaState: nil)
+        #expect(persistence.errorMessage != nil)
+        #expect(persistence.logLines.first?.hasPrefix("⏸") == true)
+        #expect(persistence.migrated.isEmpty)
+        #expect(persistence.migrating == nil)
+    }
+
     @Test func healthyMigrationRecordsSuccessAndClearsTransientLogs() async throws {
         let candidate = app("Figma", token: "figma", provenance: .token)
         let fixture = try preparation(for: candidate)
