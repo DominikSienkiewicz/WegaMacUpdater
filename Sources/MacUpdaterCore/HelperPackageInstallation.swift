@@ -29,7 +29,9 @@ public struct HelperPackageInstallation: Sendable {
         status: @escaping @Sendable (UUID) async throws -> PackageInstallationStatus
     ) {
         self.init(store: store, handshake: handshake, begin: { id, path, _ in try await begin(id, path) },
-                  status: status, verifyInstalled: { _ in /* this overload predates installed-version verification */ })
+                  status: status, verifyInstalled: { _ in
+                      /* this overload predates installed-version verification */
+                  })
     }
 
     public init(
