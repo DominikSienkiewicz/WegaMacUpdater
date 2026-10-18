@@ -24,7 +24,7 @@ enum ModuleResources {
     /// Directories that may hold the bundle, most authoritative first, so a stale copy in a build
     /// directory can never shadow the one that was shipped and signed.
     private static var searchPaths: [URL] {
-        let token = Bundle(for: BundleToken.self)
+        let token = BundleToken.bundle
         return [
             Bundle.main.resourceURL,                        // packaged .app: Contents/Resources
             token.resourceURL,                              // framework or test bundle
@@ -52,4 +52,6 @@ enum ModuleResources {
 }
 
 /// Anchors `Bundle(for:)` to this module rather than to whoever calls it.
-private final class BundleToken {}
+private final class BundleToken {
+    static var bundle: Bundle { Bundle(for: BundleToken.self) }
+}

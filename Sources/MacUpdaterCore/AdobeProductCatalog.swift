@@ -37,10 +37,10 @@ private final class ProductVersionCollector: NSObject, XMLParserDelegate {
     private(set) var latestVersions: [String: String] = [:]
 
     func parser(
-        _ parser: XMLParser,
+        _ _: XMLParser,
         didStartElement elementName: String,
-        namespaceURI: String?,
-        qualifiedName: String?,
+        namespaceURI _: String?,
+        qualifiedName _: String?,
         attributes attributeDict: [String: String]
     ) {
         guard elementName == "product",

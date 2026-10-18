@@ -29,9 +29,11 @@ struct ManualScanStatusIntegrationTests {
         let report = await ManualUpdateScanner(
             brewService: BrewService(locator: BinaryLocator(brewCandidates: []), runner: StatusBrewRunner()),
             scanDirectories: [root], caskCacheURL: cache,
-            selfUpdateChecker: WegaSelfUpdateChecker(client: FakeHTTP.client(status: 503)),
-            javaRuntimeDirectories: [], adobeUninstallDirectory: root.appendingPathComponent("no-adobe"),
-            sparkleChecker: SparkleUpdateChecker(feedOverrides: [:])
+            dependencies: .init(
+                selfUpdateChecker: WegaSelfUpdateChecker(client: FakeHTTP.client(status: 503)),
+                javaRuntimeDirectories: [], adobeUninstallDirectory: root.appendingPathComponent("no-adobe"),
+                sparkleChecker: SparkleUpdateChecker(feedOverrides: [:])
+            )
         ).scanReport()
         #expect(report.uncheckedSources == ["GitHub · Wega"])
         #expect(report.installations.first { InstallationIdentity(path: $0.path) == InstallationIdentity(path: path) }?
@@ -81,9 +83,11 @@ struct ManualScanStatusIntegrationTests {
                 brewService: BrewService(locator: BinaryLocator(brewCandidates: [URL(fileURLWithPath: "/usr/bin/true")]),
                                          runner: StatusBrewRunner()),
                 scanDirectories: [root, root], caskCacheURL: cache,
-                selfUpdateChecker: WegaSelfUpdateChecker(client: FakeHTTP.client(status: 503)),
-                javaRuntimeDirectories: [], adobeUninstallDirectory: root.appendingPathComponent("no-adobe"),
-                sparkleChecker: SparkleUpdateChecker(client: FakeHTTP.client(status: 503), feedOverrides: [:])
+                dependencies: .init(
+                    selfUpdateChecker: WegaSelfUpdateChecker(client: FakeHTTP.client(status: 503)),
+                    javaRuntimeDirectories: [], adobeUninstallDirectory: root.appendingPathComponent("no-adobe"),
+                    sparkleChecker: SparkleUpdateChecker(client: FakeHTTP.client(status: 503), feedOverrides: [:])
+                )
             )
         }
         let legacy = await scanner().scan()

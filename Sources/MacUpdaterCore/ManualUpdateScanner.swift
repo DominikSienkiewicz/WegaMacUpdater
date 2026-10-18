@@ -22,32 +22,40 @@ public struct ManualUpdateScanner: Sendable {
     private let adobeUninstallDirectory: URL
     private let sparkleChecker: SparkleUpdateChecker
 
+    /// The update sources a scan consults besides Homebrew, each defaulting to production.
+    /// Tests override only the ones they isolate, through the memberwise initializer.
+    public struct Dependencies: Sendable {
+        public var selfUpdateChecker: WegaSelfUpdateChecker = WegaSelfUpdateChecker()
+        public var rollbackLedger: CaskRollbackLedger = .shared
+        public var javaRuntimeScanner: JavaRuntimeScanner = JavaRuntimeScanner()
+        public var javaRuntimeDirectories: [URL] = JavaRuntimeScanner.scanDirectories()
+        public var packageReceiptLocator: PackageReceiptLocator = PackageReceiptLocator()
+        public var adobeCatalogClient: AdobeCatalogClient = .productCatalog()
+        public var adobeUninstallDirectory: URL = SystemPaths.adobeUninstallDirectory
+        public var sparkleChecker: SparkleUpdateChecker = SparkleUpdateChecker()
+
+        public static var production: Self { Self() }
+    }
+
     public init(
         brewService: BrewService = BrewService(),
         scanDirectories: [URL] = AppScanDirectories.all(configuration: ScanConfigurationStore.resolvedConfiguration()),
         caskCacheURL: URL = AppScanDirectories.caskDatabaseCacheURL,
         maxConcurrentChecks: Int = 12,
-        selfUpdateChecker: WegaSelfUpdateChecker = WegaSelfUpdateChecker(),
-        rollbackLedger: CaskRollbackLedger = .shared,
-        javaRuntimeScanner: JavaRuntimeScanner = JavaRuntimeScanner(),
-        javaRuntimeDirectories: [URL] = JavaRuntimeScanner.scanDirectories(),
-        packageReceiptLocator: PackageReceiptLocator = PackageReceiptLocator(),
-        adobeCatalogClient: AdobeCatalogClient = .productCatalog(),
-        adobeUninstallDirectory: URL = SystemPaths.adobeUninstallDirectory,
-        sparkleChecker: SparkleUpdateChecker = SparkleUpdateChecker()
+        dependencies: Dependencies = .production
     ) {
         self.brewService = brewService
         self.scanDirectories = scanDirectories
         self.caskCacheURL = caskCacheURL
         self.maxConcurrentChecks = maxConcurrentChecks
-        self.selfUpdateChecker = selfUpdateChecker
-        self.rollbackLedger = rollbackLedger
-        self.javaRuntimeScanner = javaRuntimeScanner
-        self.javaRuntimeDirectories = javaRuntimeDirectories
-        self.packageReceiptLocator = packageReceiptLocator
-        self.adobeCatalogClient = adobeCatalogClient
-        self.adobeUninstallDirectory = adobeUninstallDirectory
-        self.sparkleChecker = sparkleChecker
+        selfUpdateChecker = dependencies.selfUpdateChecker
+        rollbackLedger = dependencies.rollbackLedger
+        javaRuntimeScanner = dependencies.javaRuntimeScanner
+        javaRuntimeDirectories = dependencies.javaRuntimeDirectories
+        packageReceiptLocator = dependencies.packageReceiptLocator
+        adobeCatalogClient = dependencies.adobeCatalogClient
+        adobeUninstallDirectory = dependencies.adobeUninstallDirectory
+        sparkleChecker = dependencies.sparkleChecker
     }
 
     /// UX-15 — Wega dogfoods its own update path. A self-update maps to the same

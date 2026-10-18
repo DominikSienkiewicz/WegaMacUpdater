@@ -41,7 +41,9 @@ struct ScanStoreDependencies {
     var checkVendorUpdate: @Sendable (ManualOutdatedApp) async throws -> VendorUpdateCompletionResult = {
         try await VendorUpdateCompletionChecker().check($0)
     }
-    var reportVendorCheck: (ManualOutdatedApp, ManualOutdatedApp?, InstallationCheck?, Int, String) -> Void = { _, _, _, _, _ in }
+    var reportVendorCheck: (ManualOutdatedApp, ManualOutdatedApp?, InstallationCheck?, Int, String) -> Void = { _, _, _, _, _ in
+        /* only the live dependencies have a menu-bar agent to report to */
+    }
     var teamIDOfApp: @Sendable (URL) async -> String? = { appURL in
         await Task.detached { CodeSignatureVerifier.teamID(ofAppAt: appURL) }.value
     }

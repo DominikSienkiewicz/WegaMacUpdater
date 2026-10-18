@@ -44,8 +44,10 @@ struct ManualScanCompletenessRecoveryTests {
                 runner: CompletenessRecoveryBrewRunner()
             ),
             scanDirectories: [root.appendingPathComponent("missing"), notADirectory], caskCacheURL: cache,
-            selfUpdateChecker: WegaSelfUpdateChecker(client: FakeHTTP.client(status: 503)),
-            javaRuntimeDirectories: [], adobeUninstallDirectory: root.appendingPathComponent("no-adobe")
+            dependencies: .init(
+                selfUpdateChecker: WegaSelfUpdateChecker(client: FakeHTTP.client(status: 503)),
+                javaRuntimeDirectories: [], adobeUninstallDirectory: root.appendingPathComponent("no-adobe")
+            )
         )
 
         let report = await scanner.scanReport()
