@@ -97,4 +97,25 @@ struct InstallationCheckStatusTests {
                                        total: 1, installationChecks: [record])
         #expect(result.removingUpgradedCasks(["example"]).installationChecks.isEmpty)
     }
+
+    @Test func onlyUnresolvedStatusesAskForAttention() {
+        for status in [InstallationCheckStatus.notChecked, .failed, .noSource, .stale] {
+            #expect(status.needsAttention, "\(status) should ask for attention")
+        }
+        for status in [InstallationCheckStatus.current, .updateAvailable, .excluded] {
+            #expect(!status.needsAttention, "\(status) should not ask for attention")
+        }
+    }
+
+    @Test func anAppStoreOutageMarksItsAppsFailedInsteadOfCurrent() {
+        var storeApp = app
+        storeApp.isManagedByMas = true
+        let record = InstallationCheck(app: storeApp, sources: [.init(source: "App Store", outcome: .current)], checkedAt: time)
+        let healthy = InstallationCheck.resolvingManagers([record], reports: ScanSourceReports(mas: .init(outcome: .succeeded)), brew: nil)
+        #expect(healthy.first?.status(for: storeApp, now: time) == .current)
+        let offline = ScanSourceReports(mas: .init(outcome: .failed("mas outdated")))
+        let failed = InstallationCheck.resolvingManagers([record], reports: offline, brew: nil)
+        #expect(failed.first?.sources == [InstallationSourceCheck(source: "App Store", outcome: .failed)])
+        #expect(failed.first?.status(for: storeApp, now: time) == .failed)
+    }
 }
