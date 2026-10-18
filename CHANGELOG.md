@@ -13,11 +13,15 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+## [0.5.5] — 2026-10-18
+
 ### Fixed
-- Older cached scans stay unconfirmed until refreshed, including after being saved again.
-- Failed manual checks name the affected sources in the failure banner and error log.
-- Parallels and other Homebrew updates blocked by an App Management ownership error now
-  show the privacy settings action and pause repeated background attempts.
+- A scan that missed some sources no longer counts as complete after the app restarts.
+  Scans saved by older versions stay unconfirmed until the next check.
+- When manual checks fail, the banner and the error log name the sources that could not be
+  checked.
+- Homebrew updates that macOS App Management refuses, such as Parallels, now offer
+  **Open privacy settings** and pause background retries for a day.
 
 ## [0.5.4] — 2026-10-05
 
@@ -314,7 +318,8 @@ their terms are still theirs.
   what changed in it, because there is no published predecessor to have changed from.
 -->
 
-[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.4...HEAD
+[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.5...HEAD
+[0.5.5]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.1...v0.5.2
