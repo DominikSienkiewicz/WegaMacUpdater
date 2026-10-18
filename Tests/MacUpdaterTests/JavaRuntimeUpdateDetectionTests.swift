@@ -154,22 +154,24 @@ struct JavaRuntimeUpdateDetectionTests {
             scanDirectories: [applications],
             caskCacheURL: cacheURL,
             maxConcurrentChecks: 1,
-            selfUpdateChecker: WegaSelfUpdateChecker(
-                repo: "coverage/wega",
-                currentVersion: "999.0.0",
-                client: FakeHTTP.client(status: 404)
-            ),
-            rollbackLedger: CaskRollbackLedger(defaults: defaults),
-            javaRuntimeDirectories: [runtimes],
-            packageReceiptLocator: PackageReceiptLocator(
-                runner: StubProcessRunner(result: ProcessResult(
-                    exitCode: 0,
-                    stdout: "pkgid: net.temurin.26.jdk\npkg-version: 26.0.1+8\n",
-                    stderr: ""
-                ))
-            ),
-            adobeCatalogClient: AdobeCatalogClient(cache: nil, client: FakeHTTP.client(status: 404)),
-            adobeUninstallDirectory: try root.makeSubdirectory("NoAdobe")
+            dependencies: .init(
+                selfUpdateChecker: WegaSelfUpdateChecker(
+                    repo: "coverage/wega",
+                    currentVersion: "999.0.0",
+                    client: FakeHTTP.client(status: 404)
+                ),
+                rollbackLedger: CaskRollbackLedger(defaults: defaults),
+                javaRuntimeDirectories: [runtimes],
+                packageReceiptLocator: PackageReceiptLocator(
+                    runner: StubProcessRunner(result: ProcessResult(
+                        exitCode: 0,
+                        stdout: "pkgid: net.temurin.26.jdk\npkg-version: 26.0.1+8\n",
+                        stderr: ""
+                    ))
+                ),
+                adobeCatalogClient: AdobeCatalogClient(cache: nil, client: FakeHTTP.client(status: 404)),
+                adobeUninstallDirectory: try root.makeSubdirectory("NoAdobe")
+            )
         )
 
         let result = await scanner.scan()
@@ -201,18 +203,20 @@ struct JavaRuntimeUpdateDetectionTests {
             scanDirectories: [applications],
             caskCacheURL: cacheURL,
             maxConcurrentChecks: 1,
-            selfUpdateChecker: WegaSelfUpdateChecker(
-                repo: "coverage/wega",
-                currentVersion: "999.0.0",
-                client: FakeHTTP.client(status: 404)
-            ),
-            rollbackLedger: CaskRollbackLedger(defaults: defaults),
-            javaRuntimeDirectories: [runtimes],
-            packageReceiptLocator: PackageReceiptLocator(
-                runner: StubProcessRunner(result: ProcessResult(exitCode: 1, stdout: "", stderr: ""))
-            ),
-            adobeCatalogClient: AdobeCatalogClient(cache: nil, client: FakeHTTP.client(status: 404)),
-            adobeUninstallDirectory: try root.makeSubdirectory("NoAdobe")
+            dependencies: .init(
+                selfUpdateChecker: WegaSelfUpdateChecker(
+                    repo: "coverage/wega",
+                    currentVersion: "999.0.0",
+                    client: FakeHTTP.client(status: 404)
+                ),
+                rollbackLedger: CaskRollbackLedger(defaults: defaults),
+                javaRuntimeDirectories: [runtimes],
+                packageReceiptLocator: PackageReceiptLocator(
+                    runner: StubProcessRunner(result: ProcessResult(exitCode: 1, stdout: "", stderr: ""))
+                ),
+                adobeCatalogClient: AdobeCatalogClient(cache: nil, client: FakeHTTP.client(status: 404)),
+                adobeUninstallDirectory: try root.makeSubdirectory("NoAdobe")
+            )
         )
 
         #expect(await scanner.scan().apps.isEmpty)

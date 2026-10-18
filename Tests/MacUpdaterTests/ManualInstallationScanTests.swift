@@ -76,9 +76,11 @@ struct ManualInstallationScanTests {
                     runner: EmptyInstallationBrewRunner()
                 ),
                 scanDirectories: directories + [directories[0]], caskCacheURL: cache,
-                selfUpdateChecker: WegaSelfUpdateChecker(client: FakeHTTP.client(status: 503)),
-                javaRuntimeDirectories: [], adobeUninstallDirectory: root.appendingPathComponent("no-adobe"),
-                sparkleChecker: SparkleUpdateChecker(client: HTTPClient(transport: transport, maxRetries: 0), feedOverrides: [:])
+                dependencies: .init(
+                    selfUpdateChecker: WegaSelfUpdateChecker(client: FakeHTTP.client(status: 503)),
+                    javaRuntimeDirectories: [], adobeUninstallDirectory: root.appendingPathComponent("no-adobe"),
+                    sparkleChecker: SparkleUpdateChecker(client: HTTPClient(transport: transport, maxRetries: 0), feedOverrides: [:])
+                )
             )
         }
 

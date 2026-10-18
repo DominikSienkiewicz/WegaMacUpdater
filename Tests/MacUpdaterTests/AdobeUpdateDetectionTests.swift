@@ -213,18 +213,20 @@ struct AdobeUpdateDetectionTests {
             scanDirectories: [applications, lightroomFolder],
             caskCacheURL: root.url.appendingPathComponent("casks.json"),
             maxConcurrentChecks: 1,
-            selfUpdateChecker: WegaSelfUpdateChecker(
-                repo: "coverage/wega",
-                currentVersion: "999.0.0",
-                client: FakeHTTP.client(status: 404)
-            ),
-            rollbackLedger: CaskRollbackLedger(defaults: defaults),
-            javaRuntimeDirectories: [],
-            packageReceiptLocator: PackageReceiptLocator(
-                runner: StubProcessRunner(result: ProcessResult(exitCode: 1, stdout: "", stderr: ""))
-            ),
-            adobeCatalogClient: AdobeCatalogClient(cache: catalogCache, client: FakeHTTP.client(status: 500)),
-            adobeUninstallDirectory: uninstallDirectory
+            dependencies: .init(
+                selfUpdateChecker: WegaSelfUpdateChecker(
+                    repo: "coverage/wega",
+                    currentVersion: "999.0.0",
+                    client: FakeHTTP.client(status: 404)
+                ),
+                rollbackLedger: CaskRollbackLedger(defaults: defaults),
+                javaRuntimeDirectories: [],
+                packageReceiptLocator: PackageReceiptLocator(
+                    runner: StubProcessRunner(result: ProcessResult(exitCode: 1, stdout: "", stderr: ""))
+                ),
+                adobeCatalogClient: AdobeCatalogClient(cache: catalogCache, client: FakeHTTP.client(status: 500)),
+                adobeUninstallDirectory: uninstallDirectory
+            )
         )
 
         let result = await scanner.scan()
