@@ -17,7 +17,8 @@ public enum PackagePayloadVerifier {
         }
     }
 
-    public static let installedAppURL = URL(fileURLWithPath: "/Applications/WegaMacUpdater.app", isDirectory: true)
+    public static let installedAppURL = SystemPaths.applicationsDirectory
+        .appendingPathComponent("WegaMacUpdater.app", isDirectory: true)
 
     static func verify(at package: URL, teamID: String, bundleID: String?, expectedVersion: String?) throws {
         guard let bundleID, !bundleID.isEmpty, let expectedVersion, !expectedVersion.isEmpty else {
@@ -31,7 +32,7 @@ public enum PackagePayloadVerifier {
         defer { try? FileManager.default.removeItem(at: directory) }
         let expanded = directory.appendingPathComponent("expanded", isDirectory: true)
         let result = try BoundedProcess.run(
-            URL(fileURLWithPath: "/usr/sbin/pkgutil"),
+            SystemPaths.pkgutil,
             arguments: ["--expand-full", package.path, expanded.path], timeouts: .query
         )
         guard result.exitCode == 0 else { throw Failure.expansionFailed(result.standardError) }
