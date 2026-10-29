@@ -173,6 +173,29 @@ public final class BrewService: @unchecked Sendable {
         ["reinstall", "--cask", "--", token]
     }
 
+    /// Arguments for "Odepnij nieużywane tapy" — removing third-party taps Homebrew stopped
+    /// loading because they are not trusted, and from which nothing installed came. Untapping
+    /// is Homebrew's own first suggestion for such a tap. Streamed via `events(arguments:)`.
+    public static func untapArguments(taps: [String]) -> [String] {
+        // SEC-10: `--` fences the tap names off from Homebrew's option parsing.
+        ["untap", "--"] + taps
+    }
+
+    /// Arguments for trusting exactly the installed casks (`<user>/<repo>/<token>`) that came
+    /// from an untrusted tap — never the whole tap, which would also trust every future cask,
+    /// formula and command it publishes.
+    public static func trustCaskArguments(names: [String]) -> [String] {
+        // SEC-10: `--` fences the names off from Homebrew's option parsing.
+        ["trust", "--cask", "--"] + names
+    }
+
+    /// The formula counterpart of `trustCaskArguments(names:)`. A separate command, because
+    /// `brew trust` takes one of `--cask` / `--formula` per run.
+    public static func trustFormulaArguments(names: [String]) -> [String] {
+        // SEC-10: `--` fences the names off from Homebrew's option parsing.
+        ["trust", "--formula", "--"] + names
+    }
+
     /// ARCH-05a: latest versions for many tokens in **one** `brew info` call.
     ///
     /// `caskLatestVersion(token:)` spawns a process per token, and the manual scanner called it
