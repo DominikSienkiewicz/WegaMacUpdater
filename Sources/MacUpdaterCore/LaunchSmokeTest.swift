@@ -98,24 +98,23 @@ public enum LaunchSmokeTest {
         let openedAt = clock.now
         let closesAt = openedAt.advanced(by: .seconds(window))
 
+        let teardown = Teardown(handle: handle, bundle: url, probe: probe,
+                                grace: terminationGrace, pollInterval: pollInterval)
         while clock.now < closesAt {
             if await handle.hasExited() {
-                return await stopping(handle, grace: terminationGrace, pollInterval: pollInterval,
-                                      verdict: .exitedEarly(after: seconds(from: openedAt, on: clock)))
+                return await teardown.stopping(verdict: .exitedEarly(after: seconds(from: openedAt, on: clock)))
             }
             do {
                 try await Task.sleep(for: .seconds(min(pollInterval, window)))
             } catch {
-                return await stopping(handle, grace: terminationGrace, pollInterval: pollInterval,
-                                      verdict: .skipped(.cancelled))
+                return await teardown.stopping(verdict: .skipped(.cancelled))
             }
         }
 
         // The closing edge belongs to the window too. Without this read, a process that died
         // during the last poll gap would be reported as having survived the full window.
         if await handle.hasExited() {
-            return await stopping(handle, grace: terminationGrace, pollInterval: pollInterval,
-                                  verdict: .exitedEarly(after: seconds(from: openedAt, on: clock)))
+            return await teardown.stopping(verdict: .exitedEarly(after: seconds(from: openedAt, on: clock)))
         }
 
         // An app that came up asking for authorization is not a survivor to be cashed in and
@@ -128,37 +127,56 @@ public enum LaunchSmokeTest {
         if await probe.hasOpenAuthorizationPrompt() {
             return .skipped(.awaitingAuthorization)
         }
-        return await stopping(handle, grace: terminationGrace, pollInterval: pollInterval, verdict: .survived)
+        return await teardown.stopping(verdict: .survived)
     }
 
-    /// Ends the instance and returns `verdict` unchanged — the stop is cleanup, never a
-    /// second chance to change the answer.
-    ///
-    /// Polite request, short grace, then an unconditional kill: the same escalation
-    /// `ProcessRunner` uses for a cancelled child (REL-12), so an app that ignores a quit
-    /// request cannot outlive the test that started it.
-    private static func stopping(
-        _ handle: any LaunchedAppHandle,
-        grace: TimeInterval,
-        pollInterval: TimeInterval,
-        verdict: Verdict
-    ) async -> Verdict {
-        if await handle.hasExited() { return verdict }
-        await handle.requestTermination()
+    /// Everything needed to end the instance this test started.
+    private struct Teardown {
+        let handle: any LaunchedAppHandle
+        let bundle: URL
+        let probe: any AppLaunchProbing
+        let grace: TimeInterval
+        let pollInterval: TimeInterval
 
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(grace))
-        while clock.now < deadline {
-            if await handle.hasExited() { return verdict }
-            do {
-                try await Task.sleep(for: .seconds(min(pollInterval, grace)))
-            } catch {
-                break
-            }
+        /// Ends the instance and returns `verdict` unchanged — the stop is cleanup, never a
+        /// second chance to change the answer.
+        ///
+        /// Polite request, short grace, then an unconditional kill: the same escalation
+        /// `ProcessRunner` uses for a cancelled child (REL-12), so an app that ignores a quit
+        /// request cannot outlive the test that started it.
+        ///
+        /// The app's own staged update is withdrawn first, while the instance still runs. An
+        /// updater that installs on quit would otherwise take this quit as its cue and replace
+        /// the bundle the test just approved — see ``SquirrelShipItJob``.
+        ///
+        /// Once the instance is gone — whether it quit, was killed or died on its own — the
+        /// verdict waits for any install the app's updater began on that exit. Whatever the
+        /// caller does next (re-read the version, restore the snapshot) must not land inside
+        /// another installer's swap.
+        func stopping(verdict: Verdict) async -> Verdict {
+            await end()
+            await probe.waitForSelfUpdate(ofBundleAt: bundle)
+            return verdict
         }
-        let stillAlive = await !handle.hasExited()
-        if stillAlive { await handle.forceTerminate() }
-        return verdict
+
+        private func end() async {
+            if await handle.hasExited() { return }
+            await probe.withdrawStagedSelfUpdate(ofBundleAt: bundle)
+            await handle.requestTermination()
+
+            let clock = ContinuousClock()
+            let deadline = clock.now.advanced(by: .seconds(grace))
+            while clock.now < deadline {
+                if await handle.hasExited() { return }
+                do {
+                    try await Task.sleep(for: .seconds(min(pollInterval, grace)))
+                } catch {
+                    break
+                }
+            }
+            let stillAlive = await !handle.hasExited()
+            if stillAlive { await handle.forceTerminate() }
+        }
     }
 
     private static func seconds(from start: ContinuousClock.Instant, on clock: ContinuousClock) -> TimeInterval {
@@ -202,12 +220,31 @@ public protocol AppLaunchProbing: Sendable {
     /// privileges`. It belongs to the system half of the test because only the system can
     /// answer it, and the smoke test needs it to know when its teardown would be destructive.
     func hasOpenAuthorizationPrompt() async -> Bool
+
+    /// Cancels an install the app's own updater has staged to run when this instance quits.
+    /// Called while the instance is still running, right before the teardown asks it to quit.
+    func withdrawStagedSelfUpdate(ofBundleAt url: URL) async
+
+    /// Returns once an install the app's own updater began on this instance's exit has finished.
+    /// Called after the instance is gone, before the verdict is handed back.
+    func waitForSelfUpdate(ofBundleAt url: URL) async
 }
 
 public extension AppLaunchProbing {
     /// A probe that cannot observe the system says "no prompt", which is the pre-existing
     /// behaviour. Only the production probe overrides this.
     func hasOpenAuthorizationPrompt() async -> Bool { false }
+
+    /// A probe that cannot reach launchd leaves the app's updater alone — the pre-existing
+    /// behaviour. Only the production probe overrides this.
+    func withdrawStagedSelfUpdate(ofBundleAt url: URL) async {
+        // Intentionally empty: only the production probe can reach launchd.
+    }
+
+    /// Nothing to wait for without launchd — the pre-existing behaviour.
+    func waitForSelfUpdate(ofBundleAt url: URL) async {
+        // Intentionally empty: only the production probe can reach launchd.
+    }
 }
 
 /// The tunables of the launch smoke test, and the switch that turns it off.

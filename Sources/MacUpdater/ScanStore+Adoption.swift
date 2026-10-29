@@ -35,10 +35,6 @@ extension ScanStore {
         let ticket = MutationGuard.shared.begin(trf("instalacja %@", "\(token)"))
         defer { MutationGuard.shared.end(ticket) }
         emitActivitySignal(.scanning)
-        brewLog = ["$ brew " + installArgs.joined(separator: " ")]
-        showLog = true
-        WegaLog.info(.homebrew, "Uruchamiam: brew \(installArgs.joined(separator: " "))")
-        emitWegaState(WegaState(pose: .sniff, line: trf("Instaluję %@ przez Brew…", "\(token)")))
 
         guard let target = manualOutdated.first(where: {
             if case .cask(let candidate) = $0.source { return candidate == token }
@@ -49,6 +45,19 @@ extension ScanStore {
             emitActivitySignal(.error)
             return
         }
+
+        // Asked fresh rather than trusted from the scan: the record is what brew itself will
+        // compare against, and it can move between the scan and the click. A failed read keeps
+        // the requested command — the post-install arrival check still catches a no-op.
+        let recordedVersion = try? await model.brewService.caskInstalledVersions()[token]
+        let installArgs = installArgs == BrewService.adoptCaskArguments(token: token)
+            ? CaskAdoptionCommand.arguments(token: token, offeredVersion: target.availableVersion,
+                                            recordedVersion: recordedVersion)
+            : installArgs
+        brewLog = ["$ brew " + installArgs.joined(separator: " ")]
+        showLog = true
+        WegaLog.info(.homebrew, "Uruchamiam: brew \(installArgs.joined(separator: " "))")
+        emitWegaState(WegaState(pose: .sniff, line: trf("Instaluję %@ przez Brew…", "\(token)")))
 
         // `nil` means the cask installs no `.app`: brew still runs, but without the
         // snapshot → canary → auto-rollback net, because there is no bundle to clone and
@@ -199,14 +208,24 @@ extension ScanStore {
                           "\(token)", "\(old)", "\(new ?? "—")")
         case .notUpgraded:
             title = tr("Nic nie zainstalowano")
-            message = trf(
-                "%@: brew zakończył się sukcesem, ale na dysku została wersja sprzed aktualizacji. Wpis Homebrew rozjechał się z aplikacją — pomoże brew reinstall --cask %@.",
-                "\(token)", "\(token)"
-            )
             // A reinstall that itself installed nothing would only offer itself again.
             if installArgs != BrewService.reinstallCaskArguments(token: token) {
+                message = trf(
+                    "%@: brew zakończył się sukcesem, ale na dysku została wersja sprzed aktualizacji. Wpis Homebrew rozjechał się z aplikacją — naprawi to przycisk „Przeinstaluj przez Brew”.",
+                    "\(token)"
+                )
                 action = .reinstallCask(token: token)
+            } else {
+                message = trf(
+                    "%@: nawet brew reinstall zostawił na dysku wersję sprzed aktualizacji — szczegóły w logu.",
+                    "\(token)"
+                )
+                action = .openLogs
             }
+        case .replacedByAppUpdater(let version):
+            title = tr("Aplikacja cofnęła aktualizację")
+            message = CaskRollbackGuard.replacedByAppUpdaterMessage(token: token, version: version)
+            action = .openLogs
         }
         brewLog.append("⚠️ " + message)
         showBanner(BannerData(variant: .danger, title: title, message: message, action: action))

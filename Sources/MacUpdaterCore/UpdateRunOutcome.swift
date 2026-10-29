@@ -22,6 +22,11 @@ public enum CaskValidationVerdict: Equatable, Sendable {
     /// nothing to roll back. Homebrew does this whenever its own Caskroom record already
     /// names the new version while the app on disk does not — see `NoOpCaskUpgradeTests`.
     case notUpgraded
+    /// Every gate passed, but the app's own updater replaced the new bundle while the launch
+    /// test was closing it; `version` is what stands on disk now. Wega restored nothing, and
+    /// Homebrew's record still names the version that was installed — see
+    /// ``SquirrelShipItJob`` for how Discord did this.
+    case replacedByAppUpdater(version: String?)
 }
 
 /// How one item ended the run, across **every** phase it had to clear: execution,
@@ -166,6 +171,9 @@ public struct ItemUpdateOutcome: Equatable, Sendable {
             // The item is exactly as outdated as it was before the run. Saying so here matters
             // because the confirming rescan cannot: it asks brew, and brew is the thing whose
             // record was wrong.
+            escalate(to: .stillOutdated)
+        case (_, .replacedByAppUpdater):
+            // The same end state reached another way: brew's record moved, the disk went back.
             escalate(to: .stillOutdated)
         }
     }

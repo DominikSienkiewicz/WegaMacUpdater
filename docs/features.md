@@ -208,8 +208,17 @@ September while every following scan listed it as outdated again.
 When the check fires on an adoption, the "Nic nie zainstalowano" banner offers **„Przeinstaluj
 przez Brew"**: `brew reinstall --cask -- <token>` run through the same protected transaction.
 Unlike `install --force`, `reinstall` does not trust the stale Caskroom record — it removes the
-cask and downloads it again, rebuilding the record and the bundle together. If that run lands
-nothing either, the banner reports it without offering the same repair again.
+cask and downloads it again, rebuilding the record and the bundle together. The banner names
+that button rather than a command to type in a terminal. If that run lands nothing either, the
+banner says so and offers the log instead of the same repair again.
+
+The banner is the fallback, not the usual path. Before "Aktualizuj przez Brew" runs anything it
+asks Homebrew what its Caskroom records for the cask (`brew info --installed --json=v2`); when
+that record already equals the version the row offers, `install --force` is a guaranteed no-op
+("Not upgrading …, the latest version is already installed"), so the update runs `reinstall`
+straight away (`CaskAdoptionCommand`). The log names the command that actually ran. That is the
+state an app's own updater leaves after it puts an older build back over a brew install — see
+the Squirrel note under the launch smoke test below — and the state a REL-07 rollback leaves.
 
 #### Launch smoke test
 
@@ -245,6 +254,25 @@ Detection alone would race, since Docker's dialog took about four seconds to app
 five-second window, so casks known to repair privileged state on first run are never launched
 by the smoke test at all. Both are "no evidence", never a failure: not learning whether an app
 runs must not be spent as a reason to undo an upgrade.
+
+The teardown also has to keep the app's **own updater** from taking the quit as its cue.
+Electron apps update through Squirrel.Mac: once one has downloaded an update, Squirrel submits
+ShipIt as a launchd job that waits for the app to quit and then swaps the bundle. Discord's feed
+lags its cask and answers any other version, newer ones included, with its current build — so a
+freshly upgraded Discord downloaded the older build inside the five-second window, and the
+smoke test's quit let ShipIt put it back two seconds later (`0.0.420` → `0.0.419`, twice on
+2026-10-27), after the update had already been reported as applied. So before it asks the
+instance to quit, the teardown removes every ShipIt job whose program lives inside the bundle
+under test (`SquirrelShipItJob`, the same `launchctl remove` Homebrew's `discord` cask runs on
+uninstall). ShipIt touches nothing while the app it updates is running, so this cancels an
+install that has not begun; Squirrel downloads the update again whenever it next decides one is
+due. The withdrawal runs even when the update is being cancelled, since a cancelled run still
+quits the app. Once the instance is gone — quit, killed or dead on its own — the teardown also
+waits (up to 20 s) until no ShipIt job of the bundle is running, because ShipIt swaps the bundle
+seconds after the app exits and nothing may read or restore it mid-swap. Should an install slip
+through anyway, the guard reads the bundle's version once more after the test: a version that changed while the app was running is reported as **replaced by the
+app's own updater** (`replacedByAppUpdater`) — not as an update and not as a rollback — and the
+item is settled as aborted, so no "Cofnij aktualizację" entry points at a version that is gone.
 
 Liveness is read repeatedly while
 the window is open **and once more on its closing edge**, and always through the handle the

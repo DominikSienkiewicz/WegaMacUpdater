@@ -48,8 +48,9 @@ public final class CaskRollbackLedger: @unchecked Sendable {
         // `.notUpgraded` restored nothing, so it arms no mark — and because it is not
         // `.healthy` it clears none either: a run that changed nothing must leave whatever the
         // ledger already remembered about this cask exactly as it was.
+        // `.replacedByAppUpdater` is the same: the app restored its own build, not Wega.
         case .healthy, .rollbackFailed, .publisherChanged,
-             .notUpgraded:                                 return nil
+             .notUpgraded, .replacedByAppUpdater:          return nil
         }
     }
 

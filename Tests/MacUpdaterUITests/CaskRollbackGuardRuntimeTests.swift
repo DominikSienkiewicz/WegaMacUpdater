@@ -253,4 +253,95 @@ struct CaskRollbackGuardRuntimeTests {
         )
         #expect(!failed)
     }
+
+    /// Discord, 2026-10-27: every gate approved the brew-installed `0.0.420`, then the app's own
+    /// updater (Squirrel's ShipIt) put `0.0.419` back as the launch test closed it — and the
+    /// update was reported as applied while Homebrew kept recording `0.0.420`.
+    @Test func aBundleTheAppReplacedDuringTheLaunchTestIsNotReportedAsUpdated() async throws {
+        // Given the cask landed 0.0.420 over a 0.0.419 snapshot
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guard-app-updater-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let snapshot = try Self.bundle(at: root.appendingPathComponent("snapshot.app"), version: "0.0.419")
+        let installed = try Self.bundle(at: root.appendingPathComponent("Discord.app"), version: "0.0.420")
+
+        // When the app's own updater swaps it back while the launch test has it open
+        let outcome = await CaskRollbackGuard.verify(
+            token: "discord",
+            snapshotURL: snapshot,
+            validationURL: installed,
+            expecting: .init(teamID: "TEAM", bundleIdentifier: "com.example.app", version: "0.0.420"),
+            dependencies: dependencies(
+                smokeTestIsEnabled: { true },
+                launchSmokeTest: { appURL in
+                    _ = try? Self.bundle(at: appURL, version: "0.0.419")
+                    return .survived
+                }
+            )
+        )
+
+        // Then the verdict says who replaced it and with what, instead of `.healthy`
+        #expect(outcome == .replacedByAppUpdater(version: "0.0.419"))
+    }
+
+    @Test func aBundleLeftAloneDuringTheLaunchTestStaysHealthy() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guard-app-updater-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let snapshot = try Self.bundle(at: root.appendingPathComponent("snapshot.app"), version: "0.0.419")
+        let installed = try Self.bundle(at: root.appendingPathComponent("Discord.app"), version: "0.0.420")
+
+        let outcome = await CaskRollbackGuard.verify(
+            token: "discord",
+            snapshotURL: snapshot,
+            validationURL: installed,
+            expecting: .init(teamID: "TEAM", bundleIdentifier: "com.example.app", version: "0.0.420"),
+            dependencies: dependencies(smokeTestIsEnabled: { true }, launchSmokeTest: { _ in .survived })
+        )
+
+        #expect(outcome == .healthy)
+    }
+
+    /// The counterweight: an updater that moves the app *past* what brew installed has not undone
+    /// anything — the bundle is newer than the update promised, which is no reason to report it
+    /// as still outdated.
+    @Test func anAppThatUpdatedItselfPastTheCaskDuringTheLaunchTestStaysHealthy() async throws {
+        // Given the cask landed 0.0.420 over a 0.0.419 snapshot
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guard-app-updater-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let snapshot = try Self.bundle(at: root.appendingPathComponent("snapshot.app"), version: "0.0.419")
+        let installed = try Self.bundle(at: root.appendingPathComponent("Discord.app"), version: "0.0.420")
+
+        // When the app's own updater moves it on to 0.0.421 while the launch test has it open
+        let outcome = await CaskRollbackGuard.verify(
+            token: "discord",
+            snapshotURL: snapshot,
+            validationURL: installed,
+            expecting: .init(teamID: "TEAM", bundleIdentifier: "com.example.app", version: "0.0.420"),
+            dependencies: dependencies(
+                smokeTestIsEnabled: { true },
+                launchSmokeTest: { appURL in
+                    _ = try? Self.bundle(at: appURL, version: "0.0.421")
+                    return .survived
+                }
+            )
+        )
+
+        // Then the update stands
+        #expect(outcome == .healthy)
+    }
+
+    @discardableResult
+    private nonisolated static func bundle(at url: URL, version: String) throws -> URL {
+        let contents = url.appendingPathComponent("Contents", isDirectory: true)
+        try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
+        let plist = try PropertyListSerialization.data(
+            fromPropertyList: ["CFBundleShortVersionString": version, "CFBundleIdentifier": "com.example.app"],
+            format: .xml,
+            options: 0
+        )
+        try plist.write(to: contents.appendingPathComponent("Info.plist"))
+        return url
+    }
 }

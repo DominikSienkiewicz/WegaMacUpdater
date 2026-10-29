@@ -448,15 +448,42 @@ enum CaskRollbackGuard {
                 return .notUpgraded
             }
 
+            let arrivedVersion = UpdateOperationRecoveryPlan.bundleShortVersion(at: validationURL)
             let smokeTest = await launchSmokeTest(token: token, appURL: validationURL)
             guard !LaunchSmokeTest.requiresRollback(smokeTest) else {
                 return await restoreSnapshot(snapshotURL, to: validationURL) ? .rolledBack : .rollbackFailed
+            }
+            // Running the app is the one gate that hands it control, and an app with its own
+            // updater can use it to replace the bundle every gate above just approved — Discord
+            // put 0.0.419 back over 0.0.420 this way. The teardown withdraws such installs
+            // (`SquirrelShipItJob`); this read is what keeps one that slipped through from being
+            // reported as an update. Nothing is restored: the app's own build is not broken.
+            // An updater that moved the app *past* the cask undid nothing, so only a version that
+            // is no longer at least the one that arrived counts.
+            let settledVersion = UpdateOperationRecoveryPlan.bundleShortVersion(at: validationURL)
+            if let arrivedVersion, settledVersion != arrivedVersion,
+               !(settledVersion.map { isUpgrade(installed: arrivedVersion, latest: $0) } ?? false) {
+                WegaLog.error(
+                    .homebrew,
+                    "\(token): updater aplikacji podmienił \(arrivedVersion) na \(settledVersion ?? "—") podczas testu startu."
+                )
+                return .replacedByAppUpdater(version: settledVersion)
             }
             // LT-01 — the snapshot deliberately stays: it is the manual undo for the whole
             // retention window. It used to be deleted here, which is why "Cofnij
             // aktualizację" could not exist. `UpdateOperationStore.pruneExpired` owns it now.
             return .healthy
         }
+    }
+
+    /// What every surface says about ``CaskValidationVerdict/replacedByAppUpdater(version:)``:
+    /// who replaced the bundle, with what, and that Homebrew's record no longer matches.
+    nonisolated static func replacedByAppUpdaterMessage(token: String, version: String?) -> String {
+        trf(
+            "%@: updater aplikacji zastąpił nową wersję wersją %@ zaraz po teście startu — Homebrew wciąż ma zapisaną nową.",
+            "\(token)",
+            "\(version ?? "—")"
+        )
     }
 
     /// Restores in place; falls back to the root helper when the destination is protected

@@ -656,6 +656,11 @@ public final class UpdateOperationSession {
                 // `verified` (the canary would have inspected the old bundle and passed it),
                 // and a snapshot of an untouched disk that restores nothing.
                 UpdateOperationStore.transition(&item, to: .aborted, at: now)
+            case .replacedByAppUpdater:
+                // The update did not stick, so it is not committed: a committed item keeps its
+                // snapshot as "Cofnij aktualizację", an undo for a version that is no longer
+                // there. The app put its own build back; Wega has nothing left to settle.
+                UpdateOperationStore.transition(&item, to: .aborted, at: now)
             }
         }
     }
