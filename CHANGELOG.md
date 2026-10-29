@@ -13,6 +13,11 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Fixed
+- **Update via Brew** no longer ends in "Nothing was installed" when Homebrew already records
+  the offered version while the app on disk is older (Discord, after its own updater put an
+  older build back): Wega now runs `brew reinstall --cask` straight away.
+
 ## [0.5.5] — 2026-10-18
 
 ### Fixed

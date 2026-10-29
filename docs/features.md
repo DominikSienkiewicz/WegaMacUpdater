@@ -211,6 +211,14 @@ Unlike `install --force`, `reinstall` does not trust the stale Caskroom record �
 cask and downloads it again, rebuilding the record and the bundle together. If that run lands
 nothing either, the banner reports it without offering the same repair again.
 
+The banner is the fallback, not the usual path. Before "Aktualizuj przez Brew" runs anything it
+asks Homebrew what its Caskroom records for the cask (`brew info --installed --json=v2`); when
+that record already equals the version the row offers, `install --force` is a guaranteed no-op
+("Not upgrading …, the latest version is already installed"), so the update runs `reinstall`
+straight away (`CaskAdoptionCommand`). The log names the command that actually ran. That is the
+state an app's own updater leaves after it puts an older build back over a brew install — see
+the Squirrel note under the launch smoke test below — and the state a REL-07 rollback leaves.
+
 #### Launch smoke test
 
 The identity, Gatekeeper and publisher gates all describe what the new bundle **is**; none
