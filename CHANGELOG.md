@@ -13,6 +13,14 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Added
+- **One-click fixes for untrusted Homebrew taps.** When Homebrew 7 warns that it is ignoring
+  formulae, casks and commands from untrusted taps, the brew log panel offers buttons instead
+  of commands to copy: it trusts exactly the installed casks and formulae that came from those
+  taps (`brew trust --cask/--formula`) and untaps the ones nothing installed came from
+  (`brew untap`), decided from Homebrew's install receipts. Each button shows the exact
+  command it runs and runs only when clicked.
+
 ## [0.5.5] — 2026-10-18
 
 ### Fixed
