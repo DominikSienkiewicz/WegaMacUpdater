@@ -10,6 +10,14 @@ import MacUpdaterCore
 // is planned from install receipts (`TapTrustPlanner`) and runs only on a click — through the
 // same write gate, mutex and termination guard as every other brew mutation.
 extension ScanStore {
+    /// What the brew log panel on the Updates screen needs to plan and run a remedy.
+    var tapTrustActions: TapTrustActions {
+        TapTrustActions(
+            resolve: { await self.tapTrustRemedies(forUntrustedTaps: $0) },
+            run: { await self.runTapTrustRemedy($0) }
+        )
+    }
+
     /// The remedies for `taps`, as named by the warning in the brew log.
     ///
     /// Install receipts are read off the main actor: deciding needs every cask's and every
