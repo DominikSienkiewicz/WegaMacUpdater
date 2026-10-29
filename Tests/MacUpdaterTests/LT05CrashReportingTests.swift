@@ -103,11 +103,17 @@ struct LT05CrashReportingTests {
         TestDefaults.isolated("lt05-crash-reporting")
     }
 
+    /// The store's clock for tests that set none: an hour after `crashPayload()`'s crash
+    /// (2026-07-22T09:41:03Z). The store keeps reports for 90 days counted from `now()`, so the
+    /// real clock silently aged every fixture crash out once 2026-10-20 had passed, and the tests
+    /// built on it went red without a line of code changing.
+    private static let fixtureNow = Date(timeIntervalSince1970: 1_784_713_263 + 3600)
+
     private func store(
         directory: URL? = nil,
         maxRecords: Int = CrashDiagnosticStore.defaultMaxRecords,
         maxAge: TimeInterval = CrashDiagnosticStore.defaultMaxAge,
-        now: @escaping () -> Date = Date.init
+        now: @escaping () -> Date = { LT05CrashReportingTests.fixtureNow }
     ) -> CrashDiagnosticStore {
         CrashDiagnosticStore(
             directory: directory ?? scratchDirectory(),
