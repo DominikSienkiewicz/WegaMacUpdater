@@ -171,8 +171,10 @@ extension Translations {
             "%@: brew installed no new version — the previous one is still on disk.",
         "%@ nie został zaktualizowany.": "%@ was not updated.",
         "Nic nie zainstalowano": "Nothing was installed",
-        "%@: brew zakończył się sukcesem, ale na dysku została wersja sprzed aktualizacji. Wpis Homebrew rozjechał się z aplikacją — pomoże brew reinstall --cask %@.":
-            "%@: brew reported success, but the pre-upgrade version is still on disk. Homebrew's record is out of sync with the app — brew reinstall --cask %@ will fix it.",
+        "%@: brew zakończył się sukcesem, ale na dysku została wersja sprzed aktualizacji. Wpis Homebrew rozjechał się z aplikacją — naprawi to przycisk „Przeinstaluj przez Brew”.":
+            "%@: brew reported success, but the pre-upgrade version is still on disk. Homebrew's record is out of sync with the app — the “Reinstall via Brew” button fixes it.",
+        "%@: nawet brew reinstall zostawił na dysku wersję sprzed aktualizacji — szczegóły w logu.":
+            "%@: even brew reinstall left the pre-upgrade version on disk — see the log for details.",
         "%@: brew zakończył się sukcesem, ale na dysku została wersja sprzed migracji — nic nie zainstalowano.":
             "%@: brew reported success, but the pre-migration version is still on disk — nothing was installed.",
         "Aplikacja cofnęła aktualizację": "The app undid the update",

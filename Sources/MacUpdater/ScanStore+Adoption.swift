@@ -208,13 +208,19 @@ extension ScanStore {
                           "\(token)", "\(old)", "\(new ?? "—")")
         case .notUpgraded:
             title = tr("Nic nie zainstalowano")
-            message = trf(
-                "%@: brew zakończył się sukcesem, ale na dysku została wersja sprzed aktualizacji. Wpis Homebrew rozjechał się z aplikacją — pomoże brew reinstall --cask %@.",
-                "\(token)", "\(token)"
-            )
             // A reinstall that itself installed nothing would only offer itself again.
             if installArgs != BrewService.reinstallCaskArguments(token: token) {
+                message = trf(
+                    "%@: brew zakończył się sukcesem, ale na dysku została wersja sprzed aktualizacji. Wpis Homebrew rozjechał się z aplikacją — naprawi to przycisk „Przeinstaluj przez Brew”.",
+                    "\(token)"
+                )
                 action = .reinstallCask(token: token)
+            } else {
+                message = trf(
+                    "%@: nawet brew reinstall zostawił na dysku wersję sprzed aktualizacji — szczegóły w logu.",
+                    "\(token)"
+                )
+                action = .openLogs
             }
         case .replacedByAppUpdater(let version):
             title = tr("Aplikacja cofnęła aktualizację")

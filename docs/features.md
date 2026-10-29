@@ -208,8 +208,9 @@ September while every following scan listed it as outdated again.
 When the check fires on an adoption, the "Nic nie zainstalowano" banner offers **„Przeinstaluj
 przez Brew"**: `brew reinstall --cask -- <token>` run through the same protected transaction.
 Unlike `install --force`, `reinstall` does not trust the stale Caskroom record — it removes the
-cask and downloads it again, rebuilding the record and the bundle together. If that run lands
-nothing either, the banner reports it without offering the same repair again.
+cask and downloads it again, rebuilding the record and the bundle together. The banner names
+that button rather than a command to type in a terminal. If that run lands nothing either, the
+banner says so and offers the log instead of the same repair again.
 
 The banner is the fallback, not the usual path. Before "Aktualizuj przez Brew" runs anything it
 asks Homebrew what its Caskroom records for the cask (`brew info --installed --json=v2`); when
