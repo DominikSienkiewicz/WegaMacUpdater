@@ -13,6 +13,12 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Added
+- When Homebrew warns that it is ignoring untrusted taps, the brew log now offers one-click
+  fixes instead of commands to copy: it trusts exactly the installed casks and formulae that
+  came from those taps and untaps the ones nothing installed came from. Each button shows the
+  command it runs and runs only when clicked.
+
 ### Fixed
 - **Update via Brew** no longer ends in "Nothing was installed" when Homebrew already records
   the offered version while the app on disk is older (Discord, after its own updater put an
