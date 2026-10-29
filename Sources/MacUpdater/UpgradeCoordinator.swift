@@ -12,6 +12,7 @@ final class UpgradeCoordinator: ObservableObject {
         case foregroundUpgrade = "foreground upgrade"
         case backgroundUpgrade = "background upgrade"
         case manualInstall = "manual install"
+        case tapTrust = "tap trust"
         case migration
         case cleanup
         case uninstall

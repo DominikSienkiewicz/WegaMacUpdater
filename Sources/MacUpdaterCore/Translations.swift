@@ -341,6 +341,12 @@ extension Translations {
         "Otwórz aplikację": "Open the application",
         "Aktualizuj przez Brew": "Update via Brew",
         "Przeinstaluj przez Brew": "Reinstall via Brew",
+        // Tap trust — przyciski w logu brew na ostrzeżenie Homebrew 7 o niezaufanych tapach.
+        "zmiana tapów Homebrew": "changing Homebrew taps",
+        "Nie udało się zmienić tapów": "Could not change the taps",
+        "Odpięto nieużywane tapy": "Unused taps untapped",
+        "Zaufano zainstalowanym pakietom": "Installed packages trusted",
+        "Wykonano: %@": "Ran: %@",
         "Zaufaj nowemu wydawcy": "Trust the new publisher",
         "Zaufano nowemu wydawcy": "New publisher trusted",
         "%@: Team ID %@ jest teraz zaufanym wydawcą.": "%@: Team ID %@ is now the trusted publisher.",
