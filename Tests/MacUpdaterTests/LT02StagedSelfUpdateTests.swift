@@ -129,6 +129,24 @@ struct SquirrelShipItJobTests {
         #expect(SquirrelShipItJob.isRunning(inLaunchctlPrint: "gui/501/x = {\n\tstate = not running\n}") == false)
     }
 
+    /// REL-12 cancels an update run by cancelling its task, and `ProcessRunner` refuses to start
+    /// anything in a cancelled task. The cancelled run's teardown still quits the app, so the
+    /// withdrawal is the one call that must not be cancelled with it.
+    @Test func aCancelledRunStillWithdrawsTheStagedInstall() async {
+        // Given Discord's ShipIt job waiting, and a runner that honours cancellation like ProcessRunner
+        let runner = ScriptedLaunchctl(states: ["not running"])
+
+        // When the withdrawal is asked for from a cancelled task
+        let withdrawn = await Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return await SquirrelShipItJob.withdraw(fromBundleAt: Self.discord, runner: runner)
+        }.value
+
+        // Then the job is still removed
+        #expect(withdrawn == ["com.discord.discord.ShipIt"])
+        #expect(runner.removed == ["com.discord.discord.ShipIt"])
+    }
+
     @Test func waitingForTheUpdaterEndsOnceItsJobStopsRunning() async {
         // Given Discord's ShipIt mid-install for two more polls
         let runner = ScriptedLaunchctl(states: ["running", "running", "not running"])

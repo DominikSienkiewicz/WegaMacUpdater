@@ -171,8 +171,9 @@ final class UpdateOperationRecovery {
                 // was committed either way, so it settles as aborted rather than as an update.
                 report.abortedTokens.append(item.token)
             case .replacedByAppUpdater:
-                // Recovery runs no launch test, so this cannot come back from here; settled
-                // like the journal settles it, should that ever change.
+                // The resumed canary runs the launch test too, so the app's own updater can
+                // replace the bundle here as well. Nothing of Wega's is left to undo and the
+                // next scan lists the app as outdated again, so it settles like the journal does.
                 report.abortedTokens.append(item.token)
             case .rollbackFailed, .publisherChanged, nil:
                 report.unrecoverableTokens.append(item.token)

@@ -52,14 +52,20 @@ public enum SquirrelShipItJob {
     /// own `discord` cask removes the same job on uninstall for the same reason. Squirrel
     /// downloads the update again the next time it decides one is due, so nothing of the app's
     /// is lost — only the install this teardown would have triggered.
+    ///
+    /// Runs to completion even when the calling task is cancelled. A cancelled update run still
+    /// quits the app under test (REL-12), and `ProcessRunner` starts nothing in a cancelled task,
+    /// so inheriting the cancellation would skip exactly the call that keeps that quit harmless.
     @discardableResult
     public static func withdraw(fromBundleAt bundle: URL, runner: ProcessRunning = ProcessRunner()) async -> [String] {
-        var withdrawn: [String] = []
-        for job in await jobs(belongingTo: bundle, runner: runner)
-        where await launchctl(["remove", job.label], runner: runner) != nil {
-            withdrawn.append(job.label)
-        }
-        return withdrawn
+        await Task.detached {
+            var withdrawn: [String] = []
+            for job in await jobs(belongingTo: bundle, runner: runner)
+            where await launchctl(["remove", job.label], runner: runner) != nil {
+                withdrawn.append(job.label)
+            }
+            return withdrawn
+        }.value
     }
 
     /// Whether `launchctl print` output describes a job whose process is alive right now.
