@@ -266,8 +266,11 @@ instance to quit, the teardown removes every ShipIt job whose program lives insi
 under test (`SquirrelShipItJob`, the same `launchctl remove` Homebrew's `discord` cask runs on
 uninstall). ShipIt touches nothing while the app it updates is running, so this cancels an
 install that has not begun; Squirrel downloads the update again whenever it next decides one is
-due. Should an install slip through anyway, the guard reads the bundle's version once more after
-the test: a version that changed while the app was running is reported as **replaced by the
+due. The withdrawal runs even when the update is being cancelled, since a cancelled run still
+quits the app. Once the instance is gone — quit, killed or dead on its own — the teardown also
+waits (up to 20 s) until no ShipIt job of the bundle is running, because ShipIt swaps the bundle
+seconds after the app exits and nothing may read or restore it mid-swap. Should an install slip
+through anyway, the guard reads the bundle's version once more after the test: a version that changed while the app was running is reported as **replaced by the
 app's own updater** (`replacedByAppUpdater`) — not as an update and not as a rollback — and the
 item is settled as aborted, so no "Cofnij aktualizację" entry points at a version that is gone.
 
