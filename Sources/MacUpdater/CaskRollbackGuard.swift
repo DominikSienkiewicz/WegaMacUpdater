@@ -458,8 +458,11 @@ enum CaskRollbackGuard {
             // put 0.0.419 back over 0.0.420 this way. The teardown withdraws such installs
             // (`SquirrelShipItJob`); this read is what keeps one that slipped through from being
             // reported as an update. Nothing is restored: the app's own build is not broken.
+            // An updater that moved the app *past* the cask undid nothing, so only a version that
+            // is no longer at least the one that arrived counts.
             let settledVersion = UpdateOperationRecoveryPlan.bundleShortVersion(at: validationURL)
-            if let arrivedVersion, settledVersion != arrivedVersion {
+            if let arrivedVersion, settledVersion != arrivedVersion,
+               !(settledVersion.map { isUpgrade(installed: arrivedVersion, latest: $0) } ?? false) {
                 WegaLog.error(
                     .homebrew,
                     "\(token): updater aplikacji podmienił \(arrivedVersion) na \(settledVersion ?? "—") podczas testu startu."
