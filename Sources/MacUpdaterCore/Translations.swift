@@ -175,6 +175,10 @@ extension Translations {
             "%@: brew reported success, but the pre-upgrade version is still on disk. Homebrew's record is out of sync with the app — brew reinstall --cask %@ will fix it.",
         "%@: brew zakończył się sukcesem, ale na dysku została wersja sprzed migracji — nic nie zainstalowano.":
             "%@: brew reported success, but the pre-migration version is still on disk — nothing was installed.",
+        "Aplikacja cofnęła aktualizację": "The app undid the update",
+        "%@: updater aplikacji zastąpił nową wersję wersją %@ zaraz po teście startu — Homebrew wciąż ma zapisaną nową.":
+            "%@: the app's own updater replaced the new version with %@ right after the launch test — Homebrew still records the new one.",
+        "%@ cofnął aktualizację.": "%@ undid the update.",
         "Cofnęłam %@ — nowa wersja nie przeszła kontroli.": "Rolled back %@ — the new version failed the check.",
         "%@: nowa wersja nie przeszła kontroli, ale rollback się nie powiódł.": "%@: the new version failed the check, but rollback did not succeed.",
         // LT-02 — canary ze smoke-testem: aplikacja jest startowana ukryta i musi przeżyć okno.

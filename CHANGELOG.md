@@ -19,7 +19,8 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   older build back): Wega now runs `brew reinstall --cask` straight away.
 - The post-update launch test no longer lets an Electron app's built-in updater replace the
   version Homebrew just installed when the test closes the app (Discord went back from 0.0.420
-  to 0.0.419 this way).
+  to 0.0.419 this way). If an app still replaces itself during the test, Wega says so instead of
+  reporting the update as applied.
 
 ## [0.5.5] — 2026-10-18
 

@@ -216,6 +216,10 @@ extension ScanStore {
             if installArgs != BrewService.reinstallCaskArguments(token: token) {
                 action = .reinstallCask(token: token)
             }
+        case .replacedByAppUpdater(let version):
+            title = tr("Aplikacja cofnęła aktualizację")
+            message = CaskRollbackGuard.replacedByAppUpdaterMessage(token: token, version: version)
+            action = .openLogs
         }
         brewLog.append("⚠️ " + message)
         showBanner(BannerData(variant: .danger, title: title, message: message, action: action))

@@ -718,6 +718,8 @@ private enum MigrationVerificationMessage {
                 "%@: brew zakończył się sukcesem, ale na dysku została wersja sprzed migracji — nic nie zainstalowano.",
                 "\(token)"
             )
+        case .replacedByAppUpdater(let version):
+            return CaskRollbackGuard.replacedByAppUpdaterMessage(token: token, version: version)
         }
     }
 }

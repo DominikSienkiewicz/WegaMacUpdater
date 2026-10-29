@@ -170,6 +170,10 @@ final class UpdateOperationRecovery {
                 // `preUpgradeVersion`, yet the guard read it as equal to the snapshot. Nothing
                 // was committed either way, so it settles as aborted rather than as an update.
                 report.abortedTokens.append(item.token)
+            case .replacedByAppUpdater:
+                // Recovery runs no launch test, so this cannot come back from here; settled
+                // like the journal settles it, should that ever change.
+                report.abortedTokens.append(item.token)
             case .rollbackFailed, .publisherChanged, nil:
                 report.unrecoverableTokens.append(item.token)
             }

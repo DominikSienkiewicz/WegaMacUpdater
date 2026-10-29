@@ -173,6 +173,9 @@ extension ScanStore {
                 brewLog.append("⚠️ " + trf("%@: brew nie zainstalował nowej wersji — na dysku została poprzednia.", "\(token)"))
                 emitWegaState(WegaState(pose: .alert,
                                         line: trf("%@ nie został zaktualizowany.", "\(token)")))
+            case .replacedByAppUpdater(let version):
+                brewLog.append("⚠️ " + CaskRollbackGuard.replacedByAppUpdaterMessage(token: token, version: version))
+                emitWegaState(WegaState(pose: .alert, line: trf("%@ cofnął aktualizację.", "\(token)")))
             }
         }
         return verdicts

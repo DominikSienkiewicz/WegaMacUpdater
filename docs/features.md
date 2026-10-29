@@ -265,7 +265,10 @@ instance to quit, the teardown removes every ShipIt job whose program lives insi
 under test (`SquirrelShipItJob`, the same `launchctl remove` Homebrew's `discord` cask runs on
 uninstall). ShipIt touches nothing while the app it updates is running, so this cancels an
 install that has not begun; Squirrel downloads the update again whenever it next decides one is
-due.
+due. Should an install slip through anyway, the guard reads the bundle's version once more after
+the test: a version that changed while the app was running is reported as **replaced by the
+app's own updater** (`replacedByAppUpdater`) — not as an update and not as a rollback — and the
+item is settled as aborted, so no "Cofnij aktualizację" entry points at a version that is gone.
 
 Liveness is read repeatedly while
 the window is open **and once more on its closing edge**, and always through the handle the
