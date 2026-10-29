@@ -254,6 +254,19 @@ five-second window, so casks known to repair privileged state on first run are n
 by the smoke test at all. Both are "no evidence", never a failure: not learning whether an app
 runs must not be spent as a reason to undo an upgrade.
 
+The teardown also has to keep the app's **own updater** from taking the quit as its cue.
+Electron apps update through Squirrel.Mac: once one has downloaded an update, Squirrel submits
+ShipIt as a launchd job that waits for the app to quit and then swaps the bundle. Discord's feed
+lags its cask and answers any other version, newer ones included, with its current build — so a
+freshly upgraded Discord downloaded the older build inside the five-second window, and the
+smoke test's quit let ShipIt put it back two seconds later (`0.0.420` → `0.0.419`, twice on
+2026-10-27), after the update had already been reported as applied. So before it asks the
+instance to quit, the teardown removes every ShipIt job whose program lives inside the bundle
+under test (`SquirrelShipItJob`, the same `launchctl remove` Homebrew's `discord` cask runs on
+uninstall). ShipIt touches nothing while the app it updates is running, so this cancels an
+install that has not begun; Squirrel downloads the update again whenever it next decides one is
+due.
+
 Liveness is read repeatedly while
 the window is open **and once more on its closing edge**, and always through the handle the
 launch returned rather than by process name, so neither a death in the last poll gap nor a

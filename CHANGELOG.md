@@ -17,6 +17,9 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 - **Update via Brew** no longer ends in "Nothing was installed" when Homebrew already records
   the offered version while the app on disk is older (Discord, after its own updater put an
   older build back): Wega now runs `brew reinstall --cask` straight away.
+- The post-update launch test no longer lets an Electron app's built-in updater replace the
+  version Homebrew just installed when the test closes the app (Discord went back from 0.0.420
+  to 0.0.419 this way).
 
 ## [0.5.5] — 2026-10-18
 

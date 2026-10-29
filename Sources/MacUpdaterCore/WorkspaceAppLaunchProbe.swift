@@ -34,6 +34,17 @@ public struct WorkspaceAppLaunchProbe: AppLaunchProbing {
         await processes.isRunning("SecurityAgent")
     }
 
+    /// Squirrel.Mac is the self-updater that installs on quit (see ``SquirrelShipItJob``), so it
+    /// is the one this teardown has to disarm.
+    public func withdrawStagedSelfUpdate(ofBundleAt url: URL) async {
+        for label in await SquirrelShipItJob.withdraw(fromBundleAt: url) {
+            WegaLog.info(
+                .homebrew,
+                "\(url.lastPathComponent): wycofano aktualizację przygotowaną przez updater aplikacji (\(label)) — po zamknięciu testu startu podmieniłaby właśnie zainstalowaną wersję."
+            )
+        }
+    }
+
     public func launch(bundleAt url: URL) async -> AppLaunchOutcome {
         guard Bundle(url: url)?.executableURL != nil else { return .skipped(.unsupportedBundle) }
         if runningInstance(at: url) != nil { return .skipped(.alreadyRunning) }
