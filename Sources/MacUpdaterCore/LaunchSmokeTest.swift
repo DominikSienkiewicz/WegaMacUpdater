@@ -148,15 +148,26 @@ public enum LaunchSmokeTest {
         /// The app's own staged update is withdrawn first, while the instance still runs. An
         /// updater that installs on quit would otherwise take this quit as its cue and replace
         /// the bundle the test just approved — see ``SquirrelShipItJob``.
+        ///
+        /// Once the instance is gone — whether it quit, was killed or died on its own — the
+        /// verdict waits for any install the app's updater began on that exit. Whatever the
+        /// caller does next (re-read the version, restore the snapshot) must not land inside
+        /// another installer's swap.
         func stopping(verdict: Verdict) async -> Verdict {
-            if await handle.hasExited() { return verdict }
+            await end()
+            await probe.waitForSelfUpdate(ofBundleAt: bundle)
+            return verdict
+        }
+
+        private func end() async {
+            if await handle.hasExited() { return }
             await probe.withdrawStagedSelfUpdate(ofBundleAt: bundle)
             await handle.requestTermination()
 
             let clock = ContinuousClock()
             let deadline = clock.now.advanced(by: .seconds(grace))
             while clock.now < deadline {
-                if await handle.hasExited() { return verdict }
+                if await handle.hasExited() { return }
                 do {
                     try await Task.sleep(for: .seconds(min(pollInterval, grace)))
                 } catch {
@@ -165,7 +176,6 @@ public enum LaunchSmokeTest {
             }
             let stillAlive = await !handle.hasExited()
             if stillAlive { await handle.forceTerminate() }
-            return verdict
         }
     }
 
@@ -214,6 +224,10 @@ public protocol AppLaunchProbing: Sendable {
     /// Cancels an install the app's own updater has staged to run when this instance quits.
     /// Called while the instance is still running, right before the teardown asks it to quit.
     func withdrawStagedSelfUpdate(ofBundleAt url: URL) async
+
+    /// Returns once an install the app's own updater began on this instance's exit has finished.
+    /// Called after the instance is gone, before the verdict is handed back.
+    func waitForSelfUpdate(ofBundleAt url: URL) async
 }
 
 public extension AppLaunchProbing {
@@ -224,6 +238,11 @@ public extension AppLaunchProbing {
     /// A probe that cannot reach launchd leaves the app's updater alone — the pre-existing
     /// behaviour. Only the production probe overrides this.
     func withdrawStagedSelfUpdate(ofBundleAt url: URL) async {
+        // Intentionally empty: only the production probe can reach launchd.
+    }
+
+    /// Nothing to wait for without launchd — the pre-existing behaviour.
+    func waitForSelfUpdate(ofBundleAt url: URL) async {
         // Intentionally empty: only the production probe can reach launchd.
     }
 }

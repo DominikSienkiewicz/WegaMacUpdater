@@ -45,6 +45,10 @@ public struct WorkspaceAppLaunchProbe: AppLaunchProbing {
         }
     }
 
+    public func waitForSelfUpdate(ofBundleAt url: URL) async {
+        await SquirrelShipItJob.waitUntilFinished(forBundleAt: url)
+    }
+
     public func launch(bundleAt url: URL) async -> AppLaunchOutcome {
         guard Bundle(url: url)?.executableURL != nil else { return .skipped(.unsupportedBundle) }
         if runningInstance(at: url) != nil { return .skipped(.alreadyRunning) }

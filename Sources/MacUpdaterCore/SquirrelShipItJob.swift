@@ -54,16 +54,54 @@ public enum SquirrelShipItJob {
     /// is lost — only the install this teardown would have triggered.
     @discardableResult
     public static func withdraw(fromBundleAt bundle: URL, runner: ProcessRunning = ProcessRunner()) async -> [String] {
-        guard let list = await launchctl(["list"], runner: runner) else { return [] }
         var withdrawn: [String] = []
+        for job in await jobs(belongingTo: bundle, runner: runner)
+        where await launchctl(["remove", job.label], runner: runner) != nil {
+            withdrawn.append(job.label)
+        }
+        return withdrawn
+    }
+
+    /// Whether `launchctl print` output describes a job whose process is alive right now.
+    public static func isRunning(inLaunchctlPrint output: String) -> Bool {
+        output.split(separator: "\n").contains { $0.trimmingCharacters(in: .whitespaces) == "state = running" }
+    }
+
+    /// Returns once no ShipIt job of `bundle` is running, or after `timeout`.
+    ///
+    /// ShipIt swaps the bundle only after the app has quit, and it takes seconds: Discord's started
+    /// 0.4 s after the quit and finished two seconds later. Reading or restoring the bundle in
+    /// that window sees either the old build or no bundle at all. Cancellation ends the wait early
+    /// rather than holding a cancelled run hostage to another app's installer.
+    public static func waitUntilFinished(
+        forBundleAt bundle: URL,
+        runner: ProcessRunning = ProcessRunner(),
+        timeout: TimeInterval = 20,
+        pollInterval: TimeInterval = 0.25
+    ) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(timeout))
+        while clock.now < deadline,
+              await jobs(belongingTo: bundle, runner: runner).contains(where: { isRunning(inLaunchctlPrint: $0.printed) }) {
+            do {
+                try await Task.sleep(for: .seconds(pollInterval))
+            } catch {
+                return
+            }
+        }
+    }
+
+    /// Every ShipIt job whose program lives inside `bundle`, with its `launchctl print` output.
+    private static func jobs(belongingTo bundle: URL, runner: ProcessRunning) async -> [(label: String, printed: String)] {
+        guard let list = await launchctl(["list"], runner: runner) else { return [] }
+        var owned: [(label: String, printed: String)] = []
         for label in candidateLabels(inLaunchctlList: list) {
             guard let printed = await launchctl(["print", "gui/\(getuid())/\(label)"], runner: runner),
                   let program = programPath(inLaunchctlPrint: printed),
-                  self.program(program, belongsTo: bundle),
-                  await launchctl(["remove", label], runner: runner) != nil else { continue }
-            withdrawn.append(label)
+                  self.program(program, belongsTo: bundle) else { continue }
+            owned.append((label, printed))
         }
-        return withdrawn
+        return owned
     }
 
     private static func launchctl(_ arguments: [String], runner: ProcessRunning) async -> String? {

@@ -31,11 +31,28 @@ struct LT02StagedSelfUpdateTests {
 
         // Then the app's staged install is withdrawn while it still runs, and only then is it quit
         #expect(verdict == .survived)
-        #expect(journal.events == [.withdrewStagedSelfUpdate(Self.bundle), .askedToQuit],
+        #expect(Array(journal.events.prefix(2)) == [.withdrewStagedSelfUpdate(Self.bundle), .askedToQuit],
                 "LT-02: a quit before the withdrawal is the moment ShipIt swaps the bundle back")
     }
 
-    @Test func anInstanceThatDiedOnItsOwnLeavesTheUpdaterAlone() async {
+    /// ShipIt swaps the bundle only after the app is gone, and takes seconds to do it — Discord's
+    /// started 0.4 s after the quit and finished 2 s later. Whatever reads the bundle next (the
+    /// guard's version check, a snapshot restore) must not run inside that swap.
+    @Test func theTeardownWaitsForTheAppsUpdaterOnceTheInstanceIsGone() async {
+        // Given an instance that survives the window and quits when asked
+        let journal = TeardownJournal()
+        let probe = TeardownRecordingProbe(journal: journal, diesOnItsOwn: false)
+
+        // When the smoke test tears it down
+        _ = await LaunchSmokeTest.run(
+            bundleAt: Self.bundle, window: 0.1, pollInterval: 0.02, terminationGrace: 0.2, probe: probe
+        )
+
+        // Then the verdict is only handed back after the app's updater has had its turn
+        #expect(journal.events.last == .awaitedSelfUpdate(Self.bundle))
+    }
+
+    @Test func anInstanceThatDiedOnItsOwnIsNotTouchedButItsUpdaterIsAwaited() async {
         // Given an instance that exits inside the window
         let journal = TeardownJournal()
         let probe = TeardownRecordingProbe(journal: journal, diesOnItsOwn: true)
@@ -45,12 +62,13 @@ struct LT02StagedSelfUpdateTests {
             bundleAt: Self.bundle, window: 0.2, pollInterval: 0.02, terminationGrace: 0.2, probe: probe
         )
 
-        // Then there is no teardown, so nothing of the app's own is touched either
+        // Then nothing of the app's own is withdrawn or quit — but the rollback that follows must
+        // not restore the snapshot while a ShipIt woken by that exit is still swapping the bundle
         guard case .exitedEarly = verdict else {
             Issue.record("expected .exitedEarly, got \(verdict)")
             return
         }
-        #expect(journal.events.isEmpty)
+        #expect(journal.events == [.awaitedSelfUpdate(Self.bundle)])
     }
 
     private static let bundle = URL(fileURLWithPath: "/Applications/Discord.app")
@@ -105,6 +123,62 @@ struct SquirrelShipItJobTests {
             "/Applications/Discord.app Helper/Contents/ShipIt", belongsTo: discord
         ) == false, "a sibling whose name merely starts with the bundle's is not inside it")
     }
+
+    @Test func aJobIsRunningOnlyWhenLaunchctlSaysSo() {
+        #expect(SquirrelShipItJob.isRunning(inLaunchctlPrint: "gui/501/x = {\n\tstate = running\n}"))
+        #expect(SquirrelShipItJob.isRunning(inLaunchctlPrint: "gui/501/x = {\n\tstate = not running\n}") == false)
+    }
+
+    @Test func waitingForTheUpdaterEndsOnceItsJobStopsRunning() async {
+        // Given Discord's ShipIt mid-install for two more polls
+        let runner = ScriptedLaunchctl(states: ["running", "running", "not running"])
+
+        // When the teardown waits for it
+        await SquirrelShipItJob.waitUntilFinished(forBundleAt: Self.discord, runner: runner,
+                                                  timeout: 5, pollInterval: 0.01)
+
+        // Then it returned only after launchctl reported the job stopped
+        #expect(runner.printsServed == 3)
+    }
+
+    private static let discord = URL(fileURLWithPath: "/Applications/Discord.app")
+}
+
+/// `launchctl`, scripted: one Discord ShipIt job whose `state` follows `states`, one poll at a time.
+private final class ScriptedLaunchctl: ProcessRunning, @unchecked Sendable {
+    private let lock = NSLock()
+    private var states: [String]
+    private var removedLabels: [String] = []
+    private var prints = 0
+
+    init(states: [String]) { self.states = states }
+
+    var removed: [String] { lock.withLock { removedLabels } }
+    var printsServed: Int { lock.withLock { prints } }
+
+    func run(_ request: ProcessRequest) async throws -> ProcessResult {
+        try Task.checkCancellation()
+        switch request.arguments.first {
+        case "list":
+            return ProcessResult(exitCode: 0, stdout: "PID\tStatus\tLabel\n-\t0\tcom.discord.discord.ShipIt\n", stderr: "")
+        case "print":
+            let state: String = lock.withLock {
+                prints += 1
+                return states.count > 1 ? states.removeFirst() : states[0]
+            }
+            let program = "/Applications/Discord.app/Contents/Frameworks/Squirrel.framework/Resources/ShipIt"
+            return ProcessResult(exitCode: 0, stdout: "\tstate = \(state)\n\tprogram = \(program)\n", stderr: "")
+        case "remove":
+            lock.withLock { removedLabels.append(contentsOf: request.arguments.dropFirst()) }
+            return ProcessResult(exitCode: 0, stdout: "", stderr: "")
+        default:
+            return ProcessResult(exitCode: 1, stdout: "", stderr: "")
+        }
+    }
+
+    func events(for request: ProcessRequest) -> AsyncThrowingStream<ProcessOutputEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
 }
 
 // MARK: - Stand-ins
@@ -112,6 +186,7 @@ struct SquirrelShipItJobTests {
 private enum TeardownEvent: Equatable {
     case withdrewStagedSelfUpdate(URL)
     case askedToQuit
+    case awaitedSelfUpdate(URL)
 }
 
 private final class TeardownJournal: @unchecked Sendable {
@@ -140,6 +215,10 @@ private final class TeardownRecordingProbe: AppLaunchProbing, @unchecked Sendabl
 
     func withdrawStagedSelfUpdate(ofBundleAt url: URL) async {
         journal.record(.withdrewStagedSelfUpdate(url))
+    }
+
+    func waitForSelfUpdate(ofBundleAt url: URL) async {
+        journal.record(.awaitedSelfUpdate(url))
     }
 }
 
