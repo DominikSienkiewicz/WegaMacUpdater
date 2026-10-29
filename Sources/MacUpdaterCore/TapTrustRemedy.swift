@@ -62,6 +62,26 @@ public enum TapTrustPlanner {
         return remedies
     }
 
+    /// The remedies not yet run since Homebrew last printed the warning.
+    ///
+    /// A remedy appends its `$ brew …` header and output under the warning instead of
+    /// replacing the log, so the other remedies stay on offer after the first click. The one
+    /// just run is withdrawn; should Homebrew print the warning again later, it did not take,
+    /// and it is offered again.
+    public static func pending(_ remedies: [TapTrustRemedy], in log: [String]) -> [TapTrustRemedy] {
+        guard let lastWarning = log.lastIndex(where: { $0.contains(TapTrustWarning.marker) }) else {
+            return remedies
+        }
+        let ranSinceWarning = Set(log[lastWarning...])
+        return remedies.filter { !ranSinceWarning.contains(logHeader(for: $0)) }
+    }
+
+    /// The line Wega writes into the brew log when it starts `remedy` — the same `$ brew …`
+    /// form every other streamed brew command in the log begins with.
+    public static func logHeader(for remedy: TapTrustRemedy) -> String {
+        "$ " + remedy.commandLine
+    }
+
     /// `<user>/<repo>/<name>` — the fully-qualified form `brew trust --cask/--formula` takes.
     private static func qualifiedNames(of kind: InstalledPackageOrigin.Kind, in origins: [InstalledPackageOrigin]) -> [String] {
         Set(origins.filter { $0.kind == kind }.map { "\($0.tap)/\($0.name)" }).sorted()

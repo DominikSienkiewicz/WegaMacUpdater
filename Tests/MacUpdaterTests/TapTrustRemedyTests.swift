@@ -43,6 +43,24 @@ struct TapTrustRemedyTests {
         #expect(TapTrustPlanner.remedies(forUntrustedTaps: [], installed: installed).isEmpty)
     }
 
+    /// A remedy's output is appended under the warning, so the panel keeps offering the other
+    /// button — but not the one already run since the warning was printed.
+    @Test func givenARemedyRunAfterTheWarningWhenFilteringThenOnlyTheOthersArePending() {
+        let untap = TapTrustRemedy(kind: .untapUnused, arguments: ["untap", "--", "manaflow-ai/cmux"])
+        let trust = TapTrustRemedy(kind: .trustInstalledCasks, arguments: ["trust", "--cask", "--", "steipete/tap/codexbar"])
+        let log = TapTrustWarningTests.warning + ["$ brew untap -- manaflow-ai/cmux", "Untapping manaflow-ai/cmux..."]
+
+        #expect(TapTrustPlanner.pending([trust, untap], in: log) == [trust])
+    }
+
+    /// Homebrew printing the warning again after the remedy ran means the remedy did not take.
+    @Test func givenTheWarningAgainAfterARemedyRanWhenFilteringThenTheRemedyIsPendingAgain() {
+        let untap = TapTrustRemedy(kind: .untapUnused, arguments: ["untap", "--", "manaflow-ai/cmux"])
+        let log = TapTrustWarningTests.warning + ["$ brew untap -- manaflow-ai/cmux"] + TapTrustWarningTests.warning
+
+        #expect(TapTrustPlanner.pending([untap], in: log) == [untap])
+    }
+
     /// The notice shows the exact command a button runs, `--` fence included.
     @Test func givenARemedyWhenShownThenItsCommandLineIsTheCommandThatRuns() {
         let remedy = TapTrustRemedy(kind: .untapUnused, arguments: ["untap", "--", "steipete/tap"])
