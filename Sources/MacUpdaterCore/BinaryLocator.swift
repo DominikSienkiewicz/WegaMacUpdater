@@ -34,6 +34,13 @@ public struct BinaryLocator {
         firstExecutable(in: brewCandidates)
     }
 
+    /// Homebrew's prefix — the directory holding `Caskroom` and `Cellar` — derived from the
+    /// located `brew` (`<prefix>/bin/brew`). The link is deliberately not resolved: on Intel
+    /// `/usr/local/bin/brew` points into `/usr/local/Homebrew`, while the prefix stays `/usr/local`.
+    public func locateBrewPrefix() -> URL? {
+        locateBrew()?.deletingLastPathComponent().deletingLastPathComponent()
+    }
+
     public func locateMas() -> URL? {
         firstExecutable(in: masCandidates)
     }

@@ -137,6 +137,29 @@ the button's tooltip names the running scan instead of blaming an empty selectio
   to quit and reopen for apps whose running process is named unusually, e.g. the `zoom` cask
   running as `zoom.us`).
 
+#### Untrusted Homebrew taps — fixed from the brew log
+
+Homebrew 7 ignores formulae, casks and commands from third-party taps you have not trusted,
+and prints a tap-trust warning into the output of most brew commands. When the brew log on
+the Updates screen carries that warning, a notice above the log offers the fix as buttons —
+no commands to copy into a terminal:
+
+- **A tap something installed came from** gets the **narrowest trust**: *"Zaufaj
+  zainstalowanym caskom"* / *"…formułom"* runs `brew trust --cask -- <tap>/<token>` (or
+  `--formula`) for exactly those installed items. Whole-tap trust, which also covers
+  everything the tap publishes in the future, is never offered.
+- **A tap nothing installed came from** is unused: *"Odepnij nieużywane tapy"* runs
+  `brew untap -- <taps>`, Homebrew's own first suggestion.
+- **"Came from" is read from Homebrew's install receipts** (`source.tap` in
+  `Caskroom/<token>/.metadata/INSTALL_RECEIPT.json` and
+  `Cellar/<name>/<version>/INSTALL_RECEIPT.json`), never from a token that happens to share
+  a tap's name — a `cmux` cask installed from `homebrew/cask` does not keep the
+  `manaflow-ai/cmux` tap in use.
+- **Nothing runs until you click**, and each row shows the exact command its button runs.
+  The command goes through the same write gate, mutex and quit guard as every other brew
+  change; its output is appended under the warning, and a button already run is withdrawn
+  while the others stay. The overlay shown during an update offers no buttons.
+
 #### When a check can't complete
 
 Offline or with a source down, the screen says **"couldn't check — check your connection"**

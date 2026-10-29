@@ -471,7 +471,7 @@ struct UpdateView: View {
                         // During a run the log lives in `UpdateRunOverlay`; a second copy
                         // under it would only be covered.
                         if scan.showLog && !scan.updating {
-                            BrewLogPanel(lines: scan.brewLog) { scan.showLog = false }
+                            BrewLogPanel(lines: scan.brewLog, tapTrust: scan.tapTrustActions) { scan.showLog = false }
                         }
                     }
                     .padding(WegaLayout.listGutter)

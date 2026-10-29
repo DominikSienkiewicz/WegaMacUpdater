@@ -104,7 +104,17 @@ struct UpgradeProgressBar: View {
 
 struct BrewLogPanel: View {
     let lines:   [String]
+    /// Answers Homebrew's tap-trust warning with buttons above the log. `nil` where a click
+    /// could not run anyway — the run overlay, while the update holds the brew mutex.
+    var tapTrust: TapTrustActions? = nil
     let onClose: () -> Void
+
+    @State private var tapTrustPlan: [TapTrustRemedy] = []
+
+    /// Taps named by the warning in the log; the receipts are read again only when these change.
+    private var untrustedTaps: [String] {
+        tapTrust == nil ? [] : TapTrustWarning.untrustedTaps(in: lines)
+    }
 
     var body: some View {
         WegaCard(padded: false) {
@@ -126,6 +136,13 @@ struct BrewLogPanel: View {
             .padding(.vertical, 8)
             .overlay(alignment: .bottom) { Divider().opacity(0.4) }
 
+            if let tapTrust {
+                let pending = TapTrustPlanner.pending(tapTrustPlan, in: lines)
+                if !pending.isEmpty {
+                    TapTrustNotice(remedies: pending, run: tapTrust.run)
+                }
+            }
+
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 1) {
@@ -145,6 +162,12 @@ struct BrewLogPanel: View {
                     withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
             }
+        }
+        .task(id: untrustedTaps) {
+            let taps = untrustedTaps
+            tapTrustPlan = []
+            guard let tapTrust, !taps.isEmpty else { return }
+            tapTrustPlan = await tapTrust.resolve(taps)
         }
     }
 }
