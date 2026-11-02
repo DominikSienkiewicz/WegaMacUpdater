@@ -233,6 +233,12 @@ extension ScanStore {
         failed += scan.failedChecks
         if scan.failedChecks > 0 { silentSources.append("ręczne checki (\(scan.failedChecks))") }
         reports.manual = scan.sourceReport
+        let masScan = await scanMasInstallations(scan.installations, report: reports.mas)
+        if masScan.report?.didFail == true, reports.mas?.didFail != true {
+            failed += 1
+            silentSources.append("Mac App Store")
+        }
+        reports.mas = masScan.report
         let manualFailureMessage = scan.uncheckedSources.isEmpty
             ? nil : trf("Nie udało się sprawdzić: %@", scan.uncheckedSources.joined(separator: ", "))
         if let manualFailureMessage {
@@ -275,7 +281,8 @@ extension ScanStore {
 
         if await bailIfCancelled(at: .manual, emitActivity: emitActivity) { return }
         installationChecks = InstallationCheck.retainingLastSuccess(
-            InstallationCheck.resolvingManagers(scan.installations, reports: reports, brew: brewOutdated),
+            InstallationCheck.resolvingManagers(scan.installations, reports: reports, brew: brewOutdated,
+                                               mas: masOutdated, masEvidence: masScan.evidence),
             previous: installationChecks
         )
         lastCheck = Date()
@@ -288,6 +295,20 @@ extension ScanStore {
 
         finishScan(emitActivity: emitActivity, silentSources: silentSources, failedSources: failed,
                    manualFailureMessage: manualFailureMessage)
+    }
+
+    private func scanMasInstallations(
+        _ installations: [InstallationCheck], report: ScanSourceReport?
+    ) async -> (evidence: [MasInstallationEvidence], report: ScanSourceReport?) {
+        guard report?.outcome == .succeeded, let model else { return ([], report) }
+        do {
+            return (try await model.masService.installationEvidence(for: installations), report)
+        } catch {
+            confirmedSourceKinds.remove(.appStore)
+            WegaLog.error(.app, "mas list: \(error.localizedDescription)")
+            return ([], ScanSourceReport(outcome: .failed("Mac App Store"),
+                                         error: tr("Mac App Store nie odpowiedział podczas sprawdzania — szczegóły w logu.")))
+        }
     }
 
     /// REL-09 — refresh Homebrew's metadata and **report** what happened.

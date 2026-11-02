@@ -110,9 +110,14 @@ public protocol BrewOutdatedProviding: Sendable {
     func outdatedGreedy() async throws -> BrewOutdated
 }
 
-/// The single mas call the menu-bar check needs.
+/// App Store outdated results and the exact installed copies represented by them.
 public protocol MasOutdatedProviding: Sendable {
     func outdated() async throws -> [MasOutdatedApp]
+    func installationEvidence(for installations: [InstallationCheck]) async throws -> [MasInstallationEvidence]
+}
+
+public extension MasOutdatedProviding {
+    func installationEvidence(for installations: [InstallationCheck]) async throws -> [MasInstallationEvidence] { [] }
 }
 
 /// The single npm call the menu-bar check needs.
@@ -231,6 +236,15 @@ public struct MenuBarUpdateChecker: Sendable {
         failed += manual.failedChecks
         reports.manual = manual.sourceReport
         let visibleManual = UpdatePlanner.applyPolicies(manual.apps, policies: policies)
+        var masEvidence: [MasInstallationEvidence] = []
+        if reports.mas?.outcome == .succeeded {
+            do { masEvidence = try await masService.installationEvidence(for: manual.installations) }
+            catch {
+                failed += 1
+                reports.mas = ScanSourceReport(outcome: .failed("App Store"))
+                WegaLog.error(.app, "Skan z paska menu — mas list: \(error.localizedDescription)")
+            }
+        }
 
         return MenuBarScanResult(
             brew: brew,
@@ -240,7 +254,8 @@ public struct MenuBarUpdateChecker: Sendable {
             failedChecks: failed,
             scannedAt: Date(),
             total: items.count + visibleManual.count,
-            installationChecks: InstallationCheck.resolvingManagers(manual.installations, reports: reports, brew: brew),
+            installationChecks: InstallationCheck.resolvingManagers(manual.installations, reports: reports, brew: brew,
+                                                                    mas: mas, masEvidence: masEvidence),
             sources: reports
         )
     }

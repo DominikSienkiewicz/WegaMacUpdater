@@ -3,12 +3,15 @@ import WegaHelperKit
 
 public enum MasServiceError: Error, Equatable, LocalizedError {
     case masNotFound
+    case incompleteQueryOutput(arguments: [String])
     case commandFailed(arguments: [String], result: ProcessResult)
 
     public var errorDescription: String? {
         switch self {
         case .masNotFound:
             return "mas was not found at /opt/homebrew/bin/mas or /usr/local/bin/mas."
+        case .incompleteQueryOutput(let arguments):
+            return "mas \(arguments.joined(separator: " ")) returned diagnostics or unrecognized rows."
         case .commandFailed(let arguments, let result):
             return "mas \(arguments.joined(separator: " ")) failed with exit code \(result.exitCode): \(result.stderr)"
         }
@@ -39,8 +42,9 @@ public final class MasService: @unchecked Sendable {
     public func outdated() async throws -> [MasOutdatedApp] {
         let arguments = ["outdated"]
         let result = try await runMas(arguments)
-        try ensureSuccess(result, arguments: arguments)
-        return parser.parse(result.stdout)
+        let apps = parser.parse(result.stdout)
+        try ensureCompleteQuery(result, arguments: arguments, parsedCount: apps.count)
+        return apps
     }
 
     public func upgrade() async throws -> ProcessResult {
@@ -113,11 +117,42 @@ public final class MasService: @unchecked Sendable {
         )
     }
 
+    public func installationEvidence(for installations: [InstallationCheck]) async throws -> [MasInstallationEvidence] {
+        let storeInstallations = installations.filter(\.isManagedByMas)
+        guard !storeInstallations.isEmpty else { return [] }
+        let installedByID = Dictionary(grouping: try await list(), by: \.appStoreID)
+        var evidence: [MasInstallationEvidence] = []
+        for check in storeInstallations {
+            try Task.checkCancellation()
+            guard let version = check.version, !version.isEmpty,
+                  let appStoreID = try await appStoreID(at: check.path),
+                  let matches = installedByID[appStoreID], matches.count == 1,
+                  matches.first?.version == version else { continue }
+            evidence.append(MasInstallationEvidence(installation: check, appStoreID: appStoreID))
+        }
+        return evidence
+    }
+
+    private func appStoreID(at path: URL) async throws -> String? {
+        let request = ProcessRequest(executableURL: SystemPaths.mdls,
+                                     arguments: ["-raw", "-name", "kMDItemAppStoreAdamID", path.path],
+                                     inheritParentEnvironment: false, timeouts: .query)
+        let result: ProcessResult
+        do { result = try await runner.run(request) }
+        catch is CancellationError { throw CancellationError() }
+        catch { return nil }
+        guard result.exitCode == 0, result.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let identifier = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines.union(.controlCharacters))
+        guard let number = UInt64(identifier), number > 0, String(number) == identifier else { return nil }
+        return identifier
+    }
+
     public func list() async throws -> [MasInstalledApp] {
         let arguments = ["list"]
         let result = try await runMas(arguments)
-        try ensureSuccess(result, arguments: arguments)
-        return listParser.parse(result.stdout)
+        let apps = listParser.parse(result.stdout)
+        try ensureCompleteQuery(result, arguments: arguments, parsedCount: apps.count)
+        return apps
     }
 
     public func search(name: String) async throws -> String? {
@@ -166,6 +201,16 @@ public final class MasService: @unchecked Sendable {
                 timeouts: timeouts
             )
         )
+    }
+
+    private func ensureCompleteQuery(_ result: ProcessResult, arguments: [String], parsedCount: Int) throws {
+        try ensureSuccess(result, arguments: arguments)
+        let lines = result.stdout.split(whereSeparator: \.isNewline)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        guard lines.count == parsedCount,
+              result.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw MasServiceError.incompleteQueryOutput(arguments: arguments)
+        }
     }
 
     private func ensureSuccess(_ result: ProcessResult, arguments: [String]) throws {
