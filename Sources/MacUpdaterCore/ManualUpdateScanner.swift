@@ -179,30 +179,20 @@ public struct ManualUpdateScanner: Sendable {
         }
     }
 
-    /// Installed Java runtimes, each carrying the cask token its installer receipt resolves to.
-    ///
-    /// A runtime with no receipt (unpacked from an archive) or one no cask claims is dropped:
-    /// without a token there is no source that could say whether it is current, and a row with
-    /// no available version and no action would be noise rather than information.
+    /// Every discovered JDK remains reportable. Only unambiguous receipt claims can borrow
+    /// a cask's update source; installed and tracked tokens additionally supply manager evidence.
     private func javaRuntimesWithCaskTokens(
-        casks: [BrewCask],
-        brewOutdatedCasks: Set<String>
-    ) async -> [ApplicationInfo] {
+        casks: [BrewCask], installedCasks: Set<String>, brewTrackedTokens: Set<String>
+    ) async -> JavaRuntimeAttribution {
         let runtimes = javaRuntimeScanner.scanAll(directories: javaRuntimeDirectories)
-        guard !runtimes.isEmpty else { return [] }
-        let receiptIndex = CaskPackageReceiptIndex(casks: casks)
-
-        var resolved: [ApplicationInfo] = []
-        for var runtime in runtimes {
-            guard runtime.version != nil,
-                  let packageID = await packageReceiptLocator.packageIdentifier(forBundleAt: runtime.path),
-                  let token = receiptIndex.token(forPackageIdentifier: packageID),
-                  // `brew outdated` already reports this one; a second row would double-count it.
-                  !brewOutdatedCasks.contains(token) else { continue }
-            runtime.caskToken = token
-            resolved.append(runtime)
+        var identifiers: [InstallationIdentity: Set<String>] = [:]
+        for runtime in runtimes {
+            identifiers[runtime.installation] = await packageReceiptLocator.packageIdentifiers(forBundleAt: runtime.path)
         }
-        return resolved
+        return JavaRuntimeAttribution(
+            runtimes: runtimes, packageIdentifiers: identifiers, casks: casks,
+            installedCasks: installedCasks, brewTrackedTokens: brewTrackedTokens
+        )
     }
 
     public func scan(brewOutdatedCasks: Set<String> = []) async -> (apps: [ManualOutdatedApp], failedChecks: Int) {
@@ -272,8 +262,9 @@ public struct ManualUpdateScanner: Sendable {
         // and then compared by the same cask check every adoption candidate goes through.
         // Kept in their own list because none of the vendor checkers apply to a runtime —
         // there is no appcast, no JetBrains code and no GitHub repo to ask.
-        let javaRuntimes = await javaRuntimesWithCaskTokens(casks: casks, brewOutdatedCasks: brewOutdatedCasks)
-            .filter { seen.insert($0.installation).inserted }
+        let javaAttribution = await javaRuntimesWithCaskTokens(casks: casks, installedCasks: installedCasks, brewTrackedTokens: Set(brewCaskVersions.keys))
+        let javaRuntimes = javaAttribution.runtimes.filter { seen.insert($0.installation).inserted }
+        let javaRuntimesToCheck = javaRuntimes.filter { $0.caskToken.map { !brewOutdatedCasks.contains($0) } ?? false }
 
         // One catalog and one inventory read for the whole scan (see `AdobeUpdateChecker`).
         let adobeInventory = AdobeProductInventory.installedProducts(in: adobeUninstallDirectory)
@@ -298,7 +289,6 @@ public struct ManualUpdateScanner: Sendable {
         let signalChecker = SignalUpdateChecker()
         let chromeChecker = ChromeUpdateChecker()
         let obsidianChecker = ObsidianUpdateChecker()
-        let brew = brewService
 
         // Build every per-app check as an independent unit of work, then run them with a
         // bounded concurrency cap. An unbounded group would open one connection per
@@ -326,12 +316,12 @@ public struct ManualUpdateScanner: Sendable {
         // ARCH-05a: one `brew info` for every adoption candidate, resolved before the fan-out,
         // instead of one process per app inside it. Each of those calls re-read the same cask
         // database to answer about a single token.
-        let candidateTokens = (appsToCheck.filter { !isBrewManaged($0) } + javaRuntimes)
+        let candidateTokens = (appsToCheck + javaRuntimesToCheck).filter { !isBrewManaged($0) }
             .compactMap(\.caskToken)
-        let latestCaskVersions = await brew.caskLatestVersions(tokens: Array(Set(candidateTokens)))
+        let latestCaskVersions = await brewService.caskLatestVersions(tokens: Array(Set(candidateTokens)))
 
         var work: [@Sendable () async -> ManualCheckObservation] = []
-        for runtime in javaRuntimes where brewAvailable && !isBrewManaged(runtime) {
+        for runtime in javaRuntimesToCheck where brewAvailable && !isBrewManaged(runtime) {
             if let check = Self.caskVersionCheck(
                 app: runtime,
                 brewTrackedVersion: runtime.caskToken.flatMap { brewCaskVersions[$0] },
@@ -425,7 +415,7 @@ public struct ManualUpdateScanner: Sendable {
         ))
         return Self.makeReport(
             collected: collected, observations: observations, installations: allInstallations + javaRuntimes + [selfApp],
-            brewOwnership: BrewOwnership(paths: ownershipPaths, tracked: brewTrackedTokens.union(brewOutdatedCasks), available: brewAvailable),
+            brewOwnership: BrewOwnership(paths: ownershipPaths.merging(javaAttribution.managedPaths) { direct, _ in direct }, tracked: brewTrackedTokens.union(brewOutdatedCasks), available: brewAvailable),
             uncheckedSources: uncheckedSources
         )
     }
