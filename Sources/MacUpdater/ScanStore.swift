@@ -115,6 +115,7 @@ final class ScanStore: ObservableObject {
     @Published var lastCheck:         Date?
     @Published private(set) var banners = BannerQueue<BannerData>()
     @Published var restartCandidates: [RestartInfo]       = []
+    var restartDiagnosticOperationIDs: [String: UUID] = [:]
     @Published var restartBusy:       String?
     @Published var caskIconPaths:     [String: URL]       = [:]
     @Published var caskDownloads:     [String: CaskDownloadInfo] = [:]   // FEAT-03

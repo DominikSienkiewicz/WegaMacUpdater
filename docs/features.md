@@ -429,6 +429,28 @@ Full activity log covering scans, source responses, install results, and errors 
 
 **Reporting a bug from a log entry.** An entry that carries structural failure detail — the command that ran, its exit code, and the tail of `stderr` — expands in place behind a disclosure arrow next to the row. Select one or more entries (⌘-click, ⇧-click) and use the toolbar's **"Zgłoś błąd…"** button, disabled while nothing is selected, to open the bug-report window. That window is one composer with a single send button, not two separate ones: a description field, a segmented **channel picker** (**"Wyślij e-mailem"** / **"Zgłoś na GitHubie"**), and a preview of the exact text that will leave the machine — all driven by the one selected channel, so switching it recomputes the preview, the truncation notice and the **"Kopiuj treść"** button together, and what you copy can never diverge from what you send. E-mail and GitHub carry different URL-length limits (2000 and 8000 characters); a large selection keeps the newest entries and drops the oldest ones to fit, and when it does, both the preview header and the report body itself say how many were omitted. The body is redacted through the same `LogRedaction.redactForExport` pass Export diagnostics uses — paths, URL query strings, credentials, e-mail addresses and account names become placeholders — and Wega never sends anything on its own: the channel only opens a prefilled mail-compose window or a prefilled GitHub issue form, and sending is the user's own action. `mailto:` cannot carry attachments in any client, so the full diagnostics zip stays the separate **"Eksportuj diagnostykę"** action in the same toolbar. When the machine has nothing that can open the chosen URL, the same window falls back to a copyable subject and body plus, per channel, the recipient address or the issue-page link — so a report is never a dead end. The e-mail recipient comes from `supportEmail` in `endpoints.json` and can be overridden by the user-writable overlay at `~/Library/Application Support/WegaMacUpdater/endpoints.json`.
 
+**Persistent update traces.** Update operations also write bounded JSONL traces under
+`~/Library/Logs/WegaMacUpdater/traces`, separate from the visible activity log. Run and
+process identifiers connect stage decisions, existing Wega log messages with their severity
+and category, command stdout/stderr, exit/cancellation
+results, HTTP attempts/retries/cache responses and vendor version comparisons. HTTP
+tracing runs only within a diagnostic operation and excludes bodies, headers, URL
+credentials and query parameters. These events observe the existing update path; they
+do not change retries, installation or vendor handoff decisions.
+
+**Export diagnostics** includes the retained `trace-<run-id>.jsonl` files and
+`trace-manifest.json` beside both ordinary log files. The manifest makes incomplete runs,
+truncation, read/write failures and retention limits explicit. Limits are 8 MiB per run
+(command output uses at most 75%), 50 run files, 64 MiB total and 14 days; active runs
+are preserved during retention. Each process stream is capped separately at 2 MiB of
+redacted output, and pending incomplete lines at 64 KiB. Complete lines and the final
+partial line at EOF are redacted before storage; explicit markers and counters report
+omitted lines or bytes. Reaching either stream cap stops trace capture for that stream
+without changing the running command, its result buffers or its live output.
+Export remains a redacted local ZIP selected through the
+save panel. It does not collect private vendor or Docker daemon logs and does not prove
+the internal cause of a vendor updater failure.
+
 ### Menu-bar agent
 A box icon lives in the menu bar, **badged with the number of available updates**. On a configurable schedule (off / hourly / every 6 hours / daily, default every 6 hours) it runs a **read-only** background check — never `brew update`, never a mutation — and posts a notification when new updates appear. **A background check never raises the macOS permission dialog**: the first time the agent has something to announce, Wega shows an explanation card in its own window, and only a user who accepts it spends the one-shot system prompt (`NotificationPrompt` in Core decides this; declining is remembered, so the card never returns).
 

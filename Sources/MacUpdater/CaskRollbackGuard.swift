@@ -118,6 +118,9 @@ enum CaskRollbackGuard {
                     bundleID: TeamIDLedger.caskKey(token),
                     teamID: currentTeamID
                 )
+            UpdateDiagnostics.record("publisher.preflight", fields: [
+                "token": token, "teamID": currentTeamID ?? "unknown", "audit": String(describing: audit)
+            ])
             guard case let .changed(old, new) = audit else { continue }
             vetoes[token] = audit
             WegaLog.error(
@@ -158,17 +161,34 @@ enum CaskRollbackGuard {
         operation: UpdateOperationSession,
         dependencies: Dependencies?
     ) -> [String: URL] {
+        UpdateStageDiagnostics.recordOperation(operation)
         var snapshots: [String: URL] = [:]
         for token in tokens {
-            guard (try? operation.requirePersisted()) != nil else { break }
-            guard let appURL = appPaths[token] else { continue }
+            guard (try? operation.requirePersisted()) != nil else {
+                UpdateDiagnostics.record("snapshot.skipped", fields: ["token": token, "reason": "journalUnavailable"])
+                break
+            }
+            guard let appURL = appPaths[token] else {
+                UpdateDiagnostics.record("snapshot.skipped", fields: ["token": token, "reason": "noResolvedApp"])
+                continue
+            }
             let name = UpdateOperationSession.snapshotDirectoryName(for: token)
             let dest = operation.snapshotsDirectory.appendingPathComponent(name, isDirectory: true)
-            let cloned = if let dependencies {
-                (try? dependencies.clone(appURL, dest)) != nil
-            } else {
-                (try? BundleSnapshot.clone(appURL, to: dest)) != nil
+            let fields = ["token": token, "operationID": operation.operation.id.uuidString,
+                          "scope": "appBundleOnly", "appPath": appURL.path, "snapshotPath": dest.path]
+            UpdateDiagnostics.record("snapshot.started", fields: fields)
+            let cloned: Bool
+            do {
+                if let dependencies { try dependencies.clone(appURL, dest) }
+                else { try BundleSnapshot.clone(appURL, to: dest) }
+                cloned = true
+            } catch {
+                cloned = false
+                UpdateDiagnostics.record("snapshot.error", fields: fields.merging(
+                    ["error": error.localizedDescription], uniquingKeysWith: { _, new in new }))
             }
+            UpdateDiagnostics.record("snapshot.result", fields: fields.merging(
+                ["cloned": String(cloned)], uniquingKeysWith: { _, new in new }))
             if cloned {
                 snapshots[token] = dest
                 operation.recordSnapshotted(token: token, snapshotName: name)
@@ -203,6 +223,7 @@ enum CaskRollbackGuard {
             CaskRollbackLedger.shared.apply(token: token, verdict: outcome)
             // LT-01 — and the same verdict settles the item's journal phases.
             operation.recordVerdict(token: token, verdict: outcome)
+            UpdateStageDiagnostics.recordValidation(outcome, token: token, operation: operation)
             outcomes[token] = outcome
         }
         return outcomes
@@ -228,6 +249,7 @@ enum CaskRollbackGuard {
             )
             dependencies.applyRollbackLedger(token, outcome)
             operation.recordVerdict(token: token, verdict: outcome)
+            UpdateStageDiagnostics.recordValidation(outcome, token: token, operation: operation)
             outcomes[token] = outcome
         }
         return outcomes
@@ -275,6 +297,7 @@ enum CaskRollbackGuard {
         // while a fresh rollback re-arms it. Same ledger chokepoint as the batch canary.
         CaskRollbackLedger.shared.apply(token: token, verdict: outcome)
         operation?.recordVerdict(token: token, verdict: outcome)
+        UpdateStageDiagnostics.recordValidation(outcome, token: token, operation: operation)
         return outcome
     }
 
@@ -297,6 +320,7 @@ enum CaskRollbackGuard {
         )
         dependencies.applyRollbackLedger(token, outcome)
         operation?.recordVerdict(token: token, verdict: outcome)
+        UpdateStageDiagnostics.recordValidation(outcome, token: token, operation: operation)
         return outcome
     }
 
@@ -309,6 +333,10 @@ enum CaskRollbackGuard {
         arrivalEvidence: CaskArrivalEvidence = .versionChange,
         dependencies: Dependencies? = nil
     ) async -> Outcome {
+        UpdateDiagnostics.record("validation.started", fields: [
+            "token": token, "appPath": validationURL.path, "snapshotAvailable": String(snapshotURL != nil),
+            "arrivalEvidence": String(describing: arrivalEvidence), "bundleBuild": "notCaptured"
+        ])
         func restoreSnapshot(
             _ snapshot: URL,
             to appURL: URL,
@@ -318,6 +346,7 @@ enum CaskRollbackGuard {
                 snapshot,
                 to: appURL,
                 preservingSnapshot: preservingSnapshot,
+                token: token,
                 dependencies: dependencies
             )
         }
@@ -336,6 +365,10 @@ enum CaskRollbackGuard {
             } else {
                 installedBundleIdentifier = CaskReplacementArtifactIdentity.bundleIdentifier(at: validationURL)
             }
+            UpdateDiagnostics.record("validation.identity", fields: [
+                "token": token, "expectedBundleID": expectedBundleIdentifier ?? "unknown",
+                "installedBundleID": installedBundleIdentifier ?? "unknown"
+            ])
             guard expectedBundleIdentifier == installedBundleIdentifier else {
                 WegaLog.error(
                     .homebrew,
@@ -363,6 +396,7 @@ enum CaskRollbackGuard {
         } else {
             await liveGatekeeperResult()
         }
+        UpdateDiagnostics.record("validation.gatekeeper", fields: ["token": token, "accepted": String(healthy)])
         guard healthy else {
             guard let snapshotURL else { return .rollbackFailed }
             return await restoreSnapshot(snapshotURL, to: validationURL) ? .rolledBack : .rollbackFailed
@@ -396,6 +430,9 @@ enum CaskRollbackGuard {
                 : .changed(old: expectedTeamID ?? "—", new: installedTeamID)
         }
 
+        UpdateDiagnostics.record("validation.publisher", fields: [
+            "token": token, "installedTeamID": installedTeamID ?? "unknown", "audit": String(describing: publisherAudit)
+        ])
         switch publisherAudit {
         case let .changed(old, new):
             WegaLog.error(
@@ -436,11 +473,16 @@ enum CaskRollbackGuard {
             // change, not on which brew command ran it — see ``CaskArrivalEvidence``. Keying
             // it on the command is what let the same loop through a second time on the
             // force-reinstall path (Discord 0.0.412, see `ForcedReinstallNoOpTests`).
-            if UpdateOperationRecoveryPlan.installedNothing(
-                evidence: arrivalEvidence,
-                installedVersion: UpdateOperationRecoveryPlan.bundleShortVersion(at: validationURL),
-                snapshotVersion: UpdateOperationRecoveryPlan.bundleShortVersion(at: snapshotURL)
-            ) {
+            let installedVersion = UpdateOperationRecoveryPlan.bundleShortVersion(at: validationURL)
+            let snapshotVersion = UpdateOperationRecoveryPlan.bundleShortVersion(at: snapshotURL)
+            let installedNothing = UpdateOperationRecoveryPlan.installedNothing(
+                evidence: arrivalEvidence, installedVersion: installedVersion, snapshotVersion: snapshotVersion
+            )
+            UpdateDiagnostics.record("validation.arrival", fields: [
+                "token": token, "installedVersion": installedVersion ?? "unknown",
+                "snapshotVersion": snapshotVersion ?? "unknown", "installedNothing": String(installedNothing)
+            ])
+            if installedNothing {
                 WegaLog.error(
                     .homebrew,
                     "\(token): brew zakończył się sukcesem, ale na dysku została wersja sprzed aktualizacji — nic nie zainstalowano."
@@ -461,6 +503,9 @@ enum CaskRollbackGuard {
             // An updater that moved the app *past* the cask undid nothing, so only a version that
             // is no longer at least the one that arrived counts.
             let settledVersion = UpdateOperationRecoveryPlan.bundleShortVersion(at: validationURL)
+            UpdateDiagnostics.record("selfUpdater.versionObserved", fields: [
+                "token": token, "arrivedVersion": arrivedVersion ?? "unknown", "settledVersion": settledVersion ?? "unknown"
+            ])
             if let arrivedVersion, settledVersion != arrivedVersion,
                !(settledVersion.map { isUpgrade(installed: arrivedVersion, latest: $0) } ?? false) {
                 WegaLog.error(
@@ -494,8 +539,17 @@ enum CaskRollbackGuard {
         _ snapshot: URL,
         to appURL: URL,
         preservingSnapshot: Bool = false,
+        token: String? = nil,
         dependencies: Dependencies? = nil
     ) async -> Bool {
+        let fields = ["appPath": appURL.path, "snapshotPath": snapshot.path, "token": token ?? "unknown",
+                      "scope": "appBundleOnly", "preservingSnapshot": String(preservingSnapshot)]
+        UpdateDiagnostics.record("rollback.started", fields: fields)
+        var restored = false
+        defer {
+            UpdateDiagnostics.record("rollback.result", fields: fields.merging(
+                ["restored": String(restored)], uniquingKeysWith: { _, new in new }))
+        }
         let restorationSource: URL
         if preservingSnapshot {
             restorationSource = snapshot.deletingLastPathComponent()
@@ -531,8 +585,10 @@ enum CaskRollbackGuard {
             } else {
                 try BundleSnapshot.restore(snapshot: restorationSource, to: appURL)
             }
+            restored = true
             return true
         } catch {
+            UpdateDiagnostics.record("rollback.localRestoreFailed", fields: ["error": error.localizedDescription])
             let helperIsEnabled = dependencies?.helperIsEnabled()
                 ?? PrivilegedHelperClient.shared.isEnabled
             guard helperIsEnabled else { return false }
@@ -544,6 +600,7 @@ enum CaskRollbackGuard {
                         at: appURL.path, withSnapshotAt: restorationSource.path
                     )
                 }
+                restored = true
                 return true
             } catch {
                 WegaLog.error(.helper, "Rollback przez helper nie powiódł się: \(error.localizedDescription)")
@@ -562,6 +619,7 @@ enum CaskRollbackGuard {
         appURL: URL,
         dependencies: Dependencies? = nil
     ) async -> LaunchSmokeTest.Verdict {
+        UpdateDiagnostics.record("smoke.started", fields: ["token": token, "appPath": appURL.path])
         // Checked before the enablement switch and in both branches: an app that repairs
         // privileged state on its first run after an upgrade must not be started and stopped
         // unattended at all, so the exemption is not something a test double can opt out of.
@@ -570,17 +628,25 @@ enum CaskRollbackGuard {
                 .homebrew,
                 "\(token): test startu pominięty — pierwszy start odtwarza uprawnienia systemowe."
             )
+            UpdateStageDiagnostics.recordSmoke(.skipped(.privilegedFirstRun), token: token)
             return .skipped(.privilegedFirstRun)
         }
 
         let verdict: LaunchSmokeTest.Verdict
         if let dependencies {
-            guard dependencies.smokeTestIsEnabled() else { return .skipped(.disabled) }
+            guard dependencies.smokeTestIsEnabled() else {
+                UpdateStageDiagnostics.recordSmoke(.skipped(.disabled), token: token)
+                return .skipped(.disabled)
+            }
             verdict = await dependencies.launchSmokeTest(appURL)
         } else {
-            guard LaunchSmokeTestConfiguration.isEnabled() else { return .skipped(.disabled) }
+            guard LaunchSmokeTestConfiguration.isEnabled() else {
+                UpdateStageDiagnostics.recordSmoke(.skipped(.disabled), token: token)
+                return .skipped(.disabled)
+            }
             verdict = await LaunchSmokeTest.run(bundleAt: appURL, probe: WorkspaceAppLaunchProbe())
         }
+        UpdateStageDiagnostics.recordSmoke(verdict, token: token)
         switch verdict {
         case .survived:
             WegaLog.info(.homebrew, "\(token): nowa wersja uruchomiła się i przeżyła test startu.")

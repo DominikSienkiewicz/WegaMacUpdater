@@ -467,6 +467,26 @@ collecting it by hand:
 | `report.txt` | App version and build, macOS version and CPU, detected package managers and their versions, Privileged Helper status and version, schedule status, the last scan's result per source, free disk space and the signature state. |
 | `update-history.txt` | The last 40 upgrade runs, item by item: update → validation → rollback, including which apps were rolled back and where a publisher's Team ID changed. |
 | `logs/wega.log`, `logs/wega.log.1` | **Both** log files — the current one and the rotated one. |
+| `logs/trace-<run-id>.jsonl` | Persistent event traces for update operations: stages, Wega log messages, command output and exit results, HTTP attempts and observed vendor-check outcomes, correlated by run and process identifiers. |
+| `logs/trace-manifest.json` | Trace retention limits, incomplete runs, truncation and recording/read failures, so missing evidence is visible. |
+
+Traces are stored locally in `~/Library/Logs/WegaMacUpdater/traces`. Each run is limited
+to 8 MiB; command output stops at 75% of that budget to leave room for later stage and
+completion events. Each process stream (stdout and stderr separately) is also capped
+at 2 MiB after redaction. Capture waits for complete lines before redaction, with a
+64 KiB pending-line cap; an unfinished final line is redacted at EOF. Overlong lines
+and output beyond the limits stop trace capture for that stream and produce explicit
+omission markers and counters; the command and its live output continue unchanged.
+The trace does not claim to contain the complete stream. Retention keeps up to 50 run
+files, 14 days and 64 MiB in total.
+Active runs are preserved while retention removes older files, so these totals can be
+temporarily exceeded. Truncation and failures are reported in the export manifest.
+
+The trace records what Wega and the commands it starts can observe. A run without a
+completion event is incomplete evidence, not proof of a successful update. HTTP events
+exclude request/response bodies, headers, URL credentials and query parameters. The
+export does not collect Docker daemon logs or other applications' private logs, and it
+cannot by itself establish the internal cause of a vendor updater's crash.
 
 Two things about this file are deliberate:
 

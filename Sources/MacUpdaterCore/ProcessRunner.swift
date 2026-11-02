@@ -163,29 +163,37 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         _ request: ProcessRequest,
         onOutput: (@Sendable (ProcessOutputEvent) -> Void)?
     ) async throws -> ProcessResult {
-        try Task.checkCancellation()
+        let diagnostics = UpdateDiagnostics.current.map { ProcessDiagnostics(run: $0, request: request) }
+        do {
+            try Task.checkCancellation()
 
-        // Bounded concurrency: hold a permit for the process's whole lifetime. Because the
-        // wait below suspends on a continuation (never a blocked thread), a held permit
-        // parks no pool thread — the gate throttles process count without starving the
-        // async runtime (ARCH-02).
-        await limiter.acquire()
-        defer { Task { await limiter.release() } }
+            // Bounded concurrency: hold a permit for the process's whole lifetime. Because the
+            // wait below suspends on a continuation (never a blocked thread), a held permit
+            // parks no pool thread — the gate throttles process count without starving the
+            // async runtime (ARCH-02).
+            await limiter.acquire()
+            defer { Task { await limiter.release() } }
 
-        // We may have queued for a permit; a caller cancelled meanwhile never launches.
-        try Task.checkCancellation()
+            // We may have queued for a permit; a caller cancelled meanwhile never launches.
+            try Task.checkCancellation()
 
-        return try await Self.runProcess(
-            request,
-            onOutput: onOutput,
-            maxCapturedBytesPerStream: maxCapturedBytesPerStream
-        )
+            return try await Self.runProcess(
+                request,
+                onOutput: onOutput,
+                maxCapturedBytesPerStream: maxCapturedBytesPerStream,
+                diagnostics: diagnostics
+            )
+        } catch {
+            diagnostics?.finishBeforeLaunch(error: error)
+            throw error
+        }
     }
 
     private static func runProcess(
         _ request: ProcessRequest,
         onOutput: (@Sendable (ProcessOutputEvent) -> Void)?,
-        maxCapturedBytesPerStream: Int
+        maxCapturedBytesPerStream: Int,
+        diagnostics: ProcessDiagnostics?
     ) async throws -> ProcessResult {
         let process = Process()
         process.executableURL = request.executableURL
@@ -235,6 +243,7 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             }
             activity.touch()
             stdoutBuffer.append(data)
+            diagnostics?.appendStdout(data)
             if let chunk = String(data: data, encoding: .utf8) {
                 onOutput?(.stdout(chunk))
             }
@@ -249,6 +258,7 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             }
             activity.touch()
             stderrBuffer.append(data)
+            diagnostics?.appendStderr(data)
             if let chunk = String(data: data, encoding: .utf8) {
                 onOutput?(.stderr(chunk))
             }
@@ -260,6 +270,7 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         process.terminationHandler = { _ in termination.signal() }
 
         try process.run()
+        diagnostics?.launched(process)
 
         let detachHandlers: () -> Void = {
             stdoutHandle.readabilityHandler = nil
@@ -275,12 +286,13 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         )
 
         // Abandon a still-running process: the tree is already killed by `awaitExit`, so
-        // drop the handlers, discard partial output, and surface the error. We don't wait
+        // drop the handlers, retain diagnostic output, and surface the error. We don't wait
         // on `ioGroup` here — a leaked grandchild could hold the pipe open and EOF would
         // never come.
         switch outcome {
         case .cancelled:
             detachHandlers()
+            diagnostics?.finish(outcome: "cancelled", process: process, error: ProcessRunnerError.cancelled)
             WegaLog.error(
                 .process,
                 "\(request.executableURL.lastPathComponent) aborted: \(ProcessRunnerError.cancelled.localizedDescription)"
@@ -288,6 +300,7 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             throw ProcessRunnerError.cancelled
         case .timedOut(let seconds):
             detachHandlers()
+            diagnostics?.finish(outcome: "timeout", process: process, error: ProcessRunnerError.timedOut(seconds: seconds))
             WegaLog.error(
                 .process,
                 "\(request.executableURL.lastPathComponent) aborted: \(ProcessRunnerError.timedOut(seconds: seconds).localizedDescription)"
@@ -295,6 +308,7 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             throw ProcessRunnerError.timedOut(seconds: seconds)
         case .idleTimedOut(let seconds):
             detachHandlers()
+            diagnostics?.finish(outcome: "idle_timeout", process: process, error: ProcessRunnerError.idleTimedOut(seconds: seconds))
             WegaLog.error(
                 .process,
                 "\(request.executableURL.lastPathComponent) aborted: \(ProcessRunnerError.idleTimedOut(seconds: seconds).localizedDescription)"
@@ -313,6 +327,7 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             stdout: stdoutBuffer.string(),
             stderr: stderrBuffer.string()
         )
+        diagnostics?.finish(outcome: "exited", process: process)
         // Non-zero is often domain-meaningful (handled by callers), so keep it at
         // debug — available for diagnosis without escalating it to a warning/error.
         // The detail is what makes it diagnosable at all: without it the line said
@@ -322,7 +337,7 @@ public final class ProcessRunner: ProcessRunning, Sendable {
                 .process,
                 "\(request.executableURL.lastPathComponent) exited \(result.exitCode)",
                 detail: LogDetail(
-                    command: ([request.executableURL.lastPathComponent] + request.arguments)
+                    command: diagnostics?.command ?? ([request.executableURL.lastPathComponent] + request.arguments)
                         .joined(separator: " "),
                     exitCode: result.exitCode,
                     stderr: result.stderr

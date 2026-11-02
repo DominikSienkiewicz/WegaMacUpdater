@@ -5,8 +5,8 @@ import Foundation
 /// addresses — out of a message *before it reaches the unified log*, where any
 /// process reading the system log could otherwise read them back.
 ///
-/// The redaction is scoped to the OSLog channel only. The persisted `wega.log` keeps the
-/// full text: it is written `0600` (see ``LogStore``), readable only by its owner, and is
+/// OSLog, persistent diagnostic traces and exports apply these rules. The ordinary
+/// persisted `wega.log` keeps the full text: it is written `0600` (see ``LogStore``), readable only by its owner, and is
 /// the place a developer actually reads paths and URLs back when diagnosing a failure.
 ///
 /// OBS-02 — a diagnostics bundle is the one artefact that deliberately *leaves* the
@@ -20,8 +20,11 @@ public enum LogRedaction {
     static let emailPlaceholder = "[email]"
     static let userPlaceholder = "[user]"
 
-    /// A `?key=value…` run: a `?` followed by a whitespace-free token containing an `=`.
-    /// Anchored on the `=` so a bare "czy na pewno?" is left alone.
+    private static let urlCredentials = try? NSRegularExpression(
+        pattern: #"(?i)\b([a-z][a-z0-9+.-]*://)[^\s/@]+@"#
+    )
+
+    /// A `?key=value…` run; the equals sign leaves ordinary question marks alone.
     private static let query = try? NSRegularExpression(
         pattern: #"\?[^\s"']*=[^\s"']*"#
     )
@@ -88,6 +91,7 @@ public enum LogRedaction {
     public static func redact(_ message: String) -> String {
         var out = message
         out = replace(pemBlock, in: out, with: secretPlaceholder)
+        out = replace(urlCredentials, in: out, with: "$1\(secretPlaceholder)@")
         out = replace(query, in: out, with: queryPlaceholder)
         out = replace(authorizationHeader, in: out, with: secretPlaceholder)
         out = replace(bearerToken, in: out, with: secretPlaceholder)

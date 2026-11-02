@@ -58,13 +58,20 @@ public enum SquirrelShipItJob {
     /// so inheriting the cancellation would skip exactly the call that keeps that quit harmless.
     @discardableResult
     public static func withdraw(fromBundleAt bundle: URL, runner: ProcessRunning = ProcessRunner()) async -> [String] {
-        await Task.detached {
-            var withdrawn: [String] = []
-            for job in await jobs(belongingTo: bundle, runner: runner)
-            where await launchctl(["remove", job.label], runner: runner) != nil {
-                withdrawn.append(job.label)
+        let trace = UpdateDiagnostics.current
+        return await Task.detached {
+            await UpdateDiagnostics.$current.withValue(trace) {
+                UpdateDiagnostics.record("selfUpdater.withdrawStarted", fields: ["appPath": bundle.path, "bundleName": bundle.lastPathComponent])
+                var withdrawn: [String] = []
+                for job in await jobs(belongingTo: bundle, runner: runner)
+                where await launchctl(["remove", job.label], runner: runner) != nil {
+                    withdrawn.append(job.label)
+                }
+                UpdateDiagnostics.record("selfUpdater.withdrawResult", fields: [
+                    "appPath": bundle.path, "bundleName": bundle.lastPathComponent, "withdrawnCount": String(withdrawn.count), "labels": withdrawn.joined(separator: ",")
+                ])
+                return withdrawn
             }
-            return withdrawn
         }.value
     }
 
@@ -85,8 +92,14 @@ public enum SquirrelShipItJob {
         timeout: TimeInterval = 20,
         pollInterval: TimeInterval = 0.25
     ) async {
+        UpdateDiagnostics.record("selfUpdater.waitStarted", fields: ["appPath": bundle.path, "bundleName": bundle.lastPathComponent, "timeoutSeconds": String(timeout)])
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: .seconds(timeout))
+        defer {
+            UpdateDiagnostics.record("selfUpdater.waitReturned", fields: [
+                "appPath": bundle.path, "bundleName": bundle.lastPathComponent, "deadlineReached": String(clock.now >= deadline), "cancelled": String(Task.isCancelled)
+            ])
+        }
         while clock.now < deadline,
               await jobs(belongingTo: bundle, runner: runner).contains(where: { isRunning(inLaunchctlPrint: $0.printed) }) {
             do {

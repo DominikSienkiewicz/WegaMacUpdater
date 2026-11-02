@@ -38,6 +38,17 @@ a dry-run panel that tells you what will happen before anything does, and a roll
 puts the old bundle back when a cask upgrade replaces nothing. Details in
 [Features](docs/features.md).
 
+## Diagnostics
+
+Update operations keep local JSONL traces with a run identifier, stage events, subprocess
+output and exits, HTTP attempts, and observed vendor-check results. **Export diagnostics**
+includes these traces and a manifest of retention limits, incomplete runs and recording
+failures in the existing redacted ZIP. It saves locally through a file picker; nothing is
+uploaded. Traces are bounded to 8 MiB per run and retained for up to 14 days, 50 files or
+64 MiB in total. They describe what Wega observed, including an interrupted operation;
+they do not establish why a vendor's own updater crashed. See
+[Diagnostics & troubleshooting](USER_GUIDE.md#4-diagnostics--troubleshooting).
+
 ## Requirements
 
 macOS 26+, Apple silicon or Intel. Homebrew is optional — without it the cask source is simply
