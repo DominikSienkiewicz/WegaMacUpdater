@@ -65,8 +65,11 @@ struct LT02CanarySmokeGateWiringTests {
     /// verdict that could undo an upgrade.
     @Test func theSwitchIsReadBeforeAnythingIsLaunched() throws {
         let helper = try tail(try guardSource(), from: "private static func launchSmokeTest(")
+        let enabledGate = try tail(String(helper), from: "guard LaunchSmokeTestConfiguration.isEnabled() else {")
+        let launch = try #require(enabledGate.range(of: "await LaunchSmokeTest.run(bundleAt: appURL, probe: WorkspaceAppLaunchProbe())"))
+        let disabledBranch = enabledGate[..<launch.lowerBound]
 
-        #expect(helper.contains("guard LaunchSmokeTestConfiguration.isEnabled() else { return .skipped(.disabled) }"),
+        #expect(disabledBranch.contains("return .skipped(.disabled)"),
                 "LT-02: the opt-out is read before the app is started")
         #expect(!LaunchSmokeTest.requiresRollback(.skipped(.disabled)),
                 "LT-02: a gate the user switched off can never be a reason to roll back")

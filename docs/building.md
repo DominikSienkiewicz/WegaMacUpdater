@@ -22,10 +22,23 @@ stream capture, process outcomes, update stages, HTTP retries/cache and vendor r
 Run just these checks with:
 
 ```bash
-swift test --jobs 1 --no-parallel --filter 'DiagnosticTraceStoreTests|DiagnosticLogCorrelationTests|DiagnosticCredentialRedactionTests|DiagnosticOutputCaptureTests|ProcessDiagnosticsTests|UpdateStageDiagnosticsTests|HTTPDiagnosticTraceTests|VendorDiagnosticTraceTests|DiagnosticTraceExportTests'
+swift test --jobs 1 --no-parallel --filter 'DiagnosticTraceStoreTests|DiagnosticLogCorrelationTests|DiagnosticCredentialRedactionTests|DiagnosticOutputCaptureTests|ProcessDiagnosticsTests|UpdateStageDiagnosticsTests|UpdateStageDiagnosticsForegroundTests|HTTPDiagnosticTraceTests|VendorDiagnosticTraceTests|DiagnosticTraceExportTests'
 ```
 
 The ZIP is assembled locally; these checks do not send diagnostics or run vendor updates.
+
+`TapTrustRemedyRunTests` and `UpdateStageDiagnosticsForegroundTests` use XCTest, like the
+other ScanStore runtime tests. They run sequentially and separately from Swift Testing's
+`MigrationStoreCoverageTests`, which also uses the process-wide update mutex. A Swift
+Testing suite's `.serialized` trait only serializes its own tests; it cannot prevent a
+different suite from acquiring that mutex. Keep this execution boundary when adding
+tests that reach the real shared mutex.
+
+Run the diagnostics-merge regressions together, including migration to exercise that boundary:
+
+```bash
+swift test --jobs 1 --filter 'BrewCaskReinstallTests|LT02CanarySmokeGateWiringTests|TapTrustRemedyRunTests|UpdateStageDiagnosticsTests|UpdateStageDiagnosticsForegroundTests|MigrationStoreCoverageTests'
+```
 
 ```bash
 swift build               # compile all targets
