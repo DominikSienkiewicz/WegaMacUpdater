@@ -16,6 +16,17 @@ GUI apps do not inherit an interactive shell environment. Wega resolves all tool
 
 ## Build and test
 
+Diagnostic trace tests use temporary stores, fake HTTP transports and controlled local
+processes. They cover retention/export, log correlation, credential redaction, bounded
+stream capture, process outcomes, update stages, HTTP retries/cache and vendor results.
+Run just these checks with:
+
+```bash
+swift test --jobs 1 --no-parallel --filter 'DiagnosticTraceStoreTests|DiagnosticLogCorrelationTests|DiagnosticCredentialRedactionTests|DiagnosticOutputCaptureTests|ProcessDiagnosticsTests|UpdateStageDiagnosticsTests|HTTPDiagnosticTraceTests|VendorDiagnosticTraceTests|DiagnosticTraceExportTests'
+```
+
+The ZIP is assembled locally; these checks do not send diagnostics or run vendor updates.
+
 ```bash
 swift build               # compile all targets
 swift test                # run all tests

@@ -66,6 +66,12 @@ final class DiagnosticsExportController: ObservableObject {
         let brewVersion = await Self.toolVersion(locator: { BinaryLocator().locateBrew() }, arguments: ["--version"])
         let masVersion = await Self.toolVersion(locator: { BinaryLocator().locateMas() }, arguments: ["version"])
         let npmDetected = await NpmLocator().locate() != nil
+        let traceLogs = DiagnosticTraceStore.shared.exportFiles()
+        let artifacts = Self.artifacts(
+            history: journal.entries(), logs: Self.logFiles(),
+            logWriteFailures: LogStore.shared.writeFailureCount,
+            traceLogs: traceLogs, traceWriteFailures: DiagnosticTraceStore.shared.writeFailureCount
+        )
 
         return DiagnosticsSnapshot(
             runtime: .init(
@@ -109,12 +115,15 @@ final class DiagnosticsExportController: ObservableObject {
                 signatures: Self.signatures(),
                 appManagementPermission: String(describing: AppManagementPermissionProbe.liveStatus())
             ),
-            artifacts: .init(
-                history: journal.entries(),
-                logFiles: Self.logFiles(),
-                logWriteFailureCount: LogStore.shared.writeFailureCount
-            )
+            artifacts: artifacts
         )
+    }
+
+    static func artifacts(
+        history: [UpdateJournalEntry], logs: [DiagnosticsSnapshot.LogFile], logWriteFailures: Int,
+        traceLogs: [DiagnosticsSnapshot.LogFile], traceWriteFailures: Int
+    ) -> DiagnosticsSnapshot.Artifacts {
+        .init(history: history, logFiles: logs + traceLogs, logWriteFailureCount: logWriteFailures + traceWriteFailures)
     }
 
     /// Both log files, including the rotated `wega.log.1` — which nothing in the app has
