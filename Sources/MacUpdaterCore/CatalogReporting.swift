@@ -19,6 +19,7 @@ public enum CatalogReporting {
         if app.isManagedByBrew || app.isManagedByMas || ServiceVendorUpdateProfile.profile(for: app) != nil { return true }
         guard let bundleID = app.bundleIdentifier else { return false }
         return MicrosoftAutoUpdateSupport.applicationID(bundleIdentifier: bundleID) != nil
+            || bundleID == BrunoUpdateSupport.catalogEntry.bundleId
             || catalog.github.contains { $0.bundleId == bundleID }
             || catalog.jetbrains.contains { $0.bundleId == bundleID }
             || catalog.synology.contains { $0.bundleId == bundleID }
