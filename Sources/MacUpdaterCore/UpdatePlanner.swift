@@ -363,13 +363,14 @@ public enum UpdatePlanner {
     }
 
     /// Deduplicates manual-update results that resolve to the same on-disk app, keeping
-    /// the highest-priority source (e.g. brew cask over Sparkle), then sorts by name.
+    /// the newer comparable vendor/cask offer, then source priority for ties or unknown
+    /// version relationships. Explicit rollback retries retain their recovery action.
     public static func dedupedByPriority(_ items: [ManualOutdatedApp]) -> [ManualOutdatedApp] {
         var byPath: [String: ManualOutdatedApp] = [:]
         for item in items {
             let key = item.path.path
             if let existing = byPath[key] {
-                if item.source.priority > existing.source.priority { byPath[key] = item }
+                if preferredUpdate(item, over: existing) { byPath[key] = item }
             } else {
                 byPath[key] = item
             }

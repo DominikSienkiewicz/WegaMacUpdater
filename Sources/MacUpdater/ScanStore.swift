@@ -446,12 +446,21 @@ final class ScanStore: ObservableObject {
         emitCounts()
     }
 
+    private var reconciledSourceUpdates: (items: [OutdatedItem], manual: [ManualOutdatedApp]) {
+        let pendingPaths = Set(vendorHandoffs.map { InstallationIdentity(path: $0.path) })
+        let pending = UpdatePlanner.attachingCaskPolicies(to: vendorHandoffs, installationChecks: installationChecks)
+        let rows = manualOutdated.filter { !pendingPaths.contains(InstallationIdentity(path: $0.path)) } + pending
+        return UpdatePlanner.reconciledUpdates(
+            items: UpdatePlanner.outdatedItems(brew: brewOutdated, mas: masOutdated, npm: npmOutdated), manual: rows
+        )
+    }
+
     // Keys carry a source tag ("f:", "c:", "a:", "n:"); see UpdatePlanner.
     // Items the user has ignored or pinned below the available version are filtered out.
     var allItems: [OutdatedItem] {
         UpdatePlanner.applyPolicies(
             UpdatePlanner.attachingReleaseNotes(
-                to: UpdatePlanner.outdatedItems(brew: brewOutdated, mas: masOutdated, npm: npmOutdated),
+                to: reconciledSourceUpdates.items,
                 manual: manualOutdated,
                 caskAppPaths: caskIconPaths
             ),
@@ -480,12 +489,10 @@ final class ScanStore: ObservableObject {
 
     /// Manual updates with ignore/pin rules applied.
     var visibleManual: [ManualOutdatedApp] {
-        let pendingPaths = Set(vendorHandoffs.map { InstallationIdentity(path: $0.path) })
-        let pending = UpdatePlanner.attachingCaskPolicies(to: vendorHandoffs, installationChecks: installationChecks)
-        let existingPaths = Set(manualOutdated.map { InstallationIdentity(path: $0.path) })
+        let rows = reconciledSourceUpdates.manual
+        let existingPaths = Set(rows.map { InstallationIdentity(path: $0.path) })
         let managed = dockerManagedUpdates.filter { !existingPaths.contains(InstallationIdentity(path: $0.path)) }
-        let rows = (manualOutdated + managed).filter { !pendingPaths.contains(InstallationIdentity(path: $0.path)) } + pending
-        return UpdatePlanner.applyPolicies(rows.map(DockerDesktopUpdatePolicy.vendorUpdate), policies: UpdatePolicyStore.shared.policiesMap)
+        return UpdatePlanner.applyPolicies((rows + managed).map(DockerDesktopUpdatePolicy.vendorUpdate), policies: UpdatePolicyStore.shared.policiesMap)
     }
 
     /// The update currently shown in the inspector pane, resolved from `inspectedKey`
