@@ -1,6 +1,6 @@
 import Foundation
 import MacUpdaterCore
-import Testing
+import XCTest
 @testable import WegaMacUpdater
 
 private actor DockerGateStopRecorder {
@@ -15,13 +15,12 @@ private actor DockerGateStopRecorder {
     }
 }
 
-@Suite("Docker Desktop bundle mutation gates", .serialized)
 @MainActor
-struct DockerDesktopMutationGateTests {
+final class DockerDesktopMutationGateTests: XCTestCase {
     private let token = "docker-desktop"
     private let appURL = URL(fileURLWithPath: "/TestApplications/Docker.app")
 
-    @Test func foregroundUpgradeDoesNotInvokeBrewWhenShutdownIsUnconfirmed() async {
+    func testForegroundUpgradeDoesNotInvokeBrewWhenShutdownIsUnconfirmed() async {
         let runner = inertRunner()
         let recorder = DockerGateStopRecorder()
         let store = scanStore(runner: runner, recorder: recorder)
@@ -32,52 +31,57 @@ struct DockerDesktopMutationGateTests {
 
         let result = await store.upgradeOneCask(item: item, appPaths: [token: appURL], snapshots: [:], operation: operation)
 
-        #expect(runner.requests.isEmpty)
-        #expect(result.outcome?.isSuccessful == false)
-        #expect(await recorder.paths == [appURL])
+        XCTAssertTrue(runner.requests.isEmpty)
+        XCTAssertEqual(result.outcome?.isSuccessful, false)
+        let stoppedPaths = await recorder.paths
+        XCTAssertEqual(stoppedPaths, [appURL])
     }
 
-    @Test(arguments: [false, true])
-    func manualAdoptionAndReinstallStopBeforePreparingOrExecutingBrew(reinstall: Bool) async {
-        let runner = inertRunner()
-        let recorder = DockerGateStopRecorder()
-        let store = scanStore(runner: runner, recorder: recorder)
-        store.manualOutdated = [ManualOutdatedApp(
-            name: "Docker", path: appURL, installedVersion: "1", availableVersion: "2",
-            source: .cask(token: token), bundleIdentifier: "com.docker.docker"
-        )]
+    func testManualAdoptionAndReinstallStopBeforePreparingOrExecutingBrew() async {
+        for reinstall in [false, true] {
+            let runner = inertRunner()
+            let recorder = DockerGateStopRecorder()
+            let store = scanStore(runner: runner, recorder: recorder)
+            store.manualOutdated = [ManualOutdatedApp(
+                name: "Docker", path: appURL, installedVersion: "1", availableVersion: "2",
+                source: .cask(token: token), bundleIdentifier: "com.docker.docker"
+            )]
 
-        if reinstall { await store.reinstallManual(token: token) }
-        else { await store.installManual(token: token) }
+            if reinstall { await store.reinstallManual(token: token) }
+            else { await store.installManual(token: token) }
 
-        #expect(runner.requests.isEmpty)
-        #expect(await recorder.paths == [appURL])
-        #expect(store.banner?.variant == .danger)
+            XCTAssertTrue(runner.requests.isEmpty)
+            let stoppedPaths = await recorder.paths
+            XCTAssertEqual(stoppedPaths, [appURL])
+            XCTAssertEqual(store.banner?.variant, .danger)
+        }
     }
 
-    @Test(arguments: ["docker", "docker-desktop", "homebrew/cask/docker-desktop"])
-    func explicitBrewActionFindsDockerRowsWithExistingVendorEvidence(policyToken: String) async {
-        let runner = inertRunner()
-        let recorder = DockerGateStopRecorder()
-        let store = scanStore(runner: runner, recorder: recorder)
-        store.manualOutdated = [ManualOutdatedApp(
-            name: "Docker", path: appURL, installedVersion: "1", availableVersion: "2",
-            source: .sparkle, bundleIdentifier: "com.docker.docker", caskPolicyToken: policyToken
-        )]
+    func testExplicitBrewActionFindsDockerRowsWithExistingVendorEvidence() async {
+        for policyToken in ["docker", "docker-desktop", "homebrew/cask/docker-desktop"] {
+            let runner = inertRunner()
+            let recorder = DockerGateStopRecorder()
+            let store = scanStore(runner: runner, recorder: recorder)
+            store.manualOutdated = [ManualOutdatedApp(
+                name: "Docker", path: appURL, installedVersion: "1", availableVersion: "2",
+                source: .sparkle, bundleIdentifier: "com.docker.docker", caskPolicyToken: policyToken
+            )]
 
-        await store.installManual(token: token)
+            await store.installManual(token: token)
 
-        #expect(await recorder.paths == [appURL])
-        #expect(runner.requests.isEmpty)
-        #expect(store.manualOutdated.first?.source == .sparkle)
+            let stoppedPaths = await recorder.paths
+            XCTAssertEqual(stoppedPaths, [appURL])
+            XCTAssertTrue(runner.requests.isEmpty)
+            XCTAssertEqual(store.manualOutdated.first?.source, .sparkle)
+        }
     }
 
-    @Test func migrationStopsBeforePreparationWhenDockerCannotShutDown() async {
+    func testMigrationStopsBeforePreparationWhenDockerCannotShutDown() async {
         let recorder = DockerGateStopRecorder()
         var dependencies = MigrationStore.Dependencies.live
         dependencies.stopDocker = { await recorder.stop($0) }
         dependencies.prepareReplacement = { _, _, _ in
-            Issue.record("Docker migration must stop before preparing a replacement after shutdown failure")
+            XCTFail("Docker migration must stop before preparing a replacement after shutdown failure")
             return .snapshotFailed
         }
         let store = MigrationStore(
@@ -94,12 +98,13 @@ struct DockerDesktopMutationGateTests {
         )
         await store.migrate(app, model: model(runner: inertRunner()), onWegaState: nil)
 
-        #expect(await recorder.paths == [appURL])
-        #expect(store.errorMessage != nil)
-        #expect(store.migrated.isEmpty)
+        let stoppedPaths = await recorder.paths
+        XCTAssertEqual(stoppedPaths, [appURL])
+        XCTAssertNotNil(store.errorMessage)
+        XCTAssertTrue(store.migrated.isEmpty)
     }
 
-    @Test func forcedRetryRechecksShutdownBeforeReplacingTheBundleAgain() async {
+    func testForcedRetryRechecksShutdownBeforeReplacingTheBundleAgain() async {
         let runner = ScanStoreRuntimeProcessRunner(run: { _ in
             ProcessResult(exitCode: 0, stdout: "", stderr: "")
         }, events: { _ in
@@ -117,13 +122,14 @@ struct DockerDesktopMutationGateTests {
 
         let result = await store.upgradeOneCask(item: item, appPaths: [token: appURL], snapshots: [:], operation: operation)
 
-        #expect(runner.requests.count == 1)
-        #expect(!runner.requests.contains { $0.arguments.contains("--force") })
-        #expect(await recorder.paths == [appURL, appURL])
-        #expect(result.outcome?.isSuccessful == false)
+        XCTAssertEqual(runner.requests.count, 1)
+        XCTAssertFalse(runner.requests.contains { $0.arguments.contains("--force") })
+        let stoppedPaths = await recorder.paths
+        XCTAssertEqual(stoppedPaths, [appURL, appURL])
+        XCTAssertEqual(result.outcome?.isSuccessful, false)
     }
 
-    @Test func aStaleForceTerminationRequestStillUsesControlledDockerShutdown() async {
+    func testAStaleForceTerminationRequestStillUsesControlledDockerShutdown() async {
         let recorder = DockerGateStopRecorder()
         let runner = inertRunner()
         var dependencies = MigrationStore.Dependencies.live
@@ -146,8 +152,9 @@ struct DockerDesktopMutationGateTests {
 
         await store.forceTerminateAndMigrate(PendingForceTermination(app: app, target: target), model: model(runner: runner), onWegaState: nil)
 
-        #expect(await recorder.paths == [appURL])
-        #expect(!runner.requests.contains { $0.arguments.contains("-KILL") })
+        let stoppedPaths = await recorder.paths
+        XCTAssertEqual(stoppedPaths, [appURL])
+        XCTAssertFalse(runner.requests.contains { $0.arguments.contains("-KILL") })
     }
 
     private func scanStore(runner: ScanStoreRuntimeProcessRunner, recorder: DockerGateStopRecorder) -> ScanStore {
