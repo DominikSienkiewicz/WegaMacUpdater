@@ -107,19 +107,44 @@ public extension VendorUpdateChecker {
     }
 
     internal func check(app: ApplicationInfo, plan: VendorCheckPlan?) async -> ManualCheckResult {
-        guard let plan else { return .notApplicable }
-        guard let response = try? await client.send(plan.request) else { return .unavailable }
-        if plan.upToDateStatusCodes.contains(response.statusCode) { return .upToDate }
+        UpdateDiagnostics.record("vendor.check.started", fields: [
+            "checker": String(describing: Self.self),
+            "bundleIdentifier": app.bundleIdentifier ?? "unknown",
+            "installed": app.version ?? "unknown",
+        ])
+        guard let plan else { return recordVendorResult(.notApplicable, app: app, reason: "no_plan") }
+        guard let response = try? await client.send(plan.request) else {
+            return recordVendorResult(.unavailable, app: app, reason: "transport_error")
+        }
+        UpdateDiagnostics.record("vendor.response", fields: [
+            "checker": String(describing: Self.self),
+            "bundleIdentifier": app.bundleIdentifier ?? "unknown",
+            "status": String(response.statusCode),
+        ])
+        if plan.upToDateStatusCodes.contains(response.statusCode) {
+            return recordVendorResult(.upToDate, app: app, reason: "accepted_status")
+        }
         guard response.statusCode == 200 else {
-            return response.statusCode >= 500 ? .unavailable : .failed
+            return recordVendorResult(response.statusCode >= 500 ? .unavailable : .failed, app: app, reason: "http_status")
         }
         switch plan.evaluate(response.data) {
         case .decided(let result):
-            return result
+            UpdateDiagnostics.record("vendor.parse", fields: [
+                "checker": String(describing: Self.self),
+                "bundleIdentifier": app.bundleIdentifier ?? "unknown", "evaluation": "decided",
+            ])
+            return recordVendorResult(result, app: app, reason: "vendor_decision")
         case .candidate(let candidate):
-            guard isUpgrade(installed: candidate.installed, latest: candidate.latest,
-                            scheme: candidate.scheme) else { return .upToDate }
-            return .outdated(ManualOutdatedApp(
+            let upgrade = isUpgrade(installed: candidate.installed, latest: candidate.latest, scheme: candidate.scheme)
+            UpdateDiagnostics.record("vendor.parse", fields: [
+                "checker": String(describing: Self.self),
+                "bundleIdentifier": app.bundleIdentifier ?? "unknown",
+                "evaluation": "candidate", "installed": candidate.installed, "latest": candidate.latest,
+                "source": candidate.source.badgeLabel, "scheme": String(describing: candidate.scheme),
+                "versionField": String(describing: candidate.installedVersionField), "isUpgrade": String(upgrade),
+            ])
+            guard upgrade else { return recordVendorResult(.upToDate, app: app, reason: "version_comparison") }
+            let result = ManualCheckResult.outdated(ManualOutdatedApp(
                 name: app.name,
                 path: app.path,
                 installedVersion: candidate.recordedInstalled ?? candidate.installed,
@@ -129,6 +154,31 @@ public extension VendorUpdateChecker {
                 completionRequirement: VendorUpdateRequirement(version: candidate.latest,
                     field: candidate.installedVersionField, scheme: candidate.scheme)
             ))
+            return recordVendorResult(result, app: app, reason: "version_comparison")
+        }
+    }
+
+    private func recordVendorResult(_ result: ManualCheckResult, app: ApplicationInfo, reason: String) -> ManualCheckResult {
+        var fields = result.vendorDiagnosticFields
+        fields["checker"] = String(describing: Self.self)
+        fields["bundleIdentifier"] = app.bundleIdentifier ?? "unknown"
+        fields["reason"] = reason
+        UpdateDiagnostics.record("vendor.completed", fields: fields)
+        return result
+    }
+}
+
+private extension ManualCheckResult {
+    var vendorDiagnosticFields: [String: String] {
+        switch self {
+        case .notApplicable: ["outcome": "not_applicable"]
+        case .upToDate: ["outcome": "up_to_date"]
+        case .unavailable: ["outcome": "unavailable"]
+        case .failed: ["outcome": "failed"]
+        case .outdated(let item): [
+            "outcome": "outdated", "installed": item.installedVersion ?? "unknown",
+            "latest": item.availableVersion ?? "unknown", "source": item.source.badgeLabel,
+        ]
         }
     }
 }
