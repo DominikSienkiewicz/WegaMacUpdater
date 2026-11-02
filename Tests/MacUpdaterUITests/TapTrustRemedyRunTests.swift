@@ -1,5 +1,5 @@
 import Foundation
-import Testing
+import XCTest
 import MacUpdaterCore
 @testable import WegaMacUpdater
 
@@ -7,11 +7,9 @@ import MacUpdaterCore
 /// configuration, so it takes the same protected path as every other brew write and reports
 /// into the same log — under the warning it answers, not in place of it.
 ///
-/// Serialized: each run takes the process-wide `UpgradeMutex`, and a parallel sibling holding
-/// it would turn the other into a "busy" refusal.
-@Suite("Tap trust — running a remedy from the brew log panel", .serialized)
+/// XCTest runs these shared-mutex checks sequentially, separately from Swift Testing suites.
 @MainActor
-struct TapTrustRemedyRunTests {
+final class TapTrustRemedyRunTests: XCTestCase {
     private static let warning = [
         "Homebrew is currently ignoring formulae, casks and commands",
         "from these taps because tap trust is required.",
@@ -19,7 +17,7 @@ struct TapTrustRemedyRunTests {
         "  brew untap manaflow-ai/cmux",
     ]
 
-    @Test func givenTheWarningWhenTheUntapRemedyRunsThenExactlyItsCommandRunsAndReportsUnderTheWarning() async {
+    func testGivenTheWarningWhenTheUntapRemedyRunsThenExactlyItsCommandRunsAndReportsUnderTheWarning() async {
         let runner = ScanStoreRuntimeProcessRunner(
             run: { _ in ProcessResult(exitCode: 0, stdout: "", stderr: "") },
             events: { _ in
@@ -35,15 +33,15 @@ struct TapTrustRemedyRunTests {
 
         await harness.store.runTapTrustRemedy(remedy)
 
-        #expect(runner.requests.map(\.arguments) == [["untap", "--", "manaflow-ai/cmux"]])
-        #expect(harness.store.brewLog == Self.warning + ["$ brew untap -- manaflow-ai/cmux", "Untapping manaflow-ai/cmux..."])
-        #expect(harness.store.showLog)
-        #expect(harness.store.banner?.variant == .success)
-        #expect(TapTrustPlanner.pending([remedy], in: harness.store.brewLog).isEmpty,
+        XCTAssertEqual(runner.requests.map(\.arguments), [["untap", "--", "manaflow-ai/cmux"]])
+        XCTAssertEqual(harness.store.brewLog, Self.warning + ["$ brew untap -- manaflow-ai/cmux", "Untapping manaflow-ai/cmux..."])
+        XCTAssertTrue(harness.store.showLog)
+        XCTAssertEqual(harness.store.banner?.variant, .success)
+        XCTAssertTrue(TapTrustPlanner.pending([remedy], in: harness.store.brewLog).isEmpty,
                 "the button just clicked must not be offered again")
     }
 
-    @Test func givenBrewFailsWhenARemedyRunsThenTheBannerSaysSoAndPointsAtTheLog() async {
+    func testGivenBrewFailsWhenARemedyRunsThenTheBannerSaysSoAndPointsAtTheLog() async {
         let runner = ScanStoreRuntimeProcessRunner(
             run: { _ in ProcessResult(exitCode: 0, stdout: "", stderr: "") },
             events: { _ in
@@ -60,9 +58,9 @@ struct TapTrustRemedyRunTests {
             TapTrustRemedy(kind: .untapUnused, arguments: BrewService.untapArguments(taps: ["manaflow-ai/cmux"]))
         )
 
-        #expect(runner.requests.map(\.arguments) == [["untap", "--", "manaflow-ai/cmux"]])
-        #expect(harness.store.banner?.variant == .danger)
-        #expect(harness.store.banner?.title == tr("Nie udało się zmienić tapów"))
-        #expect(harness.store.brewLog.last == "Error: No available tap manaflow-ai/cmux.")
+        XCTAssertEqual(runner.requests.map(\.arguments), [["untap", "--", "manaflow-ai/cmux"]])
+        XCTAssertEqual(harness.store.banner?.variant, .danger)
+        XCTAssertEqual(harness.store.banner?.title, tr("Nie udało się zmienić tapów"))
+        XCTAssertEqual(harness.store.brewLog.last, "Error: No available tap manaflow-ai/cmux.")
     }
 }

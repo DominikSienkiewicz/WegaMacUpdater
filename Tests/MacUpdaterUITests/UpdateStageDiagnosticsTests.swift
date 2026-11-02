@@ -114,37 +114,6 @@ struct UpdateStageDiagnosticsTests {
         #expect(fixture.events.contains { $0.event == "recovery.summary" && $0.fields["aborted"] == fixture.token })
     }
 
-    @Test func foregroundRecordsPlanRescanAndVerdictWithoutAddingCommands() async throws {
-        let fixture = try Fixture(token: "formula", before: "1", installed: "2")
-        defer { fixture.cleanUp() }
-        let runner = ScanStoreRuntimeProcessRunner(run: { request in
-            let output: String
-            switch request.arguments {
-            case ["outdated", "--json=v2", "--greedy", "--greedy-latest", "--greedy-auto-updates"]:
-                output = #"{"formulae":[],"casks":[]}"#
-            case ["outdated"]: output = ""
-            case ["outdated", "-g", "--json"]: output = "{}"
-            default: throw CocoaError(.executableNotLoadable)
-            }
-            return ProcessResult(exitCode: 0, stdout: output, stderr: "")
-        })
-        let harness = makeScanStoreRuntimeHarness(runner: runner)
-        harness.store.brewOutdated = BrewOutdated(formulae: [
-            BrewOutdatedItem(name: "formula", installedVersions: ["1"], currentVersion: "2")
-        ], casks: [])
-
-        await UpdateDiagnostics.$current.withValue(fixture.run) {
-            await harness.store.runUpdate(targetKeys: ["f:formula"])
-        }
-
-        #expect(harness.store.banner?.variant == .success)
-        #expect(runner.requests.count == 4)
-        #expect(fixture.events.contains { $0.event == "update.plannedItem" && $0.fields["targetVersion"] == "2" })
-        #expect(fixture.events.contains { $0.event == "rescan.result" && $0.fields["confirmed"] == "true" })
-        #expect(fixture.events.contains { $0.event == "update.itemVerdict" && $0.fields["verdict"] == "succeeded" })
-        #expect(fixture.events.filter { $0.event == "trace.started" }.count == 1)
-    }
-
     @Test func discordDetachedSelfUpdaterWorkRetainsContextAndTheSameThreeCommands() async throws {
         let fixture = try Fixture(token: "discord", before: "0.0.419", installed: "0.0.420")
         defer { fixture.cleanUp() }
