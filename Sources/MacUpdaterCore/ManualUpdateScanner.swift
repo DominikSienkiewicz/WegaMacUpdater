@@ -332,8 +332,9 @@ public struct ManualUpdateScanner: Sendable {
         // An empty Caskroom entry has no tracked version, so its bundle also needs the
         // catalog-version fallback used for adoption candidates.
         let brewTrackedTokens = Set(brewCaskVersions.keys)
-        func isBrewManaged(_ app: ApplicationInfo) -> Bool {
-            BrewManagement.isAuthoritative(
+        func needsCaskVersionCheck(_ app: ApplicationInfo) -> Bool {
+            guard let token = app.caskToken, !brewOutdatedCasks.contains(token) else { return false }
+            return !BrewManagement.isAuthoritative(
                 caskToken: app.caskToken,
                 isManagedByBrew: app.isManagedByBrew,
                 installedCaskTokens: installedCasks,
@@ -344,12 +345,12 @@ public struct ManualUpdateScanner: Sendable {
         // ARCH-05a: one `brew info` for every adoption candidate, resolved before the fan-out,
         // instead of one process per app inside it. Each of those calls re-read the same cask
         // database to answer about a single token.
-        let candidateTokens = (appsToCheck + javaRuntimesToCheck).filter { !isBrewManaged($0) }
+        let candidateTokens = (appsToCheck + javaRuntimesToCheck).filter(needsCaskVersionCheck)
             .compactMap(\.caskToken)
         let latestCaskVersions = await brewService.caskLatestVersions(tokens: Array(Set(candidateTokens)))
 
         var work: [@Sendable () async -> ManualCheckObservation] = []
-        for runtime in javaRuntimesToCheck where brewAvailable && !isBrewManaged(runtime) {
+        for runtime in javaRuntimesToCheck where brewAvailable && needsCaskVersionCheck(runtime) {
             if let check = Self.caskVersionCheck(
                 app: runtime,
                 brewTrackedVersion: runtime.caskToken.flatMap { brewCaskVersions[$0] },
@@ -363,7 +364,7 @@ public struct ManualUpdateScanner: Sendable {
                 work.append(check)
                 continue
             }
-            if !isBrewManaged(app) {
+            if needsCaskVersionCheck(app) {
                 // The catalog fallback is needed only when Homebrew lacks a tracked version.
                 if brewAvailable, let check = Self.caskVersionCheck(
                     app: app,
