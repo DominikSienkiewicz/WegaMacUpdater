@@ -59,6 +59,17 @@ swift test --jobs 1 --no-parallel --filter 'MasInstallationEvidence|IndependentV
 These tests do not run a live MAU query or update installed applications. No full suite is
 implied by this targeted command.
 
+Standalone application tests use injected HTTP responses and temporary app bundles. They
+cover Mozilla release channels and ESR overlap, malformed or unavailable feeds, wrong-channel
+Homebrew offers, Bruno and UTM identity and release selection, App Store/Sparkle routing,
+Zed Stable/Preview selection and completion evidence:
+
+```bash
+swift test --jobs 1 --no-parallel --filter 'FirefoxUpdateCheckerTests|FirefoxCaskVersionTests|FirefoxAdoptionChannelTests|ThunderbirdUpdateCheckerTests|ThunderbirdCaskChannelTests|ThunderbirdCaskRecoveryChannelTests|ThunderbirdChannelMetadataTests|ThunderbirdCaskVersionTests|ThunderbirdScanBoundaryTests|BrunoUpdateSupportTests|UTMUpdateSupportTests|ZedUpdateCheckerTests|ZedManualScanTests'
+```
+
+These tests do not update or launch installed vendor applications.
+
 Docker safety regression tests use fake process runners, injected lifecycle services and
 temporary bundles. They cover shutdown and restore gates, local engine readiness, manual
 restart offers, vendor routing, background exclusion, bundle-only rollback scope and smoke

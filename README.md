@@ -76,6 +76,17 @@ AutoUpdate listing and an explicit MAU handoff. App Store copies retain their Ap
 Only recognized, newer version offers create update rows; an empty or unknown listing never
 certifies a particular copy as current. Wega does not install Office through `msupdate`.
 
+Manually installed Firefox and Thunderbird use Mozilla's channel-specific releases. Wega
+reads each bundle's channel metadata and keeps Release, ESR and Beta separate, including
+overlapping ESR branches. Unknown channels do not inherit a stable-release result. Beta
+copies exposing only a base version without the `bN` sequence remain unconfirmed.
+Bruno and UTM use their official GitHub releases without requiring a Homebrew installation.
+Bruno opens its own updater with a release-page fallback; UTM requires a macOS release
+asset and opens the official releases list, while App Store copies retain the App Store route. Zed checks Stable and Preview
+separately and opens the installed app's updater. Cask channel checks also guard migration candidates
+and inherited update policies. Opening an updater alone never confirms
+that the installed version changed.
+
 ## Diagnostics
 
 Update operations keep local JSONL traces with a run identifier, stage events, subprocess
@@ -114,6 +125,8 @@ Docker mutation checks run in sequential XCTest suites, separately from Swift Te
 that share the update mutex. Source guards also check the protected reinstall call chain,
 the smoke-test opt-out before launch, generic restart detection, publisher-veto reporting
 before mutation, and token-aware manual rollback before journaling and version pinning.
+Standalone-source tests cover channel identity, Mozilla beta ordering, GitHub macOS assets,
+unknown/error evidence and updater completion.
 Commands and quality gates are documented in
 [Building and testing](docs/building.md#build-and-test).
 

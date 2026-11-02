@@ -1,0 +1,148 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "GitHub release listing consumed by Wega",
+    "version": "1.0.0",
+    "description": "Read-only subset of GitHub REST releases used by GitHubReleasesChecker. Wega requests the first 100 releases and filters drafts and prereleases locally. It does not fetch additional pages or install release assets through this API."
+  },
+  "servers": [
+    {
+      "url": "https://api.github.com"
+    }
+  ],
+  "externalDocs": {
+    "url": "https://docs.github.com/en/rest/releases/releases#list-releases"
+  },
+  "paths": {
+    "/repos/{owner}/{repo}/releases": {
+      "get": {
+        "operationId": "listRepositoryReleases",
+        "parameters": [
+          {
+            "name": "owner",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Release list; an empty list does not provide a version offer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Release"
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Unmodified; HTTPClient reuses a previously cached successful body."
+          },
+          "403": {
+            "description": "Forbidden or rate limited; no version evidence."
+          },
+          "404": {
+            "description": "Repository or releases unavailable; no version evidence."
+          },
+          "429": {
+            "description": "Rate limited; no version evidence."
+          },
+          "5XX": {
+            "description": "Service unavailable; no version evidence."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Release": {
+        "type": "object",
+        "required": [
+          "tag_name",
+          "draft",
+          "prerelease"
+        ],
+        "properties": {
+          "tag_name": {
+            "type": "string"
+          },
+          "draft": {
+            "type": "boolean"
+          },
+          "prerelease": {
+            "type": "boolean"
+          },
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "published_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "assets": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "browser_download_url"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "browser_download_url": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}
