@@ -111,9 +111,10 @@ Refreshing Inventory reads local installations; use **Check now** in Updates for
 update check. Opening this status does not add network requests.
 
 An App Store receipt alone, a cask name match without a resolved installation path, or a
-missing comparison version cannot prove that a specific copy is current. These cases
-remain unconfirmed. In particular, the current `mas outdated` integration does not supply
-a verified per-path result; its package update list still appears in Updates.
+missing comparison version cannot prove that a specific copy is current. For App Store
+apps, Wega validates the ID of the exact installed path against `mas list` and its version,
+then applies the completed update query. Missing IDs, duplicate copies and incomplete
+queries remain unconfirmed or failed. Refresh the update scan to replace older evidence.
 
 Installer applications and JDKs need an exact link to their cask before a package result
 can describe that installed copy. A receipt or declared application path can provide that
@@ -126,6 +127,38 @@ Drive can show this status when installer receipts do not identify the copy. The
 cannot mark the app current or enable a cask update for that copy. Independent updates,
 failures and stale results keep their usual status; the possible source remains in the
 details. Run **Check now** after upgrading Wega to rebuild this evidence.
+
+### Vendor-managed applications
+
+Homebrew ownership does not hide vendor releases. When both sources report comparable
+versions for the same verified installation, Updates presents the newer offer with its
+appropriate action. A hidden older Homebrew offer is also excluded from automatic updates.
+Versions that cannot be compared safely remain separate.
+
+WARP and Logi Options+ updates appear as vendor handoffs and are excluded from batch and
+background Homebrew updates. Open the application's status in Inventory for the vendor
+instructions, even when no update version is known. If WARP is managed by your organization,
+use the version and update controls provided by your administrator. Wega does not change
+MDM settings or stop these services to force an update.
+
+Bitdefender Antivirus for Mac shows its installed product version and build separately from
+product and threat-signature freshness. Those freshness values remain unconfirmed: a running
+antivirus, a recent file date or a signature refresh does not prove that the product is current.
+Bitdefender Agent, VPN and App Store scanners are not treated as the antivirus product.
+
+### Microsoft Office and AutoUpdate
+
+For vendor-installed Word, Excel, PowerPoint, Outlook and OneNote, Wega queries Microsoft
+AutoUpdate (MAU) without installing anything. macOS may request permission for MAU during
+its first query. A recognized newer offer appears in Updates; its action opens MAU, where
+you decide what to install. Inventory also provides the MAU/support handoff without an offer.
+Office installed from the App Store stays on the App Store route.
+
+A `No updates available` response does not identify the registered path of each Office copy,
+so Wega keeps that copy unconfirmed. Unknown output, command failures and missing version
+evidence never become an “up to date” result. When MAU is not found at its standard location, the source remains unconfirmed and
+provides Microsoft's support instructions. Opening MAU does not record an
+installation success; completion requires independent evidence from the selected copy.
 
 ### Release notes for Homebrew casks
 

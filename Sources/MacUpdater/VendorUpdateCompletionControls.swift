@@ -13,6 +13,9 @@ struct VendorUpdateCompletionControls: View {
         if case .cask(let token) = item.source, DockerDesktopUpdatePolicy.isDocker(token: token) {
             return tr("Odczytaj wersję i build tej instalacji Docker Desktop. To nie jest kontrola działania silnika ani sprawdzenie najnowszej wersji u producenta.")
         }
+        if ServiceVendorUpdatePolicy.profile(for: item) != nil {
+            return tr("Odczytaj wersję tej instalacji i porównaj z wykrytym celem. To nie potwierdza najnowszej wersji u producenta ani aktualności definicji zagrożeń.")
+        }
         return tr("Odczytaj wersję pod tą ścieżką i sprawdź źródło producenta, bez pełnego skanu.")
     }
 

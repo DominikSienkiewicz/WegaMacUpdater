@@ -16,9 +16,10 @@ public enum CatalogReporting {
     /// I/O, whereas catalog membership + brew/MAS is a pure function of already-scanned state and is
     /// exactly the "known source" the community-catalog loop cares about.
     public static func hasKnownUpdateSource(_ app: ApplicationInfo, catalog: AppCatalog) -> Bool {
-        if app.isManagedByBrew || app.isManagedByMas { return true }
+        if app.isManagedByBrew || app.isManagedByMas || ServiceVendorUpdateProfile.profile(for: app) != nil { return true }
         guard let bundleID = app.bundleIdentifier else { return false }
-        return catalog.github.contains { $0.bundleId == bundleID }
+        return MicrosoftAutoUpdateSupport.applicationID(bundleIdentifier: bundleID) != nil
+            || catalog.github.contains { $0.bundleId == bundleID }
             || catalog.jetbrains.contains { $0.bundleId == bundleID }
             || catalog.synology.contains { $0.bundleId == bundleID }
             || catalog.sparkleFeedOverrides.contains { $0.bundleId == bundleID }

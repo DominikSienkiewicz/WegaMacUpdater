@@ -57,6 +57,7 @@ public enum SystemPaths {
     public static let killall = URL(fileURLWithPath: "/usr/bin/killall")
     public static let open = URL(fileURLWithPath: "/usr/bin/open")
     public static let osascript = URL(fileURLWithPath: "/usr/bin/osascript")
+    public static let mdls = URL(fileURLWithPath: "/usr/bin/mdls")
     public static let pkgutil = URL(fileURLWithPath: "/usr/sbin/pkgutil")
     public static let launchctl = URL(fileURLWithPath: "/bin/launchctl")
 

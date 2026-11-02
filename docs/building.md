@@ -46,6 +46,19 @@ translations). They do not launch applications, install packages or modify real 
 swift test --jobs 1 --no-parallel --filter 'LT02ShipItWithdrawalFailureTests|CaskBuildDriftArrivalTests|CaskBuildDriftVerificationTests|PackageReceiptIdentifiersTests|PackageCaskAttributionTests|JavaRuntimeInstallationAttributionTests|UnconfirmedCaskAssociationTests|UnconfirmedCaskPresentationTests'
 ```
 
+App Store, independent vendor feeds, service-app handoffs, Bitdefender metadata and
+Microsoft AutoUpdate regressions use temporary bundles, injected HTTP/process responses
+and pure presentation/state checks. They cover both scan entry points, exact identities,
+duplicate offers, automatic candidate selection, package paths, snapshot compatibility,
+MAU output classification and the distinction between opening an updater and installing:
+
+```bash
+swift test --jobs 1 --no-parallel --filter 'MasInstallationEvidence|IndependentVendor|ServiceVendor|BitdefenderSupportTests|MicrosoftAutoUpdate'
+```
+
+These tests do not run a live MAU query or update installed applications. No full suite is
+implied by this targeted command.
+
 Docker safety regression tests use fake process runners, injected lifecycle services and
 temporary bundles. They cover shutdown and restore gates, local engine readiness, manual
 restart offers, vendor routing, background exclusion, bundle-only rollback scope and smoke

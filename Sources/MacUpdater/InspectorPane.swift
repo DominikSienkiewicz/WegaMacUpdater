@@ -296,12 +296,18 @@ struct InspectorPane: View {
             sectionHeading(tr("Akcje"))
             switch update {
             case .outdated(let item, _):
-                Text(item.kind == .cask && DockerDesktopUpdatePolicy.isDocker(token: item.name)
-                     ? tr("Wykryto aktualizację Docker Desktop, ale ścieżka aplikacji jest nieznana. Otwórz Docker Desktop samodzielnie lub ponów skanowanie.")
-                     : tr("Aktualizowane zbiorczo — zaznacz na liście i użyj „Zaktualizuj wybrane”."))
-                    .font(.wega(.subheadline))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                if item.kind == .cask, let profile = ServiceVendorUpdateProfile.profile(caskToken: item.name) {
+                    ServiceVendorUpdateControls(profile: profile, appURL: nil)
+                    Text(tr("Homebrew zgłasza aktualizację, ale nie potwierdzono ścieżki tej aplikacji. Otwórz ją samodzielnie lub ponów skanowanie."))
+                        .font(.wega(.subheadline)).foregroundStyle(.secondary)
+                } else {
+                    Text(item.kind == .cask && DockerDesktopUpdatePolicy.isDocker(token: item.name)
+                         ? tr("Wykryto aktualizację Docker Desktop, ale ścieżka aplikacji jest nieznana. Otwórz Docker Desktop samodzielnie lub ponów skanowanie.")
+                         : tr("Aktualizowane zbiorczo — zaznacz na liście i użyj „Zaktualizuj wybrane”."))
+                        .font(.wega(.subheadline))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             case .manual(let app):
                 ManualUpdateActionView(item: app, busyToken: busyToken, onInstall: onInstall)
             }

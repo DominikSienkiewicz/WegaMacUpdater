@@ -30,6 +30,8 @@ public enum BackgroundUpdateEligibility {
         case noChecksum
         /// Docker Desktop requires a foreground choice and a verified shutdown before Homebrew.
         case dockerRequiresSupervision
+        /// The installed service and its administrator own the update procedure.
+        case vendorManagedService
     }
 
     public enum Verdict: Equatable, Sendable {
@@ -41,6 +43,7 @@ public enum BackgroundUpdateEligibility {
     /// we cannot inspect is treated exactly like a cask with no checksum.
     public static func evaluate(profile: CaskArtifactProfile, download: CaskDownloadInfo?) -> Verdict {
         guard !DockerDesktopUpdatePolicy.isDocker(token: profile.token) else { return .ineligible(.dockerRequiresSupervision) }
+        guard !ServiceVendorUpdatePolicy.requiresVendor(token: profile.token) else { return .ineligible(.vendorManagedService) }
         let kinds = profile.artifactKinds
         guard !kinds.isEmpty else { return .ineligible(.noArtifacts) }
         guard kinds.isSubset(of: safeArtifactKinds) else { return .ineligible(.privilegedArtifact) }

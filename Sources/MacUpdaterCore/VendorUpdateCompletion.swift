@@ -86,13 +86,15 @@ public struct VendorUpdateCompletionChecker: Sendable {
               app.bundleIdentifier == expectedID, app.installation == InstallationIdentity(path: item.path) else {
             return .init(app: nil, outcome: .unconfirmed(.identityChanged))
         }
-        let localDockerCheck: Bool
+        let localTargetCheck: Bool
         if case .cask(let token) = item.source {
-            localDockerCheck = DockerDesktopUpdatePolicy.isDocker(token: token)
+            let service = ServiceVendorUpdateProfile.profile(caskToken: token)
+            localTargetCheck = DockerDesktopUpdatePolicy.isDocker(token: token)
+                || (service != nil && service == ServiceVendorUpdateProfile.profile(for: app))
         } else {
-            localDockerCheck = false
+            localTargetCheck = false
         }
-        let result: ManualCheckResult = localDockerCheck ? .upToDate : await checkSource(app, item.source)
+        let result: ManualCheckResult = localTargetCheck ? .upToDate : await checkSource(app, item.source)
         try Task.checkCancellation()
         guard let after = readApplication(item.path), after == app else {
             return .init(app: nil, outcome: .unconfirmed(.changedDuringCheck))
@@ -107,7 +109,7 @@ public struct VendorUpdateCompletionChecker: Sendable {
             return .init(app: app, outcome: .unconfirmed(.sourceUnavailable))
         case .upToDate:
             guard let requirement = item.completionRequirement,
-                  !localDockerCheck || requirement.field != .sharedPackage else {
+                  !localTargetCheck || requirement.field != .sharedPackage else {
                 return .init(app: app, outcome: .unconfirmed(.unknownTarget))
             }
             guard requirement.field == .sharedPackage || requirement.isReached(in: app) else {
@@ -149,6 +151,9 @@ enum VendorUpdateSourceCheck {
         case .signal: return await SignalUpdateChecker().check(app: app)
         case .chrome: return await ChromeUpdateChecker().check(app: app)
         case .obsidian: return await ObsidianUpdateChecker().check(app: app)
+        case .microsoftAutoUpdate(let applicationID):
+            guard MicrosoftAutoUpdateSupport.applicationID(for: app) == applicationID else { return .notApplicable }
+            return await MicrosoftAutoUpdateClient().list().check(app: app)
         case .adobe(let sapCode):
             let inventory = AdobeProductInventory.installedProducts()
             guard AdobeProductInventory.product(matching: app, in: inventory)?.sapCode == sapCode else { return .notApplicable }

@@ -58,6 +58,28 @@ These are reporting associations. `CaskAppPathResolver` still supplies only dire
 artifacts to the snapshot and replacement machinery; recognizing a package's installation
 does not promise a snapshot or rollback for it.
 
+#### Vendor ownership and per-installation checks
+
+A completed Mac App Store query can certify a copy only after its exact-path App Store ID
+and installed version agree with `mas list`. Partial output, duplicate IDs and unresolved
+copies cannot borrow a successful result. Vendor feeds run independently of Homebrew
+management; comparable package/vendor offers retain the newer version and its action once,
+including in background candidate selection. Raw evidence and incomparable offers remain.
+
+WARP and Logi Options+ use vendor handoffs, with no batch/background Homebrew installation
+or generic cask adoption. Exact package ownership may provide the handoff target; ambiguous
+paths expose instructions instead of opening a guessed copy. Organizational WARP controls
+remain with the vendor/administrator. Bitdefender's exact antivirus identity exposes product
+version/build and separately unconfirmed product/signature freshness; Agent and VPN do not
+supply the antivirus version.
+
+Vendor-installed Office applications use a bounded MAU list query and a user-opened MAU
+flow. Recognized newer offers are tracked; no-update messages lack per-copy registration
+proof and remain unconfirmed. The parser recognizes the published text offer shape
+and the locally observed ANSI progress/no-update variant, and fails closed on unknown
+formats. App Store copies retain their own update route. No Office install or configuration
+command is run by Wega.
+
 #### Before anything runs — the dry-run panel
 
 **"Show exactly what I will do"** expands a **dry-run panel** above the update button. It

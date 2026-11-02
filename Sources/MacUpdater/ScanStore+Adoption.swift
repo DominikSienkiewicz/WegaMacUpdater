@@ -41,6 +41,7 @@ extension ScanStore {
     }
 
     private func installManualCoordinated(token: String, installArgs: [String]) async {
+        guard !ServiceVendorUpdatePolicy.requiresVendor(token: token) else { return }
         guard let model, manualBusy == nil else {
             UpdateDiagnostics.record("adoption.skipped", fields: ["token": token, "reason": "unavailableOrBusy"])
             return

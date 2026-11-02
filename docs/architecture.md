@@ -29,7 +29,9 @@ test contracts. `ScanStore` and `MenuBarUpdateChecker` resolve authoritative Bre
 only against the scanner's verified token-to-path map. Inventory consumes this evidence;
 it performs no update-source requests. `InstallationCheck` compares the saved bundle ID,
 path, version/build and timestamp before presenting a status. Policy filtering affects
-visibility, not whether a check ran. App Store per-path evidence remains explicitly unknown.
+visibility, not whether a check ran. App Store outcomes require the exact-path identity
+and installed-version validation represented by `MasInstallationEvidence`; a receipt alone
+is insufficient. Both foreground and menu-bar scans collect this evidence.
 
 `PackageCaskAttribution.unconfirmedCandidates` retains installed package-cask matches that
 lack exact ownership. `InstallationCheck.unconfirmedCaskToken` carries this evidence to the
@@ -37,6 +39,21 @@ Inventory status and saved snapshots, separately from the verified `caskToken` c
 manager resolution and policy attachment. The optional field decodes as absent in older
 snapshots. It prevents a complete/current verdict; independent update, failure, policy and
 staleness results retain precedence.
+
+Vendor observations are independent of Brew ownership. `UpdatePlanner.reconciledUpdates`
+selects comparable offers for verified owners without deleting raw source evidence; the
+foreground list, menu-bar count and background candidate selection use this same rule.
+Service-app profiles route WARP and Logi Options+ to the vendor and exclude their casks
+from batch, adoption and background mutation. Exact package ownership can supply the
+handoff path; an unconfirmed candidate cannot.
+
+`MicrosoftAutoUpdateClient` performs a bounded read-only list command. Its parser accepts
+recognized text offers and the observed no-updates response, rejecting unrecognized or
+contradictory data. `MicrosoftAutoUpdateReport` applies per-copy evidence and strictly newer
+offers; its optional snapshot field remains compatible with older saved checks. Inventory
+and update actions use a validated MAU bundle or the vendor support page, without running
+an installer. `BitdefenderSupport` keeps installed product metadata separate from unverified
+product and threat-definition freshness.
 
 `ScanSnapshot.installationChecks` was added in schema 2: missing data decodes as an empty
 collection, never a set of successful checks. Window results persist it in the existing
