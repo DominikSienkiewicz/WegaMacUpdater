@@ -51,6 +51,8 @@ public struct InstallationCheck: Codable, Equatable, Sendable {
     /// A possible installed cask, without verified ownership, update actions or policy aliases.
     public var unconfirmedCaskToken: String?
     public var isManagedByMas: Bool
+    /// Product-list evidence is not proof that Microsoft AutoUpdate registered this copy.
+    public var microsoftAutoUpdate: MicrosoftAutoUpdateEvidence?
 
     public init(app: ApplicationInfo, sources: [InstallationSourceCheck], checkedAt: Date) {
         path = app.path
@@ -58,7 +60,11 @@ public struct InstallationCheck: Codable, Equatable, Sendable {
         version = app.version
         buildVersion = app.buildVersion
         self.checkedAt = checkedAt
-        self.sources = sources
+        if let profile = ServiceVendorUpdateProfile.profile(for: app), !sources.contains(where: { $0.source == profile.name }) {
+            self.sources = sources + [.init(source: profile.name, outcome: .notChecked)]
+        } else {
+            self.sources = sources
+        }
         caskToken = nil
         unconfirmedCaskToken = nil
         isManagedByMas = app.isManagedByMas
@@ -85,6 +91,7 @@ public struct InstallationCheck: Codable, Equatable, Sendable {
         if sources.contains(where: { $0.outcome == .failed }) { return .failed }
         if !updates.isEmpty { return .excluded }
         if unconfirmedCaskToken != nil || sources.contains(where: { $0.outcome == .notChecked }) { return .notChecked }
+        if ServiceVendorUpdateProfile.profile(for: app) != nil { return .notChecked }
         if sources.contains(where: { $0.outcome == .current }) { return .current }
         return .noSource
     }
@@ -103,7 +110,8 @@ public struct InstallationCheck: Codable, Equatable, Sendable {
     }
 
     public static func resolvingManagers(
-        _ checks: [Self], reports: ScanSourceReports, brew: BrewOutdated?
+        _ checks: [Self], reports: ScanSourceReports, brew: BrewOutdated?,
+        mas: [MasOutdatedApp] = [], masEvidence: [MasInstallationEvidence]? = nil
     ) -> [Self] {
         checks.map { check in
             var updated = check
@@ -116,8 +124,15 @@ public struct InstallationCheck: Codable, Equatable, Sendable {
                 else { outcome = .notChecked }
                 updated.sources.removeAll { $0.source == "Homebrew" }
                 updated.sources.append(.init(source: "Homebrew", outcome: outcome, availableVersion: target, policyKey: "c:" + token))
-            } else if check.isManagedByMas, reports.mas?.didFail == true {
-                updated.sources = [.init(source: "App Store", outcome: .failed)]
+            } else if check.isManagedByMas {
+                if reports.mas?.didFail == true {
+                    updated.sources = [.init(source: "App Store", outcome: .failed)]
+                } else if let masEvidence {
+                    let source = reports.mas?.outcome == .succeeded
+                        ? MasInstallationEvidence.sourceCheck(for: check, evidence: masEvidence, outdated: mas)
+                        : InstallationSourceCheck(source: "App Store", outcome: .notChecked)
+                    updated.sources = [source]
+                }
             }
             updated.stampSuccess()
             return updated

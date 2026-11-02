@@ -32,10 +32,11 @@ Wega's docs are split by audience. **Start with the one that matches what you wa
 
 ## What it updates
 
-Homebrew casks, Mac App Store apps, JetBrains IDEs, GitHub Releases and Sparkle apps — five
-sources behind one list, with npm globals as a third package manager. Every update runs behind
-a dry-run panel that tells you what will happen before anything does, and a rollback net that
-puts the old bundle back when a cask upgrade replaces nothing. Details in
+Homebrew casks, Mac App Store apps, JetBrains IDEs, GitHub Releases, Sparkle apps and
+Microsoft AutoUpdate share one list, with npm globals as a third package manager.
+Package-manager actions expose their commands in a dry-run panel; supported cask replacements
+can restore the previous bundle when replacement fails. Vendor handoffs open the owning
+updater. Details in
 [Features](docs/features.md).
 
 ## Installation evidence and repair
@@ -53,6 +54,27 @@ installer packages or Java runtimes.
 Cask repair checks version and build changes before recording success. During a launch
 smoke test, an unconfirmed Squirrel/ShipIt withdrawal leaves the app running instead of
 triggering its queued installer by quitting it. Details are in [Features](docs/features.md).
+
+## Vendor and App Store update sources
+
+App Store checks identify each installed copy by its exact-path Spotlight App Store ID,
+validated against `mas list` and the installed version. Only successful, complete queries
+can confirm a current or outdated copy; missing identities and duplicate copies stay unconfirmed.
+
+Vendor feeds run even when Homebrew tracks an app. Comparable offers for the same verified
+installation appear once, using the newer version and its update action. Raw source evidence
+is retained; incomparable versions and Obsidian's separate package updates remain distinct.
+The same reconciliation controls background update candidates.
+
+WARP and Logi Options+ updates use the vendor's application instead of bulk or background
+Homebrew installation. Inventory also recognizes Bitdefender Antivirus for Mac and shows
+its installed product version/build separately from the unverified freshness of the product
+and threat signatures. WARP's vendor handoff leaves organizational rollout policy in control.
+
+Vendor-installed Word, Excel, PowerPoint, Outlook and OneNote use a read-only Microsoft
+AutoUpdate listing and an explicit MAU handoff. App Store copies retain their App Store route.
+Only recognized, newer version offers create update rows; an empty or unknown listing never
+certifies a particular copy as current. Wega does not install Office through `msupdate`.
 
 ## Diagnostics
 
@@ -83,7 +105,7 @@ launch/quit smoke checks, including aliases and renamed bundles. See
 ## Requirements
 
 macOS 26+, Apple silicon or Intel. Homebrew is optional — without it the cask source is simply
-absent and the other four keep working. Full list in [Building and testing](docs/building.md).
+absent and the other sources keep working. Full list in [Building and testing](docs/building.md).
 
 ## Testing
 

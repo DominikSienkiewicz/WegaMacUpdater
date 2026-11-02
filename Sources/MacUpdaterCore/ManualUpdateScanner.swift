@@ -1,8 +1,8 @@
 import Foundation
 
-/// Runs the 14 manual-app update checkers (Sparkle, JetBrains, GitHub, Synology,
+/// Runs the manual-app update checkers (Sparkle, JetBrains, GitHub, Synology,
 /// Antigravity, Parallels, Google Drive, ChatGPT, Postman, Discord, Signal, Chrome,
-/// Obsidian, Adobe Creative Cloud) plus the brew-cask version check
+/// Obsidian, Adobe Creative Cloud, Microsoft AutoUpdate) plus the brew-cask version check
 /// over every installed app, and returns the outdated ones deduplicated by source
 /// priority — together with source failures, temporary outages and per-installation evidence.
 ///
@@ -21,6 +21,8 @@ public struct ManualUpdateScanner: Sendable {
     private let adobeCatalogClient: AdobeCatalogClient
     private let adobeUninstallDirectory: URL
     private let sparkleChecker: SparkleUpdateChecker
+    private let vendorClient: HTTPClient
+    private let microsoftAutoUpdateClient: MicrosoftAutoUpdateClient
 
     /// The update sources a scan consults besides Homebrew, each defaulting to production.
     /// Tests override only the ones they isolate, through the memberwise initializer.
@@ -33,6 +35,8 @@ public struct ManualUpdateScanner: Sendable {
         public var adobeCatalogClient: AdobeCatalogClient = .productCatalog()
         public var adobeUninstallDirectory: URL = SystemPaths.adobeUninstallDirectory
         public var sparkleChecker: SparkleUpdateChecker = SparkleUpdateChecker()
+        public var microsoftAutoUpdateClient: MicrosoftAutoUpdateClient = MicrosoftAutoUpdateClient()
+        public var vendorClient: HTTPClient = .shared
 
         public static var production: Self { Self() }
     }
@@ -56,6 +60,8 @@ public struct ManualUpdateScanner: Sendable {
         adobeCatalogClient = dependencies.adobeCatalogClient
         adobeUninstallDirectory = dependencies.adobeUninstallDirectory
         sparkleChecker = dependencies.sparkleChecker
+        vendorClient = dependencies.vendorClient
+        microsoftAutoUpdateClient = dependencies.microsoftAutoUpdateClient
     }
 
     /// UX-15 — Wega dogfoods its own update path. A self-update maps to the same
@@ -162,7 +168,7 @@ public struct ManualUpdateScanner: Sendable {
         brewTrackedVersion: String?,
         latestCaskVersions: [String: String]
     ) -> (@Sendable () async -> ManualCheckObservation)? {
-        guard let token = app.caskToken else { return nil }
+        guard ServiceVendorUpdateProfile.profile(for: app) == nil, let token = app.caskToken else { return nil }
         return Self.observed("Cask", app, applicable: true) {
             guard let latest = latestCaskVersions[token] else { return .unavailable }
             let reference = brewTrackedVersion ?? app.version
@@ -253,9 +259,7 @@ public struct ManualUpdateScanner: Sendable {
             casks: casks.filter { !directAppTokens.contains($0.token) }, installedTokens: installedCasks, receiptLocator: packageReceiptLocator)
         let ownershipPaths = caskPaths.merging(packageOwnership.paths) { direct, _ in direct }
         let allInstallations = Self.routeDistinctInstallations(packageOwnership.installations, caskAppPaths: ownershipPaths, brewOutdatedCasks: [])
-        appsToCheck = Self.routeDistinctInstallations(
-            allInstallations.filter { !$0.isManagedByMas }, caskAppPaths: ownershipPaths, brewOutdatedCasks: brewOutdatedCasks
-        )
+        appsToCheck = allInstallations.filter { !$0.isManagedByMas }
 
         // JDKs live outside every Applications root and are not `.app` bundles, so the scan
         // above cannot see them; they are resolved to a cask through their installer receipt
@@ -277,32 +281,28 @@ public struct ManualUpdateScanner: Sendable {
         }
 
         let sparkleChecker = self.sparkleChecker
-        let jetbrainsChecker = JetBrainsUpdateChecker()
-        let githubChecker = GitHubReleasesChecker()
-        let synologyChecker = SynologyUpdateChecker()
-        let antigravityChecker = AntigravityUpdateChecker()
-        let parallelsChecker = ParallelsUpdateChecker()
-        let googleDriveChecker = GoogleDriveUpdateChecker()
-        let chatGPTChecker = ChatGPTUpdateChecker()
-        let postmanChecker = PostmanUpdateChecker()
-        let discordChecker = DiscordUpdateChecker()
-        let signalChecker = SignalUpdateChecker()
-        let chromeChecker = ChromeUpdateChecker()
-        let obsidianChecker = ObsidianUpdateChecker()
+        let jetbrainsChecker = JetBrainsUpdateChecker(client: vendorClient)
+        let githubChecker = GitHubReleasesChecker(client: vendorClient)
+        let synologyChecker = SynologyUpdateChecker(client: vendorClient)
+        let antigravityChecker = AntigravityUpdateChecker(client: vendorClient)
+        let parallelsChecker = ParallelsUpdateChecker(client: vendorClient)
+        let googleDriveChecker = GoogleDriveUpdateChecker(client: vendorClient)
+        let chatGPTChecker = ChatGPTUpdateChecker(client: vendorClient)
+        let postmanChecker = PostmanUpdateChecker(client: vendorClient)
+        let discordChecker = DiscordUpdateChecker(client: vendorClient)
+        let signalChecker = SignalUpdateChecker(client: vendorClient)
+        let chromeChecker = ChromeUpdateChecker(client: vendorClient)
+        let obsidianChecker = ObsidianUpdateChecker(client: vendorClient)
 
         // Build every per-app check as an independent unit of work, then run them with a
         // bounded concurrency cap. An unbounded group would open one connection per
         // (app × checker) — hundreds at once on a large /Applications — and hammer the
         // remote update APIs; the cap keeps the fan-out polite without serialising it.
-        // Brew decides for brew-managed apps: `brew outdated` is their single source of
-        // truth, so we DON'T run the cask-version check or the cask-lag special checkers
-        // on them. Package-installed applications acquire managed status only after their
-        // exact scanned path resolves through installer receipts or a declared uninstall path.
-        // Brew is the source of truth for an app only when it actually tracks an
-        // installed version for the cask. A cask listed by `brew list --cask` but with
-        // no version in `brew info --installed` (empty Caskroom metadata — e.g. Claude,
-        // Postman, which self-updated out-of-band) is invisible to `brew outdated`, so
-        // route it to the cask-version check below instead of deferring to brew.
+        // Homebrew owns the cask installation action and tracked package comparison.
+        // Official vendor feeds still check the installed bundle: their release can be newer
+        // than the cask even when Homebrew tracks that installation or reports it outdated.
+        // An empty Caskroom entry has no tracked version, so its bundle also needs the
+        // catalog-version fallback used for adoption candidates.
         let brewTrackedTokens = Set(brewCaskVersions.keys)
         func isBrewManaged(_ app: ApplicationInfo) -> Bool {
             BrewManagement.isAuthoritative(
@@ -330,10 +330,9 @@ public struct ManualUpdateScanner: Sendable {
                 work.append(check)
             }
         }
-        for app in appsToCheck {
+        for app in appsToCheck where ServiceVendorUpdateProfile.profile(for: app) == nil {
             if !isBrewManaged(app) {
-                // Non-brew apps only: cask-version check (adoption candidates) plus the
-                // cask-lag special checkers.
+                // The catalog fallback is needed only when Homebrew lacks a tracked version.
                 if brewAvailable, let check = Self.caskVersionCheck(
                     app: app,
                     brewTrackedVersion: app.caskToken.flatMap { brewCaskVersions[$0] },
@@ -341,21 +340,21 @@ public struct ManualUpdateScanner: Sendable {
                 ) {
                     work.append(check)
                 }
-                if let adobeChecker {
-                    work.append(Self.observed("Adobe", app) { adobeChecker.check(app: app) })
-                }
-                work.append(Self.observed("JetBrains", app, checker: jetbrainsChecker))
-                work.append(Self.observed("GitHub", app, checker: githubChecker))
-                work.append(Self.observed("Synology", app, checker: synologyChecker))
-                work.append(Self.observed("Antigravity", app, checker: antigravityChecker))
-                work.append(Self.observed("Parallels", app, checker: parallelsChecker))
-                work.append(Self.observed("Google Drive", app, checker: googleDriveChecker))
-                work.append(Self.observed("ChatGPT", app, checker: chatGPTChecker))
-                work.append(Self.observed("Postman", app, checker: postmanChecker))
-                work.append(Self.observed("Discord", app, checker: discordChecker))
-                work.append(Self.observed("Signal", app, checker: signalChecker))
-                work.append(Self.observed("Chrome", app, checker: chromeChecker))
             }
+            if let adobeChecker {
+                work.append(Self.observed("Adobe", app) { adobeChecker.check(app: app) })
+            }
+            work.append(Self.observed("JetBrains", app, checker: jetbrainsChecker))
+            work.append(Self.observed("GitHub", app, checker: githubChecker))
+            work.append(Self.observed("Synology", app, checker: synologyChecker))
+            work.append(Self.observed("Antigravity", app, checker: antigravityChecker))
+            work.append(Self.observed("Parallels", app, checker: parallelsChecker))
+            work.append(Self.observed("Google Drive", app, checker: googleDriveChecker))
+            work.append(Self.observed("ChatGPT", app, checker: chatGPTChecker))
+            work.append(Self.observed("Postman", app, checker: postmanChecker))
+            work.append(Self.observed("Discord", app, checker: discordChecker))
+            work.append(Self.observed("Signal", app, checker: signalChecker))
+            work.append(Self.observed("Chrome", app, checker: chromeChecker))
             // Obsidian self-updates its ASAR package independently of its installer.
             // Run this even when Homebrew owns the current cask: brew may correctly report
             // the installer as current while an insider package update is still available.
@@ -406,18 +405,23 @@ public struct ManualUpdateScanner: Sendable {
         ))
         // REL-17 — the last gap where a pending update is visible to nobody: brew's Caskroom
         // records a version the bundle on disk never reached, so `brew outdated` (receipt vs
-        // cask) stays silent while `isBrewManaged` has already suppressed both the
-        // cask-version check and every vendor checker for that app.
+        // cask) stays silent. Its vendor feed may also report the older bundle as current,
+        // so the tracked-version comparison remains necessary alongside vendor checks.
         collected.append(contentsOf: Self.caskMetadataDriftRows(
             installedApps: appsToCheck + javaRuntimes,
             brewCaskVersions: brewCaskVersions,
             alreadyListedTokens: listedCaskTokens()
         ))
-        return Self.makeReport(
+        return await applyingMicrosoftEvidence(to: Self.makeReport(
             collected: collected, observations: observations, installations: allInstallations + javaRuntimes + [selfApp],
             brewOwnership: BrewOwnership(paths: ownershipPaths.merging(javaAttribution.managedPaths) { direct, _ in direct }, tracked: brewTrackedTokens.union(brewOutdatedCasks), available: brewAvailable, unconfirmedCandidates: packageOwnership.unconfirmedCandidates),
             uncheckedSources: uncheckedSources
-        )
+        ), applications: allInstallations)
+    }
+
+    private func applyingMicrosoftEvidence(to report: ManualScanReport, applications: [ApplicationInfo]) async -> ManualScanReport {
+        guard applications.contains(where: { MicrosoftAutoUpdateSupport.applicationID(for: $0) != nil }) else { return report }
+        return (await microsoftAutoUpdateClient.list()).applying(to: report, applications: applications)
     }
 
     private struct BrewOwnership {
@@ -536,9 +540,8 @@ public struct ManualUpdateScanner: Sendable {
     /// an older one, leaves brew's Caskroom claiming a version the disk never reached. Brew then
     /// compares its own receipt against the cask, finds them equal, and reports nothing; because
     /// brew tracks a version, ``BrewManagement/isAuthoritative(caskToken:isManagedByBrew:installedCaskTokens:brewTrackedTokens:)``
-    /// makes it the sole source of truth and `scan()` runs neither the cask-version check nor any
-    /// vendor checker on that app. Nothing compares the bundle against the cask, so the update is
-    /// invisible everywhere.
+    /// suppresses the redundant cask-version check. The separate vendor checks may report the
+    /// installed bundle as current too; this comparison retains the tracked package evidence.
     ///
     /// Discord is the reproducer: brew records `0.0.403`, `/Applications/Discord.app` is
     /// `0.0.402`, and Discord's own Squirrel feed answers 204 for `0.0.402` — so even running the

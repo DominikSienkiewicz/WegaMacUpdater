@@ -163,7 +163,7 @@ final class MenuBarAgent: ObservableObject {
         // F3 — upgrade the safe, opted-in subset before announcing anything, so the badge and
         // the notification describe the world *after* the background work, not before it.
         let upgraded = await BackgroundUpdater.shared.runIfEligible(
-            candidates: current.brew?.casks.map(\.name) ?? [],
+            candidates: current.backgroundCaskCandidates,
             policies: policies
         )
         if !upgraded.isEmpty {

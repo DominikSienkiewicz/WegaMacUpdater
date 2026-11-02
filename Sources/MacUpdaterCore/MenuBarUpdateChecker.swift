@@ -52,6 +52,14 @@ public struct MenuBarScanResult: Equatable, Sendable {
         self.sources = sources
     }
 
+    /// Cask offers represented by the scan's update actions, before background opt-in checks.
+    public var backgroundCaskCandidates: [String] {
+        let reconciled = UpdatePlanner.reconciledUpdates(
+            items: UpdatePlanner.outdatedItems(brew: brew, mas: [], npm: []), manual: manualApps
+        )
+        return reconciled.items.filter { $0.kind == .cask }.map(\.name)
+    }
+
     /// UX-11g — the display names of everything this check found outdated, so the menu-bar
     /// dropdown can say *which* apps have updates instead of only *how many*.
     ///
@@ -61,11 +69,11 @@ public struct MenuBarScanResult: Equatable, Sendable {
     /// checker produced this list therefore has exactly `total` entries, so the names can
     /// never disagree with the count shown beside them.
     public func outdatedDisplayNames(policies: [String: UpdatePolicy] = [:]) -> [String] {
-        let items = UpdatePlanner.applyPolicies(
-            UpdatePlanner.outdatedItems(brew: brew, mas: mas, npm: npm),
-            policies: policies
+        let reconciled = UpdatePlanner.reconciledUpdates(
+            items: UpdatePlanner.outdatedItems(brew: brew, mas: mas, npm: npm), manual: manualApps
         )
-        let manual = UpdatePlanner.applyPolicies(manualApps, policies: policies)
+        let items = UpdatePlanner.applyPolicies(reconciled.items, policies: policies)
+        let manual = UpdatePlanner.applyPolicies(reconciled.manual, policies: policies)
         return items.map(\.name) + manual.map(\.name)
     }
 
@@ -78,8 +86,8 @@ public struct MenuBarScanResult: Equatable, Sendable {
     /// stays resident, that is a second fan-out of processes and network probes per round, for
     /// information already in hand.
     ///
-    /// Only the cask list is touched: upgrading a cask cannot change what `mas`, `npm` or the
-    /// vendor checkers would report, so re-deriving those would only reproduce what is here.
+    /// Removes the completed casks and vendor offers whose comparable targets they reached.
+    /// Newer vendor releases, unknown version relationships and shared packages remain visible.
     public func removingUpgradedCasks(
         _ upgraded: [String],
         policies: [String: UpdatePolicy] = [:]
@@ -92,11 +100,17 @@ public struct MenuBarScanResult: Equatable, Sendable {
             formulae: brew.formulae,
             casks: brew.casks.filter { !done.contains($0.name) }
         )
-        let items = UpdatePlanner.applyPolicies(
-            UpdatePlanner.outdatedItems(brew: trimmed.brew, mas: mas, npm: npm),
-            policies: policies
+        trimmed.manualApps.removeAll { vendor in
+            guard vendor.origin == .brew, let token = vendor.caskPolicyToken, done.contains(token),
+                  let completed = brew.casks.first(where: { $0.name == token }) else { return false }
+            let order = UpdatePlanner.vendorVersionOrder(vendor, caskVersion: completed.currentVersion)
+            return order == .orderedAscending || order == .orderedSame
+        }
+        let reconciled = UpdatePlanner.reconciledUpdates(
+            items: UpdatePlanner.outdatedItems(brew: trimmed.brew, mas: mas, npm: npm), manual: trimmed.manualApps
         )
-        let visibleManual = UpdatePlanner.applyPolicies(manualApps, policies: policies)
+        let items = UpdatePlanner.applyPolicies(reconciled.items, policies: policies)
+        let visibleManual = UpdatePlanner.applyPolicies(reconciled.manual, policies: policies)
         trimmed.total = items.count + visibleManual.count
         return trimmed
     }
@@ -110,9 +124,14 @@ public protocol BrewOutdatedProviding: Sendable {
     func outdatedGreedy() async throws -> BrewOutdated
 }
 
-/// The single mas call the menu-bar check needs.
+/// App Store outdated results and the exact installed copies represented by them.
 public protocol MasOutdatedProviding: Sendable {
     func outdated() async throws -> [MasOutdatedApp]
+    func installationEvidence(for installations: [InstallationCheck]) async throws -> [MasInstallationEvidence]
+}
+
+public extension MasOutdatedProviding {
+    func installationEvidence(for installations: [InstallationCheck]) async throws -> [MasInstallationEvidence] { [] }
 }
 
 /// The single npm call the menu-bar check needs.
@@ -221,16 +240,24 @@ public struct MenuBarUpdateChecker: Sendable {
             WegaLog.error(.network, "Skan z paska menu — npm outdated: \(error.localizedDescription)")
         }
 
-        let items = UpdatePlanner.applyPolicies(
-            UpdatePlanner.outdatedItems(brew: brew, mas: mas, npm: npm),
-            policies: policies
-        )
-
         let brewOutdatedCasks = Set(brew?.casks.map(\.name) ?? [])
         let manual = await scanner.scanReport(brewOutdatedCasks: brewOutdatedCasks)
         failed += manual.failedChecks
         reports.manual = manual.sourceReport
-        let visibleManual = UpdatePlanner.applyPolicies(manual.apps, policies: policies)
+        let reconciled = UpdatePlanner.reconciledUpdates(
+            items: UpdatePlanner.outdatedItems(brew: brew, mas: mas, npm: npm), manual: manual.apps
+        )
+        let items = UpdatePlanner.applyPolicies(reconciled.items, policies: policies)
+        let visibleManual = UpdatePlanner.applyPolicies(reconciled.manual, policies: policies)
+        var masEvidence: [MasInstallationEvidence] = []
+        if reports.mas?.outcome == .succeeded {
+            do { masEvidence = try await masService.installationEvidence(for: manual.installations) }
+            catch {
+                failed += 1
+                reports.mas = ScanSourceReport(outcome: .failed("App Store"))
+                WegaLog.error(.app, "Skan z paska menu — mas list: \(error.localizedDescription)")
+            }
+        }
 
         return MenuBarScanResult(
             brew: brew,
@@ -240,7 +267,8 @@ public struct MenuBarUpdateChecker: Sendable {
             failedChecks: failed,
             scannedAt: Date(),
             total: items.count + visibleManual.count,
-            installationChecks: InstallationCheck.resolvingManagers(manual.installations, reports: reports, brew: brew),
+            installationChecks: InstallationCheck.resolvingManagers(manual.installations, reports: reports, brew: brew,
+                                                                    mas: mas, masEvidence: masEvidence),
             sources: reports
         )
     }

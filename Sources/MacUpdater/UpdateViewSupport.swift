@@ -590,6 +590,11 @@ struct ManualUpdateActionView: View {
                 trustPublisherControl
                 if DockerDesktopUpdatePolicy.isDocker(item) {
                     DockerDesktopUpdateActions(item: item, busyToken: busyToken, onInstall: onInstall)
+                } else if let profile = ServiceVendorUpdatePolicy.profile(for: item) {
+                    ServiceVendorUpdateControls(profile: profile, appURL: item.path) {
+                        scan.vendorOpened(item, succeeded: $0)
+                    }
+                    .frame(maxWidth: 340, alignment: .leading)
                 } else {
                     actionControl
                 }
@@ -726,6 +731,10 @@ struct ManualUpdateActionView: View {
                 Label(tr("Otwórz Creative Cloud"), systemImage: "arrow.down.circle")
             }
             .controlSize(.small)
+        case .microsoftAutoUpdate:
+            MicrosoftAutoUpdateControls(app: ApplicationInfo(path: item.path, name: item.name,
+                bundleIdentifier: item.bundleIdentifier, version: item.installedVersion, installDate: nil, updateDate: nil,
+                isManagedByBrew: item.origin == .brew, isManagedByMas: item.origin == .appStore), item: item)
         case .openSelfUpdate:
             // The row leads to the in-app installer in Settings — signature verification,
             // the headless helper install and the restart all live there. Never a browser.

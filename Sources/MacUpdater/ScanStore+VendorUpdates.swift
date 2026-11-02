@@ -83,6 +83,10 @@ extension ScanStore {
 
     private func applyVendorResult(_ result: VendorUpdateCompletionResult, for item: ManualOutdatedApp) {
         let checkedAt = Date()
+        let serviceOwner = serviceManagedUpdates.first {
+            $0.source == item.source && $0.bundleIdentifier == item.bundleIdentifier
+                && InstallationIdentity(path: $0.path) == InstallationIdentity(path: item.path)
+        }?.caskPolicyToken
         let check = vendorInstallationCheck(result, item: item, at: checkedAt)
         if let check {
             installationChecks.removeAll { InstallationIdentity(path: $0.path) == InstallationIdentity(path: item.path) }
@@ -91,9 +95,10 @@ extension ScanStore {
         var remaining: ManualOutdatedApp? = item
         switch result.outcome {
         case .confirmed:
-            if case .cask(let token) = item.source, DockerDesktopUpdatePolicy.isDocker(token: token),
-               caskIconPaths[token].map({ InstallationIdentity(path: $0) }) == InstallationIdentity(path: item.path) {
-                brewOutdated?.casks.removeAll { $0.name == token }
+            if case .cask(let token) = item.source {
+                let dockerOwner = DockerDesktopUpdatePolicy.isDocker(token: token)
+                    && caskIconPaths[token].map({ InstallationIdentity(path: $0) }) == InstallationIdentity(path: item.path)
+                if dockerOwner || serviceOwner == token { brewOutdated?.casks.removeAll { $0.name == token } }
             }
             manualOutdated.removeAll { $0.path == item.path && $0.bundleIdentifier == item.bundleIdentifier }
             vendorHandoffs.removeAll { $0.path == item.path }

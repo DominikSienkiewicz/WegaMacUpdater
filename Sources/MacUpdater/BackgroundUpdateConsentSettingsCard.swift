@@ -218,6 +218,8 @@ struct BackgroundUpdateConsentSettingsCard: View {
         )
       case .dockerRequiresSupervision:
         return tr("Docker Desktop wymaga aktualizacji pod nadzorem. Użyj aktualizatora producenta lub jawnie wybierz Homebrew.")
+      case .vendorManagedService:
+        return tr("Tę usługę aktualizuje producent lub administrator. Otwórz aplikację i użyj dostępnej tam ścieżki aktualizacji.")
       case .noChecksum:
         return tr(
           "Pobranie nie ma konkretnej sumy SHA-256, więc Homebrew nie zweryfikuje pliku.")
