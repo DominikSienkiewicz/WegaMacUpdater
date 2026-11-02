@@ -37,7 +37,7 @@ public enum MigrationPlanner {
     /// Apps that have a Homebrew cask equivalent and haven't been migrated yet.
     public static func matchable(candidates: [ApplicationInfo], migrated: Set<String>) -> [ApplicationInfo] {
         candidates.filter { app in
-            guard let token = app.caskToken else { return false }
+            guard let token = app.caskToken, ThunderbirdInstallationChannel.permitsCask(token, for: app) else { return false }
             return !migrated.contains(token)
         }
     }

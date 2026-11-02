@@ -18,7 +18,7 @@ public extension ManualOutdatedApp.UpdateSource {
         case .github:     return .github
         case .sparkle:    return .sparkle
         case .synology:   return .synology
-        case .antigravity, .parallels, .googleDrive, .chatgpt, .postman, .discord, .signal, .chrome, .obsidian, .microsoftAutoUpdate, .adobe, .wega:
+        case .antigravity, .parallels, .googleDrive, .chatgpt, .postman, .discord, .signal, .chrome, .thunderbird, .obsidian, .microsoftAutoUpdate, .adobe, .wega:
             return .vendorDirect
         }
     }

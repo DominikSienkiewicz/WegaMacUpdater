@@ -79,7 +79,7 @@ public struct ApplicationScanner {
             caskMatchProvenance = nil
         }
 
-        return ApplicationInfo(
+        let app = ApplicationInfo(
             path: appURL,
             name: appName,
             bundleIdentifier: bundleIdentifier,
@@ -92,6 +92,7 @@ public struct ApplicationScanner {
             caskMatchProvenance: caskMatchProvenance,
             isManagedByMas: managedByMas
         )
+        return ThunderbirdInstallationChannel.applyingCaskAdmission(to: app)
     }
 
     private func hasMasReceipt(at appURL: URL) -> Bool {

@@ -72,6 +72,8 @@ public enum VersionScheme: String, Codable, Sendable {
     /// A complete dotted numeric build identifier. Every component participates;
     /// none is discarded as optional marketing-version metadata.
     case numericBuild
+    /// Mozilla's numeric releases, ESR suffix and numerically ordered `bN` beta sequence.
+    case mozilla
 }
 
 /// A version decomposed for comparison: the numeric `primary` core, an optional
@@ -88,6 +90,9 @@ private func parseVersion(_ v: String, scheme: VersionScheme) -> ParsedVersion? 
     switch scheme {
     case .semver:        return parseSemver(v)
     case .buildNumbered: return parseBuildNumbered(v)
+    case .mozilla:
+        guard let parsed = MozillaReleaseVersion(v) else { return nil }
+        return ParsedVersion(primary: parsed.components, prerelease: parsed.beta.map { ["beta", String($0)] } ?? [], build: [])
     case .numericBuild:
         let components = v.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ".", omittingEmptySubsequences: false)
         guard !components.isEmpty, components.allSatisfy({ !$0.isEmpty && $0.utf8.allSatisfy { (48...57).contains($0) } }) else { return nil }

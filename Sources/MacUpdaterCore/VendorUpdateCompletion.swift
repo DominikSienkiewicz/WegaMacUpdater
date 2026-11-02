@@ -150,6 +150,9 @@ enum VendorUpdateSourceCheck {
         case .discord: return await DiscordUpdateChecker().check(app: app)
         case .signal: return await SignalUpdateChecker().check(app: app)
         case .chrome: return await ChromeUpdateChecker().check(app: app)
+        case .thunderbird(let channel):
+            guard ThunderbirdInstallationChannel.read(at: app.path) == channel else { return .unavailable }
+            return await ThunderbirdUpdateChecker().check(app: app)
         case .obsidian: return await ObsidianUpdateChecker().check(app: app)
         case .microsoftAutoUpdate(let applicationID):
             guard MicrosoftAutoUpdateSupport.applicationID(for: app) == applicationID else { return .notApplicable }

@@ -169,13 +169,15 @@ public struct ManualUpdateScanner: Sendable {
         latestCaskVersions: [String: String]
     ) -> (@Sendable () async -> ManualCheckObservation)? {
         guard ServiceVendorUpdateProfile.profile(for: app) == nil, let token = app.caskToken else { return nil }
+        guard ThunderbirdInstallationChannel.permitsCask(token, for: app) else { return nil }
         return Self.observed("Cask", app, applicable: true) {
             guard let latest = latestCaskVersions[token] else { return .unavailable }
             let reference = brewTrackedVersion ?? app.version
             guard let installed = reference, !installed.isEmpty else { return .notApplicable }
-            if versionsEqual(latest, installed) { return .upToDate }
-            guard compareVersions(installed, latest, scheme: .buildNumbered) != .unknown else { return .failed }
-            guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
+            let scheme: VersionScheme = ThunderbirdUpdateChecker.recognizes(app) ? .mozilla : .buildNumbered
+            if scheme == .buildNumbered, versionsEqual(latest, installed) { return .upToDate }
+            guard compareVersions(installed, latest, scheme: scheme) != .unknown else { return .failed }
+            guard isUpgrade(installed: installed, latest: latest, scheme: scheme) else { return .upToDate }
             return .outdated(ManualOutdatedApp(
                 name: app.name, path: app.path,
                 installedVersion: app.version ?? installed,
@@ -183,6 +185,13 @@ public struct ManualUpdateScanner: Sendable {
                 source: .cask(token: token)
             ))
         }
+    }
+
+    private func thunderbirdCheck(for app: ApplicationInfo) -> (@Sendable () async -> ManualCheckObservation)? {
+        guard ThunderbirdUpdateChecker.recognizes(app) else { return nil }
+        let checker = ThunderbirdUpdateChecker(client: vendorClient)
+        let label = ThunderbirdInstallationChannel.read(at: app.path).map { "Thunderbird \($0.label)" } ?? "Thunderbird"
+        return Self.observed(label, app, applicable: true) { await checker.check(app: app) }
     }
 
     /// Every discovered JDK remains reportable. Only unambiguous receipt claims can borrow
@@ -355,6 +364,7 @@ public struct ManualUpdateScanner: Sendable {
             work.append(Self.observed("Discord", app, checker: discordChecker))
             work.append(Self.observed("Signal", app, checker: signalChecker))
             work.append(Self.observed("Chrome", app, checker: chromeChecker))
+            if let check = thunderbirdCheck(for: app) { work.append(check) }
             // Obsidian self-updates its ASAR package independently of its installer.
             // Run this even when Homebrew owns the current cask: brew may correctly report
             // the installer as current while an insider package update is still available.
@@ -424,19 +434,24 @@ public struct ManualUpdateScanner: Sendable {
         return (await microsoftAutoUpdateClient.list()).applying(to: report, applications: applications)
     }
 
-    private struct BrewOwnership {
+    struct BrewOwnership {
         let paths: [String: URL]
         let tracked: Set<String>
         let available: Bool
         let unconfirmedCandidates: [InstallationIdentity: String]
     }
 
-    private static func makeReport(
+    static func makeReport(
         collected: [ManualOutdatedApp], observations: [ManualCheckObservation], installations: [ApplicationInfo],
         brewOwnership: BrewOwnership, uncheckedSources: [String]
     ) -> ManualScanReport {
-        let apps = InstallationInventory.deduplicated(installations)
-        let policyPaths = brewOwnership.paths.filter { brewOwnership.tracked.contains($0.key) }
+        let apps = InstallationInventory.deduplicated(installations).map(ThunderbirdInstallationChannel.applyingCaskAdmission(to:))
+        let appsByInstallation = Dictionary(uniqueKeysWithValues: apps.map { ($0.installation, $0) })
+        let policyPaths = brewOwnership.paths.filter { token, path in
+            guard brewOwnership.tracked.contains(token) else { return false }
+            guard let app = appsByInstallation[InstallationIdentity(path: path)] else { return true }
+            return ThunderbirdInstallationChannel.permitsCask(token, for: app)
+        }
         let policyTokens = UpdatePlanner.resolvedCaskPolicyTokens(appPaths: policyPaths)
         let rows = UpdatePlanner.attachingCaskPolicies(
             to: UpdatePlanner.dedupedByPriority(collected), appPaths: policyPaths
@@ -450,7 +465,8 @@ public struct ManualUpdateScanner: Sendable {
             if let token = policyTokens[app.installation] {
                 record.caskToken = token
                 record.sources.append(.init(source: "Homebrew", outcome: .notChecked))
-            } else if let token = brewOwnership.unconfirmedCandidates[app.installation] {
+            } else if let token = brewOwnership.unconfirmedCandidates[app.installation],
+                      ThunderbirdInstallationChannel.permitsCask(token, for: app) {
                 record.unconfirmedCaskToken = token
                 record.sources.append(.init(source: "Homebrew", outcome: .notChecked))
             } else if app.isManagedByBrew || (!brewOwnership.available && app.caskToken != nil && record.sources.isEmpty) {
@@ -477,11 +493,12 @@ public struct ManualUpdateScanner: Sendable {
     static func routeDistinctInstallations(
         _ apps: [ApplicationInfo], caskAppPaths: [String: URL], brewOutdatedCasks: Set<String>
     ) -> [ApplicationInfo] {
+        let admitted = apps.map(ThunderbirdInstallationChannel.applyingCaskAdmission(to:))
         var copyCounts: [String: Int] = [:]
-        for app in apps {
+        for app in admitted {
             if let token = app.caskToken { copyCounts[token, default: 0] += 1 }
         }
-        return apps.compactMap { app in
+        return admitted.compactMap { app in
             var routed = app
             if let token = app.caskToken, copyCounts[token, default: 0] > 1,
                caskAppPaths[token].map({ InstallationIdentity(path: $0) }) != app.installation {
@@ -517,7 +534,7 @@ public struct ManualUpdateScanner: Sendable {
             .subtracting(alreadyListedTokens)
             .sorted()
             .compactMap { token in
-                guard let app = appByToken[token] else { return nil }
+                guard let app = appByToken[token], ThunderbirdInstallationChannel.permitsCask(token, for: app) else { return nil }
                 return ManualOutdatedApp(
                     name: app.name,
                     path: app.path,
@@ -592,6 +609,7 @@ public struct ManualUpdateScanner: Sendable {
             .sorted()
             .compactMap { token in
                 guard let app = appByToken[token],
+                      ThunderbirdInstallationChannel.permitsCask(token, for: app),
                       let recorded = brewCaskVersions[token],
                       let onDisk = app.version,
                       !isAlreadyAtRecordedVersion(app: app, recorded: recorded),
