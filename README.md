@@ -71,8 +71,8 @@ absent and the other four keep working. Full list in [Building and testing](docs
 
 ## Testing
 
-Tests cover Core policies and app orchestration. Tap-remedy and foreground-diagnostics
-checks run in sequential XCTest suites, separately from Swift Testing migration checks
+Tests cover Core policies and app orchestration. Tap-remedy, foreground-diagnostics and
+Docker mutation checks run in sequential XCTest suites, separately from Swift Testing migration checks
 that share the update mutex. Source guards also check the protected reinstall call chain
 and the smoke-test opt-out before launch. Commands and quality gates are documented in
 [Building and testing](docs/building.md#build-and-test).

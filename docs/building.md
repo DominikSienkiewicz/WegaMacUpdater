@@ -36,7 +36,8 @@ exemptions. They do not stop, start, update or reset an installed Docker Desktop
 swift test --jobs 1 --no-parallel --filter 'DockerDesktop|DockerRollbackScope|DockerSmoke|DockerBatchExecution|DockerManualRestart|DockerManualCompletion'
 ```
 
-`TapTrustRemedyRunTests` and `UpdateStageDiagnosticsForegroundTests` use XCTest, like the
+`TapTrustRemedyRunTests`, `UpdateStageDiagnosticsForegroundTests` and
+`DockerDesktopMutationGateTests` use XCTest, like the
 other ScanStore runtime tests. They run sequentially and separately from Swift Testing's
 `MigrationStoreCoverageTests`, which also uses the process-wide update mutex. A Swift
 Testing suite's `.serialized` trait only serializes its own tests; it cannot prevent a
