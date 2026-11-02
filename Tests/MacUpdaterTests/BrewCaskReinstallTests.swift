@@ -16,11 +16,19 @@ struct BrewCaskReinstallTests {
     @Test func reinstallRunsThroughTheProtectedAdoptionFlow() throws {
         let text = try ScanStoreSources.everything()
         let entry = try #require(text.range(of: "func reinstallManual(token: String) async"))
-        let body = text[entry.lowerBound...].prefix(400)
+        let traced = try #require(text.range(of: "private func reinstallManualTraced(token: String) async"))
+        let coordinated = try #require(text.range(of: "private func installManualCoordinated(token: String, installArgs: [String]) async"))
+        try #require(entry.lowerBound < traced.lowerBound && traced.lowerBound < coordinated.lowerBound)
+        let entryBody = text[entry.lowerBound..<traced.lowerBound]
+        let tracedBody = text[traced.lowerBound..<coordinated.lowerBound]
 
-        #expect(body.contains("performWrite(.manualInstall)"))
-        #expect(body.contains("installManualCoordinated(token: token, installArgs: BrewService.reinstallCaskArguments(token: token))"),
-                "the repair must reuse the snapshot → verify → rollback transaction, not call brew directly")
+        #expect(entryBody.contains("await reinstallManualTraced(token: token)"))
+        let writeGate = try #require(tracedBody.range(of: "performWrite(.manualInstall)"))
+        let transaction = try #require(tracedBody.range(of:
+            "installManualCoordinated(token: token, installArgs: BrewService.reinstallCaskArguments(token: token))"
+        ))
+        #expect(writeGate.lowerBound < transaction.lowerBound,
+                "the repair must enter the write gate before reusing the snapshot → verify → rollback transaction")
     }
 
     @Test func notUpgradedBannerOffersTheReinstallUnlessItWasTheReinstall() throws {
