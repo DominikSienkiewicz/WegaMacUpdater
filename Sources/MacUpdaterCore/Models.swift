@@ -18,15 +18,18 @@ public struct BrewCask: Codable, Equatable, Sendable {
     /// ``CaskPackageReceiptIndex``). Empty for the overwhelming majority of casks, which
     /// install an `.app` by copying it and therefore leave no receipt.
     public var pkgutilIdentifiers: [String]
+    /// Literal application paths removed by `uninstall.delete`, used only as ownership evidence.
+    public var uninstallAppPaths: [String]
 
-    public init(token: String, name: [String], pkgutilIdentifiers: [String] = []) {
+    public init(token: String, name: [String], pkgutilIdentifiers: [String] = [], uninstallAppPaths: [String] = []) {
         self.token = token
         self.name = name
         self.pkgutilIdentifiers = pkgutilIdentifiers
+        self.uninstallAppPaths = uninstallAppPaths
     }
 
     private enum CodingKeys: String, CodingKey {
-        case token, name, pkgutilIdentifiers, artifacts
+        case token, name, pkgutilIdentifiers, uninstallAppPaths, artifacts
     }
 
     /// Decodes both shapes this type is read from: Homebrew's published cask database, where
@@ -44,6 +47,12 @@ public struct BrewCask: Codable, Equatable, Sendable {
             let artifacts = try container.decodeIfPresent([JSONValue].self, forKey: .artifacts) ?? []
             pkgutilIdentifiers = CaskArtifacts.uninstallPackageIdentifiers(in: artifacts)
         }
+        if let cached = try container.decodeIfPresent([String].self, forKey: .uninstallAppPaths) {
+            uninstallAppPaths = cached
+        } else {
+            let artifacts = try container.decodeIfPresent([JSONValue].self, forKey: .artifacts) ?? []
+            uninstallAppPaths = CaskArtifacts.uninstallAppPaths(in: artifacts)
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -51,6 +60,7 @@ public struct BrewCask: Codable, Equatable, Sendable {
         try container.encode(token, forKey: .token)
         try container.encode(name, forKey: .name)
         try container.encode(pkgutilIdentifiers, forKey: .pkgutilIdentifiers)
+        try container.encode(uninstallAppPaths, forKey: .uninstallAppPaths)
     }
 }
 

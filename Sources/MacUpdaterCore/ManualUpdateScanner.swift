@@ -243,11 +243,9 @@ public struct ManualUpdateScanner: Sendable {
             try await brewService.caskInstallationInfo(tokens: Array(installedCasks))
         }
         let caskPaths = CaskAppPathResolver().appPaths(from: installInfo)
-        let appProducingTokens: Set<String> = {
-            let producers = Set(installInfo.filter { !$0.appArtifacts.isEmpty }.map(\.token))
-            // If brew info failed for everything (offline?), don't accidentally hide all matches.
-            return producers.isEmpty ? installedCasks : producers
-        }()
+        let directAppTokens = Set(installInfo.filter { !$0.appArtifacts.isEmpty }.map(\.token))
+        // If brew info failed for everything (offline?), don't accidentally hide all matches.
+        let appProducingTokens = directAppTokens.isEmpty ? installedCasks : directAppTokens
 
         let scanner = ApplicationScanner()
         var seen = Set<InstallationIdentity>()
@@ -261,9 +259,12 @@ public struct ManualUpdateScanner: Sendable {
                 if seen.insert(app.installation).inserted { appsToCheck.append(app) }
             }
         }
-        let allInstallations = Self.routeDistinctInstallations(appsToCheck, caskAppPaths: caskPaths, brewOutdatedCasks: [])
+        let packageOwnership = await PackageCaskAttribution.resolve(installations: appsToCheck,
+            casks: casks.filter { !directAppTokens.contains($0.token) }, installedTokens: installedCasks, receiptLocator: packageReceiptLocator)
+        let ownershipPaths = caskPaths.merging(packageOwnership.paths) { direct, _ in direct }
+        let allInstallations = Self.routeDistinctInstallations(packageOwnership.installations, caskAppPaths: ownershipPaths, brewOutdatedCasks: [])
         appsToCheck = Self.routeDistinctInstallations(
-            allInstallations.filter { !$0.isManagedByMas }, caskAppPaths: caskPaths, brewOutdatedCasks: brewOutdatedCasks
+            allInstallations.filter { !$0.isManagedByMas }, caskAppPaths: ownershipPaths, brewOutdatedCasks: brewOutdatedCasks
         )
 
         // JDKs live outside every Applications root and are not `.app` bundles, so the scan
@@ -305,8 +306,8 @@ public struct ManualUpdateScanner: Sendable {
         // remote update APIs; the cap keeps the fan-out polite without serialising it.
         // Brew decides for brew-managed apps: `brew outdated` is their single source of
         // truth, so we DON'T run the cask-version check or the cask-lag special checkers
-        // on them. Managed status uses the FULL installed-cask set (matched by name or
-        // resolved token), so pkg-artifact casks like `google-drive` count too.
+        // on them. Package-installed applications acquire managed status only after their
+        // exact scanned path resolves through installer receipts or a declared uninstall path.
         // Brew is the source of truth for an app only when it actually tracks an
         // installed version for the cask. A cask listed by `brew list --cask` but with
         // no version in `brew info --installed` (empty Caskroom metadata — e.g. Claude,
@@ -424,7 +425,7 @@ public struct ManualUpdateScanner: Sendable {
         ))
         return Self.makeReport(
             collected: collected, observations: observations, installations: allInstallations + javaRuntimes + [selfApp],
-            brewOwnership: BrewOwnership(paths: caskPaths, tracked: brewTrackedTokens.union(brewOutdatedCasks), available: brewAvailable),
+            brewOwnership: BrewOwnership(paths: ownershipPaths, tracked: brewTrackedTokens.union(brewOutdatedCasks), available: brewAvailable),
             uncheckedSources: uncheckedSources
         )
     }
