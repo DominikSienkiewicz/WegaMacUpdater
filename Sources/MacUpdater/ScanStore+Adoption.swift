@@ -184,8 +184,9 @@ extension ScanStore {
         // which would be a false alarm about an install that in fact just succeeded. That
         // false alarm is the reason the gate above exists; skipping the verification, rather
         // than skipping the install, is what removes it.
+        var installedAppURL: URL? = target.path
         if let preparation {
-            let installedAppURL = await CaskReplacementSafety.resolveInstalledAppURL(
+            installedAppURL = await CaskReplacementSafety.resolveInstalledAppURL(
                 preparation,
                 brewService: model.brewService
             )
@@ -206,15 +207,7 @@ extension ScanStore {
             emitWegaState(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
             WegaLog.error(.homebrew, "Instalacja \(token): \(installError.localizedDescription)")
         } else if exitCode == 0 {
-            manualOutdated.removeAll {
-                if case .cask(let t) = $0.source { return t == token }
-                return false
-            }
-            showBanner(BannerData(variant: .success, title: trf("Zaktualizowano %@", "\(token)"),
-                                  message: tr("Teraz zarządzany przez Homebrew.")))
-            emitActivitySignal(.success)
-            emitWegaState(WegaState(pose: .happy, line: trf("%@ zaktualizowany i pod opieką Brew.", "\(token)")))
-            WegaLog.info(.homebrew, "Zainstalowano \(token) (brew cask)")
+            reportManualInstallSuccess(token: token, appURL: installedAppURL ?? target.path)
         } else {
             showBanner(BannerData(variant: .danger, title: trf("Błąd instalacji %@", "\(token)"),
                                   message: tr("Sprawdź logi poniżej.")))
