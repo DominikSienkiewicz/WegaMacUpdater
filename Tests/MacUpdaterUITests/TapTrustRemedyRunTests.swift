@@ -100,4 +100,34 @@ final class TapTrustRemedyRunTests: XCTestCase {
         XCTAssertEqual(TapTrustPlanner.pending([untap], in: harness.store.brewLog), [untap])
         XCTAssertEqual(harness.store.banner?.title, tr("Zaufano wskazanej definicji pakietu"))
     }
+
+    func testGivenTwoUnusedTapsWhenTheSecondFailsThenRetryDoesNotIncludeTheRemovedTap() async {
+        let runner = ScanStoreRuntimeProcessRunner(
+            run: { _ in ProcessResult(exitCode: 0, stdout: "", stderr: "") },
+            events: { request in
+                if request.arguments.contains("steipete/tap") {
+                    return .success([
+                        .stderr("from these taps because tap trust is required.\nUntap them with:\n  brew untap steipete/tap\n"),
+                        .stderr("Error: Refusing to load cask steipete/tap/codexbar from untrusted tap steipete/tap.\n"),
+                        .finished(ProcessResult(exitCode: 1, stdout: "", stderr: "")),
+                    ])
+                }
+                return .success([.finished(ProcessResult(exitCode: 0, stdout: "", stderr: ""))])
+            }
+        )
+        let harness = makeScanStoreRuntimeHarness(runner: runner)
+        harness.store.brewLog = Self.warning
+        let remedies = TapTrustPlanner.remedies(forUntrustedTaps: ["manaflow-ai/cmux", "steipete/tap"], installed: [])
+
+        for remedy in remedies {
+            await harness.store.runTapTrustRemedy(remedy)
+        }
+
+        XCTAssertEqual(runner.requests.map(\.arguments), [
+            ["untap", "--", "manaflow-ai/cmux"], ["untap", "--", "steipete/tap"],
+        ])
+        XCTAssertEqual(TapTrustPlanner.pending(remedies, in: harness.store.brewLog).map(\.arguments), [
+            ["trust", "--cask", "--", "steipete/tap/codexbar"], ["untap", "--", "steipete/tap"],
+        ])
+    }
 }

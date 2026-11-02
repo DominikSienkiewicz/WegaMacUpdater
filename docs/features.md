@@ -196,7 +196,8 @@ no commands to copy into a terminal:
   `--formula`) for exactly those installed items. Whole-tap trust, which also covers
   everything the tap publishes in the future, is never offered.
 - **A tap nothing installed came from** is unused: *"Odepnij nieużywane tapy"* runs
-  `brew untap -- <taps>`, Homebrew's own first suggestion.
+  `brew untap -- <tap>`, Homebrew's own first suggestion. Each tap has its own action,
+  so a failure on another tap never retries a removal that already succeeded.
 - **"Came from" is read from Homebrew's install receipts** (`source.tap` in
   `Caskroom/<token>/.metadata/INSTALL_RECEIPT.json` and
   `Cellar/<name>/<version>/INSTALL_RECEIPT.json`), never from a token that happens to share

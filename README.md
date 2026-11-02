@@ -97,7 +97,8 @@ If Homebrew refuses to load a package definition while untapping, the brew log o
 trust for that exact cask or formula, with its command and persistent effect shown before
 the click. Retrying untap is a separate action. Failed remedies remain available; only
 a successful command dismisses its action. Wega never automatically trusts a whole tap
-or forces removal to bypass this error.
+or forces removal to bypass this error. Unused taps are removed through separate actions,
+so retrying a failed removal does not include a tap that was already removed.
 
 Update operations keep local JSONL traces with a run identifier, stage events, subprocess
 output and exits, HTTP attempts, and observed vendor-check results. **Export diagnostics**

@@ -41,13 +41,18 @@ public enum TapTrustWarning {
             if let refusal = loadRefusal(in: line), !taps.contains(refusal.tap) {
                 taps.append(refusal.tap)
             }
-            guard hasWarning, let command = remedyCommands.first(where: line.hasPrefix) else { continue }
-            for name in line.dropFirst(command.count).split(separator: " ").map(String.init)
-            where isTapName(name) && !taps.contains(name) {
+            guard hasWarning else { continue }
+            for name in remedyTaps(in: line) where !taps.contains(name) {
                 taps.append(name)
             }
         }
         return taps
+    }
+
+    static func remedyTaps(in line: String) -> [String] {
+        let text = unprefixed(line)
+        guard let command = remedyCommands.first(where: text.hasPrefix) else { return [] }
+        return text.dropFirst(command.count).split(separator: " ").map(String.init).filter(isTapName)
     }
 
     static func loadRefusal(in line: String) -> LoadRefusal? {

@@ -17,7 +17,8 @@ struct TapTrustRemedyTests {
         let remedies = TapTrustPlanner.remedies(forUntrustedTaps: Self.listed, installed: installed)
 
         #expect(remedies == [
-            TapTrustRemedy(kind: .untapUnused, arguments: ["untap", "--", "manaflow-ai/cmux", "steipete/tap"]),
+            TapTrustRemedy(kind: .untapUnused, arguments: ["untap", "--", "manaflow-ai/cmux"]),
+            TapTrustRemedy(kind: .untapUnused, arguments: ["untap", "--", "steipete/tap"]),
         ])
     }
 

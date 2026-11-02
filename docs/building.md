@@ -17,8 +17,9 @@ GUI apps do not inherit an interactive shell environment. Wega resolves all tool
 ## Build and test
 
 Tap-trust recovery checks use captured refusal messages and a fake process runner. They
-cover failed/unfinished untap actions, scoped trust, malformed or unrelated output and the
-separate clicks required for trust and retry. They do not change real Homebrew trust or taps:
+cover failed/unfinished untap actions, independent tap removals, scoped trust, malformed or
+unrelated output and the separate clicks required for trust and retry. They do not change
+real Homebrew trust or taps:
 
 ```bash
 swift test --jobs 1 --no-parallel --filter 'TapTrustRecoveryTests|TapTrustRemedyTests|TapTrustRemedyRunTests'

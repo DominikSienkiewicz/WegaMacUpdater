@@ -61,8 +61,8 @@ public enum TapTrustPlanner {
             remedies.append(TapTrustRemedy(kind: .trustInstalledFormulae, arguments: BrewService.trustFormulaArguments(names: formulae)))
         }
         let unused = taps.filter { !usedTaps.contains($0.lowercased()) }
-        if !unused.isEmpty {
-            remedies.append(TapTrustRemedy(kind: .untapUnused, arguments: BrewService.untapArguments(taps: unused)))
+        for tap in unused {
+            remedies.append(TapTrustRemedy(kind: .untapUnused, arguments: BrewService.untapArguments(taps: [tap])))
         }
         return remedies
     }
@@ -73,16 +73,24 @@ public enum TapTrustPlanner {
         var succeeded: Set<String> = []
         var blocked: [TapTrustRemedy] = []
         var untapTargets: Set<String> = []
+        var readingWarning = false
         for line in log {
             if line.contains(TapTrustWarning.marker) {
-                succeeded.removeAll()
-                blocked.removeAll()
+                readingWarning = true
+            }
+            if readingWarning {
+                let warnedTaps = Set(TapTrustWarning.remedyTaps(in: line))
+                for remedy in remedies where !tapNames(in: remedy).isDisjoint(with: warnedTaps) {
+                    succeeded.remove(remedy.commandLine)
+                }
             }
             if line.hasPrefix("$ ") {
+                readingWarning = false
                 let command = String(line.dropFirst(2))
                 untapTargets = tapsInUntap(command)
                 succeeded.remove(command)
             } else if line.hasPrefix(successPrefix) {
+                readingWarning = false
                 let command = String(line.dropFirst(successPrefix.count))
                 succeeded.insert(command)
                 let removedTaps = tapsInUntap(command)
@@ -110,6 +118,12 @@ public enum TapTrustPlanner {
 
     public static func logSuccess(for remedy: TapTrustRemedy) -> String {
         successPrefix + remedy.commandLine
+    }
+
+    private static func tapNames(in remedy: TapTrustRemedy) -> Set<String> {
+        let names = remedy.arguments.drop(while: { $0 != "--" }).dropFirst()
+        if remedy.kind == .untapUnused { return Set(names) }
+        return Set(names.map { $0.split(separator: "/").prefix(2).joined(separator: "/") })
     }
 
     private static func tapsInUntap(_ command: String) -> Set<String> {
