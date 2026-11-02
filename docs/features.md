@@ -33,6 +33,27 @@ checker, in one pass.
   **Homebrew Casks** — never "Manually installed" — keeping the two windows in agreement.
 - Selectable list — update all or pick individually.
 
+#### Installer applications and Java runtimes
+
+The per-installation report resolves `.pkg` and script-installed applications separately
+from direct `.app` cask artifacts. `PackageCaskAttribution` uses all owning `pkgutil`
+receipt identifiers and literal absolute `.app` paths from a cask's `uninstall.delete`.
+It ignores wildcard, relative and `zap` paths. Claims must identify one installation and
+one installed cask; ambiguous claims, duplicate copies and App Store installations cannot
+borrow another copy's Homebrew result. The catalog cache uses `casks-v3.json` so an older
+cache without the added uninstall-path metadata does not silently hide that evidence.
+
+Java runtimes are scanned under the system and per-user `JavaVirtualMachines` directories.
+`JavaRuntimeAttribution` preserves every discovered `.jdk` in the report, canonicalizes
+symlink aliases and uses unambiguous package receipts to resolve a cask. A versioned cask
+must match the runtime's Java major version. Installed and tracked runtimes can inherit
+Homebrew's per-package outcome; a runtime already listed by `brew outdated` remains visible
+without creating a duplicate manual update. Missing or conflicting evidence stays unconfirmed.
+
+These are reporting associations. `CaskAppPathResolver` still supplies only direct app
+artifacts to the snapshot and replacement machinery; recognizing a package's installation
+does not promise a snapshot or rollback for it.
+
 #### Before anything runs — the dry-run panel
 
 **"Show exactly what I will do"** expands a **dry-run panel** above the update button. It
@@ -263,6 +284,11 @@ engine readiness are reported separately. A failed readiness check leaves a retr
 bundle only. Settings, VM disks, images, containers and volumes are outside that snapshot;
 restoring the bundle cannot guarantee compatibility with migrated data.
 
+Manual cask repair also compares build and prerelease information. An unchanged
+`0.4.16+1` does not satisfy an offered `0.4.16,2`, and unchanged `1.2.3-beta` does not prove
+installation of `1.2.3`. A zero Brew exit does not commit such an unchanged older bundle.
+An intentional same-version takeover keeps its existing semantics.
+
 #### Launch smoke test
 
 The identity, Gatekeeper and publisher gates all describe what the new bundle **is**; none
@@ -312,8 +338,10 @@ instance to quit, the teardown removes every ShipIt job whose program lives insi
 under test (`SquirrelShipItJob`, the same `launchctl remove` Homebrew's `discord` cask runs on
 uninstall). ShipIt touches nothing while the app it updates is running, so this cancels an
 install that has not begun; Squirrel downloads the update again whenever it next decides one is
-due. The withdrawal runs even when the update is being cancelled, since a cancelled run still
-quits the app. Once the instance is gone — quit, killed or dead on its own — the teardown also
+due. The withdrawal runs even when the update is being cancelled. If listing or inspecting
+jobs, reading their program paths, or removing an owned job fails, teardown is suspended:
+the app remains running and the smoke result is `skipped(selfUpdatePending)`. Diagnostics
+record the incomplete inspection or failed labels; this is not proof that no updater remains. Once the instance is gone — quit, killed or dead on its own — the teardown also
 waits (up to 20 s) until no ShipIt job of the bundle is running, because ShipIt swaps the bundle
 seconds after the app exits and nothing may read or restore it mid-swap. Should an install slip
 through anyway, the guard reads the bundle's version once more after the test: a version that changed while the app was running is reported as **replaced by the

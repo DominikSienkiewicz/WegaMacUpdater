@@ -38,6 +38,19 @@ a dry-run panel that tells you what will happen before anything does, and a roll
 puts the old bundle back when a cask upgrade replaces nothing. Details in
 [Features](docs/features.md).
 
+## Installation evidence and repair
+
+Installer-based apps and Java runtimes are associated with Homebrew through exact
+installation evidence: package receipts or literal application paths declared by the cask.
+Ambiguous claims and duplicate installations do not inherit a package's update result.
+JDKs remain in the scan report even when their source is unknown or Homebrew already
+lists their update. These reporting associations do not extend app-bundle rollback to
+installer packages or Java runtimes.
+
+Cask repair checks version and build changes before recording success. During a launch
+smoke test, an unconfirmed Squirrel/ShipIt withdrawal leaves the app running instead of
+triggering its queued installer by quitting it. Details are in [Features](docs/features.md).
+
 ## Diagnostics
 
 Update operations keep local JSONL traces with a run identifier, stage events, subprocess

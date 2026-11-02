@@ -102,8 +102,10 @@ A terminal failure clears the operation block without claiming that the update s
 Older helpers fail the version handshake and must be updated and re-registered.
 
 Manual scan deduplication uses `InstallationIdentity`, matching inventory and policy keys.
-If multiple paths match one cask, only the path resolved by `CaskAppPathResolver` keeps its
-cask association. Other copies continue through vendor/Sparkle checks; this does not extend
+Direct `.app` casks use `CaskAppPathResolver`; installer apps use `PackageCaskAttribution`
+and JDKs use `JavaRuntimeAttribution`. Reporting joins only unambiguous installation paths
+with installed/tracked casks. The latter two mappings never become snapshot or replacement
+paths. Other copies cannot inherit that installation's package result; this does not extend
 Homebrew to installing into arbitrary duplicate locations.
 
 `ManualOutdatedApp.caskPolicyToken` is an optional policy alias, separate from the source
