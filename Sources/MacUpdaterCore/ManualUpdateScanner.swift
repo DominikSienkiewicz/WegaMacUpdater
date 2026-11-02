@@ -2,7 +2,7 @@ import Foundation
 
 /// Runs the manual-app update checkers (Sparkle, JetBrains, GitHub, Synology,
 /// Antigravity, Parallels, Google Drive, ChatGPT, Postman, Discord, Signal, Chrome,
-/// Obsidian, Adobe Creative Cloud, Microsoft AutoUpdate) plus the brew-cask version check
+/// Obsidian, Zed, Adobe Creative Cloud, Microsoft AutoUpdate) plus the brew-cask version check
 /// over every installed app, and returns the outdated ones deduplicated by source
 /// priority — together with source failures, temporary outages and per-installation evidence.
 ///
@@ -156,6 +156,12 @@ public struct ManualUpdateScanner: Sendable {
         return { ManualCheckObservation(app: app, source: source, result: await check(), wasApplicable: applicable) }
     }
 
+    private func zedObservation(for app: ApplicationInfo) -> (@Sendable () async -> ManualCheckObservation)? {
+        guard ZedUpdateChecker.isZed(bundleIdentifier: app.bundleIdentifier) else { return nil }
+        let checker = ZedUpdateChecker(client: vendorClient)
+        return Self.observed("Zed", app, applicable: true) { await checker.check(app: app) }
+    }
+
     /// The "Homebrew knows a newer version than the bundle on disk" check, for one app that
     /// brew does not already own.
     ///
@@ -168,7 +174,8 @@ public struct ManualUpdateScanner: Sendable {
         brewTrackedVersion: String?,
         latestCaskVersions: [String: String]
     ) -> (@Sendable () async -> ManualCheckObservation)? {
-        guard ServiceVendorUpdateProfile.profile(for: app) == nil, let token = app.caskToken else { return nil }
+        guard ServiceVendorUpdateProfile.profile(for: app) == nil,
+              !ZedUpdateChecker.isZed(bundleIdentifier: app.bundleIdentifier), let token = app.caskToken else { return nil }
         return Self.observed("Cask", app, applicable: true) {
             guard let latest = latestCaskVersions[token] else { return .unavailable }
             let reference = brewTrackedVersion ?? app.version
@@ -280,7 +287,6 @@ public struct ManualUpdateScanner: Sendable {
             adobeChecker = AdobeUpdateChecker(catalog: catalog, inventory: adobeInventory)
         }
 
-        let sparkleChecker = self.sparkleChecker
         let jetbrainsChecker = JetBrainsUpdateChecker(client: vendorClient)
         let githubChecker = GitHubReleasesChecker(client: vendorClient)
         let synologyChecker = SynologyUpdateChecker(client: vendorClient)
@@ -292,7 +298,6 @@ public struct ManualUpdateScanner: Sendable {
         let discordChecker = DiscordUpdateChecker(client: vendorClient)
         let signalChecker = SignalUpdateChecker(client: vendorClient)
         let chromeChecker = ChromeUpdateChecker(client: vendorClient)
-        let obsidianChecker = ObsidianUpdateChecker(client: vendorClient)
 
         // Build every per-app check as an independent unit of work, then run them with a
         // bounded concurrency cap. An unbounded group would open one connection per
@@ -331,6 +336,10 @@ public struct ManualUpdateScanner: Sendable {
             }
         }
         for app in appsToCheck where ServiceVendorUpdateProfile.profile(for: app) == nil {
+            if let check = zedObservation(for: app) {
+                work.append(check)
+                continue
+            }
             if !isBrewManaged(app) {
                 // The catalog fallback is needed only when Homebrew lacks a tracked version.
                 if brewAvailable, let check = Self.caskVersionCheck(
@@ -359,7 +368,7 @@ public struct ManualUpdateScanner: Sendable {
             // Run this even when Homebrew owns the current cask: brew may correctly report
             // the installer as current while an insider package update is still available.
             if app.bundleIdentifier == ObsidianUpdateChecker.bundleIdentifier {
-                work.append(Self.observed("Obsidian", app, checker: obsidianChecker))
+                work.append(Self.observed("Obsidian", app, checker: ObsidianUpdateChecker(client: vendorClient)))
             }
             // Sparkle ALWAYS — it's the app's own appcast, independent of Homebrew. Also
             // keeps working for an app that merely shares a name with a CLI-only cask
@@ -436,7 +445,11 @@ public struct ManualUpdateScanner: Sendable {
         brewOwnership: BrewOwnership, uncheckedSources: [String]
     ) -> ManualScanReport {
         let apps = InstallationInventory.deduplicated(installations)
-        let policyPaths = brewOwnership.paths.filter { brewOwnership.tracked.contains($0.key) }
+        let policyPaths = brewOwnership.paths.filter { token, path in
+            guard brewOwnership.tracked.contains(token) else { return false }
+            guard let app = apps.first(where: { $0.installation == InstallationIdentity(path: path) }) else { return true }
+            return ZedUpdateChecker.isCompatibleCask(token, bundleIdentifier: app.bundleIdentifier)
+        }
         let policyTokens = UpdatePlanner.resolvedCaskPolicyTokens(appPaths: policyPaths)
         let rows = UpdatePlanner.attachingCaskPolicies(
             to: UpdatePlanner.dedupedByPriority(collected), appPaths: policyPaths
@@ -483,6 +496,11 @@ public struct ManualUpdateScanner: Sendable {
         }
         return apps.compactMap { app in
             var routed = app
+            if let token = routed.caskToken, !ZedUpdateChecker.isCompatibleCask(token, bundleIdentifier: app.bundleIdentifier) {
+                routed.caskToken = nil
+                routed.caskMatchProvenance = nil
+                routed.isManagedByBrew = false
+            }
             if let token = app.caskToken, copyCounts[token, default: 0] > 1,
                caskAppPaths[token].map({ InstallationIdentity(path: $0) }) != app.installation {
                 routed.caskToken = nil
@@ -517,7 +535,8 @@ public struct ManualUpdateScanner: Sendable {
             .subtracting(alreadyListedTokens)
             .sorted()
             .compactMap { token in
-                guard let app = appByToken[token] else { return nil }
+                guard let app = appByToken[token],
+                      ZedUpdateChecker.isCompatibleCask(token, bundleIdentifier: app.bundleIdentifier) else { return nil }
                 return ManualOutdatedApp(
                     name: app.name,
                     path: app.path,
@@ -592,6 +611,7 @@ public struct ManualUpdateScanner: Sendable {
             .sorted()
             .compactMap { token in
                 guard let app = appByToken[token],
+                      ZedUpdateChecker.isCompatibleCask(token, bundleIdentifier: app.bundleIdentifier),
                       let recorded = brewCaskVersions[token],
                       let onDisk = app.version,
                       !isAlreadyAtRecordedVersion(app: app, recorded: recorded),

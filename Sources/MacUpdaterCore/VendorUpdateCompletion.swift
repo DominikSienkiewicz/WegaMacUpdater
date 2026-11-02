@@ -151,6 +151,9 @@ enum VendorUpdateSourceCheck {
         case .signal: return await SignalUpdateChecker().check(app: app)
         case .chrome: return await ChromeUpdateChecker().check(app: app)
         case .obsidian: return await ObsidianUpdateChecker().check(app: app)
+        case .zed(let channel):
+            guard ZedReleaseChannel(bundleIdentifier: app.bundleIdentifier) == channel else { return .notApplicable }
+            return await ZedUpdateChecker().check(app: app)
         case .microsoftAutoUpdate(let applicationID):
             guard MicrosoftAutoUpdateSupport.applicationID(for: app) == applicationID else { return .notApplicable }
             return await MicrosoftAutoUpdateClient().list().check(app: app)

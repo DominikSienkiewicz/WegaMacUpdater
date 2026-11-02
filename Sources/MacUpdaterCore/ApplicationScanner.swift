@@ -72,6 +72,12 @@ public struct ApplicationScanner {
             break
         }
 
+        if let token = caskToken, !ZedUpdateChecker.isCompatibleCask(token, bundleIdentifier: bundleIdentifier) {
+            isManagedByBrew = false
+            caskToken = nil
+            caskMatchProvenance = nil
+        }
+
         let managedByMas = hasMasReceipt(at: appURL)
         if managedByMas {
             isManagedByBrew = false

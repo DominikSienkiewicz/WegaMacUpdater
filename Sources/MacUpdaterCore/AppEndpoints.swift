@@ -33,6 +33,8 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public let signalUpdate: String
     public let chromeVersions: String
     public let obsidianDesktopReleases: String
+    public let zedRelease: String
+    public let zedReleasesPage: String
     public let homebrewWebsite: String
     public let homebrewInstallCommand: String
     public let githubReleasesPage: String
@@ -100,6 +102,14 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
 
     public func chromeVersionsURL(channel: String) -> URL? {
         URL(string: Self.fill(chromeVersions, ["channel": channel]))
+    }
+
+    public func zedReleaseURL(channel: ZedReleaseChannel, architecture: String) -> URL? {
+        URL(string: Self.fill(zedRelease, ["channel": channel.rawValue, "architecture": architecture]))
+    }
+
+    public func zedReleasesPageURL(channel: ZedReleaseChannel) -> URL? {
+        URL(string: Self.fill(zedReleasesPage, ["channel": channel.rawValue]))
     }
 
     // MARK: Fixed endpoints (force-unwrapped: the bundled config is validated at launch)
@@ -353,6 +363,8 @@ extension AppEndpoints {
             signalUpdate: validURL(other.signalUpdate, signalUpdate),
             chromeVersions: templateURL(other.chromeVersions, chromeVersions),
             obsidianDesktopReleases: validURL(other.obsidianDesktopReleases, obsidianDesktopReleases),
+            zedRelease: templateURL(other.zedRelease, zedRelease),
+            zedReleasesPage: templateURL(other.zedReleasesPage, zedReleasesPage),
             homebrewWebsite: validURL(other.homebrewWebsite, homebrewWebsite),
             // SEC-08: the install command is a shell string, never overridable from the overlay.
             homebrewInstallCommand: homebrewInstallCommand,
@@ -409,6 +421,8 @@ public struct AppEndpointsOverlay: Decodable, Sendable, Equatable {
     public let signalUpdate: String?
     public let chromeVersions: String?
     public var obsidianDesktopReleases: String? = nil
+    public var zedRelease: String? = nil
+    public var zedReleasesPage: String? = nil
     public let homebrewWebsite: String?
     public let homebrewInstallCommand: String?
     public let githubReleasesPage: String?

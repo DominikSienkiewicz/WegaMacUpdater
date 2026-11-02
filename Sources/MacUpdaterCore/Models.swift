@@ -222,6 +222,8 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
         /// Obsidian — self-updating ASAR package; may follow the Catalyst insider channel
         /// independently of the app bundle and Homebrew cask versions.
         case obsidian
+        /// Zed's own release feed, preserving the installed stable or preview channel.
+        case zed(channel: ZedReleaseChannel)
         /// Office update reported by Microsoft AutoUpdate; installation remains vendor-owned.
         case microsoftAutoUpdate(applicationID: String)
         /// A Creative Cloud application, identified by Adobe's SAP product code (`LRCC`,
@@ -247,6 +249,7 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
             case .signal:      return 5
             case .chrome:      return 5
             case .obsidian:    return 5
+            case .zed:         return 5
             case .microsoftAutoUpdate: return 5
             case .jetbrains:   return 4
             case .github:      return 3

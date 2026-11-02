@@ -82,6 +82,7 @@ public extension ManualOutdatedApp.UpdateSource {
         case .signal:               return "Signal"
         case .chrome:               return "Chrome"
         case .obsidian:             return "Obsidian"
+        case .zed:                 return "Zed"
         case .microsoftAutoUpdate: return "Microsoft AutoUpdate"
         case .adobe(let sapCode):   return sapCode
         case .wega:                 return "Wega"
@@ -107,6 +108,8 @@ public extension ManualOutdatedApp.UpdateSource {
             return .openURL(URL(string: downloadPage), style: .synologyDownload)
         case .googleDrive:
             return .openURL(AppEndpoints.shared.googleDriveDownloadURL, style: .vendorDownload)
+        case .zed(let channel):
+            return .launchAppWithReleases(AppEndpoints.shared.zedReleasesPageURL(channel: channel))
         case .adobe:
             return .creativeCloud(fallbackURL: AppEndpoints.shared.adobeCreativeCloudURL)
         case .microsoftAutoUpdate:
