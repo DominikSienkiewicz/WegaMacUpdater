@@ -16,9 +16,11 @@ import Foundation
 /// also refused by identifier, even when their filename or Homebrew token is unavailable.
 public struct WorkspaceAppLaunchProbe: AppLaunchProbing {
     private let processes: RunningProcessService
+    private let runner: ProcessRunning
 
-    public init(processes: RunningProcessService = RunningProcessService()) {
+    public init(processes: RunningProcessService = RunningProcessService(), runner: ProcessRunning = ProcessRunner()) {
         self.processes = processes
+        self.runner = runner
     }
 
     /// `SecurityAgent` is the process macOS starts to draw an authorization sheet, and it exists
@@ -38,16 +40,22 @@ public struct WorkspaceAppLaunchProbe: AppLaunchProbing {
     /// Squirrel.Mac is the self-updater that installs on quit (see ``SquirrelShipItJob``), so it
     /// is the one this teardown has to disarm.
     public func withdrawStagedSelfUpdate(ofBundleAt url: URL) async {
-        for label in await SquirrelShipItJob.withdraw(fromBundleAt: url) {
+        _ = await prepareForTermination(ofBundleAt: url)
+    }
+
+    public func prepareForTermination(ofBundleAt url: URL) async -> Bool {
+        let withdrawal = await SquirrelShipItJob.withdrawSafely(fromBundleAt: url, runner: runner)
+        for label in withdrawal.withdrawnLabels {
             WegaLog.info(
                 .homebrew,
                 "\(url.lastPathComponent): wycofano aktualizację przygotowaną przez updater aplikacji (\(label)) — po zamknięciu testu startu podmieniłaby właśnie zainstalowaną wersję."
             )
         }
+        return withdrawal.permitsTermination
     }
 
     public func waitForSelfUpdate(ofBundleAt url: URL) async {
-        await SquirrelShipItJob.waitUntilFinished(forBundleAt: url)
+        await SquirrelShipItJob.waitUntilFinished(forBundleAt: url, runner: runner)
     }
 
     public func launch(bundleAt url: URL) async -> AppLaunchOutcome {
