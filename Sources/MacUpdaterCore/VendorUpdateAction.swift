@@ -81,7 +81,10 @@ public extension ManualOutdatedApp.UpdateSource {
         case .discord:              return "Discord"
         case .signal:               return "Signal"
         case .chrome:               return "Chrome"
+        case .thunderbird(let channel): return "Thunderbird \(channel.label)"
+        case .firefox(let channel): return channel.sourceLabel
         case .obsidian:             return "Obsidian"
+        case .zed:                 return "Zed"
         case .microsoftAutoUpdate: return "Microsoft AutoUpdate"
         case .adobe(let sapCode):   return sapCode
         case .wega:                 return "Wega"
@@ -98,7 +101,9 @@ public extension ManualOutdatedApp.UpdateSource {
         case .mas:
             return .appStore
         case .github(let repo, let selfUpdates):
-            let releases = AppEndpoints.shared.githubReleasesPageURL(repo: repo)
+            let releases = repo == UTMUpdateSupport.repository && !selfUpdates
+                ? AppEndpoints.shared.githubReleasesIndexPageURL(repo: repo)
+                : AppEndpoints.shared.githubReleasesPageURL(repo: repo)
             return selfUpdates ? .launchAppWithReleases(releases)
                                : .openURL(releases, style: .githubReleases)
         case .jetbrains:
@@ -107,6 +112,8 @@ public extension ManualOutdatedApp.UpdateSource {
             return .openURL(URL(string: downloadPage), style: .synologyDownload)
         case .googleDrive:
             return .openURL(AppEndpoints.shared.googleDriveDownloadURL, style: .vendorDownload)
+        case .zed(let channel):
+            return .launchAppWithReleases(AppEndpoints.shared.zedReleasesPageURL(channel: channel))
         case .adobe:
             return .creativeCloud(fallbackURL: AppEndpoints.shared.adobeCreativeCloudURL)
         case .microsoftAutoUpdate:
@@ -116,7 +123,7 @@ public extension ManualOutdatedApp.UpdateSource {
             // would step around signature verification and the helper install. So the row
             // leads to the in-app installer.
             return .openSelfUpdate
-        case .sparkle, .antigravity, .parallels, .chatgpt, .postman, .discord, .signal, .chrome, .obsidian:
+        case .sparkle, .antigravity, .parallels, .chatgpt, .postman, .discord, .signal, .chrome, .firefox, .thunderbird, .obsidian:
             return .launchApp
         }
     }

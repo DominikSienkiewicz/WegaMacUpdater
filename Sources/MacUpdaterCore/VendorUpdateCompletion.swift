@@ -150,7 +150,11 @@ enum VendorUpdateSourceCheck {
         case .discord: return await DiscordUpdateChecker().check(app: app)
         case .signal: return await SignalUpdateChecker().check(app: app)
         case .chrome: return await ChromeUpdateChecker().check(app: app)
+        case .firefox, .thunderbird: return await checkMozilla(app: app, source: source)
         case .obsidian: return await ObsidianUpdateChecker().check(app: app)
+        case .zed(let channel):
+            guard ZedReleaseChannel(bundleIdentifier: app.bundleIdentifier) == channel else { return .notApplicable }
+            return await ZedUpdateChecker().check(app: app)
         case .microsoftAutoUpdate(let applicationID):
             guard MicrosoftAutoUpdateSupport.applicationID(for: app) == applicationID else { return .notApplicable }
             return await MicrosoftAutoUpdateClient().list().check(app: app)
@@ -162,4 +166,16 @@ enum VendorUpdateSourceCheck {
         case .cask, .mas, .wega: return .notApplicable
         }
     }
+    private static func checkMozilla(app: ApplicationInfo, source: ManualOutdatedApp.UpdateSource) async -> ManualCheckResult {
+        switch source {
+        case .firefox(let channel):
+            guard FirefoxInstallationMetadata.channel(for: app) == channel else { return .failed }
+            return await FirefoxUpdateChecker().check(app: app)
+        case .thunderbird(let channel):
+            guard ThunderbirdInstallationChannel.read(at: app.path) == channel else { return .unavailable }
+            return await ThunderbirdUpdateChecker().check(app: app)
+        default: return .notApplicable
+        }
+    }
+
 }

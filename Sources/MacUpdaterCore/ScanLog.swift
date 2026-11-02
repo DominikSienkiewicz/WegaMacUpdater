@@ -33,7 +33,10 @@ public enum ScanLog {
         case .discord:     return "Discord"
         case .signal:      return "Signal"
         case .chrome:      return "Google Chrome"
+        case .thunderbird: return source.badgeLabel
+        case .firefox(let channel): return channel.sourceLabel
         case .obsidian:    return "Obsidian"
+        case .zed:         return "Zed"
         case .microsoftAutoUpdate: return "Microsoft AutoUpdate"
         case .adobe:       return "Adobe Creative Cloud"
         case .wega:        return "Wega"

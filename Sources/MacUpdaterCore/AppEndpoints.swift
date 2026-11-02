@@ -32,10 +32,15 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public let discordUpdate: String
     public let signalUpdate: String
     public let chromeVersions: String
+    public let firefoxVersions: String
+    public let thunderbirdVersions: String
     public let obsidianDesktopReleases: String
+    public let zedRelease: String
+    public let zedReleasesPage: String
     public let homebrewWebsite: String
     public let homebrewInstallCommand: String
     public let githubReleasesPage: String
+    public let githubReleasesIndexPage: String
     public let googleDriveDownload: String
     /// Adobe's Creative Cloud product feed — the one document listing every shipped version
     /// of every CC application, narrowed by query to the macOS desktop products.
@@ -94,6 +99,10 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
         URL(string: Self.fill(githubReleasesPage, ["repo": repo]))
     }
 
+    public func githubReleasesIndexPageURL(repo: String) -> URL? {
+        URL(string: Self.fill(githubReleasesIndexPage, ["repo": repo]))
+    }
+
     public func discordUpdateURL(channel: String, version: String) -> URL? {
         URL(string: Self.fill(discordUpdate, ["channel": channel, "version": version]))
     }
@@ -102,10 +111,20 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
         URL(string: Self.fill(chromeVersions, ["channel": channel]))
     }
 
+    public func zedReleaseURL(channel: ZedReleaseChannel, architecture: String) -> URL? {
+        URL(string: Self.fill(zedRelease, ["channel": channel.rawValue, "architecture": architecture]))
+    }
+
+    public func zedReleasesPageURL(channel: ZedReleaseChannel) -> URL? {
+        URL(string: Self.fill(zedReleasesPage, ["channel": channel.rawValue]))
+    }
+
     // MARK: Fixed endpoints (force-unwrapped: the bundled config is validated at launch)
 
     public var chatgptAppcastURL: URL { URL(string: chatgptAppcast)! }
+    public var firefoxVersionsURL: URL { URL(string: firefoxVersions)! }
     public var signalUpdateURL: URL { URL(string: signalUpdate)! }
+    public var thunderbirdVersionsURL: URL { URL(string: thunderbirdVersions)! }
     public var obsidianDesktopReleasesURL: URL { URL(string: obsidianDesktopReleases)! }
     public var googleDriveOmahaURL: URL { URL(string: googleDriveOmaha)! }
     public var caskDatabaseURL: URL { URL(string: caskDatabase)! }
@@ -352,11 +371,16 @@ extension AppEndpoints {
             discordUpdate: templateURL(other.discordUpdate, discordUpdate),
             signalUpdate: validURL(other.signalUpdate, signalUpdate),
             chromeVersions: templateURL(other.chromeVersions, chromeVersions),
+            firefoxVersions: validURL(other.firefoxVersions, firefoxVersions),
+            thunderbirdVersions: validURL(other.thunderbirdVersions, thunderbirdVersions),
             obsidianDesktopReleases: validURL(other.obsidianDesktopReleases, obsidianDesktopReleases),
+            zedRelease: templateURL(other.zedRelease, zedRelease),
+            zedReleasesPage: templateURL(other.zedReleasesPage, zedReleasesPage),
             homebrewWebsite: validURL(other.homebrewWebsite, homebrewWebsite),
             // SEC-08: the install command is a shell string, never overridable from the overlay.
             homebrewInstallCommand: homebrewInstallCommand,
             githubReleasesPage: templateURL(other.githubReleasesPage, githubReleasesPage),
+            githubReleasesIndexPage: templateURL(other.githubReleasesIndexPage, githubReleasesIndexPage),
             googleDriveDownload: validURL(other.googleDriveDownload, googleDriveDownload),
             adobeProductCatalog: validURL(other.adobeProductCatalog, adobeProductCatalog),
             adobeCreativeCloud: validURL(other.adobeCreativeCloud, adobeCreativeCloud),
@@ -408,10 +432,15 @@ public struct AppEndpointsOverlay: Decodable, Sendable, Equatable {
     public let discordUpdate: String?
     public let signalUpdate: String?
     public let chromeVersions: String?
+    public var firefoxVersions: String? = nil
+    public var thunderbirdVersions: String? = nil
     public var obsidianDesktopReleases: String? = nil
+    public var zedRelease: String? = nil
+    public var zedReleasesPage: String? = nil
     public let homebrewWebsite: String?
     public let homebrewInstallCommand: String?
     public let githubReleasesPage: String?
+    public var githubReleasesIndexPage: String? = nil
     public let googleDriveDownload: String?
     // Defaulted (like `obsidianDesktopReleases`) so existing memberwise-init call sites keep
     // compiling without listing the Adobe keys.

@@ -146,6 +146,30 @@ product and threat-signature freshness. Those freshness values remain unconfirme
 antivirus, a recent file date or a signature refresh does not prove that the product is current.
 Bitdefender Agent, VPN and App Store scanners are not treated as the antivirus product.
 
+### Firefox, Thunderbird, Bruno, UTM and Zed
+
+These applications can be checked when installed directly, without Homebrew:
+
+| Application | Version source | Update action |
+|---|---|---|
+| Firefox | Mozilla feed for the installed Release, ESR or Beta channel | Open Firefox's updater |
+| Thunderbird | Mozilla feed for the installed Release, ESR or Beta channel | Open Thunderbird's updater |
+| Bruno | Official stable GitHub releases | Open Bruno, with the release page as a fallback |
+| UTM | Official stable GitHub releases containing `UTM.dmg` | Open the official releases list |
+| Zed | Official Stable or Preview update feed | Open Zed, with its channel release page as a fallback |
+
+Wega reads Mozilla channel metadata from the particular installed bundle. Missing or
+ambiguous channel metadata leaves the check unconfirmed; Wega does not assume Stable.
+A Beta copy exposing only a base version such as `146.0`, without `b9`, stays unconfirmed.
+An ESR installation is compared with its supported ESR branch rather than the latest
+regular release. Homebrew offers and migration candidates for a different channel are excluded. Zed development
+and custom builds do not inherit Stable offers.
+
+UTM installed through the App Store keeps its App Store update route. An installation
+advertising its own Sparkle feed retains that native update channel. Wega checks versions
+and hands control to the appropriate updater or release page; a later version check must
+confirm the installed copy actually reached the offered version.
+
 ### Microsoft Office and AutoUpdate
 
 For vendor-installed Word, Excel, PowerPoint, Outlook and OneNote, Wega queries Microsoft

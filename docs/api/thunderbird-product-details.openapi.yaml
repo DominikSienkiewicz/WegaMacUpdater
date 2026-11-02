@@ -1,0 +1,47 @@
+openapi: 3.1.0
+info:
+  title: Mozilla Thunderbird product details consumed by Wega
+  version: 1.0.0
+  description: >-
+    Read-only subset of Mozilla's public product details. These versions describe
+    published releases, not a guarantee that Thunderbird's staged updater will
+    offer a release immediately to every installation. Wega opens the installed
+    application and leaves installation to Thunderbird.
+servers:
+  - url: https://product-details.mozilla.org
+paths:
+  /1.0/thunderbird_versions.json:
+    get:
+      operationId: getThunderbirdVersions
+      summary: Read independently published Release, ESR and Beta versions
+      responses:
+        '200':
+          description: >-
+            Wega selects only the installed channel. A missing or malformed
+            selected value is a failed check. ESR_NEXT is optional and may be
+            empty; when two ESR trains are published, the installed major
+            version selects its matching train. Otherwise ESR uses THUNDERBIRD_ESR.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                properties:
+                  LATEST_THUNDERBIRD_VERSION:
+                    type: string
+                    pattern: '^[0-9]+(?:\.[0-9]+){1,3}$'
+                  THUNDERBIRD_ESR:
+                    type: string
+                    pattern: '^[0-9]+(?:\.[0-9]+){1,3}esr$'
+                  THUNDERBIRD_ESR_NEXT:
+                    type: string
+                    pattern: '^(?:[0-9]+(?:\.[0-9]+){1,3}esr)?$'
+                  LATEST_THUNDERBIRD_DEVEL_VERSION:
+                    type: string
+                    pattern: '^[0-9]+(?:\.[0-9]+){1,3}b[0-9]+$'
+        '304':
+          description: HTTPClient reuses the previously cached response body.
+        '4XX':
+          description: Check failed; no current-version claim is made.
+        '5XX':
+          description: Source unavailable; no current-version claim is made.

@@ -1,0 +1,65 @@
+openapi: 3.1.0
+info:
+  title: Mozilla Firefox product details consumed by Wega
+  version: 1.0.0
+  description: >-
+    Consumer contract for the public Mozilla release document. Wega reads the
+    installed channel from Contents/Resources/application.ini, section App,
+    RemotingName. It compares release, ESR and beta independently. Missing or
+    invalid channel metadata or versions remain unchecked, never current.
+    During ESR overlap, an installed major stays on its published ESR track;
+    when its major is absent, Wega offers the newest published ESR track.
+    Beta comparison requires an installed bN sequence; a bundle exposing only
+    the base version remains unchecked. Wega does not download installers or
+    invoke Firefox during a check. Updates are handed to Firefox's own updater.
+servers:
+  - url: https://product-details.mozilla.org
+paths:
+  /1.0/firefox_versions.json:
+    get:
+      operationId: firefoxReleaseVersions
+      summary: Read published Firefox channel versions
+      parameters:
+        - in: header
+          name: If-None-Match
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: >-
+            Release metadata. The field for the selected channel must contain
+            a valid version. Other fields are ignored. ESR_NEXT may be empty.
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                properties:
+                  LATEST_FIREFOX_VERSION:
+                    type: string
+                    pattern: '^[0-9]+(?:\.[0-9]+){1,3}$'
+                  LATEST_FIREFOX_RELEASED_DEVEL_VERSION:
+                    type: string
+                    pattern: '^[0-9]+(?:\.[0-9]+){1,3}b[0-9]+$'
+                  FIREFOX_ESR:
+                    type: string
+                    pattern: '^[0-9]+(?:\.[0-9]+){1,3}esr$'
+                  FIREFOX_ESR_NEXT:
+                    type: string
+                    pattern: '^(?:[0-9]+(?:\.[0-9]+){1,3}esr)?$'
+              example:
+                LATEST_FIREFOX_VERSION: '141.0'
+                LATEST_FIREFOX_RELEASED_DEVEL_VERSION: '142.0b10'
+                FIREFOX_ESR: '128.14.0esr'
+                FIREFOX_ESR_NEXT: '140.1.0esr'
+        '304':
+          description: Wega's shared HTTP client reuses the cached successful body.
+        '5XX':
+          description: Source unavailable; no current or update result is inferred.
+        default:
+          description: Unexpected HTTP status is a failed check.

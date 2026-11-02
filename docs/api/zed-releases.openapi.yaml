@@ -1,0 +1,68 @@
+openapi: 3.1.0
+info:
+  title: Zed release metadata consumed by Wega
+  version: 1.0.0
+  description: >-
+    Read-only subset of the endpoint used by Zed's auto_update crate.
+    Wega compares the version for the installed bundle's channel and opens Zed
+    to perform updates. It does not download or install the returned asset.
+    This contract describes the consumer and is not a producer compatibility guarantee.
+  x-upstream-source: https://github.com/zed-industries/zed/blob/main/crates/auto_update/src/auto_update.rs
+servers:
+  - url: https://cloud.zed.dev
+paths:
+  /releases/{channel}/latest/asset:
+    get:
+      operationId: getLatestZedRelease
+      summary: Resolve the latest macOS application release in one channel
+      parameters:
+        - name: channel
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [stable, preview]
+          description: >-
+            dev.zed.Zed selects stable; dev.zed.Zed-Preview selects preview.
+            Unrecognized bundle channels are not queried.
+        - name: os
+          in: query
+          required: true
+          schema:
+            type: string
+            const: macos
+        - name: arch
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [aarch64, x86_64]
+        - name: asset
+          in: query
+          required: true
+          schema:
+            type: string
+            const: zed
+      responses:
+        '200':
+          description: >-
+            The version must be a complete SemVer value. Missing or invalid
+            versions leave the check failed, never current. Extra fields are ignored.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version]
+                properties:
+                  version:
+                    type: string
+                    minLength: 1
+                    examples: [1.26.2]
+                  url:
+                    type: string
+                    description: Producer download URL; Wega does not consume it.
+                additionalProperties: true
+        default:
+          description: >-
+            HTTP 5xx and transport errors are unavailable; other non-200
+            statuses fail the check. No Homebrew fallback is inferred.
