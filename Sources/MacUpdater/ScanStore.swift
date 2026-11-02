@@ -48,6 +48,12 @@ struct ScanStoreDependencies {
         await Task.detached { CodeSignatureVerifier.teamID(ofAppAt: appURL) }.value
     }
     var bundleIdentifierOfApp: (URL) -> String? = { CaskReplacementArtifactIdentity.bundleIdentifier(at: $0) }
+    var stopDocker: @Sendable (URL) async -> DockerDesktopStopResult = {
+        await DockerDesktopStopper().stop(bundleURL: $0)
+    }
+    var restartDocker: @Sendable (URL) async -> DockerDesktopRestartResult = {
+        await DockerDesktopRestarter().restart(bundleURL: $0)
+    }
     var teamIDLedger: TeamIDLedger = .shared
     var rollbackLedger: CaskRollbackLedger = .shared
     var confirmPublisherChange: @MainActor (ScanStore.PublisherChangePrompt) -> Bool = { PublisherChangeAlert.confirm($0) }
@@ -116,6 +122,7 @@ final class ScanStore: ObservableObject {
     @Published private(set) var banners = BannerQueue<BannerData>()
     @Published var restartCandidates: [RestartInfo]       = []
     var restartDiagnosticOperationIDs: [String: UUID] = [:]
+    var restartDockerBundleURLs: [String: URL] = [:]
     @Published var restartBusy:       String?
     @Published var caskIconPaths:     [String: URL]       = [:]
     @Published var caskDownloads:     [String: CaskDownloadInfo] = [:]   // FEAT-03
