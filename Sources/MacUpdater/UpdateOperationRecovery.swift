@@ -88,13 +88,28 @@ final class UpdateOperationRecovery {
     /// the retention window to finished operations.
     @discardableResult
     func recoverInterruptedOperations() async -> Report {
+        let inherited = UpdateDiagnostics.current
+        let trace = inherited ?? DiagnosticRun(trigger: "recovery", subjects: [])
+        defer { if inherited == nil { trace.finish() } }
+        return await UpdateDiagnostics.$current.withValue(trace) {
+            await recoverInterruptedOperationsTraced()
+        }
+    }
+
+    private func recoverInterruptedOperationsTraced() async -> Report {
         sweepLegacyTempSnapshots()
 
         var report = Report()
         for operation in store.operations() where !operation.isFinished {
             guard let session = store.resumeSession(operationID: operation.id) else { continue }
+            UpdateStageDiagnostics.recordOperation(session)
             for item in session.operation.items where !item.phase.isTerminal {
-                guard item.recoveryAttempts == 0 else { continue }
+                guard item.recoveryAttempts == 0 else {
+                    UpdateDiagnostics.record("recovery.skipped", fields: [
+                        "operationID": operation.id.uuidString, "token": item.token, "reason": "alreadyAttempted"
+                    ])
+                    continue
+                }
                 session.noteRecoveryAttempt(token: item.token)
                 do { try session.requirePersisted() }
                 catch {
@@ -107,7 +122,12 @@ final class UpdateOperationRecovery {
                     report.unrecoverableTokens.append(item.token)
                     continue
                 }
-                switch UpdateOperationRecoveryPlan.action(for: item.phase) {
+                let action = UpdateOperationRecoveryPlan.action(for: item.phase)
+                UpdateDiagnostics.record("recovery.action", fields: [
+                    "operationID": operation.id.uuidString, "token": item.token,
+                    "phase": item.phase.rawValue, "action": String(describing: action), "interruptionCause": "unknown"
+                ])
+                switch action {
                 case .abortWithoutMutation:
                     settleWithoutMutation(item: item, session: session, report: &report)
                 case .commitVerified:
@@ -126,6 +146,10 @@ final class UpdateOperationRecovery {
         if pruned > 0 {
             WegaLog.info(.app, "LT-01: retencja snapshotów — usunięto \(pruned) przeterminowanych kopii.")
         }
+        UpdateDiagnostics.record("recovery.summary", fields: [
+            "aborted": report.abortedTokens.joined(separator: ","), "committed": report.committedTokens.joined(separator: ","),
+            "rolledBack": report.rolledBackTokens.joined(separator: ","), "unrecoverable": report.unrecoverableTokens.joined(separator: ",")
+        ])
         guard !report.isEmpty else { return report }
         WegaLog.info(.app, "LT-01: recovery po przerwaniu — cofnięto: \(report.rolledBackTokens), "
             + "zatwierdzono: \(report.committedTokens), porzucono bez mutacji: \(report.abortedTokens), "
@@ -144,6 +168,10 @@ final class UpdateOperationRecovery {
         let appURL = URL(fileURLWithPath: item.appPath)
         let appExists = dependencies.fileExists(appURL.path)
         let installedVersion = appExists ? dependencies.appVersion(appURL) : nil
+        UpdateDiagnostics.record("recovery.probe", fields: [
+            "operationID": session.operation.id.uuidString, "token": item.token, "appExists": String(appExists),
+            "installedVersion": installedVersion ?? "unknown", "previousVersion": item.preUpgradeVersion ?? "unknown"
+        ])
 
         switch UpdateOperationRecoveryPlan.installingProbe(
             appExists: appExists,
@@ -198,13 +226,18 @@ final class UpdateOperationRecovery {
             report.unrecoverableTokens.append(item.token)
             return
         }
+        UpdateDiagnostics.record("rollback.started", fields: [
+            "operationID": session.operation.id.uuidString, "token": item.token, "scope": "appBundleOnly", "reason": "appMissing"
+        ])
         do {
             try dependencies.clone(snapshotURL, appURL)
+            UpdateDiagnostics.record("rollback.result", fields: ["token": item.token, "restored": "true", "scope": "appBundleOnly"])
             session.markRolledBack(token: item.token)
             dependencies.recordRollback(item.token)
             report.rolledBackTokens.append(item.token)
             WegaLog.error(.homebrew, "LT-01: \(item.token): przerwana instalacja usunęła aplikację — przywrócono z klona.")
         } catch {
+            UpdateDiagnostics.record("rollback.result", fields: ["token": item.token, "restored": "false", "error": error.localizedDescription])
             WegaLog.error(.homebrew, "LT-01: \(item.token): przywrócenie znikniętej aplikacji nie powiodło się — \(error.localizedDescription)")
             report.unrecoverableTokens.append(item.token)
         }

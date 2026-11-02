@@ -85,12 +85,14 @@ public enum LaunchSmokeTest {
         terminationGrace: TimeInterval = LaunchSmokeTestConfiguration.defaultTerminationGrace,
         probe: any AppLaunchProbing
     ) async -> Verdict {
+        UpdateDiagnostics.record("smoke.launchRequested", fields: ["appPath": url.path, "bundleName": url.lastPathComponent, "windowSeconds": String(window)])
         let handle: any LaunchedAppHandle
         switch await probe.launch(bundleAt: url) {
         case .skipped(let reason): return .skipped(reason)
         case .failed(let message): return .launchFailed(message)
         case .launched(let started): handle = started
         }
+        UpdateDiagnostics.record("smoke.launched", fields: ["appPath": url.path, "bundleName": url.lastPathComponent, "pid": String(handle.processIdentifier)])
 
         // The launch has already succeeded here, before the first tick of the window: this
         // is the proof that the process started, and nothing observed later has to carry it.
@@ -162,6 +164,7 @@ public enum LaunchSmokeTest {
         private func end() async {
             if await handle.hasExited() { return }
             await probe.withdrawStagedSelfUpdate(ofBundleAt: bundle)
+            UpdateDiagnostics.record("smoke.terminationRequested", fields: ["appPath": bundle.path, "bundleName": bundle.lastPathComponent, "pid": String(handle.processIdentifier)])
             await handle.requestTermination()
 
             let clock = ContinuousClock()
@@ -175,7 +178,10 @@ public enum LaunchSmokeTest {
                 }
             }
             let stillAlive = await !handle.hasExited()
-            if stillAlive { await handle.forceTerminate() }
+            if stillAlive {
+                UpdateDiagnostics.record("smoke.forceTerminationRequested", fields: ["appPath": bundle.path, "bundleName": bundle.lastPathComponent, "pid": String(handle.processIdentifier)])
+                await handle.forceTerminate()
+            }
         }
     }
 

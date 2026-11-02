@@ -86,6 +86,10 @@ extension ScanStore {
         beginItem(named: token)
         defer { endItem() }
 
+        var attempt = 1
+        UpdateDiagnostics.record("upgrade.attempt", fields: [
+            "token": token, "operationID": operation.operation.id.uuidString, "attempt": String(attempt)
+        ])
         var outcome = await runBrewUpgrade(
             arguments: UpdatePlanner.caskUpgradeCommand(tokens: [token]).arguments,
             logSource: token,
@@ -96,6 +100,8 @@ extension ScanStore {
         // when that happens — which is what makes one retry safe, and is the whole running
         // cost of upgrading casks concurrently.
         if outcome.isHomebrewLockCollision {
+            attempt += 1
+            UpdateDiagnostics.record("upgrade.retry", fields: ["token": token, "attempt": String(attempt), "reason": "homebrewLockCollision"])
             brewLog.append(UpgradeLogPrefix.line(
                 "↻ " + trf("Homebrew był zajęty (%@) — ponawiam.", "\(token)"), from: token))
             WegaLog.info(.homebrew, "Kolizja blokad Homebrew — ponawiam \(token)")
@@ -110,6 +116,8 @@ extension ScanStore {
         // Auto-recover an interrupted upgrade: brew bails because a stale staged app from a
         // previous, cut-short run occupies the destination. `--force` overwrites it.
         if outcome.tokensRetryableWithForce.contains(token) {
+            attempt += 1
+            UpdateDiagnostics.record("upgrade.retry", fields: ["token": token, "attempt": String(attempt), "reason": "interruptedCaskReplacement", "force": "true"])
             brewLog.append(UpgradeLogPrefix.line(
                 "↻ " + trf("Przerwana aktualizacja (%@) — ponawiam z --force.", "\(token)"), from: token))
             WegaLog.info(.homebrew, "Przerwana aktualizacja casku — ponawiam z --force: \(token)")
@@ -158,8 +166,12 @@ extension ScanStore {
         // unknown, probe me", a crash before it reads as "never ran". It has to be written
         // once, before the first process starts, not once per cask.
         preparation.operation.recordInstalling()
+        UpdateDiagnostics.record("operation.phase", fields: [
+            "operationID": preparation.operation.operation.id.uuidString, "phase": "installing"
+        ])
         do { try preparation.operation.requirePersisted() }
         catch {
+            UpdateDiagnostics.record("upgrade.deferred", fields: ["reason": "journalUnavailable", "error": error.localizedDescription])
             reportJournalFailure(error)
             return []
         }
@@ -265,6 +277,7 @@ extension ScanStore {
         preparation: ForegroundCaskPreparation
     ) async -> LaneItemResult {
         guard !shouldStopUpdate(before: [item.key]) else {
+            UpdateDiagnostics.record("upgrade.skipped", fields: ["token": item.name, "reason": "stopRequested"])
             return LaneItemResult(item: item, outcome: nil)
         }
         return await upgradeOneCask(
@@ -316,6 +329,10 @@ extension ScanStore {
             return BrewUpgradeOutcome(exitCode: -1, failedTokens: [], errorLines: [error.localizedDescription])
         }
         let outcome = BrewUpgradeOutcome.analyze(exitCode: exitCode, output: captured)
+        UpdateDiagnostics.record("brew.outcome", fields: [
+            "source": logSource, "exitCode": String(exitCode), "successful": String(outcome.isSuccessful),
+            "failedTokens": outcome.failedTokens.sorted().joined(separator: ",")
+        ])
         if streamsProgress {
             upgradeTracker?.brewCallFinished(succeeded: outcome.isSuccessful)
             upgradeProgress = upgradeTracker?.progress

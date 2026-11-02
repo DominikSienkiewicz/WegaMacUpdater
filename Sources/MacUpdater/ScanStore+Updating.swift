@@ -8,6 +8,15 @@ import MacUpdaterCore
 // it is `ScanStore+Rollback`; deciding *what* to run is `ScanStore+UpdatePlan`.
 extension ScanStore {
     func runUpdate(targetKeys: Set<String>) async {
+        let inherited = UpdateDiagnostics.current
+        let trace = inherited ?? DiagnosticRun(trigger: "foreground", subjects: targetKeys.sorted())
+        defer { if inherited == nil { trace.finish() } }
+        await UpdateDiagnostics.$current.withValue(trace) {
+            await runUpdateTraced(targetKeys: targetKeys)
+        }
+    }
+
+    private func runUpdateTraced(targetKeys: Set<String>) async {
         // REL-12 — a clean stop switch per run; a previous cancellation may not leak in.
         resetUpdateInterruption()
         do {
@@ -15,6 +24,7 @@ extension ScanStore {
                 await self.runUpdateCoordinated(targetKeys: targetKeys, operationLease: lease)
             }
         } catch is CancellationError {
+            UpdateDiagnostics.record("update.cancelled", fields: ["stage": "writeLease"])
             return
         } catch {
             WegaLog.error(.homebrew, "Koordynacja aktualizacji: \(error.localizedDescription)")
@@ -25,10 +35,14 @@ extension ScanStore {
         targetKeys: Set<String>,
         operationLease: OperationCoordinator.Lease
     ) async {
-        guard model != nil, !targetKeys.isEmpty else { return }
+        guard model != nil, !targetKeys.isEmpty else {
+            UpdateDiagnostics.record("update.skipped", fields: ["reason": model == nil ? "modelUnavailable" : "emptySelection"])
+            return
+        }
         // F3 — never overlap with a background upgrade: both take snapshots and both call
         // `brew upgrade --cask`. The window is the one the user is waiting on.
         guard UpgradeMutex.shared.acquire() else {
+            UpdateDiagnostics.record("update.skipped", fields: ["reason": "upgradeMutexBusy"])
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja w toku"),
                                   message: tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.")))
             return
@@ -46,6 +60,12 @@ extension ScanStore {
         // was produced for. `name`/`key` here are what the tools and the rescan both use.
         let plannedKeys   = targetKeys
         let plannedItems  = allItems.filter { plannedKeys.contains($0.key) }
+        for item in plannedItems {
+            UpdateDiagnostics.record("update.plannedItem", fields: [
+                "key": item.key, "token": item.name, "kind": String(describing: item.kind),
+                "previousVersion": item.from ?? "unknown", "targetVersion": item.to ?? "unknown"
+            ])
+        }
         // F2 — the exact argument vectors come from the planner, the same call the preview
         // panel renders. Building them here as well is how a dry-run starts to lie: the
         // `--force` retry path below is precisely the drift that was waiting to happen.
@@ -87,7 +107,11 @@ extension ScanStore {
             switch await prepareForegroundCasks(plannedCaskNames, targetKeys: targetKeys) {
             case .ready(let prepared):
                 caskPreparation = prepared
+                UpdateStageDiagnostics.recordOperation(prepared.operation)
             case .blocked(let publisherVetoes):
+                UpdateDiagnostics.record("update.deferred", fields: [
+                    "reason": "caskPreparationBlocked", "publisherVetoes": publisherVetoes.keys.sorted().joined(separator: ",")
+                ])
                 var blockedRun = UpdateRunOutcome()
                 blockedRun.recordPublisherVetoes(
                     plannedItems.filter { $0.kind == .cask },
@@ -186,6 +210,10 @@ extension ScanStore {
         // recovery from a bad upgrade would reinstall from.
         selected.removeAll()
         restartCandidates = candidates
+        restartDiagnosticOperationIDs.removeAll()
+        if let operationID = caskPreparation?.operation.operation.id {
+            for candidate in candidates { restartDiagnosticOperationIDs[candidate.processName] = operationID }
+        }
 
         // Re-query brew/mas so the list reflects reality, not optimistic clearing.
         // If a cask failed (e.g. "App source not there"), it will still appear here.
@@ -193,7 +221,12 @@ extension ScanStore {
         // M2(d) — lightweight: no second `brew update`, no second stale-cask sweep. The
         // rescan is not a stage of this bar: `runCheck` replaces the results view with the
         // scan's own screen, so the two bars hand over to each other.
+        UpdateDiagnostics.record("rescan.started", fields: ["lightweight": "true"])
         await runCheck(emitActivity: false, lightweight: true, operationLease: operationLease)
+        UpdateDiagnostics.record("rescan.result", fields: [
+            "confirmed": String(Set(plannedItems.map(\.kind)).isSubset(of: confirmedSourceKinds)),
+            "stillOutdatedKeys": allItems.map(\.key).sorted().joined(separator: ",")
+        ])
 
         updating = false
 
@@ -213,6 +246,7 @@ extension ScanStore {
     /// banner — green only when every item cleared every phase.
     private func report(run: UpdateRunOutcome) {
         let summary = run.summary
+        UpdateStageDiagnostics.recordSummary(summary)
 
         // OBS-02 — the verdicts below drive banners that vanish with the window. The same
         // run is also written to the durable journal, so a bug report filed tomorrow can
@@ -345,11 +379,31 @@ extension ScanStore {
     }
 
     func restartApp(_ info: RestartInfo) async {
+        let inherited = UpdateDiagnostics.current
+        let trace = inherited ?? DiagnosticRun(trigger: "restart", subjects: [info.appName])
+        defer { if inherited == nil { trace.finish() } }
+        await UpdateDiagnostics.$current.withValue(trace) {
+            await restartAppTraced(info)
+        }
+    }
+
+    private func restartAppTraced(_ info: RestartInfo) async {
+        var fields = ["processName": info.processName, "appName": info.appName, "engineReadiness": "notChecked"]
+        if let operationID = restartDiagnosticOperationIDs[info.processName] {
+            fields["operationID"] = operationID.uuidString
+        }
+        UpdateDiagnostics.record("restart.requested", fields: fields)
         restartBusy = info.processName
         await processes.kill(info.processName)
+        UpdateDiagnostics.record("restart.terminationReturned", fields: fields.merging(
+            ["result": "notExposedByService"], uniquingKeysWith: { _, new in new }))
         try? await Task.sleep(for: .milliseconds(800))
         await processes.launch(appName: info.appName)
+        UpdateDiagnostics.record("restart.launchReturned", fields: fields.merging(
+            ["result": "notExposedByService"], uniquingKeysWith: { _, new in new }))
         restartCandidates.removeAll { $0.processName == info.processName }
         restartBusy = nil
+        restartDiagnosticOperationIDs.removeValue(forKey: info.processName)
+        UpdateDiagnostics.record("restart.flowCompleted", fields: fields)
     }
 }

@@ -78,13 +78,26 @@ final class BackgroundUpdater {
     /// Returns the tokens it upgraded, for the notification.
     @discardableResult
     func runIfEligible(candidates: [String], policies: [String: UpdatePolicy]) async -> [String] {
+        let inherited = UpdateDiagnostics.current
+        let trace = inherited ?? DiagnosticRun(trigger: "background", subjects: candidates)
+        defer { if inherited == nil { trace.finish() } }
+        return await UpdateDiagnostics.$current.withValue(trace) {
+            await runEligibleTraced(candidates: candidates, policies: policies)
+        }
+    }
+
+    private func runEligibleTraced(candidates: [String], policies: [String: UpdatePolicy]) async -> [String] {
         let optedIn = dependencies?.optedInTokens() ?? BackgroundUpdateOptInStore.shared.tokens
-        guard !candidates.isEmpty, !optedIn.isEmpty else { return [] }
+        guard !candidates.isEmpty, !optedIn.isEmpty else {
+            UpdateDiagnostics.record("background.skipped", fields: ["reason": "noCandidatesOrOptIn"])
+            return []
+        }
 
         // REL-05 — a refused "App Management" grant fails every cask identically, so a round
         // started while it stands produces nothing but another notification. Hold back until
         // the cooldown lets one round through to find out whether the grant arrived.
         guard dependencies?.allowsRound() ?? AppManagementDenialStore.shared.allowsRound() else {
+            UpdateDiagnostics.record("background.skipped", fields: ["reason": "appManagementCooldown"])
             WegaLog.info(
                 .homebrew,
                 "Aktualizacja w tle wstrzymana — brak uprawnienia „Zarządzanie aplikacjami”. Przyznaj je w Ustawieniach systemowych → Prywatność i bezpieczeństwo."
@@ -104,6 +117,7 @@ final class BackgroundUpdater {
                 }
             }
         } catch {
+            UpdateDiagnostics.record("background.skipped", fields: ["reason": "preflightFailed", "error": error.localizedDescription])
             return []
         }
         let profiles = preflight.profiles
@@ -124,6 +138,9 @@ final class BackgroundUpdater {
                 ?? runningTokens(appPaths: appPaths),
             policies: policies
         ))
+        UpdateDiagnostics.record("background.eligibility", fields: [
+            "candidates": candidates.joined(separator: ","), "eligible": initiallyEligibleTokens.joined(separator: ",")
+        ])
         guard !initiallyEligibleTokens.isEmpty else { return [] }
         let downloadSizes = if let dependencies {
             await dependencies.probeDownloadSizes(initiallyEligibleTokens, downloadsByToken)
@@ -168,6 +185,7 @@ final class BackgroundUpdater {
             }
             let acquiredMutex = dependencies?.acquireMutex() ?? acquireLiveMutex()
             guard acquiredMutex else {
+                UpdateDiagnostics.record("background.skipped", fields: ["reason": "upgradeMutexBusy"])
                 WegaLog.info(.homebrew, "Aktualizacja w tle pominięta — trwa aktualizacja z okna.")
                 return []
             }
@@ -200,6 +218,7 @@ final class BackgroundUpdater {
                 runningProcessTokens: lockedRunningProcessTokens,
                 policies: lockedPolicies
             ))
+            UpdateDiagnostics.record("background.eligibilityRechecked", fields: ["eligible": eligibleLockedTokens.joined(separator: ",")])
             guard !eligibleLockedTokens.isEmpty else { return [] }
 
             func liveResourceDecision() async -> DownloadGate.Decision {
@@ -216,6 +235,7 @@ final class BackgroundUpdater {
                 await liveResourceDecision()
             }
             guard case .allow = resourceDecision else {
+                UpdateDiagnostics.record("background.deferred", fields: ["reason": "resources", "decision": String(describing: resourceDecision)])
                 if case .postpone(let reason) = resourceDecision {
                     WegaLog.info(.homebrew, "Aktualizacja w tle odroczona — \(reason).")
                 }
@@ -240,6 +260,7 @@ final class BackgroundUpdater {
             }
             let operation = dependencies?.beginOperation() ?? beginLiveOperation()
             operation.recordPlanned(tokens: lockedTokens, appPaths: appPaths)
+            UpdateStageDiagnostics.recordOperation(operation)
             do { try operation.requirePersisted() }
             catch {
                 WegaLog.error(.homebrew, "Aktualizacja w tle odroczona — \(error.localizedDescription)")
@@ -269,6 +290,7 @@ final class BackgroundUpdater {
                 )
             }
             guard !tokens.isEmpty else {
+                UpdateStageDiagnostics.recordSummary(run.summary)
                 // Brew never ran: settle the journal and drop the directory — an operation
                 // without snapshots restores nothing.
                 operation.abortUnfinished()
@@ -304,6 +326,9 @@ final class BackgroundUpdater {
     ) async -> BrewUpgradeOutcome {
         let retryTokens = outcome.tokensRetryableWithForce
         guard !retryTokens.isEmpty else { return outcome }
+        UpdateDiagnostics.record("upgrade.retry", fields: [
+            "tokens": retryTokens.joined(separator: ","), "attempt": "2", "reason": "interruptedCaskReplacement", "force": "true"
+        ])
         WegaLog.info(
             .homebrew,
             "Aktualizacja w tle — przerwana aktualizacja casku, ponawiam z --force: \(retryTokens.joined(separator: ", "))"
@@ -335,6 +360,7 @@ final class BackgroundUpdater {
             // LT-01 — `installing` is the last journal write before brew; after a crash it
             // is what recovery probes.
             operation.recordInstalling()
+            UpdateDiagnostics.record("operation.phase", fields: ["operationID": operation.operation.id.uuidString, "phase": "installing"])
             do { try operation.requirePersisted() }
             catch {
                 WegaLog.error(.homebrew, "Aktualizacja w tle odroczona — \(error.localizedDescription)")
@@ -402,6 +428,7 @@ final class BackgroundUpdater {
             await confirmByRescan(&run)
 
             let summary = run.summary
+            UpdateStageDiagnostics.recordSummary(summary)
             for outcome in summary.items where outcome.verdict != .succeeded {
                 WegaLog.error(.homebrew, "\(outcome.name): aktualizacja w tle — \(outcome.verdict.logDescription).")
             }
@@ -440,6 +467,7 @@ final class BackgroundUpdater {
     /// and still lists as outdated was not upgraded, and a query that fails leaves the round
     /// unconfirmed — which the notification says rather than glossing over.
     private func confirmByRescan(_ run: inout UpdateRunOutcome) async {
+        UpdateDiagnostics.record("rescan.started", fields: ["source": "background"])
         let outdated: BrewOutdated
         do {
             if let dependencies {
@@ -450,10 +478,14 @@ final class BackgroundUpdater {
         } catch {
             WegaLog.error(.homebrew, "Aktualizacja w tle — skan potwierdzający: \(error.localizedDescription)")
             run.applyRescan(stillOutdatedKeys: [], confirmed: false)
+            UpdateDiagnostics.record("rescan.result", fields: ["confirmed": "false", "error": error.localizedDescription])
             return
         }
         run.applyRescan(stillOutdatedKeys: Set(outdated.casks.map { Self.caskItem($0.name).key }),
                         confirmed: true)
+        UpdateDiagnostics.record("rescan.result", fields: [
+            "confirmed": "true", "stillOutdatedKeys": outdated.casks.map { Self.caskItem($0.name).key }.sorted().joined(separator: ",")
+        ])
     }
 
     private static func caskItem(_ token: String) -> OutdatedItem {

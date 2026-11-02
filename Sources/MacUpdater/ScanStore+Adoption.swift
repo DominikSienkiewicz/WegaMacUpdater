@@ -9,6 +9,15 @@ import MacUpdaterCore
 // but "is this app the cask it looks like" — and REL-08 and LT-03 both live here.
 extension ScanStore {
     func installManual(token: String) async {
+        let inherited = UpdateDiagnostics.current
+        let trace = inherited ?? DiagnosticRun(trigger: "adoption", subjects: [token])
+        defer { if inherited == nil { trace.finish() } }
+        await UpdateDiagnostics.$current.withValue(trace) {
+            await installManualTraced(token: token)
+        }
+    }
+
+    private func installManualTraced(token: String) async {
         await dependencies.upgrades.performWrite(.manualInstall) {
             await self.installManualCoordinated(token: token, installArgs: BrewService.adoptCaskArguments(token: token))
         }
@@ -17,14 +26,27 @@ extension ScanStore {
     /// The banner's repair for a `.notUpgraded` adoption: the same protected transaction, with
     /// `brew reinstall` in place of `install --force`.
     func reinstallManual(token: String) async {
+        let inherited = UpdateDiagnostics.current
+        let trace = inherited ?? DiagnosticRun(trigger: "reinstall", subjects: [token])
+        defer { if inherited == nil { trace.finish() } }
+        await UpdateDiagnostics.$current.withValue(trace) {
+            await reinstallManualTraced(token: token)
+        }
+    }
+
+    private func reinstallManualTraced(token: String) async {
         await dependencies.upgrades.performWrite(.manualInstall) {
             await self.installManualCoordinated(token: token, installArgs: BrewService.reinstallCaskArguments(token: token))
         }
     }
 
     private func installManualCoordinated(token: String, installArgs: [String]) async {
-        guard let model, manualBusy == nil else { return }
+        guard let model, manualBusy == nil else {
+            UpdateDiagnostics.record("adoption.skipped", fields: ["token": token, "reason": "unavailableOrBusy"])
+            return
+        }
         guard UpgradeMutex.shared.acquire() else {
+            UpdateDiagnostics.record("adoption.skipped", fields: ["token": token, "reason": "upgradeMutexBusy"])
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja w toku"),
                                   message: tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.")))
             return
@@ -54,6 +76,10 @@ extension ScanStore {
             ? CaskAdoptionCommand.arguments(token: token, offeredVersion: target.availableVersion,
                                             recordedVersion: recordedVersion)
             : installArgs
+        UpdateDiagnostics.record("adoption.planned", fields: [
+            "token": token, "targetVersion": target.availableVersion ?? "unknown", "recordedVersion": recordedVersion ?? "unknown",
+            "command": installArgs.joined(separator: " ")
+        ])
         brewLog = ["$ brew " + installArgs.joined(separator: " ")]
         showLog = true
         WegaLog.info(.homebrew, "Uruchamiam: brew \(installArgs.joined(separator: " "))")
@@ -75,13 +101,16 @@ extension ScanStore {
         ) {
         case .ready(let ready):
             preparation = ready
+            UpdateStageDiagnostics.recordOperation(ready.operation)
         case .resourcePostponed(let reason):
+            UpdateDiagnostics.record("adoption.deferred", fields: ["token": token, "reason": "resources", "detail": String(describing: reason)])
             brewLog.append("⏸ " + trf("Aktualizacja odroczona: %@.", "\(reason)"))
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
                                   message: trf("Bramka zasobów: %@.", "\(reason)")))
             emitActivitySignal(.error)
             return
         case .publisherRejected(let old, let new):
+            UpdateDiagnostics.record("adoption.deferred", fields: ["token": token, "reason": "publisherRejected", "previousTeamID": old, "currentTeamID": new ?? "unknown"])
             let message = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
                               "\(token)", "\(old)", "\(new ?? "—")")
             brewLog.append("⏸ " + message)
@@ -90,11 +119,13 @@ extension ScanStore {
             emitActivitySignal(.error)
             return
         case .journalUnavailable(let message):
+            UpdateDiagnostics.record("adoption.deferred", fields: ["token": token, "reason": "journalUnavailable", "detail": message])
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
                                   message: message, action: .openLogs))
             emitActivitySignal(.error)
             return
         case .snapshotFailed:
+            UpdateDiagnostics.record("adoption.deferred", fields: ["token": token, "reason": "snapshotFailed"])
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
                                   message: tr("Nie udało się utworzyć wymaganego snapshotu.")))
             emitActivitySignal(.error)
@@ -107,6 +138,7 @@ extension ScanStore {
             // app path is "nothing to snapshot", never "a failed snapshot"), and refusing
             // here left the user with a visible update and no way to apply it.
             preparation = nil
+            UpdateDiagnostics.record("adoption.protectionSkipped", fields: ["token": token, "reason": "caskInstallsNoApp"])
             let message = trf("%@: ten cask instaluje pakiet .pkg — aktualizacja pójdzie bez ochrony rollbackiem.",
                               "\(token)")
             brewLog.append("⚠️ " + message)
@@ -129,6 +161,11 @@ extension ScanStore {
             brewLog.append("error: \(error.localizedDescription)")
             installError = error
         }
+
+        UpdateDiagnostics.record("adoption.executionResult", fields: [
+            "token": token, "exitCode": String(exitCode), "error": installError?.localizedDescription ?? "none",
+            "verificationPlanned": String(preparation != nil)
+        ])
 
         // Only an adoption has something to verify. Asking for the installed `.app` of a cask
         // that declares none returns `nil`, and `verify` turns that `nil` into
@@ -182,6 +219,7 @@ extension ScanStore {
         token: String,
         installArgs: [String]
     ) -> Bool {
+        UpdateDiagnostics.record("adoption.verdict", fields: ["token": token, "verdict": String(describing: verdict)])
         let title: String
         let message: String
         var action: BannerAction?
