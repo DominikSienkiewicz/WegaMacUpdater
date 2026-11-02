@@ -2,6 +2,20 @@ import Foundation
 import MacUpdaterCore
 
 extension ScanStore {
+    func queueDockerRestart(token: String, bundleURL: URL) {
+        guard DockerDesktopMutationGate.isDocker(token: token) else { return }
+        let existing = restartCandidates.first {
+            restartDockerBundleURLs[$0.processName]?.standardizedFileURL == bundleURL.standardizedFileURL
+        }
+        let candidate = existing ?? RestartInfo(
+            processName: "Docker Desktop", appName: bundleURL.deletingPathExtension().lastPathComponent
+        )
+        restartCandidates.removeAll { $0.processName == candidate.processName }
+        restartCandidates.append(candidate)
+        restartDockerBundleURLs[candidate.processName] = bundleURL
+        restartDiagnosticOperationIDs.removeValue(forKey: candidate.processName)
+    }
+
     func dockerRestartBundles(
         tokens: [String], appPaths: [String: URL], running: [RunningApplicationTarget]
     ) -> [String: URL] {
