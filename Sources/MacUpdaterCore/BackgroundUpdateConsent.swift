@@ -134,6 +134,7 @@ public enum BackgroundUpdateConsentQualification: Equatable, Sendable {
         download: CaskDownloadInfo?,
         context: BackgroundUpdateConsentContext
     ) -> BackgroundUpdateConsentQualification {
+        guard !DockerDesktopUpdatePolicy.isDocker(token: token) else { return .ineligible(.dockerRequiresSupervision) }
         if let policy = context.policies["c:\(token)"] {
             switch policy {
             case .ignored:

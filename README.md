@@ -49,6 +49,21 @@ uploaded. Traces are bounded to 8 MiB per run and retained for up to 14 days, 50
 they do not establish why a vendor's own updater crashed. See
 [Diagnostics & troubleshooting](USER_GUIDE.md#4-diagnostics--troubleshooting).
 
+## Docker Desktop updates
+
+Docker Desktop has a separate supervised update flow. The default action opens its own
+updater; Homebrew remains an explicit alternative with confirmation. Docker is excluded
+from bulk and background upgrades, including previously saved background consent.
+Before a Homebrew replacement or rollback, Wega requires confirmed shutdown through
+Docker's bundled CLI. It does not force-kill Docker or reset its settings.
+
+An explicit restart checks the local engine with a bounded wait; installing the package
+alone never proves engine readiness. Rollback covers only the application bundle, not
+settings, VM disks, images, containers or volumes. Docker is excluded from automatic
+launch/quit smoke checks, including aliases and renamed bundles. See
+[Docker Desktop](USER_GUIDE.md#docker-desktop) and the focused checks in
+[Building and testing](docs/building.md).
+
 ## Requirements
 
 macOS 26+, Apple silicon or Intel. Homebrew is optional — without it the cask source is simply
@@ -56,8 +71,8 @@ absent and the other four keep working. Full list in [Building and testing](docs
 
 ## Testing
 
-Tests cover Core policies and app orchestration. Tap-remedy and foreground-diagnostics
-checks run in sequential XCTest suites, separately from Swift Testing migration checks
+Tests cover Core policies and app orchestration. Tap-remedy, foreground-diagnostics and
+Docker mutation checks run in sequential XCTest suites, separately from Swift Testing migration checks
 that share the update mutex. Source guards also check the protected reinstall call chain
 and the smoke-test opt-out before launch. Commands and quality gates are documented in
 [Building and testing](docs/building.md#build-and-test).

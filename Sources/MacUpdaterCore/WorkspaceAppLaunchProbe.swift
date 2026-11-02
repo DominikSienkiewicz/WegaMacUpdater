@@ -9,10 +9,11 @@ import Foundation
 /// hidden, so a background round can verify an upgrade without windows appearing on a Mac
 /// nobody is sitting at.
 ///
-/// The one case this refuses is an app that is **already running**. `NSWorkspace` would then
+/// An app that is **already running** is refused. `NSWorkspace` would then
 /// hand back the user's own instance rather than a new one, and the smoke test ends by
 /// terminating what it started — so it would quit an app the user is using. That is reported
-/// as `.alreadyRunning`, which never triggers a rollback.
+/// as `.alreadyRunning`, which never triggers a rollback. Privileged-first-run bundles are
+/// also refused by identifier, even when their filename or Homebrew token is unavailable.
 public struct WorkspaceAppLaunchProbe: AppLaunchProbing {
     private let processes: RunningProcessService
 
@@ -50,6 +51,10 @@ public struct WorkspaceAppLaunchProbe: AppLaunchProbing {
     }
 
     public func launch(bundleAt url: URL) async -> AppLaunchOutcome {
+        let bundleIdentifier = CaskReplacementArtifactIdentity.bundleIdentifier(at: url)
+        if LaunchSmokeTestConfiguration.isExemptFromSmokeTest(bundleIdentifier: bundleIdentifier) {
+            return .skipped(.privilegedFirstRun)
+        }
         guard Bundle(url: url)?.executableURL != nil else { return .skipped(.unsupportedBundle) }
         if runningInstance(at: url) != nil { return .skipped(.alreadyRunning) }
 

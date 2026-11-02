@@ -337,6 +337,32 @@ they persist across launches and the menu-bar badge honours them too.
 
 ---
 
+### Docker Desktop
+
+Docker updates appear in their own section. **Open Docker Desktop** opens the installed
+app; choose **Check for updates** in Docker's menu. Opening the app only starts tracking:
+use **Check this app** afterward to verify the offered version on disk. That check does
+not prove the engine is running. If Wega cannot resolve the installation path, the row
+explains why an action is unavailable.
+
+**Use Homebrew…** is a separate choice with a confirmation dialog. It may interrupt
+running containers: Wega first asks Docker Desktop to stop through its bundled CLI and
+checks that its application processes exited. Unsupported shutdown, a timeout, cancellation
+or an uncertain result postpones replacement. Wega repeats this check at retry and restore
+boundaries. Docker is excluded from **Update selected**, **Update all** and unattended
+updates, even if it was previously allowed in background settings.
+
+After a successful Homebrew replacement, the restart offer is optional. Only your click
+starts Docker and waits for the local engine. An engine timeout leaves the restart action
+available and does not rewrite the installation result as a success or failure.
+
+The rollback shield and **Undo update** protect **only the `.app` bundle**. They do not
+back up or restore Docker settings, VM disks, images, containers or volumes, and cannot
+promise compatibility with data migrated by a newer Docker version. Use Docker's own
+[backup and restore guidance](https://docs.docker.com/desktop/settings-and-maintenance/backup-and-restore/)
+for that data. Wega neither runs a factory reset nor launches Docker as an automatic smoke
+test, including when its application bundle was renamed.
+
 ## 4. Diagnostics & troubleshooting
 
 ### The Logs tab

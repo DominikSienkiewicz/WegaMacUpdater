@@ -424,10 +424,29 @@ struct UpdateView: View {
                         }
                         // Group manual updates by INSTALL ORIGIN (same axis the Inventory
                         // window labels), not by update source. A self-updating Homebrew
-                        // cask (Docker, Postman, ChatGPT…) stays under "Homebrew Casks" so
+                        // cask (Postman, ChatGPT…) stays under "Homebrew Casks" so
                         // both windows agree it's Brew — only genuinely non-package-manager
                         // apps land under "Ręcznie zainstalowane".
-                        let manualGroups = UpdatePlanner.groupManual(visibleManual)
+                        let dockerManual = visibleManual.filter { DockerDesktopUpdatePolicy.isDocker($0) }
+                        let visibleDocker = updateFilter.isSecurityOnly ? dockerManual.filter(scan.isSecurityApp) : dockerManual
+                        if !visibleDocker.isEmpty && updateFilter != .cli {
+                            ManualUpdateSection(
+                                items: visibleDocker, busyToken: scan.manualBusy,
+                                onInstall: { token in Task { await scan.installManual(token: token) } },
+                                title: "Docker Desktop", icon: "shippingbox",
+                                subtitle: tr("aktualizator producenta"),
+                                caption: tr("Domyślnie użyj aktualizatora Docker Desktop. Homebrew wymaga osobnego potwierdzenia i bezpiecznego zatrzymania."),
+                                inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,
+                                onPin: requestPinManual, onSkip: scan.skipManual,
+                                onInspect: { scan.inspectedKey = "m:" + $0.path.path }
+                            )
+                        }
+                        if updateFilter == .all || updateFilter == .apps {
+                            ForEach(scan.unresolvedDockerItems) { item in
+                                UnresolvedDockerUpdateRow(item: item) { scan.inspectedKey = item.key }
+                            }
+                        }
+                        let manualGroups = UpdatePlanner.groupManual(visibleManual.filter { !DockerDesktopUpdatePolicy.isDocker($0) })
                         let brewManual = updateFilter.isSecurityOnly ? manualGroups.brew.filter(scan.isSecurityApp) : manualGroups.brew
                         if !brewManual.isEmpty && updateFilter != .cli {
                             ManualUpdateSection(
@@ -687,42 +706,48 @@ private struct PlanPreviewCaskRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(token)
-                .font(.wega(.subheadline, weight: .medium, monospaced: true))
-                .frame(width: 150, alignment: .leading)
-            Text(host)
-                .font(.wega(.footnote))
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
-            Spacer(minLength: 6)
-            if download?.hasChecksum == true {
-                Label(tr("suma sprawdzana"), systemImage: "checkmark.seal")
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(Color.wegaSuccess)
-                    .help(tr("suma sprawdzana"))
-            } else {
-                Label(tr("bez weryfikacji sumy"), systemImage: "exclamationmark.shield")
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(Color.wegaDanger)
-                    .help(tr("bez weryfikacji sumy"))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(token)
+                    .font(.wega(.subheadline, weight: .medium, monospaced: true))
+                    .frame(width: 150, alignment: .leading)
+                Text(host)
+                    .font(.wega(.footnote))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                if download?.hasChecksum == true {
+                    Label(tr("suma sprawdzana"), systemImage: "checkmark.seal")
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(Color.wegaSuccess)
+                        .help(tr("suma sprawdzana"))
+                } else {
+                    Label(tr("bez weryfikacji sumy"), systemImage: "exclamationmark.shield")
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(Color.wegaDanger)
+                        .help(tr("bez weryfikacji sumy"))
+                }
+                if protection == .protected {
+                    Image(systemName: "shield.lefthalf.filled").foregroundStyle(Color.wegaSuccess)
+                        .help(RollbackScopePresentation.notice(for: RollbackProtection.scope(token: token))?.localizedDescription
+                              ?? tr("Chronione automatycznym cofnięciem"))
+                } else if protection != nil {
+                    Image(systemName: "shield.slash").foregroundStyle(.tertiary)
+                        .help(tr("Bez ochrony cofnięciem"))
+                }
+                if mayNeedPassword {
+                    Image(systemName: "key").foregroundStyle(Color.wegaToffee)
+                        .help(tr("Może poprosić o hasło administratora."))
+                }
+                Text(sizeLabel)
+                    .font(.wega(.footnote, monospaced: true))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 96, alignment: .trailing)
             }
+            .font(.wega(.subheadline))
             if protection == .protected {
-                Image(systemName: "shield.lefthalf.filled").foregroundStyle(Color.wegaSuccess)
-                    .help(tr("Chronione automatycznym cofnięciem"))
-            } else if protection != nil {
-                Image(systemName: "shield.slash").foregroundStyle(.tertiary)
-                    .help(tr("Bez ochrony cofnięciem"))
+                RollbackScopeNotice(scope: RollbackProtection.scope(token: token))
             }
-            if mayNeedPassword {
-                Image(systemName: "key").foregroundStyle(Color.wegaToffee)
-                    .help(tr("Może poprosić o hasło administratora."))
-            }
-            Text(sizeLabel)
-                .font(.wega(.footnote, monospaced: true))
-                .foregroundStyle(.tertiary)
-                .frame(width: 96, alignment: .trailing)
         }
-        .font(.wega(.subheadline))
     }
 }

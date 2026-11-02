@@ -58,15 +58,21 @@ extension ScanStore {
         defer { MutationGuard.shared.end(ticket) }
         emitActivitySignal(.scanning)
 
-        guard let target = manualOutdated.first(where: {
-            if case .cask(let candidate) = $0.source { return candidate == token }
-            return false
+        guard let target = visibleManual.first(where: {
+            if case .cask(let candidate) = $0.source {
+                return candidate == token || (DockerDesktopMutationGate.isDocker(token: token)
+                    && DockerDesktopMutationGate.isDocker(token: candidate))
+            }
+            return DockerDesktopMutationGate.isDocker(token: token)
+                && $0.caskPolicyToken.map { DockerDesktopMutationGate.isDocker(token: $0) } == true
         }) else {
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
                                   message: tr("Nie udało się utworzyć wymaganego snapshotu.")))
             emitActivitySignal(.error)
             return
         }
+
+        if await dockerMutationFailure(token: token, bundleURL: target.path) != nil { return }
 
         // Asked fresh rather than trusted from the scan: the record is what brew itself will
         // compare against, and it can move between the scan and the click. A failed read keeps
@@ -145,6 +151,11 @@ extension ScanStore {
             WegaLog.warning(.homebrew, message)
         }
 
+        if await dockerMutationFailure(token: token, bundleURL: target.path) != nil {
+            preparation?.operation.abortUnfinished()
+            return
+        }
+
         var installError: Error?
         var exitCode: Int32 = 0
         // LT-01 — the journal's last word before brew replaces the bundle: a crash from
@@ -173,8 +184,9 @@ extension ScanStore {
         // which would be a false alarm about an install that in fact just succeeded. That
         // false alarm is the reason the gate above exists; skipping the verification, rather
         // than skipping the install, is what removes it.
+        var installedAppURL: URL? = target.path
         if let preparation {
-            let installedAppURL = await CaskReplacementSafety.resolveInstalledAppURL(
+            installedAppURL = await CaskReplacementSafety.resolveInstalledAppURL(
                 preparation,
                 brewService: model.brewService
             )
@@ -195,15 +207,7 @@ extension ScanStore {
             emitWegaState(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
             WegaLog.error(.homebrew, "Instalacja \(token): \(installError.localizedDescription)")
         } else if exitCode == 0 {
-            manualOutdated.removeAll {
-                if case .cask(let t) = $0.source { return t == token }
-                return false
-            }
-            showBanner(BannerData(variant: .success, title: trf("Zaktualizowano %@", "\(token)"),
-                                  message: tr("Teraz zarządzany przez Homebrew.")))
-            emitActivitySignal(.success)
-            emitWegaState(WegaState(pose: .happy, line: trf("%@ zaktualizowany i pod opieką Brew.", "\(token)")))
-            WegaLog.info(.homebrew, "Zainstalowano \(token) (brew cask)")
+            reportManualInstallSuccess(token: token, appURL: installedAppURL ?? target.path)
         } else {
             showBanner(BannerData(variant: .danger, title: trf("Błąd instalacji %@", "\(token)"),
                                   message: tr("Sprawdź logi poniżej.")))

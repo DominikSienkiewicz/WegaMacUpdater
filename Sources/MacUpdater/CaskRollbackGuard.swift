@@ -38,6 +38,9 @@ enum CaskRollbackGuard {
         var removeItem: @Sendable (URL) throws -> Void
         var smokeTestIsEnabled: @Sendable () -> Bool
         var launchSmokeTest: @Sendable (URL) async -> LaunchSmokeTest.Verdict
+        var stopDocker: @Sendable (URL) async -> DockerDesktopStopResult = {
+            await DockerDesktopStopper().stop(bundleURL: $0)
+        }
 
         static let live = Dependencies(
             teamIDBeforeMutation: { CodeSignatureVerifier.teamID(ofAppAt: $0) },
@@ -550,6 +553,9 @@ enum CaskRollbackGuard {
             UpdateDiagnostics.record("rollback.result", fields: fields.merging(
                 ["restored": String(restored)], uniquingKeysWith: { _, new in new }))
         }
+        guard await dockerRestoreIsAllowed(token: token, snapshot: snapshot, appURL: appURL, dependencies: dependencies) else {
+            return false
+        }
         let restorationSource: URL
         if preservingSnapshot {
             restorationSource = snapshot.deletingLastPathComponent()
@@ -579,6 +585,9 @@ enum CaskRollbackGuard {
             }
         }
 
+        if preservingSnapshot {
+            guard await dockerRestoreIsAllowed(token: token, snapshot: snapshot, appURL: appURL, dependencies: dependencies) else { return false }
+        }
         do {
             if let dependencies {
                 try dependencies.restore(restorationSource, appURL)
@@ -592,6 +601,9 @@ enum CaskRollbackGuard {
             let helperIsEnabled = dependencies?.helperIsEnabled()
                 ?? PrivilegedHelperClient.shared.isEnabled
             guard helperIsEnabled else { return false }
+            guard await dockerRestoreIsAllowed(token: token, snapshot: snapshot, appURL: appURL, dependencies: dependencies) else {
+                return false
+            }
             do {
                 if let dependencies {
                     try await dependencies.helperReplace(appURL.path, restorationSource.path)
@@ -607,6 +619,31 @@ enum CaskRollbackGuard {
                 return false
             }
         }
+    }
+
+    private static func dockerRestoreIsAllowed(
+        token: String?,
+        snapshot: URL,
+        appURL: URL,
+        dependencies: Dependencies?
+    ) async -> Bool {
+        let identifiesDocker = token.map { DockerDesktopMutationGate.isDocker(token: $0) } == true
+            || (dependencies?.bundleIdentifier(snapshot) ?? CaskReplacementArtifactIdentity.bundleIdentifier(at: snapshot)) == "com.docker.docker"
+            || (dependencies?.bundleIdentifier(appURL) ?? CaskReplacementArtifactIdentity.bundleIdentifier(at: appURL)) == "com.docker.docker"
+        guard identifiesDocker else { return true }
+        let stop: @Sendable (URL) async -> DockerDesktopStopResult
+        if let override = dependencies?.stopDocker {
+            stop = override
+        } else {
+            stop = { @Sendable url in await DockerDesktopStopper().stop(bundleURL: url) }
+        }
+        let shutdown = await stop(appURL)
+        UpdateDiagnostics.record("rollback.dockerShutdown", fields: [
+            "appPath": appURL.path, "result": String(describing: shutdown),
+            "allowsBundleMutation": String(shutdown.allowsBundleMutation)
+        ])
+        if !shutdown.allowsBundleMutation { WegaLog.error(.homebrew, shutdown.mutationBlockMessage) }
+        return shutdown.allowsBundleMutation
     }
 
     /// LT-02 — starts the upgraded app hidden and reports whether it survived the window.

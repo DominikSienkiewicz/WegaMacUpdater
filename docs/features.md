@@ -29,7 +29,7 @@ checker, in one pass.
   without brew no longer wears a permanent red "the list may be incomplete" banner over a
   list that is complete.
 - **Grouped by install origin.** Updates are grouped by the same `AppOrigin` the Inventory
-  window badges by, so a self-updating Homebrew cask like Docker or Postman appears under
+  window badges by, so a self-updating Homebrew cask like Postman appears under
   **Homebrew Casks** — never "Manually installed" — keeping the two windows in agreement.
 - Selectable list — update all or pick individually.
 
@@ -243,6 +243,26 @@ straight away (`CaskAdoptionCommand`). The log names the command that actually r
 state an app's own updater leaves after it puts an older build back over a brew install — see
 the Squirrel note under the launch smoke test below — and the state a REL-07 rollback leaves.
 
+#### Docker Desktop
+
+`DockerDesktopUpdatePolicy` keeps Docker out of batch targets, previews and background
+eligibility. The supervised row prefers the vendor updater, preserves pending handoffs,
+and offers Homebrew behind an explicit confirmation. An unresolved installation stays
+visible without an executable action. Local completion of a cask-sourced handoff checks
+the installed identity and offered version/build with two stable reads; it does not claim
+the engine is ready or replace a real vendor check for other sources.
+
+`DockerDesktopStopper` uses the CLI inside the resolved Docker bundle, a bounded stop and
+local process probes. Bundle replacement, force retry, migration, automatic recovery and
+Undo all require a confirmed stop; there is no force-kill or factory-reset fallback.
+`DockerDesktopRestarter` runs only on an explicit restart, starts the installed Desktop
+and polls its local user socket with a bounded deadline. The installation result and
+engine readiness are reported separately. A failed readiness check leaves a retry action.
+
+`RollbackProtection.Scope` and the rollback UI identify Docker protection as application
+bundle only. Settings, VM disks, images, containers and volumes are outside that snapshot;
+restoring the bundle cannot guarantee compatibility with migrated data.
+
 #### Launch smoke test
 
 The identity, Gatekeeper and publisher gates all describe what the new bundle **is**; none
@@ -266,8 +286,9 @@ the app would be destructive rather than tidy: an instance holding an **open sys
 authorization prompt**, and a cask named as doing a **privileged first run**.
 
 That last pair is the Docker Desktop lesson. An app whose bundle was just replaced may come
-up asking for authorization to reinstate privileged state — Docker rebuilds its `vmnetd`
-configuration this way. The prompt is drawn by a helper process that dies with its parent, so
+up asking for authorization to reinstate privileged state. Older Docker Desktop versions
+used this path for `vmnetd`; the historical incident below does not imply that every
+current release uses that helper. The prompt is drawn by a helper process that dies with its parent, so
 the teardown cancels an installation the user is still answering: Docker's password dialog was
 killed 7.4 seconds after it appeared (the five-second window plus the two-second grace), and
 because the privileged step never finished, every later launch re-prompted and crashed. So an
@@ -275,7 +296,9 @@ open prompt — detected through `SecurityAgent`, which exists only while an aut
 is on screen — suspends the teardown and leaves the instance running for the user to answer.
 Detection alone would race, since Docker's dialog took about four seconds to appear against a
 five-second window, so casks known to repair privileged state on first run are never launched
-by the smoke test at all. Both are "no evidence", never a failure: not learning whether an app
+by the smoke test at all. Docker aliases and tap-qualified tokens retain this exemption,
+and the uncached `com.docker.docker` bundle identity blocks a renamed app before any launch.
+Both are "no evidence", never a failure: not learning whether an app
 runs must not be spent as a reason to undo an upgrade.
 
 The teardown also has to keep the app's **own updater** from taking the quit as its cue.
@@ -411,6 +434,9 @@ Scans every app on the system regardless of origin. Brew casks are removed with 
 ### Migration
 Finds manually-installed apps that have a Homebrew Cask equivalent and offers to migrate them with `brew install --cask`. Runs `mas search` in parallel for apps without a cask match to find App Store equivalents. Running detection covers every matched app: the exact standardized/resolved bundle path wins, with a unique bundle ID as fallback; ambiguous duplicate bundle IDs stop the migration. Wega sends that exact process a normal application **Quit** request and waits for it to stop. Only an app that remains open produces a separate warning about unsaved data; after explicit consent Wega identifies the target again, sends `SIGKILL` only to that PID, and confirms the app stopped. A failed or ambiguous force-quit cancels the migration instead of being ignored. A match too weak to trust (the **"niepewne"** / low confidence level) is refused before anything runs: since `brew install --cask --force` overwrites the app in place, a low-confidence `.app`→cask match could replace it with a *different* program, so Wega blocks the automatic takeover and asks you to verify the token manually (`MigrationAutoTakeover` consuming `CaskMatchConfidence.allowsAutoConfirm` — the confidence score now gates execution, not just the badge). The confidence comes from **how** the match was found (`CaskMatchProvenance`, decided by `CaskMatcher` and carried on the scanned app): an already-installed cask, a curated entry in `customCaskMappings` or an exact token hit is certain; a match on one of a cask's display names is plausible and asks for confirmation; an app tied to no cask at all is the case that stays blocked. A publisher mismatch still overrules all of it. Previously the scorer re-derived this from strings its callers could not supply, so the curated table — whose whole purpose is apps whose name does not normalize to their token — scored lowest and had every one of its entries refused. Before Homebrew replaces an existing `.app`, migration takes the shared upgrade mutex, passes the same hard disk/network/power gate as an upgrade, verifies and preserves the installed publisher baseline, and requires a copy-on-write snapshot. The installed result must pass the shared Gatekeeper/Team-ID canary; otherwise Wega restores the snapshot and reports failure. The manual cask-adoption action in Updates uses this same protected transaction, so neither `brew install --cask --force` entry point can bypass it. A cask that installs **no `.app` at all** — a `pkg` cask such as `zoom` or `google-drive` — is refused up front with "Nie można przejąć", before brew runs: there is no bundle to snapshot, nothing for the Gatekeeper/Team-ID canary to validate, and nothing to restore. Adoption previously ran the force-install on these anyway and then reported the missing app artifact as `.rollbackFailed` ("the new version failed the check and could not be restored"), which described neither a check nor a rollback — both had been skipped. This is the same `RollbackProtection` question the batch upgrade path already asks, now asked by the adoption path too. A successful brew migration ends there: Wega **touches nothing in `~/Library`**. The old "clean leftovers" sheet was removed (SEC-01) — for a migration the app keeps its bundle id, so those "leftovers" are the live Application Support, preferences and container of the app you just adopted, and the sheet offered to delete them permanently with everything preselected. **npm ↔ brew duplicate row** — for CLIs installed via both `npm -g` and Homebrew (e.g. `@openai/codex` + `codex` cask), inline "Usuń z npm" / "Usuń z brew" buttons run the corresponding uninstall (`npm uninstall -g -- <pkg>` via `NpmGlobalService.uninstallEvents`, or `brew uninstall -- <token>`; the `--` terminator is SEC-10) after a confirmation alert; the duplicate disappears from the list on exit 0.
 
+Docker migration uses the controlled Desktop shutdown gate instead of generic force
+termination, including when a stale confirmation requests force termination.
+
 ### Inventory
 The **Check status** column and **Needs checking** filter expose the latest per-installation
 update-check evidence: current, update available, incomplete, no recognized source,
@@ -453,6 +479,9 @@ the internal cause of a vendor updater failure.
 
 ### Menu-bar agent
 A box icon lives in the menu bar, **badged with the number of available updates**. On a configurable schedule (off / hourly / every 6 hours / daily, default every 6 hours) it runs a **read-only** background check — never `brew update`, never a mutation — and posts a notification when new updates appear. **A background check never raises the macOS permission dialog**: the first time the agent has something to announce, Wega shows an explanation card in its own window, and only a user who accepts it spends the one-shot system prompt (`NotificationPrompt` in Core decides this; declining is remembered, so the card never returns).
+
+**Docker Desktop is always excluded from unattended upgrades**, even with saved opt-in
+consent; Settings shows the reason.
 
 **Background updates (opt-in, per app)** — from a row's ⋯ menu you can let Wega upgrade a cask unattended. The Settings window keeps a durable audit of every consent—including packages no longer present in the current update list—with its grant date, revoke action and a current per-package reason: ignored/pinned policy, no update waiting, unresolved installed app, running app, unsafe metadata, or readiness for the final checks. While Settings is visible, that verdict refreshes after app launches or exits, after returning to the active lifecycle, and periodically for Homebrew's outdated state; rapid lifecycle events are debounced and every Homebrew read shares the app-wide read/write coordinator. Every safety condition must hold, and the default answer is no: you opted this app in; the cask installs an `.app` and only `app`/`binary`/`zap` artifacts (no `pkg`/`installer`/`preflight` hook); Homebrew has a concrete `sha256`; no ignore/pin rule applies; and the app is not running. Metadata alone is not enough: Wega must resolve the installed `.app` and successfully create its copy-on-write snapshot in that exact round. A missing path or failed snapshot vetoes that token before `brew` starts, leaving it for the user-present window flow. Snapshot feasibility, resources and publisher safety are deliberately checked only immediately before the unattended update, not speculatively from Settings. After acquiring the upgrade mutex, Wega checks policies and running processes again so a decision made while the round waited cannot be stale. Sudo-requiring and binary-only casks are excluded *by construction*, not by preference. Before any snapshot or payload download, the same hard resource gate used by the window checks metered/Low Data Mode networking, battery level, thermal throttling and free disk. Its disk budget is the download plus estimated unpacked payload plus the full allocated size of the rollback snapshot plus a safety margin. Unknown sizes use the configured estimate; an unreadable capacity fails closed. A veto postpones the round and persists its reason in Wega's log.
 

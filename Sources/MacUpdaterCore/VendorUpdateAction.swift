@@ -91,7 +91,7 @@ public extension ManualOutdatedApp.UpdateSource {
     var updateActionKind: UpdateActionKind {
         switch self {
         case .cask(let token):
-            return .brewInstall(token: token)
+            return DockerDesktopUpdatePolicy.isDocker(token: token) ? .launchApp : .brewInstall(token: token)
         case .mas:
             return .appStore
         case .github(let repo, let selfUpdates):

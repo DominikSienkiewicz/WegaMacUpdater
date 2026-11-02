@@ -27,7 +27,17 @@ swift test --jobs 1 --no-parallel --filter 'DiagnosticTraceStoreTests|Diagnostic
 
 The ZIP is assembled locally; these checks do not send diagnostics or run vendor updates.
 
-`TapTrustRemedyRunTests` and `UpdateStageDiagnosticsForegroundTests` use XCTest, like the
+Docker safety regression tests use fake process runners, injected lifecycle services and
+temporary bundles. They cover shutdown and restore gates, local engine readiness, manual
+restart offers, vendor routing, background exclusion, bundle-only rollback scope and smoke
+exemptions. They do not stop, start, update or reset an installed Docker Desktop:
+
+```bash
+swift test --jobs 1 --no-parallel --filter 'DockerDesktop|DockerRollbackScope|DockerSmoke|DockerBatchExecution|DockerManualRestart|DockerManualCompletion'
+```
+
+`TapTrustRemedyRunTests`, `UpdateStageDiagnosticsForegroundTests` and
+`DockerDesktopMutationGateTests` use XCTest, like the
 other ScanStore runtime tests. They run sequentially and separately from Swift Testing's
 `MigrationStoreCoverageTests`, which also uses the process-wide update mutex. A Swift
 Testing suite's `.serialized` trait only serializes its own tests; it cannot prevent a

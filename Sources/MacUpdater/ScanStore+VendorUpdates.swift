@@ -91,6 +91,10 @@ extension ScanStore {
         var remaining: ManualOutdatedApp? = item
         switch result.outcome {
         case .confirmed:
+            if case .cask(let token) = item.source, DockerDesktopUpdatePolicy.isDocker(token: token),
+               caskIconPaths[token].map({ InstallationIdentity(path: $0) }) == InstallationIdentity(path: item.path) {
+                brewOutdated?.casks.removeAll { $0.name == token }
+            }
             manualOutdated.removeAll { $0.path == item.path && $0.bundleIdentifier == item.bundleIdentifier }
             vendorHandoffs.removeAll { $0.path == item.path }
             vendorMessages[item.path.path] = nil

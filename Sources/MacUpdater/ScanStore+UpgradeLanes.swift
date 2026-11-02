@@ -83,6 +83,9 @@ extension ScanStore {
         operation: UpdateOperationSession
     ) async -> LaneItemResult {
         let token = item.name
+        if let failure = await dockerMutationFailure(token: token, bundleURL: appPaths[token]) {
+            return LaneItemResult(item: item, outcome: failure)
+        }
         beginItem(named: token)
         defer { endItem() }
 
@@ -106,6 +109,9 @@ extension ScanStore {
                 "↻ " + trf("Homebrew był zajęty (%@) — ponawiam.", "\(token)"), from: token))
             WegaLog.info(.homebrew, "Kolizja blokad Homebrew — ponawiam \(token)")
             try? await Task.sleep(for: .seconds(2))
+            if let failure = await dockerMutationFailure(token: token, bundleURL: appPaths[token]) {
+                return LaneItemResult(item: item, outcome: failure)
+            }
             outcome = await runBrewUpgrade(
                 arguments: UpdatePlanner.caskUpgradeCommand(tokens: [token]).arguments,
                 logSource: token,
@@ -116,6 +122,9 @@ extension ScanStore {
         // Auto-recover an interrupted upgrade: brew bails because a stale staged app from a
         // previous, cut-short run occupies the destination. `--force` overwrites it.
         if outcome.tokensRetryableWithForce.contains(token) {
+            if let failure = await dockerMutationFailure(token: token, bundleURL: appPaths[token]) {
+                return LaneItemResult(item: item, outcome: failure)
+            }
             attempt += 1
             UpdateDiagnostics.record("upgrade.retry", fields: ["token": token, "attempt": String(attempt), "reason": "interruptedCaskReplacement", "force": "true"])
             brewLog.append(UpgradeLogPrefix.line(

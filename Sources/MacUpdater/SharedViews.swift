@@ -445,9 +445,12 @@ struct PackageRow: View {
                         .font(.caption.monospaced())
                         .foregroundStyle(.tertiary)
                 }
+                if rollback == .protected {
+                    RollbackScopeNotice(scope: RollbackProtection.scope(token: token ?? name), compact: true)
+                }
             }
             Spacer()
-            if let rollback { RollbackBadge(verdict: rollback) }
+            if let rollback { RollbackBadge(verdict: rollback, scope: RollbackProtection.scope(token: token ?? name)) }
             if let from = currentVersion, let to = latestVersion {
                 let kind = versionChangeKind(from: from, to: to)
                 let emphasis = versionEmphasis(changeKind: kind,
@@ -516,14 +519,10 @@ struct PackageRow: View {
 
 // MARK: - Rollback badge (M5)
 
-/// Surfaces the snapshot → canary → auto-rollback net that has always run and never showed.
-///
-/// It deliberately promises only what happens *during* this upgrade: if the new version
-/// fails its Gatekeeper check, the previous one comes back automatically. It does not offer
-/// a manual "Undo" — a healthy upgrade deletes the snapshot after the canary window, so a
-/// button implying longer retention would be a lie.
+/// Describes app-bundle rollback capability without implying Docker environment recovery.
 private struct RollbackBadge: View {
     let verdict: RollbackProtection.Verdict
+    let scope: RollbackProtection.Scope
 
     var body: some View {
         switch verdict {
@@ -531,8 +530,9 @@ private struct RollbackBadge: View {
             Image(systemName: "shield.lefthalf.filled")
                 .font(.wega(.callout))
                 .foregroundStyle(Color.wegaSuccess)
-                .help(tr("Przed aktualizacją robię kopię. Jeśli nowa wersja nie przejdzie testu, wracam do poprzedniej."))
-                .accessibilityLabel(tr("Chronione automatycznym cofnięciem"))
+                .help(RollbackScopePresentation.notice(for: scope)?.localizedDescription
+                      ?? tr("Przed aktualizacją robię kopię. Jeśli nowa wersja nie przejdzie testu, wracam do poprzedniej."))
+                .accessibilityLabel(tr(RollbackScopePresentation.notice(for: scope)?.title ?? "Chronione automatycznym cofnięciem"))
         case .unprotected:
             Image(systemName: "shield.slash")
                 .font(.wega(.callout))

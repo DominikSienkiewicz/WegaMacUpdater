@@ -38,15 +38,23 @@ struct RollbackView: View {
                 Button(tr("Anuluj"), role: .cancel) { undoTarget = nil }
             } message: {
                 if let undoTarget {
-                    Text(trf("%@ zostanie zastąpiona kopią sprzed aktualizacji, a przywrócona wersja zostanie przypięta. Kopia jest trzymana do %@.",
-                             "\(undoTarget.token)",
-                             "\(undoTarget.expiresAt.formatted(date: .abbreviated, time: .omitted))"))
+                    Text(confirmationMessage(for: undoTarget))
                 }
             }
             // The retention sweep can drop a snapshot between the last refresh and the
             // moment this destination is opened, so the list is re-read on arrival rather
             // than trusted from whenever the Updates tab last looked.
             .onAppear { scan.refreshUndoableUpdates() }
+    }
+
+    private func confirmationMessage(for update: UndoableUpdate) -> String {
+        let restoration = trf(
+            "%@ zostanie zastąpiona kopią sprzed aktualizacji, a przywrócona wersja zostanie przypięta. Kopia jest trzymana do %@.",
+            update.token,
+            update.expiresAt.formatted(date: .abbreviated, time: .omitted)
+        )
+        guard let notice = RollbackScopePresentation.notice(for: update.rollbackScope) else { return restoration }
+        return "\(restoration)\n\n\(notice.localizedDescription)"
     }
 
     @ViewBuilder

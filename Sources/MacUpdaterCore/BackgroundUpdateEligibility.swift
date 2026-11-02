@@ -3,7 +3,8 @@ import Foundation
 /// Whether a cask may be upgraded without the user watching (F3).
 ///
 /// Background updating is only responsible where the outcome is verifiable and reversible.
-/// Two properties decide it, both readable from `brew info --json`:
+/// Docker Desktop always requires supervision. For other casks, two properties decide it,
+/// both readable from `brew info --json`:
 ///
 /// 1. **An app and no privileged artifacts.** `pkg`, `installer` and `preflight` can run
 ///    arbitrary code or demand an admin password. A cask must install an `.app` and declare
@@ -27,6 +28,8 @@ public enum BackgroundUpdateEligibility {
         case privilegedArtifact
         /// Homebrew would install without verifying the download (`:no_check`, or absent).
         case noChecksum
+        /// Docker Desktop requires a foreground choice and a verified shutdown before Homebrew.
+        case dockerRequiresSupervision
     }
 
     public enum Verdict: Equatable, Sendable {
@@ -37,6 +40,7 @@ public enum BackgroundUpdateEligibility {
     /// `download` is optional because `brew info` may not report one; a cask whose download
     /// we cannot inspect is treated exactly like a cask with no checksum.
     public static func evaluate(profile: CaskArtifactProfile, download: CaskDownloadInfo?) -> Verdict {
+        guard !DockerDesktopUpdatePolicy.isDocker(token: profile.token) else { return .ineligible(.dockerRequiresSupervision) }
         let kinds = profile.artifactKinds
         guard !kinds.isEmpty else { return .ineligible(.noArtifacts) }
         guard kinds.isSubset(of: safeArtifactKinds) else { return .ineligible(.privilegedArtifact) }

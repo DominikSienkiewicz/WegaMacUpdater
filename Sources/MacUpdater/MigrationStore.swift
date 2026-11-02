@@ -43,6 +43,9 @@ final class MigrationStore: ObservableObject {
         ) async -> CaskValidationVerdict
         var waitBetweenRunningChecks: @Sendable () async -> Void
         var openURL: @MainActor @Sendable (URL) -> Void
+        var stopDocker: @Sendable (URL) async -> DockerDesktopStopResult = {
+            await DockerDesktopStopper().stop(bundleURL: $0)
+        }
 
         static let live = Dependencies(
             fetchCasks: { try await CaskDatabaseClient.caskCatalog().fetchCasks() },
@@ -182,6 +185,8 @@ final class MigrationStore: ObservableObject {
             return
         }
 
+        if await migrateDockerIfNeeded(app, token: token, model: model, onWegaState: onWegaState) { return }
+
         switch resolveRunningTarget(for: app) {
         case .notRunning:
             break
@@ -229,6 +234,7 @@ final class MigrationStore: ObservableObject {
         guard migrating == nil, let token = request.app.caskToken else { return }
         pendingForceTermination = nil
         migrating = token
+        if await migrateDockerIfNeeded(request.app, token: token, model: model, onWegaState: onWegaState) { return }
         let currentTarget: RunningApplicationTarget
         switch resolveRunningTarget(for: request.app) {
         case .running(let target):
@@ -448,6 +454,8 @@ final class MigrationStore: ObservableObject {
             line: trf("Instaluję %@ przez Homebrew…", "\(app.name)")
         ))
 
+        guard await stopDockerBeforeMigration(token: token, appURL: app.path, onWegaState: onWegaState) else { return }
+
         let preparation: CaskReplacementSafety.Preparation
         switch await dependencies.prepareReplacement(token, app.path, model.brewService) {
         case .ready(let ready):
@@ -487,6 +495,11 @@ final class MigrationStore: ObservableObject {
                                "\(token)")
             if let errorMessage { logLines.append("⏸ " + errorMessage) }
             onWegaState?(WegaState(pose: .alert, line: tr("Nie można przejąć")))
+            return
+        }
+
+        guard await stopDockerBeforeMigration(token: token, appURL: app.path, onWegaState: onWegaState) else {
+            preparation.operation.abortUnfinished()
             return
         }
 
@@ -721,5 +734,32 @@ private enum MigrationVerificationMessage {
         case .replacedByAppUpdater(let version):
             return CaskRollbackGuard.replacedByAppUpdaterMessage(token: token, version: version)
         }
+    }
+}
+
+extension MigrationStore {
+    private func migrateDockerIfNeeded(
+        _ app: ApplicationInfo,
+        token: String,
+        model: AppViewModel,
+        onWegaState: (@MainActor (WegaState) -> Void)?
+    ) async -> Bool {
+        guard DockerDesktopMutationGate.isDocker(token: token) else { return false }
+        await performMigration(app, token: token, model: model, onWegaState: onWegaState)
+        return true
+    }
+
+    private func stopDockerBeforeMigration(
+        token: String,
+        appURL: URL,
+        onWegaState: (@MainActor (WegaState) -> Void)?
+    ) async -> Bool {
+        guard let shutdown = await DockerDesktopMutationGate.stopIfNeeded(
+            token: token, bundleURL: appURL, stop: dependencies.stopDocker
+        ), !shutdown.allowsBundleMutation else { return true }
+        errorMessage = shutdown.mutationBlockMessage
+        logLines.append("⏸ " + shutdown.mutationBlockMessage)
+        onWegaState?(WegaState(pose: .alert, line: shutdown.mutationBlockMessage))
+        return false
     }
 }
