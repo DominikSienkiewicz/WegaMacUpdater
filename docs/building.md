@@ -16,6 +16,15 @@ GUI apps do not inherit an interactive shell environment. Wega resolves all tool
 
 ## Build and test
 
+Foreground source-wiring guards check generic restart detection, publisher-veto reporting
+before mutation, and manual rollback with the cask token before journaling and version
+pinning. They locate reporting methods independently of access modifiers. These checks
+inspect source code; they do not execute updates or restore installed apps:
+
+```bash
+swift test --jobs 1 --no-parallel --filter 'LT01UpdateOperationWiringTests|RestartDetectionWiringTests|ForegroundPublisherVetoPersistenceTests'
+```
+
 Diagnostic trace tests use temporary stores, fake HTTP transports and controlled local
 processes. They cover retention/export, log correlation, credential redaction, bounded
 stream capture, process outcomes, update stages, HTTP retries/cache and vendor results.

@@ -14,7 +14,7 @@ struct RestartDetectionWiringTests {
         )
         let start = try #require(text.range(of: "private func runUpdateCoordinated("))
         let end = try #require(
-            text.range(of: "private func report(run:", range: start.upperBound..<text.endIndex)
+            text.range(of: "func report(run:", range: start.upperBound..<text.endIndex)
         )
         let body = String(text[start.lowerBound..<end.lowerBound])
 

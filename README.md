@@ -89,8 +89,10 @@ absent and the other four keep working. Full list in [Building and testing](docs
 
 Tests cover Core policies and app orchestration. Tap-remedy, foreground-diagnostics and
 Docker mutation checks run in sequential XCTest suites, separately from Swift Testing migration checks
-that share the update mutex. Source guards also check the protected reinstall call chain
-and the smoke-test opt-out before launch. Commands and quality gates are documented in
+that share the update mutex. Source guards also check the protected reinstall call chain,
+the smoke-test opt-out before launch, generic restart detection, publisher-veto reporting
+before mutation, and token-aware manual rollback before journaling and version pinning.
+Commands and quality gates are documented in
 [Building and testing](docs/building.md#build-and-test).
 
 ## License

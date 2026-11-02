@@ -54,7 +54,7 @@ struct TrackedHelperIntegrationTests {
         let task = Task {
             await #expect(throws: CancellationError.self) { try await client.install(at: "/unused/Wega.pkg", version: "3.0") }
         }
-        await task.value
+        _ = await task.value
         #expect(!store.hasPending)
     }
 }
