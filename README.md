@@ -1,13 +1,15 @@
 # Wega Mac Updater
-**Designed and maintained by [Dominik](https://www.linkedin.com/in/dominik-sienkiewicz/), built with AI coding agents:** I set the architecture, write the specifications, define the quality gates enforced in CI and review every change.
+
+**Designed and maintained by [Dominik Sienkiewicz](https://www.linkedin.com/in/dominik-sienkiewicz/), built with AI coding agents:** I set the architecture, write the specifications, define the quality gates enforced in CI and review every change.
 
 Native macOS app that keeps every application on your Mac up to date — Homebrew casks, Mac App Store, JetBrains IDEs, GitHub Releases, and Sparkle apps — from a single window, without ever opening a terminal.
 
 ![Swift](https://img.shields.io/badge/Swift-6.0-orange?style=for-the-badge&logo=swift&logoColor=white)
 ![SwiftUI](https://img.shields.io/badge/SwiftUI-macOS_26%2B-blue?style=for-the-badge&logo=apple&logoColor=white)
-![Version](https://img.shields.io/badge/Version-0.2.0-lightgrey?style=for-the-badge)
 ![Homebrew](https://img.shields.io/badge/Homebrew-optional-FBB040?style=for-the-badge&logo=homebrew&logoColor=white)
 ![Architecture](https://img.shields.io/badge/Architecture-SPM_Modules-purple?style=for-the-badge)
+
+[![Version](https://img.shields.io/badge/Version-0.6.0-lightgrey?style=for-the-badge)](Sources/WegaHelperKit/AppMetadata.swift)
 [![CI](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml/badge.svg)](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml)
 
 ## The Vision: one window, zero terminals
