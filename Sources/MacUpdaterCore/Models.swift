@@ -219,6 +219,8 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
         case signal
         /// Google Chrome (stable / beta / dev / canary) — self-updating via Keystone.
         case chrome
+        /// Firefox release, ESR or beta, verified against Mozilla's own release metadata.
+        case firefox(channel: FirefoxReleaseChannel)
         /// Obsidian — self-updating ASAR package; may follow the Catalyst insider channel
         /// independently of the app bundle and Homebrew cask versions.
         case obsidian
@@ -246,6 +248,7 @@ public struct ManualOutdatedApp: Codable, Equatable, Sendable {
             case .discord:     return 5
             case .signal:      return 5
             case .chrome:      return 5
+            case .firefox:     return 5
             case .obsidian:    return 5
             case .microsoftAutoUpdate: return 5
             case .jetbrains:   return 4

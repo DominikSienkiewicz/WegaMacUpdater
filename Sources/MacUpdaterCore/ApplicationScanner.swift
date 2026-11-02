@@ -79,7 +79,7 @@ public struct ApplicationScanner {
             caskMatchProvenance = nil
         }
 
-        return ApplicationInfo(
+        var app = ApplicationInfo(
             path: appURL,
             name: appName,
             bundleIdentifier: bundleIdentifier,
@@ -92,6 +92,12 @@ public struct ApplicationScanner {
             caskMatchProvenance: caskMatchProvenance,
             isManagedByMas: managedByMas
         )
+        if let token = app.caskToken, !FirefoxUpdateChecker.allowsCask(token, for: app) {
+            app.isManagedByBrew = false
+            app.caskToken = nil
+            app.caskMatchProvenance = nil
+        }
+        return app
     }
 
     private func hasMasReceipt(at appURL: URL) -> Bool {

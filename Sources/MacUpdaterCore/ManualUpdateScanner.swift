@@ -168,14 +168,17 @@ public struct ManualUpdateScanner: Sendable {
         brewTrackedVersion: String?,
         latestCaskVersions: [String: String]
     ) -> (@Sendable () async -> ManualCheckObservation)? {
-        guard ServiceVendorUpdateProfile.profile(for: app) == nil, let token = app.caskToken else { return nil }
+        guard ServiceVendorUpdateProfile.profile(for: app) == nil, let token = app.caskToken,
+              FirefoxUpdateChecker.allowsCask(token, for: app) else { return nil }
         return Self.observed("Cask", app, applicable: true) {
             guard let latest = latestCaskVersions[token] else { return .unavailable }
             let reference = brewTrackedVersion ?? app.version
             guard let installed = reference, !installed.isEmpty else { return .notApplicable }
-            if versionsEqual(latest, installed) { return .upToDate }
-            guard compareVersions(installed, latest, scheme: .buildNumbered) != .unknown else { return .failed }
-            guard isUpgrade(installed: installed, latest: latest) else { return .upToDate }
+            let scheme: VersionScheme = app.bundleIdentifier == FirefoxUpdateChecker.bundleIdentifier ? .mozilla : .buildNumbered
+            if scheme == .buildNumbered, versionsEqual(latest, installed) { return .upToDate }
+            let comparison = compareVersions(installed, latest, scheme: scheme)
+            guard comparison != .unknown else { return .failed }
+            guard comparison == .orderedAscending else { return .upToDate }
             return .outdated(ManualOutdatedApp(
                 name: app.name, path: app.path,
                 installedVersion: app.version ?? installed,
@@ -292,6 +295,7 @@ public struct ManualUpdateScanner: Sendable {
         let discordChecker = DiscordUpdateChecker(client: vendorClient)
         let signalChecker = SignalUpdateChecker(client: vendorClient)
         let chromeChecker = ChromeUpdateChecker(client: vendorClient)
+        let firefoxChecker = FirefoxUpdateChecker(client: vendorClient)
         let obsidianChecker = ObsidianUpdateChecker(client: vendorClient)
 
         // Build every per-app check as an independent unit of work, then run them with a
@@ -355,6 +359,7 @@ public struct ManualUpdateScanner: Sendable {
             work.append(Self.observed("Discord", app, checker: discordChecker))
             work.append(Self.observed("Signal", app, checker: signalChecker))
             work.append(Self.observed("Chrome", app, checker: chromeChecker))
+            work.append(Self.observed(FirefoxUpdateChecker.sourceLabel(for: app), app, checker: firefoxChecker))
             // Obsidian self-updates its ASAR package independently of its installer.
             // Run this even when Homebrew owns the current cask: brew may correctly report
             // the installer as current while an insider package update is still available.
@@ -436,7 +441,11 @@ public struct ManualUpdateScanner: Sendable {
         brewOwnership: BrewOwnership, uncheckedSources: [String]
     ) -> ManualScanReport {
         let apps = InstallationInventory.deduplicated(installations)
-        let policyPaths = brewOwnership.paths.filter { brewOwnership.tracked.contains($0.key) }
+        let policyPaths = brewOwnership.paths.filter { token, path in
+            guard brewOwnership.tracked.contains(token) else { return false }
+            guard let app = apps.first(where: { $0.installation == InstallationIdentity(path: path) }) else { return true }
+            return FirefoxUpdateChecker.allowsCask(token, for: app)
+        }
         let policyTokens = UpdatePlanner.resolvedCaskPolicyTokens(appPaths: policyPaths)
         let rows = UpdatePlanner.attachingCaskPolicies(
             to: UpdatePlanner.dedupedByPriority(collected), appPaths: policyPaths
@@ -450,7 +459,8 @@ public struct ManualUpdateScanner: Sendable {
             if let token = policyTokens[app.installation] {
                 record.caskToken = token
                 record.sources.append(.init(source: "Homebrew", outcome: .notChecked))
-            } else if let token = brewOwnership.unconfirmedCandidates[app.installation] {
+            } else if let token = brewOwnership.unconfirmedCandidates[app.installation],
+                      FirefoxUpdateChecker.allowsCask(token, for: app) {
                 record.unconfirmedCaskToken = token
                 record.sources.append(.init(source: "Homebrew", outcome: .notChecked))
             } else if app.isManagedByBrew || (!brewOwnership.available && app.caskToken != nil && record.sources.isEmpty) {
@@ -483,6 +493,11 @@ public struct ManualUpdateScanner: Sendable {
         }
         return apps.compactMap { app in
             var routed = app
+            if let token = routed.caskToken, !FirefoxUpdateChecker.allowsCask(token, for: app) {
+                routed.caskToken = nil
+                routed.caskMatchProvenance = nil
+                routed.isManagedByBrew = false
+            }
             if let token = app.caskToken, copyCounts[token, default: 0] > 1,
                caskAppPaths[token].map({ InstallationIdentity(path: $0) }) != app.installation {
                 routed.caskToken = nil
@@ -517,7 +532,7 @@ public struct ManualUpdateScanner: Sendable {
             .subtracting(alreadyListedTokens)
             .sorted()
             .compactMap { token in
-                guard let app = appByToken[token] else { return nil }
+                guard let app = appByToken[token], FirefoxUpdateChecker.allowsCask(token, for: app) else { return nil }
                 return ManualOutdatedApp(
                     name: app.name,
                     path: app.path,
@@ -592,6 +607,7 @@ public struct ManualUpdateScanner: Sendable {
             .sorted()
             .compactMap { token in
                 guard let app = appByToken[token],
+                      FirefoxUpdateChecker.allowsCask(token, for: app),
                       let recorded = brewCaskVersions[token],
                       let onDisk = app.version,
                       !isAlreadyAtRecordedVersion(app: app, recorded: recorded),

@@ -30,14 +30,13 @@ public struct DuplicateRemoval: Identifiable, Equatable, Sendable {
     }
 }
 
-/// Pure, view-independent logic for the Migration screen. Extracted out of
-/// `MigrationView` so candidate partitioning and leftover-path construction can be
-/// unit-tested without SwiftUI or a real filesystem.
+/// View-independent candidate selection and leftover-path construction for Migration.
+/// Channel-sensitive cask matches are checked against the installed application's metadata.
 public enum MigrationPlanner {
     /// Apps that have a Homebrew cask equivalent and haven't been migrated yet.
     public static func matchable(candidates: [ApplicationInfo], migrated: Set<String>) -> [ApplicationInfo] {
         candidates.filter { app in
-            guard let token = app.caskToken else { return false }
+            guard let token = app.caskToken, FirefoxUpdateChecker.allowsCask(token, for: app) else { return false }
             return !migrated.contains(token)
         }
     }

@@ -81,6 +81,7 @@ public extension ManualOutdatedApp.UpdateSource {
         case .discord:              return "Discord"
         case .signal:               return "Signal"
         case .chrome:               return "Chrome"
+        case .firefox(let channel): return channel.sourceLabel
         case .obsidian:             return "Obsidian"
         case .microsoftAutoUpdate: return "Microsoft AutoUpdate"
         case .adobe(let sapCode):   return sapCode
@@ -116,7 +117,7 @@ public extension ManualOutdatedApp.UpdateSource {
             // would step around signature verification and the helper install. So the row
             // leads to the in-app installer.
             return .openSelfUpdate
-        case .sparkle, .antigravity, .parallels, .chatgpt, .postman, .discord, .signal, .chrome, .obsidian:
+        case .sparkle, .antigravity, .parallels, .chatgpt, .postman, .discord, .signal, .chrome, .firefox, .obsidian:
             return .launchApp
         }
     }

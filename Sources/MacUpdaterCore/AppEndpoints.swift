@@ -32,6 +32,7 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public let discordUpdate: String
     public let signalUpdate: String
     public let chromeVersions: String
+    public let firefoxVersions: String
     public let obsidianDesktopReleases: String
     public let homebrewWebsite: String
     public let homebrewInstallCommand: String
@@ -105,6 +106,7 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     // MARK: Fixed endpoints (force-unwrapped: the bundled config is validated at launch)
 
     public var chatgptAppcastURL: URL { URL(string: chatgptAppcast)! }
+    public var firefoxVersionsURL: URL { URL(string: firefoxVersions)! }
     public var signalUpdateURL: URL { URL(string: signalUpdate)! }
     public var obsidianDesktopReleasesURL: URL { URL(string: obsidianDesktopReleases)! }
     public var googleDriveOmahaURL: URL { URL(string: googleDriveOmaha)! }
@@ -352,6 +354,7 @@ extension AppEndpoints {
             discordUpdate: templateURL(other.discordUpdate, discordUpdate),
             signalUpdate: validURL(other.signalUpdate, signalUpdate),
             chromeVersions: templateURL(other.chromeVersions, chromeVersions),
+            firefoxVersions: validURL(other.firefoxVersions, firefoxVersions),
             obsidianDesktopReleases: validURL(other.obsidianDesktopReleases, obsidianDesktopReleases),
             homebrewWebsite: validURL(other.homebrewWebsite, homebrewWebsite),
             // SEC-08: the install command is a shell string, never overridable from the overlay.
@@ -408,6 +411,7 @@ public struct AppEndpointsOverlay: Decodable, Sendable, Equatable {
     public let discordUpdate: String?
     public let signalUpdate: String?
     public let chromeVersions: String?
+    public var firefoxVersions: String? = nil
     public var obsidianDesktopReleases: String? = nil
     public let homebrewWebsite: String?
     public let homebrewInstallCommand: String?
