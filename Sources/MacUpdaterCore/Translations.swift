@@ -14,6 +14,7 @@ public enum Translations {
     public static let en: [String: String] = base.merging(operations) { first, _ in first }
         .merging(vendorCompletion) { first, _ in first }
         .merging(rollbackScope) { first, _ in first }
+        .merging(DockerRestartTranslations.english) { first, _ in first }
 }
 
 extension Translations {

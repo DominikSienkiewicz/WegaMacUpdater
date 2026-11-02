@@ -127,10 +127,11 @@ extension ScanStore {
         // Detection is generic: each cask's resolved bundle URL is matched against the live
         // applications, so it covers the whole catalog, not 16 hardcoded tokens. The restart
         // map is passed only as an override for casks whose process name is atypical.
+        let runningApplications = runningApplicationInspector.runningApplications()
         let candidates = RunningCaskDetector.runningApps(
             tokens: plannedCaskNames,
             appPaths: caskPreparation?.appPaths ?? [:],
-            running: runningApplicationInspector.runningApplications(),
+            running: runningApplications,
             overrides: MacUpdaterConstants.restartMap
         )
 
@@ -210,6 +211,9 @@ extension ScanStore {
         // recovery from a bad upgrade would reinstall from.
         selected.removeAll()
         restartCandidates = candidates
+        restartDockerBundleURLs = dockerRestartBundles(
+            tokens: plannedCaskNames, appPaths: caskPreparation?.appPaths ?? [:], running: runningApplications
+        )
         restartDiagnosticOperationIDs.removeAll()
         if let operationID = caskPreparation?.operation.operation.id {
             for candidate in candidates { restartDiagnosticOperationIDs[candidate.processName] = operationID }
@@ -244,7 +248,7 @@ extension ScanStore {
     /// Turns the run into what the user sees: the sticky alerts first (a failed rollback and
     /// a changed publisher are the two things that must not be missable), then the summary
     /// banner — green only when every item cleared every phase.
-    private func report(run: UpdateRunOutcome) {
+    func report(run: UpdateRunOutcome) {
         let summary = run.summary
         UpdateStageDiagnostics.recordSummary(summary)
 
@@ -316,7 +320,7 @@ extension ScanStore {
             let count = summary.upgraded.count
             showBanner(BannerData(variant: .success,
                                   title: trf("Zaktualizowano %@ pakietów", "\(count)"),
-                                  message: tr("Wszystko gotowe.")))
+                                  message: dockerInstallationMessage(in: summary) ?? tr("Wszystko gotowe.")))
             emitActivitySignal(.success)
             emitWegaState(WegaState(pose: .happy, line: trf("Gotowe! %@ pakietów odświeżonych.", "\(count)")))
             WegaLog.info(.homebrew, "Zaktualizowano \(count) pakietów")
@@ -393,6 +397,7 @@ extension ScanStore {
             fields["operationID"] = operationID.uuidString
         }
         UpdateDiagnostics.record("restart.requested", fields: fields)
+        if await handleDockerRestart(info, fields: fields) { return }
         restartBusy = info.processName
         await processes.kill(info.processName)
         UpdateDiagnostics.record("restart.terminationReturned", fields: fields.merging(
