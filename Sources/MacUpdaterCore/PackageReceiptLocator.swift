@@ -17,6 +17,22 @@ public struct PackageReceiptLocator: Sendable {
         self.runner = runner
     }
 
+    /// Every receipt claiming this exact bundle path, used to reject conflicting owners.
+    public func packageIdentifiers(forBundleAt bundleURL: URL) async -> Set<String> {
+        let request = ProcessRequest(
+            executableURL: SystemPaths.pkgutil,
+            arguments: ["--file-info", bundleURL.appendingPathComponent("Contents/Info.plist").path],
+            environment: [:], inheritParentEnvironment: false, timeouts: .query
+        )
+        guard let result = try? await runner.run(request), result.exitCode == 0 else { return [] }
+        return Set(result.stdout.split(whereSeparator: \.isNewline).compactMap { rawLine in
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard line.hasPrefix("pkgid:") else { return nil }
+            let identifier = String(line.dropFirst("pkgid:".count)).trimmingCharacters(in: .whitespaces)
+            return identifier.isEmpty ? nil : identifier
+        })
+    }
+
     /// The package identifier that installed `bundleURL`, or `nil` when the bundle came from
     /// somewhere other than an installer package (a drag install, an archive, a build tree).
     public func packageIdentifier(forBundleAt bundleURL: URL) async -> String? {
