@@ -7,12 +7,22 @@ import Foundation
 /// shows that output in the brew log panel, so the panel is where the user meets the warning —
 /// and where Wega can offer the fix instead of asking them to copy commands into a terminal.
 ///
-/// The tap names are read from the remedy lines Homebrew prints (`brew untap <taps>` and the
-/// whole-tap `brew trust <taps>`), never from prose. They become arguments of a command the
-/// user runs with one click, so anything not shaped like `<user>/<repo>` is dropped: an option,
-/// a placeholder such as `<user>/<tap>/<cask>`, a path.
+/// Tap names come from Homebrew's warning commands or its exact package-load refusal.
+/// Names become command arguments, so options, placeholders and paths are rejected.
+/// A refusal must name a fully-qualified package belonging to the tap it reports.
 public enum TapTrustWarning {
-    /// The sentence only this warning prints. Without it no line is read as a remedy, so
+    enum PackageKind: String {
+        case cask
+        case formula
+    }
+
+    struct LoadRefusal {
+        let kind: PackageKind
+        let qualifiedName: String
+        let tap: String
+    }
+
+    /// The marker required before reading the warning's remedy-command lines, so
     /// `brew untap` text from any other source — Wega's own `$ brew untap …` header, Homebrew's
     /// deprecated-taps notice — never turns into an offer.
     static let marker = "because tap trust is required"
@@ -21,21 +31,44 @@ public enum TapTrustWarning {
     /// carry options and three-part names, which the tap-name filter rejects on its own.
     private static let remedyCommands = ["brew untap ", "brew trust "]
 
-    /// Taps the warning in `log` names, each once, in the order Homebrew listed them.
-    /// Empty when the log carries no tap-trust warning.
+    /// Taps named by a warning or an exact package-load refusal, each once.
     public static func untrustedTaps(in log: [String]) -> [String] {
         let lines = log.map(unprefixed)
-        guard lines.contains(where: { $0.contains(marker) }) else { return [] }
+        let hasWarning = lines.contains { $0.contains(marker) }
 
         var taps: [String] = []
         for line in lines {
-            guard let command = remedyCommands.first(where: line.hasPrefix) else { continue }
-            for name in line.dropFirst(command.count).split(separator: " ").map(String.init)
-            where isTapName(name) && !taps.contains(name) {
+            if let refusal = loadRefusal(in: line), !taps.contains(refusal.tap) {
+                taps.append(refusal.tap)
+            }
+            guard hasWarning else { continue }
+            for name in remedyTaps(in: line) where !taps.contains(name) {
                 taps.append(name)
             }
         }
         return taps
+    }
+
+    static func remedyTaps(in line: String) -> [String] {
+        let text = unprefixed(line)
+        guard let command = remedyCommands.first(where: text.hasPrefix) else { return [] }
+        return text.dropFirst(command.count).split(separator: " ").map(String.init).filter(isTapName)
+    }
+
+    static func loadRefusal(in line: String) -> LoadRefusal? {
+        let words = unprefixed(line).split(separator: " ").map(String.init)
+        guard words.count == 10,
+              Array(words.prefix(4)) == ["Error:", "Refusing", "to", "load"],
+              let kind = PackageKind(rawValue: words[4]),
+              Array(words[6...8]) == ["from", "untrusted", "tap"],
+              words[9].hasSuffix(".") else { return nil }
+        let tap = String(words[9].dropLast())
+        let name = words[5]
+        let parts = name.split(separator: "/", omittingEmptySubsequences: false)
+        guard isTapName(tap), parts.count == 3,
+              parts.prefix(2).joined(separator: "/") == tap,
+              parts[2].range(of: #"^[A-Za-z0-9][A-Za-z0-9_.+@-]*$"#, options: .regularExpression) != nil else { return nil }
+        return LoadRefusal(kind: kind, qualifiedName: name, tap: tap)
     }
 
     /// `<user>/<repo>` — the only shape Homebrew accepts as a tap name. A leading `-` would

@@ -48,8 +48,6 @@ extension ScanStore {
         let ticket = MutationGuard.shared.begin(tr("zmiana tapów Homebrew"))
         defer { MutationGuard.shared.end(ticket) }
 
-        // Appended, not replacing the log: the warning above is what the other remedies are
-        // read from, and `TapTrustPlanner.pending` withdraws this one by its header.
         brewLog = ProcessEventStream.appendingCapped([TapTrustPlanner.logHeader(for: remedy)], to: brewLog)
         showLog = true
         WegaLog.info(.homebrew, "Uruchamiam: \(remedy.commandLine)")
@@ -74,7 +72,16 @@ extension ScanStore {
             WegaLog.error(.homebrew, "\(remedy.commandLine) nieudane (\(reason))")
             return
         }
-        let title = remedy.kind == .untapUnused ? tr("Odpięto nieużywane tapy") : tr("Zaufano zainstalowanym pakietom")
+        brewLog = ProcessEventStream.appendingCapped([TapTrustPlanner.logSuccess(for: remedy)], to: brewLog)
+        let title: String
+        switch remedy.kind {
+        case .untapUnused:
+            title = tr("Odpięto nieużywane tapy")
+        case .trustInstalledCasks, .trustInstalledFormulae:
+            title = tr("Zaufano zainstalowanym pakietom")
+        case .trustRequiredCask, .trustRequiredFormula:
+            title = tr("Zaufano wskazanej definicji pakietu")
+        }
         showBanner(BannerData(variant: .success, title: title, message: trf("Wykonano: %@", remedy.commandLine)))
         emitActivitySignal(.success)
         WegaLog.info(.homebrew, "Wykonano: \(remedy.commandLine)")

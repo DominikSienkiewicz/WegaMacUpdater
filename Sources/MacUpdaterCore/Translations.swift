@@ -359,6 +359,7 @@ extension Translations {
         "Nie udało się zmienić tapów": "Could not change the taps",
         "Odpięto nieużywane tapy": "Unused taps untapped",
         "Zaufano zainstalowanym pakietom": "Installed packages trusted",
+        "Zaufano wskazanej definicji pakietu": "Specified package definition trusted",
         "Wykonano: %@": "Ran: %@",
         "Homebrew pomija pakiety z niezaufanych tapów": "Homebrew is skipping packages from untrusted taps",
         "Przycisk zmienia konfigurację Homebrew: uruchamia dokładnie polecenie obok, dopiero po kliknięciu.":
@@ -369,6 +370,10 @@ extension Translations {
         "Tylko te zainstalowane caski — nie cały tap.": "Only these installed casks — not the whole tap.",
         "Zaufaj zainstalowanym formułom": "Trust installed formulae",
         "Tylko te zainstalowane formuły — nie cały tap.": "Only these installed formulae — not the whole tap.",
+        "Zaufaj definicji caska": "Trust cask definition",
+        "Zaufaj definicji formuły": "Trust formula definition",
+        "Homebrew wymaga tej definicji przy odpinaniu tapu. Zaufanie pozostanie zapisane; potem ponów odpięcie.":
+            "Homebrew requires this definition when untapping. Trust will remain saved; retry untapping afterwards.",
         "Zaufaj nowemu wydawcy": "Trust the new publisher",
         "Zaufano nowemu wydawcy": "New publisher trusted",
         "%@: Team ID %@ jest teraz zaufanym wydawcą.": "%@: Team ID %@ is now the trusted publisher.",

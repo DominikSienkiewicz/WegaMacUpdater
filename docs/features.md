@@ -196,7 +196,8 @@ no commands to copy into a terminal:
   `--formula`) for exactly those installed items. Whole-tap trust, which also covers
   everything the tap publishes in the future, is never offered.
 - **A tap nothing installed came from** is unused: *"Odepnij nieużywane tapy"* runs
-  `brew untap -- <taps>`, Homebrew's own first suggestion.
+  `brew untap -- <tap>`, Homebrew's own first suggestion. Each tap has its own action,
+  so a failure on another tap never retries a removal that already succeeded.
 - **"Came from" is read from Homebrew's install receipts** (`source.tap` in
   `Caskroom/<token>/.metadata/INSTALL_RECEIPT.json` and
   `Cellar/<name>/<version>/INSTALL_RECEIPT.json`), never from a token that happens to share
@@ -204,8 +205,17 @@ no commands to copy into a terminal:
   `manaflow-ai/cmux` tap in use.
 - **Nothing runs until you click**, and each row shows the exact command its button runs.
   The command goes through the same write gate, mutex and quit guard as every other brew
-  change; its output is appended under the warning, and a button already run is withdrawn
-  while the others stay. The overlay shown during an update offers no buttons.
+  change; its output is appended under the warning. A button is withdrawn only after a
+  successful exit; failed or unfinished actions remain available. The overlay shown during
+  an update offers no buttons.
+- **A trust refusal during untap has a separate recovery action.** Homebrew can load a
+  same-named package from the tap before checking its install receipt, even when the
+  installed copy came from another tap. Wega recognizes the exact cask/formula refusal
+  for the attempted untap and offers `brew trust --cask -- <tap>/<token>` (or `--formula`)
+  for that definition. This does not assert that the installed copy came from that tap.
+  The row explains that the trust remains saved. Trust requires its own click, and untap
+  requires a separate retry; neither runs automatically. Wega does not use whole-tap trust,
+  `untap --force`, or disable Homebrew's trust checks as a fallback.
 
 #### When a check can't complete
 
