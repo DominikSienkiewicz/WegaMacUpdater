@@ -202,7 +202,7 @@ public enum CaskArrivalEvidence: Equatable, Sendable {
     /// `brew upgrade`. The cask offers a version the disk does not have, by definition of the
     /// item being outdated, so the version is expected to move.
     case versionChange
-    /// `brew install --cask --force`, which no Caskroom record can make skip.
+    /// A manual cask update or takeover through `install --force` or `reinstall`.
     ///
     /// `expectedVersion` is what the cask offers. `nil` — or the version already on disk —
     /// means a takeover rather than an update: the bundle is not expected to change, so an
@@ -301,13 +301,23 @@ public enum UpdateOperationRecoveryPlan {
         if case .forcedReinstall(let expectedVersion) = evidence {
             guard let expectedVersion,
                   let snapshotVersion,
-                  !versionsEqual(expectedVersion, snapshotVersion)
+                  !sameArrivalVersion(expectedVersion, snapshotVersion)
             else { return false }
+            guard let installedVersion else { return false }
+            return sameArrivalVersion(installedVersion, snapshotVersion)
         }
         return !bundleWasReplaced(
             installedVersion: installedVersion,
             snapshotVersion: snapshotVersion
         )
+    }
+
+    private static func sameArrivalVersion(_ lhs: String, _ rhs: String) -> Bool {
+        switch compareVersions(lhs, rhs, scheme: .buildNumbered) {
+        case .orderedSame: return true
+        case .orderedAscending, .orderedDescending: return false
+        case .unknown: return versionsEqual(lhs, rhs)
+        }
     }
 
     /// `CFBundleShortVersionString` read straight from the plist, deliberately not through
