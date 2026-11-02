@@ -16,6 +16,7 @@ public enum Translations {
         .merging(rollbackScope) { first, _ in first }
         .merging(DockerRestartTranslations.english) { first, _ in first }
         .merging(dockerShutdown) { first, _ in first }
+        .merging(dockerDesktop) { first, _ in first }
 }
 
 extension Translations {

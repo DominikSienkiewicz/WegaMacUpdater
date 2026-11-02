@@ -588,7 +588,11 @@ struct ManualUpdateActionView: View {
                     WegaBadge(label: tr("cofnięto — ponów próbę"), variant: .danger)
                 }
                 trustPublisherControl
-                actionControl
+                if DockerDesktopUpdatePolicy.isDocker(item) {
+                    DockerDesktopUpdateActions(item: item, busyToken: busyToken, onInstall: onInstall)
+                } else {
+                    actionControl
+                }
             }
             .disabled(item.source.supportsVendorCompletion && (!scan.allowsVendorCheck || upgrades.state != .idle))
             if item.source.supportsVendorCompletion {
@@ -605,7 +609,7 @@ struct ManualUpdateActionView: View {
     /// accepts the new Team ID — retrying the Brew action alone would be refused every time.
     @ViewBuilder
     private var trustPublisherControl: some View {
-        if item.rolledBack, case .brewInstall(let token) = item.source.updateActionKind,
+        if item.rolledBack, case .cask(let token) = item.source,
            scan.dependencies.rollbackLedger.reason(forToken: token) == .publisherChanged {
             Button {
                 Task { await scan.trustNewPublisher(token: token, reportedTeamID: nil) }

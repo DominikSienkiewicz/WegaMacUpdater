@@ -9,6 +9,13 @@ struct VendorUpdateCompletionControls: View {
     private var pending: Bool { scan.vendorHandoffs.contains { $0.path == item.path } }
     private var checking: Bool { scan.vendorCheckPath == item.path.path }
 
+    private var completionHelp: String {
+        if case .cask(let token) = item.source, DockerDesktopUpdatePolicy.isDocker(token: token) {
+            return tr("Odczytaj wersję i build tej instalacji Docker Desktop. To nie jest kontrola działania silnika ani sprawdzenie najnowszej wersji u producenta.")
+        }
+        return tr("Odczytaj wersję pod tą ścieżką i sprawdź źródło producenta, bez pełnego skanu.")
+    }
+
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
             if pending {
@@ -26,7 +33,7 @@ struct VendorUpdateCompletionControls: View {
                         Label(tr("Sprawdź tę aplikację"), systemImage: "arrow.clockwise")
                     }
                     .disabled(!scan.allowsVendorCheck || upgrades.state != .idle)
-                    .help(tr("Odczytaj wersję pod tą ścieżką i sprawdź źródło producenta, bez pełnego skanu."))
+                    .help(completionHelp)
                     if pending {
                         Button(tr("Zakończ śledzenie")) { scan.dismissVendorHandoff(item) }
                             .buttonStyle(.plain)

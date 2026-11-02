@@ -47,6 +47,7 @@ public enum BackgroundUpdatePlanner {
     /// Candidate order is preserved so the completion notification can name apps predictably.
     public static func eligibleTokens(_ inputs: Inputs) -> [String] {
         inputs.candidates.filter { token in
+            guard !DockerDesktopUpdatePolicy.isDocker(token: token) else { return false }
             guard inputs.optedIn.contains(token) else { return false }
             guard !inputs.runningProcessTokens.contains(token) else { return false }
             // Casks are keyed `c:<token>` in the policy map — see `OutdatedItem.policyKey`.

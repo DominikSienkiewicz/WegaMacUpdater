@@ -86,7 +86,13 @@ public struct VendorUpdateCompletionChecker: Sendable {
               app.bundleIdentifier == expectedID, app.installation == InstallationIdentity(path: item.path) else {
             return .init(app: nil, outcome: .unconfirmed(.identityChanged))
         }
-        let result = await checkSource(app, item.source)
+        let localDockerCheck: Bool
+        if case .cask(let token) = item.source {
+            localDockerCheck = DockerDesktopUpdatePolicy.isDocker(token: token)
+        } else {
+            localDockerCheck = false
+        }
+        let result: ManualCheckResult = localDockerCheck ? .upToDate : await checkSource(app, item.source)
         try Task.checkCancellation()
         guard let after = readApplication(item.path), after == app else {
             return .init(app: nil, outcome: .unconfirmed(.changedDuringCheck))
@@ -100,7 +106,8 @@ public struct VendorUpdateCompletionChecker: Sendable {
         case .notApplicable, .failed, .unavailable:
             return .init(app: app, outcome: .unconfirmed(.sourceUnavailable))
         case .upToDate:
-            guard let requirement = item.completionRequirement else {
+            guard let requirement = item.completionRequirement,
+                  !localDockerCheck || requirement.field != .sharedPackage else {
                 return .init(app: app, outcome: .unconfirmed(.unknownTarget))
             }
             guard requirement.field == .sharedPackage || requirement.isReached(in: app) else {

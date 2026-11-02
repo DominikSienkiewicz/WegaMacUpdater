@@ -295,8 +295,10 @@ struct InspectorPane: View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeading(tr("Akcje"))
             switch update {
-            case .outdated:
-                Text(tr("Aktualizowane zbiorczo — zaznacz na liście i użyj „Zaktualizuj wybrane”."))
+            case .outdated(let item, _):
+                Text(item.kind == .cask && DockerDesktopUpdatePolicy.isDocker(token: item.name)
+                     ? tr("Wykryto aktualizację Docker Desktop, ale ścieżka aplikacji jest nieznana. Otwórz Docker Desktop samodzielnie lub ponów skanowanie.")
+                     : tr("Aktualizowane zbiorczo — zaznacz na liście i użyj „Zaktualizuj wybrane”."))
                     .font(.wega(.subheadline))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

@@ -216,6 +216,8 @@ struct BackgroundUpdateConsentSettingsCard: View {
         return tr(
           "Cask zawiera uprzywilejowany lub nieznany artefakt, który może wymagać nadzoru."
         )
+      case .dockerRequiresSupervision:
+        return tr("Docker Desktop wymaga aktualizacji pod nadzorem. Użyj aktualizatora producenta lub jawnie wybierz Homebrew.")
       case .noChecksum:
         return tr(
           "Pobranie nie ma konkretnej sumy SHA-256, więc Homebrew nie zweryfikuje pliku.")

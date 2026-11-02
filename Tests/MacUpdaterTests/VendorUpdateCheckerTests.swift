@@ -133,7 +133,7 @@ final class VendorUpdateCheckerTests: XCTestCase {
     }
 
     func testNonLaunchActionKindsAreResolvedFromData() {
-        XCTAssertEqual(ManualOutdatedApp.UpdateSource.cask(token: "docker").updateActionKind, .brewInstall(token: "docker"))
+        XCTAssertEqual(ManualOutdatedApp.UpdateSource.cask(token: "docker").updateActionKind, .launchApp)
         XCTAssertEqual(ManualOutdatedApp.UpdateSource.mas(appStoreID: "1").updateActionKind, .appStore)
         XCTAssertEqual(ManualOutdatedApp.UpdateSource.jetbrains(caskToken: "idea").updateActionKind, .jetBrainsToolbox)
 

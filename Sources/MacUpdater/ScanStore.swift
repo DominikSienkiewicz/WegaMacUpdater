@@ -461,20 +461,31 @@ final class ScanStore: ObservableObject {
 
     /// The installable rows the active sidebar category actually renders.
     func visibleItems(for filter: UpdateFilter) -> [OutdatedItem] {
-        UpdatePlanner.visibleItems(allItems, filter: filter)
+        UpdatePlanner.visibleItems(DockerDesktopUpdatePolicy.batchItems(allItems), filter: filter)
     }
 
     /// The exact visible rows the batch button, plan preview and confirmation describe.
     func updateTargets(for filter: UpdateFilter) -> [OutdatedItem] {
-        UpdatePlanner.targets(from: allItems, selectedKeys: selected, filter: filter)
+        UpdatePlanner.targets(from: DockerDesktopUpdatePolicy.batchItems(allItems), selectedKeys: selected, filter: filter)
+    }
+
+    var dockerManagedUpdates: [ManualOutdatedApp] {
+        DockerDesktopUpdatePolicy.managedUpdates(items: allItems, appPaths: caskIconPaths, installationChecks: installationChecks)
+    }
+
+    var unresolvedDockerItems: [OutdatedItem] {
+        let resolved = Set(dockerManagedUpdates.compactMap(\.caskPolicyToken))
+        return allItems.filter { $0.kind == .cask && DockerDesktopUpdatePolicy.isDocker(token: $0.name) && !resolved.contains($0.name) }
     }
 
     /// Manual updates with ignore/pin rules applied.
     var visibleManual: [ManualOutdatedApp] {
         let pendingPaths = Set(vendorHandoffs.map { InstallationIdentity(path: $0.path) })
         let pending = UpdatePlanner.attachingCaskPolicies(to: vendorHandoffs, installationChecks: installationChecks)
-        let rows = manualOutdated.filter { !pendingPaths.contains(InstallationIdentity(path: $0.path)) } + pending
-        return UpdatePlanner.applyPolicies(rows, policies: UpdatePolicyStore.shared.policiesMap)
+        let existingPaths = Set(manualOutdated.map { InstallationIdentity(path: $0.path) })
+        let managed = dockerManagedUpdates.filter { !existingPaths.contains(InstallationIdentity(path: $0.path)) }
+        let rows = (manualOutdated + managed).filter { !pendingPaths.contains(InstallationIdentity(path: $0.path)) } + pending
+        return UpdatePlanner.applyPolicies(rows.map(DockerDesktopUpdatePolicy.vendorUpdate), policies: UpdatePolicyStore.shared.policiesMap)
     }
 
     /// The update currently shown in the inspector pane, resolved from `inspectedKey`
@@ -483,6 +494,11 @@ final class ScanStore: ObservableObject {
     var inspectedUpdate: InspectedUpdate? {
         guard let key = inspectedKey else { return nil }
         if let item = allItems.first(where: { $0.key == key }) {
+            if item.kind == .cask, DockerDesktopUpdatePolicy.isDocker(token: item.name),
+               let path = caskIconPaths[item.name],
+               let app = visibleManual.first(where: { InstallationIdentity(path: $0.path) == InstallationIdentity(path: path) }) {
+                return .manual(app)
+            }
             return .outdated(item, iconPath: caskIconPaths[item.name])
         }
         if let app = visibleManual.first(where: { "m:" + $0.path.path == key }) {
@@ -562,7 +578,8 @@ final class ScanStore: ObservableObject {
     /// The single count every surface reports (M4): the window header, the sidebar badge,
     /// the menu-bar badge and the notification all read it from here.
     var updateCount: UnifiedUpdateCount {
-        UpdatePlanner.unifiedCount(installable: allItems.count, manual: visibleManual.count)
+        UpdatePlanner.unifiedCount(installable: DockerDesktopUpdatePolicy.batchItems(allItems).count,
+                                   manual: visibleManual.count + unresolvedDockerItems.count)
     }
 
     /// Badge, error, footer and category counts — all derived from the current lists,
@@ -571,7 +588,8 @@ final class ScanStore: ObservableObject {
         sinks.badgeChange?(updateCount.badgeCount)
         sinks.errorCount?(failedSources)
         sinks.footerInfo?(lastCheck, visibleManual.filter(isSecurityApp).count)
-        let appsCount = allItems.filter { $0.kind.category == .apps }.count + visibleManual.count
+        let appsCount = DockerDesktopUpdatePolicy.batchItems(allItems).filter { $0.kind.category == .apps }.count
+            + visibleManual.count + unresolvedDockerItems.count
         let cliCount  = allItems.filter { $0.kind.category == .cli }.count
         sinks.categoryCounts?(appsCount, cliCount)
     }
