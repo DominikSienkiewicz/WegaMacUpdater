@@ -8,6 +8,8 @@ import MacUpdaterCore
 // it is `ScanStore+Rollback`; deciding *what* to run is `ScanStore+UpdatePlan`.
 extension ScanStore {
     func runUpdate(targetKeys: Set<String>) async {
+        let targetKeys = DockerDesktopUpdatePolicy.eligibleKeys(targetKeys)
+        guard !targetKeys.isEmpty else { return }
         let inherited = UpdateDiagnostics.current
         let trace = inherited ?? DiagnosticRun(trigger: "foreground", subjects: targetKeys.sorted())
         defer { if inherited == nil { trace.finish() } }
