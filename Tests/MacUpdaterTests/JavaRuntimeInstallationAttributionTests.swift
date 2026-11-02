@@ -68,8 +68,8 @@ struct JavaRuntimeInstallationAttributionTests {
 
     @Test func multipleClaimedCopiesCannotShareOneHomebrewResultOrAction() async throws {
         let fixture = try JavaAttributionFixture()
-        try fixture.addRuntime("temurin-27.jdk", version: "27.0.0", receipt: "net.temurin.27.jdk")
-        try fixture.addRuntime("temurin-27-copy.jdk", version: "27.0.0", receipt: "net.temurin.27.jdk")
+        _ = try fixture.addRuntime("temurin-27.jdk", version: "27.0.0", receipt: "net.temurin.27.jdk")
+        _ = try fixture.addRuntime("temurin-27-copy.jdk", version: "27.0.0", receipt: "net.temurin.27.jdk")
 
         let report = await fixture.scanner().scanReport()
         let runtimes = report.installations.filter { $0.path.pathExtension == "jdk" }
@@ -81,7 +81,7 @@ struct JavaRuntimeInstallationAttributionTests {
 
     @Test func ambiguousCaskClaimsLeaveTheRuntimeUnattributed() async throws {
         let fixture = try JavaAttributionFixture()
-        try fixture.addRuntime("temurin-27.jdk", version: "27.0.0", receipt: "net.temurin.27.jdk")
+        _ = try fixture.addRuntime("temurin-27.jdk", version: "27.0.0", receipt: "net.temurin.27.jdk")
         try CaskDatabaseCache(fileURL: fixture.cacheURL).save([
             BrewCask(token: "temurin", name: ["Temurin"], pkgutilIdentifiers: ["net.temurin.27.jdk"]),
             BrewCask(token: "temurin@27", name: ["Temurin 27"], pkgutilIdentifiers: ["net.temurin.27.jdk"]),
@@ -128,7 +128,7 @@ struct JavaRuntimeInstallationAttributionTests {
 
     @Test func versionedCaskCannotClaimARuntimeFromAnotherMajor() async throws {
         let fixture = try JavaAttributionFixture()
-        try fixture.addRuntime("temurin-27.jdk", version: "27.0.0", receipt: "net.temurin.21.jdk")
+        _ = try fixture.addRuntime("temurin-27.jdk", version: "27.0.0", receipt: "net.temurin.21.jdk")
 
         let report = await fixture.scanner().scanReport()
         let runtime = try #require(report.installations.first { $0.path.pathExtension == "jdk" })
@@ -143,7 +143,7 @@ struct JavaRuntimeInstallationAttributionTests {
         let ambiguous = try fixture.addRuntime("ambiguous.jdk", version: "27.0.0", receipt: "net.temurin.27.jdk")
         fixture.runner.receipts[InstallationIdentity(path: ambiguous.appendingPathComponent("Contents/Info.plist")).rawValue] =
             "pkgid: net.temurin.27.jdk\n\npkgid: net.temurin.21.jdk\n"
-        try fixture.addRuntime("temurin-27.jdk", version: "27.0.0", receipt: "net.temurin.27.jdk")
+        _ = try fixture.addRuntime("temurin-27.jdk", version: "27.0.0", receipt: "net.temurin.27.jdk")
 
         let report = await fixture.scanner().scanReport()
         let runtimes = report.installations.filter { $0.path.pathExtension == "jdk" }

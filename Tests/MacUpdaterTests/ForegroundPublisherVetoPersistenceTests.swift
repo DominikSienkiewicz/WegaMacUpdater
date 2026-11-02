@@ -46,7 +46,7 @@ struct ForegroundPublisherVetoPersistenceTests {
 
         let updateStart = try #require(source.range(of: "func runUpdate(targetKeys: Set<String>) async"))
         let updateEnd = try #require(source.range(
-            of: "private func report(run: UpdateRunOutcome)",
+            of: "func report(run: UpdateRunOutcome)",
             range: updateStart.upperBound..<source.endIndex
         ))
         let update = source[updateStart.lowerBound..<updateEnd.lowerBound]

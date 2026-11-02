@@ -74,7 +74,7 @@ struct LT01UpdateOperationWiringTests {
     /// would offer the update the user just took back.
     @Test func manualUndoRestoresThenPinsTheRestoredVersion() throws {
         let undo = try source("ScanStore+Undo.swift")
-        let restore = try #require(undo.range(of: "await CaskRollbackGuard.restoreSnapshot(snapshotURL, to: appURL)"))
+        let restore = try #require(undo.range(of: "await CaskRollbackGuard.restoreSnapshot(snapshotURL, to: appURL, token: undoable.token)"))
         let mark = try #require(undo.range(of: "store.markUndoneByUser(operationID: operation.id, token: undoable.token)"))
         let pin = try #require(undo.range(of: "UpdatePolicyStore.shared.pin("))
         #expect(restore.lowerBound < mark.lowerBound,
