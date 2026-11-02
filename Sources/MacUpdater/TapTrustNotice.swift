@@ -20,6 +20,9 @@ struct TapTrustRemedyPresentation: Equatable {
         case .trustInstalledFormulae:
             buttonTitle = tr("Zaufaj zainstalowanym formułom")
             explanation = tr("Tylko te zainstalowane formuły — nie cały tap.")
+        case .trustRequiredCask, .trustRequiredFormula:
+            buttonTitle = remedy.kind == .trustRequiredCask ? tr("Zaufaj definicji caska") : tr("Zaufaj definicji formuły")
+            explanation = tr("Homebrew wymaga tej definicji przy odpinaniu tapu. Zaufanie pozostanie zapisane; potem ponów odpięcie.")
         }
         command = remedy.commandLine
     }

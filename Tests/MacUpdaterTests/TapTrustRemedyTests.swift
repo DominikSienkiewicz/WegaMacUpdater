@@ -48,7 +48,8 @@ struct TapTrustRemedyTests {
     @Test func givenARemedyRunAfterTheWarningWhenFilteringThenOnlyTheOthersArePending() {
         let untap = TapTrustRemedy(kind: .untapUnused, arguments: ["untap", "--", "manaflow-ai/cmux"])
         let trust = TapTrustRemedy(kind: .trustInstalledCasks, arguments: ["trust", "--cask", "--", "steipete/tap/codexbar"])
-        let log = TapTrustWarningTests.warning + ["$ brew untap -- manaflow-ai/cmux", "Untapping manaflow-ai/cmux..."]
+        let log = TapTrustWarningTests.warning + ["$ brew untap -- manaflow-ai/cmux", "Untapping manaflow-ai/cmux...",
+            "[wega] succeeded: brew untap -- manaflow-ai/cmux"]
 
         #expect(TapTrustPlanner.pending([trust, untap], in: log) == [trust])
     }
@@ -56,7 +57,8 @@ struct TapTrustRemedyTests {
     /// Homebrew printing the warning again after the remedy ran means the remedy did not take.
     @Test func givenTheWarningAgainAfterARemedyRanWhenFilteringThenTheRemedyIsPendingAgain() {
         let untap = TapTrustRemedy(kind: .untapUnused, arguments: ["untap", "--", "manaflow-ai/cmux"])
-        let log = TapTrustWarningTests.warning + ["$ brew untap -- manaflow-ai/cmux"] + TapTrustWarningTests.warning
+        let log = TapTrustWarningTests.warning + ["$ brew untap -- manaflow-ai/cmux",
+            "[wega] succeeded: brew untap -- manaflow-ai/cmux"] + TapTrustWarningTests.warning
 
         #expect(TapTrustPlanner.pending([untap], in: log) == [untap])
     }

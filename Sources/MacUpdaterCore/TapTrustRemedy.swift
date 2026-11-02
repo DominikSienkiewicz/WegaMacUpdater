@@ -11,6 +11,9 @@ public struct TapTrustRemedy: Hashable, Sendable {
         case trustInstalledCasks
         /// `brew trust --formula` for the installed formulae that came from untrusted taps.
         case trustInstalledFormulae
+        /// Trust a specific definition Homebrew refused to load while checking an untap.
+        case trustRequiredCask
+        case trustRequiredFormula
         /// `brew untap` for the untrusted taps nothing installed came from.
         case untapUnused
     }
@@ -38,6 +41,8 @@ public struct TapTrustRemedy: Hashable, Sendable {
 /// unused, and untapping it is Homebrew's own first suggestion. Origins come from install
 /// receipts (`HomebrewInstallReceipts`), never from a token resembling the tap's name.
 public enum TapTrustPlanner {
+    private static let successPrefix = "[wega] succeeded: "
+
     public static func remedies(
         forUntrustedTaps taps: [String],
         installed: [InstalledPackageOrigin]
@@ -62,24 +67,66 @@ public enum TapTrustPlanner {
         return remedies
     }
 
-    /// The remedies not yet run since Homebrew last printed the warning.
-    ///
-    /// A remedy appends its `$ brew …` header and output under the warning instead of
-    /// replacing the log, so the other remedies stay on offer after the first click. The one
-    /// just run is withdrawn; should Homebrew print the warning again later, it did not take,
-    /// and it is offered again.
+    /// Pending remedies, including explicit scoped trust after a blocked untap.
+    /// Only Wega's successful-exit marker dismisses an action; starting it is not success.
     public static func pending(_ remedies: [TapTrustRemedy], in log: [String]) -> [TapTrustRemedy] {
-        guard let lastWarning = log.lastIndex(where: { $0.contains(TapTrustWarning.marker) }) else {
-            return remedies
+        var succeeded: Set<String> = []
+        var blocked: [TapTrustRemedy] = []
+        var untapTargets: Set<String> = []
+        for line in log {
+            if line.contains(TapTrustWarning.marker) {
+                succeeded.removeAll()
+                blocked.removeAll()
+            }
+            if line.hasPrefix("$ ") {
+                let command = String(line.dropFirst(2))
+                untapTargets = tapsInUntap(command)
+                succeeded.remove(command)
+            } else if line.hasPrefix(successPrefix) {
+                let command = String(line.dropFirst(successPrefix.count))
+                succeeded.insert(command)
+                let removedTaps = tapsInUntap(command)
+                blocked.removeAll { remedy in
+                    remedy.commandLine == command || remedy.arguments.last.map { name in
+                        removedTaps.contains(name.split(separator: "/").prefix(2).joined(separator: "/"))
+                    } == true
+                }
+                untapTargets.removeAll()
+            } else if let refusal = TapTrustWarning.loadRefusal(in: line), untapTargets.contains(refusal.tap) {
+                let remedy = trustRequired(by: refusal)
+                succeeded.remove(remedy.commandLine)
+                if !blocked.contains(remedy) { blocked.append(remedy) }
+            }
         }
-        let ranSinceWarning = Set(log[lastWarning...])
-        return remedies.filter { !ranSinceWarning.contains(logHeader(for: $0)) }
+        let recoveryCommands = Set(blocked.map(\.commandLine))
+        return blocked + remedies.filter { !succeeded.contains($0.commandLine) && !recoveryCommands.contains($0.commandLine) }
     }
 
     /// The line Wega writes into the brew log when it starts `remedy` — the same `$ brew …`
     /// form every other streamed brew command in the log begins with.
     public static func logHeader(for remedy: TapTrustRemedy) -> String {
         "$ " + remedy.commandLine
+    }
+
+    public static func logSuccess(for remedy: TapTrustRemedy) -> String {
+        successPrefix + remedy.commandLine
+    }
+
+    private static func tapsInUntap(_ command: String) -> Set<String> {
+        let words = command.split(separator: " ").map(String.init)
+        guard Array(words.prefix(3)) == ["brew", "untap", "--"], words.count > 3 else { return [] }
+        let taps = words.dropFirst(3)
+        guard taps.allSatisfy(TapTrustWarning.isTapName) else { return [] }
+        return Set(taps)
+    }
+
+    private static func trustRequired(by refusal: TapTrustWarning.LoadRefusal) -> TapTrustRemedy {
+        switch refusal.kind {
+        case .cask:
+            return TapTrustRemedy(kind: .trustRequiredCask, arguments: BrewService.trustCaskArguments(names: [refusal.qualifiedName]))
+        case .formula:
+            return TapTrustRemedy(kind: .trustRequiredFormula, arguments: BrewService.trustFormulaArguments(names: [refusal.qualifiedName]))
+        }
     }
 
     /// `<user>/<repo>/<name>` — the fully-qualified form `brew trust --cask/--formula` takes.
