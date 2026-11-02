@@ -199,37 +199,66 @@ public final class HTTPClient: @unchecked Sendable {
             urlRequest.setValue(cached.etag, forHTTPHeaderField: "If-None-Match")
         }
 
-        let (data, response) = try await performWithRetry(urlRequest)
+        let traceID = UUID().uuidString
+        Self.recordHTTP("http.request", traceID: traceID, fields: [
+            "method": request.method,
+            "host": request.url.host ?? "unknown",
+            "path": LogRedaction.redact(request.url.path),
+            "etagEnabled": String(request.enableETag),
+            "conditionalRequest": String(cached != nil),
+        ])
+        let (data, response) = try await performWithRetry(urlRequest, traceID: traceID)
         guard let http = response as? HTTPURLResponse else {
+            Self.recordHTTP("http.completed", traceID: traceID, fields: ["status": "-1", "cache": "not_http"])
             return HTTPResponse(data: data, statusCode: -1)
         }
 
         // 304: serve the stored body and report it as OK so callers' `== 200`
         // checks keep working transparently.
         if http.statusCode == 304, let cached {
+            Self.recordHTTP("http.completed", traceID: traceID, fields: ["status": "200", "cache": "hit"])
             return HTTPResponse(data: cached.data, statusCode: 200, notModified: true)
         }
 
+        var cacheOutcome = request.enableETag ? "miss" : "disabled"
         if request.enableETag, (200..<300).contains(http.statusCode),
            let etag = http.value(forHTTPHeaderField: "ETag") {
             etagStore.store(ETagStore.Entry(etag: etag, data: data), for: request.url)
+            cacheOutcome = "stored"
         }
 
+        Self.recordHTTP("http.completed", traceID: traceID, fields: [
+            "status": String(http.statusCode), "cache": cacheOutcome,
+        ])
         return HTTPResponse(data: data, statusCode: http.statusCode)
     }
 
     // MARK: Retry
 
-    private func performWithRetry(_ request: URLRequest) async throws -> (Data, URLResponse) {
+    private func performWithRetry(_ request: URLRequest, traceID: String) async throws -> (Data, URLResponse) {
         var attempt = 0
         let target = request.url?.absoluteString ?? "<no url>"
         while true {
+            let started = ContinuousClock.now
+            var receivedResponse = false
+            Self.recordHTTP("http.attempt.started", traceID: traceID, fields: ["attempt": String(attempt + 1)])
             do {
                 let (data, response) = try await transport.data(for: request)
+                receivedResponse = true
+                Self.recordHTTP("http.response", traceID: traceID, fields: [
+                    "attempt": String(attempt + 1),
+                    "status": String((response as? HTTPURLResponse)?.statusCode ?? -1),
+                    "elapsedMilliseconds": Self.elapsedMilliseconds(since: started),
+                    "responseBytes": String(data.count),
+                ])
                 if let http = response as? HTTPURLResponse,
                    shouldRetry(http),
                    attempt < maxRetries {
                     if let wait = serverRequestedWait(http), wait > Self.maxRetryWait {
+                        Self.recordHTTP("http.retry.skipped", traceID: traceID, fields: [
+                            "attempt": String(attempt + 1), "reason": "server_wait_exceeds_limit",
+                            "status": String(http.statusCode), "requestedDelaySeconds": String(wait),
+                        ])
                         WegaLog.warning(
                             .network,
                             "HTTP \(http.statusCode) from \(target) — serwer każe czekać \(Int(wait))s, bez ponawiania"
@@ -238,6 +267,10 @@ public final class HTTPClient: @unchecked Sendable {
                     }
                     attempt += 1
                     let delay = retryDelay(http: http, attempt: attempt)
+                    Self.recordHTTP("http.retry", traceID: traceID, fields: [
+                        "attempt": String(attempt), "nextAttempt": String(attempt + 1),
+                        "reason": "http_status", "status": String(http.statusCode), "delaySeconds": String(delay),
+                    ])
                     WegaLog.warning(
                         .network,
                         "HTTP \(http.statusCode) from \(target) — retry \(attempt)/\(self.maxRetries) za \(delay)s"
@@ -247,13 +280,26 @@ public final class HTTPClient: @unchecked Sendable {
                 }
                 return (data, response)
             } catch {
+                let cancelled = error is CancellationError || (error as? URLError)?.code == .cancelled
+                Self.recordHTTP(receivedResponse ? "http.retry.interrupted" : "http.transport.failed", traceID: traceID, fields: [
+                    "attempt": String(receivedResponse ? attempt : attempt + 1),
+                    "elapsedMilliseconds": Self.elapsedMilliseconds(since: started),
+                    "errorType": String(describing: type(of: error)),
+                    "errorCode": String((error as NSError).code),
+                    "cancelled": String(cancelled),
+                ])
                 if attempt < maxRetries, isRetryable(error) {
                     attempt += 1
+                    let delay = retryDelay(http: nil, attempt: attempt)
+                    Self.recordHTTP("http.retry", traceID: traceID, fields: [
+                        "attempt": String(attempt), "nextAttempt": String(attempt + 1),
+                        "reason": "transport_error", "delaySeconds": String(delay),
+                    ])
                     WegaLog.warning(
                         .network,
                         "transport error for \(target) — retry \(attempt)/\(self.maxRetries): \(error.localizedDescription)"
                     )
-                    try await sleepFor(retryDelay(http: nil, attempt: attempt))
+                    try await sleepFor(delay)
                     continue
                 }
                 // A user-driven cancellation isn't a failure worth flagging — only log
@@ -267,6 +313,18 @@ public final class HTTPClient: @unchecked Sendable {
                 throw error
             }
         }
+    }
+
+    private static func recordHTTP(_ event: String, traceID: String, fields: [String: String]) {
+        guard UpdateDiagnostics.current != nil else { return }
+        var fields = fields
+        fields["requestID"] = traceID
+        UpdateDiagnostics.record(event, fields: fields)
+    }
+
+    private static func elapsedMilliseconds(since started: ContinuousClock.Instant) -> String {
+        let duration = started.duration(to: .now)
+        return String(Double(duration.components.seconds) * 1000 + Double(duration.components.attoseconds) / 1e15)
     }
 
     /// 429 i 5xx są przejściowe. Dodatkowo (SEC-05): GitHub primary rate-limit
