@@ -55,6 +55,9 @@ final class UpdateOperationRecovery {
         var removeItem: @Sendable (URL) throws -> Void
         var legacyDirectory: @Sendable () -> URL
         var announce: @MainActor @Sendable (Report) -> Void
+        var stopDocker: @Sendable (URL) async -> DockerDesktopStopResult = {
+            await DockerDesktopStopper().stop(bundleURL: $0)
+        }
 
         static let live = Dependencies(
             fileExists: { FileManager.default.fileExists(atPath: $0) },
@@ -223,6 +226,13 @@ final class UpdateOperationRecovery {
         let appURL = URL(fileURLWithPath: item.appPath)
         guard let snapshotURL = snapshotMap(for: item, operationID: session.operation.id)[item.token] else {
             WegaLog.error(.homebrew, "LT-01: \(item.token): aplikacja zniknęła, a snapshot nie istnieje — nic do przywrócenia.")
+            report.unrecoverableTokens.append(item.token)
+            return
+        }
+        if let shutdown = await DockerDesktopMutationGate.stopIfNeeded(
+            token: item.token, bundleURL: appURL, stop: dependencies.stopDocker
+        ), !shutdown.allowsBundleMutation {
+            WegaLog.error(.homebrew, shutdown.mutationBlockMessage)
             report.unrecoverableTokens.append(item.token)
             return
         }

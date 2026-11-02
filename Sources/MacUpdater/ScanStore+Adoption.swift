@@ -58,15 +58,21 @@ extension ScanStore {
         defer { MutationGuard.shared.end(ticket) }
         emitActivitySignal(.scanning)
 
-        guard let target = manualOutdated.first(where: {
-            if case .cask(let candidate) = $0.source { return candidate == token }
-            return false
+        guard let target = visibleManual.first(where: {
+            if case .cask(let candidate) = $0.source {
+                return candidate == token || (DockerDesktopMutationGate.isDocker(token: token)
+                    && DockerDesktopMutationGate.isDocker(token: candidate))
+            }
+            return DockerDesktopMutationGate.isDocker(token: token)
+                && $0.caskPolicyToken.map { DockerDesktopMutationGate.isDocker(token: $0) } == true
         }) else {
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
                                   message: tr("Nie udało się utworzyć wymaganego snapshotu.")))
             emitActivitySignal(.error)
             return
         }
+
+        if await dockerMutationFailure(token: token, bundleURL: target.path) != nil { return }
 
         // Asked fresh rather than trusted from the scan: the record is what brew itself will
         // compare against, and it can move between the scan and the click. A failed read keeps
@@ -143,6 +149,11 @@ extension ScanStore {
                               "\(token)")
             brewLog.append("⚠️ " + message)
             WegaLog.warning(.homebrew, message)
+        }
+
+        if await dockerMutationFailure(token: token, bundleURL: target.path) != nil {
+            preparation?.operation.abortUnfinished()
+            return
         }
 
         var installError: Error?

@@ -56,6 +56,9 @@ final class BackgroundUpdater {
         ) async -> [String: CaskValidationVerdict]
         var outdatedGreedy: @Sendable () async throws -> BrewOutdated
         var notify: @MainActor @Sendable (UpdateRunSummary) -> Void
+        var stopDocker: @Sendable (URL) async -> DockerDesktopStopResult = {
+            await DockerDesktopStopper().stop(bundleURL: $0)
+        }
     }
 
     private struct Round: Sendable {
@@ -320,12 +323,31 @@ final class BackgroundUpdater {
             )
     }
 
+    private func dockerShutdownConfirmed(tokens: [String], appPaths: [String: URL]) async -> Bool {
+        let stop: @Sendable (URL) async -> DockerDesktopStopResult
+        if let override = dependencies?.stopDocker {
+            stop = override
+        } else {
+            stop = { @Sendable url in await DockerDesktopStopper().stop(bundleURL: url) }
+        }
+        for token in tokens {
+            guard let shutdown = await DockerDesktopMutationGate.stopIfNeeded(
+                token: token, bundleURL: appPaths[token], stop: stop
+            ), !shutdown.allowsBundleMutation else { continue }
+            WegaLog.error(.homebrew, "\(token): \(shutdown.mutationBlockMessage) (\(shutdown))")
+            return false
+        }
+        return true
+    }
+
     private func recoveringLeftover(
         from outcome: BrewUpgradeOutcome,
+        appPaths: [String: URL],
         runBrew: @MainActor @Sendable ([String]) async -> BrewUpgradeOutcome
     ) async -> BrewUpgradeOutcome {
         let retryTokens = outcome.tokensRetryableWithForce
         guard !retryTokens.isEmpty else { return outcome }
+        guard await dockerShutdownConfirmed(tokens: retryTokens, appPaths: appPaths) else { return outcome }
         UpdateDiagnostics.record("upgrade.retry", fields: [
             "tokens": retryTokens.joined(separator: ","), "attempt": "2", "reason": "interruptedCaskReplacement", "force": "true"
         ])
@@ -350,6 +372,11 @@ final class BackgroundUpdater {
         run: inout UpdateRunOutcome
     ) async -> [String] {
 
+            guard await dockerShutdownConfirmed(tokens: tokens, appPaths: appPaths) else {
+                operation.abortUnfinished()
+                return []
+            }
+
             let command = UpdatePlanner.commands(for: UpdatePlanner.plan(
                 selectedKeys: Set(tokens.map { "c:\($0)" })
             ))
@@ -368,7 +395,7 @@ final class BackgroundUpdater {
             }
             func runLiveBrew(arguments: [String]) async -> BrewUpgradeOutcome {
                 var caskOutcome = await runBrew(arguments: arguments)
-                caskOutcome = await recoveringLeftover(from: caskOutcome) { forcedArguments in
+                caskOutcome = await recoveringLeftover(from: caskOutcome, appPaths: appPaths) { forcedArguments in
                     await self.runBrew(arguments: forcedArguments)
                 }
                 return caskOutcome
@@ -378,6 +405,7 @@ final class BackgroundUpdater {
                 let initialOutcome = await dependencies.runBrew(arguments)
                 caskOutcome = await recoveringLeftover(
                     from: initialOutcome,
+                    appPaths: appPaths,
                     runBrew: dependencies.runBrew
                 )
             } else {
