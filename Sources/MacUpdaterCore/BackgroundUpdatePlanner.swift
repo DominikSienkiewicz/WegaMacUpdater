@@ -48,6 +48,7 @@ public enum BackgroundUpdatePlanner {
     public static func eligibleTokens(_ inputs: Inputs) -> [String] {
         inputs.candidates.filter { token in
             guard !DockerDesktopUpdatePolicy.isDocker(token: token) else { return false }
+            guard !ServiceVendorUpdatePolicy.requiresVendor(token: token) else { return false }
             guard inputs.optedIn.contains(token) else { return false }
             guard !inputs.runningProcessTokens.contains(token) else { return false }
             // Casks are keyed `c:<token>` in the policy map — see `OutdatedItem.policyKey`.

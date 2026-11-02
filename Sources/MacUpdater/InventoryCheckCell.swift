@@ -4,8 +4,12 @@ import MacUpdaterCore
 struct InventoryCheckPresentation {
     let status: InstallationCheckStatus
     let check: InstallationCheck?
+    let app: ApplicationInfo
+    var serviceVendor: ServiceVendorUpdateProfile? { ServiceVendorUpdateProfile.profile(for: app) }
+    var vendorAppURL: URL? { serviceVendor != nil && app.path.isFileURL ? app.path : nil }
 
     init(app: ApplicationInfo, check: InstallationCheck?, policies: [String: UpdatePolicy], now: Date = Date()) {
+        self.app = app
         let matches = check.map { InstallationIdentity(path: $0.path) == app.installation && $0.bundleIdentifier == app.bundleIdentifier } ?? false
         self.check = matches ? check : nil
         status = self.check?.status(for: app, policies: policies, now: now) ?? .notChecked
@@ -17,6 +21,9 @@ struct InventoryCheckPresentation {
         }
         if status == .notChecked, check?.unconfirmedCaskToken != nil {
             return tr("Powiązanie z Homebrew niepotwierdzone")
+        }
+        if serviceVendor != nil, status == .notChecked || status == .noSource {
+            return tr("Aktualizator producenta — brak potwierdzenia")
         }
         switch status {
         case .notChecked: return tr("Brak potwierdzenia")
@@ -82,6 +89,11 @@ struct InventoryCheckCell: View {
                     }
                     Text((check.path.path as NSString).abbreviatingWithTildeInPath)
                         .font(.caption).textSelection(.enabled)
+                }
+                if let profile = presentation.serviceVendor {
+                    Divider()
+                    Text(profile.name).font(.headline)
+                    ServiceVendorUpdateControls(profile: profile, appURL: presentation.vendorAppURL)
                 }
                 Text(tr("Status pochodzi ze sprawdzania aktualizacji. Odświeżenie spisu tylko odczytuje zainstalowane aplikacje."))
                     .font(.caption).foregroundStyle(.secondary)

@@ -590,6 +590,11 @@ struct ManualUpdateActionView: View {
                 trustPublisherControl
                 if DockerDesktopUpdatePolicy.isDocker(item) {
                     DockerDesktopUpdateActions(item: item, busyToken: busyToken, onInstall: onInstall)
+                } else if let profile = ServiceVendorUpdatePolicy.profile(for: item) {
+                    ServiceVendorUpdateControls(profile: profile, appURL: item.path) {
+                        scan.vendorOpened(item, succeeded: $0)
+                    }
+                    .frame(maxWidth: 340, alignment: .leading)
                 } else {
                     actionControl
                 }

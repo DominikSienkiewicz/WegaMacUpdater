@@ -162,7 +162,7 @@ public struct ManualUpdateScanner: Sendable {
         brewTrackedVersion: String?,
         latestCaskVersions: [String: String]
     ) -> (@Sendable () async -> ManualCheckObservation)? {
-        guard let token = app.caskToken else { return nil }
+        guard ServiceVendorUpdateProfile.profile(for: app) == nil, let token = app.caskToken else { return nil }
         return Self.observed("Cask", app, applicable: true) {
             guard let latest = latestCaskVersions[token] else { return .unavailable }
             let reference = brewTrackedVersion ?? app.version
@@ -330,7 +330,7 @@ public struct ManualUpdateScanner: Sendable {
                 work.append(check)
             }
         }
-        for app in appsToCheck {
+        for app in appsToCheck where ServiceVendorUpdateProfile.profile(for: app) == nil {
             if !isBrewManaged(app) {
                 // Non-brew apps only: cask-version check (adoption candidates) plus the
                 // cask-lag special checkers.

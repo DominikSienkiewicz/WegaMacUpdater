@@ -58,7 +58,11 @@ public struct InstallationCheck: Codable, Equatable, Sendable {
         version = app.version
         buildVersion = app.buildVersion
         self.checkedAt = checkedAt
-        self.sources = sources
+        if let profile = ServiceVendorUpdateProfile.profile(for: app), !sources.contains(where: { $0.source == profile.name }) {
+            self.sources = sources + [.init(source: profile.name, outcome: .notChecked)]
+        } else {
+            self.sources = sources
+        }
         caskToken = nil
         unconfirmedCaskToken = nil
         isManagedByMas = app.isManagedByMas
@@ -85,6 +89,7 @@ public struct InstallationCheck: Codable, Equatable, Sendable {
         if sources.contains(where: { $0.outcome == .failed }) { return .failed }
         if !updates.isEmpty { return .excluded }
         if unconfirmedCaskToken != nil || sources.contains(where: { $0.outcome == .notChecked }) { return .notChecked }
+        if ServiceVendorUpdateProfile.profile(for: app) != nil { return .notChecked }
         if sources.contains(where: { $0.outcome == .current }) { return .current }
         return .noSource
     }

@@ -446,7 +446,28 @@ struct UpdateView: View {
                                 UnresolvedDockerUpdateRow(item: item) { scan.inspectedKey = item.key }
                             }
                         }
-                        let manualGroups = UpdatePlanner.groupManual(visibleManual.filter { !DockerDesktopUpdatePolicy.isDocker($0) })
+                        let serviceManual = visibleManual.filter { ServiceVendorUpdatePolicy.profile(for: $0) != nil }
+                        let visibleServices = updateFilter.isSecurityOnly ? serviceManual.filter(scan.isSecurityApp) : serviceManual
+                        if !visibleServices.isEmpty && updateFilter != .cli {
+                            ManualUpdateSection(
+                                items: visibleServices, busyToken: scan.manualBusy,
+                                onInstall: { token in Task { await scan.installManual(token: token) } },
+                                title: tr("Usługi aktualizowane przez producenta"), icon: "gearshape.2",
+                                subtitle: tr("aktualizator producenta"),
+                                caption: tr("Homebrew wskazuje wersję pakietu. Aktualizację wykonaj w aplikacji, zgodnie z polityką administratora."),
+                                inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,
+                                onPin: requestPinManual, onSkip: scan.skipManual,
+                                onInspect: { scan.inspectedKey = "m:" + $0.path.path }
+                            )
+                        }
+                        if updateFilter == .all || updateFilter == .apps {
+                            ForEach(scan.unresolvedServiceItems) { item in
+                                UnresolvedServiceUpdateRow(item: item) { scan.inspectedKey = item.key }
+                            }
+                        }
+                        let manualGroups = UpdatePlanner.groupManual(visibleManual.filter {
+                            !DockerDesktopUpdatePolicy.isDocker($0) && ServiceVendorUpdatePolicy.profile(for: $0) == nil
+                        })
                         let brewManual = updateFilter.isSecurityOnly ? manualGroups.brew.filter(scan.isSecurityApp) : manualGroups.brew
                         if !brewManual.isEmpty && updateFilter != .cli {
                             ManualUpdateSection(
