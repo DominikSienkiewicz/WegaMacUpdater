@@ -4,6 +4,7 @@ import Foundation
 struct PackageCaskAttribution {
     let installations: [ApplicationInfo]
     let paths: [String: URL]
+    let unconfirmedCandidates: [InstallationIdentity: String]
 
     static func resolve(
         installations: [ApplicationInfo], casks: [BrewCask], installedTokens: Set<String>,
@@ -36,6 +37,7 @@ struct PackageCaskAttribution {
             return path
         }
         let owners = UpdatePlanner.resolvedCaskPolicyTokens(appPaths: paths)
+        var unconfirmedCandidates: [InstallationIdentity: String] = [:]
         let attributed = installations.map { app in
             var attributed = app
             if !app.isManagedByMas, let token = owners[app.installation] {
@@ -43,12 +45,13 @@ struct PackageCaskAttribution {
                 attributed.caskToken = token
                 attributed.isManagedByBrew = true
             } else if app.isManagedByMas || app.caskToken.map({ packageTokens.contains($0) }) == true {
+                if !app.isManagedByMas, let token = app.caskToken { unconfirmedCandidates[app.installation] = token }
                 attributed.caskToken = nil
                 attributed.caskMatchProvenance = nil
                 attributed.isManagedByBrew = false
             }
             return attributed
         }
-        return Self(installations: attributed, paths: paths)
+        return Self(installations: attributed, paths: paths, unconfirmedCandidates: unconfirmedCandidates)
     }
 }

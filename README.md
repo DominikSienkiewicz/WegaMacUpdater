@@ -43,6 +43,9 @@ puts the old bundle back when a cask upgrade replaces nothing. Details in
 Installer-based apps and Java runtimes are associated with Homebrew through exact
 installation evidence: package receipts or literal application paths declared by the cask.
 Ambiguous claims and duplicate installations do not inherit a package's update result.
+When an installed package cask matches by name but its ownership is unverified, Inventory
+shows **Homebrew association unconfirmed** with the candidate token. This note does not
+mark the copy current or grant it a cask update action or policy alias.
 JDKs remain in the scan report even when their source is unknown or Homebrew already
 lists their update. These reporting associations do not extend app-bundle rollback to
 installer packages or Java runtimes.

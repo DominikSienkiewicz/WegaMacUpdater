@@ -48,6 +48,8 @@ public struct InstallationCheck: Codable, Equatable, Sendable {
     public var lastSuccessfulCheck: Date?
     public var sources: [InstallationSourceCheck]
     public var caskToken: String?
+    /// A possible installed cask, without verified ownership, update actions or policy aliases.
+    public var unconfirmedCaskToken: String?
     public var isManagedByMas: Bool
 
     public init(app: ApplicationInfo, sources: [InstallationSourceCheck], checkedAt: Date) {
@@ -58,13 +60,14 @@ public struct InstallationCheck: Codable, Equatable, Sendable {
         self.checkedAt = checkedAt
         self.sources = sources
         caskToken = nil
+        unconfirmedCaskToken = nil
         isManagedByMas = app.isManagedByMas
         lastSuccessfulCheck = nil
         stampSuccess()
     }
 
     mutating func stampSuccess() {
-        if !sources.isEmpty, sources.allSatisfy({ $0.outcome == .current || $0.outcome == .outdated }) {
+        if unconfirmedCaskToken == nil, !sources.isEmpty, sources.allSatisfy({ $0.outcome == .current || $0.outcome == .outdated }) {
             lastSuccessfulCheck = checkedAt
         }
     }
@@ -81,7 +84,7 @@ public struct InstallationCheck: Codable, Equatable, Sendable {
         }) { return .updateAvailable }
         if sources.contains(where: { $0.outcome == .failed }) { return .failed }
         if !updates.isEmpty { return .excluded }
-        if sources.contains(where: { $0.outcome == .notChecked }) { return .notChecked }
+        if unconfirmedCaskToken != nil || sources.contains(where: { $0.outcome == .notChecked }) { return .notChecked }
         if sources.contains(where: { $0.outcome == .current }) { return .current }
         return .noSource
     }

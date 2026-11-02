@@ -42,6 +42,10 @@ It ignores wildcard, relative and `zap` paths. Claims must identify one installa
 one installed cask; ambiguous claims, duplicate copies and App Store installations cannot
 borrow another copy's Homebrew result. The catalog cache uses `casks-v3.json` so an older
 cache without the added uninstall-path metadata does not silently hide that evidence.
+An installed package cask matched by the catalog but lacking verified ownership remains
+visible as an unconfirmed association. Inventory shows its candidate token and an explanation,
+including when receipts are missing or ownership claims conflict. The note survives saved
+scans, supplies no action token or policy alias, and cannot certify a current installation.
 
 Java runtimes are scanned under the system and per-user `JavaVirtualMachines` directories.
 `JavaRuntimeAttribution` preserves every discovered `.jdk` in the report, canonicalizes

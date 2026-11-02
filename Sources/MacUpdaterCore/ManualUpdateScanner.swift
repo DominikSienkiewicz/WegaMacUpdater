@@ -415,7 +415,7 @@ public struct ManualUpdateScanner: Sendable {
         ))
         return Self.makeReport(
             collected: collected, observations: observations, installations: allInstallations + javaRuntimes + [selfApp],
-            brewOwnership: BrewOwnership(paths: ownershipPaths.merging(javaAttribution.managedPaths) { direct, _ in direct }, tracked: brewTrackedTokens.union(brewOutdatedCasks), available: brewAvailable),
+            brewOwnership: BrewOwnership(paths: ownershipPaths.merging(javaAttribution.managedPaths) { direct, _ in direct }, tracked: brewTrackedTokens.union(brewOutdatedCasks), available: brewAvailable, unconfirmedCandidates: packageOwnership.unconfirmedCandidates),
             uncheckedSources: uncheckedSources
         )
     }
@@ -424,6 +424,7 @@ public struct ManualUpdateScanner: Sendable {
         let paths: [String: URL]
         let tracked: Set<String>
         let available: Bool
+        let unconfirmedCandidates: [InstallationIdentity: String]
     }
 
     private static func makeReport(
@@ -444,6 +445,9 @@ public struct ManualUpdateScanner: Sendable {
             var record = check
             if let token = policyTokens[app.installation] {
                 record.caskToken = token
+                record.sources.append(.init(source: "Homebrew", outcome: .notChecked))
+            } else if let token = brewOwnership.unconfirmedCandidates[app.installation] {
+                record.unconfirmedCaskToken = token
                 record.sources.append(.init(source: "Homebrew", outcome: .notChecked))
             } else if app.isManagedByBrew || (!brewOwnership.available && app.caskToken != nil && record.sources.isEmpty) {
                 record.sources.append(.init(source: "Homebrew", outcome: .notChecked))

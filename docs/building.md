@@ -29,11 +29,12 @@ The ZIP is assembled locally; these checks do not send diagnostics or run vendor
 
 Installer attribution and update-repair regressions use fake Brew, `pkgutil` and `launchctl`
 responses and temporary app/JDK bundles. They cover failed ShipIt withdrawal, build drift,
-all receipt claims, literal cask paths, duplicate/MAS isolation, JDK major versions and
-symlink aliases. They do not launch applications, install packages or modify real jobs:
+all receipt claims, literal cask paths, duplicate/MAS isolation, JDK major versions,
+symlink aliases and unconfirmed cask associations (status, policy isolation, snapshots and
+translations). They do not launch applications, install packages or modify real jobs:
 
 ```bash
-swift test --jobs 1 --no-parallel --filter 'LT02ShipItWithdrawalFailureTests|CaskBuildDriftArrivalTests|CaskBuildDriftVerificationTests|PackageReceiptIdentifiersTests|PackageCaskAttributionTests|JavaRuntimeInstallationAttributionTests'
+swift test --jobs 1 --no-parallel --filter 'LT02ShipItWithdrawalFailureTests|CaskBuildDriftArrivalTests|CaskBuildDriftVerificationTests|PackageReceiptIdentifiersTests|PackageCaskAttributionTests|JavaRuntimeInstallationAttributionTests|UnconfirmedCaskAssociationTests|UnconfirmedCaskPresentationTests'
 ```
 
 Docker safety regression tests use fake process runners, injected lifecycle services and

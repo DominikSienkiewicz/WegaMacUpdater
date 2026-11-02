@@ -119,7 +119,13 @@ Installer applications and JDKs need an exact link to their cask before a packag
 can describe that installed copy. A receipt or declared application path can provide that
 link; an ambiguous receipt or another copy cannot. Java runtimes remain in the scan report
 when no source is confirmed, and an update already listed by Homebrew is not listed twice.
-Run **Check now** after upgrading Wega to rebuild this evidence.
+If an installed package cask is a possible match but the link cannot be confirmed, the
+status reads **Powiązanie z Homebrew niepotwierdzone** (Homebrew association unconfirmed).
+Open it to see the possible cask and the missing confirmation. For example, WARP and Google
+Drive can show this status when installer receipts do not identify the copy. The note
+cannot mark the app current or enable a cask update for that copy. Independent updates,
+failures and stale results keep their usual status; the possible source remains in the
+details. Run **Check now** after upgrading Wega to rebuild this evidence.
 
 ### Release notes for Homebrew casks
 
