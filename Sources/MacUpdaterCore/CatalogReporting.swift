@@ -10,7 +10,7 @@ import Foundation
 /// therefore a strictly finer condition than the Inventory "Ręcznie" badge.
 public enum CatalogReporting {
     /// True when Wega already knows how to deliver updates for `app`: it is managed by Homebrew or
-    /// the Mac App Store, or its bundle identifier appears in one of the catalog's lookup tables.
+    /// the Mac App Store, or its bundle identifier has a built-in or catalogued update source.
     ///
     /// This deliberately does not read the app's own `Info.plist` `SUFeedURL`: that is per-app disk
     /// I/O, whereas catalog membership + brew/MAS is a pure function of already-scanned state and is
@@ -19,6 +19,7 @@ public enum CatalogReporting {
         if app.isManagedByBrew || app.isManagedByMas || ServiceVendorUpdateProfile.profile(for: app) != nil { return true }
         guard let bundleID = app.bundleIdentifier else { return false }
         return MicrosoftAutoUpdateSupport.applicationID(bundleIdentifier: bundleID) != nil
+            || bundleID == UTMUpdateSupport.bundleIdentifier
             || catalog.github.contains { $0.bundleId == bundleID }
             || catalog.jetbrains.contains { $0.bundleId == bundleID }
             || catalog.synology.contains { $0.bundleId == bundleID }

@@ -36,6 +36,7 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public let homebrewWebsite: String
     public let homebrewInstallCommand: String
     public let githubReleasesPage: String
+    public let githubReleasesIndexPage: String
     public let googleDriveDownload: String
     /// Adobe's Creative Cloud product feed — the one document listing every shipped version
     /// of every CC application, narrowed by query to the macOS desktop products.
@@ -92,6 +93,10 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
 
     public func githubReleasesPageURL(repo: String) -> URL? {
         URL(string: Self.fill(githubReleasesPage, ["repo": repo]))
+    }
+
+    public func githubReleasesIndexPageURL(repo: String) -> URL? {
+        URL(string: Self.fill(githubReleasesIndexPage, ["repo": repo]))
     }
 
     public func discordUpdateURL(channel: String, version: String) -> URL? {
@@ -357,6 +362,7 @@ extension AppEndpoints {
             // SEC-08: the install command is a shell string, never overridable from the overlay.
             homebrewInstallCommand: homebrewInstallCommand,
             githubReleasesPage: templateURL(other.githubReleasesPage, githubReleasesPage),
+            githubReleasesIndexPage: templateURL(other.githubReleasesIndexPage, githubReleasesIndexPage),
             googleDriveDownload: validURL(other.googleDriveDownload, googleDriveDownload),
             adobeProductCatalog: validURL(other.adobeProductCatalog, adobeProductCatalog),
             adobeCreativeCloud: validURL(other.adobeCreativeCloud, adobeCreativeCloud),
@@ -412,6 +418,7 @@ public struct AppEndpointsOverlay: Decodable, Sendable, Equatable {
     public let homebrewWebsite: String?
     public let homebrewInstallCommand: String?
     public let githubReleasesPage: String?
+    public var githubReleasesIndexPage: String? = nil
     public let googleDriveDownload: String?
     // Defaulted (like `obsidianDesktopReleases`) so existing memberwise-init call sites keep
     // compiling without listing the Adobe keys.

@@ -98,7 +98,9 @@ public extension ManualOutdatedApp.UpdateSource {
         case .mas:
             return .appStore
         case .github(let repo, let selfUpdates):
-            let releases = AppEndpoints.shared.githubReleasesPageURL(repo: repo)
+            let releases = repo == UTMUpdateSupport.repository && !selfUpdates
+                ? AppEndpoints.shared.githubReleasesIndexPageURL(repo: repo)
+                : AppEndpoints.shared.githubReleasesPageURL(repo: repo)
             return selfUpdates ? .launchAppWithReleases(releases)
                                : .openURL(releases, style: .githubReleases)
         case .jetbrains:

@@ -6,15 +6,19 @@ public struct GitHubReleasesChecker: VendorUpdateChecker {
 
     public init(
         client: HTTPClient = .shared,
-        repos: [String: GitHubCatalogEntry] = AppCatalog.shared.githubRepos
+        repos: [String: GitHubCatalogEntry]? = nil
     ) {
         self.client = client
-        self.repos = repos
+        self.repos = repos ?? AppCatalog.shared.githubRepos.merging(
+            [UTMUpdateSupport.bundleIdentifier: UTMUpdateSupport.githubEntry],
+            uniquingKeysWith: { catalogEntry, _ in catalogEntry }
+        )
     }
 
     public func plan(for app: ApplicationInfo) -> VendorCheckPlan? {
         guard let bundleId = app.bundleIdentifier,
               let mapping = repos[bundleId] else { return nil }
+        guard !UTMUpdateSupport.usesNativeUpdateChannel(app, client: client) else { return nil }
 
         guard let url = AppEndpoints.shared.githubReleasesURL(repo: mapping.repo) else { return nil }
 
@@ -27,8 +31,13 @@ public struct GitHubReleasesChecker: VendorUpdateChecker {
             // also carries every release the user is behind, which is the question the row
             // actually has to answer. Drafts and prereleases are filtered here rather than by
             // GitHub, and REL-11's SemVer ordering decides which release is newest.
-            guard let releases = GitHubReleaseHistory.stableReleases(from: data) else {
+            guard var releases = GitHubReleaseHistory.stableReleases(from: data) else {
                 return .decided(.failed)
+            }
+            if bundleId == UTMUpdateSupport.bundleIdentifier, mapping.repo == UTMUpdateSupport.repository {
+                guard let macOSReleases = UTMUpdateSupport.comparableMacOSReleases(releases, installedVersion: app.version)
+                else { return .decided(.failed) }
+                releases = macOSReleases
             }
             guard let newest = GitHubReleaseHistory.newest(releases) else { return .decided(.upToDate) }
 
