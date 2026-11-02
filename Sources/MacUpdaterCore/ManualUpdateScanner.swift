@@ -1,8 +1,8 @@
 import Foundation
 
-/// Runs the 14 manual-app update checkers (Sparkle, JetBrains, GitHub, Synology,
+/// Runs the manual-app update checkers (Sparkle, JetBrains, GitHub, Synology,
 /// Antigravity, Parallels, Google Drive, ChatGPT, Postman, Discord, Signal, Chrome,
-/// Obsidian, Adobe Creative Cloud) plus the brew-cask version check
+/// Obsidian, Adobe Creative Cloud, Microsoft AutoUpdate) plus the brew-cask version check
 /// over every installed app, and returns the outdated ones deduplicated by source
 /// priority — together with source failures, temporary outages and per-installation evidence.
 ///
@@ -21,6 +21,7 @@ public struct ManualUpdateScanner: Sendable {
     private let adobeCatalogClient: AdobeCatalogClient
     private let adobeUninstallDirectory: URL
     private let sparkleChecker: SparkleUpdateChecker
+    private let microsoftAutoUpdateClient: MicrosoftAutoUpdateClient
 
     /// The update sources a scan consults besides Homebrew, each defaulting to production.
     /// Tests override only the ones they isolate, through the memberwise initializer.
@@ -33,6 +34,7 @@ public struct ManualUpdateScanner: Sendable {
         public var adobeCatalogClient: AdobeCatalogClient = .productCatalog()
         public var adobeUninstallDirectory: URL = SystemPaths.adobeUninstallDirectory
         public var sparkleChecker: SparkleUpdateChecker = SparkleUpdateChecker()
+        public var microsoftAutoUpdateClient: MicrosoftAutoUpdateClient = MicrosoftAutoUpdateClient()
 
         public static var production: Self { Self() }
     }
@@ -56,6 +58,7 @@ public struct ManualUpdateScanner: Sendable {
         adobeCatalogClient = dependencies.adobeCatalogClient
         adobeUninstallDirectory = dependencies.adobeUninstallDirectory
         sparkleChecker = dependencies.sparkleChecker
+        microsoftAutoUpdateClient = dependencies.microsoftAutoUpdateClient
     }
 
     /// UX-15 — Wega dogfoods its own update path. A self-update maps to the same
@@ -413,11 +416,16 @@ public struct ManualUpdateScanner: Sendable {
             brewCaskVersions: brewCaskVersions,
             alreadyListedTokens: listedCaskTokens()
         ))
-        return Self.makeReport(
+        return await applyingMicrosoftEvidence(to: Self.makeReport(
             collected: collected, observations: observations, installations: allInstallations + javaRuntimes + [selfApp],
             brewOwnership: BrewOwnership(paths: ownershipPaths.merging(javaAttribution.managedPaths) { direct, _ in direct }, tracked: brewTrackedTokens.union(brewOutdatedCasks), available: brewAvailable, unconfirmedCandidates: packageOwnership.unconfirmedCandidates),
             uncheckedSources: uncheckedSources
-        )
+        ), applications: allInstallations)
+    }
+
+    private func applyingMicrosoftEvidence(to report: ManualScanReport, applications: [ApplicationInfo]) async -> ManualScanReport {
+        guard applications.contains(where: { MicrosoftAutoUpdateSupport.applicationID(for: $0) != nil }) else { return report }
+        return (await microsoftAutoUpdateClient.list()).applying(to: report, applications: applications)
     }
 
     private struct BrewOwnership {

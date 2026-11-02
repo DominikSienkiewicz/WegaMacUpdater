@@ -149,6 +149,9 @@ enum VendorUpdateSourceCheck {
         case .signal: return await SignalUpdateChecker().check(app: app)
         case .chrome: return await ChromeUpdateChecker().check(app: app)
         case .obsidian: return await ObsidianUpdateChecker().check(app: app)
+        case .microsoftAutoUpdate(let applicationID):
+            guard MicrosoftAutoUpdateSupport.applicationID(for: app) == applicationID else { return .notApplicable }
+            return await MicrosoftAutoUpdateClient().list().check(app: app)
         case .adobe(let sapCode):
             let inventory = AdobeProductInventory.installedProducts()
             guard AdobeProductInventory.product(matching: app, in: inventory)?.sapCode == sapCode else { return .notApplicable }

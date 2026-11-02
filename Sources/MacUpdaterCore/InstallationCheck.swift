@@ -51,6 +51,8 @@ public struct InstallationCheck: Codable, Equatable, Sendable {
     /// A possible installed cask, without verified ownership, update actions or policy aliases.
     public var unconfirmedCaskToken: String?
     public var isManagedByMas: Bool
+    /// Product-list evidence is not proof that Microsoft AutoUpdate registered this copy.
+    public var microsoftAutoUpdate: MicrosoftAutoUpdateEvidence?
 
     public init(app: ApplicationInfo, sources: [InstallationSourceCheck], checkedAt: Date) {
         path = app.path

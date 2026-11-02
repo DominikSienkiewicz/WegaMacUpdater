@@ -18,7 +18,8 @@ public enum CatalogReporting {
     public static func hasKnownUpdateSource(_ app: ApplicationInfo, catalog: AppCatalog) -> Bool {
         if app.isManagedByBrew || app.isManagedByMas { return true }
         guard let bundleID = app.bundleIdentifier else { return false }
-        return catalog.github.contains { $0.bundleId == bundleID }
+        return MicrosoftAutoUpdateSupport.applicationID(bundleIdentifier: bundleID) != nil
+            || catalog.github.contains { $0.bundleId == bundleID }
             || catalog.jetbrains.contains { $0.bundleId == bundleID }
             || catalog.synology.contains { $0.bundleId == bundleID }
             || catalog.sparkleFeedOverrides.contains { $0.bundleId == bundleID }

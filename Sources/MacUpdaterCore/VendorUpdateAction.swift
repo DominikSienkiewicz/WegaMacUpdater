@@ -35,6 +35,7 @@ public enum UpdateActionKind: Equatable, Sendable {
     /// download, the signature verification, the helper install, the restart, and its own
     /// "see the release" link — nothing here needs the release URL.
     case openSelfUpdate
+    case microsoftAutoUpdate
 }
 
 /// Which labelled variant of the "open a URL" action a source uses. The label text stays
@@ -48,7 +49,7 @@ public enum OpenURLStyle: Equatable, Sendable {
 public extension ManualOutdatedApp.UpdateSource {
     var supportsVendorCompletion: Bool {
         switch updateActionKind {
-        case .launchApp, .launchAppWithReleases, .openURL, .jetBrainsToolbox, .creativeCloud: true
+        case .launchApp, .launchAppWithReleases, .openURL, .jetBrainsToolbox, .creativeCloud, .microsoftAutoUpdate: true
         case .brewInstall, .appStore, .openSelfUpdate: false
         }
     }
@@ -81,6 +82,7 @@ public extension ManualOutdatedApp.UpdateSource {
         case .signal:               return "Signal"
         case .chrome:               return "Chrome"
         case .obsidian:             return "Obsidian"
+        case .microsoftAutoUpdate: return "Microsoft AutoUpdate"
         case .adobe(let sapCode):   return sapCode
         case .wega:                 return "Wega"
         }
@@ -106,6 +108,8 @@ public extension ManualOutdatedApp.UpdateSource {
             return .openURL(AppEndpoints.shared.googleDriveDownloadURL, style: .vendorDownload)
         case .adobe:
             return .creativeCloud(fallbackURL: AppEndpoints.shared.adobeCreativeCloudURL)
+        case .microsoftAutoUpdate:
+            return .microsoftAutoUpdate
         case .wega:
             // "Launching the app" would be Wega itself and would apply nothing; the browser
             // would step around signature verification and the helper install. So the row

@@ -2,10 +2,12 @@ import SwiftUI
 import MacUpdaterCore
 
 struct InventoryCheckPresentation {
+    let app: ApplicationInfo
     let status: InstallationCheckStatus
     let check: InstallationCheck?
 
     init(app: ApplicationInfo, check: InstallationCheck?, policies: [String: UpdatePolicy], now: Date = Date()) {
+        self.app = app
         let matches = check.map { InstallationIdentity(path: $0.path) == app.installation && $0.bundleIdentifier == app.bundleIdentifier } ?? false
         self.check = matches ? check : nil
         status = self.check?.status(for: app, policies: policies, now: now) ?? .notChecked
@@ -82,6 +84,11 @@ struct InventoryCheckCell: View {
                     }
                     Text((check.path.path as NSString).abbreviatingWithTildeInPath)
                         .font(.caption).textSelection(.enabled)
+                }
+                if MicrosoftAutoUpdateSupport.applicationID(for: presentation.app) != nil {
+                    Divider()
+                    MicrosoftAutoUpdateControls(app: presentation.app,
+                        evidence: presentation.status == .stale ? nil : presentation.check?.microsoftAutoUpdate)
                 }
                 Text(tr("Status pochodzi ze sprawdzania aktualizacji. Odświeżenie spisu tylko odczytuje zainstalowane aplikacje."))
                     .font(.caption).foregroundStyle(.secondary)

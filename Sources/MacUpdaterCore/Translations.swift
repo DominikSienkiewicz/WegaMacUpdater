@@ -18,6 +18,7 @@ public enum Translations {
         .merging(dockerShutdown) { first, _ in first }
         .merging(dockerDesktop) { first, _ in first }
         .merging(unconfirmedCaskAssociation) { first, _ in first }
+        .merging(MicrosoftAutoUpdateTranslations.english) { first, _ in first }
 }
 
 extension Translations {
