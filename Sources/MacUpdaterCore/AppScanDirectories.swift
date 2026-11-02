@@ -58,12 +58,11 @@ public enum AppScanDirectories {
 
     /// On-disk cache for the Homebrew cask database.
     ///
-    /// The `-v2` suffix retires the caches written before ``BrewCask`` started carrying
-    /// installer-receipt identifiers. Those files are structurally valid and up to a day
-    /// fresh, so they would be loaded as-is — and every JDK would stay invisible until the
-    /// TTL happened to expire. Changing the name costs one download once.
+    /// The `-v3` suffix retires caches without installer application paths. Their receipt
+    /// identifiers still decode, but script-installed applications such as Logi Options+
+    /// need literal `uninstall.delete` paths immediately rather than after the cache expires.
     public static var caskDatabaseCacheURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Caches/\(AppMetadata.bundleIdentifier)/casks-v2.json")
+            .appendingPathComponent("Library/Caches/\(AppMetadata.bundleIdentifier)/casks-v3.json")
     }
 }

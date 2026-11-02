@@ -56,6 +56,8 @@ public enum LaunchSmokeTest {
         /// The instance raised a system authorization prompt that is still open, so the
         /// teardown was suspended and the instance was left running for the user to answer.
         case awaitingAuthorization
+        /// The staged updater could not be safely withdrawn, so the instance remains running.
+        case selfUpdatePending
         /// The app is on ``LaunchSmokeTestConfiguration/tokensExemptFromSmokeTest`` — its
         /// first run after an upgrade repairs privileged state, which must not be interrupted.
         case privilegedFirstRun
@@ -76,8 +78,8 @@ public enum LaunchSmokeTest {
     /// Starts the app through `probe`, watches it for `window` seconds, and stops the
     /// instance it started before returning.
     ///
-    /// The instance is always stopped — a smoke test that left a hidden copy of every
-    /// upgraded app running would be a worse problem than the one it detects.
+    /// Teardown leaves the instance running if authorization is pending or its staged
+    /// self-update cannot be safely withdrawn. Both conditions produce a skipped verdict.
     public static func run(
         bundleAt url: URL,
         window: TimeInterval = LaunchSmokeTestConfiguration.defaultWindow,
@@ -140,8 +142,8 @@ public enum LaunchSmokeTest {
         let grace: TimeInterval
         let pollInterval: TimeInterval
 
-        /// Ends the instance and returns `verdict` unchanged — the stop is cleanup, never a
-        /// second chance to change the answer.
+        /// Ends the instance and preserves `verdict` unless a staged updater prevents safe
+        /// termination, in which case the smoke test is skipped and the instance stays running.
         ///
         /// Polite request, short grace, then an unconditional kill: the same escalation
         /// `ProcessRunner` uses for a cancelled child (REL-12), so an app that ignores a quit
@@ -156,21 +158,27 @@ public enum LaunchSmokeTest {
         /// caller does next (re-read the version, restore the snapshot) must not land inside
         /// another installer's swap.
         func stopping(verdict: Verdict) async -> Verdict {
-            await end()
+            guard await end() else {
+                UpdateDiagnostics.record("smoke.terminationDeferred", fields: [
+                    "appPath": bundle.path, "bundleName": bundle.lastPathComponent,
+                    "pid": String(handle.processIdentifier), "reason": "selfUpdatePending"
+                ])
+                return .skipped(.selfUpdatePending)
+            }
             await probe.waitForSelfUpdate(ofBundleAt: bundle)
             return verdict
         }
 
-        private func end() async {
-            if await handle.hasExited() { return }
-            await probe.withdrawStagedSelfUpdate(ofBundleAt: bundle)
+        private func end() async -> Bool {
+            if await handle.hasExited() { return true }
+            guard await probe.prepareForTermination(ofBundleAt: bundle) else { return false }
             UpdateDiagnostics.record("smoke.terminationRequested", fields: ["appPath": bundle.path, "bundleName": bundle.lastPathComponent, "pid": String(handle.processIdentifier)])
             await handle.requestTermination()
 
             let clock = ContinuousClock()
             let deadline = clock.now.advanced(by: .seconds(grace))
             while clock.now < deadline {
-                if await handle.hasExited() { return }
+                if await handle.hasExited() { return true }
                 do {
                     try await Task.sleep(for: .seconds(min(pollInterval, grace)))
                 } catch {
@@ -182,6 +190,7 @@ public enum LaunchSmokeTest {
                 UpdateDiagnostics.record("smoke.forceTerminationRequested", fields: ["appPath": bundle.path, "bundleName": bundle.lastPathComponent, "pid": String(handle.processIdentifier)])
                 await handle.forceTerminate()
             }
+            return true
         }
     }
 
@@ -231,6 +240,9 @@ public protocol AppLaunchProbing: Sendable {
     /// Called while the instance is still running, right before the teardown asks it to quit.
     func withdrawStagedSelfUpdate(ofBundleAt url: URL) async
 
+    /// Withdraws an install staged for quit and confirms whether termination may proceed.
+    func prepareForTermination(ofBundleAt url: URL) async -> Bool
+
     /// Returns once an install the app's own updater began on this instance's exit has finished.
     /// Called after the instance is gone, before the verdict is handed back.
     func waitForSelfUpdate(ofBundleAt url: URL) async
@@ -245,6 +257,12 @@ public extension AppLaunchProbing {
     /// behaviour. Only the production probe overrides this.
     func withdrawStagedSelfUpdate(ofBundleAt url: URL) async {
         // Intentionally empty: only the production probe can reach launchd.
+    }
+
+    /// Preserves the pre-existing withdrawal contract for probes without a system safety check.
+    func prepareForTermination(ofBundleAt url: URL) async -> Bool {
+        await withdrawStagedSelfUpdate(ofBundleAt: url)
+        return true
     }
 
     /// Nothing to wait for without launchd — the pre-existing behaviour.

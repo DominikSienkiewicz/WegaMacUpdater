@@ -115,6 +115,18 @@ missing comparison version cannot prove that a specific copy is current. These c
 remain unconfirmed. In particular, the current `mas outdated` integration does not supply
 a verified per-path result; its package update list still appears in Updates.
 
+Installer applications and JDKs need an exact link to their cask before a package result
+can describe that installed copy. A receipt or declared application path can provide that
+link; an ambiguous receipt or another copy cannot. Java runtimes remain in the scan report
+when no source is confirmed, and an update already listed by Homebrew is not listed twice.
+If an installed package cask is a possible match but the link cannot be confirmed, the
+status reads **Powiązanie z Homebrew niepotwierdzone** (Homebrew association unconfirmed).
+Open it to see the possible cask and the missing confirmation. For example, WARP and Google
+Drive can show this status when installer receipts do not identify the copy. The note
+cannot mark the app current or enable a cask update for that copy. Independent updates,
+failures and stale results keep their usual status; the possible source remains in the
+details. Run **Check now** after upgrading Wega to rebuild this evidence.
+
 ### Release notes for Homebrew casks
 
 Click **Sprawdź notatki wydania** (Check release notes) under a cask row or in its inspector.
@@ -244,6 +256,12 @@ Cancelling — and every timeout — now really stops the tool Wega started, tog
 helper process it spawned: Wega asks it to quit, gives it a moment to unwind, and kills it
 if it refuses. Every command also has both a maximum runtime and an inactivity limit, so a
 package manager that hangs silently can no longer hold the window forever.
+
+If the post-update launch test cannot confirm that an app's queued Squirrel/ShipIt update
+was withdrawn, it leaves the app running and records the skipped teardown in Logs. This
+prevents Wega's own quit from starting an unconfirmed installer. It does not prove that the
+app's updater can never change the bundle later. Repair also checks build and prerelease
+changes; Brew reporting success alone does not prove that the offered build arrived.
 
 ### The rollback shield
 

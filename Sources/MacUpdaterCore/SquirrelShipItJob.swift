@@ -58,19 +58,39 @@ public enum SquirrelShipItJob {
     /// so inheriting the cancellation would skip exactly the call that keeps that quit harmless.
     @discardableResult
     public static func withdraw(fromBundleAt bundle: URL, runner: ProcessRunning = ProcessRunner()) async -> [String] {
+        await withdrawSafely(fromBundleAt: bundle, runner: runner).withdrawnLabels
+    }
+
+    /// A completed inspection and successful removals are both required before asking the app to quit.
+    public struct WithdrawalResult: Equatable, Sendable {
+        public let withdrawnLabels: [String]
+        public let permitsTermination: Bool
+    }
+
+    /// Withdraws only jobs owned by this bundle, retaining failures as an explicit termination veto.
+    public static func withdrawSafely(fromBundleAt bundle: URL, runner: ProcessRunning = ProcessRunner()) async -> WithdrawalResult {
         let trace = UpdateDiagnostics.current
         return await Task.detached {
             await UpdateDiagnostics.$current.withValue(trace) {
                 UpdateDiagnostics.record("selfUpdater.withdrawStarted", fields: ["appPath": bundle.path, "bundleName": bundle.lastPathComponent])
+                let inspection = await jobs(belongingTo: bundle, runner: runner)
                 var withdrawn: [String] = []
-                for job in await jobs(belongingTo: bundle, runner: runner)
-                where await launchctl(["remove", job.label], runner: runner) != nil {
-                    withdrawn.append(job.label)
+                var failed: [String] = []
+                for job in inspection.owned {
+                    if await launchctl(["remove", job.label], runner: runner) != nil {
+                        withdrawn.append(job.label)
+                    } else {
+                        failed.append(job.label)
+                    }
                 }
+                let permitsTermination = inspection.complete && failed.isEmpty
                 UpdateDiagnostics.record("selfUpdater.withdrawResult", fields: [
-                    "appPath": bundle.path, "bundleName": bundle.lastPathComponent, "withdrawnCount": String(withdrawn.count), "labels": withdrawn.joined(separator: ",")
+                    "appPath": bundle.path, "bundleName": bundle.lastPathComponent,
+                    "withdrawnCount": String(withdrawn.count), "labels": withdrawn.joined(separator: ","),
+                    "inspectionComplete": String(inspection.complete), "failedLabels": failed.joined(separator: ","),
+                    "permitsTermination": String(permitsTermination)
                 ])
-                return withdrawn
+                return WithdrawalResult(withdrawnLabels: withdrawn, permitsTermination: permitsTermination)
             }
         }.value
     }
@@ -101,7 +121,7 @@ public enum SquirrelShipItJob {
             ])
         }
         while clock.now < deadline,
-              await jobs(belongingTo: bundle, runner: runner).contains(where: { isRunning(inLaunchctlPrint: $0.printed) }) {
+              await jobs(belongingTo: bundle, runner: runner).owned.contains(where: { isRunning(inLaunchctlPrint: $0.printed) }) {
             do {
                 try await Task.sleep(for: .seconds(pollInterval))
             } catch {
@@ -110,17 +130,30 @@ public enum SquirrelShipItJob {
         }
     }
 
-    /// Every ShipIt job whose program lives inside `bundle`, with its `launchctl print` output.
-    private static func jobs(belongingTo bundle: URL, runner: ProcessRunning) async -> [(label: String, printed: String)] {
-        guard let list = await launchctl(["list"], runner: runner) else { return [] }
+    private struct JobInspection {
         var owned: [(label: String, printed: String)] = []
+        var complete = true
+    }
+
+    /// An unreadable candidate cannot be treated as proof that no updater belongs to this bundle.
+    private static func jobs(belongingTo bundle: URL, runner: ProcessRunning) async -> JobInspection {
+        guard let list = await launchctl(["list"], runner: runner) else {
+            UpdateDiagnostics.record("selfUpdater.inspectionFailed", fields: ["appPath": bundle.path, "command": "list"])
+            return JobInspection(complete: false)
+        }
+        var inspection = JobInspection()
         for label in candidateLabels(inLaunchctlList: list) {
             guard let printed = await launchctl(["print", "gui/\(getuid())/\(label)"], runner: runner),
-                  let program = programPath(inLaunchctlPrint: printed),
-                  self.program(program, belongsTo: bundle) else { continue }
-            owned.append((label, printed))
+                  let program = programPath(inLaunchctlPrint: printed), !program.isEmpty else {
+                inspection.complete = false
+                UpdateDiagnostics.record("selfUpdater.inspectionFailed", fields: ["appPath": bundle.path, "command": "print", "label": label])
+                continue
+            }
+            if self.program(program, belongsTo: bundle) {
+                inspection.owned.append((label, printed))
+            }
         }
-        return owned
+        return inspection
     }
 
     private static func launchctl(_ arguments: [String], runner: ProcessRunning) async -> String? {

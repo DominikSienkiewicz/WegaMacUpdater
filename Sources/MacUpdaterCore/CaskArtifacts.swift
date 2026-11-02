@@ -41,6 +41,26 @@ enum JSONValue: Decodable, Equatable {
 
 /// Extracts the installer-package identifiers a cask claims.
 enum CaskArtifacts {
+    /// Exact bundle destinations only; zap, wildcard paths and installer scripts are not ownership claims.
+    static func uninstallAppPaths(in artifacts: [JSONValue]) -> [String] {
+        artifacts
+            .compactMap { artifact -> [JSONValue]? in
+                guard case .object(let stanzas) = artifact,
+                      case .array(let uninstalls)? = stanzas["uninstall"] else { return nil }
+                return uninstalls
+            }
+            .flatMap { $0 }
+            .flatMap { uninstall -> [String] in
+                guard case .object(let directives) = uninstall,
+                      let paths = directives["delete"] else { return [] }
+                return paths.strings
+            }
+            .filter { path in
+                path.hasPrefix("/") && URL(fileURLWithPath: path).pathExtension == "app"
+                    && path.rangeOfCharacter(from: CharacterSet(charactersIn: "*?[]{}")) == nil
+            }
+    }
+
     /// Reads `uninstall` → `pkgutil` only.
     ///
     /// `zap` also carries `pkgutil` entries, but they are the aggressive leftover sweep and

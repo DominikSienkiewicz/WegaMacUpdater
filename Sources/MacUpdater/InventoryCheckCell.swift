@@ -15,6 +15,9 @@ struct InventoryCheckPresentation {
         if status == .updateAvailable, check?.sources.contains(where: { $0.outcome == .failed }) == true {
             return tr("Aktualizacja; sprawdzenie niepełne")
         }
+        if status == .notChecked, check?.unconfirmedCaskToken != nil {
+            return tr("Powiązanie z Homebrew niepotwierdzone")
+        }
         switch status {
         case .notChecked: return tr("Brak potwierdzenia")
         case .current: return tr("Sprawdzona — aktualna")
@@ -71,6 +74,11 @@ struct InventoryCheckCell: View {
                     Text(trf("Ostatnie pełne sprawdzenie: %@", check.lastSuccessfulCheck?.formatted(date: .abbreviated, time: .shortened) ?? "—"))
                     ForEach(Array(check.sources.enumerated()), id: \.offset) { _, source in
                         Text("\(tr(source.source)): \(sourceLabel(source.outcome))")
+                    }
+                    if let token = check.unconfirmedCaskToken {
+                        Text(trf("Możliwe źródło: Homebrew (%@)", token))
+                        Text(tr("Brak jednoznacznego potwierdzenia tej instalacji. Wynik casku nie potwierdza aktualności tej kopii."))
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                     Text((check.path.path as NSString).abbreviatingWithTildeInPath)
                         .font(.caption).textSelection(.enabled)

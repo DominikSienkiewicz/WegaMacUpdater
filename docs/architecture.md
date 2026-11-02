@@ -31,6 +31,13 @@ it performs no update-source requests. `InstallationCheck` compares the saved bu
 path, version/build and timestamp before presenting a status. Policy filtering affects
 visibility, not whether a check ran. App Store per-path evidence remains explicitly unknown.
 
+`PackageCaskAttribution.unconfirmedCandidates` retains installed package-cask matches that
+lack exact ownership. `InstallationCheck.unconfirmedCaskToken` carries this evidence to the
+Inventory status and saved snapshots, separately from the verified `caskToken` consumed by
+manager resolution and policy attachment. The optional field decodes as absent in older
+snapshots. It prevents a complete/current verdict; independent update, failure, policy and
+staleness results retain precedence.
+
 `ScanSnapshot.installationChecks` was added in schema 2: missing data decodes as an empty
 collection, never a set of successful checks. Window results persist it in the existing
 private snapshot file; the menu-bar result carries it in memory. Last complete-check times
@@ -102,8 +109,10 @@ A terminal failure clears the operation block without claiming that the update s
 Older helpers fail the version handshake and must be updated and re-registered.
 
 Manual scan deduplication uses `InstallationIdentity`, matching inventory and policy keys.
-If multiple paths match one cask, only the path resolved by `CaskAppPathResolver` keeps its
-cask association. Other copies continue through vendor/Sparkle checks; this does not extend
+Direct `.app` casks use `CaskAppPathResolver`; installer apps use `PackageCaskAttribution`
+and JDKs use `JavaRuntimeAttribution`. Reporting joins only unambiguous installation paths
+with installed/tracked casks. The latter two mappings never become snapshot or replacement
+paths. Other copies cannot inherit that installation's package result; this does not extend
 Homebrew to installing into arbitrary duplicate locations.
 
 `ManualOutdatedApp.caskPolicyToken` is an optional policy alias, separate from the source

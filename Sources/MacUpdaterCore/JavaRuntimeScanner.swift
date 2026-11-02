@@ -9,9 +9,8 @@ import WegaHelperKit
 /// ``ApplicationScanner`` keeps only `pathExtension == "app"`, and ``AppScanDirectories``
 /// only ever descends from the two Applications roots. So an installed, outdated,
 /// Homebrew-packaged JDK (`temurin`, `temurin@21`, …) was invisible to every checker in the
-/// app, with nothing anywhere reporting it. This scanner is the missing discovery half; the
-/// version comparison is then the ordinary cask check, reached through
-/// ``CaskPackageReceiptIndex``.
+/// app, with nothing anywhere reporting it. This scanner supplies discovery; receipt-backed
+/// attribution then connects an unambiguous installation to its Homebrew result or cask check.
 public struct JavaRuntimeScanner: Sendable {
     /// The one bundle extension accepted here. JDKs, JREs and Oracle's `.jdk` layout all
     /// use it; anything else in the directory (an installer leftover, a stray folder) is
@@ -47,7 +46,7 @@ public struct JavaRuntimeScanner: Sendable {
         return contents
             .filter { $0.pathExtension == Self.bundleExtension }
             .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
-            .map(runtimeInfo(for:))
+            .map { runtimeInfo(for: $0.resolvingSymlinksInPath()) }
     }
 
     private func runtimeInfo(for bundleURL: URL) -> ApplicationInfo {

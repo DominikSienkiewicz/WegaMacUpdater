@@ -27,6 +27,16 @@ swift test --jobs 1 --no-parallel --filter 'DiagnosticTraceStoreTests|Diagnostic
 
 The ZIP is assembled locally; these checks do not send diagnostics or run vendor updates.
 
+Installer attribution and update-repair regressions use fake Brew, `pkgutil` and `launchctl`
+responses and temporary app/JDK bundles. They cover failed ShipIt withdrawal, build drift,
+all receipt claims, literal cask paths, duplicate/MAS isolation, JDK major versions,
+symlink aliases and unconfirmed cask associations (status, policy isolation, snapshots and
+translations). They do not launch applications, install packages or modify real jobs:
+
+```bash
+swift test --jobs 1 --no-parallel --filter 'LT02ShipItWithdrawalFailureTests|CaskBuildDriftArrivalTests|CaskBuildDriftVerificationTests|PackageReceiptIdentifiersTests|PackageCaskAttributionTests|JavaRuntimeInstallationAttributionTests|UnconfirmedCaskAssociationTests|UnconfirmedCaskPresentationTests'
+```
+
 Docker safety regression tests use fake process runners, injected lifecycle services and
 temporary bundles. They cover shutdown and restore gates, local engine readiness, manual
 restart offers, vendor routing, background exclusion, bundle-only rollback scope and smoke
