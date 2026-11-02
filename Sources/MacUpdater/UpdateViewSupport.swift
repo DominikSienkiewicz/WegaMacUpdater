@@ -414,6 +414,7 @@ struct UndoUpdateSection: View {
                         Text(subtitle(for: item))
                             .font(.wega(.subheadline))
                             .foregroundStyle(.tertiary)
+                        RollbackScopeNotice(scope: item.rollbackScope, compact: true)
                     }
                     Spacer()
                     if busyToken == item.token {

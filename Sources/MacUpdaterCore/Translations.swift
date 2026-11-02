@@ -13,6 +13,7 @@ public enum Translations {
     /// `type_body_length` ceiling. Sections are additive — keys never overlap.
     public static let en: [String: String] = base.merging(operations) { first, _ in first }
         .merging(vendorCompletion) { first, _ in first }
+        .merging(rollbackScope) { first, _ in first }
 }
 
 extension Translations {

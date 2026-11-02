@@ -687,42 +687,48 @@ private struct PlanPreviewCaskRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(token)
-                .font(.wega(.subheadline, weight: .medium, monospaced: true))
-                .frame(width: 150, alignment: .leading)
-            Text(host)
-                .font(.wega(.footnote))
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
-            Spacer(minLength: 6)
-            if download?.hasChecksum == true {
-                Label(tr("suma sprawdzana"), systemImage: "checkmark.seal")
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(Color.wegaSuccess)
-                    .help(tr("suma sprawdzana"))
-            } else {
-                Label(tr("bez weryfikacji sumy"), systemImage: "exclamationmark.shield")
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(Color.wegaDanger)
-                    .help(tr("bez weryfikacji sumy"))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(token)
+                    .font(.wega(.subheadline, weight: .medium, monospaced: true))
+                    .frame(width: 150, alignment: .leading)
+                Text(host)
+                    .font(.wega(.footnote))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                if download?.hasChecksum == true {
+                    Label(tr("suma sprawdzana"), systemImage: "checkmark.seal")
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(Color.wegaSuccess)
+                        .help(tr("suma sprawdzana"))
+                } else {
+                    Label(tr("bez weryfikacji sumy"), systemImage: "exclamationmark.shield")
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(Color.wegaDanger)
+                        .help(tr("bez weryfikacji sumy"))
+                }
+                if protection == .protected {
+                    Image(systemName: "shield.lefthalf.filled").foregroundStyle(Color.wegaSuccess)
+                        .help(RollbackScopePresentation.notice(for: RollbackProtection.scope(token: token))?.localizedDescription
+                              ?? tr("Chronione automatycznym cofnięciem"))
+                } else if protection != nil {
+                    Image(systemName: "shield.slash").foregroundStyle(.tertiary)
+                        .help(tr("Bez ochrony cofnięciem"))
+                }
+                if mayNeedPassword {
+                    Image(systemName: "key").foregroundStyle(Color.wegaToffee)
+                        .help(tr("Może poprosić o hasło administratora."))
+                }
+                Text(sizeLabel)
+                    .font(.wega(.footnote, monospaced: true))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 96, alignment: .trailing)
             }
+            .font(.wega(.subheadline))
             if protection == .protected {
-                Image(systemName: "shield.lefthalf.filled").foregroundStyle(Color.wegaSuccess)
-                    .help(tr("Chronione automatycznym cofnięciem"))
-            } else if protection != nil {
-                Image(systemName: "shield.slash").foregroundStyle(.tertiary)
-                    .help(tr("Bez ochrony cofnięciem"))
+                RollbackScopeNotice(scope: RollbackProtection.scope(token: token))
             }
-            if mayNeedPassword {
-                Image(systemName: "key").foregroundStyle(Color.wegaToffee)
-                    .help(tr("Może poprosić o hasło administratora."))
-            }
-            Text(sizeLabel)
-                .font(.wega(.footnote, monospaced: true))
-                .foregroundStyle(.tertiary)
-                .frame(width: 96, alignment: .trailing)
         }
-        .font(.wega(.subheadline))
     }
 }
