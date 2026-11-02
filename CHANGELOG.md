@@ -13,20 +13,42 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-11-02
+
 ### Added
-- When Homebrew warns that it is ignoring untrusted taps, the brew log now offers one-click
-  fixes instead of commands to copy: it trusts exactly the installed casks and formulae that
-  came from those taps and untaps the ones nothing installed came from. Each button shows the
-  command it runs and runs only when clicked.
+- Check standalone Firefox and Thunderbird updates within the installed Release, ESR or
+  Beta channel, and Zed updates within Stable or Preview. Update actions open the installed
+  application's own updater.
+- Check official Bruno and UTM releases without requiring a Homebrew installation.
+- Show Microsoft AutoUpdate offers for vendor-installed Office apps and open MAU explicitly;
+  App Store copies retain their App Store update route.
+- Route WARP and Logi Options+ updates through their vendors, and recognize Bitdefender's
+  installed product version without claiming that its software or threat signatures are current.
+- Offer one-click fixes for Homebrew tap-trust warnings. Each action shows its command,
+  trusts only packages installed from the affected taps, or removes taps with no installed packages.
+- Export bounded, redacted local diagnostic traces covering update stages, subprocess output,
+  HTTP attempts and observed vendor results. Diagnostic exports remain local.
+
+### Changed
+- Docker Desktop defaults to its vendor updater and is excluded from bulk and background
+  updates. Explicit Homebrew replacement and rollback require confirmed shutdown; an optional
+  restart checks engine readiness. Rollback covers the application bundle only.
+- Vendor update checks run independently of Homebrew ownership and reconcile comparable offers
+  for the same verified installation.
+- Inventory distinguishes exact installer and JDK ownership from unconfirmed Homebrew
+  associations, and retains installations whose update status cannot be verified.
 
 ### Fixed
-- **Update via Brew** no longer ends in "Nothing was installed" when Homebrew already records
-  the offered version while the app on disk is older (Discord, after its own updater put an
-  older build back): Wega now runs `brew reinstall --cask` straight away.
-- The post-update launch test no longer lets an Electron app's built-in updater replace the
-  version Homebrew just installed when the test closes the app (Discord went back from 0.0.420
-  to 0.0.419 this way). If an app still replaces itself during the test, Wega says so instead of
-  reporting the update as applied.
+- App Store checks confirm each installed copy using its own identity and version; missing
+  identities and duplicate installations remain unconfirmed.
+- **Update via Brew** reinstalls a cask when Homebrew already records the offered version but
+  the application on disk is older. Cask repair verifies version and build changes before
+  reporting success.
+- Post-update launch checks wait for Electron's built-in updater and withdraw staged ShipIt
+  installs, including on cancellation. When withdrawal cannot be confirmed, Wega leaves the
+  application running rather than triggering its queued installer by quitting it.
+- Report an application that replaces itself during a launch check instead of reporting the
+  original update as successfully applied.
 
 ## [0.5.5] — 2026-10-18
 
@@ -333,7 +355,8 @@ their terms are still theirs.
   what changed in it, because there is no published predecessor to have changed from.
 -->
 
-[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.5...HEAD
+[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.5...v0.6.0
 [0.5.5]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.2...v0.5.3
