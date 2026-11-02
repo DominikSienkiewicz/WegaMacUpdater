@@ -27,6 +27,15 @@ swift test --jobs 1 --no-parallel --filter 'DiagnosticTraceStoreTests|Diagnostic
 
 The ZIP is assembled locally; these checks do not send diagnostics or run vendor updates.
 
+Docker safety regression tests use fake process runners, injected lifecycle services and
+temporary bundles. They cover shutdown and restore gates, local engine readiness, manual
+restart offers, vendor routing, background exclusion, bundle-only rollback scope and smoke
+exemptions. They do not stop, start, update or reset an installed Docker Desktop:
+
+```bash
+swift test --jobs 1 --no-parallel --filter 'DockerDesktop|DockerRollbackScope|DockerSmoke|DockerBatchExecution|DockerManualRestart|DockerManualCompletion'
+```
+
 ```bash
 swift build               # compile all targets
 swift test                # run all tests
