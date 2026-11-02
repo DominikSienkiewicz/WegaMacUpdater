@@ -70,6 +70,14 @@ swift test --jobs 1 --no-parallel --filter 'FirefoxUpdateCheckerTests|FirefoxCas
 
 These tests do not update or launch installed vendor applications.
 
+Manual scanner regression checks cover casks already listed by Homebrew, independent
+vendor results, missing candidate versions, rollback rows, self-updates and documentation
+agreement with updater routing. HTTP responses and Homebrew processes are simulated:
+
+```bash
+swift test --jobs 1 --no-parallel --filter 'AlreadyListedCaskScanTests|ManualUpdateScannerScanCoverageTests|QA04CheckerCountDriftTests'
+```
+
 Docker safety regression tests use fake process runners, injected lifecycle services and
 temporary bundles. They cover shutdown and restore gates, local engine readiness, manual
 restart offers, vendor routing, background exclusion, bundle-only rollback scope and smoke

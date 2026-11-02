@@ -65,6 +65,9 @@ Vendor feeds run even when Homebrew tracks an app. Comparable offers for the sam
 installation appear once, using the newer version and its update action. Raw source evidence
 is retained; incomparable versions and Obsidian's separate package updates remain distinct.
 The same reconciliation controls background update candidates.
+Apps already listed by `brew outdated` skip the redundant cask-version lookup while keeping
+their independent vendor checks. Missing versions for other cask candidates remain visible
+as incomplete checks.
 
 WARP and Logi Options+ updates use the vendor's application instead of bulk or background
 Homebrew installation. Inventory also recognizes Bitdefender Antivirus for Mac and shows
@@ -80,6 +83,7 @@ Manually installed Firefox and Thunderbird use Mozilla's channel-specific releas
 reads each bundle's channel metadata and keeps Release, ESR and Beta separate, including
 overlapping ESR branches. Unknown channels do not inherit a stable-release result. Beta
 copies exposing only a base version without the `bN` sequence remain unconfirmed.
+Firefox and Thunderbird update actions open the installed app's own updater.
 Bruno and UTM use their official GitHub releases without requiring a Homebrew installation.
 Bruno opens its own updater with a release-page fallback; UTM requires a macOS release
 asset and opens the official releases list, while App Store copies retain the App Store route. Zed checks Stable and Preview
@@ -127,6 +131,8 @@ the smoke-test opt-out before launch, generic restart detection, publisher-veto 
 before mutation, and token-aware manual rollback before journaling and version pinning.
 Standalone-source tests cover channel identity, Mozilla beta ordering, GitHub macOS assets,
 unknown/error evidence and updater completion.
+Scanner regression tests also cover already-listed casks, independent vendor results and
+missing versions for candidates that still require a cask check.
 Commands and quality gates are documented in
 [Building and testing](docs/building.md#build-and-test).
 
