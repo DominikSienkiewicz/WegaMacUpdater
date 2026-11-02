@@ -291,12 +291,20 @@ public enum LaunchSmokeTestConfiguration {
     /// Deliberately short. An entry costs the crash-at-startup gate for that app, so it is
     /// earned by evidence of a privileged first run, not by suspicion.
     public static let tokensExemptFromSmokeTest: Set<String> = [
-        // Reinstates `com.docker.vmnetd` and the `/var/run/docker.sock` symlink through an
-        // authorization prompt whenever its bundle changed underneath it (observed 4.87.0).
-        "docker-desktop"
+        // Docker Desktop 4.87.0 reinstated `com.docker.vmnetd` and `/var/run/docker.sock`
+        // through authorization after bundle replacement. Preserve that first-run flow.
+        "docker", "docker-desktop"
     ]
 
     public static func isExemptFromSmokeTest(token: String) -> Bool {
-        tokensExemptFromSmokeTest.contains(token)
+        let normalized = token.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let bareToken = normalized.split(separator: "/").last.map(String.init) ?? ""
+        return tokensExemptFromSmokeTest.contains(bareToken)
+    }
+
+    /// Protects a renamed app or a launch path without a Homebrew token.
+    public static func isExemptFromSmokeTest(bundleIdentifier: String?) -> Bool {
+        guard let bundleIdentifier else { return false }
+        return bundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "com.docker.docker"
     }
 }
