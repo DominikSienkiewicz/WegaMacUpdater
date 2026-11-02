@@ -43,7 +43,9 @@ public enum WegaLog {
         if let run = UpdateDiagnostics.current {
             var fields = ["level": level.rawValue, "category": category.rawValue, "message": message]
             for field in detail?.fields ?? [] { fields["detail." + field.key] = field.value }
-            run.record("log", fields: fields, output: detail?.output)
+            let output = category == .process ? nil : detail?.output
+            if category == .process, detail?.output != nil { fields["output_source"] = "process_stream_events" }
+            run.record("log", fields: fields, output: output)
         }
         Task { @MainActor in LogStore.shared.append(entry) }
     }
