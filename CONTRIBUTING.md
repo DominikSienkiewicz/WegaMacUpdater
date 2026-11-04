@@ -85,12 +85,23 @@ let (defaults, teardown) = TestDefaults.isolated("my-feature")
 defer { teardown() }
 ```
 
-A suite is file-backed, and `removePersistentDomain(forName:)` empties
-`~/Library/Preferences/<suite>.plist` without deleting it — so hand-rolled suites left one
-empty 4 KB plist per test per run, thousands of them over a few weeks. `TestDefaults`
-unlinks the file in teardown *and* sweeps the leftovers of earlier runs when a run starts,
-which is the part that actually reclaims the disk: `cfprefsd` writes a domain back after the
-test process has already exited, so no in-process cleanup can be the last word.
+`TestDefaults` returns an in-memory test double for injected settings stores. Each fixture
+owns its values, validates and copies property-list inputs, and uses Foundation's typed
+getters for conversions. Teardown clears that fixture immediately. Normal value writes
+never reach `cfprefsd`, so the daemon cannot recreate a test plist after the process exits.
+
+The double covers value reads/writes, URL conversion, removal and dictionary snapshots.
+It is not a fixture for registration domains, persistent-domain APIs, cross-process
+persistence or KVO; tests for those behaviors need a real `UserDefaults` fixture.
+Existing store-reload tests reuse the same defaults instance.
+
+For compatibility, the first fixture in a process still removes legacy `wega.tests.*.plist`
+files older than ten minutes. To remove old files manually, when no Wega tests are running:
+
+```bash
+find "$HOME/Library/Preferences" -maxdepth 1 -type f -name 'wega.tests.*.plist' -print -delete
+```
+
 `ArchitectureReviewRegressionTests` fails the build if any test under `Tests/` builds a
 suite by hand.
 

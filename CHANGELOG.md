@@ -13,6 +13,10 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Fixed
+- Unit-test settings fixtures keep values in memory and clear them during teardown, avoiding
+  leftover `wega.tests.*.plist` files in the user's preferences directory.
+
 ## [0.6.0] — 2026-11-02
 
 ### Added

@@ -53,8 +53,7 @@ let package = Package(
             dependencies: ["MacUpdaterCore"],
             path: "Sources/WegaSudoShim"
         ),
-        // Shared by both test targets so the UserDefaults-suite teardown lives in one place:
-        // a suite left behind is an empty plist in ~/Library/Preferences that nothing reclaims.
+        // Shared settings fixtures keep unit-test values out of persistent preferences.
         .target(
             name: "WegaTestSupport",
             path: "Tests/WegaTestSupport"
