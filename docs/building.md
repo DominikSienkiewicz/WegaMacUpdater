@@ -16,6 +16,18 @@ GUI apps do not inherit an interactive shell environment. Wega resolves all tool
 
 ## Build and test
 
+The shared settings fixtures keep unit-test values in memory and clear them during teardown.
+`TestDefaultsCleanupTests` covers preference-file prevention, value conversions, immutable
+snapshots, fixture isolation and isolation from standard defaults:
+
+```bash
+swift test --jobs 2 --no-parallel --filter TestDefaultsCleanupTests
+```
+
+These checks do not establish persistence between processes. The fixture contract and
+manual cleanup command for older test files are in
+[Contributing](../CONTRIBUTING.md#isolated-userdefaults).
+
 Tap-trust recovery checks use captured refusal messages and a fake process runner. They
 cover failed/unfinished untap actions, independent tap removals, scoped trust, malformed or
 unrelated output and the separate clicks required for trust and retry. They do not change

@@ -142,6 +142,9 @@ Standalone-source tests cover channel identity, Mozilla beta ordering, GitHub ma
 unknown/error evidence and updater completion.
 Scanner regression tests also cover already-listed casks, independent vendor results and
 missing versions for candidates that still require a cask check.
+Unit-test settings fixtures keep values in memory and clear them during teardown, avoiding
+`wega.tests.*.plist` files in the user's preferences directory. They cover settings logic,
+not persistence between processes; see [isolated defaults](CONTRIBUTING.md#isolated-userdefaults).
 Commands and quality gates are documented in
 [Building and testing](docs/building.md#build-and-test).
 
