@@ -24,32 +24,46 @@ public struct BrewCaskDriftFilter {
 
     /// Returns tokens whose real bundle version already matches or exceeds
     /// `currentVersion` and should therefore be hidden from the outdated list.
+    ///
+    /// - Parameter attributedInstallations: the scan's installations. A cask that declares
+    ///   no `.app` (an installer script or a `pkg`, such as Logi Options+) is judged by the
+    ///   copies the scan confirmed as its own; every one of them must be current.
     public func driftedTokens(
         outdated: [BrewOutdatedItem],
-        installationInfo: [BrewCaskInstallationInfo]
+        installationInfo: [BrewCaskInstallationInfo],
+        attributedInstallations: [InstallationCheck] = []
     ) -> Set<String> {
         let infoByToken = Dictionary(installationInfo.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first })
         var drifted: Set<String> = []
 
         for item in outdated {
-            guard let current = item.currentVersion,
-                  let info = infoByToken[item.name],
-                  !info.appArtifacts.isEmpty else { continue }
-
-            for artifact in info.appArtifacts {
-                let candidates = [
-                    applicationsDir.appendingPathComponent(artifact),
-                    userApplicationsDir.appendingPathComponent(artifact)
-                ]
-                guard let realVersion = candidates.lazy.compactMap(readBundleVersion).first else { continue }
-
-                if versionAtLeast(realVersion, current) {
-                    drifted.insert(item.name)
-                    break
-                }
-            }
+            guard let current = item.currentVersion, let info = infoByToken[item.name] else { continue }
+            let isCurrentOnDisk = info.appArtifacts.isEmpty
+                ? Self.attributedCopiesAreCurrent(token: item.name, current: current, installations: attributedInstallations)
+                : someAppArtifactIsCurrent(info.appArtifacts, current: current)
+            if isCurrentOnDisk { drifted.insert(item.name) }
         }
         return drifted
+    }
+
+    private func someAppArtifactIsCurrent(_ artifacts: [String], current: String) -> Bool {
+        artifacts.contains { artifact in
+            let candidates = [
+                applicationsDir.appendingPathComponent(artifact),
+                userApplicationsDir.appendingPathComponent(artifact)
+            ]
+            guard let realVersion = candidates.lazy.compactMap(readBundleVersion).first else { return false }
+            return versionAtLeast(realVersion, current)
+        }
+    }
+
+    private static func attributedCopiesAreCurrent(
+        token: String, current: String, installations: [InstallationCheck]
+    ) -> Bool {
+        let owned = installations.filter { $0.caskToken == token }
+        return !owned.isEmpty && owned.allSatisfy { copy in
+            copy.version.map { versionAtLeast($0, current) } ?? false
+        }
     }
 
     public static func readBundleShortVersionString(_ appURL: URL) -> String? {

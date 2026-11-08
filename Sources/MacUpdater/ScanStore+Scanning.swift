@@ -252,7 +252,9 @@ extension ScanStore {
         if let casks = brewOutdated?.casks, !casks.isEmpty {
             let infos = (try? await model.brewService.caskInstallationInfo(tokens: casks.map(\.name))) ?? []
 
-            let drifted = BrewCaskDriftFilter().driftedTokens(outdated: casks, installationInfo: infos)
+            let drifted = BrewCaskDriftFilter().driftedTokens(
+                outdated: casks, installationInfo: infos, attributedInstallations: scan.installations
+            )
             if !drifted.isEmpty, var updated = brewOutdated {
                 updated.casks.removeAll { drifted.contains($0.name) }
                 brewOutdated = updated

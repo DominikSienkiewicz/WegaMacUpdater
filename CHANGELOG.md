@@ -20,6 +20,8 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   no longer show a phantom Homebrew update that `brew reinstall` could never clear.
 - A self-updating cask app is listed once when its vendor offers a build of the same release
   the cask names, such as ChatGPT `26.1103.41825 (25679)` against the cask's `26.1103.41825`.
+- Casks that install through a package or installer script, such as Logi Options+, no longer
+  reappear as outdated after each scan once the app has updated itself to the cask's version.
 
 ## [0.6.0] — 2026-11-02
 
