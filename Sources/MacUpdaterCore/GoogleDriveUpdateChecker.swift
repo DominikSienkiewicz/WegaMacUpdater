@@ -1,12 +1,11 @@
 import Foundation
 
 /// Hits Google's Omaha update endpoint the same way GoogleSoftwareUpdate's
-/// Keystone agent does, with the `com.google.drivefs` appid pinned to the
-/// `canary` cohort. The Stable / 50-percent / 5-percent cohorts return the
-/// staged-rollout version, which is often older than what's actually
-/// installed (Drive's CFBundleVersion races ahead of stable); canary tracks
-/// the head and is what other Mac update apps query to surface patches like
-/// `126.0.4 → 126.0.5` that the public release-notes page never lists.
+/// Keystone agent does for the installed `com.google.drivefs`, with no `ap`
+/// cohort, so Omaha answers with the release it would hand that installation.
+/// The `canary` cohort runs ahead of what Drive installs: on 2026-11-08 it
+/// offered 134.0.0.0 to a 133.0.2.0 the default cohort called current, and
+/// Wega reported an update Drive itself denied.
 public enum GoogleDriveUpdateParser {
 
     public static let omahaEndpoint = AppEndpoints.shared.googleDriveOmahaURL
@@ -18,7 +17,7 @@ public enum GoogleDriveUpdateParser {
         <?xml version="1.0" encoding="UTF-8"?>\
         <request protocol="3.0" updater="KeystoneDaemon-1.3.21.0" ismachine="0">\
         <os platform="mac" version="14.0" arch="arm64"/>\
-        <app appid="com.google.drivefs" version="\(installedVersion)" lang="en-US" ap="canary">\
+        <app appid="com.google.drivefs" version="\(installedVersion)" lang="en-US">\
         <updatecheck/>\
         </app>\
         </request>

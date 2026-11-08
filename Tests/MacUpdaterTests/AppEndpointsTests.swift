@@ -89,7 +89,7 @@ final class AppEndpointsTests: XCTestCase {
         XCTAssertEqual(e.discordUpdateURL(channel: "canary", version: "0.0.966")?.absoluteString,
                        "https://discord.com/api/updates/canary?platform=osx&version=0.0.966")
         XCTAssertEqual(e.chromeVersionsURL(channel: "canary")?.absoluteString,
-                       "https://versionhistory.googleapis.com/v1/chrome/platforms/mac/channels/canary/versions")
+                       "https://versionhistory.googleapis.com/v1/chrome/platforms/mac/channels/canary/versions/all/releases?filter=endtime=none")
         XCTAssertEqual(e.githubReleasesPageURL(repo: "owner/app")?.absoluteString,
                        "https://github.com/owner/app/releases/latest")
     }

@@ -82,7 +82,7 @@ struct IndependentVendorCheckTests {
         }
         var body: String {
             switch self {
-            case .chrome: #"{"versions":[{"version":"3.0.0"}]}"#
+            case .chrome: #"{"releases":[{"version":"3.0.0","fraction":1}]}"#
             case .discord: #"{"name":"3.0.0"}"#
             case .googleDrive: #"<response><app><updatecheck><manifest version="3.0.0"/></updatecheck></app></response>"#
             }
