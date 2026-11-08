@@ -222,7 +222,7 @@ MacUpdaterCore (library target — no SwiftUI dependency)
 ├── CaskDatabaseClient   — full cask database fetch + disk cache
 ├── CaskMatcher          — bundle-id / name → cask token matching
 ├── StaleCaskDetector    — detects casks where installed .app is gone
-├── BrewCaskDriftFilter  — hides casks whose on-disk `CFBundleShortVersionString` already matches `current_version`; covers self-updating apps like Google Chrome that bump their bundle outside Homebrew, leaving brew's `installed_versions` metadata stale
+├── BrewCaskDriftFilter  — hides casks whose on-disk `CFBundleShortVersionString` already matches `current_version`; covers self-updating apps like Google Chrome that bump their bundle outside Homebrew, leaving brew's `installed_versions` metadata stale. A cask without an `.app` artifact (an installer script or `pkg`, such as Logi Options+) is judged by the installations the scan attributed to it by receipt. Both the window scan and the background `MenuBarUpdateChecker` apply it before counting or offering casks
 ├── CaskAppPathResolver  — token → installed `.app` bundle (system-wide `/Applications` preferred over `~/Applications`, a cask with nothing on disk simply absent); the one place both upgrade paths ask where a bundle lives, resolved at upgrade time so the snapshot → canary → rollback chain no longer depends on a map only a full scan filled
 ├── BinaryLocator        — resolves brew + mas executable paths
 ├── RunningProcessService — terminate (`killall`) and relaunch (`open -a`) running apps for the restart-after-update and quit-before-migrate flows; routed through the `ProcessRunning` seam (one implementation shared by UpdateView + MigrationView, unit-tested with a fake instead of spawning real processes)
