@@ -6,14 +6,24 @@ public func versionVariants(_ v: String) -> [String] {
     v.replacingOccurrences(of: "+", with: ",").split(separator: ",").map(String.init)
 }
 
+/// Drops a git-tag `v`/`V` written directly before the first digit. Raspberry Pi Imager
+/// ships `v2.0.12` as its bundle version; left in place, `Int("v2")` fails and the version
+/// reads as `0.12`, behind the cask's `2.0.12` it is identical to.
+private func droppingTagPrefix(_ v: String) -> String {
+    guard let first = v.first, first == "v" || first == "V",
+          let next = v.dropFirst().first, ("0"..."9").contains(next) else { return v }
+    return String(v.dropFirst())
+}
+
 /// Returns numeric components from a single version segment. Handles:
+/// - "vX.Y.Z" → "X.Y.Z" (a git-tag prefix in the bundle version)
 /// - "X (Y)" → "X.Y" (Zoom-style)
 /// - "X.Y.Z-build" → "X.Y.Z.build" (Parallels-style; the `-NNNNN` suffix is
 ///   the build number, not a pre-release tag — without this, `26.3.3-57507`
 ///   parsed only as `[26, 3]` and the drift filter wrongly hid Parallels
 ///   from the outdated list).
 public func versionComponents(_ v: String) -> [Int] {
-    v.replacingOccurrences(of: " (", with: ".")
+    droppingTagPrefix(v).replacingOccurrences(of: " (", with: ".")
      .replacingOccurrences(of: ")", with: "")
      .replacingOccurrences(of: "-", with: ".")
      .split(separator: ".").compactMap { Int($0) }
@@ -125,7 +135,7 @@ private func parseBuildNumbered(_ v: String) -> ParsedVersion? {
         build += variants[1...].flatMap { $0.split(separator: ".").compactMap { Int($0) } }
     }
 
-    var coreString = variants.first ?? v
+    var coreString = droppingTagPrefix(variants.first ?? v)
     // Zoom-style " (NNN)" build suffix.
     if let paren = coreString.range(of: #" \(\d+\)"#, options: .regularExpression) {
         let digits = coreString[paren].drop { !$0.isNumber }.prefix { $0.isNumber }

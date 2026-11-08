@@ -16,6 +16,8 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 ### Fixed
 - Unit-test settings fixtures keep values in memory and clear them during teardown, avoiding
   leftover `wega.tests.*.plist` files in the user's preferences directory.
+- Apps whose bundle version carries a git-tag prefix, such as Raspberry Pi Imager's `v2.0.12`,
+  no longer show a phantom Homebrew update that `brew reinstall` could never clear.
 
 ## [0.6.0] — 2026-11-02
 
