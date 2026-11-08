@@ -1,6 +1,6 @@
 import Foundation
 
-/// The **full** result of a menu-bar background check: the raw per-source outdated
+/// The **full** result of a menu-bar background check: the per-source outdated
 /// lists (`brew`/`mas`/`npm`) and the manual-scan result (`manualApps` + `failedChecks`),
 /// plus the policy-filtered badge `total` and a `scannedAt` timestamp.
 ///
@@ -9,8 +9,8 @@ import Foundation
 /// immediately rather than re-scanning from zero. `total` and `failedChecks` are stored
 /// so existing count-only callers (`MenuBarAgent`) keep working unchanged.
 public struct MenuBarScanResult: Equatable, Sendable {
-    /// Raw `brew outdated` result (formulae + casks), or `nil` when brew is not
-    /// installed or its check errored.
+    /// `brew outdated` result (formulae + casks) without the casks whose app is already
+    /// current on disk, or `nil` when brew is not installed or its check errored.
     public var brew: BrewOutdated?
     /// Raw Mac App Store outdated apps (empty when `mas` is not installed).
     public var mas: [MasOutdatedApp]
@@ -118,10 +118,16 @@ public struct MenuBarScanResult: Equatable, Sendable {
 
 // MARK: - Injection seams
 
-/// The single brew call the menu-bar check needs. `BrewService` conforms; tests
+/// The brew calls the menu-bar check needs. `BrewService` conforms; tests
 /// inject a fake so the check runs without a real Homebrew.
 public protocol BrewOutdatedProviding: Sendable {
     func outdatedGreedy() async throws -> BrewOutdated
+    /// The `.app` artifacts of the given casks, which ``BrewCaskDriftFilter`` reads.
+    func caskInstallationInfo(tokens: [String]) async throws -> [BrewCaskInstallationInfo]
+}
+
+public extension BrewOutdatedProviding {
+    func caskInstallationInfo(tokens: [String]) async throws -> [BrewCaskInstallationInfo] { [] }
 }
 
 /// App Store outdated results and the exact installed copies represented by them.
@@ -166,6 +172,7 @@ public struct MenuBarUpdateChecker: Sendable {
     private let npmService: NpmOutdatedProviding
     private let scanner: ManualScanning
     private let operations: OperationCoordinator
+    private let driftFilter: BrewCaskDriftFilter
 
     /// Note on `scanner`: it no longer inherits the injected `brewService`, because that
     /// parameter is now a protocol and `ManualUpdateScanner` wants the concrete type. In
@@ -177,13 +184,15 @@ public struct MenuBarUpdateChecker: Sendable {
         masService: MasOutdatedProviding = MasService(),
         npmService: NpmOutdatedProviding = NpmGlobalService(),
         scanner: ManualScanning = ManualUpdateScanner(),
-        operations: OperationCoordinator = .shared
+        operations: OperationCoordinator = .shared,
+        driftFilter: BrewCaskDriftFilter = BrewCaskDriftFilter()
     ) {
         self.brewService = brewService
         self.masService = masService
         self.npmService = npmService
         self.scanner = scanner
         self.operations = operations
+        self.driftFilter = driftFilter
     }
 
     public func availableUpdateCount(policies: [String: UpdatePolicy] = [:]) async -> MenuBarScanResult {
@@ -244,6 +253,7 @@ public struct MenuBarUpdateChecker: Sendable {
         let manual = await scanner.scanReport(brewOutdatedCasks: brewOutdatedCasks)
         failed += manual.failedChecks
         reports.manual = manual.sourceReport
+        brew = await removingCasksCurrentOnDisk(from: brew, installations: manual.installations)
         let reconciled = UpdatePlanner.reconciledUpdates(
             items: UpdatePlanner.outdatedItems(brew: brew, mas: mas, npm: npm), manual: manual.apps
         )
@@ -271,5 +281,21 @@ public struct MenuBarUpdateChecker: Sendable {
                                                                     mas: mas, masEvidence: masEvidence),
             sources: reports
         )
+    }
+
+    /// The window scan's drift step (`ScanStore+Scanning`): a self-updated app whose Caskroom
+    /// record fell behind is neither counted nor handed to a background `brew upgrade`, which
+    /// would put the older cask version back. Unreadable cask metadata hides nothing.
+    private func removingCasksCurrentOnDisk(
+        from brew: BrewOutdated?, installations: [InstallationCheck]
+    ) async -> BrewOutdated? {
+        guard var brew, !brew.casks.isEmpty,
+              let infos = try? await brewService.caskInstallationInfo(tokens: brew.casks.map(\.name))
+        else { return brew }
+        let drifted = driftFilter.driftedTokens(
+            outdated: brew.casks, installationInfo: infos, attributedInstallations: installations
+        )
+        brew.casks.removeAll { drifted.contains($0.name) }
+        return brew
     }
 }

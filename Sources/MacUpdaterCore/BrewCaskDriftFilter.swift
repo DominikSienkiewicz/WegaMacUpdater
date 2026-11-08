@@ -6,16 +6,16 @@ import WegaHelperKit
 /// still records an older `installed_versions`. Happens for apps with built-in
 /// self-updaters (Google Chrome, Edge, Brave, Firefox, ...) that rewrite their
 /// bundle outside of Homebrew, leaving brew's metadata stale.
-public struct BrewCaskDriftFilter {
+public struct BrewCaskDriftFilter: Sendable {
     private let applicationsDir: URL
     private let userApplicationsDir: URL
-    private let readBundleVersion: (URL) -> String?
+    private let readBundleVersion: @Sendable (URL) -> String?
 
     public init(
         applicationsDir: URL = SystemPaths.applicationsDirectory,
         userApplicationsDir: URL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Applications", isDirectory: true),
-        readBundleVersion: @escaping (URL) -> String? = BrewCaskDriftFilter.readBundleShortVersionString
+        readBundleVersion: @escaping @Sendable (URL) -> String? = BrewCaskDriftFilter.readBundleShortVersionString
     ) {
         self.applicationsDir = applicationsDir
         self.userApplicationsDir = userApplicationsDir

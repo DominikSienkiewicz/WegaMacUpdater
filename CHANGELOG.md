@@ -22,6 +22,9 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   the cask names, such as ChatGPT `26.1103.41825 (25679)` against the cask's `26.1103.41825`.
 - Casks that install through a package or installer script, such as Logi Options+, no longer
   reappear as outdated after each scan once the app has updated itself to the cask's version.
+- The background check no longer counts, announces or upgrades casks whose app has already
+  updated itself, so the menu-bar badge matches the window and an opted-in background update
+  can no longer install an older cask version over a newer self-updated app.
 
 ## [0.6.0] — 2026-11-02
 
