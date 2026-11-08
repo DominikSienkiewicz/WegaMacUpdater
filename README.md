@@ -66,7 +66,8 @@ can confirm a current or outdated copy; missing identities and duplicate copies 
 Vendor feeds run even when Homebrew tracks an app. Comparable offers for the same verified
 installation appear once, using the newer version and its update action. Raw source evidence
 is retained; incomparable versions and Obsidian's separate package updates remain distinct.
-The same reconciliation controls background update candidates.
+A vendor build of the release a cask names counts as that release, while a cask build the
+vendor does not state stays incomparable. The same reconciliation controls background update candidates.
 Apps already listed by `brew outdated` skip the redundant cask-version lookup while keeping
 their independent vendor checks. Missing versions for other cask candidates remain visible
 as incomplete checks.

@@ -40,7 +40,9 @@ extension UpdatePlanner {
         guard vendorVersion.range(of: numericVersion, options: .regularExpression) != nil,
               caskVersion.range(of: numericVersion, options: .regularExpression) != nil else { return .unknown }
         let order = compareVersions(vendorVersion, caskVersion, scheme: .buildNumbered)
-        if order == .orderedSame, hasExplicitBuild(vendorVersion) != hasExplicitBuild(caskVersion) { return .unknown }
+        // A cask build the vendor does not state could be later than the vendor's offer; a
+        // vendor build the cask does not state only refines the release the cask names.
+        if order == .orderedSame, hasExplicitBuild(caskVersion), !hasExplicitBuild(vendorVersion) { return .unknown }
         return order
     }
 
