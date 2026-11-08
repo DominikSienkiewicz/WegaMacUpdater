@@ -73,14 +73,14 @@ final class GoogleDriveUpdateCheckerTests: XCTestCase {
         XCTAssertTrue(isUpgrade(installed: Self.driveVersion(126, 0, 4, 0), latest: latest))
     }
 
-    func testOmahaRequestBodyTargetsDrivefsCanaryCohort() {
-        // The exact appid + cohort that produced the canary fixture. Pinned
-        // here so a future refactor doesn't silently drop us back into the
-        // Stable cohort (which never advertises the latest patch).
-        let installed = Self.driveVersion(126, 0, 4, 0)
+    func testOmahaRequestBodyAsksForTheReleaseTheInstalledDriveWouldGet() {
+        // No `ap` cohort: Drive's own Keystone check sends none. On 2026-11-08 the canary
+        // cohort answered 134.0.0.0 to an installed 133.0.2.0 while the default cohort answered
+        // `noupdate`, so Wega offered an update Drive itself reported as current.
+        let installed = Self.driveVersion(133, 0, 2, 0)
         let body = GoogleDriveUpdateParser.omahaRequestBody(installedVersion: installed)
         XCTAssertTrue(body.contains(#"appid="com.google.drivefs""#))
-        XCTAssertTrue(body.contains(#"ap="canary""#))
+        XCTAssertFalse(body.contains("ap="))
         XCTAssertTrue(body.contains(##"version="\##(installed)""##))
     }
 

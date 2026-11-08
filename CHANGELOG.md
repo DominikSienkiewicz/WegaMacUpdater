@@ -25,6 +25,8 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 - The background check no longer counts, announces or upgrades casks whose app has already
   updated itself, so the menu-bar badge matches the window and an opted-in background update
   can no longer install an older cask version over a newer self-updated app.
+- Google Chrome and Google Drive no longer show an update their own updater does not offer:
+  Chrome versions still in a staged rollout and Drive's canary builds are not reported.
 
 ## [0.6.0] — 2026-11-02
 
