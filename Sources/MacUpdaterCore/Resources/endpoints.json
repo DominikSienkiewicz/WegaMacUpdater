@@ -1,6 +1,7 @@
 {
   "jetbrainsReleases": "https://data.services.jetbrains.com/products/releases?code={code}&latest=true&type=release",
   "chatgptAppcast": "https://persistent.oaistatic.com/sidekick/public/sparkle_public_appcast.xml",
+  "chatgptRolloutAppcast": "https://updates.oaistatic.com/codex/app/appcast?installation_id=00000000-0000-0000-0000-000000000000&arch={architecture}&app_version={version}&beta=false&plan_type=unknown",
   "googleDriveOmaha": "https://tools.google.com/service/update2",
   "caskDatabase": "https://formulae.brew.sh/api/cask.json",
   "appCatalog": "https://raw.githubusercontent.com/DominikSienkiewicz/WegaMacUpdater/main/Sources/MacUpdaterCore/Resources/app-catalog.json",

@@ -16,6 +16,9 @@ import Foundation
 public struct AppEndpoints: Decodable, Sendable, Equatable {
     public let jetbrainsReleases: String
     public let chatgptAppcast: String
+    /// The appcast of the release ChatGPT (`com.openai.codex`) is served during a staged
+    /// rollout; see ``ChatGPTRolloutFeed``.
+    public let chatgptRolloutAppcast: String
     public let googleDriveOmaha: String
     public let caskDatabase: String
     /// Canonical remote source for the `AppCatalog` overlay (`CatalogRefresher`).
@@ -109,6 +112,10 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
 
     public func chromeVersionsURL(channel: String) -> URL? {
         URL(string: Self.fill(chromeVersions, ["channel": channel]))
+    }
+
+    public func chatgptRolloutAppcastURL(architecture: String, version: String) -> URL? {
+        URL(string: Self.fill(chatgptRolloutAppcast, ["architecture": architecture, "version": version]))
     }
 
     public func zedReleaseURL(channel: ZedReleaseChannel, architecture: String) -> URL? {
@@ -359,6 +366,7 @@ extension AppEndpoints {
         return AppEndpoints(
             jetbrainsReleases: templateURL(other.jetbrainsReleases, jetbrainsReleases),
             chatgptAppcast: validURL(other.chatgptAppcast, chatgptAppcast),
+            chatgptRolloutAppcast: templateURL(other.chatgptRolloutAppcast, chatgptRolloutAppcast),
             googleDriveOmaha: validURL(other.googleDriveOmaha, googleDriveOmaha),
             caskDatabase: validURL(other.caskDatabase, caskDatabase),
             appCatalog: validURL(other.appCatalog, appCatalog),
@@ -420,6 +428,7 @@ extension AppEndpoints {
 public struct AppEndpointsOverlay: Decodable, Sendable, Equatable {
     public let jetbrainsReleases: String?
     public let chatgptAppcast: String?
+    public var chatgptRolloutAppcast: String? = nil
     public let googleDriveOmaha: String?
     public let caskDatabase: String?
     public let appCatalog: String?

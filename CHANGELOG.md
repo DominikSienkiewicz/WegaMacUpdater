@@ -27,6 +27,9 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   can no longer install an older cask version over a newer self-updated app.
 - Google Chrome and Google Drive no longer show an update their own updater does not offer:
   Chrome versions still in a staged rollout and Drive's canary builds are not reported.
+- ChatGPT no longer shows an update it does not offer yet. Wega asks OpenAI's rollout service
+  which release every installation is served instead of reading the feed that already lists
+  releases still rolling out.
 
 ## [0.6.0] — 2026-11-02
 
