@@ -105,6 +105,19 @@ struct IndependentVendorReconciliationTests {
         }
     }
 
+    /// ChatGPT: Sparkle offers `26.1103.41825 (25679)` and the `chatgpt` cask offers
+    /// `26.1103.41825`. A cask without a build tier names only its release, which the vendor
+    /// row matches and refines, so the installation must be listed once, by the vendor row.
+    @Test func aVendorBuildOfTheSameCaskReleaseRepresentsTheInstallationOnce() {
+        var sparkle = row()
+        sparkle.source = .sparkle
+        sparkle.availableVersion = "26.1103.41825 (25679)"
+        let packages = items(version: "26.1103.41825")
+        let result = UpdatePlanner.reconciledUpdates(items: packages, manual: [sparkle])
+        #expect(result.items.isEmpty)
+        #expect(result.manual == [sparkle])
+    }
+
     @Test func skippingTheLatestVendorVersionDoesNotRevealAnOlderBrewOffer() async {
         let policies: [String: UpdatePolicy] = ["c:vendor-fixture": .skipped(version: "3.0.0")]
         let result = await checker().availableUpdateCount(policies: policies)
