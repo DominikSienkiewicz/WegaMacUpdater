@@ -17,6 +17,32 @@ public enum ChatGPTUpdateParser {
     }
 }
 
+/// The Sparkle feed of the current ChatGPT for macOS (`com.openai.codex`, built on Codex),
+/// which OpenAI releases in stages. Its static appcast (the catalog's Sparkle override)
+/// lists a release as soon as the first rollout group gets it. The app itself asks
+/// `updates.oaistatic.com/codex/app/appcast`, which redirects to the appcast that ends at
+/// the release served to that installation. On 2026-11-08 every sampled installation with
+/// no known plan was sent the release served to everyone, so the endpoint template carries
+/// a placeholder installation ID and `plan_type=unknown`, never the user's own ID or plan.
+public enum ChatGPTRolloutFeed {
+    public static let bundleIdentifier = "com.openai.codex"
+
+    /// Nil unless `installedVersion` is the dotted numeric version the endpoint expects.
+    public static func url(installedVersion: String?) -> URL? {
+        guard let installedVersion,
+              installedVersion.range(of: #"^\d+(\.\d+)*$"#, options: .regularExpression) != nil else { return nil }
+        return AppEndpoints.shared.chatgptRolloutAppcastURL(architecture: hostArchitecture, version: installedVersion)
+    }
+
+    private static var hostArchitecture: String {
+        #if arch(arm64)
+        "arm64"
+        #else
+        "x64"
+        #endif
+    }
+}
+
 /// Detects updates for the ChatGPT desktop app, whose Homebrew cask `chatgpt`
 /// is marked `auto_updates` and whose metadata lags OpenAI's public release
 /// channel by days. The app self-updates via Sparkle from a runtime-resolved

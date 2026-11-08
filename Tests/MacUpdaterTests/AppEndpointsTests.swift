@@ -90,6 +90,9 @@ final class AppEndpointsTests: XCTestCase {
                        "https://discord.com/api/updates/canary?platform=osx&version=0.0.966")
         XCTAssertEqual(e.chromeVersionsURL(channel: "canary")?.absoluteString,
                        "https://versionhistory.googleapis.com/v1/chrome/platforms/mac/channels/canary/versions/all/releases?filter=endtime=none")
+        XCTAssertEqual(e.chatgptRolloutAppcastURL(architecture: "arm64", version: "26.1103.41825")?.absoluteString,
+                       "https://updates.oaistatic.com/codex/app/appcast?installation_id=00000000-0000-0000-0000-000000000000"
+                           + "&arch=arm64&app_version=26.1103.41825&beta=false&plan_type=unknown")
         XCTAssertEqual(e.githubReleasesPageURL(repo: "owner/app")?.absoluteString,
                        "https://github.com/owner/app/releases/latest")
     }

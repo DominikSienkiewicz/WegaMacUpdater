@@ -41,12 +41,17 @@ public struct SparkleUpdateChecker: VendorUpdateChecker {
         ))
     }
 
-    /// Lookup order, first hit wins:
+    /// ChatGPT (`com.openai.codex`) always uses ``ChatGPTRolloutFeed``, and nothing else when
+    /// that URL cannot be built, because its static feed lists releases still rolling out.
+    /// For every other app the lookup order is, first hit wins:
     /// 1. `SparkleFeedOverrides` (hard-coded for apps that hide the URL — e.g. Electron-based Codex).
     /// 2. App's UserDefaults `SUFeedURL` (Sparkle reads this at runtime; some apps set it for beta/stable channels).
     /// 3. `Info.plist:SUFeedURL` read via PropertyListSerialization — never `Bundle(url:)`, which caches
     ///    plist values across in-place updates and returns stale data.
     private func resolveFeedURL(for app: ApplicationInfo) -> URL? {
+        if app.bundleIdentifier == ChatGPTRolloutFeed.bundleIdentifier {
+            return ChatGPTRolloutFeed.url(installedVersion: app.version)
+        }
         if let bundleID = app.bundleIdentifier,
            let override = feedOverrides[bundleID],
            let url = URL(string: override) {

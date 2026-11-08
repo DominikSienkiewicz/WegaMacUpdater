@@ -215,7 +215,7 @@ MacUpdaterCore (library target — no SwiftUI dependency)
 ├── ChatGPTUpdateChecker   — OpenAI's desktop appcast; the cask lags behind the app's own updater
 ├── DiscordUpdateChecker   — Discord's `updates/distributions/app` endpoint; another self-updating cask whose brew metadata cannot be trusted
 ├── SignalUpdateChecker    — Signal's release feed; same pattern — the app updates itself, brew reports the version it installed
-├── SparkleUpdateChecker   — Info.plist (PropertyListSerialization, never Bundle(url:)) + CFPreferencesCopyAppValue fallback + `SparkleFeedOverrides` map (backed by AppCatalog) for apps that set the feed URL at runtime
+├── SparkleUpdateChecker   — Info.plist (PropertyListSerialization, never Bundle(url:)) + CFPreferencesCopyAppValue fallback + `SparkleFeedOverrides` map (backed by AppCatalog) for apps that set the feed URL at runtime. ChatGPT (`com.openai.codex`) is the exception: `ChatGPTRolloutFeed` asks OpenAI's rollout endpoint (`updates.oaistatic.com/codex/app/appcast`) as an installation with a placeholder ID and no known plan, and reads the appcast it redirects to — the release served to everyone, not one still rolling out that the static appcast already lists
 ├── NpmBrewDuplicateDetector — finds CLIs installed via both `npm -g` and Homebrew (surfaced in Migration)
 ├── NpmGlobalChecker       — outdated scan via one `npm outdated -g --json` process (`npm ls -g` for inventory); NpmLocator scans brew/Volta/fnm/nvm + login-shell fallback, resolved path cached per scan
 ├── VersionComparison    — versionsEqual, isUpgrade, compareVersions(scheme:) (SemVer vs build-numbered), normalizeGitTag (public, tested)
