@@ -13,6 +13,12 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Changed
+- The self-update check, release notes, catalog refresh and the project, issue and new-issue
+  links use the repository's new owner, `SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater`.
+  Earlier versions still reach the moved repository through GitHub's redirect from the former
+  address.
+
 ### Fixed
 - Unit-test settings fixtures keep values in memory and clear them during teardown, avoiding
   leftover `wega.tests.*.plist` files in the user's preferences directory.
@@ -343,7 +349,7 @@ Software has bugs, macOS changes underneath it, and a vendor can move a download
 So, in the words of the licence itself: the software is provided **"as is", without warranty of any
 kind**, and the author is **not liable for any claim, damages or other liability** arising from it
 or from its use. The binding text is
-[LICENSE](https://github.com/DominikSienkiewicz/WegaMacUpdater/blob/main/LICENSE) — this paragraph
+[LICENSE](https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/blob/main/LICENSE) — this paragraph
 only points at it.
 
 In practice, two honest suggestions: keep the backups you would want to have anyway, and use the
@@ -359,16 +365,16 @@ their terms are still theirs.
   what changed in it, because there is no published predecessor to have changed from.
 -->
 
-[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.6.0...HEAD
-[0.6.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.5...v0.6.0
-[0.5.5]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.4...v0.5.5
-[0.5.4]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.3...v0.5.4
-[0.5.3]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.2...v0.5.3
-[0.5.2]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.1...v0.5.2
-[0.5.1]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.0...v0.5.1
-[0.5.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.2.0...v0.3.0
+[Unreleased]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/compare/v0.5.5...v0.6.0
+[0.5.5]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/compare/v0.5.4...v0.5.5
+[0.5.4]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/compare/v0.5.3...v0.5.4
+[0.5.3]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/compare/v0.5.2...v0.5.3
+[0.5.2]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/compare/v0.5.1...v0.5.2
+[0.5.1]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/compare/v0.2.0...v0.3.0
 
 
-[0.2.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/releases/tag/v0.2.0
+[0.2.0]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/releases/tag/v0.2.0
