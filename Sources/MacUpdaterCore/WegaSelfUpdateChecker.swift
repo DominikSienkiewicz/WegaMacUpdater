@@ -51,7 +51,7 @@ public struct WegaSelfUpdateChecker: Sendable {
     private let client: HTTPClient
 
     public init(
-        repo: String = "SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater",
+        repo: String = "DominikSienkiewicz/WegaMacUpdater",
         currentVersion: String = AppMetadata.version,
         client: HTTPClient = .shared
     ) {

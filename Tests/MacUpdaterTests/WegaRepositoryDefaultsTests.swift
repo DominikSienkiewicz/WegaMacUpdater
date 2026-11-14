@@ -18,14 +18,15 @@ private final class RecordingTransport: HTTPTransport, @unchecked Sendable {
     }
 }
 
-/// The repository moved from the personal account to the organization on 2026-11-13. The
-/// self-update check and the release notes must ask the organization directly instead of
-/// relying on GitHub's redirect, which disappears if the old name is ever reused.
+/// The repository spent 2026-11-13 and 2026-11-14 in an organization and then moved back to
+/// the personal account. The self-update check and the release notes must ask the account
+/// that owns the repository directly instead of relying on GitHub's redirect, which
+/// disappears if a former name is ever reused.
 @Suite("Wega's own GitHub repository")
 struct WegaRepositoryDefaultsTests {
-    private static let repository = "SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater"
+    private static let repository = "DominikSienkiewicz/WegaMacUpdater"
 
-    @Test func selfUpdateCheckAsksTheOrganizationRepository() async {
+    @Test func selfUpdateCheckAsksTheOwningRepository() async {
         let transport = RecordingTransport()
         let client = HTTPClient(transport: transport, maxRetries: 0, retryBaseDelay: 0)
 
@@ -34,7 +35,7 @@ struct WegaRepositoryDefaultsTests {
         #expect(transport.requestedURLs == ["https://api.github.com/repos/\(Self.repository)/releases/latest"])
     }
 
-    @Test func releaseHistoryAsksTheOrganizationRepository() async {
+    @Test func releaseHistoryAsksTheOwningRepository() async {
         let transport = RecordingTransport()
         let client = HTTPClient(transport: transport, maxRetries: 0, retryBaseDelay: 0)
 

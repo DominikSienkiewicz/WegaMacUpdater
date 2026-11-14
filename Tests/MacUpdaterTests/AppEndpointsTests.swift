@@ -24,8 +24,8 @@ final class AppEndpointsTests: XCTestCase {
         XCTAssertTrue(e.appCatalog.hasSuffix("app-catalog.json"),
                       "catalog source should point at an app-catalog.json document")
         XCTAssertEqual(e.appCatalogURL.absoluteString,
-                       "https://raw.githubusercontent.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/main/Sources/MacUpdaterCore/Resources/app-catalog.json",
-                       "the catalog is fetched from the organization that owns the repository")
+                       "https://raw.githubusercontent.com/DominikSienkiewicz/WegaMacUpdater/main/Sources/MacUpdaterCore/Resources/app-catalog.json",
+                       "the catalog is fetched from the account that owns the repository")
     }
 
     // UX-14: the Inventory "report this app" button opens a prefilled GitHub issue against
@@ -34,7 +34,7 @@ final class AppEndpointsTests: XCTestCase {
         let e = try AppEndpoints.loadBundled()
         XCTAssertEqual(e.projectNewIssueURL.scheme, "https")
         XCTAssertEqual(e.projectNewIssueURL.absoluteString,
-                       "https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/issues/new")
+                       "https://github.com/DominikSienkiewicz/WegaMacUpdater/issues/new")
     }
 
     // Zgłoszenie błędu z zakładki Logi otwiera domyślnego klienta poczty pod tym adresem,
@@ -61,9 +61,9 @@ final class AppEndpointsTests: XCTestCase {
         XCTAssertEqual(e.googleDriveDownloadURL.absoluteString,
                        "https://www.google.com/drive/download/")
         XCTAssertEqual(e.projectRepositoryURL.absoluteString,
-                       "https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater")
+                       "https://github.com/DominikSienkiewicz/WegaMacUpdater")
         XCTAssertEqual(e.projectIssuesURL.absoluteString,
-                       "https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/issues")
+                       "https://github.com/DominikSienkiewicz/WegaMacUpdater/issues")
         XCTAssertEqual(e.authorLinkedInURL.absoluteString,
                        "https://www.linkedin.com/in/dominik-sienkiewicz/")
         XCTAssertEqual(e.masRepositoryURL.absoluteString, "https://github.com/mas-cli/mas")
