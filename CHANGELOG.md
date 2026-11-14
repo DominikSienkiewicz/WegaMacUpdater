@@ -16,7 +16,9 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 ### Fixed
 - Obsidian no longer shows a GitHub update it has already installed. The GitHub Releases check
   compared the release with the installer version in the app bundle, not with the newer package
-  Obsidian actually runs, so the row stayed after every in-app update.
+  Obsidian actually runs, so the row stayed after every in-app update. A row already handed off
+  to GitHub Releases now disappears on the next start instead of waiting for a check that no
+  longer runs.
 - Unit-test settings fixtures keep values in memory and clear them during teardown, avoiding
   leftover `wega.tests.*.plist` files in the user's preferences directory.
 - Apps whose bundle version carries a git-tag prefix, such as Raspberry Pi Imager's `v2.0.12`,

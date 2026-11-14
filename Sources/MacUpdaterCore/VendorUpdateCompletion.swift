@@ -58,6 +58,15 @@ public enum VendorHandoffScanEvidence {
             }
         }
     }
+
+    /// Handoffs whose own source has stopped checking their app, so neither a scan nor a
+    /// recheck can ever answer for them. Dropping one confirms nothing about the update.
+    public static func retired(_ handoffs: [ManualOutdatedApp]) -> [ManualOutdatedApp] {
+        handoffs.filter { item in
+            guard case .github = item.source, let bundleIdentifier = item.bundleIdentifier else { return false }
+            return GitHubReleasesChecker.defersToDedicatedChecker(bundleIdentifier: bundleIdentifier)
+        }
+    }
 }
 
 /// Rechecks only the selected vendor and exact bundle. Never invokes a package manager.

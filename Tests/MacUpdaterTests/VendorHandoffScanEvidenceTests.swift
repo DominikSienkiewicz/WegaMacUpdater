@@ -57,7 +57,20 @@ struct VendorHandoffScanEvidenceTests {
         ) == [handoff()])
     }
 
+    @Test func handoffFromASourceThatNoLongerChecksItsAppIsRetired() {
+        let gitHubObsidian = gitHubHandoff("md.obsidian", repo: "obsidianmd/obsidian-releases")
+        let gitHubRectangle = gitHubHandoff("com.knollsoft.Rectangle", repo: "rxhanson/Rectangle")
+        #expect(VendorHandoffScanEvidence.retired([handoff(), gitHubObsidian, gitHubRectangle]) == [gitHubObsidian])
+    }
+
     private var now: Date { Date(timeIntervalSince1970: 2_000) }
+
+    private func gitHubHandoff(_ bundleIdentifier: String, repo: String) -> ManualOutdatedApp {
+        ManualOutdatedApp(name: bundleIdentifier, path: URL(fileURLWithPath: "/Applications/\(bundleIdentifier).app"),
+                          installedVersion: "1.15.0", availableVersion: "1.15.1",
+                          source: .github(repo: repo, selfUpdates: true), bundleIdentifier: bundleIdentifier,
+                          completionRequirement: .init(version: "1.15.1", scheme: .semver))
+    }
 
     private func check(outcome: InstallationSourceCheck.Outcome, source: String = "Obsidian") -> InstallationCheck {
         InstallationCheck(app: app(version: "1.14.3"), sources: [.init(source: source, outcome: outcome)], checkedAt: now)

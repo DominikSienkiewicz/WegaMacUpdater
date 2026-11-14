@@ -219,7 +219,8 @@ not the external updater. Pending handoffs survive restarting Wega and language 
 outdated row remains until a subsequent check resolves it. A full scan also closes the
 handoff when its selected source reports this exact bundle current and the scan does not
 list it as outdated; the history records an **external** update, without a banner. A
-failed or skipped source leaves the handoff pending.
+failed or skipped source leaves the handoff pending. A handoff whose source no longer checks
+the app, such as GitHub Releases for Obsidian, is dropped without recording an update.
 
 Older saved scan results lack a machine-readable verification target. They can be checked
 again to refresh an outdated offer; if already current, run a full check.
