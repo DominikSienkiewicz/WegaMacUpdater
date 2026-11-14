@@ -35,7 +35,7 @@ or App Store passwords.
 ### Install the app
 
 1. Download the latest **`.dmg`** (or **`.pkg`**) from the
-   [Releases page](https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/releases).
+   [Releases page](https://github.com/DominikSienkiewicz/WegaMacUpdater/releases).
 2. **`.dmg`** — open it and drag **Wega Mac Updater** into your **Applications** folder.
    **`.pkg`** — double-click it and follow the installer.
 3. Launch Wega from Applications or Spotlight.
@@ -668,6 +668,6 @@ whether it's marked for removal.
 ---
 
 Need something this guide doesn't cover? Open a
-[discussion or issue](https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/issues) — but
+[discussion or issue](https://github.com/DominikSienkiewicz/WegaMacUpdater/issues) — but
 for anything security-sensitive, use the private channel in [`SECURITY.md`](SECURITY.md)
 instead of a public issue.

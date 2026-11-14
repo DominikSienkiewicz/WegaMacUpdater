@@ -10,7 +10,7 @@ Native macOS app that keeps every application on your Mac up to date — Homebre
 ![Architecture](https://img.shields.io/badge/Architecture-SPM_Modules-purple?style=for-the-badge)
 
 [![Version](https://img.shields.io/badge/Version-0.6.0-lightgrey?style=for-the-badge)](Sources/WegaHelperKit/AppMetadata.swift)
-[![CI](https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/actions/workflows/ci.yml/badge.svg)](https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/actions/workflows/ci.yml)
+[![CI](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml/badge.svg)](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml)
 
 ## The Vision: one window, zero terminals
 
