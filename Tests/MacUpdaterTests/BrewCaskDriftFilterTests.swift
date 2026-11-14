@@ -111,6 +111,31 @@ final class BrewCaskDriftFilterTests: XCTestCase {
         XCTAssertEqual(drifted, ["foo"])
     }
 
+    func testObsidianIsJudgedByThePackageItRunsNotByItsInstallerBundle() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let apps = root.appendingPathComponent("Applications", isDirectory: true)
+        let packages = root.appendingPathComponent("obsidian", isDirectory: true)
+        let contents = apps.appendingPathComponent("Obsidian.app/Contents", isDirectory: true)
+        try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: packages, withIntermediateDirectories: true)
+        try PropertyListSerialization.data(fromPropertyList: [
+            "CFBundleIdentifier": "md.obsidian", "CFBundleShortVersionString": "1.15.0"
+        ], format: .xml, options: 0).write(to: contents.appendingPathComponent("Info.plist"))
+        try Data().write(to: packages.appendingPathComponent("obsidian-1.15.1.asar"))
+        let filter = BrewCaskDriftFilter(
+            applicationsDir: apps, userApplicationsDir: root.appendingPathComponent("User", isDirectory: true),
+            readBundleVersion: { BrewCaskDriftFilter.readInstalledVersion($0, obsidianPackages: packages) }
+        )
+
+        let drifted = filter.driftedTokens(
+            outdated: [BrewOutdatedItem(name: "obsidian", installedVersions: ["1.14.5"], currentVersion: "1.15.1")],
+            installationInfo: [BrewCaskInstallationInfo(token: "obsidian", appArtifacts: ["Obsidian.app"])]
+        )
+
+        XCTAssertEqual(drifted, ["obsidian"], "Obsidian runs package 1.15.1; only its installer bundle says 1.15.0")
+    }
+
     func testKeepsCaskWithoutInstallationInfo() {
         let filter = makeFilter(["/Applications/Foo.app": "2.0.0"])
         let drifted = filter.driftedTokens(

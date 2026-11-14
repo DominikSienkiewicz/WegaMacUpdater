@@ -15,7 +15,7 @@ public struct BrewCaskDriftFilter: Sendable {
         applicationsDir: URL = SystemPaths.applicationsDirectory,
         userApplicationsDir: URL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Applications", isDirectory: true),
-        readBundleVersion: @escaping @Sendable (URL) -> String? = BrewCaskDriftFilter.readBundleShortVersionString
+        readBundleVersion: @escaping @Sendable (URL) -> String? = BrewCaskDriftFilter.readInstalledVersion
     ) {
         self.applicationsDir = applicationsDir
         self.userApplicationsDir = userApplicationsDir
@@ -66,11 +66,18 @@ public struct BrewCaskDriftFilter: Sendable {
         }
     }
 
-    public static func readBundleShortVersionString(_ appURL: URL) -> String? {
-        let plistURL = appURL.appendingPathComponent("Contents/Info.plist")
-        guard let data = try? Data(contentsOf: plistURL),
-              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
-              let version = plist["CFBundleShortVersionString"] as? String else { return nil }
-        return version
+    /// The version the app at `appURL` runs. Obsidian keeps its installer version in the
+    /// bundle while it loads a newer self-updated package, so its package decides.
+    public static func readInstalledVersion(_ appURL: URL) -> String? {
+        readInstalledVersion(appURL, obsidianPackages: ObsidianUpdateChecker.defaultApplicationSupportDirectory)
+    }
+
+    static func readInstalledVersion(_ appURL: URL, obsidianPackages: URL) -> String? {
+        guard let data = try? Data(contentsOf: appURL.appendingPathComponent("Contents/Info.plist")),
+              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+        else { return nil }
+        let bundleVersion = plist["CFBundleShortVersionString"] as? String
+        guard plist["CFBundleIdentifier"] as? String == ObsidianUpdateChecker.bundleIdentifier else { return bundleVersion }
+        return ObsidianUpdateChecker.runningVersion(bundleVersion: bundleVersion, applicationSupportDirectory: obsidianPackages)
     }
 }
