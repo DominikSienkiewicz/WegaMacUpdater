@@ -49,6 +49,34 @@ final class VendorHandoffScanClosureTests: XCTestCase {
         XCTAssertEqual(entries.map(\.trigger), [.external])
     }
 
+    func testRestoredGitHubHandoffForObsidianIsDroppedWithoutRecordingAnUpdate() throws {
+        let harness = makeScanStoreRuntimeHarness(runner: runner())
+        var dependencies = harness.store.dependencies
+        dependencies.recordUpdateRun = { _ in XCTFail("No source confirmed the update, so dropping the handoff is not a finished update") }
+        let gitHubHandoff = ManualOutdatedApp(
+            name: "Obsidian", path: handoff().path, installedVersion: "1.15.0", availableVersion: "1.15.1",
+            source: .github(repo: "obsidianmd/obsidian-releases", selfUpdates: true), bundleIdentifier: "md.obsidian",
+            completionRequirement: .init(version: "1.15.1", scheme: .semver)
+        )
+        let installerBundle = ApplicationInfo(path: handoff().path, name: "Obsidian", bundleIdentifier: "md.obsidian",
+                                              version: "1.15.0", buildVersion: "1.15.0",
+                                              installDate: nil, updateDate: nil, isManagedByBrew: true)
+        let failedRecheck = InstallationCheck(app: installerBundle, sources: [
+            .init(source: "Obsidian", outcome: .notChecked), .init(source: "GitHub", outcome: .failed)
+        ], checkedAt: Date())
+        try ScanResultStore(io: harness.snapshots).save(ScanSnapshot(
+            scannedAt: Date(timeIntervalSince1970: 3_000), brew: nil, mas: [], npm: [], manual: [],
+            installationChecks: [failedRecheck], vendorHandoffs: [gitHubHandoff]
+        ))
+        let store = ScanStore(resultStore: ScanResultStore(io: harness.snapshots), dependencies: dependencies)
+
+        store.restoreLastScan()
+
+        XCTAssertTrue(store.vendorHandoffs.isEmpty, "GitHub no longer checks Obsidian, so neither a scan nor a recheck could close it")
+        XCTAssertTrue(store.visibleManual.isEmpty)
+        XCTAssertTrue(try XCTUnwrap(ScanResultStore(io: harness.snapshots).load()).vendorHandoffs.isEmpty)
+    }
+
     private func storeScanning(
         sourceOutcome: InstallationSourceCheck.Outcome,
         record: @escaping (UpdateJournalEntry) -> Void

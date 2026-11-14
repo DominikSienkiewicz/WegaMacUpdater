@@ -17,7 +17,8 @@ Shared Obsidian package data alone cannot confirm an individual bundle's active 
 `ScanStore+VendorUpdates` owns the cancellable task under an `OperationCoordinator` read
 lease. A full scan invalidates an in-flight verification. Pending rows are persisted as the
 additive `ScanSnapshot.vendorHandoffs` field and remain visible until explicitly resolved
-or dismissed. One-app results update their installation evidence and menu-bar count without
+or dismissed, or until their source stops checking the app (`VendorHandoffScanEvidence.retired`),
+which records nothing. One-app results update their installation evidence and menu-bar count without
 advancing full-scan timestamps or claiming other sources were checked. Confirmed results use
 `UpdateJournalEntry.Trigger.external`; they do not run Wega installation, signature-validation
 or rollback machinery. New optional targets and pending arrays decode older snapshots safely.

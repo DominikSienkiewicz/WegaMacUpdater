@@ -15,13 +15,18 @@ public struct GitHubReleasesChecker: VendorUpdateChecker {
         ].merging(AppCatalog.shared.githubRepos) { _, configured in configured }
     }
 
+    /// Whether another checker owns this app even when the catalog maps it to a repository.
+    /// Obsidian's bundle keeps the installer version while it runs a newer self-updated
+    /// package, so only `ObsidianUpdateChecker` can compare it with a release.
+    static func defersToDedicatedChecker(bundleIdentifier: String) -> Bool {
+        bundleIdentifier == ObsidianUpdateChecker.bundleIdentifier
+    }
+
     public func plan(for app: ApplicationInfo) -> VendorCheckPlan? {
         guard let bundleId = app.bundleIdentifier,
               let mapping = repos[bundleId] else { return nil }
         guard !UTMUpdateSupport.usesNativeUpdateChannel(app, client: client) else { return nil }
-        // Obsidian's bundle keeps the installer version while it runs a newer self-updated
-        // package, so only `ObsidianUpdateChecker` can compare it with a release.
-        guard bundleId != ObsidianUpdateChecker.bundleIdentifier else { return nil }
+        guard !Self.defersToDedicatedChecker(bundleIdentifier: bundleId) else { return nil }
 
         let usesBrunoStableChannel = BrunoUpdateSupport.isOfficial(mapping)
         if usesBrunoStableChannel && !BrunoUpdateSupport.isStableVersion(app.version) { return nil }

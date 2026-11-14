@@ -59,19 +59,23 @@ extension ScanStore {
     }
 
     /// Closes the handoffs the freshly applied scan result proves current, recording them as
-    /// done outside Wega. No banner: this also runs on quiet and restored results.
+    /// done outside Wega, and drops the retired ones without a record.
+    /// No banner: this also runs on quiet and restored results.
     func closeVendorHandoffsConfirmedByScan() {
+        let retired = VendorHandoffScanEvidence.retired(vendorHandoffs)
         let confirmed = VendorHandoffScanEvidence.confirmedCurrent(
             vendorHandoffs, installationChecks: installationChecks, stillOutdated: manualOutdated
         )
-        guard !confirmed.isEmpty else { return }
-        let closed = Set(confirmed.map(\.path))
+        guard !retired.isEmpty || !confirmed.isEmpty else { return }
+        let closed = Set((retired + confirmed).map(\.path))
         vendorHandoffs.removeAll { closed.contains($0.path) }
         for path in closed { vendorMessages[path.path] = nil }
-        dependencies.recordUpdateRun(UpdateJournalEntry(finishedAt: Date(), trigger: .external, items: confirmed.map {
-            UpdateJournalItem(name: $0.name, kind: "manual", phase: .succeeded,
-                              upgraded: true, rolledBack: false, publisherChanged: false)
-        }))
+        if !confirmed.isEmpty {
+            dependencies.recordUpdateRun(UpdateJournalEntry(finishedAt: Date(), trigger: .external, items: confirmed.map {
+                UpdateJournalItem(name: $0.name, kind: "manual", phase: .succeeded,
+                                  upgraded: true, rolledBack: false, publisherChanged: false)
+            }))
+        }
         persistLastScan()
         emitCounts()
     }
