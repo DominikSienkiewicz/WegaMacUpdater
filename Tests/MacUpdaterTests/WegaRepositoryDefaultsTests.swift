@@ -1,0 +1,45 @@
+import Foundation
+import Testing
+@testable import MacUpdaterCore
+
+/// Records the URL of every request and answers 404, so a test sees where a query goes
+/// without depending on what the release API returns.
+private final class RecordingTransport: HTTPTransport, @unchecked Sendable {
+    private let lock = NSLock()
+    private var urls: [String] = []
+
+    var requestedURLs: [String] { lock.withLock { urls } }
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        let url = request.url!
+        lock.withLock { urls.append(url.absoluteString) }
+        let response = HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: [:])!
+        return (Data(), response)
+    }
+}
+
+/// The repository moved from the personal account to the organization on 2026-11-13. The
+/// self-update check and the release notes must ask the organization directly instead of
+/// relying on GitHub's redirect, which disappears if the old name is ever reused.
+@Suite("Wega's own GitHub repository")
+struct WegaRepositoryDefaultsTests {
+    private static let repository = "SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater"
+
+    @Test func selfUpdateCheckAsksTheOrganizationRepository() async {
+        let transport = RecordingTransport()
+        let client = HTTPClient(transport: transport, maxRetries: 0, retryBaseDelay: 0)
+
+        _ = await WegaSelfUpdateChecker(currentVersion: "0.1.0", client: client).check()
+
+        #expect(transport.requestedURLs == ["https://api.github.com/repos/\(Self.repository)/releases/latest"])
+    }
+
+    @Test func releaseHistoryAsksTheOrganizationRepository() async {
+        let transport = RecordingTransport()
+        let client = HTTPClient(transport: transport, maxRetries: 0, retryBaseDelay: 0)
+
+        _ = await ReleaseHistoryFetcher(client: client).notesNewerThan("0.1.0")
+
+        #expect(transport.requestedURLs == ["https://api.github.com/repos/\(Self.repository)/releases?per_page=100"])
+    }
+}
