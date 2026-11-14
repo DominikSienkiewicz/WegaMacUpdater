@@ -90,4 +90,31 @@ final class ObsidianUpdateCheckerTests: XCTestCase {
         XCTAssertEqual(update.installedVersion, "1.12.7")
         XCTAssertEqual(update.availableVersion, "1.12.8")
     }
+
+    func testGitHubReleasesLeaveObsidianToItsPackageChecker() async {
+        let client = FakeHTTP.client(ok: #"[{"tag_name":"1.15.1","draft":false,"prerelease":false}]"#)
+        let catalogEntry = GitHubCatalogEntry(
+            bundleId: "md.obsidian",
+            repo: "obsidianmd/obsidian-releases",
+            caskToken: "obsidian",
+            selfUpdates: true
+        )
+        let installerBundle = ApplicationInfo(
+            path: URL(fileURLWithPath: "/Applications/Obsidian.app"),
+            name: "Obsidian",
+            bundleIdentifier: "md.obsidian",
+            version: "1.15.0",
+            installDate: nil,
+            updateDate: nil,
+            isManagedByBrew: true,
+            caskToken: "obsidian"
+        )
+
+        let result = await GitHubReleasesChecker(client: client, repos: ["md.obsidian": catalogEntry])
+            .check(app: installerBundle)
+
+        guard case .notApplicable = result else {
+            return XCTFail("The bundle carries Obsidian's installer version, not its loaded package; got \(result)")
+        }
+    }
 }

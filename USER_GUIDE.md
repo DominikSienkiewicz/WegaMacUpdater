@@ -375,7 +375,7 @@ Wega routes each app through the right updater:
 - **npm globals** — `npm install -g <pkg>@latest`.
 - **JetBrains IDEs** — opens JetBrains Toolbox.
 - **GitHub-released apps** — those that carry their own updater (Visual Studio Code,
-  Obsidian, GitHub Desktop…) open so that updater can take over, with a **GitHub Releases**
+  Rectangle, GitHub Desktop…) open so that updater can take over, with a **GitHub Releases**
   link kept beside the button for when it has been switched off. The rest open the Releases
   page.
 - **Sparkle and self-updating apps** (ChatGPT, Postman, Parallels, Antigravity, Google

@@ -19,6 +19,9 @@ public struct GitHubReleasesChecker: VendorUpdateChecker {
         guard let bundleId = app.bundleIdentifier,
               let mapping = repos[bundleId] else { return nil }
         guard !UTMUpdateSupport.usesNativeUpdateChannel(app, client: client) else { return nil }
+        // Obsidian's bundle keeps the installer version while it runs a newer self-updated
+        // package, so only `ObsidianUpdateChecker` can compare it with a release.
+        guard bundleId != ObsidianUpdateChecker.bundleIdentifier else { return nil }
 
         let usesBrunoStableChannel = BrunoUpdateSupport.isOfficial(mapping)
         if usesBrunoStableChannel && !BrunoUpdateSupport.isStableVersion(app.version) { return nil }
