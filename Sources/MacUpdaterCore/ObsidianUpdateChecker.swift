@@ -26,7 +26,7 @@ public struct ObsidianUpdateChecker: VendorUpdateChecker {
 
     public func plan(for app: ApplicationInfo) -> VendorCheckPlan? {
         guard app.bundleIdentifier == Self.bundleIdentifier,
-              let installed = installedVersion(fallingBackTo: app.version)
+              let installed = Self.runningVersion(bundleVersion: app.version, applicationSupportDirectory: applicationSupportDirectory)
         else { return nil }
 
         // Resolved from local settings, so it is stable for this check; snapshot it before
@@ -44,7 +44,7 @@ public struct ObsidianUpdateChecker: VendorUpdateChecker {
         }
     }
 
-    private static var defaultApplicationSupportDirectory: URL {
+    static var defaultApplicationSupportDirectory: URL {
         let base = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first ?? FileManager.default.homeDirectoryForCurrentUser
@@ -60,12 +60,14 @@ public struct ObsidianUpdateChecker: VendorUpdateChecker {
         return settings.insider ?? false
     }
 
-    private func installedVersion(fallingBackTo bundleVersion: String?) -> String? {
+    /// The version Obsidian runs: the newest package it loads from `applicationSupportDirectory`,
+    /// or the bundle's installer version when no newer package exists.
+    static func runningVersion(bundleVersion: String?, applicationSupportDirectory: URL) -> String? {
         let packageVersions = (try? FileManager.default.contentsOfDirectory(
             at: applicationSupportDirectory,
             includingPropertiesForKeys: nil,
             options: [.skipsHiddenFiles]
-        ))?.compactMap(Self.packageVersion(from:)) ?? []
+        ))?.compactMap(packageVersion(from:)) ?? []
 
         return packageVersions.reduce(bundleVersion) { current, candidate in
             guard let current else { return candidate }
