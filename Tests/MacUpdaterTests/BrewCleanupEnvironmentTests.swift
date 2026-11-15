@@ -13,11 +13,12 @@ final class BrewCleanupEnvironmentTests: XCTestCase {
         _ = try await service.upgradeCask(token: "example")
         _ = try await service.upgradeFormulae()
         _ = try await service.installCask(token: "example")
+        _ = try await service.uninstallFormula(name: "example")
         for arguments in [BrewService.adoptCaskArguments(token: "example"),
                           BrewService.reinstallCaskArguments(token: "example")] {
             for try await _ in try service.events(arguments: arguments) {}
         }
-        XCTAssertEqual(runner.requests.count, 5)
+        XCTAssertEqual(runner.requests.count, 6)
         for request in runner.requests {
             XCTAssertEqual(request.environment["HOMEBREW_NO_INSTALL_CLEANUP"], "1")
             XCTAssertNil(request.environment["HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK"])

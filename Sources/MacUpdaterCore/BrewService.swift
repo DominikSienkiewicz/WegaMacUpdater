@@ -135,6 +135,27 @@ public final class BrewService: @unchecked Sendable {
         return result
     }
 
+    /// Installed formulae that depend on `formula`, sorted by name.
+    public func usesInstalled(formula: String) async throws -> [String] {
+        // SEC-10: `--` fences the name off from Homebrew's option parsing.
+        let arguments = ["uses", "--installed", "--", formula]
+        let result = try await runBrew(arguments, environment: HomebrewEnvironment.cleanupQueryEnvironment)
+        try ensureSuccess(result, arguments: arguments)
+        return result.stdout
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .sorted()
+    }
+
+    public func uninstallFormula(name: String) async throws -> ProcessResult {
+        // SEC-10: `--` fences the name off from Homebrew's option parsing.
+        let arguments = ["uninstall", "--formula", "--", name]
+        let result = try await runBrew(arguments)
+        try ensureSuccess(result, arguments: arguments)
+        return result
+    }
+
     public func upgradeFormulae() async throws -> ProcessResult {
         let arguments = ["upgrade", "--formula"]
         let result = try await runBrew(arguments)
@@ -252,6 +273,7 @@ public final class BrewService: @unchecked Sendable {
 
     private func runBrew(
         _ arguments: [String],
+        environment: [String: String] = HomebrewEnvironment.brewEnvironment,
         timeouts: ProcessTimeoutPolicy = .query
     ) async throws -> ProcessResult {
         guard let brewURL = locator.locateBrew() else {
@@ -262,7 +284,7 @@ public final class BrewService: @unchecked Sendable {
             ProcessRequest(
                 executableURL: brewURL,
                 arguments: arguments,
-                environment: HomebrewEnvironment.brewEnvironment,
+                environment: environment,
                 inheritParentEnvironment: false,
                 timeouts: timeouts
             )
