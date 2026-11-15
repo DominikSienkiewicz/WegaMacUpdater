@@ -15,6 +15,22 @@ final class ProcessOutputPolicyTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 0)
     }
 
+    func testNullDeviceStdinIsWiredToTheNullDevice() {
+        let process = Process()
+        ProcessRunner.applyStandardInput(.nullDevice, to: process)
+        XCTAssertEqual((process.standardInput as? FileHandle)?.fileDescriptor,
+                       FileHandle.nullDevice.fileDescriptor)
+    }
+
+    func testInheritStdinLeavesTheProcessInputUnset() {
+        let process = Process()
+        let untouched = process.standardInput as? FileHandle
+        ProcessRunner.applyStandardInput(.inherit, to: process)
+        XCTAssertTrue((process.standardInput as? FileHandle) === untouched)
+        XCTAssertNotEqual((process.standardInput as? FileHandle)?.fileDescriptor,
+                          FileHandle.nullDevice.fileDescriptor)
+    }
+
     func testSuppressedLoggingKeepsStderrOutOfTheExitDetail() {
         let detail = ProcessRunner.exitLogDetail(
             command: "zsh", exitCode: 1, stderr: "TOKEN=abc", logging: .suppressed)

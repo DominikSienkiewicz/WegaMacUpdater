@@ -230,9 +230,7 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         let stderrPipe = Pipe()
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
-        if request.standardInput == .nullDevice {
-            process.standardInput = FileHandle.nullDevice
-        }
+        applyStandardInput(request.standardInput, to: process)
         let recordsOutput = request.outputLogging == .full
 
         // Rolling buffers: every chunk is streamed live through `onOutput`, but the
@@ -367,6 +365,13 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             )
         }
         return result
+    }
+
+    static func applyStandardInput(_ standardInput: ProcessStandardInput, to process: Process) {
+        switch standardInput {
+        case .inherit: break
+        case .nullDevice: process.standardInput = FileHandle.nullDevice
+        }
     }
 
     static func exitLogDetail(
