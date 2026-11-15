@@ -7,7 +7,8 @@ name: Build
 # the one CI proved green, and can never outrun the lint / catalog / bundle gates.
 #
 # Pinned toolchain — single source of truth, bump here:
-#   Xcode 26 / Swift 6.0  → CONTRIBUTING.md, README.md ("Xcode 26 or Swift 6.0 toolchain")
+#   Xcode 27.2 / Swift 6.0 on the `xcode-27` runner image (GitHub public preview; the
+#   `macos-26` image carries Xcode 26 only) → CONTRIBUTING.md, docs/building.md, RELEASING.md
 #   SwiftLint 0.65.0      → .swiftlint.yml
 # `latest-stable` / bare `brew install swiftlint` are deliberately avoided: with a `--strict`
 # lint gate, a new SwiftLint release promoting a new rule to an error would break the build the
@@ -25,7 +26,7 @@ env:
 jobs:
   build-test:
     name: Build & Test
-    runs-on: macos-26
+    runs-on: xcode-27
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -33,7 +34,7 @@ jobs:
       - name: Select pinned Xcode
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
-          xcode-version: '26.0'
+          xcode-version: '27.2'
 
       - name: Swift version
         run: swift --version
@@ -134,7 +135,7 @@ jobs:
 
   lint:
     name: SwiftLint
-    runs-on: macos-26
+    runs-on: xcode-27
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -144,7 +145,7 @@ jobs:
       - name: Select pinned Xcode
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
-          xcode-version: '26.0'
+          xcode-version: '27.2'
 
       # Pinned SwiftLint (SWIFTLINT_VERSION), not `brew install swiftlint`: brew installs
       # whatever is current, and under `--strict` a newer rule set turns green into red with
@@ -168,7 +169,7 @@ jobs:
 
   package:
     name: Package (.pkg, universal)
-    runs-on: macos-26
+    runs-on: xcode-27
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -176,7 +177,7 @@ jobs:
       - name: Select pinned Xcode
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
-          xcode-version: '26.0'
+          xcode-version: '27.2'
 
       # The gate below is exercised here only on an ad-hoc bundle, so its Developer-ID path —
       # the one that makes notarization mandatory — would never run until a tag is pushed.

@@ -11,7 +11,8 @@ If you are a **user** looking for how to install and use the app, see the
 
 ## Prerequisites
 
-- **macOS 26 (Tahoe) or newer** and **Xcode 26 / Swift 6.0**.
+- **macOS 26.6 or newer** and **Xcode 27.2 / Swift 6.0** — the toolchain CI pins; Xcode 27.2
+  itself requires macOS 26.6. The app still runs on macOS 26 (Tahoe) or newer.
   A Command Line Tools–only toolchain is not enough: SwiftLint needs a SourceKit that
   only the full Xcode provides, so `./scripts/check.sh` refuses to run without it.
   Point `xcode-select` at Xcode, not CommandLineTools:

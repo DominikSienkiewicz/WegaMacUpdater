@@ -42,7 +42,7 @@ jobs:
   release:
     name: Build & publish release
     needs: build
-    runs-on: macos-26
+    runs-on: xcode-27
     # A signing stall is this job's most likely failure, and it does not look like a failure:
     # v0.2.0's first attempt sat on "Tworzę PKG..." waiting for a keychain prompt nobody could
     # answer, and was cancelled only by GitHub's six-hour job maximum — six hours billed at the
@@ -70,7 +70,7 @@ jobs:
       - name: Select pinned Xcode
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
-          xcode-version: '26.0'
+          xcode-version: '27.2'
 
       # Makes the "secrets configured" state observable in every release run without leaking
       # any value: a maintainer can see at a glance whether this will be a signed+notarized or

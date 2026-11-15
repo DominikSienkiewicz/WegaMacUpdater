@@ -4,8 +4,8 @@ Requirements, build commands, CI gates and the single source of truth for the ve
 
 ## Requirements
 
-- macOS 26 (Tahoe) or newer
-- Xcode 26 — the full app, not the Command Line Tools alone: SwiftLint needs a SourceKit
+- macOS 26.6 or newer (required by Xcode 27.2; the built app runs on macOS 26 or newer)
+- Xcode 27.2, the version CI pins — the full app, not the Command Line Tools alone: SwiftLint needs a SourceKit
   that ships only with Xcode (`scripts/check.sh` stops early and says so when
   `xcode-select -p` points elsewhere)
 - Optional: Homebrew at `/opt/homebrew/bin/brew` or `/usr/local/bin/brew` — without it Wega

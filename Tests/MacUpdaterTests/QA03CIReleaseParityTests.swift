@@ -29,10 +29,13 @@ struct QA03CIReleaseParityTests {
         let reusable = try contents(of: ".github/workflows/build.yml")
         let release = try contents(of: ".github/workflows/release.yml")
 
-        // The project and CI declare macOS 26; release must not build on a different runner.
+        // CI and release share one runner, the `xcode-27` image that carries the pinned Xcode;
+        // release must not build on a different runner.
         #expect(!release.contains("macos-15"))
-        #expect(reusable.contains("runs-on: macos-26"))
-        #expect(release.contains("runs-on: macos-26"))
+        #expect(!reusable.contains("runs-on: macos-26"))
+        #expect(!release.contains("runs-on: macos-26"))
+        #expect(reusable.contains("runs-on: xcode-27"))
+        #expect(release.contains("runs-on: xcode-27"))
     }
 
     // MARK: - Pinned toolchain (Xcode + SwiftLint), despite `--strict`
@@ -42,12 +45,14 @@ struct QA03CIReleaseParityTests {
         let release = try contents(of: ".github/workflows/release.yml")
 
         // `xcode-version: latest-stable` lets a new Xcode reach the build silently; pin it to a
-        // concrete version (docs: Xcode 26). Match the actual usage, not a comment that may
+        // concrete version (docs: Xcode 27.2). Match the actual usage, not a comment that may
         // mention the anti-pattern it replaced.
         #expect(!reusable.contains("xcode-version: latest-stable"))
         #expect(!release.contains("xcode-version: latest-stable"))
-        #expect(reusable.contains("xcode-version: '26"))
-        #expect(release.contains("xcode-version: '26"))
+        #expect(!reusable.contains("xcode-version: '26"))
+        #expect(!release.contains("xcode-version: '26"))
+        #expect(reusable.contains("xcode-version: '27.2'"))
+        #expect(release.contains("xcode-version: '27.2'"))
 
         // A floating SwiftLint under `--strict` fails the day it ships a new rule. Pin the version
         // (.swiftlint.yml already references 0.65.0) and install it from a fixed release asset

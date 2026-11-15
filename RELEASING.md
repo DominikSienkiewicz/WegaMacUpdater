@@ -116,7 +116,7 @@ This is the irreversible step. Up to here you could still undo everything with
 The tag triggers [`release.yml`](.github/workflows/release.yml):
 
 1. **Quality gate** — the same reusable [`build.yml`](.github/workflows/build.yml) CI runs,
-   on the same `macos-26` runner and pinned Xcode 26 / SwiftLint 0.65.0 toolchain. Publishing
+   on the same `xcode-27` runner and pinned Xcode 27.2 / SwiftLint 0.65.0 toolchain. Publishing
    `needs:` this job, so a release can never outrun the tests, lint, catalog and bundle
    checks, nor be built on a different toolchain than the one CI proved green.
 2. **Tag verification** — the tag must equal `AppMetadata.version`, and `CHANGELOG.md` must
