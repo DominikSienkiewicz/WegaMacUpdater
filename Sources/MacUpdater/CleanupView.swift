@@ -182,7 +182,7 @@ struct CleanupView: View {
         panel.isExtensionHidden = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            try format.data(report, home: store.home).write(to: url, options: .atomic)
+            try format.data(report, home: store.home, tccMapEnabled: tccMapEnabled).write(to: url, options: .atomic)
         } catch {
             exportError = trf("Nie udało się zapisać pliku: %@", error.localizedDescription)
         }

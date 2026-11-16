@@ -381,7 +381,7 @@ final class CleanupStoreTests: XCTestCase {
         gate.open()
         await store.task?.value
 
-        XCTAssertTrue(savedWhileScanning.isEmpty, "nothing is rewritten under a running scan")
+        XCTAssertTrue(savedWhileScanning.isEmpty, "no report was stored, so there is nothing to rewrite under the scan")
         XCTAssertEqual(store.report, CleanupStoreFixtures.reportWithoutMap())
         XCTAssertEqual(
             boundary.savedReports, [CleanupStoreFixtures.reportWithoutMap()], "the scanned map never reaches the saved report"
@@ -406,10 +406,38 @@ final class CleanupStoreTests: XCTestCase {
         gate.open()
         await store.task?.value
 
-        XCTAssertEqual(reportWhileScanning, mapped, "the report is not replaced under a running scan")
+        XCTAssertNotEqual(reportWhileScanning, mapped)
+        XCTAssertEqual(reportWhileScanning, CleanupStoreFixtures.reportWithoutMap(), "the map is forgotten under a running scan")
         XCTAssertTrue(store.lastScanCancelled)
         XCTAssertEqual(store.report, CleanupStoreFixtures.reportWithoutMap())
         XCTAssertEqual(boundary.savedReports, [CleanupStoreFixtures.reportWithoutMap()])
+    }
+
+    /// All store work runs on the main actor and a finished scan follows the switch anyway, so a
+    /// map switched off is forgotten at once, also while a scan runs, and no export can carry it.
+    func testSwitchingOffDuringARunningScanStripsTheStoredMapAtOnce() async {
+        let boundary = FakeCleanupBoundary()
+        boundary.tccMapEnabled = true
+        boundary.persistedReport = CleanupStoreFixtures.mappedReport()
+        boundary.scanResult = CleanupStoreFixtures.mappedReport()
+        let gate = FakeGate()
+        boundary.scanGate = gate
+        let store = CleanupStore(dependencies: boundary.dependencies)
+
+        store.scan()
+        await fulfillment(of: [gate.entered], timeout: 5)
+        boundary.tccMapEnabled = false
+        store.applyTCCMapSetting()
+        let reportWhileScanning = store.report
+        let savedWhileScanning = boundary.savedReports
+        gate.open()
+        await store.task?.value
+
+        XCTAssertEqual(store.phase, .idle)
+        XCTAssertEqual(reportWhileScanning, CleanupStoreFixtures.reportWithoutMap())
+        XCTAssertEqual(savedWhileScanning, [CleanupStoreFixtures.reportWithoutMap()], "the saved copy loses the map at once too")
+        XCTAssertEqual(store.report, CleanupStoreFixtures.reportWithoutMap(), "the scanned map never reaches the screen")
+        XCTAssertEqual(boundary.savedReports, [CleanupStoreFixtures.reportWithoutMap(), CleanupStoreFixtures.reportWithoutMap()])
     }
 
     func testStoreIsHeldAboveTheLanguageReKey() throws {

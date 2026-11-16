@@ -159,15 +159,11 @@ final class CleanupStore: ObservableObject {
         task?.cancel()
     }
 
-    /// While the Files and Folders switch is off, a map in the stored report is forgotten at once:
-    /// the report on screen, its saved copy and so every export lose the D10 findings and notes.
-    /// Nothing is replaced under a running scan or removal; the report it stores follows the
-    /// switch, and the setting is applied again when it ends.
+    /// While the Files and Folders switch is off, a map in the stored report is forgotten at once,
+    /// also under a running scan or removal: the report on screen, its saved copy and so every
+    /// export lose the D10 findings and notes. All of it runs on the main actor, and the report a
+    /// running scan stores follows the switch as well.
     func applyTCCMapSetting() {
-        switch phase {
-        case .scanning, .removing: return
-        case .idle, .readingPath: break
-        }
         guard let report, let kept = reportFollowingTCCMapSetting(report) else { return }
         self.report = kept
         persist("raportu") { try dependencies.saveReport(kept) }

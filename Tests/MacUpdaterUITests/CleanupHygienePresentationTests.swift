@@ -355,6 +355,29 @@ final class CleanupHygienePresentationTests: XCTestCase {
         }
     }
 
+    /// The view exports what the store holds; a map that is still there because the switch went
+    /// off a moment ago never reaches the file.
+    func testExportWithTheSwitchOffCarriesNoMap() throws {
+        let emptyMapNote = CleanupDetectorNote(detector: .tccMap, kind: .tccMapEmpty)
+        let report = Fixture.report(findings: [Fixture.claudeActive, Fixture.itermBundle], notes: [emptyMapNote])
+
+        try withLanguage(.pl) {
+            let noteText = CleanupPresentation.noteText(emptyMapNote)
+            for format in [CleanupPresentation.ExportFormat.text, .json] {
+                let off = String(decoding: try format.data(report, home: Fixture.home, tccMapEnabled: false), as: UTF8.self)
+                let on = String(decoding: try format.data(report, home: Fixture.home, tccMapEnabled: true), as: UTF8.self)
+                XCTAssertTrue(on.contains("com.googlecode.iterm2"), "positive control: \(format)")
+                XCTAssertFalse(off.contains("com.googlecode.iterm2"), "no D10 finding in the \(format) export")
+                XCTAssertFalse(off.contains("D10"), "no D10 finding or note in the \(format) export")
+                XCTAssertTrue(off.contains("/.local/bin/claude"), "the rest of the report stays: \(format)")
+                if format == .text {
+                    XCTAssertTrue(on.contains(noteText), "positive control: the text export lists the note")
+                    XCTAssertFalse(off.contains(noteText))
+                }
+            }
+        }
+    }
+
     func testCancelledPathReadShowsNoMessage() {
         withLanguage(.pl) {
             XCTAssertNil(CleanupPresentation.pathReadMessage(.cancelled), "a stopped read is not an error")

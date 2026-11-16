@@ -85,10 +85,12 @@ enum CleanupPresentation {
             }
         }
 
-        func data(_ report: CleanupReport, home: URL) throws -> Data {
+        /// While `tccMapEnabled` is off, the export leaves out any map the report still holds.
+        func data(_ report: CleanupReport, home: URL, tccMapEnabled: Bool) throws -> Data {
+            let report = tccMapEnabled ? report : CleanupPresentation.withoutMap(report)
             switch self {
-            case .text: Data(CleanupPresentation.exportText(report, home: home).utf8)
-            case .json: try CleanupReportRenderer.json(report, home: home)
+            case .text: return Data(CleanupPresentation.exportText(report, home: home).utf8)
+            case .json: return try CleanupReportRenderer.json(report, home: home)
             }
         }
     }
