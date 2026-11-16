@@ -145,7 +145,7 @@ public enum CleanupReportRenderer {
 /// Swaps the home directory for `~` in the JSON text `CleanupReportRenderer` writes, and back.
 ///
 /// It works on UTF-8 bytes, so matching is by Unicode scalars. The home is replaced in both of its
-/// spellings, as path text and as a percent-encoded `file://` URL, wherever it is followed by `/`
+/// spellings, as path text and as a percent-encoded `file://` URL, wherever it is followed by `/`, by a space (a command word)
 /// or by the closing quote of a string, so `/Users/dom` never matches inside `/Users/dominik`.
 /// Every `~` already in the text is first written as its JSON `\u` escape, so each literal `~`
 /// left stands for the home and `expanding` restores exactly what was encoded. A path-text match
@@ -157,7 +157,7 @@ private struct CleanupHomeText {
     private static let escapedTilde = Array(#"\u"#.utf8) + Array("007e".utf8)
     private static let fileScheme = Array("file://".utf8)
     private static let escapedFileScheme = Array(#"file:\/\/"#.utf8)
-    private static let boundaries: Set<UInt8> = [UInt8(ascii: "/"), UInt8(ascii: "\"")]
+    private static let boundaries: Set<UInt8> = [UInt8(ascii: "/"), UInt8(ascii: "\""), UInt8(ascii: " ")]
 
     private let pathSpelling: [UInt8]?
     private let urlSpelling: [UInt8]?

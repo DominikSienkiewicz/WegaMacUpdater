@@ -170,6 +170,34 @@ final class CleanupReportTests: XCTestCase {
         XCTAssertEqual(restored.findings.first?.action, .command(command))
     }
 
+    func testHomeBeforeASpaceInACommandIsAbbreviatedAndRestored() throws {
+        let shortHome = URL(filePath: "/Users/t", directoryHint: .isDirectory)
+        let tool = shortHome.appending(path: "bin/tsc", directoryHint: .notDirectory)
+        let command = "npm uninstall -g --prefix /Users/t pkg /Users/tom"
+        let report = CleanupReport(
+            createdAt: Date(timeIntervalSince1970: 1_794_300_000), path: sampleReport(home: shortHome).path,
+            findings: [CleanupFinding(
+                detector: .pathDuplicates, tool: "tsc", path: tool, realpath: tool, source: .packageManager(.npm),
+                version: nil, size: nil, status: .shadowed, reason: .shadowedBy(path: "/opt/homebrew/bin/tsc"),
+                action: .command(command), risk: .low, bucket: .needsDecision,
+                identity: CleanupFileIdentity(device: 1, inode: 22)
+            )],
+            notes: [], skippedProtected: []
+        )
+
+        let json = String(decoding: try CleanupReportRenderer.json(report, home: shortHome), as: UTF8.self)
+
+        XCTAssertTrue(json.contains("--prefix ~ pkg"), json)
+        XCTAssertFalse(json.contains("/Users/t pkg"), json)
+        XCTAssertTrue(json.contains("/Users/tom"), "a longer name is not the home: \(json)")
+        let restored = try CleanupReportRenderer.report(fromJSON: Data(json.utf8), home: shortHome)
+        XCTAssertEqual(restored.findings.first?.action, .command(command))
+        let io = InMemoryReportIO()
+        let file = CleanupReportFile(home: shortHome, io: io)
+        try file.save(report)
+        XCTAssertEqual(try XCTUnwrap(file.load()).findings.first?.action, .command(command))
+    }
+
     func testTextSpellsBrewCommandsTheSharedWay() {
         let link = plainHome.appending(path: "opt/homebrew/bin/gh", directoryHint: .notDirectory)
         let formula = CleanupFinding(
