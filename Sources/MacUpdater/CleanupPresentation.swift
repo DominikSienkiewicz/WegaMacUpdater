@@ -31,11 +31,18 @@ enum CleanupPresentation {
         /// Shown beside the button or instead of it: the command to copy, the instruction to
         /// follow, or that the row is for information only.
         let note: String?
+
+        func appendingDetail(_ text: String) -> Row {
+            Row(
+                findingID: findingID, groupHeader: groupHeader, bucket: bucket, status: status, title: title,
+                detail: detail + " · " + text, sizeText: sizeText, button: button, note: note
+            )
+        }
     }
 
     struct Section: Equatable {
         enum Kind: Hashable {
-            case duplicates, homebrew, runtimes, gradle, jetBrains, shellState, protectedLocations, filesAndFolders
+            case duplicates, homebrew, runtimes, gradle, jetBrains, shellState, pathHygiene, protectedLocations, filesAndFolders
         }
 
         let kind: Kind
@@ -78,10 +85,12 @@ enum CleanupPresentation {
             }
         }
 
-        func data(_ report: CleanupReport, home: URL) throws -> Data {
+        /// While `tccMapEnabled` is off, the export leaves out any map the report still holds.
+        func data(_ report: CleanupReport, home: URL, tccMapEnabled: Bool) throws -> Data {
+            let report = tccMapEnabled ? report : CleanupPresentation.withoutMap(report)
             switch self {
-            case .text: Data(CleanupPresentation.exportText(report, home: home).utf8)
-            case .json: try CleanupReportRenderer.json(report, home: home)
+            case .text: return Data(CleanupPresentation.exportText(report, home: home).utf8)
+            case .json: return try CleanupReportRenderer.json(report, home: home)
             }
         }
     }
@@ -92,10 +101,15 @@ enum CleanupPresentation {
     // MARK: - Sections
 
     /// The sections in the sidebar sketch's order: copies of one tool, Homebrew leftovers, version
-    /// managers, Gradle, JetBrains, shell state, skipped protected locations (only when there are
-    /// some) and the "Files and Folders" explanation. Each detector's findings and notes go to its
-    /// own section, and every section but the shell state groups its rows by tool.
-    static func sections(_ report: CleanupReport, home: URL) -> [Section] {
+    /// managers, Gradle, JetBrains, shell state, `PATH` hygiene, skipped protected locations (only
+    /// when there are some) and the "Files and Folders" map. Each detector's findings and notes go
+    /// to its own section, and every section but the shell state groups its rows by tool.
+    ///
+    /// The map follows `tccMapEnabled`, the live Settings switch, not the stored report: while the
+    /// switch is off, a map the report still holds shows nowhere, not even as a protected location.
+    static func sections(_ report: CleanupReport, home: URL, tccMapEnabled: Bool = false) -> [Section] {
+        let map = mapState(of: report, tccMapEnabled: tccMapEnabled)
+        let report = map == .off ? withoutMap(report) : report
         let isProtected: (CleanupFinding) -> Bool = { $0.status == .skippedProtected }
         let listed = report.findings.filter { !isProtected($0) }
         let findings = { (kind: Section.Kind) in listed.filter { sectionKind(of: $0.detector) == kind } }
@@ -120,18 +134,22 @@ enum CleanupPresentation {
             section(.shellState, tr("Stan powłok"), notes: notes(.shellState),
                     rows: findings(.shellState).map { row(for: $0, home: home, groupHeader: nil, namesTool: true) },
                     empty: tr("Nie znaleziono pozostałości po sesjach powłoki.")),
+            report.path.isApproximate
+                ? Section(kind: .pathHygiene, title: tr("PATH"), notes: [
+                    tr("PATH jest przybliżony, więc Wega nie sprawdza jego wpisów. Kliknij „Odczytaj PATH”, a potem „Skanuj”."),
+                ] + notes(.pathHygiene), rows: [])
+                : grouped(.pathHygiene, tr("PATH"), [], tr("Wpisy PATH są w porządku.")),
         ]
         let skipped = report.skippedProtected.map { skippedRow($0, home: home) }
             + report.findings.filter(isProtected).map { row(for: $0, home: home, groupHeader: nil, namesTool: true) }
         if !skipped.isEmpty {
             sections.append(Section(kind: .protectedLocations, title: tr("Pominięte lokalizacje chronione"), notes: [], rows: skipped))
         }
-        sections.append(Section(kind: .filesAndFolders, title: tr("Wpisy w „Pliki i foldery”"), notes: [
-            tr("Narzędzie wiersza poleceń nie ma pakietu aplikacji, więc macOS zapisuje zgodę na dostęp do plików osobno dla każdej ścieżki, z której zostało uruchomione."),
-            tr("Każda kopia z sekcji „Wiele kopii tego samego narzędzia” może mieć w Ustawieniach systemowych → Prywatność i ochrona → Pliki i foldery własny wpis."),
-            tr("Mapa, która przypisze te wpisy do konkretnych kopii, pojawi się w kolejnej wersji jako opcja w Ustawieniach."),
-        ], rows: []))
-        return sections
+        sections.append(filesAndFoldersSection(
+            map, notes: notes(.filesAndFolders), rows: groupedRows(findings(.filesAndFolders), home: home),
+            offRows: mayHaveEntriesRows(listed, home: home)
+        ))
+        return map == .read ? addingLinkedEntries(to: sections, from: report.findings) : sections
     }
 
     private static func section(_ kind: Section.Kind, _ title: String, notes: [String], rows: [Row], empty: String) -> Section {
@@ -147,6 +165,8 @@ enum CleanupPresentation {
         case .gradle: .gradle
         case .jetBrains: .jetBrains
         case .shellState: .shellState
+        case .pathHygiene: .pathHygiene
+        case .tccMap: .filesAndFolders
         }
     }
 
@@ -188,6 +208,7 @@ enum CleanupPresentation {
         switch status {
         case .active: 0
         case .shadowed, .unused, .stale, .inUse: 1
+        case .deadEntry: 1
         case .dependency, .brokenLink, .pinned, .recentUpgrade: 2
         case .expected, .appManaged, .info, .skippedProtected: 3
         }
@@ -197,16 +218,17 @@ enum CleanupPresentation {
         let control = control(for: finding, home: home)
         return Row(
             findingID: finding.id, groupHeader: groupHeader, bucket: finding.bucket, status: statusText(finding.status),
-            title: tilde(finding.path.path, home), detail: detail(of: finding, home: home, namesTool: namesTool),
+            title: isMapBundleEntry(finding) ? finding.tool : tilde(finding.path.path, home),
+            detail: detail(of: finding, home: home, namesTool: namesTool),
             sizeText: finding.size.map(sizeText), button: control.button, note: control.note
         )
     }
 
-    /// The button comes from the finding's action alone; an excluded finding never offers one. A
-    /// JetBrains folder of a version an installed IDE replaced also names the IDE's own cleanup,
-    /// which knows its folders best; it does not clear a folder no installed IDE explains.
+    /// The button comes from the finding's action alone; an excluded finding never offers one to
+    /// remove. A JetBrains folder of a version an installed IDE replaced also names the IDE's own
+    /// cleanup, which knows its folders best; it does not clear a folder no installed IDE explains.
     private static func control(for finding: CleanupFinding, home: URL) -> (button: ButtonKind?, note: String?) {
-        guard finding.bucket != .excluded else { return (nil, tr("tylko informacja")) }
+        guard finding.bucket != .excluded else { return excludedControl(for: finding, home: home) }
         switch finding.action {
         case .trash, .trashBatch:
             guard finding.detector == .jetBrains, case .ideVersionNotInstalled = finding.reason else { return (.trash, nil) }
@@ -214,14 +236,26 @@ enum CleanupPresentation {
         case .brew(.cleanup): return (.brewCleanup, nil)
         case .brew: return (.brew, nil)
         case .command(let command): return (.copyCommand(command), command)
-        case .instruction(let instruction): return (nil, instructionText(displayed(instruction, home: home)))
+        case .instruction(let instruction): return (nil, instructionNote(for: finding, instruction, home: home))
         case .none: return (nil, tr("tylko informacja"))
+        }
+    }
+
+    /// `PATH` hygiene and the Files and Folders map are advice only, so their excluded rows still
+    /// show the instruction to follow or the command to copy; Wega runs neither.
+    private static func excludedControl(for finding: CleanupFinding, home: URL) -> (button: ButtonKind?, note: String?) {
+        let informationOnly: (button: ButtonKind?, note: String?) = (nil, tr("tylko informacja"))
+        guard finding.detector == .pathHygiene || finding.detector == .tccMap else { return informationOnly }
+        switch finding.action {
+        case .instruction(let instruction): return (nil, instructionNote(for: finding, instruction, home: home))
+        case .command(let command): return (.copyCommand(command), command)
+        case .trash, .trashBatch, .brew, .none: return informationOnly
         }
     }
 
     private static func detail(of finding: CleanupFinding, home: URL, namesTool: Bool) -> String {
         var parts: [String] = namesTool ? [finding.tool] : []
-        if let source = finding.source { parts.append(sourceText(source)) }
+        if let source = finding.source, !isMapBundleEntry(finding) { parts.append(sourceText(source)) }
         if let version = finding.version {
             parts.append(version)
         } else if finding.source == .standalone, finding.status != .brokenLink {
@@ -286,7 +320,7 @@ enum CleanupPresentation {
 
     static func pathReadMessage(_ result: CleanupPathReadResult?) -> String? {
         switch result {
-        case nil, .captured: nil
+        case nil, .captured, .cancelled: nil
         case .unsupportedShell(let shell):
             trf("Powłoka %@ nie jest obsługiwana, więc PATH nie został odczytany. Skan użyje poprzedniego odczytu albo przybliżonego PATH.", shell)
         case .failed:
@@ -320,6 +354,7 @@ enum CleanupPresentation {
         case .pinned: tr("potrzebna")
         case .recentUpgrade: tr("świeżo zaktualizowana")
         case .info: tr("informacja")
+        case .deadEntry: tr("martwy wpis")
         }
     }
 
@@ -360,6 +395,59 @@ enum CleanupPresentation {
         case .ideNotFound: tr("nie znaleziono zainstalowanego IDE tego produktu")
         case .newerThanInstalledIDE(let installed):
             trf("nowsza niż zainstalowane IDE (%@)", installed.joined(separator: ", "))
+        case .missingPathEntry, .repeatedPathEntry, .samePlaceAs, .nestedIn, .olderCopyWins, .tccEntry, .tccEntryFileGone:
+            hygieneReasonText(reason, requiredBy: paths)
+        }
+    }
+
+    /// The `PATH` hygiene and Files and Folders reasons. The other reasons are listed rather than
+    /// defaulted, so a reason added later fails to compile here until it has a text.
+    private static func hygieneReasonText(_ reason: CleanupReason, requiredBy paths: [String]) -> String {
+        switch reason {
+        case .missingPathEntry: tr("ten katalog nie istnieje albo nie jest katalogiem, więc nic w nim nie szukamy")
+        case .repeatedPathEntry(let count): trf("ten sam wpis występuje w PATH %@ razy; liczy się pierwszy", "\(count)")
+        case .samePlaceAs(let path): trf("to samo miejsce co wcześniejszy wpis %@", path)
+        case .nestedIn(let parent): trf("leży wewnątrz katalogu %@, który też jest w PATH", parent)
+        case .olderCopyWins(let version, let newer, let newerVersion):
+            trf("aktywna jest wersja %@, a przesłonięta kopia %@ ma nowszą wersję %@", version, newer, newerVersion)
+        case .tccEntry(let grants, let link):
+            tccEntryText(grants: grants, link: link)
+        case .tccEntryFileGone(let grants):
+            trf("wpis w „Pliki i foldery” (%@) wskazuje plik, którego już nie ma", grantsText(grants))
+        case .olderVersion, .newerVersion, .shadowedBy, .systemCopy, .managedByApp, .staleSinceBoot, .keptSinceBoot,
+             .unknownVersionDirectory, .currentVersion, .protectedLocation, .brokenLink, .requiredBy, .homebrewLeftovers,
+             .homebrewKeptVersions, .installedOnlyAsDependency, .recentlyUpgraded, .notRequiredByProjects, .requiredByProjects,
+             .unusedGradleDistribution, .unreferencedJDK, .systemJDK, .ideVersionNotInstalled, .ideNotFound, .newerThanInstalledIDE:
+            reasonText(reason, requiredBy: paths)
+        }
+    }
+
+    private static func tccEntryText(grants: [CleanupTCCGrant], link: CleanupTCCLink?) -> String {
+        let entry = trf("wpis w „Pliki i foldery”: %@", grantsText(grants))
+        guard let link else { return entry }
+        let kind = switch link.kind {
+        case .activeCopy: tr("dotyczy aktywnej kopii")
+        case .copyToRemove: tr("dotyczy kopii do usunięcia")
+        case .keptCopy: tr("dotyczy kopii, która zostaje")
+        case .appManaged(let owner): trf("dotyczy kopii aplikacji %@", owner)
+        }
+        return "\(entry); \(kind)"
+    }
+
+    private static func grantsText(_ grants: [CleanupTCCGrant]) -> String {
+        grants.map { grant in
+            trf(grant.allowed ? "%@ (zezwolono)" : "%@ (odmówiono)", serviceName(grant.service))
+        }.joined(separator: ", ")
+    }
+
+    private static func serviceName(_ service: CleanupTCCService) -> String {
+        switch service {
+        case .desktop: tr("Pulpit")
+        case .documents: tr("Dokumenty")
+        case .downloads: tr("Pobrane")
+        case .networkVolumes: tr("woluminy sieciowe")
+        case .removableVolumes: tr("woluminy wymienne")
+        case .allFiles: tr("Pełny dostęp do dysku")
         }
     }
 
@@ -369,6 +457,10 @@ enum CleanupPresentation {
             tr("Usuń ją narzędziem, które ją zainstalowało.")
         case .removeAppLinkWithAdminRights(let link):
             trf("Dowiązanie %@ prowadzi do aplikacji; usuń je ręcznie, z uprawnieniami administratora.", link)
+        case .editShellFiles(let entry, let locations):
+            removeEntryText(entry, locations: locations)
+        case .switchOffInFilesAndFolders:
+            tr("Wyłącz ten wpis w Ustawieniach systemowych → Prywatność i ochrona → Pliki i foldery.")
         }
     }
 
@@ -386,6 +478,12 @@ enum CleanupPresentation {
             tr("Katalogów projektów jest więcej, niż Wega przeszukuje w jednym skanie. Część wersji może być potrzebna projektom, których nie sprawdzono.")
         case (.unrecognisedIDEInstall, _):
             tr("Jedno z IDE JetBrains nie ma pliku product-info.json, więc katalogi tego produktu zostają bez zmian.")
+        case (.tccUnreadable, _):
+            tr("Wega nie mogła odczytać bazy zgód. Brakuje jej Pełnego dostępu do dysku albo pliku bazy nie ma, więc mapy „Pliki i foldery” nie ma w raporcie.")
+        case (.tccUnsupportedSchema, _):
+            tr("Baza zgód ma układ, którego Wega nie zna, więc nie zgaduje i mapy „Pliki i foldery” nie ma w raporcie.")
+        case (.tccMapEmpty, _):
+            tr("Baza zgód nie ma wpisów dla plików i folderów. Pełny dostęp do dysku jest w bazie systemowej, której Wega nie mapuje.")
         case (.failed, let detector):
             trf("Ta część skanu nie powiodła się: %@. Jej wyników nie ma w raporcie.", detectorName(detector))
         }
@@ -401,6 +499,8 @@ enum CleanupPresentation {
         case .runtimeVersions: tr("wersje środowisk")
         case .gradle: tr("Gradle")
         case .jetBrains: tr("katalogi IDE JetBrains")
+        case .pathHygiene: tr("higiena PATH")
+        case .tccMap: tr("mapa „Pliki i foldery”")
         }
     }
 
@@ -580,12 +680,220 @@ enum CleanupPresentation {
     }
 
     private static func displayed(_ reason: CleanupReason, home: URL) -> CleanupReason {
-        guard case .shadowedBy(let path) = reason else { return reason }
-        return .shadowedBy(path: tilde(path, home))
+        switch reason {
+        case .shadowedBy(let path): .shadowedBy(path: tilde(path, home))
+        case .samePlaceAs(let path): .samePlaceAs(path: tilde(path, home))
+        case .nestedIn(let parent): .nestedIn(parent: tilde(parent, home))
+        case .olderCopyWins(let version, let newer, let newerVersion):
+            .olderCopyWins(version: version, newer: tilde(newer, home), newerVersion: newerVersion)
+        default: reason
+        }
     }
 
     private static func displayed(_ instruction: CleanupInstruction, home: URL) -> CleanupInstruction {
-        guard case .removeAppLinkWithAdminRights(let link) = instruction else { return instruction }
-        return .removeAppLinkWithAdminRights(link: tilde(link, home))
+        switch instruction {
+        case .removeAppLinkWithAdminRights(let link):
+            .removeAppLinkWithAdminRights(link: tilde(link, home))
+        case .editShellFiles(let entry, let locations):
+            .editShellFiles(
+                entry: tilde(entry, home),
+                locations: locations.map { CleanupShellFileLocation(file: tilde($0.file, home), line: $0.line) }
+            )
+        case .removeWithCreatingTool, .switchOffInFilesAndFolders:
+            instruction
+        }
+    }
+}
+
+// MARK: - PATH hygiene advice
+
+extension CleanupPresentation {
+    /// The note of a row whose action is an instruction. A `PATH` hygiene row's shell-file advice
+    /// follows its reason: removing an entry that lies inside another, or the folder that holds a
+    /// tool's active copy, would take a whole folder of tools off `PATH`.
+    private static func instructionNote(for finding: CleanupFinding, _ instruction: CleanupInstruction, home: URL) -> String {
+        let shown = displayed(instruction, home: home)
+        guard finding.detector == .pathHygiene, case .editShellFiles(let entry, let locations) = shown else {
+            return instructionText(shown)
+        }
+        return shellFileAdvice(for: finding.reason, entry: entry, locations: locations, home: home)
+    }
+
+    /// `entry` and `locations` are shown as given, with `~` already substituted; the paths inside
+    /// `reason` are the finding's own. A dead or same-place entry, like any other reason, is
+    /// removed where it is added.
+    private static func shellFileAdvice(
+        for reason: CleanupReason, entry: String, locations: [CleanupShellFileLocation], home: URL
+    ) -> String {
+        let places = placesText(locations)
+        switch reason {
+        case .repeatedPathEntry:
+            if locations.isEmpty { return dynamicEntryText(entry) + " " + tr("Zadbaj, żeby był dodawany tylko raz.") }
+            if locations.count == 1 { return trf("Zostaw w PATH tylko jeden wpis %@. Ten wpis pochodzi z %@.", entry, places) }
+            return trf("Zostaw tylko jedną z linii, które dodają wpis %@: %@.", entry, places)
+        case .nestedIn(let parent):
+            let parent = tilde(parent, home)
+            if locations.isEmpty {
+                return dynamicEntryText(entry) + " "
+                    + trf("W PATH jest też zawierający go katalog %@. Sprawdź, czy potrzebujesz obu.", parent)
+            }
+            if locations.count == 1 {
+                return trf(
+                    "W PATH jest i ten katalog, i zawierający go katalog %@. Sprawdź, czy potrzebujesz obu. Ten wpis pochodzi z %@.",
+                    parent, places
+                )
+            }
+            return trf(
+                "W PATH jest i ten katalog, i zawierający go katalog %@. Sprawdź, czy potrzebujesz obu. Ten wpis pochodzi z kilku miejsc: %@.",
+                parent, places
+            )
+        case .olderCopyWins(_, let newer, _):
+            let newerDirectory = tilde(URL(filePath: newer, directoryHint: .notDirectory).deletingLastPathComponent().path, home)
+            if locations.isEmpty {
+                return dynamicEntryText(entry) + " " + trf("Przesuń %@ w PATH przed ten wpis albo usuń starszą kopię.", newerDirectory)
+            }
+            if locations.count == 1 {
+                return trf(
+                    "Przesuń %@ w PATH przed %@ albo usuń starszą kopię. Katalog starszej kopii pochodzi z %@.",
+                    newerDirectory, entry, places
+                )
+            }
+            return trf(
+                "Przesuń %@ w PATH przed %@ albo usuń starszą kopię. Katalog starszej kopii pochodzi z kilku miejsc: %@.",
+                newerDirectory, entry, places
+            )
+        default:
+            guard locations.isEmpty else { return removeEntryText(entry, locations: locations) }
+            return dynamicEntryText(entry) + " " + tr("Usuń go tam, gdzie jest dodawany.")
+        }
+    }
+
+    /// The plain shell-file instruction: remove the entry from every place that adds it, or say
+    /// that no file Wega checks adds it.
+    private static func removeEntryText(_ entry: String, locations: [CleanupShellFileLocation]) -> String {
+        switch locations.count {
+        case 0: dynamicEntryText(entry)
+        case 1: trf("Usuń wpis %@ z pliku powłoki, który go dodaje: %@.", entry, placesText(locations))
+        default: trf("Usuń wpis %@ ze wszystkich miejsc, które go dodają: %@.", entry, placesText(locations))
+        }
+    }
+
+    private static func dynamicEntryText(_ entry: String) -> String {
+        trf(
+            "Wpisu %@ nie ma w plikach powłoki, które sprawdza Wega. Dodał go prawdopodobnie eval, dołączony plik, menedżer wtyczek albo ZDOTDIR.",
+            entry
+        )
+    }
+
+    private static func placesText(_ locations: [CleanupShellFileLocation]) -> String {
+        locations.map { "\($0.file):\($0.line)" }.joined(separator: ", ")
+    }
+}
+
+// MARK: - Files and Folders
+
+extension CleanupPresentation {
+    /// What the Files and Folders section can show, from the live switch and the report's D10 output.
+    private enum MapState: Equatable {
+        /// The switch is off; a map in the report is not shown.
+        case off
+        /// The switch is on, but the report was scanned while it was off (no D10 finding or note).
+        case notScanned
+        /// The scan tried and read no map; its notes say why. `openedDatabase`: the database was
+        /// opened (it was empty or of an unknown layout), so Wega had Full Disk Access.
+        case notRead(openedDatabase: Bool)
+        case read
+    }
+
+    private static func mapState(of report: CleanupReport, tccMapEnabled: Bool) -> MapState {
+        guard tccMapEnabled else { return .off }
+        if report.findings.contains(where: { $0.detector == .tccMap }) { return .read }
+        let mapNotes = report.notes.filter { $0.detector == .tccMap }
+        guard !mapNotes.isEmpty else { return .notScanned }
+        return .notRead(openedDatabase: mapNotes.contains { $0.kind == .tccMapEmpty || $0.kind == .tccUnsupportedSchema })
+    }
+
+    private static func withoutMap(_ report: CleanupReport) -> CleanupReport {
+        CleanupReport(
+            createdAt: report.createdAt, path: report.path,
+            findings: report.findings.filter { $0.detector != .tccMap },
+            notes: report.notes.filter { $0.detector != .tccMap },
+            skippedProtected: report.skippedProtected
+        )
+    }
+
+    /// `mapNotes` and `mapRows` are the report's D10 notes and rows; `offRows` lists what may have
+    /// entries while the switch is off. Every scan that opened the database repeats the Full Disk
+    /// Access reminder, whether or not the map had rows.
+    private static func filesAndFoldersSection(_ state: MapState, notes mapNotes: [String], rows mapRows: [Row], offRows: [Row]) -> Section {
+        let reminder = tr("Pełny dostęp do dysku, którego Wega potrzebuje do mapy, macOS daje też każdemu programowi, który Wega uruchamia: brew, npm, mas i powłoce, z której Wega odczytuje PATH. Gdy skończysz przeglądać mapę, usuń Wegę z listy Pełny dostęp do dysku.")
+        let explanation = [
+            tr("Narzędzie wiersza poleceń nie ma pakietu aplikacji, więc macOS zapisuje zgodę na dostęp do plików osobno dla każdej ścieżki, z której zostało uruchomione."),
+            tr("Każda kopia z sekcji „Wiele kopii tego samego narzędzia” może mieć w Ustawieniach systemowych → Prywatność i ochrona → Pliki i foldery własny wpis."),
+        ]
+        let (notes, rows): ([String], [Row]) = switch state {
+        case .off:
+            (explanation + [tr("Mapa, która przypisuje te wpisy do konkretnych kopii, jest wyłączona. Włącz ją w Ustawieniach.")], offRows)
+        case .notScanned:
+            (explanation + [tr("Mapa jest włączona. Kliknij „Skanuj”, żeby ją odczytać.")], [])
+        case .notRead(let openedDatabase):
+            (openedDatabase ? mapNotes + [reminder] : mapNotes, [])
+        case .read:
+            (mapNotes + [reminder, tr("Wpisów Pełnego dostępu do dysku Wega nie mapuje: macOS trzyma je w bazie systemowej.")], mapRows)
+        }
+        return Section(kind: .filesAndFolders, title: tr("Wpisy w „Pliki i foldery”"), notes: notes, rows: rows)
+    }
+
+    /// With the map off: each tool with two or more copies on `PATH` that are not the system's
+    /// expected copy, then each copy an app manages. Each may have its own entry; no finding stands
+    /// behind these rows, so they offer nothing.
+    private static func mayHaveEntriesRows(_ findings: [CleanupFinding], home: URL) -> [Row] {
+        var tools: [String] = []
+        var copies: [String: Int] = [:]
+        for finding in findings where finding.detector == .pathDuplicates && finding.status != .expected {
+            if copies[finding.tool] == nil { tools.append(finding.tool) }
+            copies[finding.tool, default: 0] += 1
+        }
+        let toolRows = tools.compactMap { tool -> Row? in
+            guard let count = copies[tool], count >= 2 else { return nil }
+            return mayHaveEntriesRow(title: tool, detail: trf("kopie w PATH: %@", "\(count)"))
+        }
+        let appRows = findings.filter { $0.status == .appManaged }.map { finding in
+            mayHaveEntriesRow(title: tilde(finding.path.path, home), detail: finding.source.map(sourceText) ?? finding.tool)
+        }
+        return toolRows + appRows
+    }
+
+    private static func mayHaveEntriesRow(title: String, detail: String) -> Row {
+        Row(
+            findingID: nil, groupHeader: nil, bucket: nil, status: tr("może mieć wpisy"), title: title, detail: detail,
+            sizeText: nil, button: nil, note: tr("tylko informacja")
+        )
+    }
+
+    /// Every row of a finding a map entry is tied to (a copy on `PATH`, a version directory, an
+    /// app's copy) names the services of its entries, so the copies say which entry is which.
+    private static func addingLinkedEntries(to sections: [Section], from findings: [CleanupFinding]) -> [Section] {
+        var services: [String: [CleanupTCCService]] = [:]
+        for finding in findings where finding.detector == .tccMap {
+            guard case .tccEntry(let grants, let link?) = finding.reason else { continue }
+            for grant in grants where services[link.findingID]?.contains(grant.service) != true {
+                services[link.findingID, default: []].append(grant.service)
+            }
+        }
+        return sections.map { section in
+            let rows = section.rows.map { row in
+                guard let id = row.findingID, let linked = services[id] else { return row }
+                return row.appendingDetail(trf("wpisy w „Pliki i foldery”: %@", linked.map(serviceName).joined(separator: ", ")))
+            }
+            return Section(kind: section.kind, title: section.title, notes: section.notes, rows: rows)
+        }
+    }
+
+    /// A Files and Folders entry of an app is recorded by its bundle id; the row shows that id
+    /// rather than the database file the finding points at.
+    private static func isMapBundleEntry(_ finding: CleanupFinding) -> Bool {
+        guard finding.detector == .tccMap, case .appBundle = finding.source else { return false }
+        return true
     }
 }

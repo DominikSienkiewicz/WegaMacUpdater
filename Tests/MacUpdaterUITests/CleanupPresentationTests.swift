@@ -22,10 +22,10 @@ final class CleanupPresentationTests: XCTestCase {
 
             XCTAssertEqual(sections.map(\.title), [
                 tr("Wiele kopii tego samego narzędzia"), tr("Homebrew"), tr("Menedżery wersji"), tr("Gradle"), tr("JetBrains"),
-                tr("Stan powłok"), tr("Pominięte lokalizacje chronione"), tr("Wpisy w „Pliki i foldery”"),
+                tr("Stan powłok"), tr("PATH"), tr("Pominięte lokalizacje chronione"), tr("Wpisy w „Pliki i foldery”"),
             ])
             XCTAssertEqual(sections.map(\.kind), [
-                .duplicates, .homebrew, .runtimes, .gradle, .jetBrains, .shellState, .protectedLocations, .filesAndFolders,
+                .duplicates, .homebrew, .runtimes, .gradle, .jetBrains, .shellState, .pathHygiene, .protectedLocations, .filesAndFolders,
             ])
             let copies = try XCTUnwrap(sections.first).rows
             XCTAssertEqual(copies.map(\.title), [
@@ -41,10 +41,14 @@ final class CleanupPresentationTests: XCTestCase {
             XCTAssertEqual(sections[5].rows.map(\.title), ["~/.local/state/fnm_multishells", "~/.local/state/fnm_multishells"])
             XCTAssertEqual(sections[5].rows.map(\.findingID), [Fixture.fnmStale.id, Fixture.fnmKept.id])
             XCTAssertNotEqual(Fixture.fnmStale.id, Fixture.fnmKept.id, "stale and kept entries of one directory are two rows")
-            XCTAssertEqual(sections[6].rows.map(\.title), ["~/Documents/bin"])
-            XCTAssertEqual(sections[6].rows.map(\.status), ["pominięta (lokalizacja chroniona)"])
-            XCTAssertEqual(sections[7].rows, [])
-            XCTAssertEqual(sections[7].notes.count, 3, "stage 1 explains the entries and has no toggle")
+            XCTAssertEqual(sections[7].rows.map(\.title), ["~/Documents/bin"])
+            XCTAssertEqual(sections[7].rows.map(\.status), ["pominięta (lokalizacja chroniona)"])
+            XCTAssertEqual(
+                sections[8].rows.map(\.title), ["claude", "~/Library/Application Support/Claude/claude-code"],
+                "with the map off, the tool with two copies and the app's copy may have entries"
+            )
+            XCTAssertEqual(sections[8].rows.map(\.findingID), [nil, nil])
+            XCTAssertEqual(sections[8].notes.count, 3, "the mechanism in two sentences, then where to turn the map on")
         }
     }
 
@@ -54,7 +58,9 @@ final class CleanupPresentationTests: XCTestCase {
         withLanguage(.pl) {
             let sections = CleanupPresentation.sections(report, home: Fixture.home)
 
-            XCTAssertEqual(sections.map(\.kind), [.duplicates, .homebrew, .runtimes, .gradle, .jetBrains, .shellState, .filesAndFolders])
+            XCTAssertEqual(
+                sections.map(\.kind), [.duplicates, .homebrew, .runtimes, .gradle, .jetBrains, .shellState, .pathHygiene, .filesAndFolders]
+            )
             XCTAssertTrue(sections.allSatisfy { $0.rows.isEmpty && !$0.notes.isEmpty })
         }
     }
@@ -341,16 +347,16 @@ final class CleanupPresentationTests: XCTestCase {
         try withLanguage(.pl) {
             let sections = CleanupPresentation.sections(report, home: Fixture.home)
             XCTAssertEqual(sections.map(\.kind), [
-                .duplicates, .homebrew, .runtimes, .gradle, .jetBrains, .shellState, .protectedLocations, .filesAndFolders,
+                .duplicates, .homebrew, .runtimes, .gradle, .jetBrains, .shellState, .pathHygiene, .protectedLocations, .filesAndFolders,
             ])
             XCTAssertEqual(sections.map(\.title), [
-                "Wiele kopii tego samego narzędzia", "Homebrew", "Menedżery wersji", "Gradle", "JetBrains", "Stan powłok",
+                "Wiele kopii tego samego narzędzia", "Homebrew", "Menedżery wersji", "Gradle", "JetBrains", "Stan powłok", "PATH",
                 "Pominięte lokalizacje chronione", "Wpisy w „Pliki i foldery”",
             ])
 
             let emptySections = CleanupPresentation.sections(empty, home: Fixture.home)
             XCTAssertEqual(
-                emptySections.map(\.kind), [.duplicates, .homebrew, .runtimes, .gradle, .jetBrains, .shellState, .filesAndFolders],
+                emptySections.map(\.kind), [.duplicates, .homebrew, .runtimes, .gradle, .jetBrains, .shellState, .pathHygiene, .filesAndFolders],
                 "the space sections say they found nothing; skipped protected locations appear only when there are some"
             )
             XCTAssertEqual(emptySections.filter { spaceKinds.contains($0.kind) }.map(\.notes), [
@@ -360,7 +366,11 @@ final class CleanupPresentationTests: XCTestCase {
             let filesAndFolders = try XCTUnwrap(emptySections.last)
             XCTAssertEqual(filesAndFolders.kind, .filesAndFolders)
             XCTAssertEqual(filesAndFolders.notes.first, tr("Narzędzie wiersza poleceń nie ma pakietu aplikacji, więc macOS zapisuje zgodę na dostęp do plików osobno dla każdej ścieżki, z której zostało uruchomione."))
-            XCTAssertEqual(filesAndFolders.notes.count, 3, "the Files and Folders text is unchanged")
+            XCTAssertEqual(filesAndFolders.notes.count, 3, "the mechanism in two sentences, then where to turn the map on")
+            XCTAssertEqual(
+                filesAndFolders.notes.last,
+                tr("Mapa, która przypisuje te wpisy do konkretnych kopii, jest wyłączona. Włącz ją w Ustawieniach.")
+            )
         }
         let english = withLanguage(.en) { CleanupPresentation.sections(empty, home: Fixture.home) }
         XCTAssertEqual(english.filter { spaceKinds.contains($0.kind) }.map(\.title), ["Homebrew", "Version managers", "Gradle", "JetBrains"])

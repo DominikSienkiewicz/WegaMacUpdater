@@ -46,6 +46,7 @@ extension InfoView {
                 languageCard
                 ScanDirectoriesSettingsCard()
                 CleanupProjectRootsSettingsCard()
+                CleanupTCCMapSettingsCard()
                 ResourceGateSettingsCard()
                 LaunchSmokeTestSettingsCard()
                 LaunchAtLoginSettingsCard()

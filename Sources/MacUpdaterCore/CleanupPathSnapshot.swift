@@ -21,6 +21,8 @@ public enum CleanupPathReadResult: Equatable, Sendable {
     case captured(CleanupPathSnapshot)
     case unsupportedShell(String)
     case failed
+    /// The read was stopped by the user; nothing was learned and nothing went wrong.
+    case cancelled
 }
 
 /// Reads the user's real `PATH` by running their login shell once, on an explicit user action.
@@ -55,9 +57,17 @@ public struct CleanupPathReader: Sendable {
         guard let request = Self.request(shellPath: shellPath, home: home, user: user) else {
             return .unsupportedShell(shell)
         }
-        guard let result = try? await runner.run(request), result.exitCode == 0,
-              let parsed = Self.parse(stdout: result.stdout)
-        else { return .failed }
+        let result: ProcessResult
+        do {
+            result = try await runner.run(request)
+        } catch ProcessRunnerError.cancelled {
+            return .cancelled
+        } catch is CancellationError {
+            return .cancelled
+        } catch {
+            return .failed
+        }
+        guard result.exitCode == 0, let parsed = Self.parse(stdout: result.stdout) else { return .failed }
         return .captured(CleanupPathSnapshot(
             entries: parsed.entries, ignoredEntries: parsed.ignored,
             shell: shell, capturedAt: now(), isApproximate: false
@@ -80,6 +90,9 @@ public struct CleanupPathReader: Sendable {
         )
         request.standardInput = .nullDevice
         request.outputLogging = .suppressed
+        // A job started from `.zshrc` can hold the shell's output open long after the shell exits.
+        // A wait that expires before the end marker arrived parses as `.failed`.
+        request.outputDrainLimit = 2
         return request
     }
 

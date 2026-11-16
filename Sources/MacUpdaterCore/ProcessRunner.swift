@@ -28,6 +28,13 @@ public struct ProcessRequest: Equatable, Sendable {
     public var idleTimeout: TimeInterval?
     public var standardInput: ProcessStandardInput = .inherit
     public var outputLogging: ProcessOutputLogging = .full
+    /// How long to keep waiting for end-of-output once the process has exited (M5). `nil`, the
+    /// default, waits for both pipes to close however long that takes. A job the process left
+    /// in the background inherits its output and can hold it open indefinitely, so when set the
+    /// wait ends after this many seconds with the output captured so far, and a cancellation
+    /// ends it with `ProcessRunnerError.cancelled`. The leftover job is never signalled.
+    /// When set, `onOutput` must return quickly: ending the wait waits for a chunk in progress.
+    public var outputDrainLimit: TimeInterval?
 
     public init(
         executableURL: URL,
@@ -247,11 +254,16 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         // Each pipe is drained exclusively by its readability handler, all the way to
         // EOF (an empty `availableData`). The descriptor is never read from a second
         // place (no `readDataToEndOfFile` after the loop), so there is no window where
-        // two readers race over the same bytes. `ioGroup` tracks the two EOFs so the
-        // success path can wait until every byte has been delivered.
+        // two readers race over the same bytes. `ioGroup` tracks the two EOFs, so without an
+        // `outputDrainLimit` the success path waits until every byte has been delivered; with
+        // one it waits at most that long and returns what has been delivered by then.
         let ioGroup = DispatchGroup()
         ioGroup.enter()
         ioGroup.enter()
+        // One gate per stream, so the two handlers never wait on each other. Only a bounded
+        // drain (M5) ever stops them; until then every chunk is recorded exactly as before.
+        let stdoutRecording = OutputRecording()
+        let stderrRecording = OutputRecording()
 
         stdoutHandle.readabilityHandler = { handle in
             let data = handle.availableData
@@ -260,11 +272,13 @@ public final class ProcessRunner: ProcessRunning, Sendable {
                 ioGroup.leave()
                 return
             }
-            activity.touch()
-            stdoutBuffer.append(data)
-            if recordsOutput { diagnostics?.appendStdout(data) }
-            if let chunk = String(data: data, encoding: .utf8) {
-                onOutput?(.stdout(chunk))
+            stdoutRecording.record {
+                activity.touch()
+                stdoutBuffer.append(data)
+                if recordsOutput { diagnostics?.appendStdout(data) }
+                if let chunk = String(data: data, encoding: .utf8) {
+                    onOutput?(.stdout(chunk))
+                }
             }
         }
 
@@ -275,11 +289,13 @@ public final class ProcessRunner: ProcessRunning, Sendable {
                 ioGroup.leave()
                 return
             }
-            activity.touch()
-            stderrBuffer.append(data)
-            if recordsOutput { diagnostics?.appendStderr(data) }
-            if let chunk = String(data: data, encoding: .utf8) {
-                onOutput?(.stderr(chunk))
+            stderrRecording.record {
+                activity.touch()
+                stderrBuffer.append(data)
+                if recordsOutput { diagnostics?.appendStderr(data) }
+                if let chunk = String(data: data, encoding: .utf8) {
+                    onOutput?(.stderr(chunk))
+                }
             }
         }
 
@@ -311,12 +327,7 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         switch outcome {
         case .cancelled:
             detachHandlers()
-            diagnostics?.finish(outcome: "cancelled", process: process, error: ProcessRunnerError.cancelled)
-            WegaLog.error(
-                .process,
-                "\(request.executableURL.lastPathComponent) aborted: \(ProcessRunnerError.cancelled.localizedDescription)"
-            )
-            throw ProcessRunnerError.cancelled
+            throw Self.cancelledRun(request, process: process, diagnostics: diagnostics)
         case .timedOut(let seconds):
             detachHandlers()
             diagnostics?.finish(outcome: "timeout", process: process, error: ProcessRunnerError.timedOut(seconds: seconds))
@@ -337,9 +348,31 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             break
         }
 
-        // Process has exited; wait — without blocking a thread — for both handlers to
-        // observe EOF so every buffered byte is captured before we read the buffers.
-        await Self.waitForIO(ioGroup)
+        if let drainLimit = request.outputDrainLimit {
+            // A job left behind can hold the output open for as long as it lives. Stop recording
+            // instead of detaching: the handlers keep reading, so that job is never blocked on a
+            // full pipe nor killed by a closed one.
+            let drain = await Self.drainOutput(ioGroup, pipes: [stdoutPipe, stderrPipe], limit: drainLimit)
+            if drain != .drained {
+                stdoutRecording.stop()
+                stderrRecording.stop()
+            }
+            switch drain {
+            case .drained:
+                break
+            case .expired:
+                WegaLog.debug(
+                    .process,
+                    "\(request.executableURL.lastPathComponent) output cut short \(drainLimit) seconds after exit"
+                )
+            case .cancelled:
+                throw Self.cancelledRun(request, process: process, diagnostics: diagnostics)
+            }
+        } else {
+            // Process has exited; wait — without blocking a thread — for both handlers to
+            // observe EOF so every buffered byte is captured before we read the buffers.
+            await Self.waitForIO(ioGroup)
+        }
 
         let result = ProcessResult(
             exitCode: process.terminationStatus,
@@ -479,6 +512,47 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         }
     }
 
+    /// The single ending of a cancelled run: the diagnostics close as "cancelled", one line is
+    /// logged, and the caller throws the returned error.
+    private static func cancelledRun(
+        _ request: ProcessRequest,
+        process: Process,
+        diagnostics: ProcessDiagnostics?
+    ) -> ProcessRunnerError {
+        diagnostics?.finish(outcome: "cancelled", process: process, error: ProcessRunnerError.cancelled)
+        WegaLog.error(
+            .process,
+            "\(request.executableURL.lastPathComponent) aborted: \(ProcessRunnerError.cancelled.localizedDescription)"
+        )
+        return .cancelled
+    }
+
+    /// Waits for both pipe readers to observe EOF for at most `limit` seconds, racing task
+    /// cancellation, without blocking a thread (M5).
+    ///
+    /// The `notify` block holds `pipes` until both EOFs arrive, however long after this returns
+    /// that is: the read ends stay open, so a job still writing is never sent SIGPIPE.
+    private static func drainOutput(_ ioGroup: DispatchGroup, pipes: [Pipe], limit: TimeInterval) async -> DrainOutcome {
+        let race = DrainRace()
+        ioGroup.notify(queue: .global(qos: .userInitiated)) {
+            withExtendedLifetime(pipes) { race.finish(.drained) }
+        }
+        return await withTaskCancellationHandler {
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    // A thrown sleep means the race is already decided and the group was cancelled.
+                    guard (try? await Task.sleep(for: .seconds(limit))) != nil else { return }
+                    race.finish(.expired)
+                }
+                let outcome = await race.wait()
+                group.cancelAll()
+                return outcome
+            }
+        } onCancel: {
+            race.finish(.cancelled)
+        }
+    }
+
     /// Stops the subprocess *and every descendant it spawned*, not just the immediate child,
     /// as a two-phase sequence: **SIGTERM → grace period → SIGKILL** (REL-12).
     ///
@@ -585,6 +659,70 @@ private final class TerminationSignal: @unchecked Sendable {
                 lock.unlock()
             }
         }
+    }
+}
+
+/// How a bounded wait for end-of-output (M5) ended.
+private enum DrainOutcome: Sendable {
+    case drained
+    case expired
+    case cancelled
+}
+
+/// Decides a bounded drain (M5): end-of-output, expiry or cancellation, whichever reports first.
+/// `wait()` suspends on a checked continuation that the first `finish(_:)` resumes; later calls
+/// find the race decided and do nothing, so the continuation is resumed exactly once.
+private final class DrainRace: @unchecked Sendable {
+    private let lock = NSLock()
+    private var decided: DrainOutcome?
+    private var continuation: CheckedContinuation<DrainOutcome, Never>?
+
+    func finish(_ outcome: DrainOutcome) {
+        lock.lock()
+        guard decided == nil else {
+            lock.unlock()
+            return
+        }
+        decided = outcome
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+        pending?.resume(returning: outcome)
+    }
+
+    func wait() async -> DrainOutcome {
+        await withCheckedContinuation { (continuation: CheckedContinuation<DrainOutcome, Never>) in
+            lock.lock()
+            if let decided {
+                lock.unlock()
+                continuation.resume(returning: decided)
+            } else {
+                self.continuation = continuation
+                lock.unlock()
+            }
+        }
+    }
+}
+
+/// Whether a stream's readability handler still records what it reads (M5). The handler records
+/// inside `record(_:)`, under the lock `stop()` takes, so once `stop()` returns no chunk can
+/// reach a buffer, the diagnostics or `onOutput` any more; the handler goes on reading and
+/// discarding until end-of-output.
+private final class OutputRecording: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isStopped = false
+
+    func record(_ body: () -> Void) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isStopped else { return }
+        body()
+    }
+
+    func stop() {
+        lock.lock()
+        isStopped = true
+        lock.unlock()
     }
 }
 

@@ -399,6 +399,35 @@ struct ArchitectureReviewRegressionTests {
         #expect(offenders.isEmpty, "Cleanup sources break the safety rules: \(offenders.sorted())")
     }
 
+    /// `TCC.db` belongs to the system: the reader opens it read-only and holds no write statement,
+    /// so a later edit cannot quietly turn a privacy read into a modification.
+    @Test func cleanupTCCReaderIsReadOnly() throws {
+        let root = packageRoot()
+        let code = executableSource(try source("Sources/MacUpdaterCore/CleanupTCCDatabase.swift", root: root))
+        let range = NSRange(code.startIndex..., in: code)
+        #expect(code.contains("SQLITE_OPEN_READONLY"))
+        let forbiddenNames = [
+            "SQLITE_OPEN_READWRITE", "SQLITE_OPEN_CREATE", "immutable", "readonly_shm",
+            "sqlite3_open(", "sqlite3_open16", "sqlite3_exec"
+        ]
+        for forbidden in forbiddenNames {
+            #expect(!code.contains(forbidden), "the TCC reader must not use \(forbidden)")
+        }
+        let literals = try NSRegularExpression(pattern: #""[^"\n]*""#)
+        let sqlText = literals.matches(in: code, range: range)
+            .compactMap { Range($0.range, in: code).map { String(code[$0]) } }
+            .joined(separator: "\n")
+        let sqlRange = NSRange(sqlText.startIndex..., in: sqlText)
+        #expect(sqlText.contains("SELECT"), "no SQL literal was found, the guard would pass vacuously")
+        let writeVerbs = try NSRegularExpression(
+            pattern: #"\b(INSERT|UPDATE|DELETE|DROP|ATTACH|CREATE|REPLACE|VACUUM)\b"#,
+            options: .caseInsensitive
+        )
+        #expect(writeVerbs.firstMatch(in: sqlText, range: sqlRange) == nil, "the TCC reader holds a write statement")
+        let pragmas = try NSRegularExpression(pattern: #"PRAGMA\b(?!\s+table_info)"#, options: .caseInsensitive)
+        #expect(pragmas.firstMatch(in: sqlText, range: sqlRange) == nil, "only PRAGMA table_info may be used")
+    }
+
     private func swiftSources(under relativePath: String) throws -> [(name: String, text: String)] {
         let root = packageRoot()
         let directory = root.appendingPathComponent(relativePath)

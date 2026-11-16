@@ -303,4 +303,30 @@ final class CleanupReportTests: XCTestCase {
         XCTAssertTrue(text.contains("brew cleanup -- node"), text)
         XCTAssertEqual(CleanupActionText.command(for: .cleanup("node")), "brew cleanup -- node")
     }
+
+    func testTextExportSpellsTheHygieneInstructions() {
+        func report(_ instruction: CleanupInstruction) -> CleanupReport {
+            let path = plainHome.appending(path: ".local/bin", directoryHint: .isDirectory)
+            return CleanupReport(
+                createdAt: Date(timeIntervalSince1970: 1_794_300_000), path: sampleReport(home: plainHome).path,
+                findings: [CleanupFinding(
+                    detector: .pathHygiene, tool: "PATH", path: path, realpath: nil, source: nil, version: nil, size: nil,
+                    status: .deadEntry, reason: .missingPathEntry, action: .instruction(instruction), risk: .low,
+                    bucket: .excluded, identity: nil
+                )],
+                notes: [], skippedProtected: []
+            )
+        }
+        func text(_ instruction: CleanupInstruction) -> String {
+            CleanupReportRenderer.text(report(instruction), home: plainHome, reasonText: reasonLabel, statusText: statusLabel)
+        }
+
+        let located = text(.editShellFiles(entry: "/x", locations: [
+            CleanupShellFileLocation(file: "/Users/wega/.zshrc", line: 42),
+            CleanupShellFileLocation(file: "/etc/paths", line: 3),
+        ]))
+        XCTAssertTrue(located.contains("instruction edit-shell-files ~/.zshrc:42, /etc/paths:3"), located)
+        XCTAssertTrue(text(.editShellFiles(entry: "/x", locations: [])).contains("instruction edit-shell-files dynamic"))
+        XCTAssertTrue(text(.switchOffInFilesAndFolders).contains("instruction switch-off-in-files-and-folders"))
+    }
 }

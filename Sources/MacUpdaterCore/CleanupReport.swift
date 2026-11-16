@@ -118,8 +118,14 @@ public enum CleanupReportRenderer {
     }
 
     private static func displayed(_ reason: CleanupReason, home: URL) -> CleanupReason {
-        guard case .shadowedBy(let path) = reason else { return reason }
-        return .shadowedBy(path: tildePath(path, home: home))
+        switch reason {
+        case .shadowedBy(let path): .shadowedBy(path: tildePath(path, home: home))
+        case .samePlaceAs(let path): .samePlaceAs(path: tildePath(path, home: home))
+        case .nestedIn(let parent): .nestedIn(parent: tildePath(parent, home: home))
+        case .olderCopyWins(let version, let newer, let newerVersion):
+            .olderCopyWins(version: version, newer: tildePath(newer, home: home), newerVersion: newerVersion)
+        default: reason
+        }
     }
 
     private static func actionText(_ action: CleanupAction, home: URL) -> String {
@@ -136,6 +142,12 @@ public enum CleanupReportRenderer {
             "instruction remove-with-creating-tool"
         case .instruction(.removeAppLinkWithAdminRights(let link)):
             "instruction remove-app-link-with-admin-rights \(tildePath(link, home: home))"
+        case .instruction(.editShellFiles(_, let locations)):
+            "instruction edit-shell-files " + (locations.isEmpty
+                ? "dynamic"
+                : locations.map { "\(tildePath($0.file, home: home)):\($0.line)" }.joined(separator: ", "))
+        case .instruction(.switchOffInFilesAndFolders):
+            "instruction switch-off-in-files-and-folders"
         case .none:
             "-"
         }

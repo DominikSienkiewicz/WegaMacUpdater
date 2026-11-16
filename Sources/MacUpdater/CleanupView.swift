@@ -11,6 +11,8 @@ struct CleanupView: View {
     let onWegaState: (WegaState) -> Void
 
     @EnvironmentObject private var store: CleanupStore
+    /// The Settings switch for the Files and Folders map; the section follows it, not the stored report.
+    @AppStorage(CleanupTCCMap.enabledKey) private var tccMapEnabled = CleanupTCCMap.enabledByDefault
     @State private var confirming: CleanupFinding?
     @State private var showsPathWarning = false
     @State private var exportError: String?
@@ -37,6 +39,7 @@ struct CleanupView: View {
             CleanupConfirmationSheet(store: store, finding: finding) { confirming = nil }
         }
         .onChange(of: store.phase) { old, new in announce(from: old, to: new) }
+        .onAppear { store.applyTCCMapSetting() }
     }
 
     // MARK: - Header
@@ -60,7 +63,7 @@ struct CleanupView: View {
                     .font(.wega(.subheadline))
                     .foregroundStyle(.secondary)
             }
-            if store.phase == .scanning {
+            if store.phase == .scanning || store.phase == .readingPath {
                 Button(tr("Anuluj")) { store.cancel() }
                     .controlSize(.small)
             }
@@ -130,7 +133,9 @@ struct CleanupView: View {
         if let report = store.report {
             ScrollView {
                 VStack(spacing: 12) {
-                    ForEach(CleanupPresentation.sections(report, home: store.home), id: \.kind) { section in
+                    ForEach(
+                        CleanupPresentation.sections(report, home: store.home, tccMapEnabled: tccMapEnabled), id: \.kind
+                    ) { section in
                         CleanupSectionCard(
                             section: section, canRemove: isIdle, copiedCommand: copiedCommand,
                             onRemove: { id in confirming = report.findings.first { $0.id == id } }, onCopy: copy
@@ -177,7 +182,7 @@ struct CleanupView: View {
         panel.isExtensionHidden = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            try format.data(report, home: store.home).write(to: url, options: .atomic)
+            try format.data(report, home: store.home, tccMapEnabled: tccMapEnabled).write(to: url, options: .atomic)
         } catch {
             exportError = trf("Nie udało się zapisać pliku: %@", error.localizedDescription)
         }
@@ -242,6 +247,7 @@ private struct CleanupSectionCard: View {
         case .gradle: "hammer"
         case .jetBrains: "chevron.left.forwardslash.chevron.right"
         case .shellState: "terminal"
+        case .pathHygiene: "arrow.triangle.branch"
         case .protectedLocations: "lock.shield"
         case .filesAndFolders: "hand.raised"
         }

@@ -285,6 +285,161 @@ final class CleanupStoreTests: XCTestCase {
         )
     }
 
+    func testCancelStopsAPathReadAndKeepsTheStoredPath() async {
+        let boundary = FakeCleanupBoundary()
+        let stored = CleanupStoreFixtures.shellPath
+        boundary.persistedPath = stored
+        boundary.pathReadResult = .captured(CleanupStoreFixtures.otherShellPath)
+        let gate = FakeGate()
+        boundary.readGate = gate
+        let store = CleanupStore(dependencies: boundary.dependencies)
+
+        store.readPath()
+        await fulfillment(of: [gate.entered], timeout: 5)
+        store.cancel()
+        // Opened as well, so a read that ignored the cancellation would capture the other PATH and
+        // fail below instead of hanging the run.
+        gate.open()
+        await store.task?.value
+
+        XCTAssertEqual(boundary.pathReads, 1)
+        XCTAssertEqual(store.phase, .idle)
+        XCTAssertEqual(store.pathSnapshot, stored)
+        XCTAssertNil(store.pathReadResult, "a stopped read is not an error to show")
+        XCTAssertTrue(boundary.savedPaths.isEmpty)
+    }
+
+    func testSwitchedOffMapIsForgottenAtLaunch() {
+        let boundary = FakeCleanupBoundary()
+        let mapped = CleanupStoreFixtures.mappedReport()
+        boundary.persistedReport = mapped
+
+        let store = CleanupStore(dependencies: boundary.dependencies)
+
+        let kept = CleanupStoreFixtures.reportWithoutMap()
+        XCTAssertEqual(store.report, kept)
+        XCTAssertEqual(store.report?.findings.map(\.detector), [.pathDuplicates])
+        XCTAssertFalse(store.report?.notes.contains { $0.detector == .tccMap } ?? true)
+        XCTAssertEqual(store.report?.createdAt, mapped.createdAt)
+        XCTAssertEqual(boundary.savedReports, [kept], "the saved report, which the exports read, loses the map too")
+    }
+
+    func testMapStaysWhileTheSwitchIsOn() {
+        let boundary = FakeCleanupBoundary()
+        boundary.tccMapEnabled = true
+        let mapped = CleanupStoreFixtures.mappedReport()
+        boundary.persistedReport = mapped
+
+        let store = CleanupStore(dependencies: boundary.dependencies)
+        store.applyTCCMapSetting()
+
+        XCTAssertEqual(store.report, mapped)
+        XCTAssertTrue(boundary.savedReports.isEmpty)
+    }
+
+    func testReportWithoutMapIsLeftAlone() {
+        let boundary = FakeCleanupBoundary()
+        let persisted = CleanupStoreFixtures.reportWithoutMap()
+        boundary.persistedReport = persisted
+
+        let store = CleanupStore(dependencies: boundary.dependencies)
+        store.applyTCCMapSetting()
+
+        XCTAssertEqual(store.report, persisted)
+        XCTAssertTrue(boundary.savedReports.isEmpty)
+    }
+
+    func testSwitchingOffLaterForgetsTheMap() {
+        let boundary = FakeCleanupBoundary()
+        boundary.tccMapEnabled = true
+        let mapped = CleanupStoreFixtures.mappedReport()
+        boundary.persistedReport = mapped
+        let store = CleanupStore(dependencies: boundary.dependencies)
+        let launched = store.report
+
+        boundary.tccMapEnabled = false
+        store.applyTCCMapSetting()
+
+        XCTAssertEqual(launched, mapped)
+        XCTAssertEqual(store.report, CleanupStoreFixtures.reportWithoutMap())
+        XCTAssertEqual(boundary.savedReports, [CleanupStoreFixtures.reportWithoutMap()])
+    }
+
+    func testAScanFinishedWithTheSwitchOffKeepsNoMap() async {
+        let boundary = FakeCleanupBoundary()
+        boundary.tccMapEnabled = true
+        boundary.scanResult = CleanupStoreFixtures.mappedReport()
+        let gate = FakeGate()
+        boundary.scanGate = gate
+        let store = CleanupStore(dependencies: boundary.dependencies)
+
+        store.scan()
+        await fulfillment(of: [gate.entered], timeout: 5)
+        boundary.tccMapEnabled = false
+        store.applyTCCMapSetting()
+        let savedWhileScanning = boundary.savedReports
+        gate.open()
+        await store.task?.value
+
+        XCTAssertTrue(savedWhileScanning.isEmpty, "no report was stored, so there is nothing to rewrite under the scan")
+        XCTAssertEqual(store.report, CleanupStoreFixtures.reportWithoutMap())
+        XCTAssertEqual(
+            boundary.savedReports, [CleanupStoreFixtures.reportWithoutMap()], "the scanned map never reaches the saved report"
+        )
+    }
+
+    func testMapSwitchedOffDuringAStoppedScanIsForgottenWhenItStops() async {
+        let boundary = FakeCleanupBoundary()
+        boundary.tccMapEnabled = true
+        let mapped = CleanupStoreFixtures.mappedReport()
+        boundary.persistedReport = mapped
+        let gate = FakeGate()
+        boundary.scanGate = gate
+        let store = CleanupStore(dependencies: boundary.dependencies)
+
+        store.scan()
+        await fulfillment(of: [gate.entered], timeout: 5)
+        boundary.tccMapEnabled = false
+        store.applyTCCMapSetting()
+        let reportWhileScanning = store.report
+        store.cancel()
+        gate.open()
+        await store.task?.value
+
+        XCTAssertNotEqual(reportWhileScanning, mapped)
+        XCTAssertEqual(reportWhileScanning, CleanupStoreFixtures.reportWithoutMap(), "the map is forgotten under a running scan")
+        XCTAssertTrue(store.lastScanCancelled)
+        XCTAssertEqual(store.report, CleanupStoreFixtures.reportWithoutMap())
+        XCTAssertEqual(boundary.savedReports, [CleanupStoreFixtures.reportWithoutMap()])
+    }
+
+    /// All store work runs on the main actor and a finished scan follows the switch anyway, so a
+    /// map switched off is forgotten at once, also while a scan runs, and no export can carry it.
+    func testSwitchingOffDuringARunningScanStripsTheStoredMapAtOnce() async {
+        let boundary = FakeCleanupBoundary()
+        boundary.tccMapEnabled = true
+        boundary.persistedReport = CleanupStoreFixtures.mappedReport()
+        boundary.scanResult = CleanupStoreFixtures.mappedReport()
+        let gate = FakeGate()
+        boundary.scanGate = gate
+        let store = CleanupStore(dependencies: boundary.dependencies)
+
+        store.scan()
+        await fulfillment(of: [gate.entered], timeout: 5)
+        boundary.tccMapEnabled = false
+        store.applyTCCMapSetting()
+        let reportWhileScanning = store.report
+        let savedWhileScanning = boundary.savedReports
+        gate.open()
+        await store.task?.value
+
+        XCTAssertEqual(store.phase, .idle)
+        XCTAssertEqual(reportWhileScanning, CleanupStoreFixtures.reportWithoutMap())
+        XCTAssertEqual(savedWhileScanning, [CleanupStoreFixtures.reportWithoutMap()], "the saved copy loses the map at once too")
+        XCTAssertEqual(store.report, CleanupStoreFixtures.reportWithoutMap(), "the scanned map never reaches the screen")
+        XCTAssertEqual(boundary.savedReports, [CleanupStoreFixtures.reportWithoutMap(), CleanupStoreFixtures.reportWithoutMap()])
+    }
+
     func testStoreIsHeldAboveTheLanguageReKey() throws {
         let app = try source("Sources/MacUpdater/MacUpdaterApp.swift", root: packageRoot())
         let ownership = try XCTUnwrap(app.range(of: "@StateObject private var cleanup = CleanupStore()"))
@@ -316,6 +471,12 @@ private enum CleanupStoreFixtures {
         shell: "zsh", capturedAt: Date(timeIntervalSince1970: 1_800_000_000), isApproximate: false
     )
 
+    /// What a read that ignored its cancellation would bring back.
+    static let otherShellPath = CleanupPathSnapshot(
+        entries: ["/opt/homebrew/bin", "/usr/bin"], ignoredEntries: [],
+        shell: "zsh", capturedAt: Date(timeIntervalSince1970: 1_800_000_600), isApproximate: false
+    )
+
     static let approximatePath = CleanupPathSnapshot(
         entries: ["/usr/bin", "/bin"], ignoredEntries: [], shell: nil, capturedAt: nil, isApproximate: true
     )
@@ -343,13 +504,59 @@ private enum CleanupStoreFixtures {
         )
     }
 
+    static func duplicateFinding() -> CleanupFinding {
+        let url = URL(filePath: "/opt/homebrew/bin/claude", directoryHint: .notDirectory)
+        return CleanupFinding(
+            detector: .pathDuplicates, tool: "claude", path: url, realpath: url,
+            source: .homebrewCask(token: "claude-code"), version: "2.1.311", size: 300_000_000,
+            status: .shadowed, reason: .shadowedBy(path: "/Users/cleanup-test/.local/bin/claude"),
+            action: .brew(.uninstallCask("claude-code")), risk: .medium, bucket: .safe,
+            identity: CleanupFileIdentity(device: 1, inode: 7)
+        )
+    }
+
+    static func mapFinding() -> CleanupFinding {
+        let database = URL(
+            filePath: "/Users/cleanup-test/Library/Application Support/com.apple.TCC/TCC.db", directoryHint: .notDirectory
+        )
+        return CleanupFinding(
+            detector: .tccMap, tool: "com.example.editor", path: database, realpath: nil,
+            source: .appBundle(name: "com.example.editor"), version: nil, size: nil, status: .info,
+            reason: .tccEntry(grants: [CleanupTCCGrant(service: .documents, allowed: true)], link: nil),
+            action: .command("tccutil reset SystemPolicyDocumentsFolder com.example.editor"),
+            risk: .low, bucket: .excluded, identity: nil
+        )
+    }
+
+    static let homebrewNote = CleanupDetectorNote(detector: .homebrew, kind: .homebrewUnavailable)
+    static let skippedProtected = ["/Users/cleanup-test/Library/Mail"]
+
+    /// A D1 finding and a D10 map entry, a D4 note and a D10 note.
+    static func mappedReport() -> CleanupReport {
+        CleanupReport(
+            createdAt: Date(timeIntervalSince1970: 1_800_000_000), path: shellPath,
+            findings: [duplicateFinding(), mapFinding()],
+            notes: [homebrewNote, CleanupDetectorNote(detector: .tccMap, kind: .tccUnsupportedSchema)],
+            skippedProtected: skippedProtected
+        )
+    }
+
+    /// `mappedReport()` without its D10 finding and D10 note.
+    static func reportWithoutMap() -> CleanupReport {
+        CleanupReport(
+            createdAt: Date(timeIntervalSince1970: 1_800_000_000), path: shellPath,
+            findings: [duplicateFinding()], notes: [homebrewNote], skippedProtected: skippedProtected
+        )
+    }
+
     static func intent() -> CleanupRemovalIntent {
         CleanupRemovalIntent(finding: finding(), inUseAcknowledged: false)
     }
 }
 
-/// The store's whole system boundary, faked: persisted state, the shell read, the scan and the
-/// remover. A gate, when set, holds the scan or the removal until the test opens it.
+/// The store's whole system boundary, faked: persisted state, the shell read, the scan, the
+/// remover and the Files and Folders switch. A gate, when set, holds the read, the scan or the
+/// removal until the test opens it.
 @MainActor
 private final class FakeCleanupBoundary {
     let coordinator = OperationCoordinator()
@@ -358,8 +565,11 @@ private final class FakeCleanupBoundary {
     var pathReadResult: CleanupPathReadResult = .failed
     var scanResult = CleanupStoreFixtures.report(tool: "scanned")
     var removalOutcome: CleanupRemovalOutcome = .removed
+    /// The Settings switch for the Files and Folders map; off, like its default.
+    var tccMapEnabled = false
     /// Thrown by the fake scan after its gate, as the coordinator's lease errors would be.
     var scanError: Error?
+    var readGate: FakeGate?
     var scanGate: FakeGate?
     var removalGate: FakeGate?
 
@@ -382,13 +592,16 @@ private final class FakeCleanupBoundary {
             loadReport: { self.persistedReport },
             saveReport: { self.savedReports.append($0) },
             loadPath: { self.persistedPath },
-            savePath: { self.savedPaths.append($0) }
+            savePath: { self.savedPaths.append($0) },
+            tccMapEnabled: { self.tccMapEnabled }
         )
     }
 
-    private func readPath() -> CleanupPathReadResult {
+    /// Like the real reader, a read whose task was cancelled reports `.cancelled`.
+    private func readPath() async -> CleanupPathReadResult {
         pathReads += 1
-        return pathReadResult
+        await readGate?.pass()
+        return Task.isCancelled ? .cancelled : pathReadResult
     }
 
     private func scan(_ path: CleanupPathSnapshot) async throws -> CleanupReport {

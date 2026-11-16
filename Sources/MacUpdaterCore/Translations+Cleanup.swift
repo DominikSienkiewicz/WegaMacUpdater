@@ -50,8 +50,6 @@ extension Translations {
             "A command-line tool has no app bundle, so macOS records file-access consent separately for every path it was run from.",
         "Każda kopia z sekcji „Wiele kopii tego samego narzędzia” może mieć w Ustawieniach systemowych → Prywatność i ochrona → Pliki i foldery własny wpis.":
             "Every copy under “Several copies of the same tool” may have its own entry in System Settings → Privacy & Security → Files and Folders.",
-        "Mapa, która przypisze te wpisy do konkretnych kopii, pojawi się w kolejnej wersji jako opcja w Ustawieniach.":
-            "A map that matches these entries to specific copies will arrive in a later version as an option in Settings.",
 
         // Rows
         "tylko informacja": "information only",
