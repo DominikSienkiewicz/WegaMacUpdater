@@ -189,7 +189,7 @@ final class UninstallCoordinator: ObservableObject {
     struct Outcome {
         /// One result per target id.
         let results: [String: UninstallTargetResult]
-        /// UX-13: how many consented `~/Library` leftovers reached the Trash, and how many
+        /// UX-13: how many consented home-folder leftovers reached the Trash, and how many
         /// could not be moved, so the result is reported honestly rather than swallowed.
         var leftoversTrashed: Int = 0
         var leftoversFailed: Int = 0

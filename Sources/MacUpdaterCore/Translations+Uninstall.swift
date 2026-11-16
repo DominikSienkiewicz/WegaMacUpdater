@@ -35,5 +35,18 @@ extension Translations {
         "%@ do Kosza przez pomocnika Wega": "%@ to Trash via Wega's helper",
         "Pomocnik Wega nie potwierdził usunięcia — aplikacja mogła już opuścić /Applications. Odświeżona lista pokazuje, czy nadal tam jest.":
             "Wega's helper did not confirm the removal — the app may already have left /Applications. The refreshed list shows whether it is still there.",
+        "Resztki aplikacji": "App leftovers",
+        "Prawdopodobne — sprawdź przed zaznaczeniem": "Probable — check before ticking",
+        "lista Homebrew": "Homebrew list",
+        "lista Homebrew (dopasowanie po nazwie)": "Homebrew list (matched by name)",
+        "identyfikator aplikacji": "bundle id",
+        "nazwa aplikacji": "app name",
+        "poza ~/Library": "outside ~/Library",
+        "używa też %@": "also used by %@",
+        "%@ · %@ zaznaczone": "%@ · %@ ticked",
+        "Lista Homebrew jest niedostępna — pokazano tylko resztki znalezione po identyfikatorze i nazwie.":
+            "The Homebrew list is unavailable — showing only leftovers found by bundle id and name.",
+        "Lista aplikacji jest niepełna — nic nie jest zaznaczone domyślnie.":
+            "The app list is incomplete — nothing is ticked by default.",
     ]
 }

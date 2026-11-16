@@ -22,11 +22,15 @@ struct UninstallView: View {
     /// REL-14: whether the scan behind `pendingUninstallTargets` was incomplete, frozen
     /// at confirmation time so the dialog can warn that the target list may be partial.
     @State private var pendingScanIncomplete: Bool = false
-    /// UX-13: `~/Library` leftovers found for the non-brew targets, planned via
-    /// `MigrationPlanner` before the confirm sheet opens so it can offer them as checkboxes.
+    /// UX-13: home-folder leftovers found for the non-brew targets, planned by the coordinator
+    /// before the confirm sheet opens so it can offer them as checkboxes.
     @State private var pendingLeftoverGroups: [LeftoverGroup] = []
-    /// UX-13: which leftover paths the user has ticked for the Trash. Defaults to every
-    /// found item; the user opts individual files out.
+    /// The cask catalog could not be loaded for the sheet, so no Homebrew zap list was used.
+    @State private var pendingLeftoverCatalogUnavailable: Bool = false
+    /// The scan behind the sheet could not read the applications, frozen when the sheet opens.
+    @State private var pendingApplicationsIncomplete: Bool = false
+    /// UX-13: which leftover paths the user has ticked for the Trash. The sheet opens with
+    /// `UninstallLeftoverPresentation.defaultSelection`; the user ticks or unticks the rest.
     @State private var selectedLeftovers: Set<String> = []
     /// The running state of `pendingUninstallTargets`, computed when the sheet opens.
     @State private var pendingRunningStates: [String: RunningApplicationResolution] = [:]
@@ -44,6 +48,9 @@ struct UninstallView: View {
     /// REL-14: the last scan failed to read one or more sources. Distinguishes an empty
     /// machine from a failed scan and drives the incomplete-data warning before uninstall.
     @State private var scanFailed:     Bool              = false
+    /// The last scan could not read the applications, so the list of other installed apps that
+    /// may still use a leftover is partial. A Homebrew failure alone does not count.
+    @State private var applicationsSourceFailed: Bool    = false
     @State private var banner:         BannerData?
 
     private var isLoading: Bool { operations.isScanning }
@@ -258,6 +265,9 @@ struct UninstallView: View {
                 ),
                 scanIncomplete: pendingScanIncomplete,
                 leftoverGroups: pendingLeftoverGroups,
+                leftoverCatalogUnavailable: pendingLeftoverCatalogUnavailable,
+                applicationsIncomplete: pendingApplicationsIncomplete,
+                measureLeftover: { [operations] in await operations.measureLeftover($0) },
                 runningStates: pendingRunningStates,
                 routes: pendingRoutes,
                 isRefreshing: operations.isScanning,
@@ -340,20 +350,25 @@ struct UninstallView: View {
         else { selected = selectableIds }
     }
 
-    /// UX-13: freezes the confirmation targets (UX-01), then plans their `~/Library`
+    /// UX-13: freezes the confirmation targets (UX-01), then plans their home-folder
     /// leftovers via the coordinator so the sheet opens with the checkbox list ready.
     private func presentUninstallDialog() async {
         let targets = self.targets
         guard !targets.isEmpty, !isUninstalling else { return }
         pendingUninstallTargets = targets
         pendingScanIncomplete = scanFailed
+        let applicationsIncomplete = applicationsSourceFailed
         pendingRoutes = await operations.routes(for: targets)
         // A blocked target is not attempted: it is neither asked to quit nor offers leftovers.
         let attempted = UninstallQuitFlow.partition(targets: targets, routes: pendingRoutes).attempt
         pendingRunningStates = operations.runningStates(for: attempted)
-        let groups = await operations.scanLeftovers(for: attempted, installed: apps).groups
-        pendingLeftoverGroups = groups
-        selectedLeftovers = Set(groups.flatMap { $0.items.map(\.url.path) })
+        let leftovers = await operations.scanLeftovers(for: attempted, installed: apps)
+        pendingLeftoverGroups = leftovers.groups
+        pendingLeftoverCatalogUnavailable = leftovers.catalogUnavailable
+        pendingApplicationsIncomplete = applicationsIncomplete
+        selectedLeftovers = UninstallLeftoverPresentation.defaultSelection(
+            leftovers.groups, applicationsIncomplete: applicationsIncomplete
+        )
         showDialog = true
     }
 
@@ -362,6 +377,8 @@ struct UninstallView: View {
         pendingUninstallTargets = []
         pendingScanIncomplete = false
         pendingLeftoverGroups = []
+        pendingLeftoverCatalogUnavailable = false
+        pendingApplicationsIncomplete = false
         pendingRunningStates = [:]
         pendingRoutes = [:]
         selectedLeftovers = []
@@ -405,6 +422,8 @@ struct UninstallView: View {
         pendingUninstallTargets = []
         pendingScanIncomplete = false
         pendingLeftoverGroups = []
+        pendingLeftoverCatalogUnavailable = false
+        pendingApplicationsIncomplete = false
         pendingRunningStates = [:]
         pendingRoutes = [:]
         selectedLeftovers = []
@@ -423,6 +442,7 @@ struct UninstallView: View {
         apps = scan.apps
         protections = scan.protections
         scanFailed = scan.scanFailed
+        applicationsSourceFailed = scan.failures.contains { $0.source == .applications }
         scanError = scan.failures.scanErrorMessage
     }
 
@@ -492,9 +512,15 @@ struct UninstallDialog: View {
     /// REL-14: the scan behind these targets failed to read one or more sources, so the
     /// list may be missing installations. The dialog warns before the destructive action.
     var scanIncomplete: Bool = false
-    /// UX-13: the `~/Library` leftovers planned for the non-brew targets, presented as
+    /// UX-13: the home-folder leftovers planned for the non-brew targets, presented as
     /// checkboxes so the user reviews exactly what "app + leftovers" removes.
     var leftoverGroups: [LeftoverGroup] = []
+    /// No Homebrew zap list could be read, so the leftover section says what it is missing.
+    var leftoverCatalogUnavailable: Bool = false
+    /// The app scan was incomplete, so no leftover is ticked by default and the section says why.
+    var applicationsIncomplete: Bool = false
+    /// Sizes a leftover once the sheet is open.
+    var measureLeftover: @Sendable (URL) async -> LeftoverSize = { _ in .unknown }
     /// Which targets are running right now, so the sheet can say Wega will ask them to quit.
     var runningStates: [String: RunningApplicationResolution] = [:]
     /// What will happen to each non-brew target: Trash, or why it cannot be removed.
@@ -512,6 +538,9 @@ struct UninstallDialog: View {
         ambiguities: [AmbiguousBrewUninstall],
         scanIncomplete: Bool = false,
         leftoverGroups: [LeftoverGroup] = [],
+        leftoverCatalogUnavailable: Bool = false,
+        applicationsIncomplete: Bool = false,
+        measureLeftover: @escaping @Sendable (URL) async -> LeftoverSize = { _ in .unknown },
         runningStates: [String: RunningApplicationResolution] = [:],
         routes: [String: UninstallRouteDecision] = [:],
         isRefreshing: Bool = false,
@@ -523,6 +552,9 @@ struct UninstallDialog: View {
         self.ambiguities = ambiguities
         self.scanIncomplete = scanIncomplete
         self.leftoverGroups = leftoverGroups
+        self.leftoverCatalogUnavailable = leftoverCatalogUnavailable
+        self.applicationsIncomplete = applicationsIncomplete
+        self.measureLeftover = measureLeftover
         self.runningStates = runningStates
         self.routes = routes
         self.isRefreshing = isRefreshing
@@ -742,13 +774,18 @@ struct UninstallDialog: View {
                         .padding(.top, brewCount > 0 ? 10 : 0)
                     }
 
-                    // UX-13: "app + leftovers" for non-brew apps — the same `~/Library`
-                    // items brew would clear with `--zap`, presented so the user reviews
-                    // and consents before they go to the (recoverable) Trash.
-                    if !leftoverGroups.isEmpty {
+                    // UX-13: "app + leftovers" for non-brew apps — what the app left in the
+                    // home folder, presented so the user reviews and consents before it goes
+                    // to the (recoverable) Trash.
+                    if UninstallLeftoverPresentation.showsSection(
+                        groups: leftoverGroups, catalogUnavailable: leftoverCatalogUnavailable
+                    ) {
                         UninstallLeftoverSelection(
                             groups: leftoverGroups,
-                            selected: $selectedLeftovers
+                            selected: $selectedLeftovers,
+                            catalogUnavailable: leftoverCatalogUnavailable,
+                            applicationsIncomplete: applicationsIncomplete,
+                            measure: measureLeftover
                         )
                         .padding(.horizontal, 22)
                         .padding(.top, 12)
@@ -873,101 +910,5 @@ struct UninstallOption: View {
                 .fill(isSelected ? Color.wegaHoney.opacity(0.06) : Color(NSColor.controlBackgroundColor))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(isSelected ? Color.wegaHoney.opacity(0.32) : Color.wegaHairline, lineWidth: 1))
         )
-    }
-}
-
-// MARK: - UX-13 leftover selection
-
-/// The checkbox sheet section listing the `~/Library` leftovers found for the non-brew
-/// targets, grouped per app. Selection is bound to the caller; every item defaults to
-/// checked, and the copy makes clear the files go to the recoverable Trash.
-struct UninstallLeftoverSelection: View {
-    let groups: [LeftoverGroup]
-    @Binding var selected: Set<String>
-
-    private var allPaths: [String] { groups.flatMap { $0.items.map(\.url.path) } }
-    private var allSelected: Bool { !allPaths.isEmpty && selected.isSuperset(of: allPaths) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "folder.badge.minus")
-                    .foregroundStyle(Color.wegaHoney)
-                    .font(.wega(.body))
-                Text(tr("Resztki w ~/Library"))
-                    .font(.wega(.callout, weight: .semibold))
-                Text("\(allPaths.count)")
-                    .font(.wega(.callout, monospaced: true))
-                    .foregroundStyle(.tertiary)
-                Spacer()
-                Button(allSelected ? tr("Odznacz wszystko") : tr("Zaznacz wszystko")) {
-                    if allSelected { selected.subtract(allPaths) }
-                    else { selected.formUnion(allPaths) }
-                }
-                .buttonStyle(.plain)
-                .font(.wega(.subheadline))
-                .foregroundStyle(Color.wegaHoney)
-            }
-            Text(tr("Zaznaczone pliki trafią do Kosza — możesz je stamtąd przywrócić."))
-                .font(.wega(.subheadline))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            ForEach(groups) { group in
-                VStack(alignment: .leading, spacing: 6) {
-                    if groups.count > 1 {
-                        Text(group.app.name)
-                            .font(.wega(.subheadline, weight: .medium))
-                            .foregroundStyle(.secondary)
-                    }
-                    ForEach(group.items) { item in
-                        UninstallLeftoverRow(
-                            url: item.url,
-                            isOn: selected.contains(item.url.path),
-                            toggle: { toggle(item.url.path) }
-                        )
-                    }
-                }
-            }
-        }
-        .padding(12)
-        .background(
-            Color(NSColor.controlBackgroundColor),
-            in: RoundedRectangle(cornerRadius: 10)
-        )
-    }
-
-    private func toggle(_ path: String) {
-        if selected.contains(path) { selected.remove(path) } else { selected.insert(path) }
-    }
-}
-
-private struct UninstallLeftoverRow: View {
-    let url: URL
-    let isOn: Bool
-    let toggle: @MainActor @Sendable () -> Void
-
-    private var displayPath: String {
-        (url.path as NSString).abbreviatingWithTildeInPath
-    }
-
-    var body: some View {
-        Toggle(isOn: selectionToggleBinding(isOn: isOn, toggle: toggle)) {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(url.lastPathComponent)
-                        .font(.wega(.subheadline, weight: .medium))
-                    Text(displayPath)
-                        .font(.wega(.footnote, monospaced: true))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                Spacer(minLength: 0)
-            }
-            .contentShape(Rectangle())
-        }
-        .toggleStyle(WegaCheckboxToggleStyle(glyphFont: .wega(.body), spacing: 10))
-        .accessibilityLabel(displayPath)
     }
 }
