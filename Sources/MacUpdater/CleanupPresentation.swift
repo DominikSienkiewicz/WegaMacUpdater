@@ -203,13 +203,13 @@ enum CleanupPresentation {
     }
 
     /// The button comes from the finding's action alone; an excluded finding never offers one. A
-    /// JetBrains folder offered for the Trash also names the IDE's own cleanup, which knows its
-    /// folders best.
+    /// JetBrains folder of a version an installed IDE replaced also names the IDE's own cleanup,
+    /// which knows its folders best; it does not clear a folder no installed IDE explains.
     private static func control(for finding: CleanupFinding, home: URL) -> (button: ButtonKind?, note: String?) {
         guard finding.bucket != .excluded else { return (nil, tr("tylko informacja")) }
         switch finding.action {
         case .trash, .trashBatch:
-            guard finding.detector == .jetBrains else { return (.trash, nil) }
+            guard finding.detector == .jetBrains, case .ideVersionNotInstalled = finding.reason else { return (.trash, nil) }
             return (.trash, tr("Zalecane: w IDE wybierz Help → Delete Leftover IDE Directories. Wega może też przenieść ten katalog do Kosza."))
         case .brew(.cleanup): return (.brewCleanup, nil)
         case .brew: return (.brew, nil)

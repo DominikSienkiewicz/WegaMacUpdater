@@ -459,6 +459,27 @@ final class CleanupPresentationTests: XCTestCase {
         XCTAssertEqual(englishRows.first { $0.findingID == Fixture.ideFolder.id }?.note, english)
     }
 
+    /// The IDE's own action clears only folders of versions it replaced: a folder no installed IDE
+    /// owns, or one newer than the installed IDE, is not its leftover, so nothing is recommended.
+    func testIdeActionIsRecommendedOnlyForVersionsTheIdeReplaced() throws {
+        let orphanPath = "/Users/cleanup-test/Library/Application Support/JetBrains/GoLand2024.1"
+        let orphan = CleanupFinding(
+            .jetBrains, tool: "GoLand", path: orphanPath, source: nil, status: .unused, reason: .ideNotFound,
+            action: .trash([Fixture.url(orphanPath)]), bucket: .needsDecision, version: "2024.1"
+        )
+        let report = Fixture.report(findings: [Fixture.ideFolder, Fixture.ideNewer, orphan])
+
+        try withLanguage(.pl) {
+            let rows = CleanupPresentation.sections(report, home: Fixture.home).flatMap(\.rows)
+            for finding in [Fixture.ideNewer, orphan] {
+                let row = try XCTUnwrap(rows.first { $0.findingID == finding.id }, finding.tool)
+                XCTAssertEqual(row.button, .trash, finding.tool)
+                XCTAssertNil(row.note, "\(finding.reason) is no leftover the IDE action clears")
+            }
+            XCTAssertNotNil(rows.first { $0.findingID == Fixture.ideFolder.id }?.note)
+        }
+    }
+
     func testBrewCleanupConfirmationShowsTheExactCommand() throws {
         let report = Fixture.report(findings: [Fixture.nodeLeftovers])
 
