@@ -88,6 +88,18 @@ struct HelperBundleStagingSourceTests {
         #expect(!fileSystem.contains("FileManager.default.moveItem"))
     }
 
+    /// Fix round 1: the identifier and the resolved path are read through the descriptor of the
+    /// inode the first `lstat` validated, never by name, so swapping the name away and back while
+    /// they are read cannot lend the bundle another identity.
+    @Test func factsAreReadThroughTheValidatedDescriptor() throws {
+        let fileSystem = try source("Sources/WegaHelperKit/UninstallStagingFileSystem.swift")
+        #expect(fileSystem.contains("openat("), "Info.plist must be opened relative to the bundle's descriptor")
+        #expect(fileSystem.contains("\"Contents/Info.plist\""))
+        #expect(fileSystem.contains("F_GETPATH"), "the resolved path must come from the descriptor")
+        #expect(!fileSystem.contains("realpath("), "no second lookup by name")
+        #expect(!fileSystem.contains("path + \"/Contents/Info.plist\""), "no Info.plist lookup by name")
+    }
+
     /// Ruling 13: a physical walk that stays on the bundle's volume and leaves hard-linked files
     /// root-owned, opening every entry with no symlink allowed anywhere in its path.
     @Test func treeWalkIsPhysicalStaysOnTheVolumeAndSkipsHardLinks() throws {

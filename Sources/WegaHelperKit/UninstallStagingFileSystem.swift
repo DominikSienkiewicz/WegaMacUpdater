@@ -22,18 +22,22 @@ extension UninstallStaging {
 
     /// What the helper read about the entry at the requested path, without following it.
     public struct TargetInspection: Equatable, Sendable {
-        /// `lstat` before anything else was read.
+        /// `lstat` before anything else was read: the inode every later fact must describe.
         public var identity: PackageStaging.ArtifactIdentity
-        /// `lstat` again after `realpath` and `Info.plist` were read. A different pair means
-        /// the entry was exchanged while its facts were being gathered.
+        /// The inode seen while the facts were read: the opened directory's when it was not the
+        /// one `identity` names, otherwise a second `lstat` taken after reading. A pair different
+        /// from `identity` means the entry was exchanged while its facts were being gathered.
         public var identityAfterReading: PackageStaging.ArtifactIdentity
         /// Owner of the entry itself (`lstat`).
         public var ownerUID: UInt32
         /// Whether the entry itself is a symbolic link (`lstat`).
         public var isSymlink: Bool
-        /// `realpath`, or `nil` when it cannot be resolved.
+        /// Where the validated inode really is, read from its descriptor (`F_GETPATH`); `nil`
+        /// when it cannot be opened as a directory with no symlink in its path, or when the
+        /// directory opened is not the inode `identity` names.
         public var resolvedPath: String?
-        /// `CFBundleIdentifier`, or `nil` when `Info.plist` is unreadable or reached through a link.
+        /// `CFBundleIdentifier` read through that same descriptor, or `nil` under the same
+        /// conditions or when `Info.plist` is unreadable or reached through a link.
         public var bundleID: String?
     }
 
@@ -56,22 +60,51 @@ extension UninstallStaging {
         public var leftWithRoot: Int { hardLinked.count + skipped.count + failed.count }
     }
 
+    /// An application directory held open, so that facts read through it describe this inode
+    /// whatever the name it was opened by points at afterwards. Closed when released.
+    public final class OpenedBundle {
+        /// Device/inode of the opened directory (`fstat`).
+        public let identity: PackageStaging.ArtifactIdentity
+        fileprivate let descriptor: Int32
+
+        fileprivate init(descriptor: Int32, identity: PackageStaging.ArtifactIdentity) {
+            self.descriptor = descriptor
+            self.identity = identity
+        }
+
+        deinit { close(descriptor) }
+    }
+
     /// The `lstat` device/inode of `path`, or `nil` when it cannot be read.
     public static func identity(atPath path: String) -> PackageStaging.ArtifactIdentity? {
         linkStatus(path).map(identity(of:))
     }
 
-    /// Reads the facts the gate needs about the entry at `path`: one `lstat` for identity, owner
-    /// and link-ness, then `realpath` and `Info.plist`, then a second `lstat` to catch an exchange
-    /// that happened in between. `nil` when the entry cannot be `lstat`ed.
+    /// Reads the facts the gate needs about the entry at `path`, all bound to one inode.
+    ///
+    /// One `lstat` gives the identity, owner and link-ness. The directory is then opened with no
+    /// symlink in its path and must be that same inode; its resolved path and identifier are read
+    /// through the descriptor, never by name. `/Applications` is admin-writable, so the name can be
+    /// swapped for another bundle while the facts are read and swapped back before the move; read
+    /// this way, the facts still describe the validated inode. A second `lstat` follows. `nil`
+    /// when the entry cannot be `lstat`ed.
     public static func inspectTarget(atPath path: String) -> TargetInspection? {
         guard let before = linkStatus(path) else { return nil }
-        let resolved = resolvedPath(of: path)
-        let bundleID = bundleIdentifier(ofBundleAt: path)
+        let validated = identity(of: before)
+        let opened = openBundle(atPath: path)
+        let isValidated = opened?.identity == validated
+        let resolved = isValidated ? opened.flatMap(resolvedPath(of:)) : nil
+        let bundleID = isValidated ? opened.flatMap(bundleIdentifier(of:)) : nil
         guard let after = linkStatus(path) else { return nil }
+        let seenWhileReading: PackageStaging.ArtifactIdentity
+        if let opened, !isValidated {
+            seenWhileReading = opened.identity
+        } else {
+            seenWhileReading = identity(of: after)
+        }
         return TargetInspection(
-            identity: identity(of: before),
-            identityAfterReading: identity(of: after),
+            identity: validated,
+            identityAfterReading: seenWhileReading,
             ownerUID: before.st_uid,
             isSymlink: fileType(before) == S_IFLNK,
             resolvedPath: resolved,
@@ -79,13 +112,41 @@ extension UninstallStaging {
         )
     }
 
-    /// `CFBundleIdentifier` from `<path>/Contents/Info.plist`, opened with no symlink allowed in
-    /// any component, so a linked `Contents` or parent cannot lend the bundle another identity.
+    /// Opens the directory at `path` with no symlink allowed in any component, the last one
+    /// included. `nil` when it is not such a directory.
+    public static func openBundle(atPath path: String) -> OpenedBundle? {
+        let descriptor = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW_ANY | O_CLOEXEC)
+        guard descriptor >= 0 else { return nil }
+        var status = stat()
+        guard fstat(descriptor, &status) == 0 else {
+            close(descriptor)
+            return nil
+        }
+        return OpenedBundle(descriptor: descriptor, identity: identity(of: status))
+    }
+
+    /// Where the opened directory is now (`F_GETPATH`), as the kernel names it — the firmlinked
+    /// `/Applications/...` form, the same answer `realpath` gives for a path nobody swapped.
+    public static func resolvedPath(of bundle: OpenedBundle) -> String? {
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        let result = buffer.withUnsafeMutableBytes { raw -> Int32 in
+            guard let base = raw.baseAddress else { return -1 }
+            return fcntl(bundle.descriptor, F_GETPATH, base)
+        }
+        guard result != -1 else { return nil }
+        return buffer.withUnsafeBufferPointer { characters in
+            characters.baseAddress.map { String(cString: $0) }
+        }
+    }
+
+    /// `CFBundleIdentifier` from `Contents/Info.plist` inside the opened directory, opened
+    /// relative to its descriptor with no symlink allowed, so neither a swapped name nor a linked
+    /// `Contents` can lend the bundle another identity.
     ///
     /// Non-blocking, so a FIFO named `Info.plist` cannot stall the helper, and bounded, so a
     /// huge file cannot exhaust it: the bundle is not yet known to be root's when this runs.
-    public static func bundleIdentifier(ofBundleAt path: String) -> String? {
-        let descriptor = open(path + "/Contents/Info.plist", O_RDONLY | O_NOFOLLOW_ANY | O_NONBLOCK | O_CLOEXEC)
+    public static func bundleIdentifier(of bundle: OpenedBundle) -> String? {
+        let descriptor = openat(bundle.descriptor, "Contents/Info.plist", O_RDONLY | O_NOFOLLOW_ANY | O_NONBLOCK | O_CLOEXEC)
         guard descriptor >= 0 else { return nil }
         let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         var status = stat()
@@ -287,13 +348,6 @@ extension UninstallStaging {
         }
         guard fileType(opened) == S_IFDIR || opened.st_nlink == 1 else { return .hardLinked }
         return fchown(descriptor, uid, gid) == 0 ? .handedOver : .failed
-    }
-
-    /// `realpath(3)`: every symlink resolved. Read only to compare with the path asked for.
-    private static func resolvedPath(of path: String) -> String? {
-        guard let resolved = realpath(path, nil) else { return nil }
-        defer { free(resolved) }
-        return String(cString: resolved)
     }
 
     private static func linkStatus(_ path: String) -> stat? {

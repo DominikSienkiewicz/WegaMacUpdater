@@ -36,7 +36,7 @@ struct UninstallStagingFileSystemTests {
             let link = try #require(UninstallStaging.inspectTarget(atPath: base + "/Apps/Link.app"))
             #expect(link.isSymlink)
             #expect(link.identity != real.identity)
-            #expect(link.resolvedPath == bundle)
+            #expect(link.resolvedPath == nil, "nothing is resolved through a link")
             #expect(link.bundleID == nil, "the identifier is never read through a link")
         }
     }
@@ -47,20 +47,53 @@ struct UninstallStagingFileSystemTests {
         }
     }
 
-    /// Ruling 16: a symlinked `Contents`, or a symlinked parent folder, would let the identifier
-    /// come from a bundle other than the entry being moved.
+    /// Ruling 16: a symlinked `Contents`, a symlinked parent folder or a target that is itself a
+    /// link would let the identifier come from a bundle other than the entry being moved.
     @Test func bundleIdentifierIsNeverReadThroughASymlink() throws {
         try withScratch { base in
             let elsewhere = try makeBundle(at: base + "/Elsewhere/Real.app", bundleID: "com.acme.real")
             try FileManager.default.createDirectory(atPath: base + "/Apps/Foo.app", withIntermediateDirectories: true)
             try FileManager.default.createSymbolicLink(
                 atPath: base + "/Apps/Foo.app/Contents", withDestinationPath: elsewhere + "/Contents")
-            #expect(UninstallStaging.bundleIdentifier(ofBundleAt: base + "/Apps/Foo.app") == nil)
+            let linkedContents = try #require(UninstallStaging.openBundle(atPath: base + "/Apps/Foo.app"))
+            #expect(UninstallStaging.bundleIdentifier(of: linkedContents) == nil)
 
             try FileManager.default.createSymbolicLink(atPath: base + "/Folder", withDestinationPath: base + "/Elsewhere")
-            #expect(UninstallStaging.bundleIdentifier(ofBundleAt: base + "/Folder/Real.app") == nil)
+            #expect(UninstallStaging.openBundle(atPath: base + "/Folder/Real.app") == nil)
+            try FileManager.default.createSymbolicLink(atPath: base + "/Apps/Link.app", withDestinationPath: elsewhere)
+            #expect(UninstallStaging.openBundle(atPath: base + "/Apps/Link.app") == nil)
 
-            #expect(UninstallStaging.bundleIdentifier(ofBundleAt: elsewhere) == "com.acme.real")
+            let real = try #require(UninstallStaging.openBundle(atPath: elsewhere))
+            #expect(UninstallStaging.bundleIdentifier(of: real) == "com.acme.real")
+            #expect(UninstallStaging.resolvedPath(of: real) == elsewhere)
+            #expect(real.identity == UninstallStaging.identity(atPath: elsewhere))
+        }
+    }
+
+    /// Fix round 1: `/Applications` is admin-writable, so the name can be swapped for another
+    /// bundle (`RENAME_SWAP`) while the facts are read and swapped back before the move. Facts read
+    /// through the descriptor of the validated inode describe that inode whatever the name points
+    /// at in between: the identifier is the original's, and the resolved path shows where the
+    /// original really is.
+    @Test func factsComeFromTheOpenedInodeWhileTheNameIsSwappedAway() throws {
+        try withScratch { base in
+            let requested = try makeBundle(at: base + "/Apps/Foo.app", bundleID: "com.acme.original")
+            let original = try #require(UninstallStaging.identity(atPath: requested))
+            let opened = try #require(UninstallStaging.openBundle(atPath: requested))
+            #expect(opened.identity == original)
+
+            #expect(rename(requested, base + "/Apps/Parked.app") == 0)
+            try makeBundle(at: requested, bundleID: "com.acme.decoy")
+            #expect(UninstallStaging.identity(atPath: requested) != original, "the name now points at the decoy")
+
+            #expect(UninstallStaging.bundleIdentifier(of: opened) == "com.acme.original")
+            #expect(UninstallStaging.resolvedPath(of: opened) == base + "/Apps/Parked.app")
+
+            #expect(rename(requested, base + "/Apps/Decoy.app") == 0)
+            #expect(rename(base + "/Apps/Parked.app", requested) == 0)
+            #expect(UninstallStaging.identity(atPath: requested) == original, "swapped back")
+            #expect(UninstallStaging.bundleIdentifier(of: opened) == "com.acme.original")
+            #expect(UninstallStaging.resolvedPath(of: opened) == requested)
         }
     }
 
