@@ -84,7 +84,7 @@ enum UninstallResultPresentation {
         switch result {
         case .blocked(.needsAppManagement):
             return [.openAppManagementSettings]
-        case .blocked(.needsHelper):
+        case .blocked(.needsHelper), .blocked(.helperNeedsReinstall):
             return [.openHelperSettings, .showInFinder(app.path)]
         case .blocked(.needsAdministratorRights), .blocked(.needsAdministratorAccount):
             return [.showInFinder(app.path)]
@@ -211,6 +211,8 @@ enum UninstallResultPresentation {
         switch block {
         case .needsHelper:
             tr("wymaga pomocnika Wega — włącz go w ustawieniach.")
+        case .helperNeedsReinstall:
+            tr("pomocnik Wega jest nieaktualny lub nie odpowiada — w ustawieniach usuń go i zainstaluj ponownie.")
         case .needsAdministratorAccount:
             tr("wymaga konta administratora.")
         case .needsAdministratorRights:

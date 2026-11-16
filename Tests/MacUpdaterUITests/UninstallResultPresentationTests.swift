@@ -33,6 +33,7 @@ struct UninstallResultPresentationTests {
             Case(app: app("Running"), result: .skippedStillRunning, reason: "nadal działa"),
             Case(app: app("Twin"), result: .skippedAmbiguousProcess, reason: "procesu"),
             Case(app: app("NeedsHelper"), result: .blocked(.needsHelper), reason: "pomocnik"),
+            Case(app: app("StaleHelper"), result: .blocked(.helperNeedsReinstall), reason: "zainstaluj ponownie"),
             Case(app: app("NeedsAdminAccount"), result: .blocked(.needsAdministratorAccount), reason: "konta administratora"),
             Case(app: app("NeedsRights"), result: .blocked(.needsAdministratorRights), reason: "uprawnień administratora"),
             Case(app: app("NeedsAppMgmt"), result: .blocked(.needsAppManagement), reason: "Zarządzaniu aplikacjami"),
@@ -124,6 +125,15 @@ struct UninstallResultPresentationTests {
         #expect(branch.contains("openSettings()"))
     }
 
+    /// Ruling 19: a stale or silent helper is already on, so "turn it on" would send the user to a
+    /// switch that does not exist; the reason says to remove it and install it again.
+    @Test func helperThatMustBeReinstalledSaysSo() {
+        let reason = UninstallResultPresentation.blockReason(.helperNeedsReinstall)
+
+        #expect(reason == "pomocnik Wega jest nieaktualny lub nie odpowiada — w ustawieniach usuń go i zainstaluj ponownie.")
+        #expect(reason != UninstallResultPresentation.blockReason(.needsHelper))
+    }
+
     @Test func failedBrewZapKeepsItsForceNote() throws {
         let cask = app("Cask", brew: true)
         let zapped = UninstallResultPresentation.report(
@@ -147,6 +157,8 @@ struct UninstallResultPresentationTests {
         #expect(UninstallResultPresentation.actions(for: .leftInStaging(staging), app: target)
                 == [.showInFinder(staging)])
         #expect(UninstallResultPresentation.actions(for: .blocked(.needsHelper), app: target)
+                == [.openHelperSettings, .showInFinder(target.path)])
+        #expect(UninstallResultPresentation.actions(for: .blocked(.helperNeedsReinstall), app: target)
                 == [.openHelperSettings, .showInFinder(target.path)])
         #expect(UninstallResultPresentation.actions(for: .blocked(.needsAdministratorAccount), app: target)
                 == [.showInFinder(target.path)])

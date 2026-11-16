@@ -281,55 +281,16 @@ struct UninstallCoordinatorRemovalTests {
         #expect(outcome.leftoversTrashed == 0)
     }
 
-    /// A helper that is off, or older than this app (protocol 5), reads as "needs Wega's helper".
-    @Test(arguments: [
-        PrivilegedHelperClient.HelperError.notEnabled,
-        .versionMismatch(helper: "5", expected: WegaHelper.version),
-    ])
-    func staleHelperReadsAsNeedsHelper(_ error: PrivilegedHelperClient.HelperError) async {
-        let target = app("Root")
-        let denied = permissionDenied()
-        let recorder = Recorder()
-        let sut = coordinator(
-            facts: .rootOwnedHelperEnabled,
-            trash: { _ in throw denied },
-            trashLeftovers: { recorder.recordLeftovers($0); return LeftoverCleanup.Result(removed: $0) },
-            stage: { _, _ in throw error }
-        )
-
-        let outcome = await sut.uninstall(
-            targets: [target], zap: false, leftovers: [leftovers(for: target)], using: BrewService()
-        )
-
-        #expect(outcome.results[target.id] == .blocked(.needsHelper))
-        #expect(recorder.trashedLeftovers.isEmpty)
+    private struct HelperFailureRun {
+        let result: UninstallTargetResult?
+        let outcome: UninstallCoordinator.Outcome
+        let recorder: Recorder
+        let original: URL
     }
 
-    @Test func helperErrorIsFailedWithItsMessage() async {
+    private func runHelperFailure(_ failure: Error) async -> HelperFailureRun {
         let target = app("Root")
         let denied = permissionDenied()
-        let recorder = Recorder()
-        let sut = coordinator(
-            facts: .rootOwnedHelperEnabled,
-            trash: { _ in throw denied },
-            trashLeftovers: { recorder.recordLeftovers($0); return LeftoverCleanup.Result(removed: $0) },
-            stage: { _, _ in throw PrivilegedHelperClient.HelperError.operationFailed("Aplikacja nie należy do roota.") }
-        )
-
-        let outcome = await sut.uninstall(
-            targets: [target], zap: false, leftovers: [leftovers(for: target)], using: BrewService()
-        )
-
-        #expect(outcome.results[target.id] == .failed("Aplikacja nie należy do roota."))
-        #expect(recorder.trashedLeftovers.isEmpty)
-    }
-
-    /// Once the request may have reached the helper, a timeout or a lost connection does not say
-    /// the removal failed: the app may already be out of /Applications. Nothing else is touched.
-    @Test(arguments: [PrivilegedHelperClient.HelperError.timedOut, .connectionFailed])
-    func unconfirmedStagingSaysTheAppMayAlreadyHaveLeft(_ error: PrivilegedHelperClient.HelperError) async {
-        let target = app("Root")
-        let original = target.path, denied = permissionDenied()
         let recorder = Recorder()
         let sut = coordinator(
             facts: .rootOwnedHelperEnabled,
@@ -338,20 +299,120 @@ struct UninstallCoordinatorRemovalTests {
                 throw denied
             },
             trashLeftovers: { recorder.recordLeftovers($0); return LeftoverCleanup.Result(removed: $0) },
-            stage: { _, _ in throw error }
+            stage: { _, _ in throw failure }
         )
-
         let outcome = await sut.uninstall(
             targets: [target], zap: false, leftovers: [leftovers(for: target)], using: BrewService()
         )
+        return HelperFailureRun(
+            result: outcome.results[target.id], outcome: outcome, recorder: recorder, original: target.path
+        )
+    }
+
+    nonisolated private static let xpcInterrupted = NSError(domain: NSCocoaErrorDomain, code: NSXPCConnectionInterrupted)
+
+    @Test func helperThatIsOffReadsAsNeedsHelper() async {
+        let failure = PrivilegedHelperClient.StagingFailure(
+            underlying: PrivilegedHelperClient.HelperError.notEnabled, requestSent: false
+        )
+
+        let run = await runHelperFailure(failure)
+
+        #expect(run.result == .blocked(.needsHelper))
+        #expect(run.recorder.trashed == [run.original])
+        #expect(run.recorder.trashedLeftovers.isEmpty)
+    }
+
+    /// A helper older than this app (protocol 5), or one that does not answer the handshake,
+    /// was never sent the request: the app is still in /Applications and the helper has to be
+    /// removed and installed again.
+    @Test(arguments: [
+        PrivilegedHelperClient.HelperError.versionMismatch(helper: "5", expected: WegaHelper.version),
+        PrivilegedHelperClient.HelperError.timedOut,
+        PrivilegedHelperClient.HelperError.connectionFailed,
+        xpcInterrupted,
+    ] as [any Error])
+    func outdatedOrSilentHelperMustBeReinstalled(_ error: any Error) async {
+        let failure = PrivilegedHelperClient.StagingFailure(underlying: error, requestSent: false)
+
+        let run = await runHelperFailure(failure)
+
+        #expect(run.result == .blocked(.helperNeedsReinstall))
+        #expect(run.recorder.trashed == [run.original])
+        #expect(run.recorder.trashedLeftovers.isEmpty)
+        #expect(run.outcome.leftoversTrashed == 0)
+    }
+
+    @Test func helperErrorIsFailedWithItsMessage() async {
+        let failure = PrivilegedHelperClient.StagingFailure(
+            underlying: PrivilegedHelperClient.HelperError.operationFailed("Aplikacja nie należy do roota."),
+            requestSent: true
+        )
+
+        let run = await runHelperFailure(failure)
+
+        #expect(run.result == .failed("Aplikacja nie należy do roota."))
+        #expect(run.recorder.trashedLeftovers.isEmpty)
+    }
+
+    /// Once the request may have reached the helper, a timeout or a lost connection does not say
+    /// the removal failed: the app may already be out of /Applications. Nothing else is touched.
+    @Test(arguments: [
+        PrivilegedHelperClient.HelperError.timedOut,
+        PrivilegedHelperClient.HelperError.connectionFailed,
+        xpcInterrupted,
+    ] as [any Error])
+    func unconfirmedStagingSaysTheAppMayAlreadyHaveLeft(_ error: any Error) async {
+        let failure = PrivilegedHelperClient.StagingFailure(underlying: error, requestSent: true)
+
+        let run = await runHelperFailure(failure)
 
         let message = UninstallCoordinator.unconfirmedHelperRemoval
-        #expect(outcome.results[target.id] == .failed(message))
+        #expect(run.result == .failed(message))
         #expect(message.contains("/Applications"))
         #expect(message != error.localizedDescription)
-        #expect(recorder.trashed == [original])
-        #expect(recorder.trashedLeftovers.isEmpty)
-        #expect(outcome.leftoversTrashed == 0)
+        #expect(run.recorder.trashed == [run.original])
+        #expect(run.recorder.trashedLeftovers.isEmpty)
+        #expect(run.outcome.leftoversTrashed == 0)
+    }
+
+    /// An error that does not say whether the request was sent is reported as if it may have been.
+    @Test func aFailureOfUnknownPhaseIsTreatedAsPossiblySent() async {
+        let run = await runHelperFailure(PrivilegedHelperClient.HelperError.timedOut)
+
+        #expect(run.result == .failed(UninstallCoordinator.unconfirmedHelperRemoval))
+        #expect(run.recorder.trashedLeftovers.isEmpty)
+    }
+
+    /// Ruling 19: whether the staging request was sent decides between "reinstall the helper"
+    /// (nothing happened) and "may already have left /Applications" (something may have).
+    @Test func helperFailureTellsASentRequestFromOneThatWasNot() {
+        typealias HelperError = PrivilegedHelperClient.HelperError
+        struct Case {
+            let error: any Error
+            let sent: Bool
+            let expected: UninstallTargetResult
+        }
+        let reinstall = UninstallTargetResult.blocked(.helperNeedsReinstall)
+        let unconfirmed = UninstallTargetResult.failed(UninstallCoordinator.unconfirmedHelperRemoval)
+        let cases: [Case] = [
+            Case(error: HelperError.timedOut, sent: false, expected: reinstall),
+            Case(error: HelperError.connectionFailed, sent: false, expected: reinstall),
+            Case(error: Self.xpcInterrupted, sent: false, expected: reinstall),
+            Case(error: HelperError.versionMismatch(helper: "5", expected: "6"), sent: false, expected: reinstall),
+            Case(error: HelperError.timedOut, sent: true, expected: unconfirmed),
+            Case(error: HelperError.connectionFailed, sent: true, expected: unconfirmed),
+            Case(error: Self.xpcInterrupted, sent: true, expected: unconfirmed),
+            Case(error: HelperError.notEnabled, sent: false, expected: .blocked(.needsHelper)),
+            Case(error: HelperError.notEnabled, sent: true, expected: .blocked(.needsHelper)),
+            Case(error: HelperError.operationFailed("nie"), sent: true, expected: .failed("nie")),
+        ]
+        for item in cases {
+            #expect(
+                UninstallCoordinator.helperFailure(item.error, requestSent: item.sent) == item.expected,
+                "\(item.error), sent: \(item.sent)"
+            )
+        }
     }
 
     @Test func helperRouteIsPreflightedForTheSheet() {

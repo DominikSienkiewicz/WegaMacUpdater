@@ -207,13 +207,17 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
     /// staging slot owned by this user, and returns where the bundle now is. The caller puts it
     /// in the Trash as the user.
     ///
-    /// - Throws: `.versionMismatch` for a stale helper and `.notEnabled` when it is not
-    ///   registered, before anything is sent; `.operationFailed` with the helper's reason when it
-    ///   refused or moved nothing; `.timedOut` or `.connectionFailed` when the helper did not
-    ///   answer. After the staging request was sent, that means the app may already have left
-    ///   `/Applications`.
+    /// - Throws: `StagingFailure`, whose `requestSent` tells a failure of the handshake (nothing
+    ///   was sent: a stale, unregistered or silent helper) from a failure of the staging request
+    ///   itself. After the request, `.timedOut` or `.connectionFailed` (or a raw XPC error) means
+    ///   no answer came back, so the app may already have left `/Applications`;
+    ///   `.operationFailed` carries the helper's reason for refusing or moving nothing.
     public func stageApplicationBundleForTrash(at path: URL, expectedBundleID: String) async throws -> URL {
-        try await performHandshake()
+        do {
+            try await performHandshake()
+        } catch {
+            throw StagingFailure(underlying: error, requestSent: false)
+        }
         do {
             return try await call(deadline: Deadline.stageForTrash) { (proxy, done: @escaping @Sendable (sending Result<URL, Error>) -> Void) in
                 proxy.stageApplicationBundleForTrash(atPath: path.path, expectedBundleID: expectedBundleID) { stagedPath, note in
@@ -221,7 +225,7 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
                 }
             }
         } catch {
-            throw Self.stagingError(error)
+            throw StagingFailure(underlying: error, requestSent: true)
         }
     }
 
@@ -234,10 +238,16 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         return .success(URL(fileURLWithPath: stagedPath))
     }
 
-    /// Anything but the client's own errors is an XPC transport error: the request's fate is as
-    /// unknown as after a timeout.
-    static func stagingError(_ error: Error) -> HelperError {
-        (error as? HelperError) ?? .connectionFailed
+    /// Why staging failed, and whether it failed before the staging request was sent (the
+    /// handshake) or after. `underlying` is the client's `HelperError` or a raw XPC error.
+    public struct StagingFailure: Error {
+        public let underlying: Error
+        public let requestSent: Bool
+
+        public init(underlying: Error, requestSent: Bool) {
+            self.underlying = underlying
+            self.requestSent = requestSent
+        }
     }
 
     // MARK: - XPC plumbing

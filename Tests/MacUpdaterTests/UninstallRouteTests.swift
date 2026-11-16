@@ -69,6 +69,29 @@ struct UninstallRouteTests {
         #expect(UninstallRoute.afterPermissionDenied(facts()) == .helper)
     }
 
+    /// Only calling the helper can show that it must be reinstalled; no set of facts predicts it.
+    @Test func noRouteAsksForTheHelperToBeReinstalled() {
+        let availabilities: [UninstallHelperAvailability] = [.notSupported, .off, .enabled]
+        for owner: UInt32 in [0, 501, 502] {
+            for writable in [false, true] {
+                for topLevel in [false, true] {
+                    for bundleID in [false, true] {
+                        for admin in [false, true] {
+                            for helper in availabilities {
+                                let item = facts(
+                                    owner: owner, writable: writable, topLevel: topLevel,
+                                    bundleID: bundleID, admin: admin, helper: helper
+                                )
+                                #expect(UninstallRoute.preflight(item) != .blocked(.helperNeedsReinstall))
+                                #expect(UninstallRoute.afterPermissionDenied(item) != .blocked(.helperNeedsReinstall))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     @Test func nestedBundleIsNotTopLevel() {
         #expect(!WegaHelper.isTopLevelApplicationBundle(path: "/Applications/X.app/Contents/Library/Y.app"))
     }

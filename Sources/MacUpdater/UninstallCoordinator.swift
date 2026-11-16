@@ -424,8 +424,11 @@ final class UninstallCoordinator: ObservableObject {
         let staged: URL
         do {
             staged = try await dependencies.stageForTrash(app.path, bundleID)
+        } catch let failure as PrivilegedHelperClient.StagingFailure {
+            return Self.helperFailure(failure.underlying, requestSent: failure.requestSent)
         } catch {
-            return Self.helperFailure(error)
+            // Without its phase the request may have been sent, so the app may already be gone.
+            return Self.helperFailure(error, requestSent: true)
         }
         do {
             try dependencies.trashItem(staged)
@@ -435,16 +438,22 @@ final class UninstallCoordinator: ObservableObject {
         }
     }
 
-    private static func helperFailure(_ error: Error) -> UninstallTargetResult {
+    /// A helper that is not registered needs turning on. One that is stale, or did not answer
+    /// before the request was sent, must be reinstalled: nothing happened to the app. No answer
+    /// after the request was sent is not a plain failure, because the app may already be gone.
+    static func helperFailure(_ error: Error, requestSent: Bool) -> UninstallTargetResult {
         switch error as? PrivilegedHelperClient.HelperError {
-        case .notEnabled, .versionMismatch:
-            .blocked(.needsHelper)
-        case .timedOut, .connectionFailed:
-            .failed(unconfirmedHelperRemoval)
+        case .notEnabled:
+            return .blocked(.needsHelper)
+        case .versionMismatch:
+            return .blocked(.helperNeedsReinstall)
         case .operationFailed(let message):
-            .failed(message)
-        case .teamIDNotConfigured, nil:
-            .failed(error.localizedDescription)
+            return .failed(message)
+        case .teamIDNotConfigured:
+            return .failed(error.localizedDescription)
+        case .timedOut, .connectionFailed, nil:
+            guard requestSent else { return .blocked(.helperNeedsReinstall) }
+            return .failed(unconfirmedHelperRemoval)
         }
     }
 }

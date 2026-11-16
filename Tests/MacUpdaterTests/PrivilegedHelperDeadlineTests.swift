@@ -116,18 +116,24 @@ struct PrivilegedHelperDeadlineTests {
         #expect(operationFailure(silent)?.isEmpty == false, "a refusal without a note still says what failed")
     }
 
-    /// After the handshake, an XPC transport error leaves the request's fate as unknown as a
-    /// timeout does, so it reads as a lost connection rather than as the helper's own answer.
-    @Test func aTransportErrorWhileStagingReadsAsALostConnection() {
-        let interrupted = NSError(domain: NSCocoaErrorDomain, code: NSXPCConnectionInterrupted)
+    /// Ruling 19: a failure of the handshake is marked as not sent, and a failure of the staging
+    /// request itself as sent, so Uninstall can tell "reinstall the helper" (nothing happened)
+    /// from "the app may already have left /Applications".
+    @Test func stagingFailuresSayWhetherTheRequestWasSent() throws {
+        let body = try functionBody(
+            "public func stageApplicationBundleForTrash(",
+            in: "Sources/MacUpdaterCore/PrivilegedHelper/PrivilegedHelperClient.swift"
+        )
+        let handshake = try #require(body.range(of: "try await performHandshake()"))
+        let notSent = try #require(body.range(of: "StagingFailure(underlying: error, requestSent: false)"))
+        let request = try #require(body.range(of: "call(deadline: Deadline.stageForTrash)"))
+        let sent = try #require(body.range(of: "StagingFailure(underlying: error, requestSent: true)"))
 
-        #expect(isConnectionFailed(PrivilegedHelperClient.stagingError(interrupted)))
-        #expect(isTimedOut(PrivilegedHelperClient.stagingError(PrivilegedHelperClient.HelperError.timedOut)))
-        let refusal = PrivilegedHelperClient.stagingError(PrivilegedHelperClient.HelperError.operationFailed("nie"))
-        guard case .operationFailed("nie") = refusal else {
-            Issue.record("the helper's own answer must pass through, got \(refusal)")
-            return
-        }
+        #expect(handshake.upperBound < notSent.lowerBound)
+        #expect(body[handshake.upperBound..<notSent.lowerBound].contains("catch"),
+                "the handshake's own failure must be caught and marked as not sent")
+        #expect(notSent.upperBound < request.lowerBound)
+        #expect(body[request.upperBound..<sent.lowerBound].contains("catch"))
     }
 
     private func operationFailure(_ result: Result<URL, Error>) -> String? {
@@ -135,16 +141,6 @@ struct PrivilegedHelperDeadlineTests {
               case .operationFailed(let message) = error as? PrivilegedHelperClient.HelperError
         else { return nil }
         return message
-    }
-
-    private func isConnectionFailed(_ error: PrivilegedHelperClient.HelperError) -> Bool {
-        if case .connectionFailed = error { return true }
-        return false
-    }
-
-    private func isTimedOut(_ error: PrivilegedHelperClient.HelperError) -> Bool {
-        if case .timedOut = error { return true }
-        return false
     }
 
     // MARK: - Source access
