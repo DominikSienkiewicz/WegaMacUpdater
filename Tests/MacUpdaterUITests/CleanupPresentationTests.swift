@@ -205,7 +205,11 @@ final class CleanupPresentationTests: XCTestCase {
 
         withLanguage(.pl) {
             let cask = CleanupPresentation.confirmation(for: Fixture.claudeCask, home: Fixture.home)
+            XCTAssertEqual(cask.action, CleanupActionText.command(for: .uninstallCask("claude-code")))
             XCTAssertEqual(cask.action, "brew uninstall --cask -- claude-code")
+            let formula = CleanupPresentation.confirmation(for: Fixture.ghFormula, home: Fixture.home)
+            XCTAssertEqual(formula.action, CleanupActionText.command(for: .uninstallFormula("gh")), "the sheet shows what BrewService runs")
+            XCTAssertEqual(formula.action, "brew uninstall --formula -- gh")
             XCTAssertTrue(CleanupReportRenderer.text(
                 caskReport, home: Fixture.home,
                 reasonText: CleanupPresentation.reasonText, statusText: CleanupPresentation.statusText
@@ -346,6 +350,11 @@ private enum CleanupPresentationFixtures {
         .pathDuplicates, tool: "claude", path: "/opt/homebrew/bin/claude", source: .homebrewCask(token: "claude-code"),
         status: .shadowed, reason: .shadowedBy(path: "/Users/cleanup-test/.local/bin/claude"),
         action: .brew(.uninstallCask("claude-code")), bucket: .safe, version: "2.1.311", size: 300_000_000
+    )
+    static let ghFormula = CleanupFinding(
+        .pathDuplicates, tool: "gh", path: "/opt/homebrew/bin/gh", source: .homebrewFormula(name: "gh"),
+        status: .shadowed, reason: .shadowedBy(path: "/Users/cleanup-test/.local/bin/gh"),
+        action: .brew(.uninstallFormula("gh")), bucket: .needsDecision, version: "2.104.0"
     )
     static let gitSystem = CleanupFinding(
         .pathDuplicates, tool: "git", path: "/usr/bin/git", source: .system, status: .expected,

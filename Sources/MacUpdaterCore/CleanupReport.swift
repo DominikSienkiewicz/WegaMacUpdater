@@ -26,6 +26,19 @@ public struct CleanupReport: Codable, Equatable, Sendable {
     }
 }
 
+/// How Cleanup spells a Homebrew removal wherever it shows one (the confirmation sheet, the text
+/// export): built from the arguments `BrewServiceCleanupRemoval` passes to `brew`, so the text
+/// is the command that runs, never `--zap` or `--force`.
+public enum CleanupActionText {
+    public static func command(for action: CleanupBrewAction) -> String {
+        let arguments = switch action {
+        case .uninstallFormula(let name): BrewService.uninstallFormulaArguments(name: name)
+        case .uninstallCask(let token): BrewService.uninstallCaskArguments(token: token, zap: false, force: false)
+        }
+        return (["brew"] + arguments).joined(separator: " ")
+    }
+}
+
 /// The JSON export (also the persisted form) and the plain-text export. Both show `~` instead of
 /// the home directory and never carry process arguments.
 public enum CleanupReportRenderer {
@@ -105,10 +118,8 @@ public enum CleanupReportRenderer {
             "trash " + urls.map { tildePath($0.path, home: home) }.joined(separator: ", ")
         case .trashBatch(let parent, let entries):
             "trash-batch \(tildePath(parent.path, home: home)) (\(entries.count))"
-        case .brew(.uninstallFormula(let name)):
-            "brew uninstall -- \(name)"
-        case .brew(.uninstallCask(let token)):
-            "brew uninstall --cask -- \(token)"
+        case .brew(let brew):
+            CleanupActionText.command(for: brew)
         case .command(let command):
             tildeWords(command, home: home)
         case .instruction(.removeWithCreatingTool):

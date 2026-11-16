@@ -120,16 +120,7 @@ public final class BrewService: @unchecked Sendable {
     }
 
     public func uninstallCask(token: String, zap: Bool = false, force: Bool = false) async throws -> ProcessResult {
-        var arguments = ["uninstall", "--cask"]
-        if zap {
-            arguments.append("--zap")
-        }
-        if force {
-            arguments.append("--force")
-        }
-        // SEC-10: `--` fences the token off from Homebrew's option parsing.
-        arguments.append("--")
-        arguments.append(token)
+        let arguments = Self.uninstallCaskArguments(token: token, zap: zap, force: force)
         let result = try await runBrew(arguments)
         try ensureSuccess(result, arguments: arguments)
         return result
@@ -149,11 +140,29 @@ public final class BrewService: @unchecked Sendable {
     }
 
     public func uninstallFormula(name: String) async throws -> ProcessResult {
-        // SEC-10: `--` fences the name off from Homebrew's option parsing.
-        let arguments = ["uninstall", "--formula", "--", name]
+        let arguments = Self.uninstallFormulaArguments(name: name)
         let result = try await runBrew(arguments)
         try ensureSuccess(result, arguments: arguments)
         return result
+    }
+
+    /// Arguments of `uninstallCask(token:zap:force:)`; Cleanup shows them as the command it runs.
+    public static func uninstallCaskArguments(token: String, zap: Bool = false, force: Bool = false) -> [String] {
+        var arguments = ["uninstall", "--cask"]
+        if zap {
+            arguments.append("--zap")
+        }
+        if force {
+            arguments.append("--force")
+        }
+        // SEC-10: `--` fences the token off from Homebrew's option parsing.
+        return arguments + ["--", token]
+    }
+
+    /// Arguments of `uninstallFormula(name:)`; Cleanup shows them as the command it runs.
+    public static func uninstallFormulaArguments(name: String) -> [String] {
+        // SEC-10: `--` fences the name off from Homebrew's option parsing.
+        ["uninstall", "--formula", "--", name]
     }
 
     public func upgradeFormulae() async throws -> ProcessResult {

@@ -170,6 +170,27 @@ final class CleanupReportTests: XCTestCase {
         XCTAssertEqual(restored.findings.first?.action, .command(command))
     }
 
+    func testTextSpellsBrewCommandsTheSharedWay() {
+        let link = plainHome.appending(path: "opt/homebrew/bin/gh", directoryHint: .notDirectory)
+        let formula = CleanupFinding(
+            detector: .pathDuplicates, tool: "gh", path: link, realpath: link, source: .homebrewFormula(name: "gh"),
+            version: "2.104.0", size: nil, status: .shadowed, reason: .shadowedBy(path: "/usr/local/bin/gh"),
+            action: .brew(.uninstallFormula("gh")), risk: .low, bucket: .needsDecision,
+            identity: CleanupFileIdentity(device: 1, inode: 31)
+        )
+        let sample = sampleReport(home: plainHome)
+        let report = CleanupReport(
+            createdAt: sample.createdAt, path: sample.path, findings: [formula] + sample.findings,
+            notes: [], skippedProtected: []
+        )
+
+        let lines = CleanupReportRenderer.text(report, home: plainHome, reasonText: reasonLabel, statusText: statusLabel)
+            .components(separatedBy: "\n")
+
+        XCTAssertEqual(lines[0].components(separatedBy: " | ")[4], CleanupActionText.command(for: .uninstallFormula("gh")))
+        XCTAssertEqual(lines[1].components(separatedBy: " | ")[4], CleanupActionText.command(for: .uninstallCask("claude-code")))
+    }
+
     func testReportFileRoundTrips() throws {
         let io = InMemoryReportIO()
         let file = CleanupReportFile(home: plainHome, io: io)

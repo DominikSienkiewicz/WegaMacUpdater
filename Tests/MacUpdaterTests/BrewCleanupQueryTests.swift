@@ -50,6 +50,22 @@ final class BrewCleanupQueryTests: XCTestCase {
         }
     }
 
+    /// The confirmation sheet and the text export show this text as the command Cleanup runs.
+    func testCleanupCommandTextIsWhatBrewServiceRuns() async throws {
+        let runner = QueryRunner(result: ProcessResult(exitCode: 0, stdout: "", stderr: ""))
+        let removal = BrewServiceCleanupRemoval(brew: makeService(runner))
+
+        try await removal.uninstallFormula(name: "gh")
+        try await removal.uninstallCask(token: "claude-code")
+
+        XCTAssertEqual(runner.requests.map { (["brew"] + $0.arguments).joined(separator: " ") }, [
+            CleanupActionText.command(for: .uninstallFormula("gh")),
+            CleanupActionText.command(for: .uninstallCask("claude-code")),
+        ])
+        XCTAssertEqual(CleanupActionText.command(for: .uninstallFormula("gh")), "brew uninstall --formula -- gh")
+        XCTAssertEqual(CleanupActionText.command(for: .uninstallCask("claude-code")), "brew uninstall --cask -- claude-code")
+    }
+
     func testSanitizedEnvironmentAdmitsCleanupQueryKeys() {
         let sanitized = AuthorizationEnvironment.sanitized(
             inherited: [:],

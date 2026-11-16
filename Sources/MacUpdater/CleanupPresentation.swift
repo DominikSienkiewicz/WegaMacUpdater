@@ -417,17 +417,16 @@ enum CleanupPresentation {
         }
     }
 
-    /// Homebrew commands are spelled exactly as `CleanupReportRenderer.text` writes them.
+    /// Homebrew commands are spelled by `CleanupActionText`, as the text export writes them and as
+    /// `BrewService` runs them.
     private static func actionText(_ action: CleanupAction, home: URL) -> String {
         switch action {
         case .trash(let urls):
             trf("Przeniesienie do Kosza: %@", urls.map { tilde($0.path, home) }.joined(separator: ", "))
         case .trashBatch(let parent, let entries):
             trf("Przeniesienie do Kosza — liczba wpisów: %@, folder: %@", "\(entries.count)", tilde(parent.path, home))
-        case .brew(.uninstallFormula(let name)):
-            "brew uninstall -- \(name)"
-        case .brew(.uninstallCask(let token)):
-            "brew uninstall --cask -- \(token)"
+        case .brew(let brew):
+            CleanupActionText.command(for: brew)
         case .command(let command):
             command
         case .instruction(let instruction):
