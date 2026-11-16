@@ -298,7 +298,7 @@ enum CleanupPresentation {
         switch kind {
         case .trash: tr("Do Kosza…")
         case .brew: tr("Odinstaluj…")
-        case .brewCleanup: tr("Wyczyść…")
+        case .brewCleanup: tr("Posprzątaj…")
         case .copyCommand: tr("Kopiuj polecenie")
         }
     }
@@ -443,7 +443,7 @@ enum CleanupPresentation {
 
     private static func confirmTitle(for action: CleanupAction) -> String {
         switch action {
-        case .brew(.cleanup): tr("Wyczyść")
+        case .brew(.cleanup): tr("Posprzątaj")
         case .brew: tr("Odinstaluj")
         default: tr("Przenieś do Kosza")
         }

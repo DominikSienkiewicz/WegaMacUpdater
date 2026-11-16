@@ -134,8 +134,8 @@ extension Translations {
         "ta wersja IDE nie jest zainstalowana; zainstalowane: %@": "this IDE version is not installed; installed: %@",
         "nie znaleziono zainstalowanego IDE tego produktu": "no installed IDE of this product was found",
         "nowsza niż zainstalowane IDE (%@)": "newer than the installed IDE (%@)",
-        "Wyczyść…": "Clean up…",
-        "Wyczyść": "Clean up",
+        "Posprzątaj…": "Clean up…",
+        "Posprzątaj": "Clean up",
 
         // Space sections
         "Menedżery wersji": "Version managers",

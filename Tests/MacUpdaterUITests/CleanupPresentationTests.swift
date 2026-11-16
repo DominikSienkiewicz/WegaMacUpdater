@@ -467,15 +467,24 @@ final class CleanupPresentationTests: XCTestCase {
             XCTAssertEqual(confirmation.action, "brew cleanup -- node")
             XCTAssertEqual(confirmation.action, CleanupActionText.command(for: .cleanup("node")), "the sheet shows what BrewService runs")
             XCTAssertEqual(confirmation.action, (["brew"] + BrewService.cleanupPackageArguments(name: "node")).joined(separator: " "))
-            XCTAssertEqual(confirmation.confirmTitle, "Wyczyść")
+            XCTAssertEqual(confirmation.confirmTitle, "Posprzątaj")
             XCTAssertEqual(confirmation.paths, ["/opt/homebrew/Cellar/node"])
             XCTAssertEqual(confirmation.reason, CleanupPresentation.reasonText(.homebrewLeftovers(items: 2)))
 
             let row = try XCTUnwrap(CleanupPresentation.sections(report, home: Fixture.home).flatMap(\.rows).first)
             XCTAssertEqual(row.findingID, Fixture.nodeLeftovers.id)
             XCTAssertEqual(row.button, .brewCleanup)
-            XCTAssertEqual(CleanupPresentation.buttonTitle(.brewCleanup), "Wyczyść…")
+            XCTAssertEqual(CleanupPresentation.buttonTitle(.brewCleanup), "Posprzątaj…")
         }
+        let english = withLanguage(.en) {
+            (
+                confirmation: CleanupPresentation.confirmation(for: Fixture.nodeLeftovers, home: Fixture.home),
+                button: CleanupPresentation.buttonTitle(.brewCleanup)
+            )
+        }
+        XCTAssertEqual(english.confirmation.confirmTitle, "Clean up", "the Logs view's \"Clear\" must not label a Homebrew clean-up")
+        XCTAssertEqual(english.confirmation.action, "brew cleanup -- node")
+        XCTAssertEqual(english.button, "Clean up…")
     }
 
     // MARK: - Helpers
