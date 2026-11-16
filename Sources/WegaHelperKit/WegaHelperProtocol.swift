@@ -37,6 +37,18 @@ import Foundation
     /// and the snapshot passes Gatekeeper — so this is NOT a generic "overwrite
     /// any path as root" primitive.
     func replaceBundle(atPath targetPath: String, withSnapshotAtPath snapshotPath: String, withReply reply: @escaping @Sendable (Bool, String?) -> Void)
+
+    /// Moves a root-owned application out of `/Applications` into a fresh staging slot under
+    /// `UninstallStaging.root` and hands it to the calling administrator, who then puts it in
+    /// the Trash as themselves. Root never writes into a home directory.
+    ///
+    /// The helper refuses anything but a plainly spelled top-level application that belongs to
+    /// root, carries `expectedBundleID` and is not Wega; the caller must be the administrator at
+    /// the console. The reply is `(stagedPath, error)`: a path with no error is a complete
+    /// hand-over; a path *with* a note means the bundle left `/Applications` but some items
+    /// stayed root-owned; no path means nothing was moved, or that a swapped entry was left in
+    /// a root-only slot.
+    func stageApplicationBundleForTrash(atPath path: String, expectedBundleID: String, withReply reply: @escaping @Sendable (String?, String?) -> Void)
 }
 
 /// Identity & code-requirement constants shared by client and helper.
@@ -57,7 +69,7 @@ public enum WegaHelper {
     /// Main app bundle identifier.
     public static let appBundleID = AppMetadata.bundleIdentifier
     /// Helper protocol version (bump on breaking interface changes).
-    public static let version = "5"
+    public static let version = "6"
 
     /// Apple Developer Team ID — pinned by XPC (both directions) and self-update
     /// verification. Must match the Developer ID certificate the app is signed with.
@@ -365,10 +377,13 @@ extension WegaHelper {
     ///
     /// Stricter than `isTopLevelApplicationBundle`, which the app's preflight uses and which
     /// accepts a `..` that standardizes back into `/Applications`: the root helper takes only a
-    /// plainly spelled path, so the string it approves is the entry the kernel resolves.
+    /// plainly spelled path, so the string it approves is the entry the kernel resolves. The
+    /// folder in `/Applications/<folder>/<name>.app` must not be a bundle in any letter case,
+    /// because Launch Services treats `X.APP` as an application just as it does `X.app`.
     public static func bundleStagingRejection(targetPath: String) -> BundleStagingRejection? {
         guard namesEveryComponentPlainly(targetPath),
-              isTopLevelApplicationBundle(path: targetPath) else {
+              isTopLevelApplicationBundle(path: targetPath),
+              !hasBundleFolder(targetPath) else {
             return .notTopLevelApplication
         }
         return nil
@@ -437,6 +452,14 @@ extension WegaHelper {
                     && !component.elementsEqual(".".utf8)
                     && !component.elementsEqual("..".utf8)
             }
+    }
+
+    /// Whether the folder between `/Applications` and the application ends in `.app`, ignoring
+    /// case. Only called on a path whose components are plain, so the byte split is the path.
+    private static func hasBundleFolder(_ path: String) -> Bool {
+        let components = path.utf8.split(separator: pathSeparator)
+        guard components.count == 3 else { return false }
+        return String(decoding: components[1], as: UTF8.self).lowercased().hasSuffix(".app")
     }
 
     private static let pathSeparator = UInt8(ascii: "/")

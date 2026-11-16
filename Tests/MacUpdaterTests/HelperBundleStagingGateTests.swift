@@ -57,6 +57,24 @@ struct HelperBundleStagingGateTests {
             == .notTopLevelApplication)
     }
 
+    /// Launch Services matches the `.app` extension ignoring case, so `X.APP` is a bundle too and
+    /// what sits inside it is part of that bundle, not an application of its own (Ruling 15).
+    @Test func rejectsABundleNestedInABundleWhateverTheCaseOfItsExtension() {
+        #expect(WegaHelper.bundleStagingRejection(targetPath: "/Applications/X.APP/Y.app")
+            == .notTopLevelApplication)
+        #expect(WegaHelper.bundleStagingRejection(targetPath: "/Applications/X.App/Y.app")
+            == .notTopLevelApplication)
+        #expect(WegaHelper.bundleStagingRejection(targetPath: "/Applications/X.aPp/Y.app")
+            == .notTopLevelApplication)
+    }
+
+    /// Positive control for the case-insensitive check: only the extension decides, not a folder
+    /// name that merely contains the letters.
+    @Test func acceptsAFolderWhoseNameOnlyLooksLikeABundle() {
+        #expect(WegaHelper.bundleStagingRejection(targetPath: "/Applications/Apps/Foo.app") == nil)
+        #expect(WegaHelper.bundleStagingRejection(targetPath: "/Applications/X.apps/Foo.app") == nil)
+    }
+
     @Test func rejectsAnApplicationTwoFoldersDeep() {
         #expect(WegaHelper.bundleStagingRejection(targetPath: "/Applications/A/B/C.app")
             == .notTopLevelApplication)
@@ -191,6 +209,22 @@ struct HelperBundleStagingGateTests {
             == .wegaItself)
     }
 
+    /// Wega's own identifier is still just a mismatch when the user asked for another application:
+    /// the request is bound to what the user saw first.
+    @Test func rejectsWegasIdentifierWhenTheUserSawAnotherApplication() {
+        #expect(WegaHelper.bundleStagingRejection(facts: facts(
+            bundleID: WegaHelper.appBundleID, expectedBundleID: "com.acme.foo")) == .identityMismatch)
+    }
+
+    /// APFS ignores Unicode normalization, and `realpath` returns the name as stored on disk. A name
+    /// sent precomposed (NFC) and stored decomposed (NFD) is the same entry, not a symlink.
+    @Test func acceptsTheSameNameInEitherUnicodeNormalization() {
+        let precomposed = "/Applications/Caf\u{E9}.app"
+        let decomposed = "/Applications/Cafe\u{301}.app"
+        #expect(Array(precomposed.utf8) != Array(decomposed.utf8))
+        #expect(WegaHelper.bundleStagingRejection(facts: facts(path: precomposed, resolved: decomposed)) == nil)
+    }
+
     // MARK: - Facts gate: order of checks
 
     /// A caller who is not allowed to ask learns nothing about the target.
@@ -243,16 +277,22 @@ struct HelperBundleStagingGateTests {
 
     /// `0711`: only root lists or writes it, and each caller can still reach the slot it owns.
     @Test func rootModeMustBeExactly0711() {
-        #expect(UninstallStaging.rootRejection(ownerUID: 0, permissions: 0o711) == nil)
-        #expect(UninstallStaging.rootRejection(ownerUID: 0, permissions: 0o755) == .stagingRootUnsafe)
-        #expect(UninstallStaging.rootRejection(ownerUID: 0, permissions: 0o700) == .stagingRootUnsafe)
-        #expect(UninstallStaging.rootRejection(ownerUID: 0, permissions: 0o733) == .stagingRootUnsafe)
-        #expect(UninstallStaging.rootRejection(ownerUID: 0, permissions: 0o1711) == .stagingRootUnsafe)
-        #expect(UninstallStaging.rootRejection(ownerUID: 0, permissions: 0o4711) == .stagingRootUnsafe)
+        #expect(UninstallStaging.rootRejection(ownerUID: 0, permissions: 0o711, isDirectory: true) == nil)
+        #expect(UninstallStaging.rootRejection(ownerUID: 0, permissions: 0o755, isDirectory: true) == .stagingRootUnsafe)
+        #expect(UninstallStaging.rootRejection(ownerUID: 0, permissions: 0o700, isDirectory: true) == .stagingRootUnsafe)
+        #expect(UninstallStaging.rootRejection(ownerUID: 0, permissions: 0o733, isDirectory: true) == .stagingRootUnsafe)
+        #expect(UninstallStaging.rootRejection(ownerUID: 0, permissions: 0o1711, isDirectory: true) == .stagingRootUnsafe)
+        #expect(UninstallStaging.rootRejection(ownerUID: 0, permissions: 0o4711, isDirectory: true) == .stagingRootUnsafe)
     }
 
     @Test func stagingRootMustBeOwnedByRoot() {
-        #expect(UninstallStaging.rootRejection(ownerUID: 501, permissions: 0o711) == .stagingRootUnsafe)
+        #expect(UninstallStaging.rootRejection(ownerUID: 501, permissions: 0o711, isDirectory: true) == .stagingRootUnsafe)
+    }
+
+    /// The facts come from `lstat`, and a symlink's own mode can be set to `0711` with `lchmod`:
+    /// anything that is not a directory is refused whatever its owner and mode (Ruling 15).
+    @Test func stagingRootMustBeADirectory() {
+        #expect(UninstallStaging.rootRejection(ownerUID: 0, permissions: 0o711, isDirectory: false) == .stagingRootUnsafe)
     }
 
     // MARK: - Fixture
