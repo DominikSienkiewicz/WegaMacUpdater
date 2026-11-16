@@ -63,7 +63,7 @@ enum LeftoverOwnership {
     }
 
     /// The folded name without one `.plist`, `.savedState`, `.binarycookies` or `.sfl<digits>` suffix.
-    private static func stem(of name: String) -> String {
+    static func stem(of name: String) -> String {
         if let suffix = stateSuffixes.first(where: { name.hasSuffix($0) }) {
             return String(name.dropLast(suffix.count))
         }

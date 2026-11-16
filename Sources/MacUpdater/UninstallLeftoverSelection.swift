@@ -49,6 +49,7 @@ enum UninstallLeftoverPresentation {
         case .outsideLibrary: return tr("poza ~/Library")
         case .caskMatchedByName: return tr("lista Homebrew (dopasowanie po nazwie)")
         case .appName: return tr("nazwa aplikacji")
+        case .notNamedForApp: return tr("lista Homebrew (wspólny folder?)")
         case nil: break
         }
         switch item.source {

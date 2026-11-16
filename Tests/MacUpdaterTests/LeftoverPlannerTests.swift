@@ -174,6 +174,97 @@ struct LeftoverPlannerTests {
         #expect(items.allSatisfy { $0.isSelectedByDefault })
     }
 
+    /// Real cask data: Word's zap list (strong through its container) also names the vendor folder.
+    @Test func strongZapItemNotNamedForTheAppIsProbable() throws {
+        let vendor = try fixture.folder("Library/Application Support/Microsoft")
+        let container = try fixture.folder("Library/Containers/com.microsoft.Word")
+        let word = app(name: "Microsoft Word", bundleID: "com.microsoft.Word", cask: cask("microsoft-word", .token, zap: [
+            "~/Library/Application Support/Microsoft", "~/Library/Containers/com.microsoft.Word",
+        ]))
+
+        let items = plannedItems(word)
+
+        #expect(items.map(\.url) == [vendor, container])
+        #expect(items.map(\.source) == [.homebrewZap(token: "microsoft-word"), .homebrewZap(token: "microsoft-word")])
+        #expect(items.map(\.probableReason) == [.notNamedForApp, nil])
+        #expect(items.map(\.isSelectedByDefault) == [false, true])
+    }
+
+    /// Real cask data: Chrome's zap list names Google's updater, which other Google apps share.
+    @Test func sharedUpdaterFoldersOfAStrongMatchAreProbable() throws {
+        let updater = try fixture.folder("Library/Google/GoogleSoftwareUpdate")
+        let keystone = try fixture.folder("Library/Caches/com.google.Keystone")
+        let preferences = try fixture.file("Library/Preferences/com.google.Chrome.plist")
+        let chrome = app(name: "Google Chrome", bundleID: "com.google.Chrome", cask: cask("google-chrome", .bundleIdentifier, zap: [
+            "~/Library/Google/GoogleSoftwareUpdate", "~/Library/Caches/com.google.Keystone",
+            "~/Library/Preferences/com.google.Chrome.plist",
+        ]))
+
+        let items = plannedItems(chrome)
+
+        #expect(items.map(\.url) == [updater, keystone, preferences])
+        #expect(items.map(\.probableReason) == [.notNamedForApp, .notNamedForApp, nil])
+    }
+
+    /// Real cask data: Obsidian, Zed and Slack name their own folders, so their items stay ticked.
+    @Test func strongZapItemsNamedForTheAppAreTicked() throws {
+        let recents = LeftoverPathRules.recentDocumentsFolder.joined(separator: "/")
+        let expected: [URL] = try [
+            fixture.folder("Library/Application Support/obsidian"),
+            fixture.file("Library/Preferences/md.obsidian.plist"),
+            fixture.folder("Library/Application Support/Zed"),
+            fixture.file("\(recents)/dev.zed.zed.sfl3"),
+            fixture.folder("Library/Application Support/Slack"),
+            fixture.folder("Library/Caches/com.tinyspeck.slackmacgap.ShipIt"),
+            fixture.folder("Library/Group Containers/ABCDE12345.com.tinyspeck.slackmacgap"),
+        ]
+        let apps = [
+            app(name: "Obsidian", bundleID: "md.obsidian", cask: cask("obsidian", .token, zap: [
+                "~/Library/Application Support/obsidian", "~/Library/Preferences/md.obsidian.plist",
+            ])),
+            app(name: "Zed", bundleID: "dev.zed.Zed", cask: cask("zed", .token, zap: [
+                "~/Library/Application Support/Zed", "~/\(recents)/dev.zed.zed.sfl*",
+            ])),
+            app(name: "Slack", bundleID: "com.tinyspeck.slackmacgap", cask: cask("slack", .token, zap: [
+                "~/Library/Application Support/Slack", "~/Library/Caches/com.tinyspeck.slackmacgap*",
+                "~/Library/Group Containers/*.com.tinyspeck.slackmacgap",
+            ])),
+        ]
+
+        let items = apps.flatMap(plannedItems)
+
+        #expect(items.map(\.url) == expected)
+        #expect(items.allSatisfy { $0.probableReason == nil && $0.isSelectedByDefault })
+    }
+
+    /// The cask token names the app too, and a state suffix is not part of the name.
+    @Test func caskTokenAndStateSuffixNameTheApp() throws {
+        let caches = try fixture.folder("Library/Caches/acme-studio")
+        let state = try fixture.folder("Library/Saved Application State/Acme.savedState")
+        let acme = app(name: "Acme", bundleID: "com.acme.studio", cask: cask("acme-studio", .curatedMapping, zap: [
+            "~/Library/Caches/acme-studio", "~/Library/Saved Application State/Acme.savedState",
+        ]))
+
+        let items = plannedItems(acme)
+
+        #expect(items.map(\.url) == [caches, state])
+        #expect(items.map(\.probableReason) == [nil, nil])
+    }
+
+    /// Each name a wildcard matched on disk is judged on its own, not on the pattern.
+    @Test func wildcardMatchesAreJudgedByTheirOwnName() throws {
+        let helper = try fixture.folder("Library/Caches/com.google.Chrome.helper")
+        let updater = try fixture.folder("Library/Caches/com.google.SoftwareUpdate")
+        let chrome = app(name: "Google Chrome", bundleID: "com.google.Chrome", cask: cask("google-chrome", .bundleIdentifier, zap: [
+            "~/Library/Caches/com.google.*",
+        ]))
+
+        let items = plannedItems(chrome)
+
+        #expect(items.map(\.url) == [helper, updater])
+        #expect(items.map(\.probableReason) == [nil, .notNamedForApp])
+    }
+
     @Test func weakZapItemsAreProbable() throws {
         let support = try fixture.folder("Library/Application Support/obsidian")
         let caches = try fixture.folder("Library/Caches/md.obsidian")

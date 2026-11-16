@@ -39,6 +39,7 @@ extension Translations {
         "Prawdopodobne — sprawdź przed zaznaczeniem": "Probable — check before ticking",
         "lista Homebrew": "Homebrew list",
         "lista Homebrew (dopasowanie po nazwie)": "Homebrew list (matched by name)",
+        "lista Homebrew (wspólny folder?)": "Homebrew list (shared folder?)",
         "identyfikator aplikacji": "bundle id",
         "nazwa aplikacji": "app name",
         "poza ~/Library": "outside ~/Library",

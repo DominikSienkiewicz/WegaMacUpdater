@@ -10,6 +10,9 @@ enum LeftoverCandidates {
         /// The ByHost template's bundle id: a found name's part between `<id>.` and `.plist` must hold
         /// no `.`, or the file belongs to a longer id (`<id>.canary.<UUID>.plist`).
         var byHostIdentifier: String?
+        /// Set on a ticked Homebrew-list entry: a found item whose name does not point to the app is
+        /// `.notNamedForApp`.
+        var appNames: AppNames?
 
         /// Whether an item found on disk for this candidate is the app's.
         func admits(_ found: [String]) -> Bool {
@@ -18,6 +21,33 @@ enum LeftoverCandidates {
                 .dropFirst(id.unicodeScalars.count + 1)
                 .dropLast(byHostSuffix.unicodeScalars.count)
             return !hostPart.contains(".")
+        }
+
+        /// Why an item found on disk for this candidate is probable, judged on its own name.
+        func probableReason(found: [String]) -> LeftoverItem.ProbableReason? {
+            guard probableReason == nil, let appNames, let name = found.last, !appNames.areNamed(by: name) else {
+                return probableReason
+            }
+            return .notNamedForApp
+        }
+    }
+
+    /// What the name of a ticked Homebrew-list item must point to: the app's display name, `.app`
+    /// file name or cask token, or its safe bundle id.
+    struct AppNames {
+        private let names: Set<String>
+        private let bundleIdentifier: String?
+
+        init(app: LeftoverApp, token: String) {
+            names = Set([app.name, app.fileName, token].map { LeftoverPathRules.key([$0]) })
+            bundleIdentifier = app.bundleIdentifier.flatMap { MigrationPlanner.isSafeBundleID($0) ? $0 : nil }
+        }
+
+        /// Without one state suffix the name equals one of the names, or it holds the bundle id the
+        /// way a zap entry names it (`LeftoverCaskEvidence.component(_:namesBoundedID:)`).
+        func areNamed(by name: String) -> Bool {
+            names.contains(LeftoverOwnership.stem(of: LeftoverPathRules.key([name])))
+                || bundleIdentifier.map { LeftoverCaskEvidence.component(name, namesBoundedID: $0) } == true
         }
     }
 
@@ -63,15 +93,19 @@ enum LeftoverCandidates {
     }
 
     /// The `~/…` entries of the matched cask's zap list, in its order. An entry outside
-    /// `~/Library`, or from a cask matched only by name, is probable.
+    /// `~/Library`, or from a cask matched only by name, is probable; so is an item found for
+    /// another entry when its own name does not point to the app.
     static func zap(for app: LeftoverApp) -> [Candidate] {
         guard let cask = app.cask else { return [] }
         let isStrong = cask.isStrong(forBundleIdentifier: app.bundleIdentifier)
+        let appNames = AppNames(app: app, token: cask.token)
         return cask.zapTrashPaths.compactMap(LeftoverPathRules.zapComponents).map { components in
-            Candidate(
+            let reason = zapReason(components, isStrong: isStrong)
+            return Candidate(
                 components: components,
                 source: .homebrewZap(token: cask.token),
-                probableReason: zapReason(components, isStrong: isStrong)
+                probableReason: reason,
+                appNames: reason == nil ? appNames : nil
             )
         }
     }

@@ -12,6 +12,9 @@ public struct LeftoverItem: Equatable, Sendable, Identifiable {
         case caskMatchedByName
         case outsideLibrary
         case appName
+        /// A strong cask's zap item whose own name does not point to the app: a vendor-wide or
+        /// shared folder (Word's `Application Support/Microsoft`, Chrome's Google updater).
+        case notNamedForApp
     }
 
     public let url: URL
@@ -64,7 +67,9 @@ public struct LeftoverCaskEvidence: Equatable, Sendable {
         }
     }
 
-    private static func component(_ component: String, namesBoundedID id: String) -> Bool {
+    /// Whether `component` holds `id`, ignoring case, bounded on each side by its start or end, a
+    /// `.` or a wildcard character.
+    static func component(_ component: String, namesBoundedID id: String) -> Bool {
         let boundaries = CharacterSet(charactersIn: ".*?[]")
         var searchRange = component.startIndex..<component.endIndex
         while let found = component.range(of: id, options: .caseInsensitive, range: searchRange) {

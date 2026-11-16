@@ -63,6 +63,14 @@ struct UninstallLeftoverPresentationTests {
         #expect(Presentation.sourceLabel(Fixture.plist) == tr("identyfikator aplikacji"))
     }
 
+    /// A folder a strong cask lists that does not name the app: a vendor-wide or shared folder.
+    @Test func notNamedForAppHasItsOwnLabel() {
+        #expect(Presentation.sourceLabel(Fixture.vendorFolder) == tr("lista Homebrew (wspólny folder?)"))
+        #expect(Translations.en["lista Homebrew (wspólny folder?)"] == "Homebrew list (shared folder?)")
+        #expect(Presentation.sections([Fixture.word]).first?.probable == [Fixture.vendorFolder])
+        #expect(Presentation.defaultSelection([Fixture.word], applicationsIncomplete: false).isEmpty)
+    }
+
     @Test func sizeTextStates() {
         #expect(Presentation.sizeText(nil) == "…")
         #expect(Presentation.sizeText(.unknown) == tr("rozmiar nieznany"))
@@ -188,8 +196,13 @@ private enum UninstallLeftoverPresentationFixtures {
     static let zedPlist = item("Library/Preferences/dev.zed.Zed.plist", source: .bundleIdentifier)
     static let zedByName = item("Library/Caches/Zed", source: .appName, probable: .appName)
 
+    static let vendorFolder = item(
+        "Library/Application Support/Microsoft", source: .homebrewZap(token: "microsoft-word"), probable: .notNamedForApp
+    )
+
     static let obsidian = group("Obsidian", [zap, plist, byName, outside, weakZap, shared, sharedOutside, coTarget])
     static let zed = group("Zed", [zedPlist, zedByName])
+    static let word = group("Microsoft Word", [vendorFolder])
 
     static func bytes(_ count: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: count, countStyle: .file)

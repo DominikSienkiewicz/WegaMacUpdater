@@ -144,7 +144,7 @@ private struct Finding {
         url = path.url
         source = candidate.source
         self.precedence = precedence
-        probableReason = candidate.probableReason
+        probableReason = candidate.probableReason(found: path.components)
     }
 
     func item(sharedWith: [String], coTargets: [String]) -> LeftoverItem {
