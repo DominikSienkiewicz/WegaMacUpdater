@@ -27,19 +27,20 @@ public enum CleanupRequirementParser {
     private static let unresolvableAliases: Set<String> = ["node", "stable", "latest", "lts", "current"]
 
     public static func requirements(in file: CleanupProjectFile) -> [CleanupRequirement] {
-        guard !file.text.contains("\0") else { return [] }
+        let text = file.text.hasPrefix("\u{FEFF}") ? String(file.text.dropFirst()) : file.text
+        guard !text.contains("\0") else { return [] }
         let found: [(tool: String, spec: CleanupVersionSpec)]
         switch file.kind {
-        case .pythonVersion: found = pythonVersions(file.text)
-        case .nvmrc, .nodeVersion: found = nodeVersions(file.text)
-        case .toolVersions: found = toolVersions(file.text)
-        case .miseToml: found = miseTools(file.text)
-        case .pyprojectToml: found = pyprojectRanges(file.text)
-        case .packageJson: found = packageJsonNode(file.text)
-        case .sdkmanrc: found = sdkmanCandidates(file.text)
-        case .rustToolchain: found = rustToolchain(file.text)
-        case .rustToolchainToml: found = rustToolchainToml(file.text)
-        case .pyvenvCfg: found = pyvenvHome(file.text)
+        case .pythonVersion: found = pythonVersions(text)
+        case .nvmrc, .nodeVersion: found = nodeVersions(text)
+        case .toolVersions: found = toolVersions(text)
+        case .miseToml: found = miseTools(text)
+        case .pyprojectToml: found = pyprojectRanges(text)
+        case .packageJson: found = packageJsonNode(text)
+        case .sdkmanrc: found = sdkmanCandidates(text)
+        case .rustToolchain: found = rustToolchain(text)
+        case .rustToolchainToml: found = rustToolchainToml(text)
+        case .pyvenvCfg: found = pyvenvHome(text)
         case .gradleWrapperProperties, .gradleDaemonJvmProperties, .gradleBuildScript: found = []
         }
         return found.map { CleanupRequirement(tool: $0.tool, spec: $0.spec, source: file.url) }
@@ -162,7 +163,7 @@ public enum CleanupRequirementParser {
             guard parts.count >= 2 else { continue }
             let tool = normalisedTool(parts[0])
             for version in parts.dropFirst() where !isSkippedToolVersion(version) {
-                result.append((tool, .pin(version)))
+                result.append((tool, versionAliasSpec(version)))
             }
         }
         return result
@@ -187,9 +188,17 @@ public enum CleanupRequirementParser {
         return result
     }
 
+    /// Aliases resolve at install time, so no installed version can be matched against them.
+    private static func versionAliasSpec(_ version: String) -> CleanupVersionSpec {
+        let lowered = version.lowercased()
+        let isAlias = lowered == "latest" || lowered == "lts" || lowered.hasPrefix("latest:")
+            || lowered.hasPrefix("lts/") || lowered.hasPrefix("lts-") || lowered.hasPrefix("prefix:")
+        return isAlias ? .unresolvable(version) : .pin(version)
+    }
+
     private static func miseSpec(_ version: String) -> CleanupVersionSpec {
         let lowered = version.lowercased()
-        return version.isEmpty || lowered == "latest" || lowered == "lts" ? .unresolvable(version) : .pin(version)
+        return version.isEmpty ? .unresolvable(version) : versionAliasSpec(version)
     }
 
     private static func miseTableSpec(_ table: String) -> CleanupVersionSpec {
@@ -232,7 +241,10 @@ public enum CleanupRequirementParser {
     }
 
     private static func rustToolchain(_ text: String) -> Found {
-        guard let first = contentLines(text).first else { return [] }
+        let content = contentLines(text)
+        let isToml = content.contains { sectionName($0) == "toolchain" || keyValue($0)?.key == "channel" }
+        if isToml { return content.compactMap(channelPin) }
+        guard let first = content.first else { return [] }
         return [("rust", .pin(first))]
     }
 
@@ -243,9 +255,16 @@ public enum CleanupRequirementParser {
         }
     }
 
+    private static func channelPin(_ line: String) -> (tool: String, spec: CleanupVersionSpec)? {
+        guard let pair = keyValue(line), pair.key == "channel" else { return nil }
+        let channel = unquoted(pair.value)
+        return channel.isEmpty ? nil : ("rust", .pin(channel))
+    }
+
     private static func pyvenvHome(_ text: String) -> Found {
-        contentLines(text).compactMap { line in
-            guard let pair = keyValue(line), pair.key.lowercased() == "home", !pair.value.isEmpty else { return nil }
+        lines(text).compactMap { raw in
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            guard !line.hasPrefix("#"), let pair = keyValue(line), pair.key.lowercased() == "home", !pair.value.isEmpty else { return nil }
             return ("python", .path(pair.value))
         }
     }

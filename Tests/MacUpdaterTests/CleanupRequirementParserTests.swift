@@ -109,4 +109,37 @@ final class CleanupRequirementParserTests: XCTestCase {
         let reqs = CleanupRequirementParser.requirements(in: CleanupProjectFile(url: url, kind: .nvmrc, text: "20\n"))
         XCTAssertEqual(reqs.map(\.source), [url])
     }
+
+    func testRustToolchainFileWithTomlContentUsesTheChannel() {
+        let text = "[toolchain]\nchannel = \"1.80.1\"\ncomponents = [\"clippy\"]\n"
+        XCTAssertEqual(pairs(parse(.rustToolchain, text)), ["rust=pin(\"1.80.1\")"])
+        XCTAssertEqual(pairs(parse(.rustToolchain, "channel = \"stable\"\n")), ["rust=pin(\"stable\")"])
+    }
+
+    func testPyvenvHomeKeepsAHashInsideThePath() {
+        let text = "# generated\nhome = /Users/x/dev#1/bin\n"
+        XCTAssertEqual(pairs(parse(.pyvenvCfg, text)), ["python=path(\"/Users/x/dev#1/bin\")"])
+    }
+
+    func testLeadingByteOrderMarkIsIgnored() {
+        XCTAssertEqual(pairs(parse(.pythonVersion, "\u{FEFF}3.12\n")), ["python=pin(\"3.12\")"])
+        XCTAssertEqual(pairs(parse(.nvmrc, "\u{FEFF}v20\n")), ["node=pin(\"20\")"])
+    }
+
+    func testToolVersionsAliasesAreUnresolvable() {
+        let text = "nodejs latest lts\npython latest:3.12 lts/* lts-iron prefix:3.1\n"
+        XCTAssertEqual(pairs(parse(.toolVersions, text)), [
+            "node=unresolvable(\"latest\")", "node=unresolvable(\"lts\")",
+            "python=unresolvable(\"latest:3.12\")", "python=unresolvable(\"lts/*\")",
+            "python=unresolvable(\"lts-iron\")", "python=unresolvable(\"prefix:3.1\")"
+        ])
+    }
+
+    func testMiseAliasesAreUnresolvableInStringAndArrayForms() {
+        let text = "[tools]\nnode = \"lts/*\"\npython = [\"latest:3\", \"3.12\"]\njava = { version = \"prefix:21\" }\nruby = \"lts-x\"\n"
+        XCTAssertEqual(pairs(parse(.miseToml, text)), [
+            "node=unresolvable(\"lts/*\")", "python=unresolvable(\"latest:3\")", "python=pin(\"3.12\")",
+            "java=unresolvable(\"prefix:21\")", "ruby=unresolvable(\"lts-x\")"
+        ])
+    }
 }
