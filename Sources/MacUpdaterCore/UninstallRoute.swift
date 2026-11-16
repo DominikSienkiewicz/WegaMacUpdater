@@ -40,9 +40,13 @@ public enum UninstallRoute {
     }
 
     /// The helper is offered only for a root-owned, top-level `/Applications` bundle that has a
-    /// bundle identifier; every other refusal is reported with its own reason.
+    /// bundle identifier; every other refusal is reported with its own reason. A refusal on a
+    /// user-owned bundle is App Management only when the bundle and its folder are writable;
+    /// otherwise plain file permissions block it.
     public static func afterPermissionDenied(_ facts: UninstallBundleFacts) -> UninstallRouteDecision {
-        if facts.ownerUID == facts.currentUserUID { return .blocked(.needsAppManagement) }
+        if facts.ownerUID == facts.currentUserUID {
+            return .blocked(facts.isWritableByUser ? .needsAppManagement : .needsAdministratorRights)
+        }
         if facts.ownerUID != 0 || !facts.isTopLevelInApplications || !facts.hasBundleIdentifier {
             return .blocked(.needsAdministratorRights)
         }

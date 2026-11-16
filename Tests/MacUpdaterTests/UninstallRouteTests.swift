@@ -29,8 +29,14 @@ struct UninstallRouteTests {
         #expect(UninstallRoute.preflight(facts()) == .helper)
     }
 
-    @Test func userOwnedDeniedNeedsAppManagement() {
-        #expect(UninstallRoute.afterPermissionDenied(facts(owner: 501)) == .blocked(.needsAppManagement))
+    @Test func userOwnedWritableDeniedNeedsAppManagement() {
+        #expect(UninstallRoute.afterPermissionDenied(facts(owner: 501, writable: true)) == .blocked(.needsAppManagement))
+    }
+
+    /// The bundle or its folder is not writable, so App Management is not what blocks it.
+    @Test func userOwnedNotWritableDeniedNeedsAdministratorRights() {
+        #expect(UninstallRoute.afterPermissionDenied(facts(owner: 501, writable: false))
+            == .blocked(.needsAdministratorRights))
     }
 
     @Test func foreignOwnerNeedsAdministratorRights() {
