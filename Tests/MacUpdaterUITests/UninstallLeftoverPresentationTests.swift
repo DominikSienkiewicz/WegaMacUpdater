@@ -51,6 +51,21 @@ struct UninstallLeftoverPresentationTests {
         #expect(paths == [Fixture.zap, Fixture.plist, Fixture.coTarget, Fixture.zedPlist].map(\.url.path))
     }
 
+    /// Owner decision 2026-11-17: "Odznacz wszystko" clears every leftover of the sheet, probable
+    /// ones included, while "Zaznacz wszystko" still ticks the main list only.
+    @Test func deselectAllClearsProbableItemsToo() throws {
+        let groups = [Fixture.obsidian, Fixture.zed]
+        var selected = Presentation.defaultSelection(groups, applicationsIncomplete: false)
+        selected.insert(Fixture.byName.url.path)
+
+        selected.subtract(Presentation.deselectAllPaths(groups))
+
+        #expect(selected.isEmpty, "a probable item ticked by hand is cleared too")
+        let view = try Fixture.source("Sources/MacUpdater/UninstallLeftoverSelection.swift")
+        #expect(view.contains("if allSelected { selected.subtract(UninstallLeftoverPresentation.deselectAllPaths(groups)) }"))
+        #expect(view.contains("else { selected.formUnion(bulkPaths) }"))
+    }
+
     @Test func sourceLabelPrecedence() {
         #expect(Presentation.sourceLabel(Fixture.sharedOutside) == trf("używa też %@", "Other App"),
                 "sharing beats being outside ~/Library")

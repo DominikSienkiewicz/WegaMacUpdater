@@ -3,8 +3,8 @@ import AppKit
 import MacUpdaterCore
 
 /// Spec §5.8: every decision the leftover section of the uninstall sheet renders — which items
-/// are ticked when it opens, which sit in the probable section, what select-all covers and how a
-/// row and the header read — so `UninstallLeftoverSelection` only draws them.
+/// are ticked when it opens, which sit in the probable section, what select-all and deselect-all
+/// cover and how a row and the header read — so `UninstallLeftoverSelection` only draws them.
 enum UninstallLeftoverPresentation {
     /// One app's leftovers: its main list, then the items to check before ticking.
     struct Section: Identifiable {
@@ -34,10 +34,15 @@ enum UninstallLeftoverPresentation {
         return Set(groups.flatMap(\.items).filter(\.isSelectedByDefault).map(\.url.path))
     }
 
-    /// What the select-all button ticks and unticks: the main lists only. Probable items are
-    /// ticked one by one.
+    /// What "Zaznacz wszystko" ticks, and what decides which of the two labels the button shows:
+    /// the main lists only. Probable items are ticked one by one.
     static func bulkPaths(_ groups: [LeftoverGroup]) -> [String] {
         sections(groups).flatMap(\.main).map(\.url.path)
+    }
+
+    /// What "Odznacz wszystko" unticks: every item of the sheet, probable ones ticked by hand too.
+    static func deselectAllPaths(_ groups: [LeftoverGroup]) -> [String] {
+        groups.flatMap(\.items).map(\.url.path)
     }
 
     /// Where the item was found. Another app still using it outweighs everything else.
@@ -148,7 +153,7 @@ struct UninstallLeftoverSelection: View {
                 Spacer()
                 if !bulkPaths.isEmpty {
                     Button(allSelected ? tr("Odznacz wszystko") : tr("Zaznacz wszystko")) {
-                        if allSelected { selected.subtract(bulkPaths) }
+                        if allSelected { selected.subtract(UninstallLeftoverPresentation.deselectAllPaths(groups)) }
                         else { selected.formUnion(bulkPaths) }
                     }
                     .buttonStyle(.plain)
