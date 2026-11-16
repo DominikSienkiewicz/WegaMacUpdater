@@ -55,6 +55,37 @@ enum LeftoverCandidates {
         }
     }
 
+    /// The `~/Library` folders whose entries are matched against the app's names.
+    static let nameParents: [[String]] = [["Library", "Application Support"], ["Library", "Caches"], ["Library", "Logs"]]
+
+    private static let minimumNameLength = 3
+    private static let genericNames: Set<String> = [
+        "apple", "google", "microsoft", "adobe", "mozilla", "jetbrains", "electron", "data", "cache", "caches",
+        "logs", "log", "temp", "tmp", "shared", "common", "default", "settings", "config", "support", "library",
+        "updater", "update", "updates", "helper", "crashreporter", "crashpad", "plugins", "app", "application",
+        "applications",
+    ]
+
+    /// The app's display name and file name, once each, minus any too short, too generic or not
+    /// expressible as one path component to be matched against a folder name.
+    static func names(for app: LeftoverApp) -> [String] {
+        var seenKeys: Set<String> = []
+        return [app.name, app.fileName].filter { name in
+            isUsableName(name) && seenKeys.insert(LeftoverPathRules.key([name])).inserted
+        }
+    }
+
+    static func nameCandidate(parent: [String], name: String) -> Candidate {
+        Candidate(components: parent + [name], source: .appName, probableReason: .appName)
+    }
+
+    private static func isUsableName(_ name: String) -> Bool {
+        name.count >= minimumNameLength
+            && !name.unicodeScalars.contains { $0 == "/" || $0 == ":" }
+            && !name.hasPrefix(".")
+            && !genericNames.contains(name.lowercased())
+    }
+
     private static func zapReason(_ components: [String], isStrong: Bool) -> LeftoverItem.ProbableReason? {
         guard LeftoverPathRules.isInsideLibrary(components) else { return .outsideLibrary }
         return isStrong ? nil : .caskMatchedByName

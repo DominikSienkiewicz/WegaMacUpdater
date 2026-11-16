@@ -32,15 +32,15 @@ public enum LeftoverPlanner {
         }
     }
 
-    /// The target's existing items, one per path, in zap-list order and then bundle-id order.
+    /// The target's existing items, one per path, in zap-list, bundle-id and then app-name order.
     private static func findings(for target: LeftoverApp, in homeFolder: HomeFolder) -> [Finding] {
         let isStrongZap = target.cask?.isStrong(forBundleIdentifier: target.bundleIdentifier) == true
         let candidates = LeftoverCandidates.zap(for: target).map { ($0, isStrongZap ? Precedence.strongZap : .weakZap) }
             + LeftoverCandidates.bundleIdentifier(for: target).map { ($0, Precedence.bundleIdentifier) }
         var findings: [Finding] = []
         var indexByKey: [String: Int] = [:]
-        for (candidate, precedence) in candidates {
-            for path in homeFolder.existingPaths(candidate.components) {
+        func record(_ paths: [ExistingPath], _ candidate: LeftoverCandidates.Candidate, _ precedence: Precedence) {
+            for path in paths {
                 let finding = Finding(path: path, candidate: candidate, precedence: precedence)
                 if let index = indexByKey[finding.key] {
                     findings[index].absorb(finding)
@@ -50,13 +50,23 @@ public enum LeftoverPlanner {
                 }
             }
         }
+        for (candidate, precedence) in candidates {
+            record(homeFolder.existingPaths(candidate.components), candidate, precedence)
+        }
+        let names = LeftoverCandidates.names(for: target)
+        for parent in LeftoverCandidates.nameParents {
+            for name in names {
+                let candidate = LeftoverCandidates.nameCandidate(parent: parent, name: name)
+                record(homeFolder.existingPaths(named: name, in: parent), candidate, .name)
+            }
+        }
         return findings
     }
 }
 
 /// Which source names an item that several sources found.
 private enum Precedence: Int, Comparable {
-    case weakZap, bundleIdentifier, strongZap
+    case name, weakZap, bundleIdentifier, strongZap
 
     static func < (lhs: Precedence, rhs: Precedence) -> Bool { lhs.rawValue < rhs.rawValue }
 }
@@ -98,10 +108,16 @@ private struct ExistingPath {
     let url: URL
 }
 
-/// The planner's read-only view of the home folder.
-private struct HomeFolder {
-    let home: URL
-    let fileSystem: any CleanupFileSystem
+/// The planner's read-only view of the home folder. It lists each folder at most once.
+private final class HomeFolder {
+    private let home: URL
+    private let fileSystem: any CleanupFileSystem
+    private var listings: [String: [String]] = [:]
+
+    init(home: URL, fileSystem: any CleanupFileSystem) {
+        self.home = home
+        self.fileSystem = fileSystem
+    }
 
     /// The offerable items `pattern` names that exist: the path itself or, when its last
     /// component is a wildcard, each matching name in its folder (with its on-disk spelling).
@@ -109,14 +125,27 @@ private struct HomeFolder {
         guard LeftoverPathRules.isOfferable(pattern), let last = pattern.last else { return [] }
         let folder = Array(pattern.dropLast())
         guard hasRealFolders(folder) else { return [] }
-        let names = LeftoverPathRules.hasWildcard(last) ? self.names(in: folder, matching: last) : [last]
-        return names.compactMap { name in
-            let components = folder + [name]
-            guard LeftoverPathRules.isOfferable(components),
-                  let entry = try? fileSystem.entry(at: lookupURL(components)) else { return nil }
-            let hint: URL.DirectoryHint = entry.kind == .directory ? .isDirectory : .notDirectory
-            return ExistingPath(components: components, url: lookupURL(folder).appending(component: name, directoryHint: hint))
-        }
+        let names = LeftoverPathRules.hasWildcard(last)
+            ? listing(of: folder).filter { LeftoverPathRules.matches(pattern: last, name: $0) }
+            : [last]
+        return names.compactMap { existingPath(folder: folder, name: $0) }
+    }
+
+    /// The offerable entries of `folder` whose name equals `name` ignoring case and Unicode
+    /// normalisation, with their on-disk spelling. `name` is literal, never a pattern.
+    func existingPaths(named name: String, in folder: [String]) -> [ExistingPath] {
+        guard hasRealFolders(folder) else { return [] }
+        return listing(of: folder)
+            .filter { name.compare($0, options: .caseInsensitive) == .orderedSame }
+            .compactMap { existingPath(folder: folder, name: $0) }
+    }
+
+    private func existingPath(folder: [String], name: String) -> ExistingPath? {
+        let components = folder + [name]
+        guard LeftoverPathRules.isOfferable(components),
+              let entry = try? fileSystem.entry(at: lookupURL(components)) else { return nil }
+        let hint: URL.DirectoryHint = entry.kind == .directory ? .isDirectory : .notDirectory
+        return ExistingPath(components: components, url: lookupURL(folder).appending(component: name, directoryHint: hint))
     }
 
     /// Whether every folder from just below the home folder down to `folder` is a directory.
@@ -126,9 +155,13 @@ private struct HomeFolder {
         }
     }
 
-    private func names(in folder: [String], matching pattern: String) -> [String] {
-        guard let entries = try? fileSystem.contents(of: lookupURL(folder)) else { return [] }
-        return entries.map(\.url.lastPathComponent).filter { LeftoverPathRules.matches(pattern: pattern, name: $0) }
+    /// The entry names of `folder`; none when it cannot be listed.
+    private func listing(of folder: [String]) -> [String] {
+        let key = LeftoverPathRules.key(folder)
+        if let cached = listings[key] { return cached }
+        let names = (try? fileSystem.contents(of: lookupURL(folder)))?.map(\.url.lastPathComponent) ?? []
+        listings[key] = names
+        return names
     }
 
     /// No trailing slash, so `lstat` never follows a link in the last component.

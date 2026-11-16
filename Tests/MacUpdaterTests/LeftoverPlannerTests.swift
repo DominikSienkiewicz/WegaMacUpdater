@@ -240,6 +240,23 @@ struct LeftoverPlannerTests {
         #expect(plan(agent).isEmpty)
     }
 
+    @Test func symlinkedCachesFolderIsRefused() throws {
+        try fixture.outsideFolder("caches/com.acme.app")
+        try fixture.symlink("Library/Caches", to: fixture.root.appending(path: "caches", directoryHint: .isDirectory))
+        let logs = try fixture.folder("Library/Logs/com.acme.app")
+
+        #expect(plannedItems(app(bundleID: "com.acme.app")).map(\.url) == [logs])
+    }
+
+    @Test func symlinkDeeperInTheChainIsRefused() throws {
+        let dotfiles = try fixture.outsideFolder("dotfiles/zed")
+        try Data().write(to: dotfiles.appending(path: "settings.json", directoryHint: .notDirectory))
+        try fixture.symlink(".config", to: fixture.root.appending(path: "dotfiles", directoryHint: .isDirectory))
+        let zed = app(name: "Zed", bundleID: nil, cask: cask("zed", .bundleIdentifier, zap: ["~/.config/zed/settings.json"]))
+
+        #expect(plan(zed).isEmpty)
+    }
+
     // MARK: - Several targets
 
     @Test func laterTargetsDoNotRepeatAPlannedPath() throws {
