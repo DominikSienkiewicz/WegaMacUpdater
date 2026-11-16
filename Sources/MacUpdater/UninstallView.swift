@@ -26,6 +26,11 @@ struct UninstallView: View {
     /// UX-13: which leftover paths the user has ticked for the Trash. Defaults to every
     /// found item; the user opts individual files out.
     @State private var selectedLeftovers: Set<String> = []
+    /// The running state of `pendingUninstallTargets`, computed when the sheet opens.
+    @State private var pendingRunningStates: [String: RunningApplicationResolution] = [:]
+    @State private var forceQuitApps: [ApplicationInfo] = []
+    @State private var showForceQuit: Bool = false
+    @State private var forceQuitAnswer: CheckedContinuation<UninstallForceQuitChoice, Never>?
     @State private var errorMessage:   String?
     /// REL-14: the last scan failed to read one or more sources. Distinguishes an empty
     /// machine from a failed scan and drives the incomplete-data warning before uninstall.
@@ -33,7 +38,7 @@ struct UninstallView: View {
     @State private var banner:         BannerData?
 
     private var isLoading: Bool { operations.isScanning }
-    private var isUninstalling: Bool { operations.isUninstalling }
+    private var isUninstalling: Bool { operations.isUninstalling || operations.isQuitting }
 
     /// REL-14: resolves the list body between loading, a failed scan, an empty machine
     /// and populated results, so a scan failure is never shown as "no apps found".
@@ -240,11 +245,17 @@ struct UninstallView: View {
                 ),
                 scanIncomplete: pendingScanIncomplete,
                 leftoverGroups: pendingLeftoverGroups,
+                runningStates: pendingRunningStates,
                 selectedLeftovers: $selectedLeftovers,
                 onCancel: cancelUninstall,
                 onConfirm: confirmUninstall
             )
         }
+        .sheet(
+            isPresented: $showForceQuit,
+            onDismiss: { answerForceQuit(.cancel) },
+            content: { UninstallForceQuitSheet(apps: forceQuitApps, onChoice: answerForceQuit) }
+        )
         .onChange(of: search) { _, _ in
             selected.formIntersection(filtered.map(\.id))
         }
@@ -307,9 +318,10 @@ struct UninstallView: View {
     /// leftovers via the coordinator so the sheet opens with the checkbox list ready.
     private func presentUninstallDialog() async {
         let targets = self.targets
-        guard !targets.isEmpty else { return }
+        guard !targets.isEmpty, !isUninstalling else { return }
         pendingUninstallTargets = targets
         pendingScanIncomplete = scanFailed
+        pendingRunningStates = operations.runningStates(for: targets)
         let groups = await operations.scanLeftovers(for: targets)
         pendingLeftoverGroups = groups
         selectedLeftovers = Set(groups.flatMap { $0.items.map(\.path) })
@@ -321,10 +333,49 @@ struct UninstallView: View {
         pendingUninstallTargets = []
         pendingScanIncomplete = false
         pendingLeftoverGroups = []
+        pendingRunningStates = [:]
         selectedLeftovers = []
     }
 
+    private func answerForceQuit(_ choice: UninstallForceQuitChoice) {
+        showForceQuit = false
+        forceQuitAnswer?.resume(returning: choice)
+        forceQuitAnswer = nil
+    }
+
+    private func askForceQuit(_ apps: [ApplicationInfo]) async -> UninstallForceQuitChoice {
+        await withCheckedContinuation { continuation in
+            forceQuitApps = apps
+            forceQuitAnswer = continuation
+            showForceQuit = true
+        }
+    }
+
+    /// Asks running targets to quit, lets the user decide about those that refuse, and
+    /// returns only what may be removed. `nil` means the user cancelled: nothing is removed.
+    private func quitPhase(
+        targets: [ApplicationInfo]
+    ) async -> (remove: [ApplicationInfo], skipped: [String: UninstallTargetResult])? {
+        let quit = await operations.requestQuit(targets)
+        var choice: UninstallForceQuitChoice?
+        var forced: UninstallQuitResult?
+        if !quit.stillRunning.isEmpty {
+            let answer = await askForceQuit(quit.stillRunning)
+            choice = answer
+            if answer == .forceQuit { forced = await operations.forceQuit(quit.stillRunning) }
+        }
+        return UninstallQuitFlow.plan(targets: targets, quit: quit, choice: choice, forced: forced)
+    }
+
+    private func quitThenUninstall(targets: [ApplicationInfo], zap: Bool, leftovers: [LeftoverGroup]) async {
+        defer { operations.endQuitPhase() }
+        guard let plan = await quitPhase(targets: targets) else { return }
+        let skippedApps = targets.filter { plan.skipped[$0.id] != nil }
+        await uninstall(targets: plan.remove, zap: zap, leftovers: leftovers, skipped: plan.skipped, skippedApps: skippedApps)
+    }
+
     private func confirmUninstall(zap: Bool) {
+        guard operations.beginQuitPhase() else { return }
         let targets = pendingUninstallTargets
         let leftovers = pendingLeftoverGroups.compactMap { group -> LeftoverGroup? in
             let consented = group.items.filter { selectedLeftovers.contains($0.path) }
@@ -334,8 +385,9 @@ struct UninstallView: View {
         pendingUninstallTargets = []
         pendingScanIncomplete = false
         pendingLeftoverGroups = []
+        pendingRunningStates = [:]
         selectedLeftovers = []
-        Task { await uninstall(targets: targets, zap: zap, leftovers: leftovers) }
+        Task { await quitThenUninstall(targets: targets, zap: zap, leftovers: leftovers) }
     }
 
     private func scan() async {
@@ -347,8 +399,26 @@ struct UninstallView: View {
         errorMessage = result.failures.scanErrorMessage
     }
 
-    private func uninstall(targets: [ApplicationInfo], zap: Bool, leftovers: [LeftoverGroup]) async {
-        guard !targets.isEmpty else { return }
+    /// Apps left alone because they were still running (or could not be told apart from
+    /// another copy) are reported as skipped, never as a failed removal.
+    private func reportSkipped(_ apps: [ApplicationInfo]) {
+        guard !apps.isEmpty else { return }
+        let names = apps.map(\.name).joined(separator: ", ")
+        let note = trf("Pominięto, bo aplikacja nadal działa lub jej proces jest niejednoznaczny: %@", names)
+        errorMessage = [errorMessage, note].compactMap { $0 }.joined(separator: " ")
+    }
+
+    private func uninstall(
+        targets: [ApplicationInfo],
+        zap: Bool,
+        leftovers: [LeftoverGroup],
+        skipped: [String: UninstallTargetResult] = [:],
+        skippedApps: [ApplicationInfo] = []
+    ) async {
+        guard !targets.isEmpty else {
+            reportSkipped(skippedApps)
+            return
+        }
         // REL-06 — `brew uninstall --cask` (with `--zap` it also deletes preferences and
         // Application Support) rewrites the Caskroom, and `UpgradeMutex` only covers upgrades.
         // Without a ticket a quit here ends the process between the Caskroom entry and the
@@ -363,6 +433,7 @@ struct UninstallView: View {
             targets: targets,
             zap: zap,
             leftovers: leftovers,
+            skipped: skipped,
             using: model.brewService
         )
         let succeeded = Set(targets.map(\.id).filter { outcome.results[$0]?.isRemoved == true })
@@ -391,6 +462,7 @@ struct UninstallView: View {
             banner = BannerData(variant: .success, title: trf("Odinstalowano %@ aplikacji", "\(succeeded.count)"), message: msg)
             onWegaState?(WegaState(pose: .happy, line: trf("Załatwione — %@ mniej na dysku.", "\(succeeded.count)")))
         }
+        reportSkipped(skippedApps)
         if !failed.isEmpty {
             errorMessage = trf(
                 "Odinstalowanie niepełne — nie usunięto: %@",
@@ -421,6 +493,8 @@ struct UninstallDialog: View {
     /// UX-13: the `~/Library` leftovers planned for the non-brew targets, presented as
     /// checkboxes so the user reviews exactly what "app + leftovers" removes.
     var leftoverGroups: [LeftoverGroup] = []
+    /// Which targets are running right now, so the sheet can say Wega will ask them to quit.
+    var runningStates: [String: RunningApplicationResolution] = [:]
     /// UX-13: the leftover paths the user has ticked for the Trash. Bound to the caller so
     /// the confirmed selection survives the sheet dismissal.
     @Binding var selectedLeftovers: Set<String>
@@ -432,6 +506,7 @@ struct UninstallDialog: View {
         ambiguities: [AmbiguousBrewUninstall],
         scanIncomplete: Bool = false,
         leftoverGroups: [LeftoverGroup] = [],
+        runningStates: [String: RunningApplicationResolution] = [:],
         selectedLeftovers: Binding<Set<String>> = .constant([]),
         onCancel: @escaping () -> Void,
         onConfirm: @escaping (Bool) -> Void
@@ -440,6 +515,7 @@ struct UninstallDialog: View {
         self.ambiguities = ambiguities
         self.scanIncomplete = scanIncomplete
         self.leftoverGroups = leftoverGroups
+        self.runningStates = runningStates
         self._selectedLeftovers = selectedLeftovers
         self.onCancel = onCancel
         self.onConfirm = onConfirm
@@ -448,6 +524,14 @@ struct UninstallDialog: View {
     /// M3(e) — the irreversible option is never the default. `--zap` also deletes
     /// preferences, caches and Application Support; the user opts into that deliberately.
     @State private var zapMode: Bool = false
+
+    static func runningNote(for state: RunningApplicationResolution?) -> String? {
+        switch state {
+        case .running: tr("Uruchomiona — Wega poprosi o jej zamknięcie")
+        case .ambiguousBundleIdentifier: tr("Nie da się wskazać jej procesu — zostanie pominięta")
+        case .notRunning, nil: nil
+        }
+    }
 
     private var brewCount: Int { targets.filter(\.isManagedByBrew).count }
     private var trashCount: Int { targets.count - brewCount }
@@ -526,6 +610,11 @@ struct UninstallDialog: View {
                                         .font(.wega(.footnote, monospaced: true))
                                         .foregroundStyle(.secondary)
                                         .textSelection(.enabled)
+                                    if let note = Self.runningNote(for: runningStates[app.id]) {
+                                        Text(note)
+                                            .font(.wega(.footnote))
+                                            .foregroundStyle(Color.wegaDanger)
+                                    }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }

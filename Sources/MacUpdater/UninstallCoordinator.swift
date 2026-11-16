@@ -89,6 +89,7 @@ final class UninstallCoordinator: ObservableObject {
     enum State: Equatable {
         case idle
         case scanning
+        case quitting
         case uninstalling
     }
 
@@ -137,6 +138,20 @@ final class UninstallCoordinator: ObservableObject {
 
     var isScanning: Bool { state == .scanning }
     var isUninstalling: Bool { state == .uninstalling }
+    /// True while apps are being asked to quit, including while the user answers the
+    /// force-quit sheet, so a second confirmation cannot start a parallel run.
+    var isQuitting: Bool { state == .quitting }
+
+    /// Claims the coordinator for the quit phase. Returns `false` when another phase owns it.
+    func beginQuitPhase() -> Bool {
+        guard state == .idle else { return false }
+        state = .quitting
+        return true
+    }
+
+    func endQuitPhase() {
+        if state == .quitting { state = .idle }
+    }
 
     func runningStates(for targets: [ApplicationInfo]) -> [String: RunningApplicationResolution] {
         resolveAll(targets)
@@ -261,6 +276,7 @@ final class UninstallCoordinator: ObservableObject {
         targets: [ApplicationInfo],
         zap: Bool,
         leftovers: [LeftoverGroup] = [],
+        skipped: [String: UninstallTargetResult] = [:],
         using brewService: BrewService
     ) async -> Outcome {
         do {
@@ -269,12 +285,14 @@ final class UninstallCoordinator: ObservableObject {
                     targets: targets,
                     zap: zap,
                     leftovers: leftovers,
+                    skipped: skipped,
                     using: brewService
                 )
             }
         } catch {
             let failure = UninstallTargetResult.failed(error.localizedDescription)
-            return Outcome(results: Dictionary(uniqueKeysWithValues: targets.map { ($0.id, failure) }))
+            let failed = Dictionary(uniqueKeysWithValues: targets.map { ($0.id, failure) })
+            return Outcome(results: failed.merging(skipped) { _, skip in skip })
         }
     }
 
@@ -282,12 +300,13 @@ final class UninstallCoordinator: ObservableObject {
         targets: [ApplicationInfo],
         zap: Bool,
         leftovers: [LeftoverGroup],
+        skipped: [String: UninstallTargetResult],
         using brewService: BrewService
     ) async -> Outcome {
         state = .uninstalling
         defer { state = .idle }
 
-        var results: [String: UninstallTargetResult] = [:]
+        var results = skipped
         for app in targets {
             if let protection = dependencies.protection(app) {
                 results[app.id] = .protected(protection)
