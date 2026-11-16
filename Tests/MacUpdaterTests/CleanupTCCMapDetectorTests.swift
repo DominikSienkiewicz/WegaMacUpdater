@@ -34,6 +34,26 @@ final class FakeTCCDatabase: CleanupTCCDatabaseReading, @unchecked Sendable {
 
 private struct UnrelatedError: Error {}
 
+/// Delegates to `base`, except that `entry(at:)` throws `.io` for `failingPath`.
+private struct FailingEntryFileSystem: CleanupFileSystem {
+    let base: CleanupFileSystem
+    let failingPath: String
+
+    func entry(at url: URL) throws -> CleanupEntry? {
+        guard url.path != failingPath else { throw CleanupFileSystemError.io(url.path) }
+        return try base.entry(at: url)
+    }
+
+    func contents(of directory: URL) throws -> [CleanupEntry] { try base.contents(of: directory) }
+    func symlinkDestination(of url: URL) throws -> String { try base.symlinkDestination(of: url) }
+    func realpath(_ url: URL) throws -> URL { try base.realpath(url) }
+    func allocatedSize(of url: URL) throws -> Int64 { try base.allocatedSize(of: url) }
+    func readText(_ url: URL, maxBytes: Int) throws -> String { try base.readText(url, maxBytes: maxBytes) }
+    func createDirectory(_ url: URL) throws { try base.createDirectory(url) }
+    func moveItem(_ source: URL, to destination: URL) throws { try base.moveItem(source, to: destination) }
+    func trash(_ url: URL) throws { try base.trash(url) }
+}
+
 final class CleanupTCCMapDetectorTests: XCTestCase {
     private static let pathClient = 1
     private static let bundleClient = 0
@@ -183,6 +203,43 @@ final class CleanupTCCMapDetectorTests: XCTestCase {
         XCTAssertEqual(finding.tool, "claude")
     }
 
+    func testD1LinkWinsOverAD3DirectoryThatContainsTheClient() throws {
+        let directory = try tmp.directory("opt/claude-2.1")
+        let client = try tmp.file("opt/claude-2.1/bin/claude", size: 4, executable: true)
+        let version = copy(.versionDirectories, .active, directory, source: .nativeVersionDirectory(tool: "claude"))
+        let shadowed = copy(.pathDuplicates, .shadowed, client)
+
+        let finding = try XCTUnwrap(try scan([row(.documents, client.path)], linkingTo: [version, shadowed]).findings.first)
+
+        XCTAssertEqual(finding.reason, .tccEntry(
+            grants: [CleanupTCCGrant(service: .documents, allowed: true)],
+            link: CleanupTCCLink(findingID: shadowed.id, kind: .copyToRemove)
+        ))
+        XCTAssertEqual(finding.action, .instruction(.switchOffInFilesAndFolders))
+    }
+
+    func testUnreadableClientIsInfoWithoutLink() throws {
+        let client = try tmp.file(".npm-global/bin/claude", size: 4, executable: true)
+        let shadowed = copy(.pathDuplicates, .shadowed, client)
+        let fileSystem = GuardedCleanupFileSystem(
+            base: FailingEntryFileSystem(base: recording, failingPath: client.path),
+            guard: ProtectedLocationGuard(home: tmp.home, mounts: FixedMountTable(["/"]))
+        )
+        let database = FakeTCCDatabase(fileURL: databaseURL, rows: [row(.documents, client.path)])
+
+        let result = try CleanupTCCMapDetector(database: database, fileSystem: fileSystem).scan(linkingTo: [shadowed])
+
+        XCTAssertEqual(result.findings.count, 1)
+        let finding = result.findings[0]
+        assertMapShape(finding)
+        XCTAssertEqual(finding.status, .info)
+        XCTAssertEqual(finding.reason, .tccEntry(grants: [CleanupTCCGrant(service: .documents, allowed: true)], link: nil))
+        XCTAssertEqual(finding.action, .none)
+        XCTAssertEqual(finding.tool, "claude")
+        XCTAssertNil(finding.realpath)
+        XCTAssertNil(finding.identity)
+    }
+
     func testUnlinkedExistingClientHasNoLink() throws {
         let client = try tmp.file("tools/foo", size: 4, executable: true)
         let unrelated = [
@@ -285,7 +342,7 @@ final class CleanupTCCMapDetectorTests: XCTestCase {
     }
 
     func testUnsafeBundleIdGetsNoCommand() throws {
-        let unsafe = ["com.evil; rm -rf ~", "", "com.example_app", "com.przykład.app", "com.evil\nrm"]
+        let unsafe = ["com.evil; rm -rf ~", "", "com.example_app", "com.przykład.app", "com.evil\nrm", "-h", ".hidden"]
 
         let result = try scan(unsafe.map { row(.documents, $0, type: Self.bundleClient) })
 

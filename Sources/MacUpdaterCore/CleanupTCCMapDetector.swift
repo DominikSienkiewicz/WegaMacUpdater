@@ -23,7 +23,8 @@ public struct CleanupTCCMapDetector: Sendable {
     }
 
     private static let allowedAuthValues: Set<Int> = [2, 3]
-    private static let bundleIDScalars = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-")
+    private static let bundleIDLeadingScalars = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+    private static let bundleIDScalars = bundleIDLeadingScalars.union(CharacterSet(charactersIn: ".-"))
 
     private let database: CleanupTCCDatabaseReading
     private let fileSystem: CleanupFileSystem
@@ -80,7 +81,7 @@ public struct CleanupTCCMapDetector: Sendable {
         let url = URL(filePath: client.name, directoryHint: .notDirectory)
         let tool = CleanupPathText.components(of: client.name).last ?? client.name
         let grants = client.orderedGrants
-        func finding(
+        func makeFinding(
             _ status: CleanupStatus, _ reason: CleanupReason, _ action: CleanupAction,
             realpath: URL? = nil, identity: CleanupFileIdentity? = nil
         ) -> CleanupFinding {
@@ -93,17 +94,17 @@ public struct CleanupTCCMapDetector: Sendable {
         do {
             entry = try fileSystem.entry(at: url)
         } catch CleanupFileSystemError.protectedLocation {
-            return finding(.skippedProtected, .protectedLocation, .none)
+            return makeFinding(.skippedProtected, .protectedLocation, .none)
         } catch {
-            return finding(.info, .tccEntry(grants: grants, link: nil), .none)
+            return makeFinding(.info, .tccEntry(grants: grants, link: nil), .none)
         }
         guard let entry else {
-            return finding(.deadEntry, .tccEntryFileGone(grants: grants), .instruction(.switchOffInFilesAndFolders))
+            return makeFinding(.deadEntry, .tccEntryFileGone(grants: grants), .instruction(.switchOffInFilesAndFolders))
         }
         let realpath = try? fileSystem.realpath(url)
         let link = Self.link(for: url, realpath: realpath, in: findings)
         let action: CleanupAction = link?.kind == .copyToRemove ? .instruction(.switchOffInFilesAndFolders) : .none
-        return finding(.info, .tccEntry(grants: grants, link: link), action, realpath: realpath, identity: entry.identity)
+        return makeFinding(.info, .tccEntry(grants: grants, link: link), action, realpath: realpath, identity: entry.identity)
     }
 
     /// The first D1 finding whose `path` or `realpath` is the client or the client's realpath, else the
@@ -151,9 +152,11 @@ public struct CleanupTCCMapDetector: Sendable {
         )
     }
 
-    /// Only `[A-Za-z0-9.-]`, so the id can be pasted into a shell command as it is.
+    /// An ASCII letter or digit first, then only `[A-Za-z0-9.-]`, so the id can be pasted into a shell
+    /// command as it is and never reads as a `tccutil` option.
     private static func isSafeBundleID(_ bundleID: String) -> Bool {
-        !bundleID.isEmpty && bundleID.unicodeScalars.allSatisfy { bundleIDScalars.contains($0) }
+        guard let first = bundleID.unicodeScalars.first, bundleIDLeadingScalars.contains(first) else { return false }
+        return bundleID.unicodeScalars.allSatisfy { bundleIDScalars.contains($0) }
     }
 
     private static func note(_ kind: CleanupDetectorNote.Kind) -> CleanupDetectorNote {
