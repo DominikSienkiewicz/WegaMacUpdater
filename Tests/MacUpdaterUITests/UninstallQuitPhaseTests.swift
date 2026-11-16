@@ -282,6 +282,32 @@ struct UninstallQuitPhaseTests {
         #expect(result.stillRunning == [alpha])
     }
 
+    /// Spec 4.3: targets with a known block are not attempted — so they are not asked to quit,
+    /// never reach the force-quit sheet, and end as blocked.
+    @Test func blockedTargetIsNeverAskedToQuit() async throws {
+        let blocked = app("Chrome"), removable = app("Bravo")
+        let table = ProcessTable()
+        table.processes = [process(blocked, pid: 10), process(removable, pid: 20)]
+        table.onQuit = { table, target in
+            guard target.processIdentifier == 20 else { return false }
+            table.remove(pid: 20)
+            return true
+        }
+        let coordinator = UninstallCoordinator(dependencies: table.dependencies)
+        var asked: [[ApplicationInfo]] = []
+
+        let plan = try #require(await coordinator.runQuitPhase(
+            targets: [blocked, removable],
+            routes: [blocked.id: .blocked(.needsAdministratorRights), removable.id: .userTrash],
+            askForceQuit: { stillRunning in asked.append(stillRunning); return .forceQuit }
+        ))
+
+        #expect(table.events == ["quit 20"])
+        #expect(asked.isEmpty)
+        #expect(plan.remove.map(\.id) == [removable.id])
+        #expect(plan.skipped == [blocked.id: .blocked(.needsAdministratorRights)])
+    }
+
     @Test func runningStatesReportEachTarget() {
         let alpha = app("Alpha"), bravo = app("Bravo")
         let table = ProcessTable()

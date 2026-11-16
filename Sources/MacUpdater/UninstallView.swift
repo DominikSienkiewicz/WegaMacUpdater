@@ -353,9 +353,11 @@ struct UninstallView: View {
         guard !targets.isEmpty, !isUninstalling else { return }
         pendingUninstallTargets = targets
         pendingScanIncomplete = scanFailed
-        pendingRunningStates = operations.runningStates(for: targets)
         pendingRoutes = operations.routes(for: targets)
-        let groups = await operations.scanLeftovers(for: targets)
+        // A blocked target is not attempted: it is neither asked to quit nor offers leftovers.
+        let attempted = UninstallQuitFlow.partition(targets: targets, routes: pendingRoutes).attempt
+        pendingRunningStates = operations.runningStates(for: attempted)
+        let groups = await operations.scanLeftovers(for: attempted)
         pendingLeftoverGroups = groups
         selectedLeftovers = Set(groups.flatMap { $0.items.map(\.path) })
         showDialog = true
@@ -385,32 +387,22 @@ struct UninstallView: View {
         }
     }
 
-    /// Asks running targets to quit, lets the user decide about those that refuse, and
-    /// returns only what may be removed. `nil` means the user cancelled: nothing is removed.
-    private func quitPhase(
-        targets: [ApplicationInfo]
-    ) async -> (remove: [ApplicationInfo], skipped: [String: UninstallTargetResult])? {
-        let quit = await operations.requestQuit(targets)
-        var choice: UninstallForceQuitChoice?
-        var forced: UninstallQuitResult?
-        if !quit.stillRunning.isEmpty {
-            let answer = await askForceQuit(quit.stillRunning)
-            choice = answer
-            if answer == .forceQuit { forced = await operations.forceQuit(quit.stillRunning) }
-        }
-        return UninstallQuitFlow.plan(targets: targets, quit: quit, choice: choice, forced: forced)
-    }
-
-    private func quitThenUninstall(targets: [ApplicationInfo], zap: Bool, leftovers: [LeftoverGroup]) async {
+    private func quitThenUninstall(
+        targets: [ApplicationInfo],
+        routes: [String: UninstallRouteDecision],
+        zap: Bool,
+        leftovers: [LeftoverGroup]
+    ) async {
         defer { operations.endQuitPhase() }
-        guard let plan = await quitPhase(targets: targets) else { return }
-        let skippedApps = targets.filter { plan.skipped[$0.id] != nil }
-        await uninstall(targets: plan.remove, zap: zap, leftovers: leftovers, skipped: plan.skipped, skippedApps: skippedApps)
+        guard let plan = await operations.runQuitPhase(targets: targets, routes: routes, askForceQuit: askForceQuit)
+        else { return }
+        await uninstall(targets: plan.remove, zap: zap, leftovers: leftovers, skipped: plan.skipped, reported: targets)
     }
 
     private func confirmUninstall(zap: Bool) {
         guard operations.beginQuitPhase() else { return }
         let targets = pendingUninstallTargets
+        let routes = pendingRoutes
         let leftovers = pendingLeftoverGroups.compactMap { group -> LeftoverGroup? in
             let consented = group.items.filter { selectedLeftovers.contains($0.path) }
             return consented.isEmpty ? nil : LeftoverGroup(app: group.app, items: consented)
@@ -422,7 +414,7 @@ struct UninstallView: View {
         pendingRunningStates = [:]
         pendingRoutes = [:]
         selectedLeftovers = []
-        Task { await quitThenUninstall(targets: targets, zap: zap, leftovers: leftovers) }
+        Task { await quitThenUninstall(targets: targets, routes: routes, zap: zap, leftovers: leftovers) }
     }
 
     private func scan() async {
@@ -434,14 +426,15 @@ struct UninstallView: View {
         errorMessage = result.failures.scanErrorMessage
     }
 
+    /// - Parameter reported: every confirmed target, in confirmation order; each one ends in
+    ///   exactly one result, whether removed, skipped before removal, or blocked.
     private func uninstall(
         targets: [ApplicationInfo],
         zap: Bool,
         leftovers: [LeftoverGroup],
-        skipped: [String: UninstallTargetResult] = [:],
-        skippedApps: [ApplicationInfo] = []
+        skipped: [String: UninstallTargetResult],
+        reported reportedApps: [ApplicationInfo]
     ) async {
-        let reportedApps = targets + skippedApps
         guard !targets.isEmpty else {
             show(UninstallResultPresentation.summary(
                 results: skipped, apps: reportedApps, leftoversTrashed: 0, leftoversFailed: 0, requestedZap: zap
@@ -538,8 +531,10 @@ struct UninstallDialog: View {
     /// preferences, caches and Application Support; the user opts into that deliberately.
     @State private var zapMode: Bool = false
 
-    static func runningNote(for state: RunningApplicationResolution?) -> String? {
-        switch state {
+    /// A blocked target is never asked to quit, so it gets no running note.
+    static func runningNote(for state: RunningApplicationResolution?, route: UninstallRouteDecision?) -> String? {
+        if case .blocked = route { return nil }
+        return switch state {
         case .running: tr("Uruchomiona — Wega poprosi o jej zamknięcie")
         case .ambiguousBundleIdentifier: tr("Nie da się wskazać jej procesu — zostanie pominięta")
         case .notRunning, nil: nil
@@ -644,7 +639,7 @@ struct UninstallDialog: View {
                                             .font(.wega(.footnote))
                                             .foregroundStyle(.secondary)
                                     }
-                                    if let note = Self.runningNote(for: runningStates[app.id]) {
+                                    if let note = Self.runningNote(for: runningStates[app.id], route: routes[app.id]) {
                                         Text(note)
                                             .font(.wega(.footnote))
                                             .foregroundStyle(Color.wegaDanger)
@@ -764,17 +759,17 @@ struct UninstallDialog: View {
                     )
                 }
                 .keyboardShortcut(.cancelAction)
-                Button(confirmLabel, role: .destructive) {
-                    UninstallDialogKeyboardBehavior.perform(
-                        .confirm,
-                        zapMode: zapMode,
-                        onCancel: onCancel,
-                        onConfirm: onConfirm
-                    )
+                if counts.removesNothing {
+                    // Every target is blocked: confirming removes and quits nothing, it only
+                    // reports why, so the button is not dressed as destructive.
+                    Button(confirmLabel) { confirm() }
+                        .keyboardShortcut(.defaultAction)
+                } else {
+                    Button(confirmLabel, role: .destructive) { confirm() }
+                        .keyboardShortcut(.defaultAction)
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.wegaDanger)
                 }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-                .tint(Color.wegaDanger)
             }
             .padding(.horizontal, 18)
             .padding(.top, 16)
@@ -786,6 +781,10 @@ struct UninstallDialog: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.wegaHairline, lineWidth: 1))
         .shadow(color: .black.opacity(0.5), radius: 40, y: 12)
         .frame(width: 480)
+    }
+
+    private func confirm() {
+        UninstallDialogKeyboardBehavior.perform(.confirm, zapMode: zapMode, onCancel: onCancel, onConfirm: onConfirm)
     }
 
     private var confirmLabel: String {

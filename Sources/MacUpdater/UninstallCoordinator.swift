@@ -186,6 +186,29 @@ final class UninstallCoordinator: ObservableObject {
         return result
     }
 
+    /// Asks the targets Wega will attempt to quit, lets the user decide about those that
+    /// refuse, and returns what may be removed. A target whose preflight route is blocked is
+    /// never asked to quit or force-quit: nothing of it will be removed, so it is reported as
+    /// blocked as it stands. `nil` means the user cancelled: nothing is removed.
+    func runQuitPhase(
+        targets: [ApplicationInfo],
+        routes: [String: UninstallRouteDecision],
+        askForceQuit: @MainActor (_ stillRunning: [ApplicationInfo]) async -> UninstallForceQuitChoice
+    ) async -> UninstallQuitFlow.Plan? {
+        let split = UninstallQuitFlow.partition(targets: targets, routes: routes)
+        let quit = await requestQuit(split.attempt)
+        var choice: UninstallForceQuitChoice?
+        var forced: UninstallQuitResult?
+        if !quit.stillRunning.isEmpty {
+            let answer = await askForceQuit(quit.stillRunning)
+            choice = answer
+            if answer == .forceQuit { forced = await forceQuit(quit.stillRunning) }
+        }
+        guard let plan = UninstallQuitFlow.plan(targets: split.attempt, quit: quit, choice: choice, forced: forced)
+        else { return nil }
+        return (plan.remove, plan.skipped.merging(split.blocked) { quitResult, _ in quitResult })
+    }
+
     /// Kills only the process each app resolves to right now, never one resolved earlier:
     /// the app may have quit, or relaunched under a new PID, since the quit phase.
     func forceQuit(_ apps: [ApplicationInfo]) async -> UninstallQuitResult {

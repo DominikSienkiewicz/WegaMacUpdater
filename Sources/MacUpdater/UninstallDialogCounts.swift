@@ -19,4 +19,7 @@ struct UninstallDialogCounts: Equatable {
     }
 
     var promisesTrash: Bool { trash > 0 }
+
+    /// Every target is blocked: confirming removes nothing and quits nothing.
+    var removesNothing: Bool { brew == 0 && trash == 0 }
 }

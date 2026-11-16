@@ -39,6 +39,39 @@ struct UninstallDialogCountsTests {
         #expect(!counts.promisesTrash)
     }
 
+    @Test func everyTargetBlockedRemovesNothing() {
+        let first = app("First"), second = app("Second")
+        let allBlocked = UninstallDialogCounts(
+            targets: [first, second],
+            routes: [first.id: .blocked(.needsAdministratorRights), second.id: .blocked(.needsAppManagement)]
+        )
+        #expect(allBlocked.removesNothing)
+
+        let oneTrashed = UninstallDialogCounts(
+            targets: [first, second],
+            routes: [first.id: .blocked(.needsAdministratorRights), second.id: .userTrash]
+        )
+        #expect(!oneTrashed.removesNothing)
+
+        let cask = app("Cask", brew: true)
+        let blockedAndCask = UninstallDialogCounts(
+            targets: [first, cask], routes: [first.id: .blocked(.needsAdministratorRights)]
+        )
+        #expect(!blockedAndCask.removesNothing)
+    }
+
+    /// A blocked app is not asked to quit, so the sheet must not say it will be.
+    @Test func blockedTargetHasNoRunningNote() {
+        let target = app("Chrome")
+        let running = RunningApplicationResolution.running(RunningApplicationTarget(
+            processIdentifier: 10, bundleURL: target.path, bundleIdentifier: target.bundleIdentifier,
+            appName: target.name, processName: target.name
+        ))
+        #expect(UninstallDialog.runningNote(for: running, route: .blocked(.needsAdministratorRights)) == nil)
+        #expect(UninstallDialog.runningNote(for: running, route: .userTrash) != nil)
+        #expect(UninstallDialog.runningNote(for: running, route: nil) != nil)
+    }
+
     @Test func missingRouteCountsAsTrash() {
         let ok = app("Ok")
         let counts = UninstallDialogCounts(targets: [ok], routes: [:])
