@@ -70,6 +70,65 @@ private final class RecordingBrewRemoval: CleanupBrewRemoving, @unchecked Sendab
     }
 }
 
+/// Answers `brew cleanup --dry-run -- <name>` with fixed items and records every query
+/// (`cleanup:<name>`, `uses:<name>`, `autoremove`) with the write lease held while it ran.
+private final class ScriptedCleanupDryRun: CleanupBrewQuerying, @unchecked Sendable {
+    private let items: [CleanupBrewCleanupItem]
+    private let coordinator: OperationCoordinator?
+    private let lock = NSLock()
+    private var recorded: [String] = []
+    private var recordedWrites: [String?] = []
+
+    init(items: [CleanupBrewCleanupItem], coordinator: OperationCoordinator? = nil) {
+        self.items = items
+        self.coordinator = coordinator
+    }
+
+    var calls: [String] { lock.withLock { recorded } }
+    var activeWrites: [String?] { lock.withLock { recordedWrites } }
+
+    func usesInstalled(formula: String) async throws -> [String] {
+        await record("uses:\(formula)")
+        return []
+    }
+
+    func cleanupDryRun(package: String?) async throws -> [CleanupBrewCleanupItem] {
+        await record(package.map { "cleanup:\($0)" } ?? "cleanup")
+        return items
+    }
+
+    func autoremoveDryRun() async throws -> [String] {
+        await record("autoremove")
+        return []
+    }
+
+    private func record(_ call: String) async {
+        let activeWrite = await coordinator?.snapshot().activeWrite
+        lock.withLock {
+            recorded.append(call)
+            recordedWrites.append(activeWrite)
+        }
+    }
+}
+
+/// Gives every re-check one fixed answer and records the findings it was asked about.
+private final class FixedReferenceRecheck: CleanupReferenceRechecking, @unchecked Sendable {
+    private let stillUnreferenced: Bool
+    private let lock = NSLock()
+    private var recorded: [CleanupFinding] = []
+
+    init(stillUnreferenced: Bool) {
+        self.stillUnreferenced = stillUnreferenced
+    }
+
+    var asked: [CleanupFinding] { lock.withLock { recorded } }
+
+    func isStillUnreferenced(_ finding: CleanupFinding) async throws -> Bool {
+        lock.withLock { recorded.append(finding) }
+        return stillUnreferenced
+    }
+}
+
 /// A Homebrew link to one version and, installed after the scan, a newer version of the same package.
 private struct PackageUpgrade {
     let action: CleanupBrewAction
@@ -596,5 +655,309 @@ final class CleanupRemoverTests: XCTestCase {
             path: parent, source: nil, action: .trashBatch(parent: parent, entries: entries),
             identity: try identity(of: parent), detector: .shellState, status: .stale
         )
+    }
+}
+
+// MARK: - brew cleanup per package and the reference re-check
+
+extension CleanupRemoverTests {
+    private static let day: TimeInterval = 24 * 60 * 60
+    private static let oldNodeKeg = "opt/homebrew/Cellar/node/22.1.0"
+    private static let currentNodeKeg = "opt/homebrew/Cellar/node/23.0.0"
+
+    func testBrewCleanupRunsPerPackageAfterAFreshDryRun() async throws {
+        let package = try nodeKegs(newestAge: 20 * Self.day)
+        let query = ScriptedCleanupDryRun(items: [dryRunItem(Self.oldNodeKeg)], coordinator: coordinator)
+        let removal = RecordingBrewRemoval(coordinator: coordinator)
+        let item = try cleanupFinding(package, name: "node", source: .homebrewFormula(name: "node"))
+
+        let outcome = await remover(brewQuery: query, brewRemoval: removal)
+            .execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: false))
+
+        XCTAssertEqual(outcome, .removed)
+        XCTAssertEqual(query.calls, ["cleanup:node"], "the dry run must name the package, never run globally")
+        XCTAssertEqual(removal.calls, ["cleanup:node"])
+        XCTAssertEqual(query.activeWrites, ["cleanup.remove"], "the dry run ran outside the write lease")
+        XCTAssertEqual(removal.activeWrites, ["cleanup.remove"], "brew cleanup ran outside the write lease")
+    }
+
+    func testBrewCleanupWithNothingLeftAsksForARescan() async throws {
+        let package = try nodeKegs(newestAge: 20 * Self.day)
+        let query = ScriptedCleanupDryRun(items: [])
+        let removal = RecordingBrewRemoval()
+        let item = try cleanupFinding(package, name: "node", source: .homebrewFormula(name: "node"))
+
+        let outcome = await remover(brewQuery: query, brewRemoval: removal)
+            .execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+
+        XCTAssertEqual(outcome, .changedSinceScan)
+        XCTAssertEqual(query.calls, ["cleanup:node"])
+        XCTAssertEqual(removal.calls, [])
+    }
+
+    /// A package upgraded within the retention window keeps its old versions, so the upgrade can
+    /// still be undone; the newest version directory's date decides, for a formula and a cask alike.
+    func testBrewCleanupRefusedAfterARecentUpgrade() async throws {
+        let formula = try nodeKegs(newestAge: Self.day)
+        try keg("opt/homebrew/Caskroom/firefox/120.0", age: 60 * Self.day)
+        try keg("opt/homebrew/Caskroom/firefox/121.0", age: Self.day)
+        let cask = tmp.url("opt/homebrew/Caskroom/firefox")
+        let packages = [
+            try cleanupFinding(formula, name: "node", source: .homebrewFormula(name: "node")),
+            try cleanupFinding(cask, name: "firefox", source: .homebrewCask(token: "firefox")),
+        ]
+        let query = ScriptedCleanupDryRun(items: [
+            dryRunItem(Self.oldNodeKeg), dryRunItem("opt/homebrew/Caskroom/firefox/120.0"),
+        ])
+        let removal = RecordingBrewRemoval()
+        let remover = remover(brewQuery: query, brewRemoval: removal)
+
+        for item in packages {
+            let outcome = await remover.execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+            XCTAssertEqual(outcome, .changedSinceScan, item.tool)
+        }
+
+        XCTAssertEqual(removal.calls, [])
+        XCTAssertEqual(query.calls, [], "the recent upgrade is a local check, made before Homebrew is asked")
+    }
+
+    /// A package directory that cannot be listed could hide a recent upgrade, so the removal fails
+    /// instead of reading it as a package without versions.
+    func testUnlistablePackageDirectoryAbortsCleanup() async throws {
+        try XCTSkipIf(geteuid() == 0, "root can list a 000 directory")
+        let package = try nodeKegs(newestAge: Self.day)
+        let item = try cleanupFinding(package, name: "node", source: .homebrewFormula(name: "node"))
+        let query = ScriptedCleanupDryRun(items: [dryRunItem(Self.oldNodeKeg)])
+        let removal = RecordingBrewRemoval()
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: package.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: package.path) }
+
+        let outcome = await remover(brewQuery: query, brewRemoval: removal)
+            .execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+
+        XCTAssertEqual(outcome, .failed("CleanupFileSystemError.io"))
+        XCTAssertEqual(query.calls, [])
+        XCTAssertEqual(removal.calls, [])
+    }
+
+    /// `brew cleanup` never touches the current version, so only the old versions the dry run
+    /// lists are checked for use, not the package directory.
+    func testRunningCurrentVersionDoesNotBlockCleanup() async throws {
+        let package = try nodeKegs(newestAge: 20 * Self.day)
+        let current = CleanupProcess(
+            pid: 4100, name: "node", executablePath: tmp.url("\(Self.currentNodeKeg)/bin/tool").path,
+            arguments: ["node", tmp.url("Dev/app/server.js").path]
+        )
+        let removal = RecordingBrewRemoval()
+        let item = try cleanupFinding(package, name: "node", source: .homebrewFormula(name: "node"))
+
+        let outcome = await remover(
+            processes: [current], brewQuery: ScriptedCleanupDryRun(items: [dryRunItem(Self.oldNodeKeg)]), brewRemoval: removal
+        ).execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: false))
+
+        XCTAssertEqual(outcome, .removed)
+        XCTAssertEqual(removal.calls, ["cleanup:node"])
+    }
+
+    func testRunningOldVersionNeedsAcknowledgement() async throws {
+        let package = try nodeKegs(newestAge: 20 * Self.day)
+        let old = CleanupProcess(
+            pid: 4101, name: "node", executablePath: tmp.url("\(Self.oldNodeKeg)/bin/tool").path, arguments: ["node"]
+        )
+        let removal = RecordingBrewRemoval()
+        let remover = remover(
+            processes: [old], brewQuery: ScriptedCleanupDryRun(items: [dryRunItem(Self.oldNodeKeg)]), brewRemoval: removal
+        )
+        let item = try cleanupFinding(package, name: "node", source: .homebrewFormula(name: "node"))
+
+        let first = await remover.execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: false))
+
+        XCTAssertEqual(first, .needsInUseAcknowledgement([old]))
+        XCTAssertEqual(removal.calls, [])
+
+        let second = await remover.execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+
+        XCTAssertEqual(second, .removed)
+        XCTAssertEqual(removal.calls, ["cleanup:node"])
+    }
+
+    /// A name the gate refuses is never queried, dry-run or passed to `brew`, whatever the action.
+    func testInvalidHomebrewNameNeverReachesBrew() async throws {
+        let package = try nodeKegs(newestAge: 20 * Self.day)
+        let query = ScriptedCleanupDryRun(items: [dryRunItem(Self.oldNodeKeg)])
+        let removal = RecordingBrewRemoval()
+        let remover = remover(brewQuery: query, brewRemoval: removal)
+        let actions: [CleanupBrewAction] = [
+            .cleanup("--prune=all"), .cleanup("node;rm"), .uninstallFormula("-rf"), .uninstallFormula("a//b"),
+            .uninstallCask("../node"), .uninstallCask(""),
+        ]
+
+        for action in actions {
+            let item = finding(
+                path: package, source: .homebrewFormula(name: "node"), action: .brew(action),
+                identity: try identity(of: package), detector: .homebrew, status: .unused
+            )
+            let outcome = await remover.execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+            XCTAssertEqual(outcome, .notRemovable, "\(action)")
+        }
+
+        XCTAssertEqual(query.calls, [])
+        XCTAssertEqual(removal.calls, [])
+    }
+
+    func testNewlyReferencedDistributionIsNotTrashed() async throws {
+        let distribution = try gradleDistribution("gradle-8.10-bin")
+        let item = try leftoverFinding(distribution, detector: .gradle, tool: "gradle", reason: .unusedGradleDistribution)
+        let recheck = FixedReferenceRecheck(stillUnreferenced: false)
+
+        let outcome = await remover(referenceRecheck: recheck)
+            .execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+
+        XCTAssertEqual(outcome, .changedSinceScan)
+        XCTAssertEqual(trash.urls, [])
+        XCTAssertEqual(recheck.asked, [item])
+    }
+
+    func testNewlyNeededJDKOrIDEFolderIsNotTrashed() async throws {
+        let jdk = try tmp.directory(".gradle/jdks/eclipse_adoptium-21-aarch64-os_x.2")
+        let folder = try jetBrainsFolder("Library/Caches/JetBrains/IntelliJIdea2025.3")
+        let items = [
+            try leftoverFinding(jdk, detector: .gradle, tool: "java", reason: .unreferencedJDK(major: 21)),
+            try leftoverFinding(folder, detector: .jetBrains, tool: "IntelliJIdea", reason: .ideVersionNotInstalled(installed: ["2026.3"])),
+        ]
+        let recheck = FixedReferenceRecheck(stillUnreferenced: false)
+        let remover = remover(referenceRecheck: recheck)
+
+        for item in items {
+            let outcome = await remover.execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+            XCTAssertEqual(outcome, .changedSinceScan, item.tool)
+        }
+
+        XCTAssertEqual(trash.urls, [])
+        XCTAssertEqual(recheck.asked, items)
+    }
+
+    /// Only D6 and D7 judged their item from what referenced it at scan time; an item that is still
+    /// unreferenced goes to the Trash.
+    func testReferenceRecheckIsAskedOnlyForGradleAndJetBrainsItems() async throws {
+        try installClaude(versions: ["2.1.318", "2.1.325"], current: "2.1.325")
+        let version = try versionFinding(tmp.url(".local/share/claude/versions/2.1.318"))
+        let refusing = FixedReferenceRecheck(stillUnreferenced: false)
+        let versionOutcome = await remover(referenceRecheck: refusing)
+            .execute(CleanupRemovalIntent(finding: version, inUseAcknowledged: true))
+        XCTAssertEqual(versionOutcome, .removed)
+        XCTAssertEqual(refusing.asked, [], "a D3 item has no references to re-check")
+
+        let distribution = try gradleDistribution("gradle-8.10-bin")
+        let item = try leftoverFinding(distribution, detector: .gradle, tool: "gradle", reason: .unusedGradleDistribution)
+        let confirming = FixedReferenceRecheck(stillUnreferenced: true)
+        let outcome = await remover(referenceRecheck: confirming)
+            .execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+
+        XCTAssertEqual(outcome, .removed)
+        XCTAssertEqual(confirming.asked, [item])
+        XCTAssertEqual(trash.urls, [version.path, distribution])
+    }
+
+    /// A Gradle daemon names its distribution only inside `-javaagent:` (or a classpath), and an
+    /// IDE its folders inside `-D` properties; the scan counted those, so the removal does too.
+    func testProcessNamingTheItemOnlyInsideAnArgumentNeedsAcknowledgement() async throws {
+        let distribution = try gradleDistribution("gradle-8.10-bin")
+        let folder = try jetBrainsFolder("Library/Caches/JetBrains/IntelliJIdea2025.3")
+        let daemon = CleanupProcess(
+            pid: 5100, name: "java", executablePath: "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home/bin/java",
+            arguments: [
+                "java", "-javaagent:\(distribution.path)/a1b2c3/gradle-8.10/lib/agents/gradle-instrumentation-agent-8.10.jar",
+                "org.gradle.launcher.daemon.bootstrap.GradleDaemon", "8.10",
+            ]
+        )
+        let ide = CleanupProcess(
+            pid: 5200, name: "idea", executablePath: "/Applications/IntelliJ IDEA 2025.3.app/Contents/MacOS/idea",
+            arguments: ["idea", "-Didea.system.path=\(folder.path)"]
+        )
+        let cases = [
+            (item: try leftoverFinding(distribution, detector: .gradle, tool: "gradle", reason: .unusedGradleDistribution), user: daemon),
+            (item: try leftoverFinding(folder, detector: .jetBrains, tool: "IntelliJIdea", reason: .ideNotFound), user: ide),
+        ]
+        let remover = remover(processes: [daemon, ide], referenceRecheck: FixedReferenceRecheck(stillUnreferenced: true))
+
+        for (item, user) in cases {
+            let first = await remover.execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: false))
+            XCTAssertEqual(first, .needsInUseAcknowledgement([user]), item.tool)
+            XCTAssertEqual(trash.urls, [], item.tool)
+        }
+        for (item, _) in cases {
+            let second = await remover.execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+            XCTAssertEqual(second, .removed, item.tool)
+        }
+        XCTAssertEqual(trash.urls, [distribution, folder])
+    }
+
+    // MARK: Helpers
+
+    private func remover(
+        processes: [CleanupProcess] = [],
+        brewQuery: CleanupBrewQuerying = ScriptedBrewQuery(),
+        brewRemoval: CleanupBrewRemoving = RecordingBrewRemoval(),
+        referenceRecheck: CleanupReferenceRechecking
+    ) -> CleanupRemover {
+        CleanupRemover(
+            fileSystem: fileSystem,
+            inspector: FakeProcessInspector(processes: processes, bootTime: Date(timeIntervalSince1970: 0)),
+            brewQuery: brewQuery, brewRemoval: brewRemoval, coordinator: coordinator, home: tmp.home,
+            today: { Self.november16Noon }, referenceRecheck: referenceRecheck
+        )
+    }
+
+    /// `Cellar/node` with an old keg two months old and the current keg `newestAge` old, both
+    /// dated against the remover's `today`.
+    private func nodeKegs(newestAge: TimeInterval) throws -> URL {
+        try keg(Self.oldNodeKeg, age: 60 * Self.day)
+        try keg(Self.currentNodeKeg, age: newestAge)
+        return tmp.url("opt/homebrew/Cellar/node")
+    }
+
+    /// A version directory holding one executable. Its date is set after its contents, because
+    /// writing inside a directory moves the date.
+    private func keg(_ relative: String, age: TimeInterval) throws {
+        try tmp.file("\(relative)/bin/tool", size: 64, executable: true)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Self.november16Noon.addingTimeInterval(-age)], ofItemAtPath: tmp.url(relative).path
+        )
+    }
+
+    private func dryRunItem(_ relative: String) -> CleanupBrewCleanupItem {
+        CleanupBrewCleanupItem(path: tmp.url(relative), size: 60_000_000)
+    }
+
+    /// A D4 finding for the package directory, as the scan identified it.
+    private func cleanupFinding(_ package: URL, name: String, source: CleanupSource) throws -> CleanupFinding {
+        CleanupFinding(
+            detector: .homebrew, tool: name, path: package, realpath: nil, source: source, version: nil, size: nil,
+            status: .unused, reason: .homebrewLeftovers(items: 1), action: .brew(.cleanup(name)), risk: .low,
+            bucket: .needsDecision, identity: try identity(of: package)
+        )
+    }
+
+    /// A D6 or D7 finding that trashes `url`, identified as the scan saw it.
+    private func leftoverFinding(
+        _ url: URL, detector: CleanupDetectorID, tool: String, reason: CleanupReason
+    ) throws -> CleanupFinding {
+        CleanupFinding(
+            detector: detector, tool: tool, path: url, realpath: nil, source: nil, version: nil, size: nil,
+            status: .unused, reason: reason, action: .trash([url]), risk: .low, bucket: .needsDecision,
+            identity: try identity(of: url)
+        )
+    }
+
+    /// A distribution as the wrapper unpacks it: `dists/<name>/<hash>/<name without type>/…`.
+    private func gradleDistribution(_ name: String) throws -> URL {
+        try tmp.file(".gradle/wrapper/dists/\(name)/a1b2c3/gradle-8.10/lib/gradle-core.jar", size: 8192)
+        return tmp.url(".gradle/wrapper/dists/\(name)")
+    }
+
+    private func jetBrainsFolder(_ relative: String) throws -> URL {
+        try tmp.file("\(relative)/options/ide.general.xml", size: 2048)
+        return tmp.url(relative)
     }
 }

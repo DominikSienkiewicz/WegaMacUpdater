@@ -318,8 +318,9 @@ public struct CleanupGradleDetector: Sendable {
     }
 
     /// From the `release` file, in the JDK or in its only subdirectory (Gradle unpacks a JDK inside
-    /// a vendor-named folder), else from the directory's name.
-    private func javaMajor(ofJDK directory: URL) -> Int? {
+    /// a vendor-named folder), else from the directory's name. The remover's reference re-check
+    /// reads a JDK's major the same way.
+    func javaMajor(ofJDK directory: URL) -> Int? {
         if let major = releaseMajor(in: directory) ?? soleSubdirectory(of: directory).flatMap(releaseMajor(in:)) {
             return major
         }
