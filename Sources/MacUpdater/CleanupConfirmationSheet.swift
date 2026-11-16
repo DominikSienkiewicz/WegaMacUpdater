@@ -7,6 +7,9 @@ import MacUpdaterCore
 /// item, the sheet lists them (name, PID, arguments held in memory) and only a second
 /// confirmation with the separate toggle on sends an acknowledged request. A successful removal
 /// closes the sheet; any other answer is explained here.
+///
+/// Long details scroll, as do the processes the remover lists, so the acknowledgement toggle and
+/// the buttons always stay on screen (the house rule the Uninstall sheet follows).
 struct CleanupConfirmationSheet: View {
     @ObservedObject var store: CleanupStore
     let finding: CleanupFinding
@@ -25,6 +28,38 @@ struct CleanupConfirmationSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             Text(tr("Potwierdź usunięcie"))
                 .font(.wega(.title3, weight: .bold))
+            ScrollView {
+                details(confirmation)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: CleanupConfirmationLayout.detailsMaxHeight)
+            if case .needsAcknowledgement(let processes) = state {
+                CleanupInUseAcknowledgement(processes: processes, acknowledged: $acknowledged)
+            }
+            if case .refused(let message) = state {
+                ErrorBanner(message: message)
+            }
+            if state == .working {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(tr("Usuwam…")).font(.wega(.callout)).foregroundStyle(.secondary)
+                }
+            }
+            buttons(state: state, confirmTitle: confirmation.confirmTitle)
+        }
+        .padding(24)
+        .frame(width: 520)
+        .interactiveDismissDisabled(state == .working)
+        .onChange(of: state) { _, new in
+            if new == .done { onClose() }
+            if case .needsAcknowledgement = new { acknowledged = false }
+        }
+    }
+
+    /// Everything the user confirms; it scrolls when long, so the acknowledgement and the buttons
+    /// below it stay on screen.
+    private func details(_ confirmation: CleanupPresentation.Confirmation) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
             field(tr("Ścieżka")) {
                 ForEach(confirmation.paths.indices, id: \.self) { index in
                     Text(confirmation.paths[index])
@@ -47,28 +82,8 @@ struct CleanupConfirmationSheet: View {
                 .font(.wega(.callout, weight: .semibold))
                 .foregroundStyle(finding.risk == .high ? Color.wegaDanger : Color.secondary)
             if !confirmation.processes.isEmpty {
-                field(tr("Używane podczas skanu przez")) { processList(confirmation.processes) }
+                field(tr("Używane podczas skanu przez")) { CleanupProcessLines(lines: confirmation.processes) }
             }
-            if case .needsAcknowledgement(let processes) = state {
-                acknowledgement(processes)
-            }
-            if case .refused(let message) = state {
-                ErrorBanner(message: message)
-            }
-            if state == .working {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(tr("Usuwam…")).font(.wega(.callout)).foregroundStyle(.secondary)
-                }
-            }
-            buttons(state: state, confirmTitle: confirmation.confirmTitle)
-        }
-        .padding(24)
-        .frame(width: 520)
-        .interactiveDismissDisabled(state == .working)
-        .onChange(of: state) { _, new in
-            if new == .done { onClose() }
-            if case .needsAcknowledgement = new { acknowledged = false }
         }
     }
 
@@ -79,32 +94,6 @@ struct CleanupConfirmationSheet: View {
                 .foregroundStyle(.tertiary)
             content()
         }
-    }
-
-    private func processList(_ lines: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            ForEach(lines.indices, id: \.self) { index in
-                Text(lines[index])
-                    .font(.wega(.subheadline, monospaced: true))
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private func acknowledgement(_ processes: [CleanupProcess]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(tr("Ten element jest teraz używany przez:"))
-                .font(.wega(.callout, weight: .semibold))
-                .foregroundStyle(Color.wegaDanger)
-            processList(processes.map(CleanupPresentation.processLine))
-            Toggle(tr("Rozumiem, że te procesy mogą przestać działać poprawnie. Usuń mimo to."), isOn: $acknowledged)
-                .toggleStyle(.checkbox)
-                .font(.wega(.callout))
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.wegaDanger.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func buttons(state: CleanupPresentation.SheetState, confirmTitle: String) -> some View {
@@ -129,5 +118,60 @@ struct CleanupConfirmationSheet: View {
     private func confirm(_ state: CleanupPresentation.SheetState) {
         store.remove(CleanupPresentation.removalIntent(for: finding, state: state, acknowledged: acknowledged))
         submitted = true
+    }
+}
+
+enum CleanupConfirmationLayout {
+    /// The confirmed details scroll beyond this height.
+    static let detailsMaxHeight: CGFloat = 300
+    /// The processes the remover found scroll beyond this height inside the acknowledgement.
+    static let acknowledgedProcessesMaxHeight: CGFloat = 120
+    /// A process line shows at most this many lines; the whole line is in its help tag.
+    static let processLineLimit = 3
+}
+
+/// Name, PID and arguments of each process, a few lines each. Arguments can be long, so a line is
+/// cut short on screen; the whole line stays selectable and is shown as its help tag.
+struct CleanupProcessLines: View {
+    let lines: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(lines.indices, id: \.self) { index in
+                Text(lines[index])
+                    .font(.wega(.subheadline, monospaced: true))
+                    .lineLimit(CleanupConfirmationLayout.processLineLimit)
+                    .truncationMode(.tail)
+                    .textSelection(.enabled)
+                    .help(lines[index])
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+/// The second confirmation for an item running processes use: the processes, in a list that
+/// scrolls when long, and the toggle the confirm button waits for, which always stays visible.
+struct CleanupInUseAcknowledgement: View {
+    let processes: [CleanupProcess]
+    @Binding var acknowledged: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(tr("Ten element jest teraz używany przez:"))
+                .font(.wega(.callout, weight: .semibold))
+                .foregroundStyle(Color.wegaDanger)
+            ScrollView {
+                CleanupProcessLines(lines: processes.map(CleanupPresentation.processLine))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: CleanupConfirmationLayout.acknowledgedProcessesMaxHeight)
+            Toggle(tr("Rozumiem, że te procesy mogą przestać działać poprawnie. Usuń mimo to."), isOn: $acknowledged)
+                .toggleStyle(.checkbox)
+                .font(.wega(.callout))
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.wegaDanger.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 }
