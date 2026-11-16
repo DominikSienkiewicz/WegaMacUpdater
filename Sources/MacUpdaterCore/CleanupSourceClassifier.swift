@@ -90,9 +90,9 @@ public struct CleanupSourceClassifier: Sendable {
     public func classify(_ realpath: URL) -> CleanupSource {
         let path = CleanupPathText.components(of: realpath.path)
         let rules: [([String]) -> CleanupSource?] = [
-            appManagedSource, appBundleSource, cellarSource, caskroomSource, npmSource,
-            pnpmGlobalSource, versionManagerSource, cargoSource, packageManagerSource,
-            nativeSource, systemSource,
+            appManagedSource, systemSource, appBundleSource, cellarSource, caskroomSource,
+            npmSource, pnpmGlobalSource, versionManagerSource, cargoSource, packageManagerSource,
+            nativeSource,
         ]
         for rule in rules {
             if let source = rule(path) { return source }

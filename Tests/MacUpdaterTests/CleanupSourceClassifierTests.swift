@@ -44,12 +44,17 @@ final class CleanupSourceClassifierTests: XCTestCase {
             ("\(home)/.local/share/claude/versions/2.1.325", .nativeVersionDirectory(tool: "claude")),
             ("/usr/bin/git", .system),
             ("/Library/Developer/CommandLineTools/usr/bin/git", .system),
-            ("/Applications/Xcode-beta.app/Contents/Developer/usr/bin/git", .appBundle(name: "Xcode-beta")),
-            ("/usr/local/bin/tool", .standalone),
+                        ("/usr/local/bin/tool", .standalone),
         ]
         for (path, expected) in cases {
             XCTAssertEqual(classify(path), expected, path)
         }
+    }
+
+    func testXcodeDeveloperToolsAreSystemNotAppBundle() {
+        XCTAssertEqual(classify("/Applications/Xcode.app/Contents/Developer/usr/bin/git"), .system)
+        XCTAssertEqual(classify("/Applications/Xcode-beta.app/Contents/Developer/usr/bin/swift"), .system)
+        XCTAssertEqual(classify("/Applications/Ollama.app/Contents/Resources/ollama"), .appBundle(name: "Ollama"))
     }
 
     func testVersionManagerRootsAreRecognised() {
