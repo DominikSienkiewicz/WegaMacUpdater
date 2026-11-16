@@ -18,11 +18,32 @@ public struct CleanupTCCRow: Equatable, Sendable {
 public enum CleanupTCCDatabaseError: Error, Equatable {
     case unreadable
     case unsupportedSchema
+    case switchedOff
 }
 
 public protocol CleanupTCCDatabaseReading: Sendable {
     var fileURL: URL { get }
     func rows(for services: [CleanupTCCService]) throws -> [CleanupTCCRow]
+}
+
+/// Asks the Settings switch again when the map is read. A scan picks its reader when it starts
+/// and reads the map last, so a switch turned off meanwhile must still keep `TCC.db` closed.
+public struct CleanupSwitchGatedTCCDatabase: CleanupTCCDatabaseReading {
+    private let base: CleanupTCCDatabaseReading
+    private let isEnabled: @Sendable () -> Bool
+
+    public init(base: CleanupTCCDatabaseReading, isEnabled: @escaping @Sendable () -> Bool) {
+        self.base = base
+        self.isEnabled = isEnabled
+    }
+
+    public var fileURL: URL { base.fileURL }
+
+    /// Throws `.switchedOff`, without calling `base`, while the switch is off.
+    public func rows(for services: [CleanupTCCService]) throws -> [CleanupTCCRow] {
+        guard isEnabled() else { throw CleanupTCCDatabaseError.switchedOff }
+        return try base.rows(for: services)
+    }
 }
 
 public struct SQLiteCleanupTCCDatabase: CleanupTCCDatabaseReading {

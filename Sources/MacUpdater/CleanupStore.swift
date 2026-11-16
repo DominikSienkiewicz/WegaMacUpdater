@@ -21,7 +21,8 @@ struct CleanupStoreDependencies {
     /// One guarded file system serves the scan, the approximate `PATH` and the remover, so every
     /// Cleanup read and every move to the Trash passes the protected-location guard. The project
     /// roots and the Files and Folders switch are read from Settings at every scan (the roots also
-    /// at every removal's re-check), never cached here; `TCC.db` is opened only while it is on.
+    /// at every removal's re-check), never cached here; `TCC.db` is opened only while it is on,
+    /// and the switch is asked again just before the map is read.
     static var live: CleanupStoreDependencies {
         let home = URL(filePath: NSHomeDirectory(), directoryHint: .isDirectory)
         let tmpDirectory = URL(filePath: NSTemporaryDirectory(), directoryHint: .isDirectory)
@@ -59,7 +60,9 @@ struct CleanupStoreDependencies {
                     home: home, tmpDirectory: tmpDirectory, path: path, fileSystem: fileSystem,
                     inspector: inspector, brew: brew, brewPrefix: BinaryLocator().locateBrewPrefix(),
                     projectRoots: projectRoots(), applicationDirectories: applicationDirectories,
-                    tccMap: tccMapEnabled() ? SQLiteCleanupTCCDatabase(home: home) : nil
+                    tccMap: tccMapEnabled()
+                        ? CleanupSwitchGatedTCCDatabase(base: SQLiteCleanupTCCDatabase(home: home), isEnabled: tccMapEnabled)
+                        : nil
                 ))
             },
             remove: { await remover.execute($0) },

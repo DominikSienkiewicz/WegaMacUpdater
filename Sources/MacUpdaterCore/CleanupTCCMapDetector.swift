@@ -35,7 +35,8 @@ public struct CleanupTCCMapDetector: Sendable {
     }
 
     /// `linkingTo`: D1 findings and D3 findings (app-managed copies are D3 findings with status `.appManaged`).
-    /// Database errors become notes; any other error is rethrown (the scanner records `.failed`).
+    /// Database errors become notes, except a switch turned off during the scan, which yields
+    /// nothing at all; any other error is rethrown (the scanner records `.failed`).
     public func scan(linkingTo findings: [CleanupFinding]) throws -> (findings: [CleanupFinding], notes: [CleanupDetectorNote]) {
         let rows: [CleanupTCCRow]
         do {
@@ -44,6 +45,8 @@ public struct CleanupTCCMapDetector: Sendable {
             return ([], [Self.note(.tccUnreadable)])
         } catch CleanupTCCDatabaseError.unsupportedSchema {
             return ([], [Self.note(.tccUnsupportedSchema)])
+        } catch CleanupTCCDatabaseError.switchedOff {
+            return ([], [])
         }
         // Two spellings of one path (`/x` and `/x/`) share an id; only the first finding is kept.
         var seen: Set<String> = []

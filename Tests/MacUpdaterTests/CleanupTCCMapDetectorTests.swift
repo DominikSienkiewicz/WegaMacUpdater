@@ -393,6 +393,19 @@ final class CleanupTCCMapDetectorTests: XCTestCase {
         XCTAssertEqual(recording.touched, [])
     }
 
+    /// The switch went off after the scan started: the map is dropped silently, with no note that
+    /// would show in a section that is now off.
+    func testSwitchedOffDatabaseGivesNoFindingsAndNoNotes() {
+        let database = FakeTCCDatabase(fileURL: databaseURL, error: CleanupTCCDatabaseError.switchedOff)
+        var result: (findings: [CleanupFinding], notes: [CleanupDetectorNote])?
+
+        XCTAssertNoThrow(result = try CleanupTCCMapDetector(database: database, fileSystem: guarded).scan(linkingTo: []))
+
+        XCTAssertEqual(result?.findings, [])
+        XCTAssertEqual(result?.notes, [])
+        XCTAssertEqual(recording.touched, [])
+    }
+
     func testIdsAreUniqueAcrossBundleClients() throws {
         let rows = ["com.googlecode.iterm2", "com.apple.Terminal", "dev.warp.Warp-Stable"]
             .map { row(.documents, $0, type: Self.bundleClient) }

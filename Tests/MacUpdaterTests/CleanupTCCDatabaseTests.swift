@@ -173,11 +173,44 @@ final class CleanupTCCDatabaseTests: XCTestCase {
         XCTAssertEqual(sorted(rows), expectedTwo)
     }
 
+    func testSwitchGateNeverCallsTheBaseWhileOff() {
+        let file = temporaryFolder.appending(path: "TCC.db", directoryHint: .notDirectory)
+        let row = CleanupTCCRow(service: CleanupTCCService.documents.rawValue, client: "/a/tool", clientType: 1, authValue: 2)
+        let base = FakeTCCDatabase(fileURL: file, rows: [row])
+        let enabled = LockedFlag(false)
+        let gated = CleanupSwitchGatedTCCDatabase(base: base, isEnabled: { enabled.value })
+
+        XCTAssertEqual(gated.fileURL, file)
+        XCTAssertThrowsError(try gated.rows(for: [.documents])) {
+            XCTAssertEqual($0 as? CleanupTCCDatabaseError, .switchedOff)
+        }
+        XCTAssertEqual(base.calls, 0, "the database is never opened once the switch is off")
+
+        enabled.value = true
+        XCTAssertEqual(try gated.rows(for: [.documents]), [row])
+        XCTAssertEqual(base.requestedServices, [[.documents]])
+    }
+
     func testHomeInitPointsAtTheUserDatabase() {
         let home = URL(filePath: "/Users/someone", directoryHint: .isDirectory)
         XCTAssertEqual(
             SQLiteCleanupTCCDatabase(home: home).fileURL.path,
             home.path + "/Library/Application Support/com.apple.TCC/TCC.db"
         )
+    }
+}
+
+/// A switch the test flips while the gate holds a closure that reads it.
+private final class LockedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: Bool
+
+    init(_ value: Bool) {
+        stored = value
+    }
+
+    var value: Bool {
+        get { lock.withLock { stored } }
+        set { lock.withLock { stored = newValue } }
     }
 }
