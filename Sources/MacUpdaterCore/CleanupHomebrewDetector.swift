@@ -197,12 +197,21 @@ public struct CleanupHomebrewDetector: Sendable {
     /// The newest modification date among a package directory's version directories; a cask's
     /// `.metadata` folder is not a version.
     static func lastInstall(in packageDirectory: URL, fileSystem: CleanupFileSystem) -> Date? {
-        versionDirectories(in: packageDirectory, fileSystem: fileSystem).compactMap(\.modificationDate).max()
+        lastInstall(among: (try? fileSystem.contents(of: packageDirectory)) ?? [])
+    }
+
+    /// The same date read from a listing the caller made, so the remover can fail on a listing
+    /// error instead of reading the package as one without versions.
+    static func lastInstall(among packageEntries: [CleanupEntry]) -> Date? {
+        versionDirectories(among: packageEntries).compactMap(\.modificationDate).max()
     }
 
     private static func versionDirectories(in packageDirectory: URL, fileSystem: CleanupFileSystem) -> [CleanupEntry] {
-        let entries = (try? fileSystem.contents(of: packageDirectory)) ?? []
-        return entries.filter { entry in
+        versionDirectories(among: (try? fileSystem.contents(of: packageDirectory)) ?? [])
+    }
+
+    private static func versionDirectories(among packageEntries: [CleanupEntry]) -> [CleanupEntry] {
+        packageEntries.filter { entry in
             entry.kind == .directory && CleanupPathText.components(of: entry.url.path).last != metadataDirectory
         }
     }

@@ -664,6 +664,7 @@ extension CleanupRemoverTests {
     private static let day: TimeInterval = 24 * 60 * 60
     private static let oldNodeKeg = "opt/homebrew/Cellar/node/22.1.0"
     private static let currentNodeKeg = "opt/homebrew/Cellar/node/23.0.0"
+    private static let nodeCache = "Library/Caches/Homebrew/node--22.1.0.arm64_sequoia.bottle.tar.gz"
 
     func testBrewCleanupRunsPerPackageAfterAFreshDryRun() async throws {
         let package = try nodeKegs(newestAge: 20 * Self.day)
@@ -737,6 +738,58 @@ extension CleanupRemoverTests {
 
         XCTAssertEqual(outcome, .failed("CleanupFileSystemError.io"))
         XCTAssertEqual(query.calls, [])
+        XCTAssertEqual(removal.calls, [])
+    }
+
+    /// `brew cleanup -- <name>` removes what the fresh dry run lists, so every package directory a
+    /// listed version lies in is dated, also when the finding's own path is a cache file.
+    func testCacheFindingCleanupRefusedWhenTheDryRunListsARecentUpgrade() async throws {
+        _ = try nodeKegs(newestAge: Self.day)
+        let item = try cacheFinding(name: "node")
+        let query = ScriptedCleanupDryRun(items: [dryRunItem(Self.oldNodeKeg), dryRunItem(Self.nodeCache)])
+        let removal = RecordingBrewRemoval()
+
+        let outcome = await remover(brewQuery: query, brewRemoval: removal)
+            .execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+
+        XCTAssertEqual(outcome, .changedSinceScan)
+        XCTAssertEqual(query.calls, ["cleanup:node"])
+        XCTAssertEqual(removal.calls, [])
+    }
+
+    /// `brew cleanup -- docker` cleans the formula and the cask of that name, whichever the finding
+    /// came from.
+    func testCaskCleanupRefusedWhenTheSameNamedFormulaWasUpgraded() async throws {
+        try keg("opt/homebrew/Caskroom/docker/4.30.0", age: 60 * Self.day)
+        try keg("opt/homebrew/Caskroom/docker/4.31.0", age: 30 * Self.day)
+        try keg("opt/homebrew/Cellar/docker/27.0.1", age: 60 * Self.day)
+        try keg("opt/homebrew/Cellar/docker/27.1.0", age: Self.day)
+        let item = try cleanupFinding(tmp.url("opt/homebrew/Caskroom/docker"), name: "docker", source: .homebrewCask(token: "docker"))
+        let query = ScriptedCleanupDryRun(items: [
+            dryRunItem("opt/homebrew/Caskroom/docker/4.30.0"), dryRunItem("opt/homebrew/Cellar/docker/27.0.1"),
+        ])
+        let removal = RecordingBrewRemoval()
+
+        let outcome = await remover(brewQuery: query, brewRemoval: removal)
+            .execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+
+        XCTAssertEqual(outcome, .changedSinceScan)
+        XCTAssertEqual(removal.calls, [])
+    }
+
+    func testUnlistablePackageDirectoryTheDryRunNamesAbortsCleanup() async throws {
+        try XCTSkipIf(geteuid() == 0, "root can list a 000 directory")
+        let package = try nodeKegs(newestAge: 20 * Self.day)
+        let item = try cacheFinding(name: "node")
+        let query = ScriptedCleanupDryRun(items: [dryRunItem(Self.oldNodeKeg), dryRunItem(Self.nodeCache)])
+        let removal = RecordingBrewRemoval()
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: package.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: package.path) }
+
+        let outcome = await remover(brewQuery: query, brewRemoval: removal)
+            .execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+
+        XCTAssertEqual(outcome, .failed("CleanupFileSystemError.io"))
         XCTAssertEqual(removal.calls, [])
     }
 
@@ -936,6 +989,15 @@ extension CleanupRemoverTests {
             detector: .homebrew, tool: name, path: package, realpath: nil, source: source, version: nil, size: nil,
             status: .unused, reason: .homebrewLeftovers(items: 1), action: .brew(.cleanup(name)), risk: .low,
             bucket: .needsDecision, identity: try identity(of: package)
+        )
+    }
+
+    /// A D4 finding whose path is a cached bottle, as the scan reports a group without a package directory.
+    private func cacheFinding(name: String) throws -> CleanupFinding {
+        let cache = try tmp.file(Self.nodeCache, size: 64)
+        return finding(
+            path: cache, source: .homebrewFormula(name: name), action: .brew(.cleanup(name)),
+            identity: try identity(of: cache), detector: .homebrew, status: .unused
         )
     }
 

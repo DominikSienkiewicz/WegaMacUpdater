@@ -138,12 +138,17 @@ public struct CleanupRemover: Sendable {
 
     /// `brew cleanup -- <name>` removes whatever a fresh dry run lists, which may differ from what
     /// the scan saw: a package upgraded since keeps its old versions for the retention window, and
-    /// a package with nothing left needs a rescan. Only the old versions the dry run lists are
+    /// a package with nothing left needs a rescan. The scanned package directory is dated before
+    /// Homebrew is asked, and every package directory the dry run lists a version in after it,
+    /// because the command cleans a formula and a cask of that name, whichever the finding named
+    /// and even when its path was a cache file. Only the old versions the dry run lists are
     /// checked for use; the current version stays installed.
     private func cleanUp(_ name: String, scanned: [Location], inUseAcknowledged: Bool) async throws -> CleanupRemovalOutcome {
-        if try scanned.contains(where: isRecentlyUpgraded) { return .changedSinceScan }
+        let scannedPackages = scanned.filter { $0.isDirectory && Self.isPackageDirectory($0.url) }.map(\.url)
+        if try isAnyRecentlyUpgraded(scannedPackages) { return .changedSinceScan }
         let leftovers = try await brewQuery.cleanupDryRun(package: name)
         guard !leftovers.isEmpty else { return .changedSinceScan }
+        if try isAnyRecentlyUpgraded(Self.packageDirectories(holding: leftovers)) { return .changedSinceScan }
         let users = processesUsing(oldVersionsAmong: leftovers)
         if !users.isEmpty, !inUseAcknowledged { return .needsInUseAcknowledgement(users) }
         try await perform(.brew(.cleanup(name)))
@@ -298,24 +303,44 @@ public struct CleanupRemover: Sendable {
 
     /// The scan dated a package by its newest version directory, and so does the removal: a
     /// package upgraded within the retention window keeps its old versions, so the upgrade can
-    /// still be undone. Only the package directory the scan found is dated (a group of caches
-    /// alone has none), and one that cannot be listed aborts instead of reading as one without
-    /// versions.
-    private func isRecentlyUpgraded(_ package: Location) throws -> Bool {
-        guard package.isDirectory, Self.isPackageDirectory(package.url) else { return false }
-        _ = try fileSystem.contents(of: package.url)
-        guard let lastInstall = CleanupHomebrewDetector.lastInstall(in: package.url, fileSystem: fileSystem) else {
-            return false
+    /// still be undone. Each directory is listed once, and one that cannot be listed aborts the
+    /// removal instead of reading as a package without versions.
+    private func isAnyRecentlyUpgraded(_ packageDirectories: [URL]) throws -> Bool {
+        try packageDirectories.contains { directory in
+            guard let lastInstall = CleanupHomebrewDetector.lastInstall(among: try fileSystem.contents(of: directory)) else {
+                return false
+            }
+            return today() < lastInstall.addingTimeInterval(UpdateOperationStore.retentionInterval)
         }
-        return today() < lastInstall.addingTimeInterval(UpdateOperationStore.retentionInterval)
     }
 
     /// `…/Cellar/<name>` or `…/Caskroom/<token>`.
     private static func isPackageDirectory(_ url: URL) -> Bool {
         let components = CleanupPathText.components(of: url.path)
-        guard components.count >= 2 else { return false }
-        let parent = components[components.count - 2]
-        return packageRoots.contains { $0.unicodeScalars.elementsEqual(parent.unicodeScalars) }
+        return components.count >= 2 && isPackageRoot(components[components.count - 2])
+    }
+
+    /// The `…/Cellar/<name>` or `…/Caskroom/<token>` of every listed path that lies in a version
+    /// directory, once each, read from the first `Cellar` or `Caskroom` component.
+    private static func packageDirectories(holding leftovers: [CleanupBrewCleanupItem]) -> [URL] {
+        var packages: [[String]] = []
+        for item in leftovers {
+            let components = CleanupPathText.components(of: item.path.path)
+            guard let root = components.indices.first(where: { $0 + 2 < components.count && isPackageRoot(components[$0]) }) else {
+                continue
+            }
+            let package = Array(components[...(root + 1)])
+            if !packages.contains(where: { isSamePath($0, package) }) { packages.append(package) }
+        }
+        return packages.map { URL(filePath: "/" + $0.joined(separator: "/"), directoryHint: .isDirectory) }
+    }
+
+    private static func isPackageRoot(_ component: String) -> Bool {
+        packageRoots.contains { $0.unicodeScalars.elementsEqual(component.unicodeScalars) }
+    }
+
+    private static func isSamePath(_ lhs: [String], _ rhs: [String]) -> Bool {
+        lhs.count == rhs.count && zip(lhs, rhs).allSatisfy { $0.unicodeScalars.elementsEqual($1.unicodeScalars) }
     }
 
     /// The old kegs and cask versions a cleanup dry run lists, `…/Cellar/<n>/<v>` and
