@@ -25,7 +25,7 @@ enum LeftoverCandidates {
 
         /// Why an item found on disk for this candidate is probable, judged on its own name.
         func probableReason(found: [String]) -> LeftoverItem.ProbableReason? {
-            guard probableReason == nil, let appNames, let name = found.last, !appNames.areNamed(by: name) else {
+            guard probableReason == nil, let appNames, let name = found.last, !appNames.matches(name) else {
                 return probableReason
             }
             return .notNamedForApp
@@ -45,7 +45,7 @@ enum LeftoverCandidates {
 
         /// Without one state suffix the name equals one of the names, or it holds the bundle id the
         /// way a zap entry names it (`LeftoverCaskEvidence.component(_:namesBoundedID:)`).
-        func areNamed(by name: String) -> Bool {
+        func matches(_ name: String) -> Bool {
             names.contains(LeftoverOwnership.stem(of: LeftoverPathRules.key([name])))
                 || bundleIdentifier.map { LeftoverCaskEvidence.component(name, namesBoundedID: $0) } == true
         }
@@ -93,8 +93,8 @@ enum LeftoverCandidates {
     }
 
     /// The `~/…` entries of the matched cask's zap list, in its order. An entry outside
-    /// `~/Library`, or from a cask matched only by name, is probable; so is an item found for
-    /// another entry when its own name does not point to the app.
+    /// `~/Library`, or from a cask matched only by name, is probable. Any other entry carries the
+    /// app's names, so an item it finds whose own name does not point to the app is probable too.
     static func zap(for app: LeftoverApp) -> [Candidate] {
         guard let cask = app.cask else { return [] }
         let isStrong = cask.isStrong(forBundleIdentifier: app.bundleIdentifier)

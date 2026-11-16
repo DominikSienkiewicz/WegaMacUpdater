@@ -34,7 +34,7 @@ struct UninstallView: View {
     @State private var selectedLeftovers: Set<String> = []
     /// The running state of `pendingUninstallTargets`, computed when the sheet opens.
     @State private var pendingRunningStates: [String: RunningApplicationResolution] = [:]
-    /// The sheet is being prepared (routes and leftovers awaited); a second press waits for it.
+    /// The sheet is being prepared (routes and leftovers awaited); a second press is ignored.
     @State private var isPreparingDialog: Bool = false
     @State private var forceQuitApps: [ApplicationInfo] = []
     @State private var showForceQuit: Bool = false
