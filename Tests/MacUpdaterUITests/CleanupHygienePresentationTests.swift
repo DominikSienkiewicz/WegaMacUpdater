@@ -260,8 +260,28 @@ final class CleanupHygienePresentationTests: XCTestCase {
                     in: CleanupPresentation.sections(Fixture.report(findings: [], notes: [note]), home: Fixture.home, tccMapEnabled: true)
                 ).notes
             }
-            XCTAssertEqual(notes, [withLanguage(.pl) { CleanupPresentation.noteText(note) }], "\(kind)")
+            XCTAssertEqual(
+                notes, withLanguage(.pl) { [CleanupPresentation.noteText(note), Fixture.fullDiskAccessReminder] },
+                "\(kind): Wega opened the database, so it had Full Disk Access"
+            )
         }
+    }
+
+    /// Spec §5.6: after a scan that opened `TCC.db` the section repeats the Full Disk Access
+    /// reminder, whether or not the map had rows; an unreadable database was never opened.
+    func testFullDiskAccessReminderFollowsEveryScanThatOpenedTheDatabase() throws {
+        func notes(_ kind: CleanupDetectorNote.Kind) throws -> [String] {
+            let report = Fixture.report(findings: [], notes: [CleanupDetectorNote(detector: .tccMap, kind: kind)])
+            return try section(.filesAndFolders, in: CleanupPresentation.sections(report, home: Fixture.home, tccMapEnabled: true)).notes
+        }
+
+        try withLanguage(.pl) {
+            XCTAssertTrue(try notes(.tccMapEmpty).contains(Fixture.fullDiskAccessReminder))
+            XCTAssertTrue(try notes(.tccUnsupportedSchema).contains(Fixture.fullDiskAccessReminder))
+            XCTAssertFalse(try notes(.tccUnreadable).contains(Fixture.fullDiskAccessReminder))
+        }
+        let english = try withLanguage(.en) { try notes(.tccMapEmpty) }
+        XCTAssertTrue(english.contains { $0.contains("remove Wega from Full Disk Access") }, "\(english)")
     }
 
     func testMapRowsReminderAndCommands() throws {
@@ -405,6 +425,10 @@ private enum CleanupHygienePresentationFixtures {
     static let now = Date(timeIntervalSince1970: 1_800_000_000)
     static let tccDatabase = "/Users/cleanup-test/Library/Application Support/com.apple.TCC/TCC.db"
     static let itermCommand = "tccutil reset SystemPolicyDesktopFolder com.googlecode.iterm2"
+
+    static var fullDiskAccessReminder: String {
+        tr("Pełny dostęp do dysku, którego Wega potrzebuje do mapy, macOS daje też każdemu programowi, który Wega uruchamia: brew, npm, mas i powłoce, z której Wega odczytuje PATH. Gdy skończysz przeglądać mapę, usuń Wegę z listy Pełny dostęp do dysku.")
+    }
 
     static var mapOffNote: String {
         tr("Mapa, która przypisuje te wpisy do konkretnych kopii, jest wyłączona. Włącz ją w Ustawieniach.")

@@ -794,20 +794,23 @@ extension CleanupPresentation {
 
 extension CleanupPresentation {
     /// What the Files and Folders section can show, from the live switch and the report's D10 output.
-    private enum MapState {
+    private enum MapState: Equatable {
         /// The switch is off; a map in the report is not shown.
         case off
         /// The switch is on, but the report was scanned while it was off (no D10 finding or note).
         case notScanned
-        /// The scan tried and read no map; its notes say why.
-        case notRead
+        /// The scan tried and read no map; its notes say why. `openedDatabase`: the database was
+        /// opened (it was empty or of an unknown layout), so Wega had Full Disk Access.
+        case notRead(openedDatabase: Bool)
         case read
     }
 
     private static func mapState(of report: CleanupReport, tccMapEnabled: Bool) -> MapState {
         guard tccMapEnabled else { return .off }
         if report.findings.contains(where: { $0.detector == .tccMap }) { return .read }
-        return report.notes.contains { $0.detector == .tccMap } ? .notRead : .notScanned
+        let mapNotes = report.notes.filter { $0.detector == .tccMap }
+        guard !mapNotes.isEmpty else { return .notScanned }
+        return .notRead(openedDatabase: mapNotes.contains { $0.kind == .tccMapEmpty || $0.kind == .tccUnsupportedSchema })
     }
 
     private static func withoutMap(_ report: CleanupReport) -> CleanupReport {
@@ -820,8 +823,10 @@ extension CleanupPresentation {
     }
 
     /// `mapNotes` and `mapRows` are the report's D10 notes and rows; `offRows` lists what may have
-    /// entries while the switch is off. A map that was read repeats the Full Disk Access reminder.
+    /// entries while the switch is off. Every scan that opened the database repeats the Full Disk
+    /// Access reminder, whether or not the map had rows.
     private static func filesAndFoldersSection(_ state: MapState, notes mapNotes: [String], rows mapRows: [Row], offRows: [Row]) -> Section {
+        let reminder = tr("Pełny dostęp do dysku, którego Wega potrzebuje do mapy, macOS daje też każdemu programowi, który Wega uruchamia: brew, npm, mas i powłoce, z której Wega odczytuje PATH. Gdy skończysz przeglądać mapę, usuń Wegę z listy Pełny dostęp do dysku.")
         let explanation = [
             tr("Narzędzie wiersza poleceń nie ma pakietu aplikacji, więc macOS zapisuje zgodę na dostęp do plików osobno dla każdej ścieżki, z której zostało uruchomione."),
             tr("Każda kopia z sekcji „Wiele kopii tego samego narzędzia” może mieć w Ustawieniach systemowych → Prywatność i ochrona → Pliki i foldery własny wpis."),
@@ -831,13 +836,10 @@ extension CleanupPresentation {
             (explanation + [tr("Mapa, która przypisuje te wpisy do konkretnych kopii, jest wyłączona. Włącz ją w Ustawieniach.")], offRows)
         case .notScanned:
             (explanation + [tr("Mapa jest włączona. Kliknij „Skanuj”, żeby ją odczytać.")], [])
-        case .notRead:
-            (mapNotes, [])
+        case .notRead(let openedDatabase):
+            (openedDatabase ? mapNotes + [reminder] : mapNotes, [])
         case .read:
-            (mapNotes + [
-                tr("Pełny dostęp do dysku, którego Wega potrzebuje do mapy, macOS daje też każdemu programowi, który Wega uruchamia: brew, npm, mas i powłoce, z której Wega odczytuje PATH. Gdy skończysz przeglądać mapę, usuń Wegę z listy Pełny dostęp do dysku."),
-                tr("Wpisów Pełnego dostępu do dysku Wega nie mapuje: macOS trzyma je w bazie systemowej."),
-            ], mapRows)
+            (mapNotes + [reminder, tr("Wpisów Pełnego dostępu do dysku Wega nie mapuje: macOS trzyma je w bazie systemowej.")], mapRows)
         }
         return Section(kind: .filesAndFolders, title: tr("Wpisy w „Pliki i foldery”"), notes: notes, rows: rows)
     }
