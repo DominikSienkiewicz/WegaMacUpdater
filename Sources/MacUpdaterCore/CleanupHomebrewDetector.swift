@@ -136,7 +136,7 @@ public struct CleanupHomebrewDetector: Sendable {
     /// `<prefix>/Cellar/<n>` or `<prefix>/Caskroom/<t>` of a group, as found on disk.
     private struct Package {
         let directory: URL
-        let source: CleanupSource
+        let root: Root
     }
 
     private enum Answer<Value> {
@@ -185,8 +185,11 @@ public struct CleanupHomebrewDetector: Sendable {
         let items = cleanup.value
         let names = autoremove.value ?? []
         let processes = (items ?? []).isEmpty && names.isEmpty ? [] : inspector.userProcesses()
-        var findings = items.map { cleanupFindings($0, prefix: brewPrefix, processes: processes) } ?? []
-        findings += names.map { autoremoveFinding($0, prefix: brewPrefix, processes: processes) }
+        let uninstalled = Self.uninstalledKegFolders(names)
+        var findings = items.map {
+            cleanupFindings($0, prefix: brewPrefix, processes: processes, uninstalled: uninstalled)
+        } ?? []
+        findings += autoremoveFindings(names, prefix: brewPrefix, processes: processes)
         let notes = cleanup.didFail || autoremove.didFail ? [CleanupDetectorNote(detector: .homebrew, kind: .dryRunFailed)] : []
         return (findings, notes)
     }
@@ -214,12 +217,26 @@ public struct CleanupHomebrewDetector: Sendable {
         }
     }
 
+    /// The keg folders (`Cellar/<short name>`) of the valid autoremove names. `brew uninstall`
+    /// removes the old kegs with the formula, so its finding replaces that formula's cleanup group
+    /// and kept-version note; one path then has one finding, and finding ids stay unique.
+    private static func uninstalledKegFolders(_ names: [String]) -> Set<String> {
+        Set(names.filter(CleanupHomebrewNames.isValid).map(shortName))
+    }
+
+    private static func shortName(of name: String) -> String {
+        CleanupPathText.components(of: name).last ?? name
+    }
+
     private func cleanupFindings(
-        _ items: [CleanupBrewCleanupItem], prefix: URL, processes: [CleanupProcess]
+        _ items: [CleanupBrewCleanupItem], prefix: URL, processes: [CleanupProcess], uninstalled: Set<String>
     ) -> [CleanupFinding] {
         let (groups, unattributed) = Self.groups(of: items)
-        var findings = groups.map { group in
-            finding(for: group, package: existingPackage(of: group.key, prefix: prefix), processes: processes)
+        var findings: [CleanupFinding] = []
+        for group in groups {
+            let package = existingPackage(of: group.key, prefix: prefix)
+            guard !Self.isUninstalled(group.key, package: package, by: uninstalled) else { continue }
+            findings.append(finding(for: group, package: package, processes: processes))
         }
         if let first = unattributed.first {
             findings.append(infoFinding(
@@ -227,7 +244,19 @@ public struct CleanupHomebrewDetector: Sendable {
                 reason: .homebrewLeftovers(items: unattributed.count)
             ))
         }
-        return findings + keptVersionFindings(prefix: prefix, named: groups.map(\.key))
+        let uninstalledKeys = uninstalled.map { GroupKey(side: .formula, name: $0) }
+        return findings + keptVersionFindings(prefix: prefix, named: groups.map(\.key) + uninstalledKeys)
+    }
+
+    /// `brew uninstall --formula` leaves a cask of the same name alone, so only the formula side, or
+    /// a cache or log whose package directory is the keg folder, is replaced.
+    private static func isUninstalled(_ key: GroupKey, package: Package?, by uninstalled: Set<String>) -> Bool {
+        guard uninstalled.contains(key.name) else { return false }
+        switch key.side {
+        case .formula: return true
+        case .cask: return false
+        case .unattached: return package?.root == .cellar
+        }
     }
 
     /// One group per package, in dry-run order. A formula and a cask of the same name stay apart;
@@ -263,7 +292,7 @@ public struct CleanupHomebrewDetector: Sendable {
     /// A name `CleanupHomebrewNames` refuses never becomes a path, so it has no package directory.
     private func existingPackage(of key: GroupKey, prefix: URL) -> Package? {
         guard CleanupHomebrewNames.isValid(key.name) else { return nil }
-        return key.side.roots.lazy.map { Package(directory: $0.directory(of: key.name, under: prefix), source: $0.source(of: key.name)) }
+        return key.side.roots.lazy.map { Package(directory: $0.directory(of: key.name, under: prefix), root: $0) }
             .first { (try? fileSystem.entry(at: $0.directory))?.kind == .directory }
     }
 
@@ -275,7 +304,7 @@ public struct CleanupHomebrewDetector: Sendable {
         if case .recentUpgrade = status { reason = .recentlyUpgraded } else { reason = .homebrewLeftovers(items: group.items.count) }
         return CleanupFinding(
             detector: .homebrew, tool: name, path: path, realpath: try? fileSystem.realpath(path),
-            source: package?.source ?? Self.source(of: group.key),
+            source: package.map { $0.root.source(of: name) } ?? Self.source(of: group.key),
             version: nil, size: Self.knownSize(of: group.items.map(\.item)), status: status, reason: reason,
             action: CleanupHomebrewNames.isValid(name) ? .brew(.cleanup(name)) : .none, risk: .low,
             bucket: CleanupBucketPolicy.bucket(status: status, kind: .homebrewCleanup, evidenceComplete: true),
@@ -310,10 +339,25 @@ public struct CleanupHomebrewDetector: Sendable {
         return users.isEmpty ? .unused : .inUse(users)
     }
 
+    /// One finding per keg folder: a tap-qualified name and its short name are the same formula.
+    private func autoremoveFindings(_ names: [String], prefix: URL, processes: [CleanupProcess]) -> [CleanupFinding] {
+        var seen: Set<String> = []
+        return names.compactMap { name in
+            let path = Self.kegFolder(of: name, under: prefix)
+            guard seen.insert(path.path).inserted else { return nil }
+            return autoremoveFinding(name, path: path, processes: processes)
+        }
+    }
+
     /// `brew autoremove` names a formula by its full name; its keg folder is `Cellar/<short name>`.
+    /// A name `CleanupHomebrewNames` refuses stays one whole path component, so it never names a
+    /// valid formula's keg folder.
+    private static func kegFolder(of name: String, under prefix: URL) -> URL {
+        Root.cellar.directory(of: CleanupHomebrewNames.isValid(name) ? shortName(of: name) : name, under: prefix)
+    }
+
     /// A name `CleanupHomebrewNames` refuses is reported without an action and never read from disk.
-    private func autoremoveFinding(_ name: String, prefix: URL, processes: [CleanupProcess]) -> CleanupFinding {
-        let path = Root.cellar.directory(of: CleanupPathText.components(of: name).last ?? name, under: prefix)
+    private func autoremoveFinding(_ name: String, path: URL, processes: [CleanupProcess]) -> CleanupFinding {
         let isValid = CleanupHomebrewNames.isValid(name)
         let realpath = isValid ? (try? fileSystem.realpath(path)) : nil
         let users = realpath.map { CleanupInUseMatcher.processes(using: $0, isDirectory: true, among: processes) } ?? []

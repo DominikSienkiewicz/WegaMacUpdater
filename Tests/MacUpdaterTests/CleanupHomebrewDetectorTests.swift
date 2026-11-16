@@ -168,6 +168,57 @@ final class CleanupHomebrewDetectorTests: XCTestCase {
         XCTAssertEqual(finding.size, try fileSystem.allocatedSize(of: underPrefix("Cellar/libfoo")))
     }
 
+    func testAutoremoveCandidateSupersedesItsCleanupGroup() async throws {
+        let oldKeg = try version("Cellar/libfoo/1.0")
+        try version("Cellar/libfoo/2.0")
+        try version("Cellar/libbar/1.0")
+        try version("Cellar/libbar/2.0")
+        let download = tmp.url("Library/Caches/Homebrew/downloads/\(Self.downloadHash)--libfoo--1.0.bottle.tar.gz")
+        let brew = FakeBrewDryRuns(
+            cleanup: [item(oldKeg, 4096), item(download, 1024)], autoremove: ["someone/tap/libfoo", "libbar"]
+        )
+
+        let result = await scan(brew)
+
+        XCTAssertEqual(
+            result.findings.map(\.action),
+            [.brew(.uninstallFormula("someone/tap/libfoo")), .brew(.uninstallFormula("libbar"))],
+            "the uninstall replaces the cleanup group and the kept-version note: \(result.findings.map(\.reason))"
+        )
+        let libfoo = underPrefix("Cellar/libfoo")
+        let forLibfoo = result.findings.filter { $0.path.path == libfoo.path }
+        XCTAssertEqual(forLibfoo.count, 1)
+        XCTAssertEqual(forLibfoo.first?.size, try fileSystem.allocatedSize(of: libfoo))
+    }
+
+    func testFindingIdsAreUnique() async throws {
+        let nodeKeg = try version("Cellar/node/22.1.0")
+        try version("Cellar/node/23.0.0")
+        let dockerKeg = try version("Cellar/docker/1.0")
+        try version("Cellar/docker/2.0")
+        let dockerCask = try version("Caskroom/docker/4.0")
+        try version("Caskroom/docker/4.1")
+        let libfooKeg = try version("Cellar/libfoo/1.0")
+        try version("Cellar/libfoo/2.0")
+        try version("Cellar/pinned/1.0")
+        try version("Cellar/pinned/2.0")
+        let brew = FakeBrewDryRuns(
+            cleanup: [
+                item(nodeKeg, 100), item(tmp.url("Library/Logs/Homebrew/node"), 10),
+                item(dockerKeg, 200), item(dockerCask, 300), item(libfooKeg, 400),
+                item(tmp.url("Library/Caches/Homebrew/api/formula.jws.json"), 50),
+            ],
+            autoremove: ["libfoo", "someone/tap/libfoo", "../libfoo"]
+        )
+
+        let result = await scan(brew)
+
+        let ids = result.findings.map(\.id)
+        XCTAssertEqual(Set(ids).count, ids.count, "duplicate finding ids: \(ids.sorted())")
+        XCTAssertTrue(result.findings.contains { $0.path.path == underPrefix("Caskroom/docker").path })
+        XCTAssertTrue(result.findings.contains { $0.reason == .homebrewKeptVersions(count: 2) })
+    }
+
     func testAutoremoveCandidateInUseIsMarked() async throws {
         try version("Cellar/libfoo/1.0", file: "bin/foo")
         let running = CleanupProcess(
