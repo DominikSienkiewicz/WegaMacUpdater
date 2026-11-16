@@ -104,6 +104,46 @@ final class CleanupStoreTests: XCTestCase {
         XCTAssertEqual(store.phase, .idle)
     }
 
+    func testCancelledScanIsNotAnnouncedAsDone() async {
+        let boundary = FakeCleanupBoundary()
+        let previous = CleanupStoreFixtures.report(tool: "previous")
+        boundary.persistedReport = previous
+        let gate = FakeGate()
+        boundary.scanGate = gate
+        let store = CleanupStore(dependencies: boundary.dependencies)
+        let stopped = tr("Skan przerwany — poprzedni raport zostaje.")
+        let done = tr("Gotowe. Zobacz, co mogę posprzątać.")
+
+        store.scan()
+        await fulfillment(of: [gate.entered], timeout: 5)
+        store.cancel()
+        gate.open()
+        await store.task?.value
+
+        XCTAssertTrue(store.lastScanCancelled)
+        XCTAssertFalse(store.lastScanFailed, "a cancellation is not a failure")
+        XCTAssertEqual(store.report, previous)
+        let announced = CleanupPresentation.scanEndedState(failed: store.lastScanFailed, cancelled: store.lastScanCancelled)
+        XCTAssertEqual(announced.line, stopped)
+        XCTAssertNotEqual(announced.pose, .happy)
+        XCTAssertEqual(Translations.en["Skan przerwany — poprzedni raport zostaje."], "Scan stopped — the previous report stays.")
+
+        let next = FakeGate()
+        boundary.scanGate = next
+        store.scan()
+        await fulfillment(of: [next.entered], timeout: 5)
+        let cancelledWhileRunning = store.lastScanCancelled
+        next.open()
+        await store.task?.value
+
+        XCTAssertFalse(cancelledWhileRunning, "a new scan clears the stop when it starts")
+        XCTAssertFalse(store.lastScanCancelled)
+        XCTAssertEqual(store.report, boundary.scanResult)
+        XCTAssertEqual(
+            CleanupPresentation.scanEndedState(failed: store.lastScanFailed, cancelled: store.lastScanCancelled).line, done
+        )
+    }
+
     func testFailedScanIsPublishedAndClearedByTheNextSuccess() async {
         let boundary = FakeCleanupBoundary()
         let previous = CleanupStoreFixtures.report(tool: "previous")

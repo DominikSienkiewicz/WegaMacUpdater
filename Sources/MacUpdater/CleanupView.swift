@@ -187,9 +187,7 @@ struct CleanupView: View {
         if new == .scanning {
             onWegaState(WegaState(pose: .sniff, line: tr("Węszę po katalogach z narzędziami…")))
         } else if old == .scanning, new == .idle {
-            onWegaState(store.lastScanFailed
-                ? WegaState(pose: .sad, line: tr("Skan się nie udał."))
-                : WegaState(pose: .happy, line: tr("Gotowe. Zobacz, co mogę posprzątać.")))
+            onWegaState(CleanupPresentation.scanEndedState(failed: store.lastScanFailed, cancelled: store.lastScanCancelled))
         }
     }
 }

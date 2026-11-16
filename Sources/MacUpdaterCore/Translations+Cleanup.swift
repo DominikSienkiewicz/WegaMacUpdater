@@ -35,6 +35,7 @@ extension Translations {
         "Węszę po katalogach z narzędziami…": "Sniffing through the tool directories…",
         "Skan się nie udał.": "The scan didn't work out.",
         "Gotowe. Zobacz, co mogę posprzątać.": "Done. See what I can tidy up.",
+        "Skan przerwany — poprzedni raport zostaje.": "Scan stopped — the previous report stays.",
 
         // Sections
         "Wiele kopii tego samego narzędzia": "Several copies of the same tool",

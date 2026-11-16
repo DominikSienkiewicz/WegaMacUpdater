@@ -276,6 +276,14 @@ enum CleanupPresentation {
         }
     }
 
+    /// What Wega says when a scan ends. A stopped scan is not announced as done: the report on
+    /// screen is still the previous one.
+    static func scanEndedState(failed: Bool, cancelled: Bool) -> WegaState {
+        if failed { return WegaState(pose: .sad, line: tr("Skan się nie udał.")) }
+        if cancelled { return WegaState(pose: .idle, line: tr("Skan przerwany — poprzedni raport zostaje.")) }
+        return WegaState(pose: .happy, line: tr("Gotowe. Zobacz, co mogę posprzątać."))
+    }
+
     static func pathReadMessage(_ result: CleanupPathReadResult?) -> String? {
         switch result {
         case nil, .captured: nil
