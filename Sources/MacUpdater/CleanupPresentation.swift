@@ -35,7 +35,7 @@ enum CleanupPresentation {
 
     struct Section: Equatable {
         enum Kind: Hashable {
-            case duplicates, shellState, protectedLocations, filesAndFolders
+            case duplicates, homebrew, runtimes, gradle, jetBrains, shellState, protectedLocations, filesAndFolders
         }
 
         let kind: Kind
@@ -91,26 +91,34 @@ enum CleanupPresentation {
 
     // MARK: - Sections
 
-    /// The stage-1 sections in order: copies of one tool (grouped by tool), shell state, skipped
-    /// protected locations (only when there are some) and the "Files and Folders" explanation.
+    /// The sections in the sidebar sketch's order: copies of one tool, Homebrew leftovers, version
+    /// managers, Gradle, JetBrains, shell state, skipped protected locations (only when there are
+    /// some) and the "Files and Folders" explanation. Each detector's findings and notes go to its
+    /// own section, and every section but the shell state groups its rows by tool.
     static func sections(_ report: CleanupReport, home: URL) -> [Section] {
         let isProtected: (CleanupFinding) -> Bool = { $0.status == .skippedProtected }
-        let copies = report.findings.filter { !isProtected($0) && $0.detector != .shellState }
-        let shellState = report.findings.filter { !isProtected($0) && $0.detector == .shellState }
-        let shellNotes = report.notes.filter { $0.detector == .shellState }.map(noteText)
-        var copyNotes = report.notes.filter { $0.detector != .shellState }.map(noteText)
-        if report.path.isApproximate, copies.contains(where: { $0.detector == .pathDuplicates }) {
-            copyNotes.append(trf(
+        let listed = report.findings.filter { !isProtected($0) }
+        let findings = { (kind: Section.Kind) in listed.filter { sectionKind(of: $0.detector) == kind } }
+        let notes = { (kind: Section.Kind) in report.notes.filter { sectionKinds(of: $0).contains(kind) }.map(noteText) }
+        let grouped = { (kind: Section.Kind, title: String, extraNotes: [String], empty: String) in
+            section(kind, title, notes: notes(kind) + extraNotes, rows: groupedRows(findings(kind), home: home), empty: empty)
+        }
+        var approximatePathNotes: [String] = []
+        if report.path.isApproximate, listed.contains(where: { $0.detector == .pathDuplicates }) {
+            approximatePathNotes.append(trf(
                 "PATH jest %@, więc to, która kopia jest aktywna, może się różnić od Terminala. Odczytaj PATH z powłoki, żeby to potwierdzić.",
                 tr("przybliżony")
             ))
         }
 
         var sections = [
-            section(.duplicates, tr("Wiele kopii tego samego narzędzia"), notes: copyNotes,
-                    rows: groupedRows(copies, home: home), empty: tr("Nie znaleziono kopii ani starych wersji narzędzi.")),
-            section(.shellState, tr("Stan powłok"), notes: shellNotes,
-                    rows: shellState.map { row(for: $0, home: home, groupHeader: nil, namesTool: true) },
+            grouped(.duplicates, tr("Wiele kopii tego samego narzędzia"), approximatePathNotes, tr("Nie znaleziono kopii ani starych wersji narzędzi.")),
+            grouped(.homebrew, tr("Homebrew"), [], tr("Homebrew nie ma nic do sprzątnięcia.")),
+            grouped(.runtimes, tr("Menedżery wersji"), [], tr("Nie znaleziono nieużywanych wersji.")),
+            grouped(.gradle, tr("Gradle"), [], tr("Nie znaleziono nieużywanych dystrybucji ani JDK.")),
+            grouped(.jetBrains, tr("JetBrains"), [], tr("Nie znaleziono katalogów starych wersji IDE.")),
+            section(.shellState, tr("Stan powłok"), notes: notes(.shellState),
+                    rows: findings(.shellState).map { row(for: $0, home: home, groupHeader: nil, namesTool: true) },
                     empty: tr("Nie znaleziono pozostałości po sesjach powłoki.")),
         ]
         let skipped = report.skippedProtected.map { skippedRow($0, home: home) }
@@ -128,6 +136,30 @@ enum CleanupPresentation {
 
     private static func section(_ kind: Section.Kind, _ title: String, notes: [String], rows: [Row], empty: String) -> Section {
         Section(kind: kind, title: title, notes: rows.isEmpty && notes.isEmpty ? [empty] : notes, rows: rows)
+    }
+
+    /// The section a detector's findings are listed in.
+    private static func sectionKind(of detector: CleanupDetectorID) -> Section.Kind {
+        switch detector {
+        case .pathDuplicates, .source, .versionDirectories: .duplicates
+        case .homebrew: .homebrew
+        case .runtimeVersions: .runtimes
+        case .gradle: .gradle
+        case .jetBrains: .jetBrains
+        case .shellState: .shellState
+        }
+    }
+
+    /// The sections a detector note is shown in. Homebrew's dependency-check notes concern the
+    /// copies; only its failed leftovers query belongs to the Homebrew section. Gradle reads the
+    /// same project walk as the version managers, so it repeats why the walk may have missed one.
+    private static func sectionKinds(of note: CleanupDetectorNote) -> [Section.Kind] {
+        switch (note.detector, note.kind) {
+        case (.homebrew, .dryRunFailed): [.homebrew]
+        case (.homebrew, _): [.duplicates]
+        case (.runtimeVersions, .noProjectRoots), (.runtimeVersions, .projectWalkTruncated): [.runtimes, .gradle]
+        case (let detector, _): [sectionKind(of: detector)]
+        }
     }
 
     /// Rows of one tool stay together, tools in the order the report first names them. The match
@@ -170,11 +202,15 @@ enum CleanupPresentation {
         )
     }
 
-    /// The button comes from the finding's action alone; an excluded finding never offers one.
+    /// The button comes from the finding's action alone; an excluded finding never offers one. A
+    /// JetBrains folder offered for the Trash also names the IDE's own cleanup, which knows its
+    /// folders best.
     private static func control(for finding: CleanupFinding, home: URL) -> (button: ButtonKind?, note: String?) {
         guard finding.bucket != .excluded else { return (nil, tr("tylko informacja")) }
         switch finding.action {
-        case .trash, .trashBatch: return (.trash, nil)
+        case .trash, .trashBatch:
+            guard finding.detector == .jetBrains else { return (.trash, nil) }
+            return (.trash, tr("Zalecane: w IDE wybierz Help → Delete Leftover IDE Directories. Wega może też przenieść ten katalog do Kosza."))
         case .brew(.cleanup): return (.brewCleanup, nil)
         case .brew: return (.brew, nil)
         case .command(let command): return (.copyCommand(command), command)

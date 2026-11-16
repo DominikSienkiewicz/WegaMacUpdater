@@ -21,10 +21,12 @@ final class CleanupPresentationTests: XCTestCase {
             let sections = CleanupPresentation.sections(report, home: Fixture.home)
 
             XCTAssertEqual(sections.map(\.title), [
-                tr("Wiele kopii tego samego narzędzia"), tr("Stan powłok"),
-                tr("Pominięte lokalizacje chronione"), tr("Wpisy w „Pliki i foldery”"),
+                tr("Wiele kopii tego samego narzędzia"), tr("Homebrew"), tr("Menedżery wersji"), tr("Gradle"), tr("JetBrains"),
+                tr("Stan powłok"), tr("Pominięte lokalizacje chronione"), tr("Wpisy w „Pliki i foldery”"),
             ])
-            XCTAssertEqual(sections.map(\.kind), [.duplicates, .shellState, .protectedLocations, .filesAndFolders])
+            XCTAssertEqual(sections.map(\.kind), [
+                .duplicates, .homebrew, .runtimes, .gradle, .jetBrains, .shellState, .protectedLocations, .filesAndFolders,
+            ])
             let copies = try XCTUnwrap(sections.first).rows
             XCTAssertEqual(copies.map(\.title), [
                 "~/.local/bin/claude",
@@ -36,13 +38,13 @@ final class CleanupPresentationTests: XCTestCase {
             ])
             XCTAssertEqual(copies.map(\.groupHeader), ["claude", nil, nil, nil, "git", nil])
             XCTAssertEqual(copies.map(\.status), ["aktywna", "przesłonięta", "nieużywana", "zarządzana przez aplikację", "aktywna", "oczekiwana"])
-            XCTAssertEqual(sections[1].rows.map(\.title), ["~/.local/state/fnm_multishells", "~/.local/state/fnm_multishells"])
-            XCTAssertEqual(sections[1].rows.map(\.findingID), [Fixture.fnmStale.id, Fixture.fnmKept.id])
+            XCTAssertEqual(sections[5].rows.map(\.title), ["~/.local/state/fnm_multishells", "~/.local/state/fnm_multishells"])
+            XCTAssertEqual(sections[5].rows.map(\.findingID), [Fixture.fnmStale.id, Fixture.fnmKept.id])
             XCTAssertNotEqual(Fixture.fnmStale.id, Fixture.fnmKept.id, "stale and kept entries of one directory are two rows")
-            XCTAssertEqual(sections[2].rows.map(\.title), ["~/Documents/bin"])
-            XCTAssertEqual(sections[2].rows.map(\.status), ["pominięta (lokalizacja chroniona)"])
-            XCTAssertEqual(sections[3].rows, [])
-            XCTAssertEqual(sections[3].notes.count, 3, "stage 1 explains the entries and has no toggle")
+            XCTAssertEqual(sections[6].rows.map(\.title), ["~/Documents/bin"])
+            XCTAssertEqual(sections[6].rows.map(\.status), ["pominięta (lokalizacja chroniona)"])
+            XCTAssertEqual(sections[7].rows, [])
+            XCTAssertEqual(sections[7].notes.count, 3, "stage 1 explains the entries and has no toggle")
         }
     }
 
@@ -52,7 +54,7 @@ final class CleanupPresentationTests: XCTestCase {
         withLanguage(.pl) {
             let sections = CleanupPresentation.sections(report, home: Fixture.home)
 
-            XCTAssertEqual(sections.map(\.kind), [.duplicates, .shellState, .filesAndFolders])
+            XCTAssertEqual(sections.map(\.kind), [.duplicates, .homebrew, .runtimes, .gradle, .jetBrains, .shellState, .filesAndFolders])
             XCTAssertTrue(sections.allSatisfy { $0.rows.isEmpty && !$0.notes.isEmpty })
         }
     }
@@ -323,6 +325,159 @@ final class CleanupPresentationTests: XCTestCase {
         }
     }
 
+    // MARK: - Space sections
+
+    func testSectionsAppearInSidebarSketchOrder() throws {
+        let report = Fixture.report(
+            findings: [
+                Fixture.fnmStale, Fixture.ideFolder, Fixture.gradleDistribution, Fixture.pythonUnused,
+                Fixture.nodeLeftovers, Fixture.claudeCask,
+            ],
+            skippedProtected: ["/Users/cleanup-test/Documents/bin"]
+        )
+        let empty = Fixture.report(findings: [])
+        let spaceKinds: [CleanupPresentation.Section.Kind] = [.homebrew, .runtimes, .gradle, .jetBrains]
+
+        try withLanguage(.pl) {
+            let sections = CleanupPresentation.sections(report, home: Fixture.home)
+            XCTAssertEqual(sections.map(\.kind), [
+                .duplicates, .homebrew, .runtimes, .gradle, .jetBrains, .shellState, .protectedLocations, .filesAndFolders,
+            ])
+            XCTAssertEqual(sections.map(\.title), [
+                "Wiele kopii tego samego narzędzia", "Homebrew", "Menedżery wersji", "Gradle", "JetBrains", "Stan powłok",
+                "Pominięte lokalizacje chronione", "Wpisy w „Pliki i foldery”",
+            ])
+
+            let emptySections = CleanupPresentation.sections(empty, home: Fixture.home)
+            XCTAssertEqual(
+                emptySections.map(\.kind), [.duplicates, .homebrew, .runtimes, .gradle, .jetBrains, .shellState, .filesAndFolders],
+                "the space sections say they found nothing; skipped protected locations appear only when there are some"
+            )
+            XCTAssertEqual(emptySections.filter { spaceKinds.contains($0.kind) }.map(\.notes), [
+                ["Homebrew nie ma nic do sprzątnięcia."], ["Nie znaleziono nieużywanych wersji."],
+                ["Nie znaleziono nieużywanych dystrybucji ani JDK."], ["Nie znaleziono katalogów starych wersji IDE."],
+            ])
+            let filesAndFolders = try XCTUnwrap(emptySections.last)
+            XCTAssertEqual(filesAndFolders.kind, .filesAndFolders)
+            XCTAssertEqual(filesAndFolders.notes.first, tr("Narzędzie wiersza poleceń nie ma pakietu aplikacji, więc macOS zapisuje zgodę na dostęp do plików osobno dla każdej ścieżki, z której zostało uruchomione."))
+            XCTAssertEqual(filesAndFolders.notes.count, 3, "the Files and Folders text is unchanged")
+        }
+        let english = withLanguage(.en) { CleanupPresentation.sections(empty, home: Fixture.home) }
+        XCTAssertEqual(english.filter { spaceKinds.contains($0.kind) }.map(\.title), ["Homebrew", "Version managers", "Gradle", "JetBrains"])
+        XCTAssertEqual(english.filter { spaceKinds.contains($0.kind) }.map(\.notes), [
+            ["Homebrew has nothing to clean up."], ["No unused versions found."],
+            ["No unused distributions or JDKs found."], ["No folders of old IDE versions found."],
+        ])
+    }
+
+    func testFindingsRouteToTheirDetectorsSection() throws {
+        let noRoots = CleanupDetectorNote(detector: .runtimeVersions, kind: .noProjectRoots)
+        let truncated = CleanupDetectorNote(detector: .runtimeVersions, kind: .projectWalkTruncated)
+        let runtimeFailed = CleanupDetectorNote(detector: .runtimeVersions, kind: .failed)
+        let gradleFailed = CleanupDetectorNote(detector: .gradle, kind: .failed)
+        let unrecognisedIDE = CleanupDetectorNote(detector: .jetBrains, kind: .unrecognisedIDEInstall)
+        let shellFailed = CleanupDetectorNote(detector: .shellState, kind: .failed)
+        let report = Fixture.report(
+            findings: [
+                Fixture.nodeLeftovers, Fixture.claudeCask, Fixture.pythonPinned, Fixture.ideExcluded, Fixture.gradleDistribution,
+                Fixture.claudeOldVersion, Fixture.pythonUnused, Fixture.jdkUnused, Fixture.ideFolder, Fixture.fnmStale,
+                Fixture.ideNewer,
+            ],
+            notes: [noRoots, truncated, runtimeFailed, gradleFailed, unrecognisedIDE, shellFailed]
+        )
+
+        try withLanguage(.pl) {
+            let sections = CleanupPresentation.sections(report, home: Fixture.home)
+            func section(_ kind: CleanupPresentation.Section.Kind) throws -> CleanupPresentation.Section {
+                try XCTUnwrap(sections.first { $0.kind == kind }, "\(kind)")
+            }
+
+            XCTAssertEqual(try section(.duplicates).rows.compactMap(\.findingID), [Fixture.claudeCask.id, Fixture.claudeOldVersion.id])
+            XCTAssertEqual(try section(.duplicates).notes, [], "the space detectors' notes stay out of the copies")
+            XCTAssertEqual(try section(.homebrew).rows.compactMap(\.findingID), [Fixture.nodeLeftovers.id])
+            XCTAssertEqual(try section(.homebrew).rows.map(\.groupHeader), ["node"])
+            XCTAssertEqual(try section(.runtimes).rows.compactMap(\.findingID), [Fixture.pythonUnused.id, Fixture.pythonPinned.id])
+            XCTAssertEqual(try section(.runtimes).rows.map(\.groupHeader), ["python", nil], "rows group by tool, removable first")
+            XCTAssertEqual(try section(.runtimes).notes, [noRoots, truncated, runtimeFailed].map(CleanupPresentation.noteText))
+            XCTAssertEqual(try section(.gradle).rows.compactMap(\.findingID), [Fixture.gradleDistribution.id, Fixture.jdkUnused.id])
+            XCTAssertEqual(try section(.gradle).rows.map(\.groupHeader), ["gradle", "java"])
+            XCTAssertEqual(
+                try section(.gradle).notes, [noRoots, truncated, gradleFailed].map(CleanupPresentation.noteText),
+                "Gradle repeats why the project walk may have missed a wrapper"
+            )
+            XCTAssertEqual(
+                try section(.jetBrains).rows.compactMap(\.findingID), [Fixture.ideExcluded.id, Fixture.ideFolder.id, Fixture.ideNewer.id]
+            )
+            XCTAssertEqual(try section(.jetBrains).rows.map(\.groupHeader), ["PyCharm", "IntelliJIdea", nil])
+            XCTAssertEqual(try section(.jetBrains).notes, [CleanupPresentation.noteText(unrecognisedIDE)])
+            XCTAssertEqual(try section(.shellState).rows.compactMap(\.findingID), [Fixture.fnmStale.id])
+            XCTAssertEqual(try section(.shellState).notes, [CleanupPresentation.noteText(shellFailed)])
+            XCTAssertEqual(try section(.homebrew).rows.first?.button, .brewCleanup)
+            XCTAssertEqual(try section(.runtimes).rows.first?.button, .copyCommand("uv python uninstall 3.11.9"))
+            XCTAssertEqual(try section(.gradle).rows.first?.button, .trash)
+        }
+    }
+
+    func testDryRunFailureNoteShowsUnderHomebrew() throws {
+        let dryRunFailed = CleanupDetectorNote(detector: .homebrew, kind: .dryRunFailed)
+        let unavailable = CleanupDetectorNote(detector: .homebrew, kind: .homebrewUnavailable)
+        let dependencyCheckFailed = CleanupDetectorNote(detector: .homebrew, kind: .failed)
+        let report = Fixture.report(findings: [Fixture.claudeCask], notes: [unavailable, dryRunFailed, dependencyCheckFailed])
+
+        try withLanguage(.pl) {
+            let sections = CleanupPresentation.sections(report, home: Fixture.home)
+            let homebrew = try XCTUnwrap(sections.first { $0.kind == .homebrew })
+            let copies = try XCTUnwrap(sections.first { $0.kind == .duplicates })
+
+            XCTAssertEqual(homebrew.notes, [CleanupPresentation.noteText(dryRunFailed)], "not the empty text: the leftovers are unknown")
+            XCTAssertEqual(
+                copies.notes, [unavailable, dependencyCheckFailed].map(CleanupPresentation.noteText),
+                "the stage-1 dependency check notes stay with the copies they concern"
+            )
+        }
+    }
+
+    func testJetBrainsRowsRecommendTheIdeAction() throws {
+        let report = Fixture.report(findings: [Fixture.ideFolder, Fixture.ideExcluded, Fixture.gradleDistribution])
+        let polish = "Zalecane: w IDE wybierz Help → Delete Leftover IDE Directories. Wega może też przenieść ten katalog do Kosza."
+        let english = "Recommended: in the IDE choose Help → Delete Leftover IDE Directories. Wega can also move this folder to the Trash."
+
+        try withLanguage(.pl) {
+            let rows = CleanupPresentation.sections(report, home: Fixture.home).flatMap(\.rows)
+            let folder = try XCTUnwrap(rows.first { $0.findingID == Fixture.ideFolder.id })
+            let excluded = try XCTUnwrap(rows.first { $0.findingID == Fixture.ideExcluded.id })
+            let distribution = try XCTUnwrap(rows.first { $0.findingID == Fixture.gradleDistribution.id })
+
+            XCTAssertEqual(folder.button, .trash)
+            XCTAssertEqual(folder.note, polish)
+            XCTAssertNil(excluded.button)
+            XCTAssertEqual(excluded.note, tr("tylko informacja"), "a row without a Trash button recommends nothing")
+            XCTAssertEqual(distribution.button, .trash)
+            XCTAssertNil(distribution.note, "only JetBrains folders have an IDE action to recommend")
+        }
+        let englishRows = withLanguage(.en) { CleanupPresentation.sections(report, home: Fixture.home).flatMap(\.rows) }
+        XCTAssertEqual(englishRows.first { $0.findingID == Fixture.ideFolder.id }?.note, english)
+    }
+
+    func testBrewCleanupConfirmationShowsTheExactCommand() throws {
+        let report = Fixture.report(findings: [Fixture.nodeLeftovers])
+
+        try withLanguage(.pl) {
+            let confirmation = CleanupPresentation.confirmation(for: Fixture.nodeLeftovers, home: Fixture.home)
+            XCTAssertEqual(confirmation.action, "brew cleanup -- node")
+            XCTAssertEqual(confirmation.action, CleanupActionText.command(for: .cleanup("node")), "the sheet shows what BrewService runs")
+            XCTAssertEqual(confirmation.action, (["brew"] + BrewService.cleanupPackageArguments(name: "node")).joined(separator: " "))
+            XCTAssertEqual(confirmation.confirmTitle, "Wyczyść")
+            XCTAssertEqual(confirmation.paths, ["/opt/homebrew/Cellar/node"])
+            XCTAssertEqual(confirmation.reason, CleanupPresentation.reasonText(.homebrewLeftovers(items: 2)))
+
+            let row = try XCTUnwrap(CleanupPresentation.sections(report, home: Fixture.home).flatMap(\.rows).first)
+            XCTAssertEqual(row.findingID, Fixture.nodeLeftovers.id)
+            XCTAssertEqual(row.button, .brewCleanup)
+            XCTAssertEqual(CleanupPresentation.buttonTitle(.brewCleanup), "Wyczyść…")
+        }
+    }
+
     // MARK: - Helpers
 
     private func withLanguage<T>(_ language: AppLanguage, _ body: () throws -> T) rethrows -> T {
@@ -414,6 +569,52 @@ private enum CleanupPresentationFixtures {
     static let fnmKept = CleanupFinding(
         .shellState, tool: "fnm", path: "/Users/cleanup-test/.local/state/fnm_multishells", source: nil,
         status: .info, reason: .keptSinceBoot(count: 3), action: .none, bucket: .excluded
+    )
+
+    static let nodeLeftovers = CleanupFinding(
+        .homebrew, tool: "node", path: "/opt/homebrew/Cellar/node", source: .homebrewFormula(name: "node"),
+        status: .unused, reason: .homebrewLeftovers(items: 2), action: .brew(.cleanup("node")), bucket: .needsDecision,
+        size: 120_000_000
+    )
+    static let pythonUnused = CleanupFinding(
+        .runtimeVersions, tool: "python", path: "/Users/cleanup-test/.local/share/uv/python/cpython-3.11.9-macos-aarch64-none",
+        source: .versionManager(.uv), status: .unused, reason: .notRequiredByProjects,
+        action: .command("uv python uninstall 3.11.9"), bucket: .needsDecision, version: "3.11.9", risk: .medium
+    )
+    static let pythonPinned = CleanupFinding(
+        .runtimeVersions, tool: "python", path: "/Users/cleanup-test/.local/share/uv/python/cpython-3.12.4-macos-aarch64-none",
+        source: .versionManager(.uv), status: .pinned(by: ["/Users/cleanup-test/Dev/app/.python-version"]),
+        reason: .requiredByProjects, action: .command("uv python uninstall 3.12.4"), bucket: .excluded,
+        version: "3.12.4", risk: .medium
+    )
+    static let gradleDistribution = CleanupFinding(
+        .gradle, tool: "gradle", path: "/Users/cleanup-test/.gradle/wrapper/dists/gradle-8.5-bin", source: nil,
+        status: .unused, reason: .unusedGradleDistribution,
+        action: .trash([url("/Users/cleanup-test/.gradle/wrapper/dists/gradle-8.5-bin")]), bucket: .safe, version: "8.5"
+    )
+    static let jdkUnused = CleanupFinding(
+        .gradle, tool: "java", path: "/Users/cleanup-test/.gradle/jdks/eclipse_adoptium-17-aarch64-os_x.2", source: nil,
+        status: .unused, reason: .unreferencedJDK(major: 17),
+        action: .trash([url("/Users/cleanup-test/.gradle/jdks/eclipse_adoptium-17-aarch64-os_x.2")]), bucket: .needsDecision,
+        version: "17"
+    )
+    static let ideFolder = CleanupFinding(
+        .jetBrains, tool: "IntelliJIdea", path: "/Users/cleanup-test/Library/Application Support/JetBrains/IntelliJIdea2024.3",
+        source: nil, status: .unused, reason: .ideVersionNotInstalled(installed: ["2025.2"]),
+        action: .trash([url("/Users/cleanup-test/Library/Application Support/JetBrains/IntelliJIdea2024.3")]), bucket: .safe,
+        version: "2024.3"
+    )
+    static let ideNewer = CleanupFinding(
+        .jetBrains, tool: "IntelliJIdea", path: "/Users/cleanup-test/Library/Caches/JetBrains/IntelliJIdea2025.3",
+        source: nil, status: .unused, reason: .newerThanInstalledIDE(installed: ["2025.2"]),
+        action: .trash([url("/Users/cleanup-test/Library/Caches/JetBrains/IntelliJIdea2025.3")]), bucket: .needsDecision,
+        version: "2025.3"
+    )
+    static let ideExcluded = CleanupFinding(
+        .jetBrains, tool: "PyCharm", path: "/Users/cleanup-test/Library/Application Support/JetBrains/PyCharm2025.2",
+        source: nil, status: .info, reason: .newerThanInstalledIDE(installed: ["2025.1"]),
+        action: .trash([url("/Users/cleanup-test/Library/Application Support/JetBrains/PyCharm2025.2")]), bucket: .excluded,
+        version: "2025.2"
     )
 
     static func url(_ path: String) -> URL {

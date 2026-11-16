@@ -17,7 +17,8 @@ struct CleanupStoreDependencies {
     var savePath: @MainActor (CleanupPathSnapshot) throws -> Void
 
     /// One guarded file system serves the scan, the approximate `PATH` and the remover, so every
-    /// Cleanup read and every move to the Trash passes the protected-location guard.
+    /// Cleanup read and every move to the Trash passes the protected-location guard. The project
+    /// roots are read from Settings at every scan and every removal's re-check, never cached here.
     static var live: CleanupStoreDependencies {
         let home = URL(filePath: NSHomeDirectory(), directoryHint: .isDirectory)
         let tmpDirectory = URL(filePath: NSTemporaryDirectory(), directoryHint: .isDirectory)
@@ -29,10 +30,16 @@ struct CleanupStoreDependencies {
         let inspector = LiveProcessInspector()
         let brew = BrewService()
         let coordinator = OperationCoordinator.shared
+        let projectRoots: @Sendable () -> [URL] = { CleanupProjectRoots.roots(from: .standard, home: home) }
+        let applicationDirectories = CleanupJetBrainsDetector.defaultApplicationDirectories(home: home)
         let remover = CleanupRemover(
             fileSystem: fileSystem, inspector: inspector, brewQuery: brew,
             brewRemoval: BrewServiceCleanupRemoval(brew: brew), coordinator: coordinator, home: home,
-            today: Date.init
+            today: Date.init,
+            referenceRecheck: CleanupLiveReferenceRecheck(
+                fileSystem: fileSystem, home: home, inspector: inspector,
+                projectRoots: projectRoots, applicationDirectories: applicationDirectories
+            )
         )
         return CleanupStoreDependencies(
             home: home,
@@ -46,7 +53,8 @@ struct CleanupStoreDependencies {
             scan: { path in
                 try await CleanupScanner().scan(CleanupContext(
                     home: home, tmpDirectory: tmpDirectory, path: path, fileSystem: fileSystem,
-                    inspector: inspector, brew: brew, brewPrefix: BinaryLocator().locateBrewPrefix()
+                    inspector: inspector, brew: brew, brewPrefix: BinaryLocator().locateBrewPrefix(),
+                    projectRoots: projectRoots(), applicationDirectories: applicationDirectories
                 ))
             },
             remove: { await remover.execute($0) },

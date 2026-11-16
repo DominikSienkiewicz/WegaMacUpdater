@@ -136,6 +136,16 @@ extension Translations {
         "Wyczyść…": "Clean up…",
         "Wyczyść": "Clean up",
 
+        // Space sections
+        "Menedżery wersji": "Version managers",
+        "JetBrains": "JetBrains",
+        "Homebrew nie ma nic do sprzątnięcia.": "Homebrew has nothing to clean up.",
+        "Nie znaleziono nieużywanych wersji.": "No unused versions found.",
+        "Nie znaleziono nieużywanych dystrybucji ani JDK.": "No unused distributions or JDKs found.",
+        "Nie znaleziono katalogów starych wersji IDE.": "No folders of old IDE versions found.",
+        "Zalecane: w IDE wybierz Help → Delete Leftover IDE Directories. Wega może też przenieść ten katalog do Kosza.":
+            "Recommended: in the IDE choose Help → Delete Leftover IDE Directories. Wega can also move this folder to the Trash.",
+
         // Sources
         "formuła Homebrew %@": "Homebrew formula %@",
         "cask Homebrew %@": "Homebrew cask %@",

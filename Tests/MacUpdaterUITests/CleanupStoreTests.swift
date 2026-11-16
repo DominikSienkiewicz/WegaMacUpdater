@@ -230,6 +230,21 @@ final class CleanupStoreTests: XCTestCase {
         )
     }
 
+    func testRemovalLogLineNamesBrewCleanup() {
+        let kegs = URL(filePath: "/opt/homebrew/Cellar/node", directoryHint: .isDirectory)
+        let leftovers = CleanupFinding(
+            detector: .homebrew, tool: "node", path: kegs, realpath: kegs,
+            source: .homebrewFormula(name: "node"), version: nil, size: 120_000_000,
+            status: .unused, reason: .homebrewLeftovers(items: 2), action: .brew(.cleanup("node")),
+            risk: .low, bucket: .needsDecision, identity: CleanupFileIdentity(device: 1, inode: 9)
+        )
+
+        XCTAssertEqual(
+            CleanupStore.removalLogLine(for: leftovers, home: CleanupStoreFixtures.home),
+            "Porządki: usunięto /opt/homebrew/Cellar/node (brew cleanup)"
+        )
+    }
+
     func testStoreIsHeldAboveTheLanguageReKey() throws {
         let app = try source("Sources/MacUpdater/MacUpdaterApp.swift", root: packageRoot())
         let ownership = try XCTUnwrap(app.range(of: "@StateObject private var cleanup = CleanupStore()"))

@@ -239,6 +239,10 @@ private struct CleanupSectionCard: View {
     private var icon: String {
         switch section.kind {
         case .duplicates: "square.on.square"
+        case .homebrew: "mug"
+        case .runtimes: "square.stack.3d.up"
+        case .gradle: "hammer"
+        case .jetBrains: "chevron.left.forwardslash.chevron.right"
         case .shellState: "terminal"
         case .protectedLocations: "lock.shield"
         case .filesAndFolders: "hand.raised"
