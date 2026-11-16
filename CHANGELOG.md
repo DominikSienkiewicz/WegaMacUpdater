@@ -35,7 +35,9 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   entries whose directory is gone, entries listed more than once, entries that are the same
   place as an earlier one or lie inside another, and tools whose active copy is older than a
   copy it shadows. Each entry names the shell files and line numbers that add it (never the
-  line's text), so you know where to edit; Wega never changes those files.
+  line's text) and says what to do there: remove a dead entry, keep one line of a repeated one,
+  check whether you need a nested one, or put the newer copy's folder earlier in `PATH`; Wega never
+  changes those files. The entries macOS adds itself for its cryptexes are left out.
 - An optional "Files and Folders" map in "Porządki", off by default and switched on in a new
   Settings card. It reads the macOS permissions database (`TCC.db`, read-only, never changed) and
   shows one row per program with its Files and Folders grants, tied to the matching copy found
