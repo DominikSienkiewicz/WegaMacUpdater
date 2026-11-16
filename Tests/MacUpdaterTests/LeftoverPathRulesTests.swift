@@ -72,6 +72,52 @@ struct LeftoverPathRulesTests {
             .isStrong(forBundleIdentifier: "com.acme.app"))
     }
 
+    @Test func zapComponentsRejectsHiddenSeparators() {
+        let entries = [
+            "~/a\u{0600}/../Documents", "~/.config/x\u{0600}/..", "~/Documents/\u{301}x/y",
+            "~/Library/Mail/\u{301}x/y", "~/../\u{301}Y/z",
+        ]
+        for entry in entries {
+            let components = LeftoverPathRules.zapComponents(entry)
+            #expect(components == nil || !LeftoverPathRules.isOfferable(components ?? []), "\(entry)")
+        }
+        #expect(LeftoverPathRules.zapComponents("~/a\u{0600}/../Documents") == nil)
+        #expect(LeftoverPathRules.zapComponents("~/Documents/\u{301}x/y") == ["Documents", "\u{301}x", "y"])
+    }
+
+    @Test func offerableRefusesMalformedComponents() {
+        #expect(!LeftoverPathRules.isOfferable([".config", ".."]))
+        #expect(!LeftoverPathRules.isOfferable(["Library", "Caches", "."]))
+        #expect(!LeftoverPathRules.isOfferable(["Library", "Application Support", "a/b"]))
+        #expect(!LeftoverPathRules.isOfferable(["", "x"]))
+        #expect(!LeftoverPathRules.isOfferable(["x", "a\u{0}b"]))
+    }
+
+    @Test func zapComponentsRejectsPureWildcards() {
+        #expect(LeftoverPathRules.zapComponents("~/Library/Caches/*") == nil)
+        #expect(LeftoverPathRules.zapComponents("~/.config/*.*") == nil)
+        #expect(LeftoverPathRules.zapComponents("~/Library/Caches/?") == nil)
+        #expect(LeftoverPathRules.zapComponents("~/Library/Group Containers/*.slack") != nil)
+        #expect(!LeftoverPathRules.isOfferable(["Library", "Caches", "*"]))
+    }
+
+    @Test func offerableRefusesAppleAnywhereInAComponent() {
+        #expect(!LeftoverPathRules.isOfferable(["Library", "Group Containers", "group.com.apple.notes"]))
+        let recents = ["Library", "Application Support", "com.apple.sharedfilelist",
+                       "com.apple.LSSharedFileList.ApplicationRecentDocuments"]
+        #expect(LeftoverPathRules.isOfferable(recents + ["md.obsidian.sfl3"]))
+        #expect(!LeftoverPathRules.isOfferable(recents + ["com.apple.TextEdit.sfl3"]))
+        #expect(!LeftoverPathRules.isOfferable(recents + ["notes.txt"]))
+        #expect(!LeftoverPathRules.isOfferable(recents + ["x.sfl3", "deeper.sfl3"]))
+    }
+
+    @Test func keyFoldsLikeEquals() {
+        #expect(LeftoverPathRules.key(["Straße"]) == LeftoverPathRules.key(["STRASSE"]))
+        #expect(LeftoverPathRules.key(["Caf\u{E9}"]) == LeftoverPathRules.key(["Cafe\u{301}"]))
+        #expect(LeftoverPathRules.key(["Library"]) == LeftoverPathRules.key(["library"]))
+        #expect(LeftoverPathRules.key(["a", "B"]) == "a/b")
+    }
+
     @Test func selectedByDefaultNeedsNoReasonAndNoSharing() {
         let url = URL(filePath: "/tmp/x", directoryHint: .notDirectory)
         let plain = LeftoverItem(url: url, source: .bundleIdentifier)
