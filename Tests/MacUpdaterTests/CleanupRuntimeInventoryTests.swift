@@ -143,4 +143,74 @@ final class CleanupRuntimeInventoryTests: XCTestCase {
         XCTAssertEqual(inventory(home).installs(), [])
         XCTAssertEqual(inventory(home).defaults(), [])
     }
+
+    func testOversizedAsdfGlobalProtectsEveryToolItInstalled() throws {
+        let home = try CleanupTempHome()
+        try home.directory(".asdf/installs/nodejs/20.1.0")
+        try home.directory(".asdf/installs/python/3.11.9")
+        let globalFile = try home.file(".tool-versions", size: 300_000)
+
+        let found = inventory(home).defaults()
+
+        XCTAssertEqual(Set(found.map(\.tool)), ["node", "python"])
+        XCTAssertTrue(found.allSatisfy { $0.spec == .unresolvable(".tool-versions") && $0.source == globalFile })
+        XCTAssertEqual(found.count, 2)
+    }
+
+    func testThrowingMiseConfigProtectsEveryToolItInstalled() throws {
+        let home = try CleanupTempHome()
+        try home.directory(".local/share/mise/installs/node/20.1.0")
+        try home.directory(".local/share/mise/installs/python/3.11.9")
+        let config = try home.file(".config/mise/config.toml", text: "[tools]\nnode = \"20\"\n")
+        let failing = ThrowingReadFileSystem(
+            base: LiveCleanupFileSystem(trash: { _ in }), failing: config.lastPathComponent
+        )
+
+        let found = CleanupRuntimeInventory(fileSystem: failing, home: home.home).defaults()
+
+        XCTAssertEqual(found.map(\.tool).sorted(), ["node", "python"])
+        XCTAssertTrue(found.allSatisfy { $0.spec == .unresolvable("config.toml") })
+    }
+
+    func testUvDefaultSurvivesASymlinkedLocalDirectory() throws {
+        let home = try CleanupTempHome()
+        let stowed = try home.directory("stow/local")
+        let python = try home.file("stow/local/share/uv/python/cpython-3.12.4-macos-aarch64-none/bin/python3.12", text: "")
+        try home.symlink(".local", to: stowed.path)
+        let link = try home.symlink("stow/local/bin/python3.12", to: python.path)
+
+        let found = inventory(home).defaults()
+
+        XCTAssertEqual(found.count, 1)
+        XCTAssertEqual(found.first?.tool, "python")
+        XCTAssertEqual(found.first?.spec, .path(python.path))
+        XCTAssertEqual(found.first?.source.lastPathComponent, link.lastPathComponent)
+    }
+
+    func testRustupDefaultWithInlineCommentIsACleanPin() throws {
+        let home = try CleanupTempHome()
+        try home.file(".rustup/settings.toml", text: "default_toolchain = \"stable\" # the default\n")
+
+        let found = inventory(home).defaults()
+
+        XCTAssertEqual(found.map(\.spec), [.pin("stable")])
+    }
+}
+
+private struct ThrowingReadFileSystem: CleanupFileSystem {
+    let base: CleanupFileSystem
+    let failing: String
+
+    func entry(at url: URL) throws -> CleanupEntry? { try base.entry(at: url) }
+    func contents(of directory: URL) throws -> [CleanupEntry] { try base.contents(of: directory) }
+    func symlinkDestination(of url: URL) throws -> String { try base.symlinkDestination(of: url) }
+    func realpath(_ url: URL) throws -> URL { try base.realpath(url) }
+    func allocatedSize(of url: URL) throws -> Int64 { try base.allocatedSize(of: url) }
+    func readText(_ url: URL, maxBytes: Int) throws -> String {
+        if url.lastPathComponent == failing { throw CleanupFileSystemError.io("denied") }
+        return try base.readText(url, maxBytes: maxBytes)
+    }
+    func createDirectory(_ url: URL) throws { try base.createDirectory(url) }
+    func moveItem(_ source: URL, to destination: URL) throws { try base.moveItem(source, to: destination) }
+    func trash(_ url: URL) throws { try base.trash(url) }
 }
