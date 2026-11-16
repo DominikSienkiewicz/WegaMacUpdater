@@ -25,5 +25,6 @@ extension Translations {
         "%@ nie da się usunąć — szczegóły poniżej": "%@ cannot be removed — details below",
         "Pokaż, czego nie usunięto": "Show what was not removed",
         "Otwórz ustawienia pomocnika": "Open helper settings",
+        "Lista aplikacji się odświeża — poczekaj, aż skończy.": "The app list is refreshing — wait until it finishes.",
     ]
 }

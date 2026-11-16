@@ -254,6 +254,7 @@ struct UninstallView: View {
                 leftoverGroups: pendingLeftoverGroups,
                 runningStates: pendingRunningStates,
                 routes: pendingRoutes,
+                isRefreshing: operations.isScanning,
                 selectedLeftovers: $selectedLeftovers,
                 onCancel: cancelUninstall,
                 onConfirm: confirmUninstall
@@ -499,6 +500,8 @@ struct UninstallDialog: View {
     var runningStates: [String: RunningApplicationResolution] = [:]
     /// What will happen to each non-brew target: Trash, or why it cannot be removed.
     var routes: [String: UninstallRouteDecision] = [:]
+    /// The list is being rescanned; confirming has to wait until it finishes.
+    var isRefreshing: Bool = false
     /// UX-13: the leftover paths the user has ticked for the Trash. Bound to the caller so
     /// the confirmed selection survives the sheet dismissal.
     @Binding var selectedLeftovers: Set<String>
@@ -512,6 +515,7 @@ struct UninstallDialog: View {
         leftoverGroups: [LeftoverGroup] = [],
         runningStates: [String: RunningApplicationResolution] = [:],
         routes: [String: UninstallRouteDecision] = [:],
+        isRefreshing: Bool = false,
         selectedLeftovers: Binding<Set<String>> = .constant([]),
         onCancel: @escaping () -> Void,
         onConfirm: @escaping (Bool) -> Void
@@ -522,6 +526,7 @@ struct UninstallDialog: View {
         self.leftoverGroups = leftoverGroups
         self.runningStates = runningStates
         self.routes = routes
+        self.isRefreshing = isRefreshing
         self._selectedLeftovers = selectedLeftovers
         self.onCancel = onCancel
         self.onConfirm = onConfirm
@@ -530,6 +535,12 @@ struct UninstallDialog: View {
     /// M3(e) — the irreversible option is never the default. `--zap` also deletes
     /// preferences, caches and Application Support; the user opts into that deliberately.
     @State private var zapMode: Bool = false
+
+    /// Why the confirm button is unavailable, or `nil` when it can be pressed. A refresh holds
+    /// the coordinator, and confirming then would do nothing.
+    static func confirmUnavailableNote(isRefreshing: Bool) -> String? {
+        isRefreshing ? tr("Lista aplikacji się odświeża — poczekaj, aż skończy.") : nil
+    }
 
     /// A blocked target is never asked to quit, so it gets no running note.
     static func runningNote(for state: RunningApplicationResolution?, route: UninstallRouteDecision?) -> String? {
@@ -749,6 +760,12 @@ struct UninstallDialog: View {
 
             // Footer buttons
             HStack(spacing: 8) {
+                if let note = Self.confirmUnavailableNote(isRefreshing: isRefreshing) {
+                    Text(note)
+                        .font(.wega(.footnote))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Spacer()
                 Button(tr("Anuluj"), role: .cancel) {
                     UninstallDialogKeyboardBehavior.perform(
@@ -764,11 +781,13 @@ struct UninstallDialog: View {
                     // reports why, so the button is not dressed as destructive.
                     Button(confirmLabel) { confirm() }
                         .keyboardShortcut(.defaultAction)
+                        .disabled(isRefreshing)
                 } else {
                     Button(confirmLabel, role: .destructive) { confirm() }
                         .keyboardShortcut(.defaultAction)
                         .buttonStyle(.borderedProminent)
                         .tint(Color.wegaDanger)
+                        .disabled(isRefreshing)
                 }
             }
             .padding(.horizontal, 18)
