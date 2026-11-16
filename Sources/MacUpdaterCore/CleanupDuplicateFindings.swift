@@ -21,7 +21,8 @@ public struct CleanupDetectorNote: Codable, Equatable, Sendable {
 }
 
 /// Turns the D1 groups into findings. Each shadowed copy gets the removal that matches the tool that
-/// installed it; a Homebrew formula another installed formula depends on is never offered for removal.
+/// installed it; a Homebrew formula another installed formula depends on, and a Homebrew package
+/// that also provides the active copy, are never offered for removal.
 public struct CleanupDuplicateFindings: Sendable {
     private struct Context {
         let processes: [CleanupProcess]
@@ -128,7 +129,7 @@ public struct CleanupDuplicateFindings: Sendable {
         if case .homebrewFormula(let name) = copy.source, let dependents = context.dependents[name] {
             return Verdict(status: .dependency(dependents), reason: .requiredBy(dependents), action: .none)
         }
-        let action = removalAction(for: copy, context: context)
+        let action = removalAction(for: copy, active: active, context: context)
         if let real = copy.realpath {
             let using = CleanupInUseMatcher.processes(using: real, isDirectory: false, among: context.processes)
             if !using.isEmpty { return Verdict(status: .inUse(using), reason: reason, action: action) }
@@ -145,11 +146,14 @@ public struct CleanupDuplicateFindings: Sendable {
         }
     }
 
-    private func removalAction(for copy: CleanupCopy, context: Context) -> CleanupAction {
+    /// `brew uninstall` removes the whole formula or cask, so a copy from the package that also
+    /// provides the active copy gets no action.
+    private func removalAction(for copy: CleanupCopy, active: CleanupCopy?, context: Context) -> CleanupAction {
+        let sharesActivePackage = active?.source == copy.source
         switch copy.source {
         case .homebrewFormula(let name):
-            return context.uncheckedFormulas.contains(name) ? .none : .brew(.uninstallFormula(name))
-        case .homebrewCask(let token): return .brew(.uninstallCask(token))
+            return context.uncheckedFormulas.contains(name) || sharesActivePackage ? .none : .brew(.uninstallFormula(name))
+        case .homebrewCask(let token): return sharesActivePackage ? .none : .brew(.uninstallCask(token))
         case .appBundle: return .instruction(.removeAppLinkWithAdminRights(link: copy.path.path))
         case .appManaged, .system, .nativeVersionDirectory: return .none
         case .standalone: return standaloneAction(for: copy)

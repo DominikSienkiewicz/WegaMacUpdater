@@ -214,9 +214,10 @@ public struct CleanupRemover: Sendable {
     }
 
     /// A copy D1 found shadowed may go only while the copy that shadowed it still works on its
-    /// own: that path still resolves to an executable file, and that file is not the one being
-    /// removed. A persisted report keeps its buttons, and once the active copy is gone the shadowed
-    /// one may be the only working copy left. Any failure to resolve it counts as gone.
+    /// own: that path still resolves to an executable file, that file is not the one being
+    /// removed and, for `brew uninstall`, it lies outside the package the command removes. A
+    /// persisted report keeps its buttons, and once the active copy is gone the shadowed one may be
+    /// the only working copy left. Any failure to resolve it counts as gone.
     private func isStillShadowed(_ finding: CleanupFinding, locations: [Location]) -> Bool {
         guard finding.detector == .pathDuplicates, case .shadowedBy(let path) = finding.reason else { return true }
         guard CleanupPathText.isAbsolute(path), !CleanupPathText.containsNUL(path),
@@ -224,7 +225,28 @@ public struct CleanupRemover: Sendable {
               let entry = try? fileSystem.entry(at: active), entry.kind == .file, entry.isExecutable
         else { return false }
         let activeComponents = CleanupPathText.components(of: active.path)
-        return !locations.contains { CleanupPathText.components(of: $0.url.path) == activeComponents }
+        if locations.contains(where: { CleanupPathText.components(of: $0.url.path) == activeComponents }) { return false }
+        guard case .brew(let action) = finding.action else { return true }
+        guard let package = Self.package(of: action, holding: locations) else { return false }
+        return !activeComponents.starts(with: package)
+    }
+
+    /// `<prefix>/Cellar/<name>` or `<prefix>/Caskroom/<token>` as components: what `brew uninstall`
+    /// removes, read from the target's resolved path. Nil when the target no longer lies in it.
+    private static func package(of action: CleanupBrewAction, holding locations: [Location]) -> [String]? {
+        let (directory, name) = switch action {
+        case .uninstallFormula(let name): ("Cellar", name)
+        case .uninstallCask(let token): ("Caskroom", token)
+        }
+        for location in locations {
+            let components = CleanupPathText.components(of: location.url.path)
+            if let index = components.indices.dropLast().first(where: {
+                components[$0] == directory && components[$0 + 1] == name
+            }) {
+                return Array(components[...(index + 1)])
+            }
+        }
+        return nil
     }
 
     private func processesUsing(_ targets: Targets) -> [CleanupProcess] {

@@ -63,6 +63,15 @@ private final class RecordingBrewRemoval: CleanupBrewRemoving, @unchecked Sendab
     }
 }
 
+/// A Homebrew link to one version and, installed after the scan, a newer version of the same package.
+private struct PackageUpgrade {
+    let action: CleanupBrewAction
+    let source: CleanupSource
+    let link: String
+    let target: String
+    let newer: String
+}
+
 /// Delegates everything, but refuses to move one source path.
 private struct FailingMoveFileSystem: CleanupFileSystem {
     let base: CleanupFileSystem
@@ -320,6 +329,53 @@ final class CleanupRemoverTests: XCTestCase {
         XCTAssertEqual(removal.calls, [])
         XCTAssertEqual(query.calls, [], "no brew call once the active copy is gone")
         XCTAssertEqual(trash.urls, [])
+    }
+
+    /// `brew uninstall` removes every version of the package, so when the active copy now resolves
+    /// into the same `Cellar/<name>` or `Caskroom/<token>` the shadowed copy came from, nothing runs.
+    func testBrewFindingWhoseActiveCopyNowComesFromTheSamePackageIsNotUninstalled() async throws {
+        let upgrades = [
+            PackageUpgrade(
+                action: .uninstallFormula("gh"), source: .homebrewFormula(name: "gh"), link: "opt/homebrew/bin/gh",
+                target: "opt/homebrew/Cellar/gh/2.104.0/bin/gh", newer: "opt/homebrew/Cellar/gh/2.105.0/bin/gh"
+            ),
+            PackageUpgrade(
+                action: .uninstallCask("claude-code"), source: .homebrewCask(token: "claude-code"),
+                link: "opt/homebrew/bin/claude", target: "opt/homebrew/Caskroom/claude-code/2.1.311/claude",
+                newer: "opt/homebrew/Caskroom/claude-code/2.1.325/claude"
+            ),
+        ]
+        for (offset, upgrade) in upgrades.enumerated() {
+            let active = try tmp.file(".local/bin/tool\(offset)", size: 16, executable: true)
+            let link = try brewLink(upgrade.link, to: upgrade.target)
+            let finding = try shadowedFinding(link, action: .brew(upgrade.action), source: upgrade.source, shadowedBy: active)
+            let newer = try tmp.file(upgrade.newer, size: 16, executable: true)
+            try FileManager.default.removeItem(at: active)
+            try tmp.symlink(".local/bin/tool\(offset)", to: newer.path)
+            let query = ScriptedBrewQuery()
+            let removal = RecordingBrewRemoval()
+
+            let outcome = await remover(brewQuery: query, brewRemoval: removal)
+                .execute(CleanupRemovalIntent(finding: finding, inUseAcknowledged: true))
+
+            XCTAssertEqual(outcome, .changedSinceScan, "\(upgrade.action)")
+            XCTAssertEqual(removal.calls, [], "\(upgrade.action)")
+            XCTAssertEqual(query.calls, [], "\(upgrade.action)")
+        }
+    }
+
+    func testBrewFindingWhoseTargetLeftItsPackageIsNotUninstalled() async throws {
+        let active = try tmp.file(".local/bin/gh", size: 16, executable: true)
+        let link = try brewLink("opt/homebrew/bin/gh", to: "opt/homebrew/opt-elsewhere/gh/bin/gh")
+        let finding = try shadowedFinding(
+            link, action: .brew(.uninstallFormula("gh")), source: .homebrewFormula(name: "gh"), shadowedBy: active
+        )
+        let removal = RecordingBrewRemoval()
+
+        let outcome = await remover(brewRemoval: removal).execute(CleanupRemovalIntent(finding: finding, inUseAcknowledged: true))
+
+        XCTAssertEqual(outcome, .changedSinceScan)
+        XCTAssertEqual(removal.calls, [])
     }
 
     func testShadowedCopyTheActiveCopyNowResolvesToIsNotRemoved() async throws {

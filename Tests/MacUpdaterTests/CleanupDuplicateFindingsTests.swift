@@ -26,6 +26,13 @@ private final class ScriptedBrew: CleanupBrewQuerying, @unchecked Sendable {
 
 private struct BrewFailure: Error {}
 
+/// Two copies of one Homebrew package: the one the active copy resolves to and an older one.
+private struct SharedPackage {
+    let source: CleanupSource
+    let current: String
+    let older: String
+}
+
 final class CleanupDuplicateFindingsTests: XCTestCase {
     private var tmp: CleanupTempHome!
     private var brewPrefix: URL!
@@ -97,6 +104,34 @@ final class CleanupDuplicateFindingsTests: XCTestCase {
         let finding = try shadowedFinding(result)
         XCTAssertEqual(finding.action, .brew(.uninstallFormula("gh")))
         XCTAssertEqual(finding.bucket, .needsDecision)
+    }
+
+    /// `brew uninstall` removes the whole formula or cask, so a shadowed copy from the package that
+    /// also provides the active copy (a versioned `Cellar/<f>/<v>/bin` on PATH beside the prefix's
+    /// `bin`) is never offered for removal.
+    func testShadowedCopyFromTheActiveCopysPackageHasNoAction() async throws {
+        let packages = [
+            SharedPackage(
+                source: .homebrewFormula(name: "node"), current: "opt/homebrew/Cellar/node/23.1.0/bin/node",
+                older: "opt/homebrew/Cellar/node/22.11.0/bin/node"
+            ),
+            SharedPackage(
+                source: .homebrewCask(token: "claude-code"), current: "opt/homebrew/Caskroom/claude-code/2.1.325/claude",
+                older: "opt/homebrew/Caskroom/claude-code/2.1.311/claude"
+            ),
+        ]
+        for package in packages {
+            let current = try tmp.file(package.current, size: 64, executable: true)
+            let older = try tmp.file(package.older, size: 64, executable: true)
+            let active = copy(tmp.url("opt/homebrew/bin/tool"), real: current, source: package.source, version: "23.1.0", role: .active, index: 0)
+            let shadowed = copy(older, real: older, source: package.source, version: "2.0.0", role: .shadowed, index: 1)
+
+            let finding = try shadowedFinding(await builder().build(scan("tool", [active, shadowed])))
+
+            XCTAssertEqual(finding.status, .shadowed, "\(package.source)")
+            XCTAssertEqual(finding.action, .none, "\(package.source)")
+            XCTAssertEqual(finding.bucket, .needsDecision, "\(package.source)")
+        }
     }
 
     func testFormulaWithDependentsIsExcludedAsDependency() async throws {
