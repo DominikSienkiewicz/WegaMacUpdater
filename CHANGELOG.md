@@ -31,12 +31,27 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   longer installed (with the IDE's "Delete Leftover IDE Directories" recommended). A new
   "Katalogi projektów" card in Settings (default `~/Dev`) says which folders to read for
   project requirements. Stopping a scan now says the previous report is kept.
+- "Porządki" checks your `PATH` itself (new "PATH" section, after you press "Odczytaj PATH"):
+  entries whose directory is gone, entries listed more than once, entries that are the same
+  place as an earlier one or lie inside another, and tools whose active copy is older than a
+  copy it shadows. Each entry names the shell files and line numbers that add it (never the
+  line's text), so you know where to edit; Wega never changes those files.
+- An optional "Files and Folders" map in "Porządki", off by default and switched on in a new
+  Settings card. It reads the macOS permissions database (`TCC.db`, read-only, never changed) and
+  shows one row per program with its Files and Folders grants, tied to the matching copy found
+  by the scan, with a `tccutil reset` command per service for apps. It needs Full Disk Access,
+  and macOS gives that to every program Wega starts (Homebrew, npm, mas and the shell that reads
+  `PATH`), so grant it only while you read the map and remove Wega from the list afterwards.
+  Switching the map off forgets a stored map at once, including in exports.
 
 ### Changed
 - The Logs keyboard shortcut moved from ⌘6 to ⌘7, because the new "Porządki" section takes ⌘6
   in the sidebar order.
 
 ### Fixed
+- "Anuluj" in "Porządki" now also stops "Odczytaj PATH", and a shell that leaves a background job
+  holding its output no longer keeps that read waiting: Wega stops waiting 2 seconds after the
+  shell exits and keeps what it already received.
 - Exported Cleanup commands no longer keep your home folder, for example in `npm uninstall -g --prefix <prefix> <package>`.
 - Obsidian no longer shows a GitHub update it has already installed. The GitHub Releases check
   compared the release with the installer version in the app bundle, not with the newer package
