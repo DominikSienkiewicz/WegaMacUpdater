@@ -15,10 +15,13 @@ struct CleanupStoreDependencies {
     var saveReport: @MainActor (CleanupReport) throws -> Void
     var loadPath: @MainActor () -> CleanupPathSnapshot?
     var savePath: @MainActor (CleanupPathSnapshot) throws -> Void
+    /// The Settings switch for the Files and Folders map (D10), read each time it is needed.
+    var tccMapEnabled: @MainActor () -> Bool = { CleanupTCCMap.enabledByDefault }
 
     /// One guarded file system serves the scan, the approximate `PATH` and the remover, so every
     /// Cleanup read and every move to the Trash passes the protected-location guard. The project
-    /// roots are read from Settings at every scan and every removal's re-check, never cached here.
+    /// roots and the Files and Folders switch are read from Settings at every scan (the roots also
+    /// at every removal's re-check), never cached here; `TCC.db` is opened only while it is on.
     static var live: CleanupStoreDependencies {
         let home = URL(filePath: NSHomeDirectory(), directoryHint: .isDirectory)
         let tmpDirectory = URL(filePath: NSTemporaryDirectory(), directoryHint: .isDirectory)
@@ -31,6 +34,7 @@ struct CleanupStoreDependencies {
         let brew = BrewService()
         let coordinator = OperationCoordinator.shared
         let projectRoots: @Sendable () -> [URL] = { CleanupProjectRoots.roots(from: .standard, home: home) }
+        let tccMapEnabled: @Sendable () -> Bool = { UserDefaults.standard.bool(forKey: CleanupTCCMap.enabledKey) }
         let applicationDirectories = CleanupJetBrainsDetector.defaultApplicationDirectories(home: home)
         let remover = CleanupRemover(
             fileSystem: fileSystem, inspector: inspector, brewQuery: brew,
@@ -54,14 +58,16 @@ struct CleanupStoreDependencies {
                 try await CleanupScanner().scan(CleanupContext(
                     home: home, tmpDirectory: tmpDirectory, path: path, fileSystem: fileSystem,
                     inspector: inspector, brew: brew, brewPrefix: BinaryLocator().locateBrewPrefix(),
-                    projectRoots: projectRoots(), applicationDirectories: applicationDirectories
+                    projectRoots: projectRoots(), applicationDirectories: applicationDirectories,
+                    tccMap: tccMapEnabled() ? SQLiteCleanupTCCDatabase(home: home) : nil
                 ))
             },
             remove: { await remover.execute($0) },
             loadReport: { CleanupReportFile(home: home).load() },
             saveReport: { try CleanupReportFile(home: home).save($0) },
             loadPath: { CleanupPathSnapshotFile().load() },
-            savePath: { try CleanupPathSnapshotFile().save($0) }
+            savePath: { try CleanupPathSnapshotFile().save($0) },
+            tccMapEnabled: tccMapEnabled
         )
     }
 }
@@ -99,6 +105,7 @@ final class CleanupStore: ObservableObject {
     private(set) var task: Task<Void, Never>?
 
     private let dependencies: CleanupStoreDependencies
+    private var settingsObserver: (any NSObjectProtocol)?
 
     /// The home the report was scanned under; the view and the exports write it as `~`.
     var home: URL { dependencies.home }
@@ -107,14 +114,28 @@ final class CleanupStore: ObservableObject {
         self.dependencies = dependencies
         report = dependencies.loadReport()
         pathSnapshot = dependencies.loadPath()
+        applyTCCMapSetting()
+        settingsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyTCCMapSetting() }
+        }
+    }
+
+    isolated deinit {
+        if let settingsObserver {
+            NotificationCenter.default.removeObserver(settingsObserver)
+        }
     }
 
     /// Runs the user's login shell once. Only a captured `PATH` replaces the stored one; an
-    /// unsupported shell or a failed read leaves it and is reported through `pathReadResult`.
+    /// unsupported shell or a failed read leaves it and is reported through `pathReadResult`. A
+    /// stopped read changes nothing and shows no error.
     func readPath() {
         start(.readingPath) {
             self.pathReadResult = nil
             let result = await self.dependencies.readPath()
+            guard result != .cancelled else { return }
             self.pathReadResult = result
             guard case .captured(let snapshot) = result else { return }
             self.pathSnapshot = snapshot
@@ -127,11 +148,26 @@ final class CleanupStore: ObservableObject {
         start(.scanning) { await self.performScan() }
     }
 
-    /// Stops a running scan, which leaves the previous report in place. A removal is never
-    /// cancelled: a `brew uninstall` killed halfway leaves a half-removed package behind.
+    /// Stops a running scan, which leaves the previous report in place, or a running `PATH` read,
+    /// which leaves the stored `PATH`. A removal is never cancelled: a `brew uninstall` killed
+    /// halfway leaves a half-removed package behind.
     func cancel() {
-        guard phase == .scanning else { return }
+        guard phase == .scanning || phase == .readingPath else { return }
         task?.cancel()
+    }
+
+    /// While the Files and Folders switch is off, a map in the stored report is forgotten at once:
+    /// the report on screen, its saved copy and so every export lose the D10 findings and notes.
+    /// Nothing is replaced under a running scan or removal; the report it stores follows the
+    /// switch, and the setting is applied again when it ends.
+    func applyTCCMapSetting() {
+        switch phase {
+        case .scanning, .removing: return
+        case .idle, .readingPath: break
+        }
+        guard let report, let kept = reportFollowingTCCMapSetting(report) else { return }
+        self.report = kept
+        persist("raportu") { try dependencies.saveReport(kept) }
     }
 
     /// Carries out one confirmed removal; the remover re-validates it under a write lease. Only a
@@ -169,7 +205,8 @@ final class CleanupStore: ObservableObject {
         }
     }
 
-    /// Starts `work` unless another operation is running; `phase` returns to idle when it ends.
+    /// Starts `work` unless another operation is running; `phase` returns to idle when it ends,
+    /// and a switch turned off meanwhile is applied to the report the operation left.
     private func start(_ phase: Phase, _ work: @escaping @MainActor () async -> Void) {
         guard self.phase == .idle else { return }
         self.phase = phase
@@ -177,10 +214,26 @@ final class CleanupStore: ObservableObject {
             await work()
             self.phase = .idle
             self.task = nil
+            self.applyTCCMapSetting()
         }
     }
 
-    /// Under a read lease, so no removal or update changes the disk while the scan reads it.
+    /// `report` without its D10 findings and notes when the switch is off and it holds any;
+    /// nil when it already follows the switch.
+    private func reportFollowingTCCMapSetting(_ report: CleanupReport) -> CleanupReport? {
+        let holdsMap = report.findings.contains { $0.detector == .tccMap }
+            || report.notes.contains { $0.detector == .tccMap }
+        guard holdsMap, !dependencies.tccMapEnabled() else { return nil }
+        return CleanupReport(
+            createdAt: report.createdAt, path: report.path,
+            findings: report.findings.filter { $0.detector != .tccMap },
+            notes: report.notes.filter { $0.detector != .tccMap },
+            skippedProtected: report.skippedProtected
+        )
+    }
+
+    /// Under a read lease, so no removal or update changes the disk while the scan reads it. A map
+    /// read before the switch went off is dropped before the report is stored or saved.
     private func performScan() async {
         lastScanFailed = false
         lastScanCancelled = false
@@ -188,9 +241,10 @@ final class CleanupStore: ObservableObject {
         let approximatePath = dependencies.approximatePath
         let scan = dependencies.scan
         do {
-            let report = try await dependencies.coordinator.withRead(label: Self.scanLeaseLabel) {
+            let scanned = try await dependencies.coordinator.withRead(label: Self.scanLeaseLabel) {
                 try await scan(storedPath ?? approximatePath())
             }
+            let report = reportFollowingTCCMapSetting(scanned) ?? scanned
             self.report = report
             lastScanFailed = false
             persist("raportu") { try dependencies.saveReport(report) }

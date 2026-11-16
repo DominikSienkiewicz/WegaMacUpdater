@@ -37,6 +37,7 @@ struct CleanupView: View {
             CleanupConfirmationSheet(store: store, finding: finding) { confirming = nil }
         }
         .onChange(of: store.phase) { old, new in announce(from: old, to: new) }
+        .onAppear { store.applyTCCMapSetting() }
     }
 
     // MARK: - Header
@@ -60,7 +61,7 @@ struct CleanupView: View {
                     .font(.wega(.subheadline))
                     .foregroundStyle(.secondary)
             }
-            if store.phase == .scanning {
+            if store.phase == .scanning || store.phase == .readingPath {
                 Button(tr("Anuluj")) { store.cancel() }
                     .controlSize(.small)
             }
