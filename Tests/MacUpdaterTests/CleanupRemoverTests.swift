@@ -321,6 +321,22 @@ final class CleanupRemoverTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: parent.path).sorted(), Self.staleNames)
     }
 
+    /// The scan pins one identity, so a Trash action naming several items could carry unchecked
+    /// ones; the remover only accepts a single target.
+    func testTrashOfSeveralItemsIsNotRemovable() async throws {
+        let first = try tmp.file("bin/tool", size: 16, executable: true)
+        let second = try tmp.file("bin2/tool", size: 16, executable: true)
+        let item = finding(
+            path: first, source: .standalone, action: .trash([first, second]), identity: try identity(of: first),
+            detector: .pathDuplicates, status: .shadowed
+        )
+
+        let outcome = await remover().execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+
+        XCTAssertEqual(outcome, .notRemovable)
+        XCTAssertEqual(trash.urls, [])
+    }
+
     func testBatchFolderNameTakesTheNextFreeSuffix() async throws {
         let (parent, entries) = try staleLinks()
         try tmp.directory("\(Self.stateDirectory)/fnm_multishells-cleanup-2026-11-16")

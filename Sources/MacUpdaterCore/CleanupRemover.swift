@@ -39,7 +39,7 @@ public struct CleanupRemovalIntent: Equatable, Sendable {
 public enum CleanupRemovalOutcome: Equatable, Sendable {
     case removed
     /// Nothing Wega carries out itself: a command or instruction for the user, no action, or an
-    /// action that names nothing to remove. Nothing was touched.
+    /// action that names nothing to remove or more than one item to trash. Nothing was touched.
     case notRemovable
     case needsInUseAcknowledgement([CleanupProcess])
     /// The item is gone, is another file now, or is the current version again; ask for a rescan.
@@ -117,12 +117,13 @@ public struct CleanupRemover: Sendable {
         return .removed
     }
 
-    /// Commands and instructions are the user's to run. A batch must name entries directly inside
-    /// its folder, because they are staged beside each other there.
+    /// Commands and instructions are the user's to run. A Trash action names exactly one item, the
+    /// one whose identity the scan recorded. A batch must name entries directly inside its folder,
+    /// because they are staged beside each other there.
     private static func isRemoval(_ action: CleanupAction) -> Bool {
         switch action {
         case .trash(let urls):
-            return !urls.isEmpty
+            return urls.count == 1
         case .trashBatch(let parent, let entries):
             return !entries.isEmpty && entries.allSatisfy { isDirectlyInside($0, parent) }
         case .brew:
@@ -145,15 +146,14 @@ public struct CleanupRemover: Sendable {
     }
 
     /// The current entry of every item the action removes, or nil when one is gone or is no longer
-    /// the scanned file. The scan records one identity: it pins a single trash target, a batch's
-    /// folder and a Homebrew finding's own path; several trash targets and a batch's entries must
-    /// at least still exist.
+    /// the scanned file. The scan records one identity: it pins the single trash target, a batch's
+    /// folder and a Homebrew finding's own path; a batch's entries must at least still exist.
     private func unchangedEntries(of finding: CleanupFinding) throws -> [CleanupEntry]? {
         guard let scanned = finding.identity else { return nil }
         switch finding.action {
         case .trash(let urls):
             guard let entries = try existingEntries(urls) else { return nil }
-            return entries.count > 1 || entries.first?.identity == scanned ? entries : nil
+            return entries.first?.identity == scanned ? entries : nil
         case .trashBatch(let parent, let urls):
             guard try fileSystem.entry(at: parent)?.identity == scanned else { return nil }
             return try existingEntries(urls)
