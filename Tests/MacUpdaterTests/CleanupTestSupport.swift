@@ -163,3 +163,17 @@ final class RecordingTrash: @unchecked Sendable {
         lock.withLock { recorded.append(url) }
     }
 }
+
+struct FakeProcessInspector: ProcessInspecting {
+    let processes: [CleanupProcess]
+    let boot: Date
+
+    init(processes: [CleanupProcess], bootTime: Date) {
+        self.processes = processes
+        boot = bootTime
+    }
+
+    func userProcesses() -> [CleanupProcess] { processes }
+
+    func bootTime() -> Date { boot }
+}
