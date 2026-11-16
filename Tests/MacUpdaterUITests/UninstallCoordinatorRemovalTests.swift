@@ -58,7 +58,8 @@ struct UninstallCoordinatorRemovalTests {
             trashLeftovers: { items in
                 recorder.recordLeftovers(items)
                 return LeftoverCleanup.Result(removed: items)
-            }
+            },
+            protection: { _ in nil }
         ))
 
         let outcome = await coordinator.uninstall(
@@ -76,7 +77,8 @@ struct UninstallCoordinatorRemovalTests {
         let coordinator = UninstallCoordinator(dependencies: .init(
             uninstallCask: { _, _, _ in },
             trashItem: { _ in },
-            trashLeftovers: { LeftoverCleanup.Result(removed: $0) }
+            trashLeftovers: { LeftoverCleanup.Result(removed: $0) },
+            protection: { _ in nil }
         ))
 
         let outcome = await coordinator.uninstall(
@@ -85,4 +87,32 @@ struct UninstallCoordinatorRemovalTests {
 
         #expect(outcome.results[cask.id] == .removedByHomebrew)
     }
+
+    @Test func protectedTargetIsRefused() async {
+        let safari = app("Safari")
+        let trashCalls = CallCounter()
+        let coordinator = UninstallCoordinator(dependencies: .init(
+            uninstallCask: { _, _, _ in },
+            trashItem: { _ in trashCalls.increment() },
+            trashLeftovers: { LeftoverCleanup.Result(removed: $0) },
+            protection: { _ in .systemApplication }
+        ))
+
+        let outcome = await coordinator.uninstall(
+            targets: [safari], zap: false, leftovers: [leftovers(for: safari)], using: BrewService()
+        )
+
+        #expect(trashCalls.count == 0)
+        #expect(outcome.results[safari.id] == .protected(.systemApplication))
+        #expect(outcome.leftoversTrashed == 0)
+    }
+}
+
+private final class CallCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+
+    func increment() { lock.lock(); value += 1; lock.unlock() }
+
+    var count: Int { lock.lock(); defer { lock.unlock() }; return value }
 }

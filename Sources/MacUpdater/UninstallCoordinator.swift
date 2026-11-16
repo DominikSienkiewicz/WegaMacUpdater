@@ -7,12 +7,19 @@ import MacUpdaterCore
 struct UninstallScan: Equatable, Sendable {
     let apps: [ApplicationInfo]
     let failures: [ScanSourceFailure]
+    /// Apps that must never be offered for removal, keyed by `ApplicationInfo.id`.
+    let protections: [String: UninstallProtection]
 
     var scanFailed: Bool { !failures.isEmpty }
 
-    init(apps: [ApplicationInfo], failures: [ScanSourceFailure] = []) {
+    init(
+        apps: [ApplicationInfo],
+        failures: [ScanSourceFailure] = [],
+        protections: [String: UninstallProtection] = [:]
+    ) {
         self.apps = apps
         self.failures = failures
+        self.protections = protections
     }
 
     /// Runs each uninstall source, recording a `ScanSourceFailure` for one that throws
@@ -21,7 +28,10 @@ struct UninstallScan: Equatable, Sendable {
     static func collect(
         directories: [URL],
         installedCasks: () async throws -> Set<String>,
-        scanApplications: (_ directory: URL, _ installedCasks: Set<String>) throws -> [ApplicationInfo]
+        scanApplications: (_ directory: URL, _ installedCasks: Set<String>) throws -> [ApplicationInfo],
+        protections: ([ApplicationInfo]) -> [String: UninstallProtection] = {
+            UninstallEligibility.protections(for: $0)
+        }
     ) async -> UninstallScan {
         var failures: [ScanSourceFailure] = []
 
@@ -49,7 +59,7 @@ struct UninstallScan: Equatable, Sendable {
         let apps = InstallationInventory.deduplicated(found)
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
-        return UninstallScan(apps: apps, failures: failures)
+        return UninstallScan(apps: apps, failures: failures, protections: protections(apps))
     }
 }
 
@@ -77,13 +87,15 @@ final class UninstallCoordinator: ObservableObject {
         var uninstallCask: @Sendable (BrewService, _ token: String, _ zap: Bool) async throws -> Void
         var trashItem: @Sendable (URL) throws -> Void
         var trashLeftovers: @Sendable ([URL]) -> LeftoverCleanup.Result
+        var protection: @Sendable (ApplicationInfo) -> UninstallProtection?
 
         static let live = Dependencies(
             uninstallCask: { brewService, token, zap in
                 _ = try await brewService.uninstallCask(token: token, zap: zap)
             },
             trashItem: { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) },
-            trashLeftovers: { LeftoverCleanup.removeToTrash($0) }
+            trashLeftovers: { LeftoverCleanup.removeToTrash($0) },
+            protection: { UninstallEligibility.protections(for: [$0])[$0.id] }
         )
     }
 
@@ -182,7 +194,9 @@ final class UninstallCoordinator: ObservableObject {
 
         var results: [String: UninstallTargetResult] = [:]
         for app in targets {
-            if app.isManagedByBrew, let token = app.caskToken {
+            if let protection = dependencies.protection(app) {
+                results[app.id] = .protected(protection)
+            } else if app.isManagedByBrew, let token = app.caskToken {
                 do {
                     try await dependencies.uninstallCask(brewService, token, zap)
                     results[app.id] = .removedByHomebrew
