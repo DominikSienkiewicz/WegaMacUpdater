@@ -351,9 +351,9 @@ struct UninstallView: View {
         // A blocked target is not attempted: it is neither asked to quit nor offers leftovers.
         let attempted = UninstallQuitFlow.partition(targets: targets, routes: pendingRoutes).attempt
         pendingRunningStates = operations.runningStates(for: attempted)
-        let groups = await operations.scanLeftovers(for: attempted)
+        let groups = await operations.scanLeftovers(for: attempted, installed: apps).groups
         pendingLeftoverGroups = groups
-        selectedLeftovers = Set(groups.flatMap { $0.items.map(\.path) })
+        selectedLeftovers = Set(groups.flatMap { $0.items.map(\.url.path) })
         showDialog = true
     }
 
@@ -398,7 +398,7 @@ struct UninstallView: View {
         let targets = pendingUninstallTargets
         let routes = pendingRoutes
         let leftovers = pendingLeftoverGroups.compactMap { group -> LeftoverGroup? in
-            let consented = group.items.filter { selectedLeftovers.contains($0.path) }
+            let consented = group.items.filter { selectedLeftovers.contains($0.url.path) }
             return consented.isEmpty ? nil : LeftoverGroup(app: group.app, items: consented)
         }
         showDialog = false
@@ -885,7 +885,7 @@ struct UninstallLeftoverSelection: View {
     let groups: [LeftoverGroup]
     @Binding var selected: Set<String>
 
-    private var allPaths: [String] { groups.flatMap { $0.items.map(\.path) } }
+    private var allPaths: [String] { groups.flatMap { $0.items.map(\.url.path) } }
     private var allSelected: Bool { !allPaths.isEmpty && selected.isSuperset(of: allPaths) }
 
     var body: some View {
@@ -920,11 +920,11 @@ struct UninstallLeftoverSelection: View {
                             .font(.wega(.subheadline, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
-                    ForEach(group.items, id: \.path) { url in
+                    ForEach(group.items) { item in
                         UninstallLeftoverRow(
-                            url: url,
-                            isOn: selected.contains(url.path),
-                            toggle: { toggle(url.path) }
+                            url: item.url,
+                            isOn: selected.contains(item.url.path),
+                            toggle: { toggle(item.url.path) }
                         )
                     }
                 }
