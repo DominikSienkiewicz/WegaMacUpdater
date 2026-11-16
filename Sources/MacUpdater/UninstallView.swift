@@ -85,7 +85,7 @@ struct UninstallView: View {
                     Button { Task { await scan() } } label: {
                         Label(tr("Odśwież"), systemImage: "arrow.clockwise")
                     }
-                    .disabled(isLoading)
+                    .disabled(isLoading || isUninstalling)
 
                     Button {
                         Task { await presentUninstallDialog() }
@@ -391,21 +391,12 @@ struct UninstallView: View {
     }
 
     private func scan() async {
+        guard let result = await operations.scan(using: model.brewService) else { return }
         errorMessage = nil
-        let result = await operations.scan(using: model.brewService)
         apps = result.apps
         protections = result.protections
         scanFailed = result.scanFailed
         errorMessage = result.failures.scanErrorMessage
-    }
-
-    /// Apps left alone because they were still running (or could not be told apart from
-    /// another copy) are reported as skipped, never as a failed removal.
-    private func reportSkipped(_ apps: [ApplicationInfo]) {
-        guard !apps.isEmpty else { return }
-        let names = apps.map(\.name).joined(separator: ", ")
-        let note = trf("Pominięto, bo aplikacja nadal działa lub jej proces jest niejednoznaczny: %@", names)
-        errorMessage = [errorMessage, note].compactMap { $0 }.joined(separator: " ")
     }
 
     private func uninstall(
@@ -416,7 +407,9 @@ struct UninstallView: View {
         skippedApps: [ApplicationInfo] = []
     ) async {
         guard !targets.isEmpty else {
-            reportSkipped(skippedApps)
+            errorMessage = UninstallOutcomeMessage.compose(
+                failure: nil, leftoverNote: nil, skippedNames: skippedApps.map(\.name)
+            ) ?? errorMessage
             return
         }
         // REL-06 — `brew uninstall --cask` (with `--zap` it also deletes preferences and
@@ -462,21 +455,23 @@ struct UninstallView: View {
             banner = BannerData(variant: .success, title: trf("Odinstalowano %@ aplikacji", "\(succeeded.count)"), message: msg)
             onWegaState?(WegaState(pose: .happy, line: trf("Załatwione — %@ mniej na dysku.", "\(succeeded.count)")))
         }
-        reportSkipped(skippedApps)
+        var failure: String?
         if !failed.isEmpty {
-            errorMessage = trf(
+            failure = trf(
                 "Odinstalowanie niepełne — nie usunięto: %@",
                 "\(failed.map(\.name).joined(separator: ", "))"
             )
             if failed.contains(where: \.requestedZap) {
-                errorMessage? += " " + tr("Nie uruchomiono --force; wybrane usunięcie wraz z resztkami nie zostało po cichu zmienione.")
+                failure? += " " + tr("Nie uruchomiono --force; wybrane usunięcie wraz z resztkami nie zostało po cichu zmienione.")
             }
         }
         // UX-13: leftovers that could not be moved are surfaced, not swallowed.
-        if outcome.leftoversFailed > 0 {
-            let note = trf("Nie udało się przenieść %@ resztek do Kosza.", "\(outcome.leftoversFailed)")
-            errorMessage = [errorMessage, note].compactMap { $0 }.joined(separator: " ")
-        }
+        let leftoverNote = outcome.leftoversFailed > 0
+            ? trf("Nie udało się przenieść %@ resztek do Kosza.", "\(outcome.leftoversFailed)")
+            : nil
+        errorMessage = UninstallOutcomeMessage.compose(
+            failure: failure, leftoverNote: leftoverNote, skippedNames: skippedApps.map(\.name)
+        ) ?? errorMessage
     }
 }
 

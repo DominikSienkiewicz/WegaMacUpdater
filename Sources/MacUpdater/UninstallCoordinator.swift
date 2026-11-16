@@ -229,8 +229,10 @@ final class UninstallCoordinator: ObservableObject {
         })
     }
 
-    func scan(using brewService: BrewService) async -> UninstallScan {
-        guard state == .idle else { return UninstallScan(apps: []) }
+    /// Returns `nil` when another phase owns the coordinator, so a caller keeps the list it
+    /// has instead of replacing it with an empty result.
+    func scan(using brewService: BrewService) async -> UninstallScan? {
+        guard state == .idle else { return nil }
         state = .scanning
         defer { state = .idle }
 
