@@ -177,3 +177,48 @@ struct FakeProcessInspector: ProcessInspecting {
 
     func bootTime() -> Date { boot }
 }
+
+private struct FixedTextUnsupported: Error {}
+
+/// Serves fixed text files, directory listings and existing paths; every other call throws.
+struct FixedTextCleanupFileSystem: CleanupFileSystem {
+    let texts: [String: String]
+    let children: [String: [String]]
+    let existing: Set<String>
+
+    init(texts: [String: String] = [:], children: [String: [String]] = [:], existing: Set<String> = []) {
+        self.texts = texts
+        self.children = children
+        self.existing = existing
+    }
+
+    func entry(at url: URL) throws -> CleanupEntry? {
+        guard existing.contains(url.path) else { return nil }
+        return CleanupEntry(
+            url: url, kind: .directory, isExecutable: true,
+            identity: CleanupFileIdentity(device: 1, inode: 1), modificationDate: nil
+        )
+    }
+
+    func contents(of directory: URL) throws -> [CleanupEntry] {
+        guard let names = children[directory.path] else { throw FixedTextUnsupported() }
+        return names.map {
+            CleanupEntry(
+                url: directory.appending(path: $0, directoryHint: .notDirectory), kind: .file, isExecutable: false,
+                identity: CleanupFileIdentity(device: 1, inode: 1), modificationDate: nil
+            )
+        }
+    }
+
+    func readText(_ url: URL, maxBytes: Int) throws -> String {
+        guard let text = texts[url.path] else { throw FixedTextUnsupported() }
+        return text
+    }
+
+    func symlinkDestination(of url: URL) throws -> String { throw FixedTextUnsupported() }
+    func realpath(_ url: URL) throws -> URL { throw FixedTextUnsupported() }
+    func allocatedSize(of url: URL) throws -> Int64 { throw FixedTextUnsupported() }
+    func createDirectory(_ url: URL) throws { throw FixedTextUnsupported() }
+    func moveItem(_ source: URL, to destination: URL) throws { throw FixedTextUnsupported() }
+    func trash(_ url: URL) throws { throw FixedTextUnsupported() }
+}
