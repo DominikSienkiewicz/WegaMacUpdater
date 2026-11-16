@@ -46,6 +46,20 @@ final class CleanupHygieneTextTests: XCTestCase {
         }
     }
 
+    /// `reasonText` and `hygieneReasonText` hand each other the reasons they do not spell. A reason
+    /// handed over by both would compile and recurse for ever, so one value of every case is
+    /// rendered here: a mis-routed reason crashes this test, not the app.
+    func testEveryReasonRendersWithoutBouncingBetweenTheTextTables() {
+        for kind in ReasonKind.allCases {
+            let reason = kind.sample
+            XCTAssertEqual(reason.kind, kind, "the sample of \(kind) is another case")
+            for language in [AppLanguage.pl, .en] {
+                let text = withLanguage(language) { CleanupPresentation.reasonText(reason) }
+                XCTAssertFalse(text.isEmpty, "\(kind) in \(language)")
+            }
+        }
+    }
+
     func testEveryNewReasonHasTextInBothLanguages() {
         let reasons: [CleanupReason] = [
             .missingPathEntry, .repeatedPathEntry(count: 2), .samePlaceAs(path: "~/a"), .nestedIn(parent: "~/b"),
@@ -58,6 +72,90 @@ final class CleanupHygieneTextTests: XCTestCase {
             let english = withLanguage(.en) { CleanupPresentation.reasonText(reason) }
             XCTAssertFalse(polish.isEmpty, "\(reason)")
             XCTAssertNotEqual(polish, english, "\(reason)")
+        }
+    }
+}
+
+/// Every `CleanupReason` case, each with one sample value. `sample` and `CleanupReason.kind` have no
+/// `default`, so a reason added later does not compile here until it has a case and a sample.
+private enum ReasonKind: CaseIterable {
+    case olderVersion, newerVersion, shadowedBy, systemCopy, managedByApp, staleSinceBoot, keptSinceBoot
+    case unknownVersionDirectory, currentVersion, protectedLocation, brokenLink, requiredBy, homebrewLeftovers
+    case homebrewKeptVersions, installedOnlyAsDependency, recentlyUpgraded, notRequiredByProjects, requiredByProjects
+    case unusedGradleDistribution, unreferencedJDK, systemJDK, ideVersionNotInstalled, ideNotFound, newerThanInstalledIDE
+    case missingPathEntry, repeatedPathEntry, samePlaceAs, nestedIn, olderCopyWins, tccEntry, tccEntryFileGone
+
+    var sample: CleanupReason {
+        switch self {
+        case .olderVersion: .olderVersion(current: "2.0")
+        case .newerVersion: .newerVersion(current: "1.0")
+        case .shadowedBy: .shadowedBy(path: "~/.local/bin/x")
+        case .systemCopy: .systemCopy
+        case .managedByApp: .managedByApp(owner: "App")
+        case .staleSinceBoot: .staleSinceBoot(count: 2)
+        case .keptSinceBoot: .keptSinceBoot(count: 1)
+        case .unknownVersionDirectory: .unknownVersionDirectory
+        case .currentVersion: .currentVersion
+        case .protectedLocation: .protectedLocation
+        case .brokenLink: .brokenLink
+        case .requiredBy: .requiredBy(["a"])
+        case .homebrewLeftovers: .homebrewLeftovers(items: 3)
+        case .homebrewKeptVersions: .homebrewKeptVersions(count: 2)
+        case .installedOnlyAsDependency: .installedOnlyAsDependency
+        case .recentlyUpgraded: .recentlyUpgraded
+        case .notRequiredByProjects: .notRequiredByProjects
+        case .requiredByProjects: .requiredByProjects
+        case .unusedGradleDistribution: .unusedGradleDistribution
+        case .unreferencedJDK: .unreferencedJDK(major: 17)
+        case .systemJDK: .systemJDK(major: 21)
+        case .ideVersionNotInstalled: .ideVersionNotInstalled(installed: ["2025.2"])
+        case .ideNotFound: .ideNotFound
+        case .newerThanInstalledIDE: .newerThanInstalledIDE(installed: ["2025.2"])
+        case .missingPathEntry: .missingPathEntry
+        case .repeatedPathEntry: .repeatedPathEntry(count: 2)
+        case .samePlaceAs: .samePlaceAs(path: "~/a")
+        case .nestedIn: .nestedIn(parent: "~/b")
+        case .olderCopyWins: .olderCopyWins(version: "1.0.0", newer: "~/n", newerVersion: "2.0.0")
+        case .tccEntry: .tccEntry(grants: [CleanupTCCGrant(service: .documents, allowed: true)], link: nil)
+        case .tccEntryFileGone: .tccEntryFileGone(grants: [CleanupTCCGrant(service: .downloads, allowed: false)])
+        }
+    }
+}
+
+private extension CleanupReason {
+    var kind: ReasonKind {
+        switch self {
+        case .olderVersion: .olderVersion
+        case .newerVersion: .newerVersion
+        case .shadowedBy: .shadowedBy
+        case .systemCopy: .systemCopy
+        case .managedByApp: .managedByApp
+        case .staleSinceBoot: .staleSinceBoot
+        case .keptSinceBoot: .keptSinceBoot
+        case .unknownVersionDirectory: .unknownVersionDirectory
+        case .currentVersion: .currentVersion
+        case .protectedLocation: .protectedLocation
+        case .brokenLink: .brokenLink
+        case .requiredBy: .requiredBy
+        case .homebrewLeftovers: .homebrewLeftovers
+        case .homebrewKeptVersions: .homebrewKeptVersions
+        case .installedOnlyAsDependency: .installedOnlyAsDependency
+        case .recentlyUpgraded: .recentlyUpgraded
+        case .notRequiredByProjects: .notRequiredByProjects
+        case .requiredByProjects: .requiredByProjects
+        case .unusedGradleDistribution: .unusedGradleDistribution
+        case .unreferencedJDK: .unreferencedJDK
+        case .systemJDK: .systemJDK
+        case .ideVersionNotInstalled: .ideVersionNotInstalled
+        case .ideNotFound: .ideNotFound
+        case .newerThanInstalledIDE: .newerThanInstalledIDE
+        case .missingPathEntry: .missingPathEntry
+        case .repeatedPathEntry: .repeatedPathEntry
+        case .samePlaceAs: .samePlaceAs
+        case .nestedIn: .nestedIn
+        case .olderCopyWins: .olderCopyWins
+        case .tccEntry: .tccEntry
+        case .tccEntryFileGone: .tccEntryFileGone
         }
     }
 }
