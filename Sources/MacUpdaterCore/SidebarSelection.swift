@@ -11,6 +11,7 @@ public enum SidebarSelection: Hashable, Sendable {
     case inventory
     case rollback
     case uninstall
+    case cleanup
     case logs
 }
 
@@ -32,6 +33,7 @@ extension SidebarSelection: CaseIterable {
         .inventory,
         .rollback,
         .uninstall,
+        .cleanup,
         .logs,
     ]
 }
@@ -47,6 +49,7 @@ extension SidebarSelection: RawRepresentable {
         case "inventory":        self = .inventory
         case "rollback":         self = .rollback
         case "uninstall":        self = .uninstall
+        case "cleanup":          self = .cleanup
         case "logs":             self = .logs
         default:                 return nil
         }
@@ -62,6 +65,7 @@ extension SidebarSelection: RawRepresentable {
         case .inventory:          return "inventory"
         case .rollback:           return "rollback"
         case .uninstall:          return "uninstall"
+        case .cleanup:            return "cleanup"
         case .logs:               return "logs"
         }
     }

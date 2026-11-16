@@ -9,8 +9,7 @@ import Foundation
 /// Format strings (used via `trf`) keep their `%@` / `%d` placeholders in both
 /// languages so argument order is preserved.
 public enum Translations {
-    /// Composed from two sections so neither declaration grows past the
-    /// `type_body_length` ceiling. Sections are additive — keys never overlap.
+    /// Composed from additive sections (`type_body_length`); keys never overlap.
     public static let en: [String: String] = base.merging(operations) { first, _ in first }
         .merging(vendorCompletion) { first, _ in first }
         .merging(rollbackScope) { first, _ in first }
@@ -19,6 +18,7 @@ public enum Translations {
         .merging(dockerDesktop) { first, _ in first }
         .merging(unconfirmedCaskAssociation) { first, _ in first }
         .merging(serviceVendors) { first, _ in first }
+        .merging(cleanup) { first, _ in first }
         .merging(MicrosoftAutoUpdateTranslations.english) { first, _ in first }
 }
 

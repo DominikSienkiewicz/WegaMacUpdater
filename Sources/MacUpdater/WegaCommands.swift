@@ -66,7 +66,7 @@ final class WegaCommandCenter: ObservableObject {
     }
 }
 
-/// The ⌘1…⌘6 destinations, in sidebar order: the coarse sections, top to bottom. The Updates
+/// The ⌘1…⌘7 destinations, in sidebar order: the coarse sections, top to bottom. The Updates
 /// section opens on its unfiltered list; its category sub-filters keep their place in the
 /// sidebar but are not each given a number.
 ///
@@ -80,7 +80,8 @@ enum WegaMenuNavigation {
         .inventory,       // ⌘3
         .rollback,        // ⌘4
         .uninstall,       // ⌘5
-        .logs,            // ⌘6
+        .cleanup,         // ⌘6
+        .logs,            // ⌘7
     ]
 }
 

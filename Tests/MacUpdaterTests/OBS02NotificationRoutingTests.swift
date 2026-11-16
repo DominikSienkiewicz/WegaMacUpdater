@@ -27,6 +27,7 @@ struct OBS02NotificationRoutingTests {
         .migration,
         .inventory,
         .uninstall,
+        .cleanup,
         .logs,
     ])
     func aDestinationSurvivesTheTripThroughUserInfo(destination: SidebarSelection) {

@@ -276,6 +276,8 @@ struct DetailColumn: View {
                     EmptyView()   // shown by the always-mounted UpdateView above
                 case .uninstall:
                     UninstallView(onWegaState: { wegaState = $0 })
+                case .cleanup:
+                    CleanupView(onWegaState: { wegaState = $0 })
                 case .migration:
                     MigrationView(onWegaState: { wegaState = $0 })
                 case .inventory:

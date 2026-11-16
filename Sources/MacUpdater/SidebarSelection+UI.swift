@@ -13,6 +13,7 @@ extension SidebarSelection {
         case .inventory: return .inventory
         case .rollback:  return .rollback
         case .uninstall: return .uninstall
+        case .cleanup:   return .cleanup
         case .logs:      return .logs
         }
     }
@@ -27,6 +28,7 @@ extension SidebarSelection {
         case .inventory:          return tr("Spis aplikacji")
         case .rollback:           return tr("Cofnij aktualizacje")
         case .uninstall:          return tr("Odinstaluj aplikacje")
+        case .cleanup:            return tr("Porządki")
         case .logs:               return tr("Logi")
         }
     }
@@ -44,6 +46,7 @@ extension SidebarSelection {
         case .inventory:          return "tablecells"
         case .rollback:           return "arrow.uturn.backward.circle"
         case .uninstall:          return "trash"
+        case .cleanup:            return "sparkles"
         case .logs:               return "doc.text.magnifyingglass"
         }
     }
@@ -54,6 +57,7 @@ extension SidebarSelection {
         case .update:    return .updates(.all)
         case .rollback:  return .rollback
         case .uninstall: return .uninstall
+        case .cleanup:   return .cleanup
         case .migration: return .migration
         case .inventory: return .inventory
         case .logs:      return .logs

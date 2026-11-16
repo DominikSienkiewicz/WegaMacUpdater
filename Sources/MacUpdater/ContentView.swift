@@ -11,6 +11,7 @@ enum SidebarTab: String, Identifiable {
     case update    = "update"
     case rollback  = "rollback"
     case uninstall = "uninstall"
+    case cleanup   = "cleanup"
     case migration = "migration"
     case inventory = "inventory"
     case logs      = "logs"
@@ -22,6 +23,7 @@ enum SidebarTab: String, Identifiable {
         case .update:    return tr("Co do odświeżenia")
         case .rollback:  return tr("Co da się cofnąć")
         case .uninstall: return tr("Usuń aplikacje")
+        case .cleanup:   return tr("Duplikaty i pozostałości")
         case .migration: return tr("Przepnij pod Brew")
         case .inventory: return tr("Pełny obchód")
         case .logs:      return tr("Co się działo")
