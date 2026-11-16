@@ -34,7 +34,8 @@ struct ProcessRunnerOutputDrainTests {
     /// detaching the readers would leave its 128 KiB stuck on a full pipe. The steps are chained
     /// with `&&`, so the marker appears only if every write went through: it proves the job lived
     /// on and was read to the end. The late output is read a second before the marker appears,
-    /// and none of it may be forwarded any more.
+    /// and none of it may be forwarded any more. The writer waits five seconds, ten times the
+    /// drain limit, so the wait has expired before it writes even on a slow CI runner.
     @Test func aLateWriterIsNotKilledByTheDrain() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appending(path: "wega-output-drain-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -45,7 +46,7 @@ struct ProcessRunnerOutputDrainTests {
             executableURL: Self.shell,
             arguments: [
                 "-c",
-                "printf ready; (sleep 2 && printf late && head -c 131072 /dev/zero && sleep 1 && touch \"$MARK\") &",
+                "printf ready; (sleep 5 && printf late && head -c 131072 /dev/zero && sleep 1 && touch \"$MARK\") &",
             ],
             environment: ["MARK": mark.path],
             timeout: 30,
@@ -59,7 +60,7 @@ struct ProcessRunnerOutputDrainTests {
         })
 
         #expect(result.stdout == "ready")
-        #expect(await Self.fileAppears(at: mark, within: .seconds(10)))
+        #expect(await Self.fileAppears(at: mark, within: .seconds(15)))
         chunkSink.finish()
         var forwarded: [String] = []
         for await chunk in chunks { forwarded.append(chunk) }
