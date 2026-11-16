@@ -7,7 +7,21 @@ enum LeftoverCandidates {
         let components: [String]
         let source: LeftoverItem.Source
         let probableReason: LeftoverItem.ProbableReason?
+        /// The ByHost template's bundle id: a found name's part between `<id>.` and `.plist` must hold
+        /// no `.`, or the file belongs to a longer id (`<id>.canary.<UUID>.plist`).
+        var byHostIdentifier: String?
+
+        /// Whether an item found on disk for this candidate is the app's.
+        func admits(_ found: [String]) -> Bool {
+            guard let id = byHostIdentifier, let name = found.last else { return true }
+            let hostPart = Array(name.unicodeScalars)
+                .dropFirst(id.unicodeScalars.count + 1)
+                .dropLast(byHostSuffix.unicodeScalars.count)
+            return !hostPart.contains(".")
+        }
     }
+
+    private static let byHostSuffix = ".plist"
 
     private static let teamIDCharacters = CharacterSet(
         charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
@@ -17,7 +31,10 @@ enum LeftoverCandidates {
     /// nothing for a bundle id that fails SEC-06.
     static func bundleIdentifier(for app: LeftoverApp) -> [Candidate] {
         guard let id = app.bundleIdentifier, MigrationPlanner.isSafeBundleID(id) else { return [] }
-        var insideLibrary: [[String]] = [
+        let inLibrary = { (components: [String]) in
+            Candidate(components: ["Library"] + components, source: .bundleIdentifier, probableReason: nil)
+        }
+        var candidates = [
             ["Application Support", id],
             ["Preferences", "\(id).plist"],
             ["Caches", id],
@@ -29,16 +46,20 @@ enum LeftoverCandidates {
             ["Logs", id],
             ["Application Scripts", id],
             ["Cookies", "\(id).binarycookies"],
-            ["Preferences", "ByHost", "\(id).*.plist"],
-        ]
+        ].map(inLibrary)
+        candidates.append(Candidate(
+            components: ["Library", "Preferences", "ByHost", "\(id).*\(byHostSuffix)"],
+            source: .bundleIdentifier,
+            probableReason: nil,
+            byHostIdentifier: id
+        ))
         if let team = app.teamIdentifier, isAlphanumeric(team) {
-            insideLibrary.append(["Group Containers", "\(team).\(id)"])
+            candidates.append(inLibrary(["Group Containers", "\(team).\(id)"]))
         }
-        insideLibrary.append(["Group Containers", "group.\(id)"])
+        candidates.append(inLibrary(["Group Containers", "group.\(id)"]))
         let recentDocuments = LeftoverPathRules.recentDocumentsFolder + ["\(id.lowercased()).sfl*"]
-        return (insideLibrary.map { ["Library"] + $0 } + [recentDocuments]).map {
-            Candidate(components: $0, source: .bundleIdentifier, probableReason: nil)
-        }
+        candidates.append(Candidate(components: recentDocuments, source: .bundleIdentifier, probableReason: nil))
+        return candidates
     }
 
     /// The `~/…` entries of the matched cask's zap list, in its order. An entry outside

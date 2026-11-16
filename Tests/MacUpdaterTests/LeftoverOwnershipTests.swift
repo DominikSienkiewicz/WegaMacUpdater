@@ -180,10 +180,14 @@ struct LeftoverOwnershipTests {
 
     // MARK: - Apps of the same run
 
+    /// The helper's ByHost file reaches the plan through the first copy's zap list: the bundle-id
+    /// ByHost template takes only files named for the exact id.
     @Test func coTargetsDoNotShareButAreRecorded() throws {
         let caches = try fixture.folder("Library/Caches/com.acme.app")
         let helperHostPreferences = try fixture.file("Library/Preferences/ByHost/com.acme.app.helper.0000-1111.plist")
-        let first = app(id: "first", name: "Acme", bundleID: "com.acme.app")
+        let first = app(
+            id: "first", name: "Acme", bundleID: "com.acme.app", zap: ["~/Library/Preferences/ByHost/com.acme.app*.plist"]
+        )
         let second = app(id: "second", name: "Acme", path: "~/Applications/Acme.app", bundleID: "com.acme.app")
         let helper = app(id: "helper", name: "Acme Helper", bundleID: "com.acme.app.helper")
 

@@ -55,7 +55,7 @@ public enum LeftoverPlanner {
             }
         }
         for (candidate, precedence) in candidates {
-            record(homeFolder.existingPaths(candidate.components), candidate, precedence)
+            record(homeFolder.existingPaths(candidate.components).filter { candidate.admits($0.components) }, candidate, precedence)
         }
         let names = LeftoverCandidates.names(for: target)
         for parent in LeftoverCandidates.nameParents {

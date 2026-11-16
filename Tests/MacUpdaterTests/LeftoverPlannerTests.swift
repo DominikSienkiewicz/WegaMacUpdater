@@ -122,6 +122,14 @@ struct LeftoverPlannerTests {
         #expect(items.allSatisfy { $0.source == .bundleIdentifier && $0.isSelectedByDefault })
     }
 
+    /// ByHost names are `<id>.<UUID>.plist`: a longer id's file is another app's.
+    @Test func byHostTemplateMatchesOnlyItsOwnID() throws {
+        let own = try fixture.file("Library/Preferences/ByHost/com.google.Chrome.0000-1111.plist")
+        try fixture.file("Library/Preferences/ByHost/com.google.Chrome.canary.0000-1111.plist")
+
+        #expect(plannedItems(app(name: "Google Chrome", bundleID: "com.google.Chrome")).map(\.url) == [own])
+    }
+
     @Test func onlyExistingPathsAreOffered() throws {
         let caches = try fixture.folder("Library/Caches/com.acme.app")
         let logs = try fixture.folder("Library/Logs/com.acme.app")
