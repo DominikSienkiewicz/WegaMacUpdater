@@ -35,7 +35,7 @@ enum CleanupPresentation {
 
     struct Section: Equatable {
         enum Kind: Hashable {
-            case duplicates, homebrew, runtimes, gradle, jetBrains, shellState, protectedLocations, filesAndFolders
+            case duplicates, homebrew, runtimes, gradle, jetBrains, shellState, pathHygiene, protectedLocations, filesAndFolders
         }
 
         let kind: Kind
@@ -147,6 +147,8 @@ enum CleanupPresentation {
         case .gradle: .gradle
         case .jetBrains: .jetBrains
         case .shellState: .shellState
+        case .pathHygiene: .pathHygiene
+        case .tccMap: .filesAndFolders
         }
     }
 
@@ -188,6 +190,7 @@ enum CleanupPresentation {
         switch status {
         case .active: 0
         case .shadowed, .unused, .stale, .inUse: 1
+        case .deadEntry: 1
         case .dependency, .brokenLink, .pinned, .recentUpgrade: 2
         case .expected, .appManaged, .info, .skippedProtected: 3
         }
@@ -320,6 +323,7 @@ enum CleanupPresentation {
         case .pinned: tr("potrzebna")
         case .recentUpgrade: tr("świeżo zaktualizowana")
         case .info: tr("informacja")
+        case .deadEntry: tr("martwy wpis")
         }
     }
 
@@ -360,6 +364,53 @@ enum CleanupPresentation {
         case .ideNotFound: tr("nie znaleziono zainstalowanego IDE tego produktu")
         case .newerThanInstalledIDE(let installed):
             trf("nowsza niż zainstalowane IDE (%@)", installed.joined(separator: ", "))
+        case .missingPathEntry, .repeatedPathEntry, .samePlaceAs, .nestedIn, .olderCopyWins, .tccEntry, .tccEntryFileGone:
+            hygieneReasonText(reason)
+        }
+    }
+
+    private static func hygieneReasonText(_ reason: CleanupReason) -> String {
+        switch reason {
+        case .missingPathEntry: tr("ten katalog nie istnieje albo nie jest katalogiem, więc nic w nim nie szukamy")
+        case .repeatedPathEntry(let count): trf("ten sam wpis występuje w PATH %@ razy; liczy się pierwszy", "\(count)")
+        case .samePlaceAs(let path): trf("to samo miejsce co wcześniejszy wpis %@", path)
+        case .nestedIn(let parent): trf("leży wewnątrz katalogu %@, który też jest w PATH", parent)
+        case .olderCopyWins(let version, let newer, let newerVersion):
+            trf("aktywna jest wersja %@, a przesłonięta kopia %@ ma nowszą wersję %@", version, newer, newerVersion)
+        case .tccEntry(let grants, let link):
+            tccEntryText(grants: grants, link: link)
+        case .tccEntryFileGone(let grants):
+            trf("wpis w „Pliki i foldery” (%@) wskazuje plik, którego już nie ma", grantsText(grants))
+        default: ""
+        }
+    }
+
+    private static func tccEntryText(grants: [CleanupTCCGrant], link: CleanupTCCLink?) -> String {
+        let entry = trf("wpis w „Pliki i foldery”: %@", grantsText(grants))
+        guard let link else { return entry }
+        let kind = switch link.kind {
+        case .activeCopy: tr("dotyczy aktywnej kopii")
+        case .copyToRemove: tr("dotyczy kopii do usunięcia")
+        case .keptCopy: tr("dotyczy kopii, która zostaje")
+        case .appManaged(let owner): trf("dotyczy kopii aplikacji %@", owner)
+        }
+        return "\(entry); \(kind)"
+    }
+
+    private static func grantsText(_ grants: [CleanupTCCGrant]) -> String {
+        grants.map { grant in
+            trf(grant.allowed ? "%@ (zezwolono)" : "%@ (odmówiono)", serviceName(grant.service))
+        }.joined(separator: ", ")
+    }
+
+    private static func serviceName(_ service: CleanupTCCService) -> String {
+        switch service {
+        case .desktop: tr("Pulpit")
+        case .documents: tr("Dokumenty")
+        case .downloads: tr("Pobrane")
+        case .networkVolumes: tr("woluminy sieciowe")
+        case .removableVolumes: tr("woluminy wymienne")
+        case .allFiles: tr("Pełny dostęp do dysku")
         }
     }
 
@@ -369,6 +420,20 @@ enum CleanupPresentation {
             tr("Usuń ją narzędziem, które ją zainstalowało.")
         case .removeAppLinkWithAdminRights(let link):
             trf("Dowiązanie %@ prowadzi do aplikacji; usuń je ręcznie, z uprawnieniami administratora.", link)
+        case .editShellFiles(let entry, let locations):
+            if locations.isEmpty {
+                trf(
+                    "Wpisu %@ nie ma w plikach powłoki, które sprawdza Wega. Dodał go prawdopodobnie eval, dołączony plik, menedżer wtyczek albo ZDOTDIR.",
+                    entry
+                )
+            } else {
+                trf(
+                    "Usuń wpis %@ z pliku powłoki, który go dodaje: %@.",
+                    entry, locations.map { "\($0.file):\($0.line)" }.joined(separator: ", ")
+                )
+            }
+        case .switchOffInFilesAndFolders:
+            tr("Wyłącz ten wpis w Ustawieniach systemowych → Prywatność i ochrona → Pliki i foldery.")
         }
     }
 
@@ -386,6 +451,12 @@ enum CleanupPresentation {
             tr("Katalogów projektów jest więcej, niż Wega przeszukuje w jednym skanie. Część wersji może być potrzebna projektom, których nie sprawdzono.")
         case (.unrecognisedIDEInstall, _):
             tr("Jedno z IDE JetBrains nie ma pliku product-info.json, więc katalogi tego produktu zostają bez zmian.")
+        case (.tccUnreadable, _):
+            tr("Wega nie mogła odczytać bazy zgód. Brakuje jej Pełnego dostępu do dysku albo pliku bazy nie ma, więc mapy „Pliki i foldery” nie ma w raporcie.")
+        case (.tccUnsupportedSchema, _):
+            tr("Baza zgód ma układ, którego Wega nie zna, więc nie zgaduje i mapy „Pliki i foldery” nie ma w raporcie.")
+        case (.tccMapEmpty, _):
+            tr("Baza zgód nie ma wpisów dla plików i folderów. Pełny dostęp do dysku jest w bazie systemowej, której Wega nie mapuje.")
         case (.failed, let detector):
             trf("Ta część skanu nie powiodła się: %@. Jej wyników nie ma w raporcie.", detectorName(detector))
         }
@@ -401,6 +472,8 @@ enum CleanupPresentation {
         case .runtimeVersions: tr("wersje środowisk")
         case .gradle: tr("Gradle")
         case .jetBrains: tr("katalogi IDE JetBrains")
+        case .pathHygiene: tr("higiena PATH")
+        case .tccMap: tr("mapa „Pliki i foldery”")
         }
     }
 
@@ -580,12 +653,27 @@ enum CleanupPresentation {
     }
 
     private static func displayed(_ reason: CleanupReason, home: URL) -> CleanupReason {
-        guard case .shadowedBy(let path) = reason else { return reason }
-        return .shadowedBy(path: tilde(path, home))
+        switch reason {
+        case .shadowedBy(let path): .shadowedBy(path: tilde(path, home))
+        case .samePlaceAs(let path): .samePlaceAs(path: tilde(path, home))
+        case .nestedIn(let parent): .nestedIn(parent: tilde(parent, home))
+        case .olderCopyWins(let version, let newer, let newerVersion):
+            .olderCopyWins(version: version, newer: tilde(newer, home), newerVersion: newerVersion)
+        default: reason
+        }
     }
 
     private static func displayed(_ instruction: CleanupInstruction, home: URL) -> CleanupInstruction {
-        guard case .removeAppLinkWithAdminRights(let link) = instruction else { return instruction }
-        return .removeAppLinkWithAdminRights(link: tilde(link, home))
+        switch instruction {
+        case .removeAppLinkWithAdminRights(let link):
+            .removeAppLinkWithAdminRights(link: tilde(link, home))
+        case .editShellFiles(let entry, let locations):
+            .editShellFiles(
+                entry: tilde(entry, home),
+                locations: locations.map { CleanupShellFileLocation(file: tilde($0.file, home), line: $0.line) }
+            )
+        case .removeWithCreatingTool, .switchOffInFilesAndFolders:
+            instruction
+        }
     }
 }

@@ -9,6 +9,8 @@ public enum CleanupDetectorID: String, Codable, Equatable, Sendable {
     case gradle = "D6"
     case jetBrains = "D7"
     case shellState = "D8"
+    case pathHygiene = "D9"
+    case tccMap = "D10"
 }
 
 public enum CleanupVersionManager: String, Codable, Equatable, Sendable {
@@ -80,6 +82,8 @@ public enum CleanupStatus: Codable, Equatable, Sendable {
     /// Absolute paths of the files or manager settings that reference the item.
     case pinned(by: [String])
     case recentUpgrade(until: Date)
+    /// A `PATH` entry or a map entry that points at nothing.
+    case deadEntry
 }
 
 public enum CleanupBrewAction: Codable, Equatable, Sendable {
@@ -91,6 +95,9 @@ public enum CleanupBrewAction: Codable, Equatable, Sendable {
 public enum CleanupInstruction: Codable, Equatable, Sendable {
     case removeWithCreatingTool
     case removeAppLinkWithAdminRights(link: String)
+    /// Empty `locations` means no shell file Wega checks mentions the entry.
+    case editShellFiles(entry: String, locations: [CleanupShellFileLocation])
+    case switchOffInFilesAndFolders
 }
 
 public enum CleanupAction: Codable, Equatable, Sendable {
@@ -128,6 +135,13 @@ public enum CleanupReason: Codable, Equatable, Sendable {
     case ideVersionNotInstalled(installed: [String])
     case ideNotFound
     case newerThanInstalledIDE(installed: [String])
+    case missingPathEntry
+    case repeatedPathEntry(count: Int)
+    case samePlaceAs(path: String)
+    case nestedIn(parent: String)
+    case olderCopyWins(version: String, newer: String, newerVersion: String)
+    case tccEntry(grants: [CleanupTCCGrant], link: CleanupTCCLink?)
+    case tccEntryFileGone(grants: [CleanupTCCGrant])
 }
 
 public enum CleanupVersionRelation: Codable, Equatable, Sendable {
@@ -183,7 +197,8 @@ public struct CleanupFinding: Codable, Equatable, Identifiable, Sendable {
         bucket: CleanupBucket,
         identity: CleanupFileIdentity?
     ) {
-        self.id = "\(detector.rawValue):\(Self.statusKey(status)):\(path.path)"
+        let base = "\(detector.rawValue):\(Self.statusKey(status)):\(path.path)"
+        self.id = detector == .tccMap ? "\(base):\(tool)" : base
         self.detector = detector
         self.tool = tool
         self.path = path
@@ -200,7 +215,8 @@ public struct CleanupFinding: Codable, Equatable, Identifiable, Sendable {
     }
 
     /// The status's case name. It is part of the id because D8 reports a directory's stale and
-    /// kept entries as two findings for the same path.
+    /// kept entries as two findings for the same path. D10 findings share the database file's path,
+    /// so their id also carries the tool.
     private static func statusKey(_ status: CleanupStatus) -> String {
         switch status {
         case .active: "active"
@@ -216,6 +232,7 @@ public struct CleanupFinding: Codable, Equatable, Identifiable, Sendable {
         case .info: "info"
         case .pinned: "pinned"
         case .recentUpgrade: "recentUpgrade"
+        case .deadEntry: "deadEntry"
         }
     }
 }
@@ -255,7 +272,7 @@ public enum CleanupBucketPolicy {
 
     private static func isExcluded(_ status: CleanupStatus) -> Bool {
         switch status {
-        case .active, .expected, .appManaged, .dependency, .info, .brokenLink, .skippedProtected, .pinned, .recentUpgrade:
+        case .active, .expected, .appManaged, .dependency, .info, .brokenLink, .skippedProtected, .pinned, .recentUpgrade, .deadEntry:
             return true
         case .shadowed, .unused, .stale, .inUse:
             return false

@@ -123,4 +123,12 @@ final class CleanupBucketPolicyTests: XCTestCase {
         XCTAssertEqual(CleanupBucketPolicy.bucket(status: .recentUpgrade(until: Date()), kind: .homebrewCleanup, evidenceComplete: true), .excluded)
         XCTAssertEqual(CleanupBucketPolicy.bucket(status: .inUse([]), kind: .jetBrainsDirectory, evidenceComplete: true), .needsDecision)
     }
+
+    func testDeadEntryIsExcluded() {
+        XCTAssertEqual(bucket(.deadEntry), .excluded)
+        XCTAssertEqual(
+            CleanupBucketPolicy.bucket(status: .deadEntry, kind: .runtimeVersion, evidenceComplete: true),
+            .excluded
+        )
+    }
 }

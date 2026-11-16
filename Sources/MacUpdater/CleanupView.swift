@@ -242,6 +242,7 @@ private struct CleanupSectionCard: View {
         case .gradle: "hammer"
         case .jetBrains: "chevron.left.forwardslash.chevron.right"
         case .shellState: "terminal"
+        case .pathHygiene: "arrow.triangle.branch"
         case .protectedLocations: "lock.shield"
         case .filesAndFolders: "hand.raised"
         }

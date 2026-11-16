@@ -24,6 +24,7 @@ extension BrewService: CleanupBrewQuerying {}
 public struct CleanupDetectorNote: Codable, Equatable, Sendable {
     public enum Kind: String, Codable, Sendable {
         case homebrewUnavailable, failed, dryRunFailed, noProjectRoots, projectWalkTruncated, unrecognisedIDEInstall
+        case tccUnreadable, tccUnsupportedSchema, tccMapEmpty
     }
 
     public let detector: CleanupDetectorID

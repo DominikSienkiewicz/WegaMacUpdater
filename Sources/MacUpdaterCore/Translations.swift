@@ -18,7 +18,7 @@ public enum Translations {
         .merging(dockerDesktop) { first, _ in first }
         .merging(unconfirmedCaskAssociation) { first, _ in first }
         .merging(serviceVendors) { first, _ in first }
-        .merging(cleanup) { first, _ in first }
+        .merging(cleanup.merging(cleanupHygiene) { first, _ in first }) { first, _ in first }
         .merging(MicrosoftAutoUpdateTranslations.english) { first, _ in first }
 }
 
