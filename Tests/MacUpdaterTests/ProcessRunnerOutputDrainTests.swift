@@ -31,8 +31,10 @@ struct ProcessRunnerOutputDrainTests {
     }
 
     /// Closing the pipes when the wait expires would hand the job a SIGPIPE on its next write;
-    /// the marker is written only after that write, so it proves the job lived on. The late
-    /// write is read a second before the marker appears, and must not be forwarded any more.
+    /// detaching the readers would leave its 128 KiB stuck on a full pipe. The steps are chained
+    /// with `&&`, so the marker appears only if every write went through: it proves the job lived
+    /// on and was read to the end. The late output is read a second before the marker appears,
+    /// and none of it may be forwarded any more.
     @Test func aLateWriterIsNotKilledByTheDrain() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appending(path: "wega-output-drain-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -41,7 +43,10 @@ struct ProcessRunnerOutputDrainTests {
         let mark = directory.appending(path: "late-writer-finished", directoryHint: .notDirectory)
         var request = ProcessRequest(
             executableURL: Self.shell,
-            arguments: ["-c", "printf ready; (sleep 2; printf late; sleep 1; touch \"$MARK\") &"],
+            arguments: [
+                "-c",
+                "printf ready; (sleep 2 && printf late && head -c 131072 /dev/zero && sleep 1 && touch \"$MARK\") &",
+            ],
             environment: ["MARK": mark.path],
             timeout: 30,
             idleTimeout: 30
@@ -61,7 +66,9 @@ struct ProcessRunnerOutputDrainTests {
         #expect(forwarded == ["ready"])
     }
 
-    @Test func cancellingDuringTheDrainThrowsCancelled() async throws {
+    /// The time limit and the stream finished with the run make a regression fail rather than
+    /// hang the suite.
+    @Test(.timeLimit(.minutes(1))) func cancellingDuringTheDrainThrowsCancelled() async throws {
         var request = ProcessRequest(
             executableURL: Self.shell,
             arguments: ["-c", Self.shellLeavingABackgroundJob],
@@ -72,13 +79,14 @@ struct ProcessRunnerOutputDrainTests {
         let runner = Self.isolatedRunner()
         let (chunks, chunkSink) = AsyncStream.makeStream(of: String.self)
         let reading = Task {
-            try await runner.run(request, onOutput: { event in
+            defer { chunkSink.finish() }
+            return try await runner.run(request, onOutput: { event in
                 if case .stdout(let chunk) = event { chunkSink.yield(chunk) }
             })
         }
         var receivedChunks = chunks.makeAsyncIterator()
         let firstChunk = await receivedChunks.next()
-        #expect(firstChunk == "ready")
+        try #require(firstChunk == "ready")
         try await Task.sleep(for: .seconds(1))
         let clock = ContinuousClock()
         let cancelledAt = clock.now
@@ -91,6 +99,27 @@ struct ProcessRunnerOutputDrainTests {
         #expect(cancelledAt.duration(to: clock.now) < .seconds(10))
     }
 
+    /// An expired wait is worth one line in `wega.log`, naming the executable and the limit only:
+    /// the output may be a login shell's, which can carry secrets. The limit is unique to this
+    /// test, so the line is found among other tests' entries.
+    @Test func anExpiredDrainLogsOneDebugLineWithoutTheOutput() async throws {
+        var request = ProcessRequest(
+            executableURL: Self.shell,
+            arguments: ["-c", Self.shellLeavingABackgroundJob],
+            timeout: 30,
+            idleTimeout: 30
+        )
+        request.outputDrainLimit = 0.75
+        let expectedMessage = "sh output cut short 0.75 seconds after exit"
+
+        _ = try await Self.isolatedRunner().run(request)
+
+        let entry = try #require(await Self.logEntry(withMessage: expectedMessage, within: .seconds(5)))
+        #expect(entry.level == .debug)
+        #expect(entry.category == .process)
+        #expect(entry.detail == nil)
+    }
+
     @Test func theDrainLimitIsOffByDefault() {
         let request = ProcessRequest(executableURL: Self.shell, timeout: 1, idleTimeout: 1)
 
@@ -101,6 +130,19 @@ struct ProcessRunnerOutputDrainTests {
     /// or holds up, the shared process-wide limiter other suites use.
     private static func isolatedRunner() -> ProcessRunner {
         ProcessRunner(limiter: ProcessLimiter(limit: 2))
+    }
+
+    /// `WegaLog` appends to `LogStore` from a main-actor task, so the entry is polled for. The
+    /// shared store is never cleared: other suites append to it too.
+    private static func logEntry(withMessage message: String, within limit: Duration) async -> LogEntry? {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: limit)
+        while clock.now < deadline {
+            let entry = await MainActor.run { LogStore.shared.entries.first { $0.message == message } }
+            if let entry { return entry }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return nil
     }
 
     private static func fileAppears(at url: URL, within limit: Duration) async -> Bool {

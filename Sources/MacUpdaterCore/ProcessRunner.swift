@@ -33,6 +33,7 @@ public struct ProcessRequest: Equatable, Sendable {
     /// in the background inherits its output and can hold it open indefinitely, so when set the
     /// wait ends after this many seconds with the output captured so far, and a cancellation
     /// ends it with `ProcessRunnerError.cancelled`. The leftover job is never signalled.
+    /// When set, `onOutput` must return quickly: ending the wait waits for a chunk in progress.
     public var outputDrainLimit: TimeInterval?
 
     public init(
@@ -253,8 +254,9 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         // Each pipe is drained exclusively by its readability handler, all the way to
         // EOF (an empty `availableData`). The descriptor is never read from a second
         // place (no `readDataToEndOfFile` after the loop), so there is no window where
-        // two readers race over the same bytes. `ioGroup` tracks the two EOFs so the
-        // success path can wait until every byte has been delivered.
+        // two readers race over the same bytes. `ioGroup` tracks the two EOFs, so without an
+        // `outputDrainLimit` the success path waits until every byte has been delivered; with
+        // one it waits at most that long and returns what has been delivered by then.
         let ioGroup = DispatchGroup()
         ioGroup.enter()
         ioGroup.enter()
@@ -355,7 +357,15 @@ public final class ProcessRunner: ProcessRunning, Sendable {
                 stdoutRecording.stop()
                 stderrRecording.stop()
             }
-            if drain == .cancelled {
+            switch drain {
+            case .drained:
+                break
+            case .expired:
+                WegaLog.debug(
+                    .process,
+                    "\(request.executableURL.lastPathComponent) output cut short \(drainLimit) seconds after exit"
+                )
+            case .cancelled:
                 throw Self.cancelledRun(request, process: process, diagnostics: diagnostics)
             }
         } else {
