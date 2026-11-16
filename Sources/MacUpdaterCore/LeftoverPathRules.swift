@@ -26,15 +26,21 @@ enum LeftoverPathRules {
     private static let wildcardScalars = Set("*?[".unicodeScalars)
     private static let forbiddenScalars = Set("{}".unicodeScalars)
 
-    /// Home-relative components of a `~/…` zap entry, or nil when the entry is not safely expressible.
+    /// The components of a `~/…` entry split on the `/` scalar, without a trailing empty one, or nil
+    /// when the entry does not start with `~/`. Components are not checked.
     /// Every syntactic check runs on Unicode scalars: the filesystem splits on the `/` scalar even where
     /// a combining mark or prepended character would glue it to its neighbour as one `Character`.
-    static func zapComponents(_ entry: String) -> [String]? {
+    static func homeRelativeComponents(_ entry: String) -> [String]? {
         let scalars = Array(entry.unicodeScalars)
         guard scalars.starts(with: "~/".unicodeScalars) else { return nil }
         var parts = scalars.dropFirst(2).split(separator: slash, omittingEmptySubsequences: false)
         if parts.count > 1, parts.last?.isEmpty == true { parts.removeLast() }
-        let components = parts.map { String(String.UnicodeScalarView($0)) }
+        return parts.map { String(String.UnicodeScalarView($0)) }
+    }
+
+    /// Home-relative components of a `~/…` zap entry, or nil when the entry is not safely expressible.
+    static func zapComponents(_ entry: String) -> [String]? {
+        guard let components = homeRelativeComponents(entry) else { return nil }
         for (index, component) in components.enumerated() {
             guard isWellFormed(component) else { return nil }
             let scalars = component.unicodeScalars
@@ -69,7 +75,7 @@ enum LeftoverPathRules {
         return !scalars.contains { $0 == slash || $0.value == 0 }
     }
 
-    private static func hasDoubleStar(_ component: String) -> Bool {
+    static func hasDoubleStar(_ component: String) -> Bool {
         let scalars = Array(component.unicodeScalars)
         return zip(scalars, scalars.dropFirst()).contains { $0 == "*" && $1 == "*" }
     }

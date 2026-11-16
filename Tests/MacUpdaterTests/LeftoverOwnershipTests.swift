@@ -115,13 +115,48 @@ struct LeftoverOwnershipTests {
         ])
         let others = [
             app(id: "b", name: "Vendor B", bundleID: "com.vendor.b", zap: ["~/Library/Application Support/Vendor/B"]),
-            app(id: "cloud", name: "Vendor Cloud", bundleID: "com.vendor.cloud", zap: ["~/Library/Application Support/Vendor/Cloud*"]),
+            app(id: "c", name: "Vendor C", bundleID: "com.vendor.c", zap: ["~/Library/Application Support/Vendor/C*"]),
         ]
 
         let groups = plan([target], others: others)
 
-        #expect(item(vendor, in: groups)?.sharedWith == ["Vendor B", "Vendor Cloud"])
+        #expect(item(vendor, in: groups)?.sharedWith == ["Vendor B", "Vendor C"])
         #expect(item(own, in: groups)?.sharedWith == [])
+    }
+
+    @Test func wildcardInAMiddleComponentStillClaims() throws {
+        let vendor = try fixture.folder("Library/Application Support/Vendor")
+        let cache = try fixture.folder("Library/Caches/com.vendor.b.x")
+        let target = app(id: "a", name: "Vendor A", bundleID: "com.vendor.a", zap: [
+            "~/Library/Application Support/Vendor", "~/Library/Caches/com.vendor.*",
+        ])
+        let others = [
+            app(id: "middle", name: "Middle", bundleID: nil, zap: ["~/Library/*/Vendor/X"]),
+            app(id: "plain", name: "Plain", bundleID: nil, zap: ["~/Library/Caches/com.vendor.b*"]),
+            app(id: "doubleStar", name: "Double Star", bundleID: nil, zap: ["~/Library/Caches/com.vendor.b**"]),
+            app(id: "braces", name: "Braces", bundleID: nil, zap: ["~/Library/Caches/com.vendor.{b,c}*"]),
+        ]
+
+        let groups = plan([target], others: others)
+
+        #expect(item(vendor, in: groups)?.sharedWith == ["Middle"])
+        #expect(item(cache, in: groups)?.sharedWith == ["Plain", "Double Star", "Braces"])
+    }
+
+    @Test func groupAndTeamContainersOfAnotherAppAreClaimed() throws {
+        let otherTeam = try fixture.folder("Library/Group Containers/ABCDE12345.com.vendor.b")
+        let otherGroup = try fixture.folder("Library/Group Containers/group.com.vendor.b")
+        let ownTeam = try fixture.folder("Library/Group Containers/ABCDE12345.com.vendor.a")
+        let target = app(
+            id: "a", name: "Vendor A", bundleID: "com.vendor.a", team: "ABCDE12345",
+            zap: ["~/Library/Group Containers/*.vendor*"]
+        )
+
+        let groups = plan([target], others: [app(id: "b", name: "Vendor B", bundleID: "com.vendor.b")])
+
+        #expect(item(otherTeam, in: groups)?.sharedWith == ["Vendor B"])
+        #expect(item(otherGroup, in: groups)?.sharedWith == ["Vendor B"])
+        #expect(item(ownTeam, in: groups)?.sharedWith == [])
     }
 
     @Test func sameNameClaimsNameItems() throws {
