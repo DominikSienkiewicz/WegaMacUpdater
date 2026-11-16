@@ -4,6 +4,17 @@ import MacUpdaterCore
 
 @testable import WegaMacUpdater
 
+extension UninstallBundleFacts {
+    static let userOwnedWritable = UninstallBundleFacts(
+        ownerUID: 501, currentUserUID: 501, isWritableByUser: true, isTopLevelInApplications: true,
+        hasBundleIdentifier: true, isAdministrator: true, helper: .notSupported
+    )
+    static let rootOwnedReadOnly = UninstallBundleFacts(
+        ownerUID: 0, currentUserUID: 501, isWritableByUser: false, isTopLevelInApplications: true,
+        hasBundleIdentifier: true, isAdministrator: true, helper: .notSupported
+    )
+}
+
 private struct TrashRefused: LocalizedError {
     var errorDescription: String? { "trash refused" }
 }
@@ -63,7 +74,8 @@ struct UninstallCoordinatorRemovalTests {
             runningApplications: { [] },
             requestQuit: { _ in false },
             forceKill: { _ in false },
-            waitBetweenRunningChecks: {}
+            waitBetweenRunningChecks: {},
+            bundleFacts: { _ in .userOwnedWritable }
         ))
 
         let outcome = await coordinator.uninstall(
@@ -76,6 +88,77 @@ struct UninstallCoordinatorRemovalTests {
         #expect(outcome.leftoversTrashed == bLeftovers.items.count)
     }
 
+    private func coordinator(
+        facts: UninstallBundleFacts,
+        trash: @escaping @Sendable (URL) throws -> Void,
+        trashLeftovers: @escaping @Sendable ([URL]) -> LeftoverCleanup.Result = { LeftoverCleanup.Result(removed: $0) }
+    ) -> UninstallCoordinator {
+        UninstallCoordinator(dependencies: .init(
+            uninstallCask: { _, _, _ in },
+            trashItem: trash,
+            trashLeftovers: trashLeftovers,
+            protection: { _ in nil },
+            runningApplications: { [] },
+            requestQuit: { _ in false },
+            forceKill: { _ in false },
+            waitBetweenRunningChecks: {},
+            bundleFacts: { _ in facts }
+        ))
+    }
+
+    @Test func blockedTargetIsNotAttempted() async {
+        let target = app("Root")
+        let calls = CallCounter()
+        let sut = coordinator(facts: .rootOwnedReadOnly, trash: { _ in calls.increment() })
+
+        let outcome = await sut.uninstall(targets: [target], zap: false, using: BrewService())
+
+        #expect(calls.count == 0)
+        #expect(outcome.results[target.id] == .blocked(.needsAdministratorRights))
+    }
+
+    @Test func routesPreflightOnlyNonBrewTargets() {
+        let manual = app("Manual"), cask = app("Cask", brew: true)
+        let sut = coordinator(facts: .rootOwnedReadOnly, trash: { _ in })
+
+        let routes = sut.routes(for: [manual, cask])
+
+        #expect(routes[manual.id] == .blocked(.needsAdministratorRights))
+        #expect(routes[cask.id] == nil)
+    }
+
+    @Test func userOwnedPermissionDeniedIsAppManagement() async {
+        let target = app("Mine")
+        let denied = NSError(domain: NSCocoaErrorDomain, code: CocoaError.fileWriteNoPermission.rawValue)
+        let sut = coordinator(facts: .userOwnedWritable, trash: { _ in throw denied })
+
+        let outcome = await sut.uninstall(targets: [target], zap: false, using: BrewService())
+
+        #expect(outcome.results[target.id] == .blocked(.needsAppManagement))
+    }
+
+    @Test func missingBundleIsFailedAndKeepsLeftovers() async {
+        let target = app("Gone")
+        let recorder = Recorder()
+        let missing = NSError(domain: NSCocoaErrorDomain, code: CocoaError.fileNoSuchFile.rawValue)
+        let sut = coordinator(
+            facts: .userOwnedWritable,
+            trash: { _ in throw missing },
+            trashLeftovers: { recorder.recordLeftovers($0); return LeftoverCleanup.Result(removed: $0) }
+        )
+
+        let outcome = await sut.uninstall(
+            targets: [target], zap: false, leftovers: [leftovers(for: target)], using: BrewService()
+        )
+
+        guard case .failed = outcome.results[target.id] else {
+            Issue.record("expected .failed, got \(String(describing: outcome.results[target.id]))")
+            return
+        }
+        #expect(recorder.trashedLeftovers.isEmpty)
+        #expect(outcome.leftoversTrashed == 0)
+    }
+
     @Test func brewTargetReportsRemovedByHomebrew() async {
         let cask = app("Charlie", brew: true)
         let coordinator = UninstallCoordinator(dependencies: .init(
@@ -86,7 +169,8 @@ struct UninstallCoordinatorRemovalTests {
             runningApplications: { [] },
             requestQuit: { _ in false },
             forceKill: { _ in false },
-            waitBetweenRunningChecks: {}
+            waitBetweenRunningChecks: {},
+            bundleFacts: { _ in .userOwnedWritable }
         ))
 
         let outcome = await coordinator.uninstall(
@@ -107,7 +191,8 @@ struct UninstallCoordinatorRemovalTests {
             runningApplications: { [] },
             requestQuit: { _ in false },
             forceKill: { _ in false },
-            waitBetweenRunningChecks: {}
+            waitBetweenRunningChecks: {},
+            bundleFacts: { _ in .userOwnedWritable }
         ))
 
         let outcome = await coordinator.uninstall(

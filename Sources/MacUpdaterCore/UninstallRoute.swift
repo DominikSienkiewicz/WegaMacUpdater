@@ -1,4 +1,5 @@
 import Foundation
+import WegaHelperKit
 
 public enum UninstallHelperAvailability: Equatable, Sendable { case notSupported, off, enabled }
 
@@ -65,5 +66,28 @@ public enum UninstallRoute {
             depth += 1
         }
         return false
+    }
+}
+
+extension UninstallBundleFacts {
+    /// Reads the facts from the live filesystem. The owner comes from `lstat`, which does not
+    /// follow a symlink. A bundle that cannot be inspected reads as not writable and owned by
+    /// nobody, so the route fails toward a blocked result and never toward an attempt as root.
+    public static func live(path: URL, hasBundleIdentifier: Bool) -> UninstallBundleFacts {
+        let currentUser = getuid()
+        var status = stat()
+        let owner: UInt32 = lstat(path.path, &status) == 0 ? status.st_uid : UInt32.max
+        let writable = owner != UInt32.max
+            && access(path.path, W_OK) == 0
+            && access(path.deletingLastPathComponent().path, W_OK) == 0
+        return UninstallBundleFacts(
+            ownerUID: owner,
+            currentUserUID: currentUser,
+            isWritableByUser: writable,
+            isTopLevelInApplications: WegaHelper.isTopLevelApplicationBundle(path: path.path),
+            hasBundleIdentifier: hasBundleIdentifier,
+            isAdministrator: AdministratorGroup.contains(uid: currentUser),
+            helper: .notSupported
+        )
     }
 }

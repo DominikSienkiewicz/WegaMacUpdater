@@ -12,6 +12,16 @@ extension Translations {
         "Wymuszenie zamknięcia może spowodować utratę niezapisanej pracy.": "Forcing an app to quit can lose unsaved work.",
         "Pomiń te aplikacje": "Skip these apps",
         "Wymuś zamknięcie": "Force quit",
-        "Pominięto, bo aplikacja nadal działa lub jej proces jest niejednoznaczny: %@": "Skipped because the app is still running or its process is ambiguous: %@",
+        "%@ — pominięta, bo nadal działa.": "%@ — skipped because it is still running.",
+        "%@ — pominięta, bo nie da się jednoznacznie wskazać jej procesu.": "%@ — skipped because its process cannot be identified.",
+        "%@ — %@": "%@ — %@",
+        "%@ — została w katalogu tymczasowym: %@": "%@ — left in a staging folder: %@",
+        "%@: %@": "%@: %@",
+        "wymaga pomocnika Wega — włącz go w ustawieniach.": "needs Wega's helper — turn it on in Settings.",
+        "wymaga konta administratora.": "needs an administrator account.",
+        "wymaga uprawnień administratora — usuń ją w Finderze.": "needs administrator rights — remove it in Finder.",
+        "macOS blokuje usuwanie — zezwól Wega w Zarządzaniu aplikacjami.": "macOS is blocking removal — allow Wega under App Management.",
+        "trafi do Kosza": "goes to the Trash",
+        "Otwórz ustawienia pomocnika": "Open helper settings",
     ]
 }

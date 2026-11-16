@@ -60,7 +60,8 @@ private final class ProcessTable: @unchecked Sendable {
                 self.remove(pid: pid)
                 return true
             },
-            waitBetweenRunningChecks: { self.onWait(self, self.recordWait()) }
+            waitBetweenRunningChecks: { self.onWait(self, self.recordWait()) },
+            bundleFacts: { _ in .userOwnedWritable }
         )
     }
 }

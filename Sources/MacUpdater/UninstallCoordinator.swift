@@ -104,6 +104,7 @@ final class UninstallCoordinator: ObservableObject {
         var requestQuit: @MainActor @Sendable (RunningApplicationTarget) -> Bool
         var forceKill: @Sendable (Int32) async -> Bool
         var waitBetweenRunningChecks: @Sendable () async -> Void
+        var bundleFacts: @Sendable (ApplicationInfo) -> UninstallBundleFacts
 
         static let live = Dependencies(
             uninstallCask: { brewService, token, zap in
@@ -115,7 +116,8 @@ final class UninstallCoordinator: ObservableObject {
             runningApplications: { WorkspaceRunningApplicationInspector().runningApplications() },
             requestQuit: { WorkspaceTargetTerminator().requestGracefulTermination($0) },
             forceKill: { await RunningProcessService().forceKill(processIdentifier: $0) },
-            waitBetweenRunningChecks: { try? await Task.sleep(for: .milliseconds(250)) }
+            waitBetweenRunningChecks: { try? await Task.sleep(for: .milliseconds(250)) },
+            bundleFacts: { UninstallBundleFacts.live(path: $0.path, hasBundleIdentifier: $0.bundleIdentifier != nil) }
         )
     }
 
@@ -151,6 +153,14 @@ final class UninstallCoordinator: ObservableObject {
 
     func endQuitPhase() {
         if state == .quitting { state = .idle }
+    }
+
+    /// The route each non-brew target would take, so the confirmation sheet can say what will
+    /// happen before the user consents. Brew-managed targets keep the Homebrew path.
+    func routes(for targets: [ApplicationInfo]) -> [String: UninstallRouteDecision] {
+        Dictionary(uniqueKeysWithValues: targets.filter { !$0.isManagedByBrew }.map {
+            ($0.id, UninstallRoute.preflight(dependencies.bundleFacts($0)))
+        })
     }
 
     func runningStates(for targets: [ApplicationInfo]) -> [String: RunningApplicationResolution] {
@@ -320,12 +330,7 @@ final class UninstallCoordinator: ObservableObject {
                     results[app.id] = .failed(error.localizedDescription)
                 }
             } else {
-                do {
-                    try dependencies.trashItem(app.path)
-                    results[app.id] = .movedToTrash
-                } catch {
-                    results[app.id] = .failed(error.localizedDescription)
-                }
+                results[app.id] = removeNonBrew(app)
             }
         }
         // UX-13: only an app that was actually removed releases its consented `~/Library`
@@ -339,5 +344,24 @@ final class UninstallCoordinator: ObservableObject {
             leftoversTrashed: leftoverResult.removed.count,
             leftoversFailed: leftoverResult.failed.count
         )
+    }
+
+    /// Moves one non-brew bundle to the user's Trash unless its route is already blocked.
+    /// Only a permission refusal is re-routed; any other error is the app's real failure.
+    private func removeNonBrew(_ app: ApplicationInfo) -> UninstallTargetResult {
+        let facts = dependencies.bundleFacts(app)
+        if case .blocked(let block) = UninstallRoute.preflight(facts) { return .blocked(block) }
+        do {
+            try dependencies.trashItem(app.path)
+            return .movedToTrash
+        } catch {
+            guard UninstallRoute.isPermissionDenied(error) else { return .failed(error.localizedDescription) }
+            switch UninstallRoute.afterPermissionDenied(facts) {
+            case .blocked(let block): return .blocked(block)
+            // Milestone B adds the helper removal here; until then it reads as "needs the helper".
+            case .helper: return .blocked(.needsHelper)
+            case .userTrash: return .failed(error.localizedDescription)
+            }
+        }
     }
 }

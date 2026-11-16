@@ -32,6 +32,10 @@ struct UninstallView: View {
     @State private var showForceQuit: Bool = false
     @State private var forceQuitAnswer: CheckedContinuation<UninstallForceQuitChoice, Never>?
     @State private var errorMessage:   String?
+    /// What the user can do about the apps the last run did not remove.
+    @State private var resultActions: [UninstallResultActionItem] = []
+    /// The route each non-brew target would take, computed when the sheet opens.
+    @State private var pendingRoutes: [String: UninstallRouteDecision] = [:]
     /// REL-14: the last scan failed to read one or more sources. Distinguishes an empty
     /// machine from a failed scan and drives the incomplete-data warning before uninstall.
     @State private var scanFailed:     Bool              = false
@@ -102,6 +106,9 @@ struct UninstallView: View {
 
                 if let err = errorMessage {
                     ErrorBanner(message: err).padding(.horizontal, 16).padding(.bottom, 8)
+                }
+                if !resultActions.isEmpty {
+                    resultActionButtons.padding(.horizontal, 16).padding(.bottom, 8)
                 }
                 if let b = banner {
                     BannerView(data: b) { banner = nil }.padding(.horizontal, 16).padding(.bottom, 8)
@@ -246,6 +253,7 @@ struct UninstallView: View {
                 scanIncomplete: pendingScanIncomplete,
                 leftoverGroups: pendingLeftoverGroups,
                 runningStates: pendingRunningStates,
+                routes: pendingRoutes,
                 selectedLeftovers: $selectedLeftovers,
                 onCancel: cancelUninstall,
                 onConfirm: confirmUninstall
@@ -260,6 +268,30 @@ struct UninstallView: View {
             selected.formIntersection(filtered.map(\.id))
         }
         .task { await scan() }
+    }
+
+    private var resultActionButtons: some View {
+        HStack(spacing: 8) {
+            ForEach(resultActions) { item in
+                Button { perform(item.action) } label: {
+                    Text(trf("%@: %@", item.appName, item.action.title))
+                }
+                .buttonStyle(.bordered)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func perform(_ action: UninstallResultAction) {
+        switch action {
+        case .showInFinder(let url):
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        case .openAppManagementSettings:
+            NSWorkspace.shared.open(AppManagementSettings.paneURL)
+        case .openHelperSettings:
+            // No result offers this until the helper removal route exists.
+            break
+        }
     }
 
     /// UX-11d: the row's right-click menu. Its contents live in `AppRowContextMenu` so the
@@ -322,6 +354,7 @@ struct UninstallView: View {
         pendingUninstallTargets = targets
         pendingScanIncomplete = scanFailed
         pendingRunningStates = operations.runningStates(for: targets)
+        pendingRoutes = operations.routes(for: targets)
         let groups = await operations.scanLeftovers(for: targets)
         pendingLeftoverGroups = groups
         selectedLeftovers = Set(groups.flatMap { $0.items.map(\.path) })
@@ -334,6 +367,7 @@ struct UninstallView: View {
         pendingScanIncomplete = false
         pendingLeftoverGroups = []
         pendingRunningStates = [:]
+        pendingRoutes = [:]
         selectedLeftovers = []
     }
 
@@ -386,6 +420,7 @@ struct UninstallView: View {
         pendingScanIncomplete = false
         pendingLeftoverGroups = []
         pendingRunningStates = [:]
+        pendingRoutes = [:]
         selectedLeftovers = []
         Task { await quitThenUninstall(targets: targets, zap: zap, leftovers: leftovers) }
     }
@@ -406,10 +441,11 @@ struct UninstallView: View {
         skipped: [String: UninstallTargetResult] = [:],
         skippedApps: [ApplicationInfo] = []
     ) async {
+        let reportedApps = targets + skippedApps
         guard !targets.isEmpty else {
-            errorMessage = UninstallOutcomeMessage.compose(
-                failure: nil, leftoverNote: nil, skippedNames: skippedApps.map(\.name)
-            ) ?? errorMessage
+            show(UninstallResultPresentation.summary(
+                results: skipped, apps: reportedApps, leftoversTrashed: 0, leftoversFailed: 0, requestedZap: zap
+            ), actions: UninstallResultPresentation.actionItems(results: skipped, apps: reportedApps))
             return
         }
         // REL-06 — `brew uninstall --cask` (with `--zap` it also deletes preferences and
@@ -419,7 +455,7 @@ struct UninstallView: View {
         let ticket = MutationGuard.shared.begin(trf("dezinstalacja %@ aplikacji", "\(targets.count)"))
         defer { MutationGuard.shared.end(ticket) }
 
-        errorMessage = nil; banner = nil
+        errorMessage = nil; banner = nil; resultActions = []
         onWegaState?(WegaState(pose: .sniff, line: tr("Aport! Zabieram to z dysku…")))
 
         let outcome = await operations.uninstall(
@@ -430,48 +466,26 @@ struct UninstallView: View {
             using: model.brewService
         )
         let succeeded = Set(targets.map(\.id).filter { outcome.results[$0]?.isRemoved == true })
-        var failed: [(name: String, requestedZap: Bool)] = []
-        for app in targets where outcome.results[app.id]?.isRemoved != true {
-            if app.isManagedByBrew {
-                failed.append((app.name, zap))
-            } else {
-                failed.append((app.name, false))
-            }
-        }
-
         selected.subtract(succeeded)
         await scan()
 
-        let brewSucceeded = targets.filter { succeeded.contains($0.id) && $0.isManagedByBrew }.count
-        let trashSucceeded = targets.filter { succeeded.contains($0.id) && !$0.isManagedByBrew }.count
-        var parts: [String] = []
-        if brewSucceeded > 0 { parts.append(trf("%@ przez brew", "\(brewSucceeded)")) }
-        if trashSucceeded > 0 { parts.append(trf("%@ do Kosza", "\(trashSucceeded)")) }
-        // UX-13: report the leftovers that reached the Trash alongside the app removals.
-        if outcome.leftoversTrashed > 0 { parts.append(trf("%@ resztek do Kosza", "\(outcome.leftoversTrashed)")) }
-        let msg = parts.joined(separator: ", ")
-
+        let summary = UninstallResultPresentation.summary(
+            results: outcome.results,
+            apps: reportedApps,
+            leftoversTrashed: outcome.leftoversTrashed,
+            leftoversFailed: outcome.leftoversFailed,
+            requestedZap: zap
+        )
         if !succeeded.isEmpty {
-            banner = BannerData(variant: .success, title: trf("Odinstalowano %@ aplikacji", "\(succeeded.count)"), message: msg)
             onWegaState?(WegaState(pose: .happy, line: trf("Załatwione — %@ mniej na dysku.", "\(succeeded.count)")))
         }
-        var failure: String?
-        if !failed.isEmpty {
-            failure = trf(
-                "Odinstalowanie niepełne — nie usunięto: %@",
-                "\(failed.map(\.name).joined(separator: ", "))"
-            )
-            if failed.contains(where: \.requestedZap) {
-                failure? += " " + tr("Nie uruchomiono --force; wybrane usunięcie wraz z resztkami nie zostało po cichu zmienione.")
-            }
-        }
-        // UX-13: leftovers that could not be moved are surfaced, not swallowed.
-        let leftoverNote = outcome.leftoversFailed > 0
-            ? trf("Nie udało się przenieść %@ resztek do Kosza.", "\(outcome.leftoversFailed)")
-            : nil
-        errorMessage = UninstallOutcomeMessage.compose(
-            failure: failure, leftoverNote: leftoverNote, skippedNames: skippedApps.map(\.name)
-        ) ?? errorMessage
+        show(summary, actions: UninstallResultPresentation.actionItems(results: outcome.results, apps: reportedApps))
+    }
+
+    private func show(_ summary: (banner: BannerData?, error: String?), actions: [UninstallResultActionItem]) {
+        banner = summary.banner
+        errorMessage = summary.error ?? errorMessage
+        resultActions = actions
     }
 }
 
@@ -490,6 +504,8 @@ struct UninstallDialog: View {
     var leftoverGroups: [LeftoverGroup] = []
     /// Which targets are running right now, so the sheet can say Wega will ask them to quit.
     var runningStates: [String: RunningApplicationResolution] = [:]
+    /// What will happen to each non-brew target: Trash, or why it cannot be removed.
+    var routes: [String: UninstallRouteDecision] = [:]
     /// UX-13: the leftover paths the user has ticked for the Trash. Bound to the caller so
     /// the confirmed selection survives the sheet dismissal.
     @Binding var selectedLeftovers: Set<String>
@@ -502,6 +518,7 @@ struct UninstallDialog: View {
         scanIncomplete: Bool = false,
         leftoverGroups: [LeftoverGroup] = [],
         runningStates: [String: RunningApplicationResolution] = [:],
+        routes: [String: UninstallRouteDecision] = [:],
         selectedLeftovers: Binding<Set<String>> = .constant([]),
         onCancel: @escaping () -> Void,
         onConfirm: @escaping (Bool) -> Void
@@ -511,6 +528,7 @@ struct UninstallDialog: View {
         self.scanIncomplete = scanIncomplete
         self.leftoverGroups = leftoverGroups
         self.runningStates = runningStates
+        self.routes = routes
         self._selectedLeftovers = selectedLeftovers
         self.onCancel = onCancel
         self.onConfirm = onConfirm
@@ -525,6 +543,15 @@ struct UninstallDialog: View {
         case .running: tr("Uruchomiona — Wega poprosi o jej zamknięcie")
         case .ambiguousBundleIdentifier: tr("Nie da się wskazać jej procesu — zostanie pominięta")
         case .notRunning, nil: nil
+        }
+    }
+
+    static func routeNote(for route: UninstallRouteDecision?) -> String? {
+        switch route {
+        case .userTrash: tr("trafi do Kosza")
+        case .helper: UninstallResultPresentation.blockReason(.needsHelper)
+        case .blocked(let block): UninstallResultPresentation.blockReason(block)
+        case nil: nil
         }
     }
 
@@ -605,6 +632,11 @@ struct UninstallDialog: View {
                                         .font(.wega(.footnote, monospaced: true))
                                         .foregroundStyle(.secondary)
                                         .textSelection(.enabled)
+                                    if let routeNote = Self.routeNote(for: routes[app.id]) {
+                                        Text(routeNote)
+                                            .font(.wega(.footnote))
+                                            .foregroundStyle(.secondary)
+                                    }
                                     if let note = Self.runningNote(for: runningStates[app.id]) {
                                         Text(note)
                                             .font(.wega(.footnote))
