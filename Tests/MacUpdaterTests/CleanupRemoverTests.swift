@@ -295,6 +295,58 @@ final class CleanupRemoverTests: XCTestCase {
         XCTAssertEqual(query.calls, [])
     }
 
+    /// A persisted report keeps its buttons. Once the copy that shadowed this one is gone, this
+    /// one may be the only working copy left, so it is not removed.
+    func testShadowedCopyWhoseActiveCopyIsGoneIsNotRemoved() async throws {
+        let active = try tmp.file(".local/bin/gh", size: 16, executable: true)
+        let link = try brewLink("opt/homebrew/bin/gh", to: "opt/homebrew/Cellar/gh/2.104.0/bin/gh")
+        let standalone = try tmp.file("bin2/gh", size: 16, executable: true)
+        let brewItem = try shadowedFinding(
+            link, action: .brew(.uninstallFormula("gh")), source: .homebrewFormula(name: "gh"), shadowedBy: active
+        )
+        let trashItem = try shadowedFinding(standalone, action: .trash([standalone]), source: .standalone, shadowedBy: active)
+        let whileShadowed = await remover().execute(CleanupRemovalIntent(finding: brewItem, inUseAcknowledged: false))
+        XCTAssertEqual(whileShadowed, .removed, "precondition: a copy that is still shadowed may go")
+
+        try FileManager.default.removeItem(at: active)
+        let query = ScriptedBrewQuery()
+        let removal = RecordingBrewRemoval()
+        let remover = remover(brewQuery: query, brewRemoval: removal)
+        let brewOutcome = await remover.execute(CleanupRemovalIntent(finding: brewItem, inUseAcknowledged: true))
+        let trashOutcome = await remover.execute(CleanupRemovalIntent(finding: trashItem, inUseAcknowledged: true))
+
+        XCTAssertEqual(brewOutcome, .changedSinceScan)
+        XCTAssertEqual(trashOutcome, .changedSinceScan)
+        XCTAssertEqual(removal.calls, [])
+        XCTAssertEqual(query.calls, [], "no brew call once the active copy is gone")
+        XCTAssertEqual(trash.urls, [])
+    }
+
+    func testShadowedCopyTheActiveCopyNowResolvesToIsNotRemoved() async throws {
+        let standalone = try tmp.file("bin2/tool", size: 16, executable: true)
+        let active = try tmp.file(".local/bin/tool", size: 16, executable: true)
+        let item = try shadowedFinding(standalone, action: .trash([standalone]), source: .standalone, shadowedBy: active)
+        try FileManager.default.removeItem(at: active)
+        try tmp.symlink(".local/bin/tool", to: standalone.path)
+
+        let outcome = await remover().execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+
+        XCTAssertEqual(outcome, .changedSinceScan)
+        XCTAssertEqual(trash.urls, [])
+    }
+
+    func testShadowedCopyWhoseActiveCopyIsNoLongerExecutableIsNotRemoved() async throws {
+        let standalone = try tmp.file("bin2/tool", size: 16, executable: true)
+        let active = try tmp.file(".local/bin/tool", size: 16, executable: true)
+        let item = try shadowedFinding(standalone, action: .trash([standalone]), source: .standalone, shadowedBy: active)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: active.path)
+
+        let outcome = await remover().execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+
+        XCTAssertEqual(outcome, .changedSinceScan)
+        XCTAssertEqual(trash.urls, [])
+    }
+
     func testBatchWithAVanishedEntryIsLeftAlone() async throws {
         let (parent, entries) = try staleLinks()
         let item = try batchFinding(parent: parent, entries: entries)
@@ -452,6 +504,17 @@ final class CleanupRemoverTests: XCTestCase {
         finding(
             path: link, source: source, action: .brew(action), identity: try identity(of: link),
             detector: .pathDuplicates, status: .shadowed
+        )
+    }
+
+    /// A D1 finding for a copy the scan saw shadowed by `active`, identified as the scan saw it.
+    private func shadowedFinding(
+        _ path: URL, action: CleanupAction, source: CleanupSource, shadowedBy active: URL
+    ) throws -> CleanupFinding {
+        CleanupFinding(
+            detector: .pathDuplicates, tool: path.lastPathComponent, path: path, realpath: nil, source: source,
+            version: nil, size: nil, status: .shadowed, reason: .shadowedBy(path: active.path), action: action,
+            risk: .low, bucket: .safe, identity: try identity(of: path)
         )
     }
 

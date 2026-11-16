@@ -51,8 +51,9 @@ public enum CleanupRemovalOutcome: Equatable, Sendable {
 
 /// The only Cleanup code that changes anything. Under one write lease, so no scan or update runs in
 /// between, it re-checks that the item is still the one the scan identified, is not what its tool's
-/// link now points to, is not used by a process the user has not acknowledged and, for a formula,
-/// still has no dependents; only then does it act. Files only ever go to the Trash.
+/// link now points to, is still shadowed by a working copy of its own when D1 found it shadowed, is
+/// not used by a process the user has not acknowledged and, for a formula, still has no
+/// dependents; only then does it act. Files only ever go to the Trash.
 public struct CleanupRemover: Sendable {
     static let leaseLabel = "cleanup.remove"
 
@@ -107,6 +108,7 @@ public struct CleanupRemover: Sendable {
         guard let entries = try unchangedEntries(of: finding) else { return .changedSinceScan }
         let targets = try targets(of: entries, action: finding.action)
         if try isPointedToByCurrentLink(finding, locations: targets.locations) { return .changedSinceScan }
+        guard isStillShadowed(finding, locations: targets.locations) else { return .changedSinceScan }
         let users = processesUsing(targets)
         if !users.isEmpty, !intent.inUseAcknowledged { return .needsInUseAcknowledgement(users) }
         if case .brew(.uninstallFormula(let name)) = finding.action {
@@ -209,6 +211,20 @@ public struct CleanupRemover: Sendable {
             }
         }
         return false
+    }
+
+    /// A copy D1 found shadowed may go only while the copy that shadowed it still works on its
+    /// own: that path still resolves to an executable file, and that file is not the one being
+    /// removed. A persisted report keeps its buttons, and once the active copy is gone the shadowed
+    /// one may be the only working copy left. Any failure to resolve it counts as gone.
+    private func isStillShadowed(_ finding: CleanupFinding, locations: [Location]) -> Bool {
+        guard finding.detector == .pathDuplicates, case .shadowedBy(let path) = finding.reason else { return true }
+        guard CleanupPathText.isAbsolute(path), !CleanupPathText.containsNUL(path),
+              let active = try? fileSystem.realpath(URL(filePath: path, directoryHint: .notDirectory)),
+              let entry = try? fileSystem.entry(at: active), entry.kind == .file, entry.isExecutable
+        else { return false }
+        let activeComponents = CleanupPathText.components(of: active.path)
+        return !locations.contains { CleanupPathText.components(of: $0.url.path) == activeComponents }
     }
 
     private func processesUsing(_ targets: Targets) -> [CleanupProcess] {
