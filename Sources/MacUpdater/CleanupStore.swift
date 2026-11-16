@@ -89,6 +89,9 @@ final class CleanupStore: ObservableObject {
 
     private let dependencies: CleanupStoreDependencies
 
+    /// The home the report was scanned under; the view and the exports write it as `~`.
+    var home: URL { dependencies.home }
+
     init(dependencies: CleanupStoreDependencies = .live) {
         self.dependencies = dependencies
         report = dependencies.loadReport()
