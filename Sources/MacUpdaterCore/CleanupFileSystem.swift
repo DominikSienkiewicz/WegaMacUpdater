@@ -61,6 +61,8 @@ public protocol CleanupFileSystem: Sendable {
 /// Physical path resolution shared by the live adapter and the guarded wrapper. Like realpath(3)
 /// it walks component by component, so links in the middle of a path (`/var` → `private/var`)
 /// are followed too, and a relative link destination resolves against the link's parent.
+/// Paths and link destinations are split on scalars (`CleanupPathText`); a destination holding a
+/// NUL is refused before any URL is built from it.
 /// `check` sees the input and every resolved candidate before it is lstat-ed or its link read.
 struct CleanupPathResolver {
     static let maximumSymlinkHops = 40
@@ -82,7 +84,7 @@ struct CleanupPathResolver {
 
     private func walk(_ url: URL, followingFinalLink: Bool) throws -> URL {
         try check(url)
-        var pending = Self.components(of: url.path)
+        var pending = CleanupPathText.components(of: url.path)
         var resolved: [String] = []
         var hops = 0
         while !pending.isEmpty {
@@ -112,14 +114,13 @@ struct CleanupPathResolver {
             guard hops <= Self.maximumSymlinkHops else { throw CleanupFileSystemError.symlinkLoop(url.path) }
             let target = try destination(candidate)
             guard !target.isEmpty else { throw CleanupFileSystemError.notFound(candidate.path) }
-            if target.hasPrefix("/") { resolved.removeAll() }
-            pending.insert(contentsOf: Self.components(of: target), at: 0)
+            guard !CleanupPathText.containsNUL(target) else {
+                throw CleanupFileSystemError.protectedLocation(candidate.path)
+            }
+            if CleanupPathText.isAbsolute(target) { resolved.removeAll() }
+            pending.insert(contentsOf: CleanupPathText.components(of: target), at: 0)
         }
         return Self.url(resolved)
-    }
-
-    private static func components(of path: String) -> [String] {
-        path.split(separator: "/").map(String.init)
     }
 
     private static func url(_ components: [String]) -> URL {

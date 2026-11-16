@@ -56,8 +56,31 @@ final class CleanupFileSystemTests: XCTestCase {
         line: UInt = #line
     ) {
         let prefix = directory.path
-        let offenders = recording.touched.filter { $0 == prefix || $0.hasPrefix(prefix + "/") }
+        // Scalars, not Characters: "/" followed by a combining mark is a single Character.
+        let offenders = recording.touched.filter {
+            $0 == prefix || $0.unicodeScalars.starts(with: (prefix + "/").unicodeScalars)
+        }
         XCTAssertEqual(offenders, [], "the base file system received a path under \(prefix)", file: file, line: line)
+    }
+
+    /// A resolver over scripted primitives: `/dir` is a directory, `/dir/link` a link to
+    /// `destination`, and every other path a file. Nothing touches the disk.
+    private func scriptedResolver(linkDestination destination: String) -> CleanupPathResolver {
+        CleanupPathResolver(
+            check: { _ in },
+            entry: { url in
+                let kind: CleanupEntryKind = switch url.path {
+                case "/dir": .directory
+                case "/dir/link": .symlink
+                default: .file
+                }
+                return CleanupEntry(
+                    url: url, kind: kind, isExecutable: false,
+                    identity: CleanupFileIdentity(device: 1, inode: 1), modificationDate: nil
+                )
+            },
+            destination: { _ in destination }
+        )
     }
 
     // MARK: Protected locations
@@ -97,6 +120,33 @@ final class CleanupFileSystemTests: XCTestCase {
         assertProtected(try locationGuard.check(home.appending(path: "LIBRARY/Mail")))
         assertProtected(try locationGuard.check(URL(filePath: "/volumes/USB")))
         assertProtected(try locationGuard.check(URL(filePath: "/System/Volumes/Data" + home.path + "/Desktop/x")))
+        assertProtected(try locationGuard.check(URL(filePath: home.path + "/Documents/\u{301}y")), "combining mark")
+        assertProtected(try locationGuard.check(URL(filePath: home.path + "/Download\u{17F}/x")), "long s")
+        assertProtected(try locationGuard.check(URL(filePath: home.path + "/Documents\u{0}x")), "NUL")
+    }
+
+    func testACombiningMarkAfterASlashDoesNotHideAProtectedLocation() throws {
+        try temp.directory("Documents")
+        let hidden = home.path + "/Documents/\u{301}y"
+        XCTAssertTrue(FileManager.default.createFile(atPath: hidden, contents: Data("secret".utf8)))
+        let (fileSystem, recording) = guardedOverRecording()
+        let url = URL(filePath: hidden, directoryHint: .notDirectory)
+
+        assertProtected(try fileSystem.entry(at: url))
+        assertProtected(try fileSystem.readText(url, maxBytes: 64))
+
+        assertUntouched(recording, under: home.appending(path: "Documents"))
+    }
+
+    func testANulInThePathIsRefusedBeforeTheTrashIsReached() throws {
+        try temp.directory("Documents")
+        let trash = RecordingTrash()
+        let (fileSystem, recording) = guardedOverRecording(trash: trash)
+
+        assertProtected(try fileSystem.trash(URL(filePath: home.path + "/Documents\u{0}x", directoryHint: .notDirectory)))
+
+        XCTAssertEqual(trash.urls, [])
+        XCTAssertEqual(recording.touched, [])
     }
 
     func testPathsOnOtherMountsAreRefused() {
@@ -171,6 +221,17 @@ final class CleanupFileSystemTests: XCTestCase {
         XCTAssertEqual(try guarded().realpath(temp.url("chain/1")).path, target.path)
         XCTAssertThrowsError(try guarded().realpath(temp.url("chain/0"))) { error in
             XCTAssertEqual(error as? CleanupFileSystemError, .symlinkLoop(temp.url("chain/0").path))
+        }
+    }
+
+    func testLinkDestinationsAreReadByScalarsNotCharacters() throws {
+        let link = URL(filePath: "/dir/link", directoryHint: .notDirectory)
+
+        XCTAssertEqual(try scriptedResolver(linkDestination: "/\u{301}x").resolve(link).path, "/\u{301}x")
+        XCTAssertThrowsError(try scriptedResolver(linkDestination: "a\u{0}b").resolve(link)) { error in
+            guard case CleanupFileSystemError.protectedLocation = error else {
+                return XCTFail("expected .protectedLocation, got \(error)")
+            }
         }
     }
 

@@ -28,14 +28,31 @@ public struct LiveMountTable: MountTableReading {
     }
 }
 
+/// Path text as the kernel reads it: split on U+002F scalars, never on Characters, because a
+/// slash followed by a combining mark (`"/" + U+0301`) is a single Character.
+enum CleanupPathText {
+    static func components(of path: String) -> [String] {
+        path.unicodeScalars.split(separator: "/").map { String(Substring($0)) }
+    }
+
+    static func isAbsolute(_ path: String) -> Bool {
+        path.unicodeScalars.first == "/"
+    }
+
+    static func containsNUL(_ path: String) -> Bool {
+        path.unicodeScalars.contains("\u{0}")
+    }
+}
+
 /// Refuses TCC-protected locations and every volume other than the startup disk, so the scan
 /// never raises a permission prompt or wakes a network share.
 ///
-/// Matching is lexical on the standardised path, by whole components, and ignores case because
-/// APFS is case-insensitive by default (`~/documents` opens `~/Documents`). Every root is also
-/// refused under `/System/Volumes/Data`, the firmlinked path to the same folders. A path is on
-/// an allowed volume only when the longest mount point containing it is `/` or lies under
-/// `/System/Volumes/`; an empty mount table therefore refuses everything.
+/// Matching is lexical on the standardised path and compares whole components, split on scalars
+/// and case-folded the way APFS compares names (`~/documents` and `~/Downloadſ` open the
+/// protected folders). Every root is also refused under `/System/Volumes/Data`, the firmlinked
+/// path to the same folders. A path is on an allowed volume only when the longest mount point
+/// containing it is `/` or lies under `/System/Volumes/`; an empty mount table therefore refuses
+/// everything. A path holding a NUL is always refused.
 public struct ProtectedLocationGuard: Sendable {
     private static let homeRelativeRoots = [
         "Desktop", "Documents", "Downloads",
@@ -45,7 +62,7 @@ public struct ProtectedLocationGuard: Sendable {
     private static let dataVolume = "/System/Volumes/Data"
     private static let systemVolumes = comparable("/System/Volumes")
 
-    private let comparableRoots: [String]
+    private let comparableRoots: [[String]]
     private let mounts: MountTableReading
 
     public init(home: URL, mounts: MountTableReading) {
@@ -65,7 +82,7 @@ public struct ProtectedLocationGuard: Sendable {
         let path = Self.standardizedPath(url)
         let candidate = Self.comparable(path)
         let isInsideRoot = comparableRoots.contains { Self.isPath(candidate, within: $0) }
-        guard !isInsideRoot, isOnAllowedVolume(candidate) else {
+        guard !Self.containsNUL(url), !isInsideRoot, isOnAllowedVolume(candidate) else {
             throw CleanupFileSystemError.protectedLocation(path)
         }
     }
@@ -85,10 +102,16 @@ public struct ProtectedLocationGuard: Sendable {
     /// `url.path` with `.` and `..` removed lexically. `URL.standardizedFileURL` is not used: it
     /// drops a leading `/private` only when the shorter path exists, which is a file-system lookup.
     static func standardizedPath(_ url: URL) -> String {
-        lexicallyStandardized(url.path)
+        "/" + standardizedComponents(url.path).joined(separator: "/")
     }
 
-    private func isOnAllowedVolume(_ candidate: String) -> Bool {
+    /// `URL.path` keeps a NUL as the literal text `%00`, but CFURL-based APIs decode it and stop
+    /// there, so they would act on a shorter path than the one checked.
+    private static func containsNUL(_ url: URL) -> Bool {
+        url.path(percentEncoded: true).utf8.contains("%00".utf8) || CleanupPathText.containsNUL(url.path)
+    }
+
+    private func isOnAllowedVolume(_ candidate: [String]) -> Bool {
         let mountPoint = mounts.mountPoints()
             .map(Self.comparable)
             .filter { Self.isPath(candidate, within: $0) }
@@ -97,27 +120,27 @@ public struct ProtectedLocationGuard: Sendable {
         return Self.isAllowedMountPoint(mountPoint)
     }
 
-    private static func isAllowedMountPoint(_ mountPoint: String) -> Bool {
-        mountPoint == "/" || mountPoint.hasPrefix(systemVolumes + "/")
+    private static func isAllowedMountPoint(_ mountPoint: [String]) -> Bool {
+        mountPoint.isEmpty || (mountPoint.count > systemVolumes.count && isPath(mountPoint, within: systemVolumes))
     }
 
-    private static func isPath(_ path: String, within root: String) -> Bool {
-        root == "/" || path == root || path.hasPrefix(root + "/")
+    private static func isPath(_ path: [String], within root: [String]) -> Bool {
+        path.count >= root.count && zip(path, root).allSatisfy { $0 == $1 }
     }
 
-    private static func comparable(_ path: String) -> String {
-        lexicallyStandardized(path).lowercased()
+    private static func comparable(_ path: String) -> [String] {
+        standardizedComponents(path).map { $0.folding(options: .caseInsensitive, locale: nil) }
     }
 
-    private static func lexicallyStandardized(_ path: String) -> String {
-        var components: [Substring] = []
-        for component in path.split(separator: "/") {
+    private static func standardizedComponents(_ path: String) -> [String] {
+        var components: [String] = []
+        for component in CleanupPathText.components(of: path) {
             switch component {
             case ".": continue
             case "..": _ = components.popLast()
             default: components.append(component)
             }
         }
-        return "/" + components.joined(separator: "/")
+        return components
     }
 }
