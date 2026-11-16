@@ -142,15 +142,28 @@ struct UninstallLeftoverPresentationTests {
 
     /// The view cannot be driven from a package test, so this pins the wiring: the sheet opens
     /// with `defaultSelection` and nothing else, fed by the last scan's applications failure.
+    /// The installed list and its completeness are read together before the first `await`: a
+    /// scan finishing during that wait must not pair a partial list with a "complete" flag.
     @Test func sheetOpensWithTheDefaultSelection() throws {
         let view = try Fixture.source("Sources/MacUpdater/UninstallView.swift")
         let present = try Fixture.body(of: "private func presentUninstallDialog()", endingAt: "private func cancelUninstall()", in: view)
         let scan = try Fixture.body(of: "private func scan() async", endingAt: "/// - Parameter reported:", in: view)
+        let firstAwait = try #require(present.range(of: "await "))
+        let beforeFirstAwait = present[..<firstAwait.lowerBound]
+        let selection = try Fixture.body(of: "UninstallLeftoverPresentation.defaultSelection(", endingAt: ")", in: String(present))
 
         #expect(present.contains("selectedLeftovers = UninstallLeftoverPresentation.defaultSelection("))
         #expect(present.components(separatedBy: "selectedLeftovers =").count == 2,
                 "nothing else ticks leftovers when the sheet opens")
         #expect(scan.contains("applicationsSourceFailed = scan.failures.contains { $0.source == .applications }"))
+
+        #expect(beforeFirstAwait.contains("let installed = apps"))
+        #expect(beforeFirstAwait.contains("let applicationsIncomplete = applicationsSourceFailed"),
+                "the applications source alone decides, not scanFailed")
+        #expect(present.contains("operations.scanLeftovers(for: attempted, installed: installed)"))
+        #expect(!present.contains("installed: apps"), "a later scan's list must not reach the planner")
+        #expect(selection.contains("applicationsIncomplete: applicationsIncomplete"))
+        #expect(present.contains("pendingApplicationsIncomplete = applicationsIncomplete"))
     }
 }
 

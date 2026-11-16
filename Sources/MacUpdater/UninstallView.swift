@@ -357,12 +357,15 @@ struct UninstallView: View {
         guard !targets.isEmpty, !isUninstalling else { return }
         pendingUninstallTargets = targets
         pendingScanIncomplete = scanFailed
+        // Read together before any wait: a scan finishing during one would otherwise pair its
+        // partial list with the earlier scan's "complete" flag.
+        let installed = apps
         let applicationsIncomplete = applicationsSourceFailed
         pendingRoutes = await operations.routes(for: targets)
         // A blocked target is not attempted: it is neither asked to quit nor offers leftovers.
         let attempted = UninstallQuitFlow.partition(targets: targets, routes: pendingRoutes).attempt
         pendingRunningStates = operations.runningStates(for: attempted)
-        let leftovers = await operations.scanLeftovers(for: attempted, installed: apps)
+        let leftovers = await operations.scanLeftovers(for: attempted, installed: installed)
         pendingLeftoverGroups = leftovers.groups
         pendingLeftoverCatalogUnavailable = leftovers.catalogUnavailable
         pendingApplicationsIncomplete = applicationsIncomplete
