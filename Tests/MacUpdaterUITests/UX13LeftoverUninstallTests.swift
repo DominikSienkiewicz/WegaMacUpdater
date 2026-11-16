@@ -199,6 +199,28 @@ struct UX13LeftoverUninstallTests {
         #expect(items.first?.sharedWith == [])
     }
 
+    /// The channel policy keeps Zed's cask from Zed Preview's own leftovers, but the installed
+    /// Preview still uses the folders that cask lists, so removing Zed must not tick them.
+    @Test func channelRefusedOtherAppStillClaimsItsCaskFolders() async throws {
+        let home = try makeHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+        try createFolder("Library/Application Support/Zed", in: home)
+        let zed = app("Zed", bundleID: "dev.zed.Zed", brew: false)
+        let preview = app("Zed", bundleID: "dev.zed.Zed-Preview", brew: false, path: "/Applications/Zed Preview.app")
+        let cask = BrewCask(token: "zed", name: ["Zed"], zapTrashPaths: [
+            "~/Library/Application Support/Zed",
+            "~/Library/Preferences/dev.zed.Zed.plist",
+        ])
+
+        let scan = await coordinator(catalog: { [cask] })
+            .scanLeftovers(for: [zed], installed: [zed, preview], home: home)
+
+        let item = try #require(scan.groups.first?.items.first)
+        #expect(item.source == .homebrewZap(token: "zed"))
+        #expect(item.sharedWith == ["Zed — /Applications/Zed Preview.app"])
+        #expect(!item.isSelectedByDefault)
+    }
+
     @Test func measureLeftoverMeasuresTheItem() async throws {
         let home = try makeHome()
         defer { try? FileManager.default.removeItem(at: home) }

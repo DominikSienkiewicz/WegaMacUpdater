@@ -1,10 +1,15 @@
 import Foundation
 
 public enum LeftoverCaskMatching {
+    /// The cask each app matches, with its zap list, keyed by `ApplicationInfo.id`.
+    /// - Parameter honouringChannelPolicy: true for the apps whose leftovers are offered: a match
+    ///   `CaskChannelPolicy` refuses (Zed's cask for Zed Preview) counts as no match. False for the
+    ///   apps that only claim items: the refused cask's zap list still names folders they use.
     public static func evidence(
         for apps: [ApplicationInfo],
         casks: [BrewCask],
-        matcher: CaskMatcher = CaskMatcher()
+        matcher: CaskMatcher = CaskMatcher(),
+        honouringChannelPolicy: Bool = true
     ) -> [String: LeftoverCaskEvidence] {
         let zapPathsByToken = casks.reduce(into: [String: [String]]()) { partial, cask in
             partial[cask.token] = partial[cask.token] ?? cask.zapTrashPaths
@@ -13,7 +18,7 @@ public enum LeftoverCaskMatching {
         var evidence: [String: LeftoverCaskEvidence] = [:]
         for app in apps {
             guard let (token, provenance) = tokenAndProvenance(for: app, matcher: matcher, index: index),
-                  CaskChannelPolicy.permits(token, for: app),
+                  !honouringChannelPolicy || CaskChannelPolicy.permits(token, for: app),
                   let zapTrashPaths = zapPathsByToken[token]
             else { continue }
             evidence[app.id] = LeftoverCaskEvidence(token: token, zapTrashPaths: zapTrashPaths, provenance: provenance)

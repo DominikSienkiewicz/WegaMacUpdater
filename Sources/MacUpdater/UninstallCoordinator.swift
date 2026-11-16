@@ -94,16 +94,21 @@ private struct LeftoverPlanningRun: Sendable {
     }
 
     /// Matches every app of the run to `catalog`, reads the planned targets' team ids and plans.
+    /// The planned targets' matches honour the channel policy, because their zap lists are offered;
+    /// the other apps' matches do not, because theirs only say what those apps still use.
     func groups(
         catalog: [BrewCask]?,
         home: URL,
         teamIdentifier: (URL) -> String?,
         fileSystem: any CleanupFileSystem
     ) -> [LeftoverGroup] {
-        let evidence = catalog.map { LeftoverCaskMatching.evidence(for: planned + alsoRemoved + others, casks: $0) } ?? [:]
-        let unsigned = { (app: ApplicationInfo) in LeftoverApp(app, teamIdentifier: nil, cask: evidence[app.id]) }
+        let offered = catalog.map { LeftoverCaskMatching.evidence(for: planned, casks: $0) } ?? [:]
+        let claiming = catalog.map {
+            LeftoverCaskMatching.evidence(for: alsoRemoved + others, casks: $0, honouringChannelPolicy: false)
+        } ?? [:]
+        let unsigned = { (app: ApplicationInfo) in LeftoverApp(app, teamIdentifier: nil, cask: claiming[app.id]) }
         let plan = LeftoverPlanner.plan(
-            targets: planned.map { LeftoverApp($0, teamIdentifier: teamIdentifier($0.path), cask: evidence[$0.id]) },
+            targets: planned.map { LeftoverApp($0, teamIdentifier: teamIdentifier($0.path), cask: offered[$0.id]) },
             alsoRemoved: alsoRemoved.map(unsigned),
             others: others.map(unsigned),
             home: home,

@@ -72,6 +72,18 @@ struct LeftoverCaskMatchingTests {
         #expect(LeftoverCaskMatching.evidence(for: [preview], casks: [cask]).isEmpty)
     }
 
+    /// A match refused for offering an app's own leftovers still says which folders it uses.
+    @Test func channelRefusedMatchIsEvidenceWhenThePolicyIsNotHonoured() {
+        let preview = app(name: "Zed", bundleIdentifier: "dev.zed.Zed-Preview")
+        let cask = BrewCask(token: "zed", name: ["Zed"], zapTrashPaths: ["~/Library/Application Support/Zed"])
+
+        let evidence = LeftoverCaskMatching.evidence(for: [preview], casks: [cask], honouringChannelPolicy: false)
+
+        #expect(evidence[preview.id] == LeftoverCaskEvidence(
+            token: "zed", zapTrashPaths: ["~/Library/Application Support/Zed"], provenance: .token
+        ))
+    }
+
     @Test func noMatchGivesNoEvidence() {
         let unknown = app(name: "Totally Unknown Thing")
         let cask = BrewCask(token: "obsidian", name: ["Obsidian"], zapTrashPaths: ["~/Library/Caches/obsidian"])
