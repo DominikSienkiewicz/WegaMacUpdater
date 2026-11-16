@@ -26,7 +26,7 @@ public struct CleanupDuplicateFindings: Sendable {
     private struct Context {
         let processes: [CleanupProcess]
         let dependents: [String: [String]]
-        let brewAnswered: Bool
+        let uncheckedFormulas: Set<String>
     }
 
     private struct Verdict {
@@ -53,31 +53,42 @@ public struct CleanupDuplicateFindings: Sendable {
     }
 
     public func build(_ scan: CleanupPathScan) async -> (findings: [CleanupFinding], notes: [CleanupDetectorNote]) {
-        let (dependents, notes) = await dependentsByFormula(in: scan)
-        let context = Context(processes: inspector.userProcesses(), dependents: dependents, brewAnswered: notes.isEmpty)
+        let lookup = await dependentsByFormula(in: scan)
+        let notes = lookup.notes
+        let context = Context(processes: inspector.userProcesses(), dependents: lookup.dependents, uncheckedFormulas: lookup.unchecked)
         let findings = scan.groups.flatMap { group in
             group.copies.map { finding(for: $0, in: group, context: context) }
         }
         return (findings, notes)
     }
 
-    private func dependentsByFormula(in scan: CleanupPathScan) async -> ([String: [String]], [CleanupDetectorNote]) {
+    private struct Lookup {
+        var dependents: [String: [String]] = [:]
+        var unchecked: Set<String> = []
+        var notes: [CleanupDetectorNote] = []
+    }
+
+    /// One query per distinct shadowed formula. After the first failure the remaining formulas stay
+    /// unchecked, while what was already learned is kept.
+    private func dependentsByFormula(in scan: CleanupPathScan) async -> Lookup {
         var names: [String] = []
         for copy in scan.groups.flatMap(\.copies) where copy.role == .shadowed {
             if case .homebrewFormula(let name) = copy.source, !names.contains(name) { names.append(name) }
         }
-        var result: [String: [String]] = [:]
-        for name in names {
+        var lookup = Lookup()
+        for (offset, name) in names.enumerated() {
             do {
                 let uses = try await brew.usesInstalled(formula: name)
-                if !uses.isEmpty { result[name] = uses }
-            } catch BrewServiceError.brewNotFound {
-                return ([:], [CleanupDetectorNote(detector: .homebrew, kind: .homebrewUnavailable)])
+                if !uses.isEmpty { lookup.dependents[name] = uses }
             } catch {
-                return ([:], [CleanupDetectorNote(detector: .homebrew, kind: .failed)])
+                let kind: CleanupDetectorNote.Kind
+                if case BrewServiceError.brewNotFound = error { kind = .homebrewUnavailable } else { kind = .failed }
+                lookup.notes = [CleanupDetectorNote(detector: .homebrew, kind: kind)]
+                lookup.unchecked = Set(names[offset...])
+                return lookup
             }
         }
-        return (result, [])
+        return lookup
     }
 
     private func finding(for copy: CleanupCopy, in group: CleanupToolGroup, context: Context) -> CleanupFinding {
@@ -91,11 +102,17 @@ public struct CleanupDuplicateFindings: Sendable {
             detector: .pathDuplicates, tool: group.name, path: copy.path, realpath: copy.realpath,
             source: copy.source, version: copy.version, size: size(of: copy, action: action),
             status: status, reason: reason, action: action, risk: risk,
-            bucket: CleanupBucketPolicy.bucket(
-                status: status, source: copy.source, relation: relation, recognisedLayout: true
-            ),
+            bucket: bucket(status: status, source: copy.source, relation: relation, action: action),
             identity: copy.identity
         )
+    }
+
+    /// A copy Wega cannot remove never counts towards the safe total.
+    private func bucket(
+        status: CleanupStatus, source: CleanupSource, relation: CleanupVersionRelation, action: CleanupAction
+    ) -> CleanupBucket {
+        let bucket = CleanupBucketPolicy.bucket(status: status, source: source, relation: relation, recognisedLayout: true)
+        return bucket == .safe && action == .none ? .needsDecision : bucket
     }
 
     private func classify(
@@ -111,7 +128,7 @@ public struct CleanupDuplicateFindings: Sendable {
         if case .homebrewFormula(let name) = copy.source, let dependents = context.dependents[name] {
             return Verdict(status: .dependency(dependents), reason: .requiredBy(dependents), action: .none)
         }
-        let action = removalAction(for: copy, brewAnswered: context.brewAnswered)
+        let action = removalAction(for: copy, context: context)
         if let real = copy.realpath {
             let using = CleanupInUseMatcher.processes(using: real, isDirectory: false, among: context.processes)
             if !using.isEmpty { return Verdict(status: .inUse(using), reason: reason, action: action) }
@@ -128,9 +145,10 @@ public struct CleanupDuplicateFindings: Sendable {
         }
     }
 
-    private func removalAction(for copy: CleanupCopy, brewAnswered: Bool) -> CleanupAction {
+    private func removalAction(for copy: CleanupCopy, context: Context) -> CleanupAction {
         switch copy.source {
-        case .homebrewFormula(let name): return brewAnswered ? .brew(.uninstallFormula(name)) : .none
+        case .homebrewFormula(let name):
+            return context.uncheckedFormulas.contains(name) ? .none : .brew(.uninstallFormula(name))
         case .homebrewCask(let token): return .brew(.uninstallCask(token))
         case .appBundle: return .instruction(.removeAppLinkWithAdminRights(link: copy.path.path))
         case .appManaged, .system, .nativeVersionDirectory: return .none
@@ -153,9 +171,10 @@ public struct CleanupDuplicateFindings: Sendable {
         let components = CleanupPathText.components(of: real.path)
         let uvRoot = CleanupPathText.components(of: home.path) + [".local", "share", "uv"]
         if components.starts(with: uvRoot + ["tools"]), components.count > uvRoot.count + 1 {
-            return .command("uv tool uninstall \(components[uvRoot.count + 1])")
+            let tool = components[uvRoot.count + 1]
+            return Self.isSafeToolToken(tool) ? .command("uv tool uninstall \(tool)") : .instruction(.removeWithCreatingTool)
         }
-        if components.starts(with: uvRoot + ["python"]), let version = copy.version {
+        if components.starts(with: uvRoot + ["python"]), let version = copy.version, Self.isSafeToolToken(version) {
             return .command("uv python uninstall \(version)")
         }
         return .instruction(.removeWithCreatingTool)
@@ -165,17 +184,31 @@ public struct CleanupDuplicateFindings: Sendable {
         let components = copy.realpath.map { CleanupPathText.components(of: $0.path) } ?? []
         switch manager {
         case .npm:
-            guard let package = npmPackage(in: components) else { return .instruction(.removeWithCreatingTool) }
+            guard let package = npmPackage(in: components), Self.isSafeToolToken(package, allowingScope: true) else { return .instruction(.removeWithCreatingTool) }
             return .command("npm uninstall -g \(package)")
         case .pipx:
-            guard let index = components.firstIndex(of: "venvs"), index + 1 < components.count else {
+            guard let index = components.firstIndex(of: "venvs"), index + 1 < components.count,
+                  Self.isSafeToolToken(components[index + 1]) else {
                 return .instruction(.removeWithCreatingTool)
             }
             return .command("pipx uninstall \(components[index + 1])")
-        case .cargo:
-            return .command("cargo uninstall \(copy.path.lastPathComponent)")
-        case .pnpm, .bun, .go:
+        case .cargo, .pnpm, .bun, .go:
             return .instruction(.removeWithCreatingTool)
+        }
+    }
+
+    /// Names that come from directory names end up in a command the user pastes into a terminal, so
+    /// only `[A-Za-z0-9._+@-]` is allowed (plus one `/` in a scoped npm name); no leading `-`, no `.`/`..`.
+    static func isSafeToolToken(_ token: String, allowingScope: Bool = false) -> Bool {
+        let parts = token.unicodeScalars.split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 1 || (allowingScope && parts.count == 2 && parts[0].first == "@") else { return false }
+        return parts.allSatisfy { part in
+            guard let first = part.first, first != "-", part.count > 0 else { return false }
+            let text = String(String.UnicodeScalarView(part))
+            return text != "." && text != ".." && part.allSatisfy { scalar in
+                ("0"..."9").contains(scalar) || ("a"..."z").contains(scalar) || ("A"..."Z").contains(scalar)
+                    || ".+@-_".unicodeScalars.contains(scalar)
+            }
         }
     }
 
