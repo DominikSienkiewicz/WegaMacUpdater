@@ -74,6 +74,18 @@ final class CleanupShellFileAttributionTests: XCTestCase {
         XCTAssertEqual(attribution().locations(of: tmp.home.path + "/.a/"), [location(".zshrc", 1)])
     }
 
+    func testEntryFollowedByAParameterExpansionIsAttributed() throws {
+        try tmp.file(".zshrc", text: """
+        PATH="/opt/x${PATH:+:$PATH}"
+        PATH=/opt/y$PATH
+        export PATH=/opt/x2${PATH:+:$PATH}
+        """)
+
+        let found = attribution()
+        XCTAssertEqual(found.locations(of: "/opt/x"), [location(".zshrc", 1)])
+        XCTAssertEqual(found.locations(of: "/opt/y"), [location(".zshrc", 2)])
+    }
+
     func testRootEntryIsNeverTrimmed() throws {
         try tmp.file(".zshrc", text: "export PATH=/:$PATH\nexport PATH=:$PATH\n")
 

@@ -15,7 +15,7 @@ public struct CleanupShellFileAttribution: Sendable, CustomStringConvertible, Cu
     private static let bashSystemFiles = ["profile", "bashrc"]
     private static let bashHomeFiles = [".bash_profile", ".bash_login", ".profile", ".bashrc"]
     private static let leadingBoundaries: Set<Unicode.Scalar> = [" ", "\t", "=", ":", "\"", "'", "("]
-    private static let trailingBoundaries: Set<Unicode.Scalar> = [":", "\"", "'", " ", "\t", ";", ")", "}"]
+    private static let trailingBoundaries: Set<Unicode.Scalar> = [":", "\"", "'", " ", "\t", ";", ")", "}", "$"]
 
     /// Paths the guard refused while reading.
     public let skippedProtected: [String]
