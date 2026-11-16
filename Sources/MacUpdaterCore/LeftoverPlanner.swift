@@ -14,7 +14,9 @@ public enum LeftoverPlanner {
     ///   - others: the installed apps that stay.
     ///   - home: the user's home folder; neither it nor anything above it is checked.
     /// - Returns: one group per target that has at least one item. Each path appears once, in
-    ///   the group of the first target that plans it.
+    ///   the group of the first target that plans it. An item lists in `sharedWith` the `others`
+    ///   that claim it (`LeftoverOwnership`), and in `coTargets` the other targets that plan or
+    ///   claim it and the `alsoRemoved` apps that claim it.
     public static func plan(
         targets: [LeftoverApp],
         alsoRemoved: [LeftoverApp],
@@ -23,12 +25,14 @@ public enum LeftoverPlanner {
         fileSystem: any CleanupFileSystem
     ) -> [LeftoverPlanGroup] {
         let homeFolder = HomeFolder(home: home, fileSystem: fileSystem)
+        let planned = targets.map { PlannedTarget(app: $0, findings: findings(for: $0, in: homeFolder)) }
+        let run = PlanningRun(targets: planned, alsoRemoved: alsoRemoved, others: others)
         var plannedKeys: Set<String> = []
-        return targets.compactMap { target in
-            let items = findings(for: target, in: homeFolder)
+        return planned.compactMap { target in
+            let items = target.findings
                 .filter { plannedKeys.insert($0.key).inserted }
-                .map(\.item)
-            return items.isEmpty ? nil : LeftoverPlanGroup(appID: target.id, items: items)
+                .map { run.item(for: $0, of: target.app) }
+            return items.isEmpty ? nil : LeftoverPlanGroup(appID: target.app.id, items: items)
         }
     }
 
@@ -64,6 +68,60 @@ public enum LeftoverPlanner {
     }
 }
 
+/// A target with every item its sources found, including those an earlier target already plans.
+private struct PlannedTarget {
+    let app: LeftoverApp
+    let findings: [Finding]
+    let keys: Set<String>
+
+    init(app: LeftoverApp, findings: [Finding]) {
+        self.app = app
+        self.findings = findings
+        keys = Set(findings.map(\.key))
+    }
+}
+
+/// The apps of one run that may claim a target's item: the other targets, the apps removed
+/// alongside them, and the installed apps that stay.
+private struct PlanningRun {
+    let targets: [PlannedTarget]
+    let alsoRemoved: [LeftoverApp]
+    let others: [LeftoverApp]
+    let allApps: [LeftoverApp]
+
+    init(targets: [PlannedTarget], alsoRemoved: [LeftoverApp], others: [LeftoverApp]) {
+        self.targets = targets
+        self.alsoRemoved = alsoRemoved
+        self.others = others
+        allApps = targets.map(\.app) + alsoRemoved + others
+    }
+
+    func item(for finding: Finding, of target: LeftoverApp) -> LeftoverItem {
+        let claims = { (app: LeftoverApp) in
+            LeftoverOwnership.claims(
+                item: finding.components, source: finding.source, target: target, by: app, allApps: allApps
+            )
+        }
+        let sharedWith = others.filter(claims).map { Self.sharedWithName(of: $0, target: target) }
+        let coTargets = targets.filter { $0.keys.contains(finding.key) || claims($0.app) }.map(\.app.id)
+            + alsoRemoved.filter(claims).map(\.id)
+        return finding.item(
+            sharedWith: Self.uniqued(sharedWith),
+            coTargets: Self.uniqued(coTargets).filter { $0 != target.id }
+        )
+    }
+
+    /// The other app's name, with its path when it has the target's name.
+    private static func sharedWithName(of app: LeftoverApp, target: LeftoverApp) -> String {
+        LeftoverPathRules.key([app.name]) == LeftoverPathRules.key([target.name]) ? "\(app.name) — \(app.path)" : app.name
+    }
+
+    private static func uniqued(_ values: [String]) -> [String] {
+        var seen: Set<String> = []
+        return values.filter { seen.insert($0).inserted }
+    }
+}
+
 /// Which source names an item that several sources found.
 private enum Precedence: Int, Comparable {
     case name, weakZap, bundleIdentifier, strongZap
@@ -74,6 +132,7 @@ private enum Precedence: Int, Comparable {
 /// One existing path a target's sources found, merged across the sources that found it.
 private struct Finding {
     let key: String
+    private(set) var components: [String]
     private(set) var url: URL
     private(set) var source: LeftoverItem.Source
     private(set) var precedence: Precedence
@@ -81,19 +140,25 @@ private struct Finding {
 
     init(path: ExistingPath, candidate: LeftoverCandidates.Candidate, precedence: Precedence) {
         key = LeftoverPathRules.key(path.components)
+        components = path.components
         url = path.url
         source = candidate.source
         self.precedence = precedence
         probableReason = candidate.probableReason
     }
 
-    var item: LeftoverItem { LeftoverItem(url: url, source: source, probableReason: probableReason) }
+    func item(sharedWith: [String], coTargets: [String]) -> LeftoverItem {
+        LeftoverItem(
+            url: url, source: source, probableReason: probableReason, sharedWith: sharedWith, coTargets: coTargets
+        )
+    }
 
     /// The higher-precedence source names the item; it stays probable only if every source
     /// that found it found it probable.
     mutating func absorb(_ other: Finding) {
         let isProbableForBoth = probableReason != nil && other.probableReason != nil
         if other.precedence > precedence {
+            components = other.components
             url = other.url
             source = other.source
             precedence = other.precedence
