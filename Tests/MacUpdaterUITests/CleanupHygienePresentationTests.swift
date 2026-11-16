@@ -69,9 +69,143 @@ final class CleanupHygienePresentationTests: XCTestCase {
             let rows = CleanupPresentation.sections(report, home: Fixture.home).flatMap(\.rows)
             let row = try XCTUnwrap(rows.first { $0.findingID == dead.id })
             XCTAssertNil(row.button)
-            XCTAssertEqual(row.note, CleanupPresentation.instructionText(.editShellFiles(entry: "~/old/bin", locations: [])))
+            XCTAssertEqual(
+                row.note,
+                CleanupPresentation.instructionText(.editShellFiles(entry: "~/old/bin", locations: [])) + " "
+                    + tr("Usuń go tam, gdzie jest dodawany."),
+                "a dead entry added dynamically is still removed where it is added"
+            )
             XCTAssertTrue(row.note?.contains("eval") == true, row.note ?? "")
         }
+    }
+
+    // MARK: - Advice per D9 reason
+
+    func testDeadEntryAdviceSaysToRemoveIt() throws {
+        try withLanguage(.pl) {
+            XCTAssertEqual(
+                try advice(.missingPathEntry, locations: Fixture.oneLocation),
+                trf("Usuń wpis %@ z pliku powłoki, który go dodaje: %@.", "~/old/bin", "~/.zprofile:3")
+            )
+            XCTAssertEqual(
+                try advice(.missingPathEntry, locations: Fixture.twoLocations),
+                trf("Usuń wpis %@ ze wszystkich miejsc, które go dodają: %@.", "~/old/bin", "~/.zprofile:3, ~/.zshrc:9")
+            )
+            XCTAssertEqual(
+                try advice(.missingPathEntry, locations: []),
+                Fixture.dynamicText("~/old/bin") + " " + tr("Usuń go tam, gdzie jest dodawany.")
+            )
+        }
+    }
+
+    func testSamePlaceAdviceSaysToRemoveIt() throws {
+        let reason = CleanupReason.samePlaceAs(path: "/Users/cleanup-test/bin")
+        try withLanguage(.pl) {
+            XCTAssertEqual(
+                try advice(reason, locations: Fixture.oneLocation),
+                trf("Usuń wpis %@ z pliku powłoki, który go dodaje: %@.", "~/old/bin", "~/.zprofile:3")
+            )
+            XCTAssertEqual(
+                try advice(reason, locations: Fixture.twoLocations),
+                trf("Usuń wpis %@ ze wszystkich miejsc, które go dodają: %@.", "~/old/bin", "~/.zprofile:3, ~/.zshrc:9")
+            )
+            XCTAssertEqual(
+                try advice(reason, locations: []), Fixture.dynamicText("~/old/bin") + " " + tr("Usuń go tam, gdzie jest dodawany.")
+            )
+        }
+    }
+
+    func testRepeatedAdviceSaysToKeepOne() throws {
+        let reason = CleanupReason.repeatedPathEntry(count: 2)
+        try withLanguage(.pl) {
+            XCTAssertEqual(
+                try advice(reason, locations: Fixture.twoLocations),
+                trf("Zostaw tylko jedną z linii, które dodają wpis %@: %@.", "~/old/bin", "~/.zprofile:3, ~/.zshrc:9")
+            )
+            XCTAssertEqual(
+                try advice(reason, locations: Fixture.oneLocation),
+                trf("Zostaw w PATH tylko jeden wpis %@. Ten wpis pochodzi z %@.", "~/old/bin", "~/.zprofile:3")
+            )
+            XCTAssertEqual(
+                try advice(reason, locations: []), Fixture.dynamicText("~/old/bin") + " " + tr("Zadbaj, żeby był dodawany tylko raz.")
+            )
+        }
+        let english = try withLanguage(.en) { try advice(reason, locations: Fixture.twoLocations) }
+        XCTAssertTrue(english.hasPrefix("Keep only one of the lines"), english)
+    }
+
+    func testNestedAdviceAsksWhetherBothAreNeededAndNeverToRemove() throws {
+        let reason = CleanupReason.nestedIn(parent: "/Users/cleanup-test/Library/pnpm")
+        try withLanguage(.pl) {
+            XCTAssertEqual(
+                try advice(reason, locations: Fixture.oneLocation),
+                trf(
+                    "W PATH jest i ten katalog, i zawierający go katalog %@. Sprawdź, czy potrzebujesz obu. Ten wpis pochodzi z %@.",
+                    "~/Library/pnpm", "~/.zprofile:3"
+                )
+            )
+            XCTAssertEqual(
+                try advice(reason, locations: Fixture.twoLocations),
+                trf(
+                    "W PATH jest i ten katalog, i zawierający go katalog %@. Sprawdź, czy potrzebujesz obu. Ten wpis pochodzi z kilku miejsc: %@.",
+                    "~/Library/pnpm", "~/.zprofile:3, ~/.zshrc:9"
+                )
+            )
+            XCTAssertEqual(
+                try advice(reason, locations: []),
+                Fixture.dynamicText("~/old/bin") + " "
+                    + trf("W PATH jest też zawierający go katalog %@. Sprawdź, czy potrzebujesz obu.", "~/Library/pnpm")
+            )
+        }
+        try assertNeverSaysToRemoveTheEntry(reason)
+    }
+
+    func testOlderCopyAdviceReordersPathAndNeverRemovesTheFolder() throws {
+        let reason = CleanupReason.olderCopyWins(version: "2.1.300", newer: "/opt/homebrew/bin/claude", newerVersion: "2.1.311")
+        let entry = "/Users/cleanup-test/.local/bin"
+        try withLanguage(.pl) {
+            XCTAssertEqual(
+                try advice(reason, entry: entry, locations: Fixture.oneLocation),
+                trf(
+                    "Przesuń %@ w PATH przed %@ albo usuń starszą kopię. Katalog starszej kopii pochodzi z %@.",
+                    "/opt/homebrew/bin", "~/.local/bin", "~/.zprofile:3"
+                )
+            )
+            XCTAssertEqual(
+                try advice(reason, entry: entry, locations: Fixture.twoLocations),
+                trf(
+                    "Przesuń %@ w PATH przed %@ albo usuń starszą kopię. Katalog starszej kopii pochodzi z kilku miejsc: %@.",
+                    "/opt/homebrew/bin", "~/.local/bin", "~/.zprofile:3, ~/.zshrc:9"
+                )
+            )
+            XCTAssertEqual(
+                try advice(reason, entry: entry, locations: []),
+                Fixture.dynamicText("~/.local/bin") + " "
+                    + trf("Przesuń %@ w PATH przed ten wpis albo usuń starszą kopię.", "/opt/homebrew/bin")
+            )
+        }
+        try assertNeverSaysToRemoveTheEntry(reason, entry: entry)
+    }
+
+    private func assertNeverSaysToRemoveTheEntry(
+        _ reason: CleanupReason, entry: String = Fixture.oldBin, file: StaticString = #filePath, line: UInt = #line
+    ) throws {
+        for locations in [Fixture.oneLocation, Fixture.twoLocations, []] {
+            let polish = try withLanguage(.pl) { try advice(reason, entry: entry, locations: locations) }
+            let english = try withLanguage(.en) { try advice(reason, entry: entry, locations: locations) }
+            XCTAssertFalse(polish.contains("Usuń wpis") || polish.contains("Usuń go"), polish, file: file, line: line)
+            XCTAssertFalse(english.contains("Remove the") || english.contains("Remove it"), english, file: file, line: line)
+        }
+    }
+
+    /// The note of the PATH section's row for a D9 finding with `reason`, whose instruction names
+    /// `entry` and `locations`.
+    private func advice(
+        _ reason: CleanupReason, entry: String = Fixture.oldBin, locations: [CleanupShellFileLocation]
+    ) throws -> String {
+        let finding = Fixture.pathHygieneFinding(reason: reason, entry: entry, locations: locations)
+        let path = try section(.pathHygiene, in: CleanupPresentation.sections(Fixture.report(findings: [finding]), home: Fixture.home))
+        return try XCTUnwrap(try XCTUnwrap(path.rows.first { $0.findingID == finding.id }).note)
     }
 
     func testMapOffListsWhatMayHaveEntries() throws {
@@ -328,6 +462,25 @@ private enum CleanupHygienePresentationFixtures {
             .pathHygiene, tool: "PATH", path: "/Users/cleanup-test/old/bin", source: nil, status: .deadEntry,
             reason: .missingPathEntry,
             action: .instruction(.editShellFiles(entry: "/Users/cleanup-test/old/bin", locations: locations)), bucket: .excluded
+        )
+    }
+
+    static let oldBin = "/Users/cleanup-test/old/bin"
+    static let oneLocation = [CleanupShellFileLocation(file: "/Users/cleanup-test/.zprofile", line: 3)]
+    static let twoLocations = oneLocation + [CleanupShellFileLocation(file: "/Users/cleanup-test/.zshrc", line: 9)]
+
+    static func dynamicText(_ entry: String) -> String {
+        CleanupPresentation.instructionText(.editShellFiles(entry: entry, locations: []))
+    }
+
+    /// A D9 finding as the detector builds one: an older-copy finding stands for the active copy
+    /// inside `entry`, every other one for `entry` itself.
+    static func pathHygieneFinding(reason: CleanupReason, entry: String, locations: [CleanupShellFileLocation]) -> CleanupFinding {
+        let isOlderCopy = if case .olderCopyWins = reason { true } else { false }
+        return CleanupFinding(
+            .pathHygiene, tool: isOlderCopy ? "claude" : "PATH", path: isOlderCopy ? entry + "/claude" : entry, source: nil,
+            status: reason == .missingPathEntry ? .deadEntry : .info, reason: reason,
+            action: .instruction(.editShellFiles(entry: entry, locations: locations)), bucket: .excluded
         )
     }
 

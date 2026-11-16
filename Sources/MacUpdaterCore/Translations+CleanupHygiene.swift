@@ -33,6 +33,22 @@ extension Translations {
         "Wpisu %@ nie ma w plikach powłoki, które sprawdza Wega. Dodał go prawdopodobnie eval, dołączony plik, menedżer wtyczek albo ZDOTDIR.":
             "%@ is not in the shell files Wega checks. It was most likely added dynamically by eval, a sourced file, a plugin manager or ZDOTDIR.",
         "Usuń wpis %@ z pliku powłoki, który go dodaje: %@.": "Remove the %@ entry from the shell file that adds it: %@.",
+        "Usuń wpis %@ ze wszystkich miejsc, które go dodają: %@.": "Remove the %@ entry everywhere it is added: %@.",
+        "Usuń go tam, gdzie jest dodawany.": "Remove it where it is added.",
+        "Zostaw w PATH tylko jeden wpis %@. Ten wpis pochodzi z %@.": "Keep only one %@ entry on PATH. It is added at %@.",
+        "Zostaw tylko jedną z linii, które dodają wpis %@: %@.": "Keep only one of the lines that add the %@ entry: %@.",
+        "Zadbaj, żeby był dodawany tylko raz.": "Make sure it is added only once.",
+        "W PATH jest i ten katalog, i zawierający go katalog %@. Sprawdź, czy potrzebujesz obu. Ten wpis pochodzi z %@.":
+            "Both this folder and %@, which contains it, are on PATH. Check whether you need both. This entry is added at %@.",
+        "W PATH jest i ten katalog, i zawierający go katalog %@. Sprawdź, czy potrzebujesz obu. Ten wpis pochodzi z kilku miejsc: %@.":
+            "Both this folder and %@, which contains it, are on PATH. Check whether you need both. This entry is added at several places: %@.",
+        "W PATH jest też zawierający go katalog %@. Sprawdź, czy potrzebujesz obu.":
+            "%@, which contains it, is on PATH too. Check whether you need both.",
+        "Przesuń %@ w PATH przed %@ albo usuń starszą kopię. Katalog starszej kopii pochodzi z %@.":
+            "Put %@ earlier in PATH than %@, or remove the older copy. The older copy's folder is added at %@.",
+        "Przesuń %@ w PATH przed %@ albo usuń starszą kopię. Katalog starszej kopii pochodzi z kilku miejsc: %@.":
+            "Put %@ earlier in PATH than %@, or remove the older copy. The older copy's folder is added at several places: %@.",
+        "Przesuń %@ w PATH przed ten wpis albo usuń starszą kopię.": "Put %@ earlier in PATH than this entry, or remove the older copy.",
         "Wyłącz ten wpis w Ustawieniach systemowych → Prywatność i ochrona → Pliki i foldery.":
             "Switch this entry off in System Settings → Privacy & Security → Files and Folders.",
 

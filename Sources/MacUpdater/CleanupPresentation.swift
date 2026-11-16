@@ -234,7 +234,7 @@ enum CleanupPresentation {
         case .brew(.cleanup): return (.brewCleanup, nil)
         case .brew: return (.brew, nil)
         case .command(let command): return (.copyCommand(command), command)
-        case .instruction(let instruction): return (nil, instructionText(displayed(instruction, home: home)))
+        case .instruction(let instruction): return (nil, instructionNote(for: finding, instruction, home: home))
         case .none: return (nil, tr("tylko informacja"))
         }
     }
@@ -245,7 +245,7 @@ enum CleanupPresentation {
         let informationOnly: (button: ButtonKind?, note: String?) = (nil, tr("tylko informacja"))
         guard finding.detector == .pathHygiene || finding.detector == .tccMap else { return informationOnly }
         switch finding.action {
-        case .instruction(let instruction): return (nil, instructionText(displayed(instruction, home: home)))
+        case .instruction(let instruction): return (nil, instructionNote(for: finding, instruction, home: home))
         case .command(let command): return (.copyCommand(command), command)
         case .trash, .trashBatch, .brew, .none: return informationOnly
         }
@@ -456,17 +456,7 @@ enum CleanupPresentation {
         case .removeAppLinkWithAdminRights(let link):
             trf("Dowiązanie %@ prowadzi do aplikacji; usuń je ręcznie, z uprawnieniami administratora.", link)
         case .editShellFiles(let entry, let locations):
-            if locations.isEmpty {
-                trf(
-                    "Wpisu %@ nie ma w plikach powłoki, które sprawdza Wega. Dodał go prawdopodobnie eval, dołączony plik, menedżer wtyczek albo ZDOTDIR.",
-                    entry
-                )
-            } else {
-                trf(
-                    "Usuń wpis %@ z pliku powłoki, który go dodaje: %@.",
-                    entry, locations.map { "\($0.file):\($0.line)" }.joined(separator: ", ")
-                )
-            }
+            removeEntryText(entry, locations: locations)
         case .switchOffInFilesAndFolders:
             tr("Wyłącz ten wpis w Ustawieniach systemowych → Prywatność i ochrona → Pliki i foldery.")
         }
@@ -710,6 +700,91 @@ enum CleanupPresentation {
         case .removeWithCreatingTool, .switchOffInFilesAndFolders:
             instruction
         }
+    }
+}
+
+// MARK: - PATH hygiene advice
+
+extension CleanupPresentation {
+    /// The note of a row whose action is an instruction. A `PATH` hygiene row's shell-file advice
+    /// follows its reason: removing an entry that lies inside another, or the folder that holds a
+    /// tool's active copy, would take a whole folder of tools off `PATH`.
+    private static func instructionNote(for finding: CleanupFinding, _ instruction: CleanupInstruction, home: URL) -> String {
+        let shown = displayed(instruction, home: home)
+        guard finding.detector == .pathHygiene, case .editShellFiles(let entry, let locations) = shown else {
+            return instructionText(shown)
+        }
+        return shellFileAdvice(for: finding.reason, entry: entry, locations: locations, home: home)
+    }
+
+    /// `entry` and `locations` are shown as given, with `~` already substituted; the paths inside
+    /// `reason` are the finding's own. A dead or same-place entry, like any other reason, is
+    /// removed where it is added.
+    private static func shellFileAdvice(
+        for reason: CleanupReason, entry: String, locations: [CleanupShellFileLocation], home: URL
+    ) -> String {
+        let places = placesText(locations)
+        switch reason {
+        case .repeatedPathEntry:
+            if locations.isEmpty { return dynamicEntryText(entry) + " " + tr("Zadbaj, żeby był dodawany tylko raz.") }
+            if locations.count == 1 { return trf("Zostaw w PATH tylko jeden wpis %@. Ten wpis pochodzi z %@.", entry, places) }
+            return trf("Zostaw tylko jedną z linii, które dodają wpis %@: %@.", entry, places)
+        case .nestedIn(let parent):
+            let parent = tilde(parent, home)
+            if locations.isEmpty {
+                return dynamicEntryText(entry) + " "
+                    + trf("W PATH jest też zawierający go katalog %@. Sprawdź, czy potrzebujesz obu.", parent)
+            }
+            if locations.count == 1 {
+                return trf(
+                    "W PATH jest i ten katalog, i zawierający go katalog %@. Sprawdź, czy potrzebujesz obu. Ten wpis pochodzi z %@.",
+                    parent, places
+                )
+            }
+            return trf(
+                "W PATH jest i ten katalog, i zawierający go katalog %@. Sprawdź, czy potrzebujesz obu. Ten wpis pochodzi z kilku miejsc: %@.",
+                parent, places
+            )
+        case .olderCopyWins(_, let newer, _):
+            let newerDirectory = tilde(URL(filePath: newer, directoryHint: .notDirectory).deletingLastPathComponent().path, home)
+            if locations.isEmpty {
+                return dynamicEntryText(entry) + " " + trf("Przesuń %@ w PATH przed ten wpis albo usuń starszą kopię.", newerDirectory)
+            }
+            if locations.count == 1 {
+                return trf(
+                    "Przesuń %@ w PATH przed %@ albo usuń starszą kopię. Katalog starszej kopii pochodzi z %@.",
+                    newerDirectory, entry, places
+                )
+            }
+            return trf(
+                "Przesuń %@ w PATH przed %@ albo usuń starszą kopię. Katalog starszej kopii pochodzi z kilku miejsc: %@.",
+                newerDirectory, entry, places
+            )
+        default:
+            guard locations.isEmpty else { return removeEntryText(entry, locations: locations) }
+            return dynamicEntryText(entry) + " " + tr("Usuń go tam, gdzie jest dodawany.")
+        }
+    }
+
+    /// The plain shell-file instruction: remove the entry from every place that adds it, or say
+    /// that no file Wega checks adds it.
+    private static func removeEntryText(_ entry: String, locations: [CleanupShellFileLocation]) -> String {
+        switch locations.count {
+        case 0: dynamicEntryText(entry)
+        case 1: trf("Usuń wpis %@ z pliku powłoki, który go dodaje: %@.", entry, placesText(locations))
+        default: trf("Usuń wpis %@ ze wszystkich miejsc, które go dodają: %@.", entry, placesText(locations))
+        }
+    }
+
+    private static func dynamicEntryText(_ entry: String) -> String {
+        trf(
+            "Wpisu %@ nie ma w plikach powłoki, które sprawdza Wega. Dodał go prawdopodobnie eval, dołączony plik, menedżer wtyczek albo ZDOTDIR.",
+            entry
+        )
+    }
+
+    private static func placesText(_ locations: [CleanupShellFileLocation]) -> String {
+        locations.map { "\($0.file):\($0.line)" }.joined(separator: ", ")
     }
 }
 
