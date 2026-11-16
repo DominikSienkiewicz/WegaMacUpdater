@@ -179,5 +179,13 @@ extension Translations {
         "Uwagi skanu:": "Scan notes:",
         "Uwagi skanu: brak": "Scan notes: none",
         "Pominięte lokalizacje chronione: brak": "Skipped protected locations: none",
+
+        // Project folders setting
+        "Katalogi projektów": "Project folders",
+        "Porządki czytają tu pliki wersji (.python-version, .nvmrc, wrapper Gradle…), żeby nie proponować usunięcia tego, czego używają projekty. Lokalizacje chronione (Dokumenty, Biurko, Pobrane, iCloud) są odrzucane.":
+            "Cleanup reads version files here (.python-version, .nvmrc, the Gradle wrapper…) so it never offers to remove what projects use. Protected locations (Documents, Desktop, Downloads, iCloud) are refused.",
+        "Ten katalog leży w lokalizacji chronionej, więc Wega go nie przeszuka.":
+            "This folder is in a protected location, so Wega will not search it.",
+        "Ten katalog jest już na liście.": "This folder is already on the list.",
     ]
 }
