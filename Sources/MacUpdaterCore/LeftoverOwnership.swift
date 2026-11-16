@@ -11,7 +11,69 @@ enum LeftoverOwnership {
     private static let teamIDLength = 10
     private static let teamIDScalars = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789".unicodeScalars)
 
-    /// Whether `app` claims the item at `components`, planned for `target`.
+    /// One app as the claim rules read it: its bundle id and names folded and its zap entries
+    /// parsed once per planning run, not once per item.
+    struct Claimant {
+        /// Folded; nil for a missing or empty bundle id.
+        let bundleIdentifier: String?
+        fileprivate let names: Set<String>
+        fileprivate let zapEntries: [[ZapComponent]]
+
+        init(_ app: LeftoverApp) {
+            bundleIdentifier = LeftoverOwnership.bundleIdentifier(of: app)
+            names = Set([app.name, app.fileName].map(LeftoverOwnership.fold))
+            zapEntries = LeftoverOwnership.zapEntries(of: app).map { $0.map(ZapComponent.init) }
+        }
+    }
+
+    /// A planned item as the claim rules compare it, folded once for every app checked against it.
+    struct ClaimedItem {
+        fileprivate let components: [String]
+        fileprivate let folded: [String]
+        fileprivate let bundleIDStems: [String]
+        fileprivate let source: LeftoverItem.Source
+
+        /// - Parameters:
+        ///   - components: the item's path below the home folder.
+        ///   - source: the source that names the item; only an `.appName` item is claimed by name.
+        init(components: [String], source: LeftoverItem.Source) {
+            self.components = components
+            folded = components.map(LeftoverOwnership.fold)
+            bundleIDStems = folded.last.map(LeftoverOwnership.bundleIDStems) ?? []
+            self.source = source
+        }
+    }
+
+    /// One component of a zap entry read for claiming.
+    fileprivate enum ZapComponent {
+        /// `**` or `{…}`: the entry is read leniently, so it covers any name.
+        case anyName
+        case pattern(String)
+        case name(folded: String)
+
+        init(_ component: String) {
+            if LeftoverPathRules.hasDoubleStar(component) || component.unicodeScalars.contains("{") {
+                self = .anyName
+            } else if LeftoverPathRules.hasWildcard(component) {
+                self = .pattern(component)
+            } else {
+                self = .name(folded: LeftoverOwnership.fold(component))
+            }
+        }
+
+        /// Whether it covers the item's component at `index`: as a pattern for `*`, `?` or `[`,
+        /// and otherwise as the same name.
+        func covers(_ item: ClaimedItem, at index: Int) -> Bool {
+            switch self {
+            case .anyName: true
+            case .pattern(let pattern): LeftoverPathRules.matches(pattern: pattern, name: item.components[index])
+            case .name(let folded): folded == item.folded[index]
+            }
+        }
+    }
+
+    /// Whether `app` claims the item at `components`, planned for `target`. A planning run uses
+    /// the overload taking a `Claimant` per app instead, built once.
     /// - Parameters:
     ///   - components: the item's path below the home folder.
     ///   - source: the source that names the item; only an `.appName` item is claimed by name.
@@ -24,21 +86,37 @@ enum LeftoverOwnership {
         by app: LeftoverApp,
         allApps: [LeftoverApp]
     ) -> Bool {
-        guard let name = components.last else { return false }
-        if let bundleID = bundleIdentifier(of: app), bundleID == bundleIdentifier(of: target) { return true }
-        return ownsByBundleIdentifier(name, app: app, allApps: allApps)
-            || (source == .appName && [app.name, app.fileName].contains { fold($0) == fold(name) })
-            || zapEntries(of: app).contains { names($0, components) || isAncestor(components, of: $0) }
+        claims(
+            item: ClaimedItem(components: components, source: source),
+            target: Claimant(target),
+            by: Claimant(app),
+            competingBundleIdentifiers: allApps.compactMap(bundleIdentifier(of:))
+        )
+    }
+
+    /// Whether `app` claims `item`, planned for `target`.
+    /// - Parameter competingBundleIdentifiers: the folded bundle ids of every app of the run; the
+    ///   longest one naming an item owns it.
+    static func claims(
+        item: ClaimedItem,
+        target: Claimant,
+        by app: Claimant,
+        competingBundleIdentifiers: [String]
+    ) -> Bool {
+        guard let name = item.folded.last else { return false }
+        if let bundleID = app.bundleIdentifier, bundleID == target.bundleIdentifier { return true }
+        return ownsByBundleIdentifier(item, bundleID: app.bundleIdentifier, competing: competingBundleIdentifiers)
+            || (item.source == .appName && app.names.contains(name))
+            || app.zapEntries.contains { names($0, item) || isAncestor(item, of: $0) }
     }
 
     /// The longest bundle id that one of the name's bundle-id stems equals or begins with
     /// followed by `.` owns the item.
-    private static func ownsByBundleIdentifier(_ name: String, app: LeftoverApp, allApps: [LeftoverApp]) -> Bool {
-        guard let bundleID = bundleIdentifier(of: app) else { return false }
-        return bundleIDStems(of: fold(name)).contains { stem in
-            isNamed(stem, after: bundleID) && !allApps.contains { other in
-                guard let otherID = bundleIdentifier(of: other) else { return false }
-                return otherID.count > bundleID.count && isNamed(stem, after: otherID)
+    private static func ownsByBundleIdentifier(_ item: ClaimedItem, bundleID: String?, competing: [String]) -> Bool {
+        guard let bundleID else { return false }
+        return item.bundleIDStems.contains { stem in
+            isNamed(stem, after: bundleID) && !competing.contains { otherID in
+                otherID.count > bundleID.count && isNamed(stem, after: otherID)
             }
         }
     }
@@ -74,27 +152,22 @@ enum LeftoverOwnership {
         return name
     }
 
-    /// Whether the zap entry names the item: same depth, and every component covered.
-    private static func names(_ entry: [String], _ components: [String]) -> Bool {
-        entry.count == components.count && zip(entry, components).allSatisfy(covers)
+    /// Whether the zap entry names the item: same depth, and every component covered. The last
+    /// component, the one most likely to differ, is compared first.
+    private static func names(_ entry: [ZapComponent], _ item: ClaimedItem) -> Bool {
+        let last = item.components.count - 1
+        return entry.count == item.components.count
+            && entry[last].covers(item, at: last)
+            && entry.indices.allSatisfy { entry[$0].covers(item, at: $0) }
     }
 
     /// Whether the item's path lies above a path the zap entry names: the item is shorter, and
     /// each of its components is covered by the entry's component at the same depth.
-    private static func isAncestor(_ components: [String], of entry: [String]) -> Bool {
-        components.count < entry.count && zip(entry, components).allSatisfy(covers)
-    }
-
-    /// Whether a zap entry's component covers an item's component: always for `**` or `{`,
-    /// as a pattern for `*`, `?` or `[`, and otherwise as the same name.
-    private static func covers(_ entryComponent: String, _ name: String) -> Bool {
-        if LeftoverPathRules.hasDoubleStar(entryComponent) || entryComponent.unicodeScalars.contains("{") {
-            return true
-        }
-        if LeftoverPathRules.hasWildcard(entryComponent) {
-            return LeftoverPathRules.matches(pattern: entryComponent, name: name)
-        }
-        return fold(entryComponent) == fold(name)
+    private static func isAncestor(_ item: ClaimedItem, of entry: [ZapComponent]) -> Bool {
+        let last = item.components.count - 1
+        return item.components.count < entry.count
+            && entry[last].covers(item, at: last)
+            && item.components.indices.allSatisfy { entry[$0].covers(item, at: $0) }
     }
 
     /// The app's zap entries read for claiming. Unlike `LeftoverPathRules.zapComponents`, which

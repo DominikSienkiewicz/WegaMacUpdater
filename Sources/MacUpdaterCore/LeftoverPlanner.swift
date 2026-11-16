@@ -31,7 +31,7 @@ public enum LeftoverPlanner {
         return planned.compactMap { target in
             let items = target.findings
                 .filter { plannedKeys.insert($0.key).inserted }
-                .map { run.item(for: $0, of: target.app) }
+                .map { run.item(for: $0, of: target) }
             return items.isEmpty ? nil : LeftoverPlanGroup(appID: target.app.id, items: items)
         }
     }
@@ -68,14 +68,27 @@ public enum LeftoverPlanner {
     }
 }
 
+/// An app of the run with what the claim rules read from it, computed once per plan.
+private struct ClaimingApp {
+    let app: LeftoverApp
+    let claimant: LeftoverOwnership.Claimant
+
+    init(_ app: LeftoverApp) {
+        self.app = app
+        claimant = LeftoverOwnership.Claimant(app)
+    }
+}
+
 /// A target with every item its sources found, including those an earlier target already plans.
 private struct PlannedTarget {
     let app: LeftoverApp
+    let claimant: LeftoverOwnership.Claimant
     let findings: [Finding]
     let keys: Set<String>
 
     init(app: LeftoverApp, findings: [Finding]) {
         self.app = app
+        claimant = LeftoverOwnership.Claimant(app)
         self.findings = findings
         keys = Set(findings.map(\.key))
     }
@@ -85,29 +98,31 @@ private struct PlannedTarget {
 /// alongside them, and the installed apps that stay.
 private struct PlanningRun {
     let targets: [PlannedTarget]
-    let alsoRemoved: [LeftoverApp]
-    let others: [LeftoverApp]
-    let allApps: [LeftoverApp]
+    let alsoRemoved: [ClaimingApp]
+    let others: [ClaimingApp]
+    let competingBundleIdentifiers: [String]
 
     init(targets: [PlannedTarget], alsoRemoved: [LeftoverApp], others: [LeftoverApp]) {
         self.targets = targets
-        self.alsoRemoved = alsoRemoved
-        self.others = others
-        allApps = targets.map(\.app) + alsoRemoved + others
+        self.alsoRemoved = alsoRemoved.map(ClaimingApp.init)
+        self.others = others.map(ClaimingApp.init)
+        competingBundleIdentifiers = (targets.map(\.claimant) + self.alsoRemoved.map(\.claimant) + self.others.map(\.claimant))
+            .compactMap(\.bundleIdentifier)
     }
 
-    func item(for finding: Finding, of target: LeftoverApp) -> LeftoverItem {
-        let claims = { (app: LeftoverApp) in
+    func item(for finding: Finding, of target: PlannedTarget) -> LeftoverItem {
+        let item = LeftoverOwnership.ClaimedItem(components: finding.components, source: finding.source)
+        let claims = { (claimant: LeftoverOwnership.Claimant) in
             LeftoverOwnership.claims(
-                item: finding.components, source: finding.source, target: target, by: app, allApps: allApps
+                item: item, target: target.claimant, by: claimant, competingBundleIdentifiers: competingBundleIdentifiers
             )
         }
-        let sharedWith = others.filter(claims).map { Self.sharedWithName(of: $0, target: target) }
-        let coTargets = targets.filter { $0.keys.contains(finding.key) || claims($0.app) }.map(\.app.id)
-            + alsoRemoved.filter(claims).map(\.id)
+        let sharedWith = others.filter { claims($0.claimant) }.map { Self.sharedWithName(of: $0.app, target: target.app) }
+        let coTargets = targets.filter { $0.keys.contains(finding.key) || claims($0.claimant) }.map(\.app.id)
+            + alsoRemoved.filter { claims($0.claimant) }.map(\.app.id)
         return finding.item(
             sharedWith: Self.uniqued(sharedWith),
-            coTargets: Self.uniqued(coTargets).filter { $0 != target.id }
+            coTargets: Self.uniqued(coTargets).filter { $0 != target.app.id }
         )
     }
 
