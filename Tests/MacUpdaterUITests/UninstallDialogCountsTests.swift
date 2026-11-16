@@ -72,6 +72,15 @@ struct UninstallDialogCountsTests {
         #expect(UninstallDialog.runningNote(for: running, route: nil) != nil)
     }
 
+    /// Spec 4.3: the sheet says ahead of time that Wega's helper removes a root-owned app, and
+    /// that it needs no password.
+    @Test func helperRouteSaysWegasHelperRemovesItWithoutAPassword() {
+        let note = UninstallDialog.routeNote(for: .helper)
+
+        #expect(note == "pomocnik Wega usunie ją bez hasła")
+        #expect(note != UninstallResultPresentation.blockReason(.needsHelper))
+    }
+
     @Test func missingRouteCountsAsTrash() {
         let ok = app("Ok")
         let counts = UninstallDialogCounts(targets: [ok], routes: [:])

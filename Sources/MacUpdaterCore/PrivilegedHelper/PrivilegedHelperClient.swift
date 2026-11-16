@@ -49,11 +49,14 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
 
     /// XPC observation deadlines. Installations return a durable ID immediately and
     /// are polled separately; a query timing out never means that the installer stopped.
-    private enum Deadline {
+    enum Deadline {
         static let handshake: Duration = .seconds(10)
         static let enableTouchID: Duration = .seconds(60)
         static let installationStatus: Duration = .seconds(10)
         static let replaceBundle: Duration = .seconds(600)
+        /// The helper hands over every item of the bundle under one lock, so a large app takes
+        /// a while; a timeout does not mean the app is still in `/Applications`.
+        static let stageForTrash: Duration = .seconds(600)
     }
 
     private let service: SMAppService
@@ -75,6 +78,16 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
     }
 
     public var isEnabled: Bool { status == .enabled }
+
+    /// Whether Uninstall may route a root-owned app to the helper. Read from the registration
+    /// alone, without a handshake: a stale helper is refused when it is called.
+    public var uninstallAvailability: UninstallHelperAvailability {
+        Self.uninstallAvailability(isEnabled: isEnabled)
+    }
+
+    static func uninstallAvailability(isEnabled: Bool) -> UninstallHelperAvailability {
+        isEnabled ? .enabled : .off
+    }
 
     /// Registers the daemon. May leave the service in `.requiresApproval` until
     /// the user toggles it on in System Settings.
@@ -188,6 +201,43 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
                 done(ok ? .success(true) : .failure(HelperError.operationFailed(message ?? "replaceBundle failed")))
             }
         }
+    }
+
+    /// Uninstall: has the helper move a root-owned application out of `/Applications` into a
+    /// staging slot owned by this user, and returns where the bundle now is. The caller puts it
+    /// in the Trash as the user.
+    ///
+    /// - Throws: `.versionMismatch` for a stale helper and `.notEnabled` when it is not
+    ///   registered, before anything is sent; `.operationFailed` with the helper's reason when it
+    ///   refused or moved nothing; `.timedOut` or `.connectionFailed` when the helper did not
+    ///   answer. After the staging request was sent, that means the app may already have left
+    ///   `/Applications`.
+    public func stageApplicationBundleForTrash(at path: URL, expectedBundleID: String) async throws -> URL {
+        try await performHandshake()
+        do {
+            return try await call(deadline: Deadline.stageForTrash) { (proxy, done: @escaping @Sendable (sending Result<URL, Error>) -> Void) in
+                proxy.stageApplicationBundleForTrash(atPath: path.path, expectedBundleID: expectedBundleID) { stagedPath, note in
+                    done(Self.stagingReply(stagedPath: stagedPath, note: note))
+                }
+            }
+        } catch {
+            throw Self.stagingError(error)
+        }
+    }
+
+    /// A staged path is the result even with a note: the note only says that some items stayed
+    /// root-owned, which the helper records in its own log.
+    static func stagingReply(stagedPath: String?, note: String?) -> Result<URL, Error> {
+        guard let stagedPath else {
+            return .failure(HelperError.operationFailed(note ?? "stageApplicationBundleForTrash failed"))
+        }
+        return .success(URL(fileURLWithPath: stagedPath))
+    }
+
+    /// Anything but the client's own errors is an XPC transport error: the request's fate is as
+    /// unknown as after a timeout.
+    static func stagingError(_ error: Error) -> HelperError {
+        (error as? HelperError) ?? .connectionFailed
     }
 
     // MARK: - XPC plumbing

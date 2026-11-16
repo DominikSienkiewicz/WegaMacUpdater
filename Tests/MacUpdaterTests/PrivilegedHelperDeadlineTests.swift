@@ -69,6 +69,101 @@ struct PrivilegedHelperDeadlineTests {
                 == .mismatch(reported: stale, expected: WegaHelper.version)
         )
     }
+
+    // MARK: - Staging a root-owned app for the Trash (Uninstall)
+
+    /// The helper walks the whole bundle under a lock, so a large app takes a while: the wait is
+    /// generous, but it still ends, so a dead helper never leaves Uninstall hanging.
+    @Test func stagingDeadlineIsBounded() {
+        let deadline = PrivilegedHelperClient.Deadline.stageForTrash
+        #expect(deadline >= .seconds(300), "a large bundle must have time to be handed over")
+        #expect(deadline <= PrivilegedHelperClient.Deadline.replaceBundle, "the wait stays bounded")
+    }
+
+    @Test func stagingCallHandshakesFirstAndWaitsOnItsOwnDeadline() throws {
+        let body = try functionBody(
+            "public func stageApplicationBundleForTrash(",
+            in: "Sources/MacUpdaterCore/PrivilegedHelper/PrivilegedHelperClient.swift"
+        )
+        let handshake = try #require(body.range(of: "try await performHandshake()"), "a stale helper must be refused first")
+        let request = try #require(body.range(of: "call(deadline: Deadline.stageForTrash)"))
+        #expect(handshake.lowerBound < request.lowerBound)
+    }
+
+    /// Uninstall reads only whether the helper is registered; a stale helper is found when it is
+    /// called, never by a synchronous handshake while the confirmation sheet is built.
+    @Test func uninstallUsesTheHelperOnlyWhileItIsRegistered() {
+        #expect(PrivilegedHelperClient.uninstallAvailability(isEnabled: true) == .enabled)
+        #expect(PrivilegedHelperClient.uninstallAvailability(isEnabled: false) == .off)
+    }
+
+    /// A path with a note means the bundle left /Applications but some items stayed root-owned;
+    /// it is still the staged bundle the app then moves to the Trash.
+    @Test func aStagedPathIsTheResultWithOrWithoutAHandOverNote() throws {
+        let staged = "/Library/Application Support/com.wega.WegaMacUpdater/UninstallStaging/A/Foo.app"
+        let complete = PrivilegedHelperClient.stagingReply(stagedPath: staged, note: nil)
+        let partial = PrivilegedHelperClient.stagingReply(stagedPath: staged, note: "2 items stayed root-owned")
+
+        #expect(try complete.get() == URL(fileURLWithPath: staged))
+        #expect(try partial.get() == URL(fileURLWithPath: staged))
+    }
+
+    @Test func noStagedPathIsTheHelpersRefusalWithItsMessage() {
+        let refusal = PrivilegedHelperClient.stagingReply(stagedPath: nil, note: "Aplikacja nie należy do roota.")
+        let silent = PrivilegedHelperClient.stagingReply(stagedPath: nil, note: nil)
+
+        #expect(operationFailure(refusal) == "Aplikacja nie należy do roota.")
+        #expect(operationFailure(silent)?.isEmpty == false, "a refusal without a note still says what failed")
+    }
+
+    /// After the handshake, an XPC transport error leaves the request's fate as unknown as a
+    /// timeout does, so it reads as a lost connection rather than as the helper's own answer.
+    @Test func aTransportErrorWhileStagingReadsAsALostConnection() {
+        let interrupted = NSError(domain: NSCocoaErrorDomain, code: NSXPCConnectionInterrupted)
+
+        #expect(isConnectionFailed(PrivilegedHelperClient.stagingError(interrupted)))
+        #expect(isTimedOut(PrivilegedHelperClient.stagingError(PrivilegedHelperClient.HelperError.timedOut)))
+        let refusal = PrivilegedHelperClient.stagingError(PrivilegedHelperClient.HelperError.operationFailed("nie"))
+        guard case .operationFailed("nie") = refusal else {
+            Issue.record("the helper's own answer must pass through, got \(refusal)")
+            return
+        }
+    }
+
+    private func operationFailure(_ result: Result<URL, Error>) -> String? {
+        guard case .failure(let error) = result,
+              case .operationFailed(let message) = error as? PrivilegedHelperClient.HelperError
+        else { return nil }
+        return message
+    }
+
+    private func isConnectionFailed(_ error: PrivilegedHelperClient.HelperError) -> Bool {
+        if case .connectionFailed = error { return true }
+        return false
+    }
+
+    private func isTimedOut(_ error: PrivilegedHelperClient.HelperError) -> Bool {
+        if case .timedOut = error { return true }
+        return false
+    }
+
+    // MARK: - Source access
+
+    private func packageRoot(file: String = #filePath) -> URL {
+        URL(fileURLWithPath: file)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    /// The text of the function starting at `signature`, up to the closing brace at its own
+    /// indentation.
+    private func functionBody(_ signature: String, in relativePath: String) throws -> Substring {
+        let text = try String(contentsOf: packageRoot().appendingPathComponent(relativePath), encoding: .utf8)
+        let start = try #require(text.range(of: signature), "\(signature) must exist")
+        let end = text[start.upperBound...].range(of: "\n    }\n")?.upperBound ?? text.endIndex
+        return text[start.lowerBound..<end]
+    }
 }
 
 /// Thread-safe one-shot flag for observing whether the deadline's `onTimeout`

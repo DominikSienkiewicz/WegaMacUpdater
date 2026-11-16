@@ -92,6 +92,38 @@ struct UninstallResultPresentationTests {
         #expect(summary.contains("Nie udało się przenieść 1 resztek do Kosza."), "failed leftover count is reported")
     }
 
+    /// Spec 4.5: an app Wega's helper removed is named in its own category, apart from a plain
+    /// move to the Trash.
+    @Test func removedThroughTheHelperIsItsOwnCategory() throws {
+        let helped = app("Helped"), trashed = app("Trashed")
+        let report = UninstallResultPresentation.report(
+            results: [helped.id: .movedToTrashByHelper, trashed.id: .movedToTrash],
+            apps: [helped, trashed], leftoversTrashed: 0, leftoversFailed: 0
+        )
+
+        let banner = try #require(report.banner)
+        #expect(banner.message.contains("Helped do Kosza przez pomocnika Wega"))
+        #expect(banner.message.contains("Trashed do Kosza"))
+        #expect(!banner.message.contains("Trashed do Kosza przez"))
+        #expect(report.rows.isEmpty)
+        #expect(report.summary == nil)
+    }
+
+    /// The helper's switch is in Wega's Settings window (`InfoView`'s helper card), so the
+    /// "needs Wega's helper" row's button opens that window.
+    @Test func helperSettingsActionOpensWegasSettingsWindow() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let view = try String(
+            contentsOf: root.appendingPathComponent("Sources/MacUpdater/UninstallView.swift"), encoding: .utf8
+        )
+        let branchStart = try #require(view.range(of: "case .openHelperSettings:"))
+        let branch = view[branchStart.upperBound...].prefix { $0 != "}" }
+
+        #expect(view.contains("@Environment(\\.openSettings) private var openSettings"))
+        #expect(branch.contains("openSettings()"))
+    }
+
     @Test func failedBrewZapKeepsItsForceNote() throws {
         let cask = app("Cask", brew: true)
         let zapped = UninstallResultPresentation.report(
@@ -115,7 +147,7 @@ struct UninstallResultPresentationTests {
         #expect(UninstallResultPresentation.actions(for: .leftInStaging(staging), app: target)
                 == [.showInFinder(staging)])
         #expect(UninstallResultPresentation.actions(for: .blocked(.needsHelper), app: target)
-                == [.showInFinder(target.path)])
+                == [.openHelperSettings, .showInFinder(target.path)])
         #expect(UninstallResultPresentation.actions(for: .blocked(.needsAdministratorAccount), app: target)
                 == [.showInFinder(target.path)])
         #expect(UninstallResultPresentation.actions(for: .movedToTrash, app: target).isEmpty)

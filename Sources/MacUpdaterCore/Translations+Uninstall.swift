@@ -29,5 +29,9 @@ extension Translations {
         "Pokaż, czego nie usunięto": "Show what was not removed",
         "Otwórz ustawienia pomocnika": "Open helper settings",
         "Lista aplikacji się odświeża — poczekaj, aż skończy.": "The app list is refreshing — wait until it finishes.",
+        "pomocnik Wega usunie ją bez hasła": "Wega's helper will remove it without a password",
+        "%@ do Kosza przez pomocnika Wega": "%@ to Trash via Wega's helper",
+        "Pomocnik Wega nie potwierdził usunięcia — aplikacja mogła już opuścić /Applications. Odświeżona lista pokazuje, czy nadal tam jest.":
+            "Wega's helper did not confirm the removal — the app may already have left /Applications. The refreshed list shows whether it is still there.",
     ]
 }

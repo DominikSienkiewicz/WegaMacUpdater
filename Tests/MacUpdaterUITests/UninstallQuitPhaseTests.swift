@@ -61,7 +61,8 @@ private final class ProcessTable: @unchecked Sendable {
                 return true
             },
             waitBetweenRunningChecks: { self.onWait(self, self.recordWait()) },
-            bundleFacts: { _ in .userOwnedWritable }
+            bundleFacts: { _ in .userOwnedWritable },
+            stageForTrash: { _, _ in throw StagingNotExpected() }
         )
     }
 }

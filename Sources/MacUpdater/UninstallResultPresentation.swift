@@ -5,7 +5,7 @@ import MacUpdaterCore
 enum UninstallResultAction: Equatable {
     case showInFinder(URL)
     case openAppManagementSettings
-    /// Reserved for the helper-based removal; no result offers it yet.
+    /// Opens Wega's Settings window, whose helper card turns the helper on.
     case openHelperSettings
 
     var title: String {
@@ -84,7 +84,9 @@ enum UninstallResultPresentation {
         switch result {
         case .blocked(.needsAppManagement):
             return [.openAppManagementSettings]
-        case .blocked(.needsAdministratorRights), .blocked(.needsHelper), .blocked(.needsAdministratorAccount):
+        case .blocked(.needsHelper):
+            return [.openHelperSettings, .showInFinder(app.path)]
+        case .blocked(.needsAdministratorRights), .blocked(.needsAdministratorAccount):
             return [.showInFinder(app.path)]
         case .leftInStaging(let url):
             return [.showInFinder(url)]
@@ -139,7 +141,11 @@ enum UninstallResultPresentation {
     ) -> BannerData? {
         guard !removed.isEmpty else { return nil }
         var parts = removed.map { app in
-            results[app.id] == .removedByHomebrew ? trf("%@ przez brew", app.name) : trf("%@ do Kosza", app.name)
+            switch results[app.id] {
+            case .removedByHomebrew: trf("%@ przez brew", app.name)
+            case .movedToTrashByHelper: trf("%@ do Kosza przez pomocnika Wega", app.name)
+            default: trf("%@ do Kosza", app.name)
+            }
         }
         // UX-13: report the leftovers that reached the Trash alongside the app removals.
         if leftoversTrashed > 0 { parts.append(trf("%@ resztek do Kosza", "\(leftoversTrashed)")) }

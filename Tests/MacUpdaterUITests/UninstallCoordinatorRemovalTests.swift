@@ -13,16 +13,30 @@ extension UninstallBundleFacts {
         ownerUID: 0, currentUserUID: 501, isWritableByUser: false, isTopLevelInApplications: true,
         hasBundleIdentifier: true, isAdministrator: true, helper: .notSupported
     )
+    static let rootOwnedHelperEnabled = UninstallBundleFacts(
+        ownerUID: 0, currentUserUID: 501, isWritableByUser: false, isTopLevelInApplications: true,
+        hasBundleIdentifier: true, isAdministrator: true, helper: .enabled
+    )
 }
 
 private struct TrashRefused: LocalizedError {
     var errorDescription: String? { "trash refused" }
 }
 
+/// Fails a test that reaches the helper when its route never should.
+struct StagingNotExpected: Error {}
+
+private struct StagingRequest: Equatable {
+    let path: URL
+    let bundleID: String
+}
+
 /// Records what the coordinator hands to the injected seams.
 private final class Recorder: @unchecked Sendable {
     private let lock = NSLock()
     private var leftovers: [URL] = []
+    private var trashCalls: [URL] = []
+    private var staging: [StagingRequest] = []
 
     func recordLeftovers(_ items: [URL]) {
         lock.lock(); defer { lock.unlock() }
@@ -32,6 +46,26 @@ private final class Recorder: @unchecked Sendable {
     var trashedLeftovers: [URL] {
         lock.lock(); defer { lock.unlock() }
         return leftovers
+    }
+
+    func recordTrash(_ url: URL) {
+        lock.lock(); defer { lock.unlock() }
+        trashCalls.append(url)
+    }
+
+    var trashed: [URL] {
+        lock.lock(); defer { lock.unlock() }
+        return trashCalls
+    }
+
+    func recordStaging(_ path: URL, _ bundleID: String) {
+        lock.lock(); defer { lock.unlock() }
+        staging.append(StagingRequest(path: path, bundleID: bundleID))
+    }
+
+    var stagingRequests: [StagingRequest] {
+        lock.lock(); defer { lock.unlock() }
+        return staging
     }
 }
 
@@ -75,7 +109,8 @@ struct UninstallCoordinatorRemovalTests {
             requestQuit: { _ in false },
             forceKill: { _ in false },
             waitBetweenRunningChecks: {},
-            bundleFacts: { _ in .userOwnedWritable }
+            bundleFacts: { _ in .userOwnedWritable },
+            stageForTrash: { _, _ in throw StagingNotExpected() }
         ))
 
         let outcome = await coordinator.uninstall(
@@ -91,7 +126,8 @@ struct UninstallCoordinatorRemovalTests {
     private func coordinator(
         facts: UninstallBundleFacts,
         trash: @escaping @Sendable (URL) throws -> Void,
-        trashLeftovers: @escaping @Sendable ([URL]) -> LeftoverCleanup.Result = { LeftoverCleanup.Result(removed: $0) }
+        trashLeftovers: @escaping @Sendable ([URL]) -> LeftoverCleanup.Result = { LeftoverCleanup.Result(removed: $0) },
+        stage: @escaping @Sendable (URL, String) async throws -> URL = { _, _ in throw StagingNotExpected() }
     ) -> UninstallCoordinator {
         UninstallCoordinator(dependencies: .init(
             uninstallCask: { _, _, _ in },
@@ -102,7 +138,8 @@ struct UninstallCoordinatorRemovalTests {
             requestQuit: { _ in false },
             forceKill: { _ in false },
             waitBetweenRunningChecks: {},
-            bundleFacts: { _ in facts }
+            bundleFacts: { _ in facts },
+            stageForTrash: stage
         ))
     }
 
@@ -163,7 +200,8 @@ struct UninstallCoordinatorRemovalTests {
         let target = app("Vanished")
         let facts = UninstallBundleFacts.live(
             path: URL(fileURLWithPath: "/nonexistent-\(UUID().uuidString)/Vanished.app"),
-            hasBundleIdentifier: true
+            hasBundleIdentifier: true,
+            helper: .enabled
         )
         let missing = NSError(domain: NSCocoaErrorDomain, code: CocoaError.fileNoSuchFile.rawValue)
         let calls = CallCounter()
@@ -178,6 +216,151 @@ struct UninstallCoordinatorRemovalTests {
         }
     }
 
+    // MARK: - Removal through Wega's helper (spec 4.3)
+
+    private func stagedURL(for app: ApplicationInfo) -> URL {
+        URL(fileURLWithPath: "/Library/Application Support/com.wega.WegaMacUpdater/UninstallStaging/\(UUID().uuidString)/\(app.name).app")
+    }
+
+    private func permissionDenied() -> NSError {
+        NSError(domain: NSCocoaErrorDomain, code: CocoaError.fileWriteNoPermission.rawValue)
+    }
+
+    /// A root-owned app the user cannot move goes to Wega's helper, which stages it; the app then
+    /// moves the staged bundle to the Trash as the user, and the app's leftovers follow it.
+    @Test func rootOwnedAppGoesThroughHelper() async {
+        let target = app("Root")
+        let original = target.path, staged = stagedURL(for: target), denied = permissionDenied()
+        let recorder = Recorder()
+        let sut = coordinator(
+            facts: .rootOwnedHelperEnabled,
+            trash: { url in
+                recorder.recordTrash(url)
+                if url == original { throw denied }
+            },
+            trashLeftovers: { recorder.recordLeftovers($0); return LeftoverCleanup.Result(removed: $0) },
+            stage: { path, bundleID in
+                recorder.recordStaging(path, bundleID)
+                return staged
+            }
+        )
+
+        let outcome = await sut.uninstall(
+            targets: [target], zap: false, leftovers: [leftovers(for: target)], using: BrewService()
+        )
+
+        #expect(outcome.results[target.id] == .movedToTrashByHelper)
+        #expect(recorder.stagingRequests == [StagingRequest(path: original, bundleID: "com.example.root")])
+        #expect(recorder.trashed.last == staged)
+        #expect(recorder.trashedLeftovers == leftovers(for: target).items)
+    }
+
+    /// The helper moved the app out of /Applications but the Trash refused the staged bundle: it
+    /// stays where the helper put it, and the app's leftovers stay too.
+    @Test func stagedBundleThatCannotBeTrashedIsLeftInStaging() async {
+        let target = app("Root")
+        let original = target.path, staged = stagedURL(for: target), denied = permissionDenied()
+        let recorder = Recorder()
+        let sut = coordinator(
+            facts: .rootOwnedHelperEnabled,
+            trash: { url in
+                recorder.recordTrash(url)
+                throw url == original ? denied : TrashRefused()
+            },
+            trashLeftovers: { recorder.recordLeftovers($0); return LeftoverCleanup.Result(removed: $0) },
+            stage: { _, _ in staged }
+        )
+
+        let outcome = await sut.uninstall(
+            targets: [target], zap: false, leftovers: [leftovers(for: target)], using: BrewService()
+        )
+
+        #expect(outcome.results[target.id] == .leftInStaging(staged))
+        #expect(recorder.trashed == [original, staged])
+        #expect(recorder.trashedLeftovers.isEmpty)
+        #expect(outcome.leftoversTrashed == 0)
+    }
+
+    /// A helper that is off, or older than this app (protocol 5), reads as "needs Wega's helper".
+    @Test(arguments: [
+        PrivilegedHelperClient.HelperError.notEnabled,
+        .versionMismatch(helper: "5", expected: WegaHelper.version),
+    ])
+    func staleHelperReadsAsNeedsHelper(_ error: PrivilegedHelperClient.HelperError) async {
+        let target = app("Root")
+        let denied = permissionDenied()
+        let recorder = Recorder()
+        let sut = coordinator(
+            facts: .rootOwnedHelperEnabled,
+            trash: { _ in throw denied },
+            trashLeftovers: { recorder.recordLeftovers($0); return LeftoverCleanup.Result(removed: $0) },
+            stage: { _, _ in throw error }
+        )
+
+        let outcome = await sut.uninstall(
+            targets: [target], zap: false, leftovers: [leftovers(for: target)], using: BrewService()
+        )
+
+        #expect(outcome.results[target.id] == .blocked(.needsHelper))
+        #expect(recorder.trashedLeftovers.isEmpty)
+    }
+
+    @Test func helperErrorIsFailedWithItsMessage() async {
+        let target = app("Root")
+        let denied = permissionDenied()
+        let recorder = Recorder()
+        let sut = coordinator(
+            facts: .rootOwnedHelperEnabled,
+            trash: { _ in throw denied },
+            trashLeftovers: { recorder.recordLeftovers($0); return LeftoverCleanup.Result(removed: $0) },
+            stage: { _, _ in throw PrivilegedHelperClient.HelperError.operationFailed("Aplikacja nie należy do roota.") }
+        )
+
+        let outcome = await sut.uninstall(
+            targets: [target], zap: false, leftovers: [leftovers(for: target)], using: BrewService()
+        )
+
+        #expect(outcome.results[target.id] == .failed("Aplikacja nie należy do roota."))
+        #expect(recorder.trashedLeftovers.isEmpty)
+    }
+
+    /// Once the request may have reached the helper, a timeout or a lost connection does not say
+    /// the removal failed: the app may already be out of /Applications. Nothing else is touched.
+    @Test(arguments: [PrivilegedHelperClient.HelperError.timedOut, .connectionFailed])
+    func unconfirmedStagingSaysTheAppMayAlreadyHaveLeft(_ error: PrivilegedHelperClient.HelperError) async {
+        let target = app("Root")
+        let original = target.path, denied = permissionDenied()
+        let recorder = Recorder()
+        let sut = coordinator(
+            facts: .rootOwnedHelperEnabled,
+            trash: { url in
+                recorder.recordTrash(url)
+                throw denied
+            },
+            trashLeftovers: { recorder.recordLeftovers($0); return LeftoverCleanup.Result(removed: $0) },
+            stage: { _, _ in throw error }
+        )
+
+        let outcome = await sut.uninstall(
+            targets: [target], zap: false, leftovers: [leftovers(for: target)], using: BrewService()
+        )
+
+        let message = UninstallCoordinator.unconfirmedHelperRemoval
+        #expect(outcome.results[target.id] == .failed(message))
+        #expect(message.contains("/Applications"))
+        #expect(message != error.localizedDescription)
+        #expect(recorder.trashed == [original])
+        #expect(recorder.trashedLeftovers.isEmpty)
+        #expect(outcome.leftoversTrashed == 0)
+    }
+
+    @Test func helperRouteIsPreflightedForTheSheet() {
+        let target = app("Root")
+        let sut = coordinator(facts: .rootOwnedHelperEnabled, trash: { _ in })
+
+        #expect(sut.routes(for: [target])[target.id] == .helper)
+    }
+
     @Test func brewTargetReportsRemovedByHomebrew() async {
         let cask = app("Charlie", brew: true)
         let coordinator = UninstallCoordinator(dependencies: .init(
@@ -189,7 +372,8 @@ struct UninstallCoordinatorRemovalTests {
             requestQuit: { _ in false },
             forceKill: { _ in false },
             waitBetweenRunningChecks: {},
-            bundleFacts: { _ in .userOwnedWritable }
+            bundleFacts: { _ in .userOwnedWritable },
+            stageForTrash: { _, _ in throw StagingNotExpected() }
         ))
 
         let outcome = await coordinator.uninstall(
@@ -224,7 +408,8 @@ struct UninstallCoordinatorRemovalTests {
             requestQuit: { _ in false },
             forceKill: { _ in false },
             waitBetweenRunningChecks: {},
-            bundleFacts: { _ in .userOwnedWritable }
+            bundleFacts: { _ in .userOwnedWritable },
+            stageForTrash: { _, _ in throw StagingNotExpected() }
         ))
     }
 
@@ -278,7 +463,8 @@ struct UninstallCoordinatorRemovalTests {
             requestQuit: { _ in false },
             forceKill: { _ in false },
             waitBetweenRunningChecks: {},
-            bundleFacts: { _ in .userOwnedWritable }
+            bundleFacts: { _ in .userOwnedWritable },
+            stageForTrash: { _, _ in throw StagingNotExpected() }
         ))
 
         let outcome = await coordinator.uninstall(
