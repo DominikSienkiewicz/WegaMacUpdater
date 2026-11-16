@@ -46,6 +46,7 @@ final class CleanupVersionDirectoryDetectorTests: XCTestCase {
         let current = try finding("2.1.325", in: all)
         XCTAssertEqual(current.status, .active)
         XCTAssertEqual(current.action, .none)
+        XCTAssertEqual(current.reason, .currentVersion)
         XCTAssertEqual(current.bucket, .excluded)
         for old in ["2.1.318", "2.1.322"] {
             let item = try finding(old, in: all)
@@ -105,6 +106,7 @@ final class CleanupVersionDirectoryDetectorTests: XCTestCase {
         let all = findings(scan: scan)
 
         XCTAssertEqual(try finding("2.1.325", in: all).status, .active)
+        XCTAssertEqual(try finding("2.1.325", in: all).reason, .currentVersion)
         XCTAssertEqual(try finding("2.1.318", in: all).action, .trash([tmp.url(".local/share/claude/versions/2.1.318")]))
     }
 
@@ -142,6 +144,7 @@ final class CleanupVersionDirectoryDetectorTests: XCTestCase {
         XCTAssertEqual(all.count, 2)
         XCTAssertEqual(try finding("2.0", in: all).status, .active)
         XCTAssertEqual(try finding("2.0", in: all).bucket, .excluded)
+        XCTAssertEqual(try finding("2.0", in: all).reason, .currentVersion)
         let old = try finding("1.0", in: all)
         XCTAssertEqual(old.status, .unused)
         XCTAssertEqual(old.action, .instruction(.removeWithCreatingTool))

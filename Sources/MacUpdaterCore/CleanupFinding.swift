@@ -103,6 +103,7 @@ public enum CleanupReason: Codable, Equatable, Sendable {
     case staleSinceBoot(count: Int)
     case keptSinceBoot(count: Int)
     case unknownVersionDirectory
+    case currentVersion
     case protectedLocation
     case brokenLink
     case requiredBy([String])

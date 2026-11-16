@@ -156,7 +156,7 @@ public struct CleanupVersionDirectoryDetector: Sendable {
 
     private func activeFinding(_ child: Child, tool: String, source: CleanupSource) -> CleanupFinding {
         makeFinding(child, tool: tool, source: source, Verdict(
-            status: .active, reason: .unknownVersionDirectory, action: .none, risk: .low,
+            status: .active, reason: .currentVersion, action: .none, risk: .low,
             relation: .notApplicable, recognised: true, sized: false
         ))
     }
