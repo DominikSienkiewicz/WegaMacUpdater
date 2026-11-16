@@ -64,10 +64,14 @@ final class LeftoverCleanupTests: XCTestCase {
         }
     }
 
-    /// Per-item trash failures are reported, not swallowed into the success count.
-    func testRemoveToTrashReportsFailuresWithoutSwallowing() {
+    /// Per-item trash failures are reported, not swallowed into the success count. Both items
+    /// exist, so the failure is the Trash's, not an item that was already gone.
+    func testRemoveToTrashReportsFailuresWithoutSwallowing() throws {
         let ok = home.appendingPathComponent("Library/Caches/com.acme.ok", isDirectory: true)
         let boom = home.appendingPathComponent("Library/Caches/com.acme.boom", isDirectory: true)
+        for item in [ok, boom] {
+            try FileManager.default.createDirectory(at: item, withIntermediateDirectories: true)
+        }
 
         struct TrashError: Error {}
         let result = LeftoverCleanup.removeToTrash([ok, boom]) { url in
@@ -76,5 +80,40 @@ final class LeftoverCleanupTests: XCTestCase {
 
         XCTAssertEqual(result.removed, [ok])
         XCTAssertEqual(result.failed, [boom])
+    }
+
+    /// A folder and an item inside it are both ticked; the folder goes first and takes the item
+    /// with it. The item is gone at its turn, so it counts as removed, not as a failure.
+    func testItemAlreadyGoneAtItsTurnCountsAsRemoved() throws {
+        let parent = home.appending(path: "Library/Application Support/Vendor", directoryHint: .isDirectory)
+        let child = parent.appending(component: "App", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: child, withIntermediateDirectories: true)
+        let trash = home.appending(component: "Trash", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: trash, withIntermediateDirectories: true)
+
+        let result = LeftoverCleanup.removeToTrash([parent, child]) { url in
+            try FileManager.default.moveItem(
+                at: url, to: trash.appending(component: UUID().uuidString, directoryHint: .isDirectory)
+            )
+        }
+
+        XCTAssertEqual(result.removed, [parent, child])
+        XCTAssertTrue(result.failed.isEmpty)
+    }
+
+    /// Only an item `lstat` positively finds missing counts as gone: one that cannot be checked
+    /// and does not move stays a failure.
+    func testItemThatCannotBeCheckedAndDoesNotMoveIsFailed() {
+        let item = home.appending(path: "Library/Caches/com.acme.locked", directoryHint: .isDirectory)
+        struct TrashError: Error {}
+
+        let result = LeftoverCleanup.removeToTrash(
+            [item],
+            trash: { _ in throw TrashError() },
+            lstat: { _ in throw CleanupFileSystemError.io("permission denied") }
+        )
+
+        XCTAssertEqual(result.failed, [item])
+        XCTAssertTrue(result.removed.isEmpty)
     }
 }
