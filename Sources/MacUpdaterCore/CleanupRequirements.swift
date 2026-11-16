@@ -197,8 +197,7 @@ public enum CleanupRequirementParser {
     }
 
     private static func miseSpec(_ version: String) -> CleanupVersionSpec {
-        let lowered = version.lowercased()
-        return version.isEmpty ? .unresolvable(version) : versionAliasSpec(version)
+        version.isEmpty ? .unresolvable(version) : versionAliasSpec(version)
     }
 
     private static func miseTableSpec(_ table: String) -> CleanupVersionSpec {

@@ -241,7 +241,8 @@ public final class BrewService: @unchecked Sendable {
         return formulae
     }
 
-    /// Homebrew's `disk_usage_readable`: binary multipliers behind `B`, `KB`, `MB` and `GB`.
+    /// Homebrew's `disk_usage_readable`: binary multipliers behind `B`, `KB`, `MB` and `GB`. A
+    /// size that is not finite or does not fit in `Int64` is unknown.
     private static func readableSize(_ token: Substring) -> Int64? {
         let text = token.trimmingCharacters(in: .whitespaces)
         let units: [(suffix: String, factor: Double)] = [
@@ -249,7 +250,9 @@ public final class BrewService: @unchecked Sendable {
         ]
         guard let unit = units.first(where: { text.hasSuffix($0.suffix) }),
               let value = Double(text.dropLast(unit.suffix.count)), value >= 0 else { return nil }
-        return Int64(value * unit.factor)
+        let bytes = value * unit.factor
+        guard bytes.isFinite, bytes < Double(Int64.max) else { return nil }
+        return Int64(bytes)
     }
 
     public func upgradeFormulae() async throws -> ProcessResult {

@@ -101,6 +101,14 @@ final class BrewCleanupQueryTests: XCTestCase {
         XCTAssertEqual(items.map(\.size), [nil, 1_536])
     }
 
+    /// A size too large for Int64, or not finite, is unknown: Homebrew's output never traps Wega.
+    func testCleanupDryRunToleratesAnUnrepresentableSize() {
+        let stdout = "Would remove: /a/b (1e30GB)\nWould remove: /c/d (infGB)\nWould remove: /e/f (2KB)\n"
+        let items = BrewService.parseCleanupDryRun(stdout)
+        XCTAssertEqual(items.map(\.path.path), ["/a/b", "/c/d", "/e/f"])
+        XCTAssertEqual(items.map(\.size), [nil, nil, 2_048])
+    }
+
     func testAutoremoveDryRunListsOneFormulaPerLine() {
         let stdout = "==> Would autoremove 2 unneeded formulae:\nlibfoo\nuser/tap/libbar\n"
         XCTAssertEqual(BrewService.parseAutoremoveDryRun(stdout), ["libfoo", "user/tap/libbar"])
