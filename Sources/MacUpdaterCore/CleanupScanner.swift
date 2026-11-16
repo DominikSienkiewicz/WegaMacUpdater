@@ -39,10 +39,11 @@ public struct CleanupContext: Sendable {
 /// Each detector is its own failure domain: one that throws leaves a `.failed` note and the others
 /// still report; D4 and D7 return their own notes. A walk that searched no project root, or was cut
 /// short, leaves a note, because D5 and D6 may then miss a requirement; D6 then keeps every
-/// distribution out of the safe bucket. Cancellation is checked before every detector, by the walk
-/// before every directory, and before the report is built, so a cancelled scan throws
-/// `CancellationError` and returns nothing; sizing inside a detector swallows its errors, so a
-/// cancellation raised there is seen at the next check.
+/// distribution out of the safe bucket, as it does when the walk was refused a path (already listed
+/// in `skippedProtected`), whose projects' wrappers went unread. Cancellation is checked before
+/// every detector, by the walk before every directory, and before the report is built, so a
+/// cancelled scan throws `CancellationError` and returns nothing; sizing inside a detector swallows
+/// its errors, so a cancellation raised there is seen at the next check.
 public struct CleanupScanner: Sendable {
     private let now: @Sendable () -> Date
 
@@ -88,9 +89,10 @@ public struct CleanupScanner: Sendable {
         }
 
         try Task.checkCancellation()
+        let walkIsComplete = walk.isComplete && walk.skippedProtected.isEmpty
         let gradleFindings = try isolated(.gradle, notes: &notes) {
             CleanupGradleDetector(fileSystem: fileSystem, home: context.home, inspector: context.inspector)
-                .findings(projectFiles: projectFiles, walkIsComplete: walk.isComplete)
+                .findings(projectFiles: projectFiles, walkIsComplete: walkIsComplete)
         }
 
         try Task.checkCancellation()

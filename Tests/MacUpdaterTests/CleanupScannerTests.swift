@@ -614,6 +614,31 @@ final class CleanupScannerTests: XCTestCase {
         }
     }
 
+    /// A root the guard refuses may hold projects whose wrappers were never read, so even with
+    /// another root walked completely no distribution is proven unused.
+    func testARefusedProjectRootKeepsDistributionsUndecided() async throws {
+        try installDistribution("9.2.0")
+        try tmp.file("Dev/app/.nvmrc", text: "22\n")
+        try tmp.file(
+            "Documents/code/gradle/wrapper/gradle-wrapper.properties",
+            text: "distributionUrl=https\\://services.gradle.org/distributions/gradle-9.2.0-bin.zip\n"
+        )
+        try tmp.symlink("Work", to: tmp.url("Documents/code").path)
+
+        let report = try await scan(context(path: [], space: SpaceSetup(projectRoots: ["Dev", "Work"]))).get()
+
+        XCTAssertEqual(report.skippedProtected, [tmp.url("Documents").path])
+        XCTAssertTrue(recording.touched.contains(tmp.url("Dev/app/.nvmrc").path), "precondition: ~/Dev was walked")
+        let distribution = try finding(.gradle, gradleDistribution("9.2.0").path, in: report)
+        XCTAssertEqual(distribution.status, .unused)
+        XCTAssertEqual(distribution.bucket, .needsDecision)
+        let roots = ProtectedLocationGuard.protectedRoots(home: tmp.home).map(CleanupPathText.components(of:))
+        let offenders = recording.touched.filter { touched in
+            roots.contains { CleanupPathText.components(of: touched).starts(with: $0) }
+        }
+        XCTAssertEqual(offenders, [], "the base file system received a protected path")
+    }
+
     /// A project folder that cannot be listed may hold a wrapper the walk never saw; the folders
     /// that were read still count.
     func testAnUnreadableProjectFolderMakesEvidenceIncomplete() async throws {
