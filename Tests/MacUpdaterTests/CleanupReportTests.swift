@@ -143,6 +143,33 @@ final class CleanupReportTests: XCTestCase {
         ].map { $0 + "\n" }.joined())
     }
 
+    /// An npm command names the shadowed copy's prefix, which can lie in the home folder; both
+    /// exports write it with `~`, and the persisted form restores the exact command.
+    func testHomePathsInsideACommandAreWrittenWithTilde() throws {
+        let prefix = plainHome.appending(path: ".local/share/fnm/node-versions/v22.11.0/installation", directoryHint: .isDirectory)
+        let tool = prefix.appending(path: "bin/tsc", directoryHint: .notDirectory)
+        let command = "npm uninstall -g --prefix \(prefix.path) typescript"
+        let report = CleanupReport(
+            createdAt: Date(timeIntervalSince1970: 1_794_300_000), path: sampleReport(home: plainHome).path,
+            findings: [CleanupFinding(
+                detector: .pathDuplicates, tool: "tsc", path: tool, realpath: tool, source: .packageManager(.npm),
+                version: nil, size: nil, status: .shadowed, reason: .shadowedBy(path: "/opt/homebrew/bin/tsc"),
+                action: .command(command), risk: .low, bucket: .needsDecision,
+                identity: CleanupFileIdentity(device: 1, inode: 21)
+            )],
+            notes: [], skippedProtected: []
+        )
+
+        let text = CleanupReportRenderer.text(report, home: plainHome, reasonText: reasonLabel, statusText: statusLabel)
+        let json = String(decoding: try CleanupReportRenderer.json(report, home: plainHome), as: UTF8.self)
+
+        XCTAssertTrue(text.contains("npm uninstall -g --prefix ~/.local/share/fnm/node-versions/v22.11.0/installation typescript"), text)
+        XCTAssertFalse(text.contains(plainHome.path), text)
+        XCTAssertFalse(json.contains(plainHome.path), json)
+        let restored = try CleanupReportRenderer.report(fromJSON: Data(json.utf8), home: plainHome)
+        XCTAssertEqual(restored.findings.first?.action, .command(command))
+    }
+
     func testReportFileRoundTrips() throws {
         let io = InMemoryReportIO()
         let file = CleanupReportFile(home: plainHome, io: io)

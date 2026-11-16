@@ -79,6 +79,14 @@ public enum CleanupReportRenderer {
         return rest.isEmpty ? "~" : "~/" + rest.joined(separator: "/")
     }
 
+    /// A command with `~` for the home in every word that is an absolute path. Commands are built
+    /// from tokens that hold no space, so splitting on spaces finds every word.
+    private static func tildeWords(_ command: String, home: URL) -> String {
+        command.unicodeScalars.split(separator: " ", omittingEmptySubsequences: false)
+            .map { tildePath(String(String.UnicodeScalarView($0)), home: home) }
+            .joined(separator: " ")
+    }
+
     private static func displayed(_ status: CleanupStatus, home: URL) -> CleanupStatus {
         guard case .inUse(let processes) = status else { return status }
         return .inUse(processes.map {
@@ -102,7 +110,7 @@ public enum CleanupReportRenderer {
         case .brew(.uninstallCask(let token)):
             "brew uninstall --cask -- \(token)"
         case .command(let command):
-            command
+            tildeWords(command, home: home)
         case .instruction(.removeWithCreatingTool):
             "instruction remove-with-creating-tool"
         case .instruction(.removeAppLinkWithAdminRights(let link)):

@@ -188,8 +188,11 @@ public struct CleanupDuplicateFindings: Sendable {
         let components = copy.realpath.map { CleanupPathText.components(of: $0.path) } ?? []
         switch manager {
         case .npm:
-            guard let package = npmPackage(in: components), Self.isSafeToolToken(package, allowingScope: true) else { return .instruction(.removeWithCreatingTool) }
-            return .command("npm uninstall -g \(package)")
+            guard let global = npmGlobal(in: components), Self.isSafeToolToken(global.package, allowingScope: true),
+                  Self.isSafeCommandPath(global.prefix) else {
+                return .instruction(.removeWithCreatingTool)
+            }
+            return .command("npm uninstall -g --prefix \(global.prefix) \(global.package)")
         case .pipx:
             guard let index = components.firstIndex(of: "venvs"), index + 1 < components.count,
                   Self.isSafeToolToken(components[index + 1]) else {
@@ -209,20 +212,36 @@ public struct CleanupDuplicateFindings: Sendable {
         return parts.allSatisfy { part in
             guard let first = part.first, first != "-", part.count > 0 else { return false }
             let text = String(String.UnicodeScalarView(part))
-            return text != "." && text != ".." && part.allSatisfy { scalar in
-                ("0"..."9").contains(scalar) || ("a"..."z").contains(scalar) || ("A"..."Z").contains(scalar)
-                    || ".+@-_".unicodeScalars.contains(scalar)
-            }
+            return text != "." && text != ".." && part.allSatisfy(isCommandScalar)
         }
     }
 
-    private func npmPackage(in components: [String]) -> String? {
+    /// A directory that ends up in a pasted command: absolute, only `[A-Za-z0-9._+@/-]`, and no
+    /// component that is `.` or `..` or starts with `-`.
+    static func isSafeCommandPath(_ path: String) -> Bool {
+        guard CleanupPathText.isAbsolute(path), path.unicodeScalars.allSatisfy({ $0 == "/" || isCommandScalar($0) }) else {
+            return false
+        }
+        return CleanupPathText.components(of: path).allSatisfy { component in
+            component != "." && component != ".." && component.unicodeScalars.first != "-"
+        }
+    }
+
+    private static func isCommandScalar(_ scalar: Unicode.Scalar) -> Bool {
+        ("0"..."9").contains(scalar) || ("a"..."z").contains(scalar) || ("A"..."Z").contains(scalar)
+            || ".+@-_".unicodeScalars.contains(scalar)
+    }
+
+    /// The npm prefix that owns the copy (the directory holding its `lib/node_modules`) and the
+    /// package name, read from the copy's real path.
+    private func npmGlobal(in components: [String]) -> (prefix: String, package: String)? {
         guard let index = components.indices.dropFirst().first(where: {
             components[$0] == "node_modules" && components[$0 - 1] == "lib"
         }), index + 1 < components.count else { return nil }
+        let prefix = "/" + components[..<(index - 1)].joined(separator: "/")
         let name = components[index + 1]
-        guard name.unicodeScalars.first == "@" else { return name }
-        return index + 2 < components.count ? "\(name)/\(components[index + 2])" : nil
+        guard name.unicodeScalars.first == "@" else { return (prefix, name) }
+        return index + 2 < components.count ? (prefix, "\(name)/\(components[index + 2])") : nil
     }
 
     private func size(of copy: CleanupCopy, action: CleanupAction) -> Int64? {

@@ -220,9 +220,10 @@ final class CleanupDuplicateFindingsTests: XCTestCase {
     }
 
     func testPackageManagerCommands() async throws {
+        let prefix = tmp.home.path
         let cases: [String: (source: CleanupSource, action: CleanupAction)] = [
-            "lib/node_modules/@scope/pkg/bin/tool": (.packageManager(.npm), .command("npm uninstall -g @scope/pkg")),
-            "lib/node_modules/plain/bin/tool": (.packageManager(.npm), .command("npm uninstall -g plain")),
+            "lib/node_modules/@scope/pkg/bin/tool": (.packageManager(.npm), .command("npm uninstall -g --prefix \(prefix) @scope/pkg")),
+            "lib/node_modules/plain/bin/tool": (.packageManager(.npm), .command("npm uninstall -g --prefix \(prefix) plain")),
             ".local/pipx/venvs/black/bin/tool": (.packageManager(.pipx), .command("pipx uninstall black")),
             ".cargo/bin/tool": (.packageManager(.cargo), .instruction(.removeWithCreatingTool)),
             ".bun/bin/tool": (.packageManager(.bun), .instruction(.removeWithCreatingTool)),
@@ -231,6 +232,30 @@ final class CleanupDuplicateFindingsTests: XCTestCase {
         for (relative, expected) in cases {
             let finding = try shadowedFinding(await builder().build(shadowed(source: expected.source, real: tmp.url(relative))))
             XCTAssertEqual(finding.action, expected.action, relative)
+        }
+    }
+
+    /// `npm uninstall -g` alone acts on the prefix of whichever `npm` comes first on `PATH`, which
+    /// is the node install providing the active copy; the command names the shadowed copy's own.
+    func testNpmCommandNamesTheShadowedCopysPrefix() async throws {
+        let installs = [
+            "opt/homebrew": "opt/homebrew/lib/node_modules/typescript/bin/tsc",
+            ".local/share/fnm/node-versions/v22.11.0/installation":
+                ".local/share/fnm/node-versions/v22.11.0/installation/lib/node_modules/@scope/pkg/bin/tool",
+        ]
+        let packages = ["opt/homebrew": "typescript", ".local/share/fnm/node-versions/v22.11.0/installation": "@scope/pkg"]
+        for (prefix, real) in installs {
+            let finding = try shadowedFinding(await builder().build(shadowed(source: .packageManager(.npm), real: tmp.url(real))))
+            let expected = "npm uninstall -g --prefix \(tmp.url(prefix).path) \(packages[prefix] ?? "")"
+            XCTAssertEqual(finding.action, .command(expected), prefix)
+        }
+    }
+
+    func testNpmCommandWithAnUnsafePrefixIsLeftToTheCreatingTool() async throws {
+        for prefix in ["node install", "node;reboot", "-node", "node$(id)"] {
+            let real = tmp.url("\(prefix)/lib/node_modules/typescript/bin/tsc")
+            let finding = try shadowedFinding(await builder().build(shadowed(source: .packageManager(.npm), real: real)))
+            XCTAssertEqual(finding.action, .instruction(.removeWithCreatingTool), prefix)
         }
     }
 
