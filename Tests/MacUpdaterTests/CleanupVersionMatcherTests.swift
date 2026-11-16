@@ -4,7 +4,7 @@ import Testing
 @Suite("CleanupVersionMatcher")
 struct CleanupVersionMatcherTests {
     struct PinCase: Sendable { let pin: String; let version: String; let expected: Bool }
-    struct RangeCase: Sendable { let range: String; let version: String; let expected: Bool? }
+    struct RangeCase: Sendable { let range: String; let version: String; let expected: Bool?; var grammar: CleanupRangeGrammar = .npm }
 
     static let pinCases: [PinCase] = [
         PinCase(pin: "3.12", version: "3.12.12", expected: true),
@@ -29,7 +29,9 @@ struct CleanupVersionMatcherTests {
         PinCase(pin: "myenv", version: "myenv", expected: true),
         PinCase(pin: "3.12", version: "stable", expected: false),
         PinCase(pin: "", version: "3.12.0", expected: false),
-        PinCase(pin: "x", version: "3.12.0", expected: false),
+        PinCase(pin: "x", version: "3.12.0", expected: true),
+        PinCase(pin: "*", version: "stable", expected: true),
+        PinCase(pin: "X", version: "20.1.0", expected: true),
         PinCase(pin: "99999999999999999999999", version: "1.0.0", expected: false)
     ]
 
@@ -117,7 +119,29 @@ struct CleanupVersionMatcherTests {
         RangeCase(range: "1 - 2", version: "1.5.0", expected: nil),
         RangeCase(range: "18.x || whatever", version: "18.1.0", expected: nil),
         RangeCase(range: ">=99999999999999999999", version: "1.0.0", expected: nil),
-        RangeCase(range: ">=1", version: "99999999999999999999.0.0", expected: false)
+        RangeCase(range: ">=1", version: "99999999999999999999.0.0", expected: false),
+        RangeCase(range: ">18", version: "18.1.0", expected: false, grammar: .npm),
+        RangeCase(range: ">3.10", version: "3.10.1", expected: true, grammar: .pep440),
+        RangeCase(range: ">3.10", version: "3.10.0", expected: false, grammar: .pep440),
+        RangeCase(range: ">3.10", version: "3.10.1", expected: false, grammar: .npm),
+        RangeCase(range: ">3.9", version: "3.9.18", expected: true, grammar: .pep440),
+        RangeCase(range: "<=3.12", version: "3.12.5", expected: false, grammar: .pep440),
+        RangeCase(range: "<=3.12", version: "3.12.0", expected: true, grammar: .pep440),
+        RangeCase(range: "<=3.12", version: "3.12.5", expected: true, grammar: .npm),
+        RangeCase(range: ">=3.10,<3.13", version: "3.12.12", expected: true, grammar: .pep440),
+        RangeCase(range: "~=3.10", version: "3.12.4", expected: true, grammar: .pep440),
+        RangeCase(range: ">=3.14.0.dev1", version: "3.14.0", expected: true, grammar: .pep440),
+        RangeCase(range: ">=3.14.0b2", version: "3.14.0", expected: true, grammar: .pep440),
+        RangeCase(range: ">=3.12.0.post1", version: "3.12.1", expected: true, grammar: .pep440),
+        RangeCase(range: ">=1.0.0+build.5", version: "1.0.0", expected: true),
+        RangeCase(range: "18foo", version: "18.0.0", expected: nil),
+        RangeCase(range: "1e5", version: "1.0.0", expected: nil),
+        RangeCase(range: "1.x.junk", version: "1.0.0", expected: nil),
+        RangeCase(range: "3.12-dev", version: "3.12.0", expected: nil),
+        RangeCase(range: ">=3.x.1", version: "3.1.1", expected: nil),
+        RangeCase(range: "3rc1.2", version: "3.0.0", expected: nil),
+        RangeCase(range: ">=1.0.0-", version: "1.0.0", expected: nil),
+        RangeCase(range: ">=1.x.dev1", version: "1.0.0", expected: nil)
     ]
 
     @Test("pin matching follows prefix and name rules", arguments: pinCases)
@@ -131,7 +155,7 @@ struct CleanupVersionMatcherTests {
     @Test("range matching covers PEP 440 and npm grammars", arguments: rangeCases)
     func rangeMatching(_ testCase: RangeCase) {
         #expect(
-            CleanupVersionMatcher.range(testCase.range, isSatisfiedBy: testCase.version) == testCase.expected,
+            CleanupVersionMatcher.range(testCase.range, isSatisfiedBy: testCase.version, grammar: testCase.grammar) == testCase.expected,
             "range \(testCase.range) vs \(testCase.version)"
         )
     }
