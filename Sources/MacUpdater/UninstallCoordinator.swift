@@ -108,6 +108,8 @@ final class UninstallCoordinator: ObservableObject {
         /// Has Wega's helper move a root-owned app into a staging slot this user owns; returns
         /// where the bundle now is.
         var stageForTrash: @Sendable (_ path: URL, _ bundleID: String) async throws -> URL
+        /// One bounded handshake with the helper, run before the sheet promises its route.
+        var helperHandshake: @Sendable () async -> UninstallHelperAvailability = { .enabled }
 
         static let live = Dependencies(
             uninstallCask: { brewService, token, zap in
@@ -127,7 +129,8 @@ final class UninstallCoordinator: ObservableObject {
                     helper: PrivilegedHelperClient.shared.uninstallAvailability
                 )
             },
-            stageForTrash: { try await PrivilegedHelperClient.shared.stageApplicationBundleForTrash(at: $0, expectedBundleID: $1) }
+            stageForTrash: { try await PrivilegedHelperClient.shared.stageApplicationBundleForTrash(at: $0, expectedBundleID: $1) },
+            helperHandshake: { await PrivilegedHelperClient.shared.uninstallAvailabilityAfterHandshake() }
         )
     }
 
@@ -172,11 +175,21 @@ final class UninstallCoordinator: ObservableObject {
     }
 
     /// The route each non-brew target would take, so the confirmation sheet can say what will
-    /// happen before the user consents. Brew-managed targets keep the Homebrew path.
-    func routes(for targets: [ApplicationInfo]) -> [String: UninstallRouteDecision] {
-        Dictionary(uniqueKeysWithValues: targets.filter { !$0.isManagedByBrew }.map {
-            ($0.id, UninstallRoute.preflight(dependencies.bundleFacts($0)))
+    /// happen before the user consents. Brew-managed targets keep the Homebrew path. When a
+    /// target would use the helper, one bounded handshake first checks that it is current, so a
+    /// stale or silent helper blocks the target before anything is quit.
+    func routes(for targets: [ApplicationInfo]) async -> [String: UninstallRouteDecision] {
+        let factsByID = Dictionary(uniqueKeysWithValues: targets.filter { !$0.isManagedByBrew }.map {
+            ($0.id, dependencies.bundleFacts($0))
         })
+        let preflight = factsByID.mapValues { UninstallRoute.preflight($0) }
+        guard preflight.values.contains(.helper) else { return preflight }
+        let handshake = await dependencies.helperHandshake()
+        return factsByID.mapValues { facts in
+            var checked = facts
+            if facts.helper == .enabled { checked.helper = handshake }
+            return UninstallRoute.preflight(checked)
+        }
     }
 
     func runningStates(for targets: [ApplicationInfo]) -> [String: RunningApplicationResolution] {

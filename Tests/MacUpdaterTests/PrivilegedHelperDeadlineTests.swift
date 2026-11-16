@@ -90,11 +90,30 @@ struct PrivilegedHelperDeadlineTests {
         #expect(handshake.lowerBound < request.lowerBound)
     }
 
-    /// Uninstall reads only whether the helper is registered; a stale helper is found when it is
-    /// called, never by a synchronous handshake while the confirmation sheet is built.
+    /// Registration alone is only the first filter; the handshake before the sheet decides whether
+    /// the helper can be promised.
     @Test func uninstallUsesTheHelperOnlyWhileItIsRegistered() {
         #expect(PrivilegedHelperClient.uninstallAvailability(isEnabled: true) == .enabled)
         #expect(PrivilegedHelperClient.uninstallAvailability(isEnabled: false) == .off)
+    }
+
+    /// A failed handshake never promises the helper: not enabled reads as off, everything else
+    /// (stale version, no answer, lost connection, a raw XPC error) as stale.
+    @Test func handshakeFailureMapsToAvailability() {
+        typealias HelperError = PrivilegedHelperClient.HelperError
+        let xpc = NSError(domain: NSCocoaErrorDomain, code: NSXPCConnectionInterrupted)
+        let cases: [(error: any Error, expected: UninstallHelperAvailability)] = [
+            (HelperError.notEnabled, .off),
+            (HelperError.versionMismatch(helper: "5", expected: "6"), .stale),
+            (HelperError.timedOut, .stale),
+            (HelperError.connectionFailed, .stale),
+            (HelperError.operationFailed("x"), .stale),
+            (HelperError.teamIDNotConfigured, .stale),
+            (xpc, .stale),
+        ]
+        for item in cases {
+            #expect(PrivilegedHelperClient.uninstallAvailability(handshakeFailure: item.error) == item.expected, "\(item.error)")
+        }
     }
 
     /// A path with a note means the bundle left /Applications but some items stayed root-owned;

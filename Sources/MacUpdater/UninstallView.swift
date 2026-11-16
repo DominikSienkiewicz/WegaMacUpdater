@@ -347,7 +347,7 @@ struct UninstallView: View {
         guard !targets.isEmpty, !isUninstalling else { return }
         pendingUninstallTargets = targets
         pendingScanIncomplete = scanFailed
-        pendingRoutes = operations.routes(for: targets)
+        pendingRoutes = await operations.routes(for: targets)
         // A blocked target is not attempted: it is neither asked to quit nor offers leftovers.
         let attempted = UninstallQuitFlow.partition(targets: targets, routes: pendingRoutes).attempt
         pendingRunningStates = operations.runningStates(for: attempted)

@@ -80,13 +80,30 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
     public var isEnabled: Bool { status == .enabled }
 
     /// Whether Uninstall may route a root-owned app to the helper. Read from the registration
-    /// alone, without a handshake: a stale helper is refused when it is called.
+    /// alone; the handshake that finds a stale helper is `uninstallAvailabilityAfterHandshake()`.
     public var uninstallAvailability: UninstallHelperAvailability {
         Self.uninstallAvailability(isEnabled: isEnabled)
     }
 
     static func uninstallAvailability(isEnabled: Bool) -> UninstallHelperAvailability {
         isEnabled ? .enabled : .off
+    }
+
+    /// Maps how a version handshake failed to what Uninstall may do with the helper.
+    static func uninstallAvailability(handshakeFailure: Error) -> UninstallHelperAvailability {
+        if case .notEnabled = handshakeFailure as? HelperError { return .off }
+        return .stale
+    }
+
+    /// One bounded handshake (the handshake deadline) before Uninstall promises the helper, so a
+    /// stale or dead helper is found before Wega quits anything.
+    public func uninstallAvailabilityAfterHandshake() async -> UninstallHelperAvailability {
+        do {
+            try await performHandshake()
+            return .enabled
+        } catch {
+            return Self.uninstallAvailability(handshakeFailure: error)
+        }
     }
 
     /// Registers the daemon. May leave the service in `.requiresApproval` until

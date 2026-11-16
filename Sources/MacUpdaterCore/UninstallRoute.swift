@@ -1,7 +1,7 @@
 import Foundation
 import WegaHelperKit
 
-public enum UninstallHelperAvailability: Equatable, Sendable { case notSupported, off, enabled }
+public enum UninstallHelperAvailability: Equatable, Sendable { case notSupported, off, enabled, stale }
 
 public struct UninstallBundleFacts: Equatable, Sendable {
     public var ownerUID: UInt32
@@ -53,6 +53,7 @@ public enum UninstallRoute {
         if facts.helper == .notSupported { return .blocked(.needsAdministratorRights) }
         if !facts.isAdministrator { return .blocked(.needsAdministratorAccount) }
         if facts.helper == .off { return .blocked(.needsHelper) }
+        if facts.helper == .stale { return .blocked(.helperNeedsReinstall) }
         return .helper
     }
 

@@ -154,11 +154,11 @@ struct UninstallCoordinatorRemovalTests {
         #expect(outcome.results[target.id] == .blocked(.needsAdministratorRights))
     }
 
-    @Test func routesPreflightOnlyNonBrewTargets() {
+    @Test func routesPreflightOnlyNonBrewTargets() async {
         let manual = app("Manual"), cask = app("Cask", brew: true)
         let sut = coordinator(facts: .rootOwnedReadOnly, trash: { _ in })
 
-        let routes = sut.routes(for: [manual, cask])
+        let routes = await sut.routes(for: [manual, cask])
 
         #expect(routes[manual.id] == .blocked(.needsAdministratorRights))
         #expect(routes[cask.id] == nil)
@@ -415,11 +415,83 @@ struct UninstallCoordinatorRemovalTests {
         }
     }
 
-    @Test func helperRouteIsPreflightedForTheSheet() {
+    @Test func helperRouteIsPreflightedForTheSheet() async {
         let target = app("Root")
         let sut = coordinator(facts: .rootOwnedHelperEnabled, trash: { _ in })
 
-        #expect(sut.routes(for: [target])[target.id] == .helper)
+        #expect(await sut.routes(for: [target])[target.id] == .helper)
+    }
+
+    private func handshakeCoordinator(
+        facts: UninstallBundleFacts,
+        handshake: @escaping @Sendable () async -> UninstallHelperAvailability,
+        running: [RunningApplicationTarget] = [],
+        quits: CallCounter = CallCounter()
+    ) -> UninstallCoordinator {
+        UninstallCoordinator(dependencies: .init(
+            uninstallCask: { _, _, _ in },
+            trashItem: { _ in },
+            trashLeftovers: { LeftoverCleanup.Result(removed: $0) },
+            protection: { _ in nil },
+            runningApplications: { running },
+            requestQuit: { _ in quits.increment(); return false },
+            forceKill: { _ in false },
+            waitBetweenRunningChecks: {},
+            bundleFacts: { _ in facts },
+            stageForTrash: { _, _ in throw StagingNotExpected() },
+            helperHandshake: handshake
+        ))
+    }
+
+    @Test func handshakeRunsOnceForAllHelperTargets() async {
+        let calls = CallCounter()
+        let sut = handshakeCoordinator(facts: .rootOwnedHelperEnabled, handshake: { calls.increment(); return .enabled })
+
+        let routes = await sut.routes(for: [app("One"), app("Two")])
+
+        #expect(calls.count == 1)
+        #expect(routes.values.allSatisfy { $0 == .helper })
+    }
+
+    @Test func noHandshakeWhenNoTargetNeedsTheHelper() async {
+        let calls = CallCounter()
+        for facts in [UninstallBundleFacts.userOwnedWritable, .rootOwnedReadOnly] {
+            let sut = handshakeCoordinator(facts: facts, handshake: { calls.increment(); return .stale })
+            _ = await sut.routes(for: [app("Plain"), app("Cask", brew: true)])
+        }
+        #expect(calls.count == 0)
+    }
+
+    @Test func staleHelperTargetIsNotAskedToQuit() async throws {
+        let target = app("Root")
+        let quits = CallCounter()
+        let running = [RunningApplicationTarget(
+            processIdentifier: 99, bundleURL: target.path, bundleIdentifier: target.bundleIdentifier,
+            appName: target.name, processName: target.name
+        )]
+        let sut = handshakeCoordinator(
+            facts: .rootOwnedHelperEnabled,
+            handshake: { .stale }, running: running, quits: quits
+        )
+
+        let routes = await sut.routes(for: [target])
+        let plan = try #require(await sut.runQuitPhase(targets: [target], routes: routes, askForceQuit: { _ in .skip }))
+
+        #expect(routes[target.id] == .blocked(.helperNeedsReinstall))
+        #expect(quits.count == 0)
+        #expect(plan.remove.isEmpty)
+        #expect(plan.skipped[target.id] == .blocked(.helperNeedsReinstall))
+    }
+
+    @Test func offRegistrationIsNotOverriddenByTheHandshake() async {
+        let target = app("Root")
+        var facts = UninstallBundleFacts.rootOwnedHelperEnabled
+        facts.helper = .off
+        let calls = CallCounter()
+        let sut = handshakeCoordinator(facts: facts, handshake: { calls.increment(); return .enabled })
+
+        #expect(await sut.routes(for: [target])[target.id] == .blocked(.needsHelper))
+        #expect(calls.count == 0)
     }
 
     @Test func brewTargetReportsRemovedByHomebrew() async {

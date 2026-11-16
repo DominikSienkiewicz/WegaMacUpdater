@@ -69,9 +69,23 @@ struct UninstallRouteTests {
         #expect(UninstallRoute.afterPermissionDenied(facts()) == .helper)
     }
 
-    /// Only calling the helper can show that it must be reinstalled; no set of facts predicts it.
-    @Test func noRouteAsksForTheHelperToBeReinstalled() {
-        let availabilities: [UninstallHelperAvailability] = [.notSupported, .off, .enabled]
+    @Test func staleHelperNeedsReinstall() {
+        #expect(UninstallRoute.afterPermissionDenied(facts(helper: .stale)) == .blocked(.helperNeedsReinstall))
+    }
+
+    @Test func staleHelperStillNeedsAnAdministratorFirst() {
+        #expect(UninstallRoute.afterPermissionDenied(facts(admin: false, helper: .stale)) == .blocked(.needsAdministratorAccount))
+    }
+
+    @Test func staleHelperDoesNotChangeRoutesThatNeverReachTheHelper() {
+        #expect(UninstallRoute.preflight(facts(owner: 501, helper: .stale)) == .userTrash)
+        #expect(UninstallRoute.afterPermissionDenied(facts(owner: 502, helper: .stale)) == .blocked(.needsAdministratorRights))
+        #expect(UninstallRoute.afterPermissionDenied(facts(topLevel: false, helper: .stale)) == .blocked(.needsAdministratorRights))
+    }
+
+    /// Only a helper the handshake found stale asks to be reinstalled; no other availability does.
+    @Test func onlyAStaleHelperAsksForReinstall() {
+        let availabilities: [UninstallHelperAvailability] = [.notSupported, .off, .enabled, .stale]
         for owner: UInt32 in [0, 501, 502] {
             for writable in [false, true] {
                 for topLevel in [false, true] {
@@ -82,8 +96,10 @@ struct UninstallRouteTests {
                                     owner: owner, writable: writable, topLevel: topLevel,
                                     bundleID: bundleID, admin: admin, helper: helper
                                 )
-                                #expect(UninstallRoute.preflight(item) != .blocked(.helperNeedsReinstall))
-                                #expect(UninstallRoute.afterPermissionDenied(item) != .blocked(.helperNeedsReinstall))
+                                if helper != .stale {
+                                    #expect(UninstallRoute.preflight(item) != .blocked(.helperNeedsReinstall))
+                                    #expect(UninstallRoute.afterPermissionDenied(item) != .blocked(.helperNeedsReinstall))
+                                }
                             }
                         }
                     }
