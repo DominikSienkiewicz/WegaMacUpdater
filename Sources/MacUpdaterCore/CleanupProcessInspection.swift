@@ -8,9 +8,15 @@ public protocol ProcessInspecting: Sendable {
 }
 
 /// Reads the arguments out of a `KERN_PROCARGS2` buffer: `Int32 argc`, the executable path,
-/// NUL padding, then `argc` NUL-terminated strings. Everything after the `argc`-th string is the
-/// environment, which can carry tokens, and is never looked at.
+/// then `argc` NUL-terminated strings. Everything after the `argc`-th string is the environment,
+/// which can carry tokens, and is never looked at.
+///
+/// The kernel pads the path and its NUL to a multiple of 8 bytes counted from the path's first
+/// byte. Exactly that padding is skipped: an empty argument is a lone NUL, so skipping every NUL
+/// after the path would shift the arguments by one and return the first environment variable.
 public enum ProcArgs2Parser {
+    private static let pathAlignment = 8
+
     public static func arguments(from buffer: [UInt8]) -> [String]? {
         let headerSize = MemoryLayout<Int32>.size
         guard buffer.count >= headerSize else { return nil }
@@ -19,7 +25,9 @@ public enum ProcArgs2Parser {
 
         var index = headerSize
         while index < buffer.count, buffer[index] != 0 { index += 1 }
-        while index < buffer.count, buffer[index] == 0 { index += 1 }
+        let pathLength = index - headerSize + 1
+        index = headerSize + (pathLength + pathAlignment - 1) / pathAlignment * pathAlignment
+        guard index <= buffer.count else { return nil }
 
         var arguments: [String] = []
         while arguments.count < Int(argc) {
