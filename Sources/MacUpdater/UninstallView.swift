@@ -8,6 +8,7 @@ struct UninstallView: View {
     @EnvironmentObject private var model: AppViewModel
 
     @State private var apps:          [ApplicationInfo] = []
+    @State private var protections:    [String: UninstallProtection] = [:]
     @State private var selected:       Set<String>       = []
     @State private var search:         String            = ""
     @StateObject private var operations = UninstallCoordinator()
@@ -25,14 +26,26 @@ struct UninstallView: View {
     /// UX-13: which leftover paths the user has ticked for the Trash. Defaults to every
     /// found item; the user opts individual files out.
     @State private var selectedLeftovers: Set<String> = []
-    @State private var errorMessage:   String?
+    /// The running state of `pendingUninstallTargets`, computed when the sheet opens.
+    @State private var pendingRunningStates: [String: RunningApplicationResolution] = [:]
+    @State private var forceQuitApps: [ApplicationInfo] = []
+    @State private var showForceQuit: Bool = false
+    @State private var forceQuitAnswer: CheckedContinuation<UninstallForceQuitChoice, Never>?
+    /// REL-14: why the last scan could not read a source. Kept apart from `result`, so a run's
+    /// result never hides a scan error that is already on screen.
+    @State private var scanError:      String?
+    /// The apps the last run did not remove — summary line and rows — kept together so a
+    /// refresh never leaves a row or its button without its explanation.
+    @State private var result:         UninstallResultReport?
+    /// The route each non-brew target would take, computed when the sheet opens.
+    @State private var pendingRoutes: [String: UninstallRouteDecision] = [:]
     /// REL-14: the last scan failed to read one or more sources. Distinguishes an empty
     /// machine from a failed scan and drives the incomplete-data warning before uninstall.
     @State private var scanFailed:     Bool              = false
     @State private var banner:         BannerData?
 
     private var isLoading: Bool { operations.isScanning }
-    private var isUninstalling: Bool { operations.isUninstalling }
+    private var isUninstalling: Bool { operations.isUninstalling || operations.isQuitting }
 
     /// REL-14: resolves the list body between loading, a failed scan, an empty machine
     /// and populated results, so a scan failure is never shown as "no apps found".
@@ -57,7 +70,11 @@ struct UninstallView: View {
     }
 
     private var targets: [ApplicationInfo] {
-        InstallationInventory.selected(filtered, identities: selected)
+        UninstallSelection.targets(filtered: filtered, selected: selected, protections: protections)
+    }
+
+    private var selectableCount: Int {
+        UninstallSelection.selectable(filtered, protections: protections).count
     }
 
     var body: some View {
@@ -72,10 +89,10 @@ struct UninstallView: View {
                             .foregroundStyle(.tertiary)
                     }
                     Spacer()
-                    Button { Task { await scan() } } label: {
+                    Button { Task { await refresh() } } label: {
                         Label(tr("Odśwież"), systemImage: "arrow.clockwise")
                     }
-                    .disabled(isLoading)
+                    .disabled(isLoading || isUninstalling)
 
                     Button {
                         Task { await presentUninstallDialog() }
@@ -90,8 +107,12 @@ struct UninstallView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
 
-                if let err = errorMessage {
-                    ErrorBanner(message: err).padding(.horizontal, 16).padding(.bottom, 8)
+                if let scanError {
+                    ErrorBanner(message: scanError).padding(.horizontal, 16).padding(.bottom, 8)
+                }
+                if let result {
+                    UninstallResultList(report: result, onAction: perform) { self.result = nil }
+                        .padding(.horizontal, 16).padding(.bottom, 8)
                 }
                 if let b = banner {
                     BannerView(data: b) { banner = nil }.padding(.horizontal, 16).padding(.bottom, 8)
@@ -108,11 +129,11 @@ struct UninstallView: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel(tr("Zaznacz wszystko"))
                         .accessibilityValue(
-                            trf("%@ z %@ zaznaczonych", "\(targets.count)", "\(filtered.count)")
+                            trf("%@ z %@ zaznaczonych", "\(targets.count)", "\(selectableCount)")
                         )
                         Text(targets.isEmpty
                              ? trf("%@ aplikacji", "\(filtered.count)")
-                             : trf("%@ zaznaczonych z %@", "\(targets.count)", "\(filtered.count)"))
+                             : trf("%@ zaznaczonych z %@", "\(targets.count)", "\(selectableCount)"))
                             .font(.wega(.callout))
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -165,7 +186,9 @@ struct UninstallView: View {
                     ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(filtered) { app in
-                                let isSelected = selected.contains(app.id)
+                                let protection = protections[app.id]
+                                let isSelected = protection == nil && selected.contains(app.id)
+                                let reason = protection.map(UninstallProtectionPresentation.protectionReason)
                                 // UX-02 — a real `Toggle`, so the row announces itself as a
                                 // checkbox with a state rather than as a button with a value.
                                 Toggle(isOn: selectionToggleBinding(isOn: isSelected) { toggle(app.id) }) {
@@ -185,6 +208,12 @@ struct UninstallView: View {
                                                     .font(.caption.monospaced())
                                                     .foregroundStyle(.tertiary)
                                             }
+                                            if let reason {
+                                                Text(reason)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                                    .lineLimit(2)
+                                            }
                                         }
                                         Spacer()
                                         if let v = app.version {
@@ -197,14 +226,15 @@ struct UninstallView: View {
                                     .contentShape(Rectangle())
                                 }
                                 .toggleStyle(WegaCheckboxToggleStyle())
+                                .disabled(protection != nil)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 9)
                                 .background(isSelected ? Color.wegaDanger.opacity(0.06) : Color.clear)
-                                .accessibilityLabel(selectionAccessibilityLabel(for: app, showsLocation: showsLocation(app)))
+                                .accessibilityLabel(selectionAccessibilityLabel(for: app, showsLocation: showsLocation(app), protectionReason: reason))
                                 // UX-11d: right-click gives the row the actions it otherwise
                                 // lacked — reveal it in Finder, copy its path, or toggle its
                                 // removal selection.
-                                .contextMenu { rowContextMenu(for: app, isSelected: isSelected) }
+                                .contextMenu { rowContextMenu(for: app, isSelected: isSelected, canToggle: protection == nil) }
 
                                 Divider().opacity(0.4).padding(.leading, 54)
                             }
@@ -226,22 +256,42 @@ struct UninstallView: View {
                 ),
                 scanIncomplete: pendingScanIncomplete,
                 leftoverGroups: pendingLeftoverGroups,
+                runningStates: pendingRunningStates,
+                routes: pendingRoutes,
+                isRefreshing: operations.isScanning,
                 selectedLeftovers: $selectedLeftovers,
                 onCancel: cancelUninstall,
                 onConfirm: confirmUninstall
             )
         }
+        .sheet(
+            isPresented: $showForceQuit,
+            onDismiss: { answerForceQuit(.cancel) },
+            content: { UninstallForceQuitSheet(apps: forceQuitApps, onChoice: answerForceQuit) }
+        )
         .onChange(of: search) { _, _ in
             selected.formIntersection(filtered.map(\.id))
         }
         .task { await scan() }
     }
 
+    private func perform(_ action: UninstallResultAction) {
+        switch action {
+        case .showInFinder(let url):
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        case .openAppManagementSettings:
+            NSWorkspace.shared.open(AppManagementSettings.paneURL)
+        case .openHelperSettings:
+            // No result offers this until the helper removal route exists.
+            break
+        }
+    }
+
     /// UX-11d: the row's right-click menu. Its contents live in `AppRowContextMenu` so the
     /// wording and ordering are unit-testable; this renders them and routes each selection.
     @ViewBuilder
-    private func rowContextMenu(for app: ApplicationInfo, isSelected: Bool) -> some View {
-        ForEach(AppRowContextMenu.items(isSelected: isSelected)) { item in
+    private func rowContextMenu(for app: ApplicationInfo, isSelected: Bool, canToggle: Bool) -> some View {
+        ForEach(AppRowContextMenu.items(isSelected: isSelected, canToggle: canToggle)) { item in
             Button {
                 performRowAction(item.action, for: app)
             } label: {
@@ -262,9 +312,7 @@ struct UninstallView: View {
     }
 
     private var selectAllSymbol: String {
-        if targets.isEmpty { return "square" }
-        if targets.count == filtered.count { return "checkmark.square.fill" }
-        return "minus.square.fill"
+        UninstallSelection.selectAllSymbol(filtered: filtered, selected: selected, protections: protections)
     }
 
     private func toggle(_ id: String) {
@@ -286,18 +334,23 @@ struct UninstallView: View {
     }
 
     private func toggleAll() {
-        if Set(targets.map(\.id)) == Set(filtered.map(\.id)) { selected.removeAll() }
-        else { selected = Set(filtered.map(\.id)) }
+        let selectableIds = UninstallSelection.selectAll(filtered: filtered, protections: protections)
+        if Set(targets.map(\.id)) == selectableIds { selected.removeAll() }
+        else { selected = selectableIds }
     }
 
     /// UX-13: freezes the confirmation targets (UX-01), then plans their `~/Library`
     /// leftovers via the coordinator so the sheet opens with the checkbox list ready.
     private func presentUninstallDialog() async {
         let targets = self.targets
-        guard !targets.isEmpty else { return }
+        guard !targets.isEmpty, !isUninstalling else { return }
         pendingUninstallTargets = targets
         pendingScanIncomplete = scanFailed
-        let groups = await operations.scanLeftovers(for: targets)
+        pendingRoutes = operations.routes(for: targets)
+        // A blocked target is not attempted: it is neither asked to quit nor offers leftovers.
+        let attempted = UninstallQuitFlow.partition(targets: targets, routes: pendingRoutes).attempt
+        pendingRunningStates = operations.runningStates(for: attempted)
+        let groups = await operations.scanLeftovers(for: attempted)
         pendingLeftoverGroups = groups
         selectedLeftovers = Set(groups.flatMap { $0.items.map(\.path) })
         showDialog = true
@@ -308,32 +361,85 @@ struct UninstallView: View {
         pendingUninstallTargets = []
         pendingScanIncomplete = false
         pendingLeftoverGroups = []
+        pendingRunningStates = [:]
+        pendingRoutes = [:]
         selectedLeftovers = []
     }
 
+    private func answerForceQuit(_ choice: UninstallForceQuitChoice) {
+        showForceQuit = false
+        forceQuitAnswer?.resume(returning: choice)
+        forceQuitAnswer = nil
+    }
+
+    private func askForceQuit(_ apps: [ApplicationInfo]) async -> UninstallForceQuitChoice {
+        await withCheckedContinuation { continuation in
+            forceQuitApps = apps
+            forceQuitAnswer = continuation
+            showForceQuit = true
+        }
+    }
+
+    private func quitThenUninstall(
+        targets: [ApplicationInfo],
+        routes: [String: UninstallRouteDecision],
+        zap: Bool,
+        leftovers: [LeftoverGroup]
+    ) async {
+        defer { operations.endQuitPhase() }
+        guard let plan = await operations.runQuitPhase(targets: targets, routes: routes, askForceQuit: askForceQuit)
+        else { return }
+        await uninstall(targets: plan.remove, zap: zap, leftovers: leftovers, skipped: plan.skipped, reported: targets)
+    }
+
     private func confirmUninstall(zap: Bool) {
+        guard operations.beginQuitPhase() else { return }
         let targets = pendingUninstallTargets
-        let leftovers = pendingLeftoverGroups
-            .flatMap(\.items)
-            .filter { selectedLeftovers.contains($0.path) }
+        let routes = pendingRoutes
+        let leftovers = pendingLeftoverGroups.compactMap { group -> LeftoverGroup? in
+            let consented = group.items.filter { selectedLeftovers.contains($0.path) }
+            return consented.isEmpty ? nil : LeftoverGroup(app: group.app, items: consented)
+        }
         showDialog = false
         pendingUninstallTargets = []
         pendingScanIncomplete = false
         pendingLeftoverGroups = []
+        pendingRunningStates = [:]
+        pendingRoutes = [:]
         selectedLeftovers = []
-        Task { await uninstall(targets: targets, zap: zap, leftovers: leftovers) }
+        Task { await quitThenUninstall(targets: targets, routes: routes, zap: zap, leftovers: leftovers) }
+    }
+
+    /// A refresh starts over: the last run's result goes as a whole, summary and rows together.
+    private func refresh() async {
+        result = nil
+        banner = nil
+        await scan()
     }
 
     private func scan() async {
-        errorMessage = nil
-        let result = await operations.scan(using: model.brewService)
-        apps = result.apps
-        scanFailed = result.scanFailed
-        errorMessage = result.failures.scanErrorMessage
+        guard let scan = await operations.scan(using: model.brewService) else { return }
+        apps = scan.apps
+        protections = scan.protections
+        scanFailed = scan.scanFailed
+        scanError = scan.failures.scanErrorMessage
     }
 
-    private func uninstall(targets: [ApplicationInfo], zap: Bool, leftovers: [URL]) async {
-        guard !targets.isEmpty else { return }
+    /// - Parameter reported: every confirmed target, in confirmation order; each one ends in
+    ///   exactly one result, whether removed, skipped before removal, or blocked.
+    private func uninstall(
+        targets: [ApplicationInfo],
+        zap: Bool,
+        leftovers: [LeftoverGroup],
+        skipped: [String: UninstallTargetResult],
+        reported reportedApps: [ApplicationInfo]
+    ) async {
+        guard !targets.isEmpty else {
+            show(UninstallResultPresentation.report(
+                results: skipped, apps: reportedApps, leftoversTrashed: 0, leftoversFailed: 0, requestedZap: zap
+            ))
+            return
+        }
         // REL-06 — `brew uninstall --cask` (with `--zap` it also deletes preferences and
         // Application Support) rewrites the Caskroom, and `UpgradeMutex` only covers upgrades.
         // Without a ticket a quit here ends the process between the Caskroom entry and the
@@ -341,55 +447,37 @@ struct UninstallView: View {
         let ticket = MutationGuard.shared.begin(trf("dezinstalacja %@ aplikacji", "\(targets.count)"))
         defer { MutationGuard.shared.end(ticket) }
 
-        errorMessage = nil; banner = nil
+        banner = nil; result = nil
         onWegaState?(WegaState(pose: .sniff, line: tr("Aport! Zabieram to z dysku…")))
 
         let outcome = await operations.uninstall(
             targets: targets,
             zap: zap,
             leftovers: leftovers,
+            skipped: skipped,
             using: model.brewService
         )
-        let succeeded = outcome.succeeded
-        var failed: [(name: String, requestedZap: Bool)] = []
-        for app in targets where outcome.failedIDs.contains(app.id) {
-            if app.isManagedByBrew {
-                failed.append((app.name, zap))
-            } else {
-                failed.append((app.name, false))
-            }
-        }
-
+        let succeeded = Set(targets.map(\.id).filter { outcome.results[$0]?.isRemoved == true })
         selected.subtract(succeeded)
         await scan()
 
-        let brewSucceeded = targets.filter { succeeded.contains($0.id) && $0.isManagedByBrew }.count
-        let trashSucceeded = targets.filter { succeeded.contains($0.id) && !$0.isManagedByBrew }.count
-        var parts: [String] = []
-        if brewSucceeded > 0 { parts.append(trf("%@ przez brew", "\(brewSucceeded)")) }
-        if trashSucceeded > 0 { parts.append(trf("%@ do Kosza", "\(trashSucceeded)")) }
-        // UX-13: report the leftovers that reached the Trash alongside the app removals.
-        if outcome.leftoversTrashed > 0 { parts.append(trf("%@ resztek do Kosza", "\(outcome.leftoversTrashed)")) }
-        let msg = parts.joined(separator: ", ")
-
+        let report = UninstallResultPresentation.report(
+            results: outcome.results,
+            apps: reportedApps,
+            leftoversTrashed: outcome.leftoversTrashed,
+            leftoversFailed: outcome.leftoversFailed,
+            requestedZap: zap
+        )
         if !succeeded.isEmpty {
-            banner = BannerData(variant: .success, title: trf("Odinstalowano %@ aplikacji", "\(succeeded.count)"), message: msg)
             onWegaState?(WegaState(pose: .happy, line: trf("Załatwione — %@ mniej na dysku.", "\(succeeded.count)")))
         }
-        if !failed.isEmpty {
-            errorMessage = trf(
-                "Odinstalowanie niepełne — nie usunięto: %@",
-                "\(failed.map(\.name).joined(separator: ", "))"
-            )
-            if failed.contains(where: \.requestedZap) {
-                errorMessage? += " " + tr("Nie uruchomiono --force; wybrane usunięcie wraz z resztkami nie zostało po cichu zmienione.")
-            }
-        }
-        // UX-13: leftovers that could not be moved are surfaced, not swallowed.
-        if outcome.leftoversFailed > 0 {
-            let note = trf("Nie udało się przenieść %@ resztek do Kosza.", "\(outcome.leftoversFailed)")
-            errorMessage = [errorMessage, note].compactMap { $0 }.joined(separator: " ")
-        }
+        show(report)
+    }
+
+    /// The success banner names what was removed; everything else stays together in `result`.
+    private func show(_ report: UninstallResultReport) {
+        banner = report.banner
+        result = report.summary == nil && report.rows.isEmpty ? nil : report
     }
 }
 
@@ -406,6 +494,12 @@ struct UninstallDialog: View {
     /// UX-13: the `~/Library` leftovers planned for the non-brew targets, presented as
     /// checkboxes so the user reviews exactly what "app + leftovers" removes.
     var leftoverGroups: [LeftoverGroup] = []
+    /// Which targets are running right now, so the sheet can say Wega will ask them to quit.
+    var runningStates: [String: RunningApplicationResolution] = [:]
+    /// What will happen to each non-brew target: Trash, or why it cannot be removed.
+    var routes: [String: UninstallRouteDecision] = [:]
+    /// The list is being rescanned; confirming has to wait until it finishes.
+    var isRefreshing: Bool = false
     /// UX-13: the leftover paths the user has ticked for the Trash. Bound to the caller so
     /// the confirmed selection survives the sheet dismissal.
     @Binding var selectedLeftovers: Set<String>
@@ -417,6 +511,9 @@ struct UninstallDialog: View {
         ambiguities: [AmbiguousBrewUninstall],
         scanIncomplete: Bool = false,
         leftoverGroups: [LeftoverGroup] = [],
+        runningStates: [String: RunningApplicationResolution] = [:],
+        routes: [String: UninstallRouteDecision] = [:],
+        isRefreshing: Bool = false,
         selectedLeftovers: Binding<Set<String>> = .constant([]),
         onCancel: @escaping () -> Void,
         onConfirm: @escaping (Bool) -> Void
@@ -425,6 +522,9 @@ struct UninstallDialog: View {
         self.ambiguities = ambiguities
         self.scanIncomplete = scanIncomplete
         self.leftoverGroups = leftoverGroups
+        self.runningStates = runningStates
+        self.routes = routes
+        self.isRefreshing = isRefreshing
         self._selectedLeftovers = selectedLeftovers
         self.onCancel = onCancel
         self.onConfirm = onConfirm
@@ -434,8 +534,35 @@ struct UninstallDialog: View {
     /// preferences, caches and Application Support; the user opts into that deliberately.
     @State private var zapMode: Bool = false
 
-    private var brewCount: Int { targets.filter(\.isManagedByBrew).count }
-    private var trashCount: Int { targets.count - brewCount }
+    /// Why the confirm button is unavailable, or `nil` when it can be pressed. A refresh holds
+    /// the coordinator, and confirming then would do nothing.
+    static func confirmUnavailableNote(isRefreshing: Bool) -> String? {
+        isRefreshing ? tr("Lista aplikacji się odświeża — poczekaj, aż skończy.") : nil
+    }
+
+    /// A blocked target is never asked to quit, so it gets no running note.
+    static func runningNote(for state: RunningApplicationResolution?, route: UninstallRouteDecision?) -> String? {
+        if case .blocked = route { return nil }
+        return switch state {
+        case .running: tr("Uruchomiona — Wega poprosi o jej zamknięcie")
+        case .ambiguousBundleIdentifier: tr("Nie da się wskazać jej procesu — zostanie pominięta")
+        case .notRunning, nil: nil
+        }
+    }
+
+    static func routeNote(for route: UninstallRouteDecision?) -> String? {
+        switch route {
+        case .userTrash: tr("trafi do Kosza")
+        case .helper: UninstallResultPresentation.blockReason(.needsHelper)
+        case .blocked(let block): UninstallResultPresentation.blockReason(block)
+        case nil: nil
+        }
+    }
+
+    private var counts: UninstallDialogCounts { UninstallDialogCounts(targets: targets, routes: routes) }
+    private var brewCount: Int { counts.brew }
+    private var trashCount: Int { counts.trash }
+    private var blockedCount: Int { counts.blocked }
     private var totalCount: Int { targets.count }
     private var hasMixed: Bool { brewCount > 0 && trashCount > 0 }
     private var hasNonBrew: Bool { trashCount > 0 }
@@ -463,10 +590,15 @@ struct UninstallDialog: View {
                         Text(tr("Aplikacje trafią do Kosza"))
                             .font(.wega(.callout))
                             .foregroundStyle(.secondary)
-                    } else {
+                    } else if blockedCount == 0 {
                         Text(tr("Wybierz, co zostawić"))
                             .font(.wega(.callout))
                             .foregroundStyle(.secondary)
+                    }
+                    if blockedCount > 0 {
+                        Text(trf("%@ nie da się usunąć — szczegóły poniżej", "\(blockedCount)"))
+                            .font(.wega(.callout))
+                            .foregroundStyle(Color.wegaDanger)
                     }
                 }
             }
@@ -511,6 +643,16 @@ struct UninstallDialog: View {
                                         .font(.wega(.footnote, monospaced: true))
                                         .foregroundStyle(.secondary)
                                         .textSelection(.enabled)
+                                    if let routeNote = Self.routeNote(for: routes[app.id]) {
+                                        Text(routeNote)
+                                            .font(.wega(.footnote))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    if let note = Self.runningNote(for: runningStates[app.id], route: routes[app.id]) {
+                                        Text(note)
+                                            .font(.wega(.footnote))
+                                            .foregroundStyle(Color.wegaDanger)
+                                    }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
@@ -616,6 +758,12 @@ struct UninstallDialog: View {
 
             // Footer buttons
             HStack(spacing: 8) {
+                if let note = Self.confirmUnavailableNote(isRefreshing: isRefreshing) {
+                    Text(note)
+                        .font(.wega(.footnote))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Spacer()
                 Button(tr("Anuluj"), role: .cancel) {
                     UninstallDialogKeyboardBehavior.perform(
@@ -626,17 +774,19 @@ struct UninstallDialog: View {
                     )
                 }
                 .keyboardShortcut(.cancelAction)
-                Button(confirmLabel, role: .destructive) {
-                    UninstallDialogKeyboardBehavior.perform(
-                        .confirm,
-                        zapMode: zapMode,
-                        onCancel: onCancel,
-                        onConfirm: onConfirm
-                    )
+                if counts.removesNothing {
+                    // Every target is blocked: confirming removes and quits nothing, it only
+                    // reports why, so the button is not dressed as destructive.
+                    Button(confirmLabel) { confirm() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(isRefreshing)
+                } else {
+                    Button(confirmLabel, role: .destructive) { confirm() }
+                        .keyboardShortcut(.defaultAction)
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.wegaDanger)
+                        .disabled(isRefreshing)
                 }
-                .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
-                .tint(Color.wegaDanger)
             }
             .padding(.horizontal, 18)
             .padding(.top, 16)
@@ -650,11 +800,15 @@ struct UninstallDialog: View {
         .frame(width: 480)
     }
 
+    private func confirm() {
+        UninstallDialogKeyboardBehavior.perform(.confirm, zapMode: zapMode, onCancel: onCancel, onConfirm: onConfirm)
+    }
+
     private var confirmLabel: String {
         if brewCount > 0 {
             return zapMode ? tr("Usuń razem z resztkami") : tr("Usuń tylko aplikację")
         }
-        return tr("Przenieś do Kosza")
+        return counts.promisesTrash ? tr("Przenieś do Kosza") : tr("Pokaż, czego nie usunięto")
     }
 }
 

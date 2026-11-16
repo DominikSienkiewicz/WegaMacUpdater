@@ -43,13 +43,21 @@ struct ExplicitDestructiveFallbackTests {
     }
 
     @Test func failedZapNeverSilentlyFallsBackToForceOrSuccess() throws {
-        let uninstall = try source("Sources/MacUpdater/UninstallView.swift")
+        let view = try source("Sources/MacUpdater/UninstallView.swift")
+        let coordinator = try source("Sources/MacUpdater/UninstallCoordinator.swift")
+        let presentation = try source("Sources/MacUpdater/UninstallResultPresentation.swift")
 
-        #expect(!uninstall.contains("uninstallCask(token: token, zap: false, force: true)"),
-                "UX-04: a failed --zap must not silently retry with --force")
-        #expect(uninstall.contains("Odinstalowanie niepełne — nie usunięto"),
+        for (name, text) in [("view", view), ("coordinator", coordinator), ("presentation", presentation)] {
+            #expect(!text.contains("uninstallCask(token: token, zap: false, force: true)"),
+                    "UX-04: a failed --zap must not silently retry with --force (\(name))")
+        }
+        #expect(presentation.contains("Odinstalowanie niepełne — nie usunięto"),
                 "UX-04: a failed requested zap must be reported as an explicit incomplete result")
-        #expect(uninstall.contains("failed.append((app.name, zap))"),
+        #expect(presentation.contains("failed.append((app.name, zap))"),
                 "UX-04: the failed zap must enter the failure result, never the success count")
+        #expect(presentation.contains("guard case .failed = results[app.id]"),
+                "UX-04: the incomplete text is for .failed results only; other reasons name themselves")
+        #expect(!view.contains("Odinstalowanie niepełne"),
+                "UX-04: the view must not assemble its own incomplete text")
     }
 }

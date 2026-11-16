@@ -264,3 +264,24 @@ extension WegaHelper.BundleReplacementFacts {
         )
     }
 }
+
+extension WegaHelper {
+    /// Whether `path` names an application directly in `/Applications` or in one plain folder
+    /// beneath it (`/Applications/Utilities/Foo.app`), and not a bundle nested inside another.
+    ///
+    /// Decided on the standardized path components, as `bundleReplacementRejection` does:
+    /// `/Applications/../tmp/a.app` resolves outside and is refused, while
+    /// `/Applications/Sub/../Foo.app` resolves to `/Applications/Foo.app` and is accepted.
+    public static func isTopLevelApplicationBundle(path: String) -> Bool {
+        guard path.hasPrefix("/") else { return false }
+        let components = URL(fileURLWithPath: path).standardizedFileURL.pathComponents
+        guard components.count == 3 || components.count == 4,
+              components[0] == "/",
+              components[1] == "Applications",
+              let name = components.last,
+              name.hasSuffix(".app") else {
+            return false
+        }
+        return components.count == 3 || !components[2].hasSuffix(".app")
+    }
+}

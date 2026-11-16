@@ -20,6 +20,7 @@ public enum Translations {
         .merging(serviceVendors) { first, _ in first }
         .merging(cleanup.merging(cleanupHygiene) { first, _ in first }) { first, _ in first }
         .merging(MicrosoftAutoUpdateTranslations.english) { first, _ in first }
+        .merging(uninstallTexts) { first, _ in first }
 }
 
 extension Translations {
@@ -964,7 +965,6 @@ extension Translations {
         "migracja %@": "migrating %@",
         "usuwanie duplikatu %@": "removing duplicate %@",
         "dezinstalacja %@ aplikacji": "uninstalling %@ app(s)",
-
         // LT-01 — trwały journal operacji: recovery, ręczne cofanie, uczciwość źródeł bez rollbacku.
         "Wega naprawiła przerwaną aktualizację": "Wega repaired an interrupted update",
         "Przerwana aktualizacja: %@ nie udało się naprawić — sprawdź te aplikacje. %@ przywrócono z kopii.":
