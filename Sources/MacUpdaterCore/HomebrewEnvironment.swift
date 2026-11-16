@@ -11,6 +11,14 @@ public enum HomebrewEnvironment {
         return AuthorizationEnvironment.sanitized(inherited: [:], overrides: overrides)
     }
 
+    /// Read-only cleanup queries: no implicit `brew update` and no analytics event per call.
+    public static var cleanupQueryEnvironment: [String: String] {
+        var overrides = brewEnvironment
+        overrides["HOMEBREW_NO_AUTO_UPDATE"] = "1"
+        overrides["HOMEBREW_NO_ANALYTICS"] = "1"
+        return AuthorizationEnvironment.sanitized(inherited: [:], overrides: overrides)
+    }
+
     /// DEBT-04: shared process-wide state lives behind a lock instead of
     /// `nonisolated(unsafe)` (which silenced Swift 6 concurrency checking). The
     /// public surface is unchanged — `static var` get/set forwards to the holder.

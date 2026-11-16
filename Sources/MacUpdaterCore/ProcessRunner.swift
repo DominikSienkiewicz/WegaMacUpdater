@@ -1,6 +1,21 @@
 import Foundation
 import Darwin
 
+/// Where a child process reads its standard input from.
+public enum ProcessStandardInput: Equatable, Sendable {
+    /// Today's behaviour: the child shares the parent's stdin.
+    case inherit
+    /// The child reads end-of-file immediately, so it can never block on a prompt.
+    case nullDevice
+}
+
+/// How much of a child's output may reach `wega.log` and the diagnostics trace.
+public enum ProcessOutputLogging: Equatable, Sendable {
+    case full
+    /// For commands whose output may carry secrets, such as the user's login shell.
+    case suppressed
+}
+
 public struct ProcessRequest: Equatable, Sendable {
     public var executableURL: URL
     public var arguments: [String]
@@ -11,6 +26,8 @@ public struct ProcessRequest: Equatable, Sendable {
     public var timeout: TimeInterval?
     /// How long the process may produce no output before it counts as hung (REL-12).
     public var idleTimeout: TimeInterval?
+    public var standardInput: ProcessStandardInput = .inherit
+    public var outputLogging: ProcessOutputLogging = .full
 
     public init(
         executableURL: URL,
@@ -213,6 +230,8 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         let stderrPipe = Pipe()
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
+        applyStandardInput(request.standardInput, to: process)
+        let recordsOutput = request.outputLogging == .full
 
         // Rolling buffers: every chunk is streamed live through `onOutput`, but the
         // accumulated capture keeps only the most recent `maxCapturedBytesPerStream`
@@ -243,7 +262,7 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             }
             activity.touch()
             stdoutBuffer.append(data)
-            diagnostics?.appendStdout(data)
+            if recordsOutput { diagnostics?.appendStdout(data) }
             if let chunk = String(data: data, encoding: .utf8) {
                 onOutput?(.stdout(chunk))
             }
@@ -258,7 +277,7 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             }
             activity.touch()
             stderrBuffer.append(data)
-            diagnostics?.appendStderr(data)
+            if recordsOutput { diagnostics?.appendStderr(data) }
             if let chunk = String(data: data, encoding: .utf8) {
                 onOutput?(.stderr(chunk))
             }
@@ -336,15 +355,33 @@ public final class ProcessRunner: ProcessRunning, Sendable {
             WegaLog.debug(
                 .process,
                 "\(request.executableURL.lastPathComponent) exited \(result.exitCode)",
-                detail: LogDetail(
+                detail: exitLogDetail(
                     command: diagnostics?.command ?? ([request.executableURL.lastPathComponent] + request.arguments)
                         .joined(separator: " "),
                     exitCode: result.exitCode,
-                    stderr: result.stderr
+                    stderr: result.stderr,
+                    logging: request.outputLogging
                 )
             )
         }
         return result
+    }
+
+    static func applyStandardInput(_ standardInput: ProcessStandardInput, to process: Process) {
+        switch standardInput {
+        case .inherit: break
+        case .nullDevice: process.standardInput = FileHandle.nullDevice
+        }
+    }
+
+    static func exitLogDetail(
+        command: String,
+        exitCode: Int32,
+        stderr: String,
+        logging: ProcessOutputLogging
+    ) -> LogDetail {
+        LogDetail(command: command, exitCode: exitCode, stderr: logging == .full ? stderr : nil)
+            ?? LogDetail(fields: [], output: nil)
     }
 
     private enum ExitOutcome: Sendable {

@@ -20,7 +20,7 @@ final class MenuCommandsTests: XCTestCase {
 
         XCTAssertEqual(
             destinations.map(\.tab),
-            [.update, .migration, .inventory, .rollback, .uninstall, .logs],
+            [.update, .migration, .inventory, .rollback, .uninstall, .cleanup, .logs],
             "The numbered destinations must follow the sidebar's top-to-bottom order"
         )
         XCTAssertEqual(

@@ -48,6 +48,15 @@ final class SidebarSelectionTests: XCTestCase {
         XCTAssertNil(SidebarSelection.uninstall.filter)
     }
 
+    func testCleanupRoundTripsAndFollowsUninstall() throws {
+        XCTAssertEqual(SidebarSelection(rawValue: "cleanup"), .cleanup)
+        XCTAssertEqual(SidebarSelection.cleanup.rawValue, "cleanup")
+        let cases = SidebarSelection.allCases
+        let uninstall = try XCTUnwrap(cases.firstIndex(of: .uninstall))
+        XCTAssertEqual(cases.firstIndex(of: .cleanup), uninstall + 1)
+        XCTAssertNil(SidebarSelection.cleanup.filter)
+    }
+
     func testInitialSelectionIsAllUpdates() {
         XCTAssertEqual(SidebarSelection.initial, .updates(.all))
     }

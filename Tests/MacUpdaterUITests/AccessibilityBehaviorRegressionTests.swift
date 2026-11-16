@@ -58,10 +58,11 @@ final class AccessibilityBehaviorRegressionTests: XCTestCase {
         .inventory,
         .rollback,
         .uninstall,
+        .cleanup,
         .logs,
       ]
     )
-    XCTAssertEqual(Set(SidebarFocusPolicy.orderedSelections).count, 9)
+    XCTAssertEqual(Set(SidebarFocusPolicy.orderedSelections).count, 10)
     for (earlier, later) in zip(
       SidebarFocusPolicy.orderedSelections,
       SidebarFocusPolicy.orderedSelections.dropFirst()

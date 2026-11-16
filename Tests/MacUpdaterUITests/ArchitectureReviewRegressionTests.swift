@@ -357,6 +357,48 @@ struct ArchitectureReviewRegressionTests {
         )
     }
 
+    /// Porządki — the cleanup code can only move things to the Trash and never runs a process itself.
+    ///
+    /// Every `Cleanup*.swift` source is enumerated, so a file added later is covered without
+    /// editing this test. URL construction must not stat the path before the protected-location
+    /// guard has seen it, so the disk-touching spellings are banned together with permanent deletion.
+    @Test func cleanupSourcesNeverDeletePermanentlyOrSpawnDirectly() throws {
+        let fileSystemOwners: Set<String> = [
+            "CleanupFileSystem.swift", "CleanupPathSnapshot.swift", "CleanupReport.swift"
+        ]
+        let universalRules: [(label: String, pattern: String)] = [
+            ("permanent deletion", #"removeItem\("#),
+            ("direct Process spawn", #"(?<![A-Za-z0-9_])Process\("#),
+            ("URL(fileURLWithPath:) without isDirectory:", #"URL\(fileURLWithPath:(?![^\n]*isDirectory:)"#),
+            ("appendingPathComponent( without isDirectory:", #"appendingPathComponent\((?![^\n]*isDirectory:)"#),
+            ("standardizedFileURL", #"\.standardizedFileURL"#),
+            ("resolvingSymlinksInPath", #"\.resolvingSymlinksInPath\(\)"#),
+            ("checkFileSystem", #"\.checkFileSystem"#),
+            ("homeDirectoryForCurrentUser", #"homeDirectoryForCurrentUser"#)
+        ]
+        let cleanupSources = try swiftSources(under: "Sources").filter {
+            $0.name.split(separator: "/").last?.hasPrefix("Cleanup") == true
+        }
+        #expect(!cleanupSources.isEmpty, "no Cleanup* sources were found, the guard would pass vacuously")
+
+        var offenders: [String] = []
+        for cleanupSource in cleanupSources {
+            let code = executableSource(cleanupSource.text)
+            let range = NSRange(code.startIndex..., in: code)
+            let fileName = String(cleanupSource.name.split(separator: "/").last ?? "")
+            for rule in universalRules {
+                let expression = try NSRegularExpression(pattern: rule.pattern)
+                if expression.firstMatch(in: code, range: range) != nil {
+                    offenders.append("\(cleanupSource.name): \(rule.label)")
+                }
+            }
+            if !fileSystemOwners.contains(fileName), code.contains("FileManager.default") {
+                offenders.append("\(cleanupSource.name): FileManager.default outside the file-system owners")
+            }
+        }
+        #expect(offenders.isEmpty, "Cleanup sources break the safety rules: \(offenders.sorted())")
+    }
+
     private func swiftSources(under relativePath: String) throws -> [(name: String, text: String)] {
         let root = packageRoot()
         let directory = root.appendingPathComponent(relativePath)

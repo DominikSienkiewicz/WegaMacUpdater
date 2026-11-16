@@ -120,6 +120,34 @@ public final class BrewService: @unchecked Sendable {
     }
 
     public func uninstallCask(token: String, zap: Bool = false, force: Bool = false) async throws -> ProcessResult {
+        let arguments = Self.uninstallCaskArguments(token: token, zap: zap, force: force)
+        let result = try await runBrew(arguments)
+        try ensureSuccess(result, arguments: arguments)
+        return result
+    }
+
+    /// Installed formulae that depend on `formula`, sorted by name.
+    public func usesInstalled(formula: String) async throws -> [String] {
+        // SEC-10: `--` fences the name off from Homebrew's option parsing.
+        let arguments = ["uses", "--installed", "--", formula]
+        let result = try await runBrew(arguments, environment: HomebrewEnvironment.cleanupQueryEnvironment)
+        try ensureSuccess(result, arguments: arguments)
+        return result.stdout
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .sorted()
+    }
+
+    public func uninstallFormula(name: String) async throws -> ProcessResult {
+        let arguments = Self.uninstallFormulaArguments(name: name)
+        let result = try await runBrew(arguments)
+        try ensureSuccess(result, arguments: arguments)
+        return result
+    }
+
+    /// Arguments of `uninstallCask(token:zap:force:)`; Cleanup shows them as the command it runs.
+    public static func uninstallCaskArguments(token: String, zap: Bool = false, force: Bool = false) -> [String] {
         var arguments = ["uninstall", "--cask"]
         if zap {
             arguments.append("--zap")
@@ -128,11 +156,13 @@ public final class BrewService: @unchecked Sendable {
             arguments.append("--force")
         }
         // SEC-10: `--` fences the token off from Homebrew's option parsing.
-        arguments.append("--")
-        arguments.append(token)
-        let result = try await runBrew(arguments)
-        try ensureSuccess(result, arguments: arguments)
-        return result
+        return arguments + ["--", token]
+    }
+
+    /// Arguments of `uninstallFormula(name:)`; Cleanup shows them as the command it runs.
+    public static func uninstallFormulaArguments(name: String) -> [String] {
+        // SEC-10: `--` fences the name off from Homebrew's option parsing.
+        ["uninstall", "--formula", "--", name]
     }
 
     public func upgradeFormulae() async throws -> ProcessResult {
@@ -252,6 +282,7 @@ public final class BrewService: @unchecked Sendable {
 
     private func runBrew(
         _ arguments: [String],
+        environment: [String: String] = HomebrewEnvironment.brewEnvironment,
         timeouts: ProcessTimeoutPolicy = .query
     ) async throws -> ProcessResult {
         guard let brewURL = locator.locateBrew() else {
@@ -262,7 +293,7 @@ public final class BrewService: @unchecked Sendable {
             ProcessRequest(
                 executableURL: brewURL,
                 arguments: arguments,
-                environment: HomebrewEnvironment.brewEnvironment,
+                environment: environment,
                 inheritParentEnvironment: false,
                 timeouts: timeouts
             )

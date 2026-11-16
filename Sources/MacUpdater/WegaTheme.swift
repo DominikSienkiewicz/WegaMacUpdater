@@ -284,6 +284,7 @@ struct WegaState: Equatable {
         case .update:    return WegaState(pose: .idle,  line: tr("Sprawdzimy, co się zestarzało?"))
         case .rollback:  return WegaState(pose: .sniff, line: tr("Coś poszło nie tak? Przyniosę starą."))
         case .uninstall: return WegaState(pose: .alert, line: tr("Aport! Zaznacz, co mam zabrać."))
+        case .cleanup:   return WegaState(pose: .idle,  line: tr("Posprzątam po aktualizacjach."))
         case .migration: return WegaState(pose: .idle,  line: tr("Pójdę zwęszyć /Applications."))
         case .inventory: return WegaState(pose: .idle,  line: tr("Obejdę wszystkie kąty."))
         case .logs:      return WegaState(pose: .sniff, line: tr("Co się ostatnio działo?"))

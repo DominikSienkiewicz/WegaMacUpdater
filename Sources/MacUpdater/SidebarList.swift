@@ -49,6 +49,7 @@ struct SidebarList: View {
             Section {
                 row(.rollback, badge: rollbackBadge)
                 row(.uninstall)
+                row(.cleanup)
                 row(.logs, badge: logsErrorBadge, isDanger: true)
             } header: { header(tr("Narzędzia")) }
         }

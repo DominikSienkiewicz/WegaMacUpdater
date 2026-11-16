@@ -9,7 +9,7 @@ struct ProcessRunnerDetailTests {
     /// procesu znów mówi tylko „exited 1", bez powodu.
     @Test func nonZeroExitAttachesCommandAndStderrToTheLogEntry() throws {
         let source = try Self.source("Sources/MacUpdaterCore/ProcessRunner.swift")
-        #expect(source.contains("detail: LogDetail("))
+        #expect(source.contains("detail: exitLogDetail("))
         #expect(source.contains("stderr: result.stderr"))
         #expect(source.contains("exitCode: result.exitCode"))
     }

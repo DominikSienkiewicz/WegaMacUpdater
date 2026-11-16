@@ -141,6 +141,22 @@ struct ProcessDiagnosticsTests {
         #expect(!String(describing: fixture.events).contains("inline-sensitive-value"))
     }
 
+    @Test func suppressedLoggingKeepsOutputOutOfTheTrace() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        var request = Self.request("printf 'SEC''RET-OUT'; printf 'SEC''RET-ERR' >&2; exit 2")
+        request.outputLogging = .suppressed
+        let result = try await UpdateDiagnostics.$current.withValue(fixture.run) {
+            try await ProcessRunner().run(request)
+        }
+        #expect(result.stdout == "SECRET-OUT")
+        #expect(result.stderr == "SECRET-ERR")
+        let events = fixture.events
+        #expect(!events.contains { $0.event == "process.stdout" || $0.event == "process.stderr" })
+        #expect(!String(describing: events).contains("SECRET"))
+        #expect(events.last { $0.event == "process.finished" }?.fields["exit_code"] == "2")
+    }
+
     @Test func signalTerminationIsDistinguishedFromANormalExit() async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }

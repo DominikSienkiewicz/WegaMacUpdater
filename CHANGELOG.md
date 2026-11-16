@@ -13,6 +13,21 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Added
+- A "Porządki" section (sidebar, ⌘6) that finds what a tool leaves behind in several copies.
+  It explains why a command appears more than once on your `PATH` (the usual cause of repeated
+  "Files and Folders" prompts), and lists old versions kept by native installers, Homebrew
+  copies shadowed by another install, copies owned by an app (marked, never offered for
+  removal) and stale `fnm` shell entries from before the last restart. The scan only reads.
+  Confirmed items go to the Trash, or are removed with Homebrew; Documents, Desktop,
+  Downloads, iCloud and other protected locations are never opened. Your shell is run only
+  when you press "Odczytaj PATH". The result can be exported as a text or JSON report with
+  `~` in place of your home folder.
+
+### Changed
+- The Logs keyboard shortcut moved from ⌘6 to ⌘7, because the new "Porządki" section takes ⌘6
+  in the sidebar order.
+
 ### Fixed
 - Obsidian no longer shows a GitHub update it has already installed. The GitHub Releases check
   compared the release with the installer version in the app bundle, not with the newer package

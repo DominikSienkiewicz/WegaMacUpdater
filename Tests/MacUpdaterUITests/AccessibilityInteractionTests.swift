@@ -109,6 +109,7 @@ final class AccessibilityInteractionTests: XCTestCase {
             "row(.migration)",
             "row(.inventory)",
             "row(.uninstall)",
+            "row(.cleanup)",
             "row(.logs",
         ]
         let positions = try orderedRows.map { marker in
