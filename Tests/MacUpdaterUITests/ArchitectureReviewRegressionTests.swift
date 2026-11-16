@@ -399,6 +399,24 @@ struct ArchitectureReviewRegressionTests {
         #expect(offenders.isEmpty, "Cleanup sources break the safety rules: \(offenders.sorted())")
     }
 
+    /// `TCC.db` belongs to the system: the reader opens it read-only and holds no write statement,
+    /// so a later edit cannot quietly turn a privacy read into a modification.
+    @Test func cleanupTCCReaderIsReadOnly() throws {
+        let root = packageRoot()
+        let code = executableSource(try source("Sources/MacUpdaterCore/CleanupTCCDatabase.swift", root: root))
+        let range = NSRange(code.startIndex..., in: code)
+        #expect(code.contains("SQLITE_OPEN_READONLY"))
+        for forbidden in ["SQLITE_OPEN_READWRITE", "SQLITE_OPEN_CREATE", "immutable"] {
+            #expect(!code.contains(forbidden), "the TCC reader must not use \(forbidden)")
+        }
+        let writeVerbs = try NSRegularExpression(
+            pattern: #"\b(INSERT|UPDATE|DELETE|DROP|ATTACH|CREATE|REPLACE|VACUUM)\b"#
+        )
+        #expect(writeVerbs.firstMatch(in: code, range: range) == nil, "the TCC reader holds a write statement")
+        let pragmas = try NSRegularExpression(pattern: #"PRAGMA\b(?!\s+table_info)"#)
+        #expect(pragmas.firstMatch(in: code, range: range) == nil, "only PRAGMA table_info may be used")
+    }
+
     private func swiftSources(under relativePath: String) throws -> [(name: String, text: String)] {
         let root = packageRoot()
         let directory = root.appendingPathComponent(relativePath)
