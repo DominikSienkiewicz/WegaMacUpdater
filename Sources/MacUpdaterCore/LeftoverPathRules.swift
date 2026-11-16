@@ -16,7 +16,7 @@ enum LeftoverPathRules {
     ]
 
     private static let applePrefix = "com.apple."
-    private static let recentDocumentsFolder = [
+    static let recentDocumentsFolder = [
         "Library", "Application Support", "com.apple.sharedfilelist",
         "com.apple.LSSharedFileList.ApplicationRecentDocuments",
     ]
