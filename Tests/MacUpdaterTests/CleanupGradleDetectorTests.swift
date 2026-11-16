@@ -177,6 +177,39 @@ final class CleanupGradleDetectorTests: XCTestCase {
         XCTAssertFalse(String(describing: found).contains("user:token@"), "a finding carries the URL's user-info")
     }
 
+    /// Gradle names the folder after the URI's decoded path (`URI.getPath()`, last `/` piece), so a
+    /// query, a fragment or percent-encoding still names `gradle-<v>-<type>`; none of it leaves.
+    func testQueryFragmentAndPercentEncodingNameTheDistributionGradleUses() throws {
+        let home = try CleanupTempHome()
+        let queried = try distribution(home, "gradle-8.5-bin")
+        let fragmented = try distribution(home, "gradle-8.6-all")
+        let encoded = try distribution(home, "gradle-8.7-bin")
+        let withQuery = try wrapper(home, project: "a", distributionURL: "https\\://mirror/dist/gradle-8.5-bin.zip?token=q-secret-1")
+        let withFragment = try wrapper(home, project: "b", distributionURL: "https\\://mirror/dist/gradle-8.6-all.zip#f-secret-2/part")
+        let percentEncoded = try wrapper(home, project: "c", distributionURL: "https\\://mirror/dist/gradle-8.7%2Dbin.zip")
+
+        let found = detector(home).findings(projectFiles: [withQuery, withFragment, percentEncoded], walkIsComplete: true)
+
+        XCTAssertEqual(try finding(at: queried, in: found).status, .pinned(by: [withQuery.url.path]))
+        XCTAssertEqual(try finding(at: fragmented, in: found).status, .pinned(by: [withFragment.url.path]))
+        XCTAssertEqual(try finding(at: encoded, in: found).status, .pinned(by: [percentEncoded.url.path]))
+        XCTAssertEqual(
+            CleanupGradleRequirements.distribution(inWrapperProperties: "distributionUrl=https\\://mirror/dist%2Fgradle-8.8-bin.zip\n"),
+            CleanupGradleDistribution(version: "8.8", type: "bin")
+        )
+        XCTAssertNil(CleanupGradleRequirements.distribution(inWrapperProperties: "distributionUrl=https\\://mirror/gradle-8.9%ZZbin.zip\n"))
+        let report = CleanupReport(
+            createdAt: Date(timeIntervalSince1970: 0),
+            path: CleanupPathSnapshot(entries: [], ignoredEntries: [], shell: nil, capturedAt: nil, isApproximate: false),
+            findings: found, notes: [], skippedProtected: []
+        )
+        let json = String(decoding: try CleanupReportRenderer.json(report, home: home.home), as: UTF8.self)
+        for secret in ["q-secret-1", "f-secret-2", "mirror"] {
+            XCTAssertFalse(json.contains(secret), "the JSON export carries \(secret)")
+            XCTAssertFalse(String(describing: found).contains(secret), "a finding carries \(secret)")
+        }
+    }
+
     /// A daemon's classpath and agent are `:`/`=`-joined, so no argument is an absolute path on its own.
     func testDaemonReferencingADistributionIsInUse() throws {
         let home = try CleanupTempHome()

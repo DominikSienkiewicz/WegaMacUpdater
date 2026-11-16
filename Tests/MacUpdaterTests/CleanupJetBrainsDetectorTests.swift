@@ -221,8 +221,32 @@ final class CleanupJetBrainsDetectorTests: XCTestCase {
         )
     }
 
+    /// IntelliJ IDEA's real product-info.json is over 500 KB, most of it the `layout` array.
+    func testLargeProductInfoIsStillRead() throws {
+        let home = try CleanupTempHome()
+        let layout = (0..<9_000).map { index in
+            #"{"name": "plugin\#(index)", "kind": "plugin", "classPath": ["plugins/p\#(index)/lib/p\#(index).jar"]}"#
+        }
+        let productInfo = """
+        {"name": "IntelliJ IDEA", "version": "2026.3", "productCode": "IU", "dataDirectoryName": "IntelliJIdea2026.3",
+         "layout": [\(layout.joined(separator: ",\n"))]}
+        """
+        XCTAssertGreaterThan(productInfo.utf8.count, 600_000, "precondition: larger than the old 256 KB cap")
+        try ide(home, "Applications/IntelliJ IDEA.app", productInfo: productInfo)
+        let old = try folder(home, "IntelliJIdea2026.1")
+
+        let result = detector(home).findings()
+
+        XCTAssertEqual(result.notes, [])
+        XCTAssertEqual(result.findings.map(\.path.path), [old.path])
+        XCTAssertEqual(result.findings.first?.reason, .ideVersionNotInstalled(installed: ["2026.3"]))
+        XCTAssertEqual(result.findings.first?.bucket, .safe)
+        XCTAssertEqual(detector(home).installedDataDirectoryNames().names, ["IntelliJIdea2026.3"])
+    }
+
     /// An application folder that cannot be listed may hold an installed IDE of any version.
     func testUnreadableApplicationFolderKeepsEveryCandidateUndecided() throws {
+        try XCTSkipIf(geteuid() == 0, "root can list a 000 directory")
         let home = try CleanupTempHome()
         try ide(home, "Applications/IntelliJ IDEA.app", dataDirectoryName: "IntelliJIdea2026.3")
         let locked = try home.directory("Locked")

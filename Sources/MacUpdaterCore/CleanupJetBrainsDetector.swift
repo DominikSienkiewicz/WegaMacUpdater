@@ -76,7 +76,8 @@ public struct CleanupJetBrainsDetector: Sendable {
     private static let toolboxApps = "Library/Application Support/JetBrains/Toolbox/apps"
     private static let toolboxDepth = 4
     private static let productInfo = "Contents/Resources/product-info.json"
-    private static let maxProductInfoBytes = 262_144
+    /// IntelliJ IDEA's product-info.json passes 500 KB (its `layout` array); only `dataDirectoryName` is decoded.
+    private static let maxProductInfoBytes = 4_194_304
 
     private struct ProductInfo: Decodable {
         let dataDirectoryName: String?

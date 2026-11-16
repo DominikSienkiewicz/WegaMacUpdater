@@ -49,12 +49,15 @@ public enum CleanupGradleRequirements {
     private static let maxMajorDigits = 4
     private static let byteOrderMark: Unicode.Scalar = "\u{FEFF}"
 
-    /// The distribution the wrapper downloads: the last `distributionUrl`, `\:` unescaped, whose
-    /// last `/`-component is `gradle-<version>-<bin|all>.zip`.
+    /// The distribution the wrapper downloads: the last `distributionUrl`, `\:` unescaped, named the
+    /// way Gradle names its folder — from the URI's path as `URI.getPath()` gives it (query and
+    /// fragment dropped, percent-decoded), whose last `/` piece must be `gradle-<version>-<bin|all>.zip`.
     public static func distribution(inWrapperProperties text: String) -> CleanupGradleDistribution? {
-        guard let url = properties(text).last(where: { isSame($0.key, "distributionUrl") })?.value else { return nil }
+        guard let url = properties(text).last(where: { isSame($0.key, "distributionUrl") })?.value,
+              let path = String(String.UnicodeScalarView(url.unicodeScalars.prefix { $0 != "?" && $0 != "#" })).removingPercentEncoding
+        else { return nil }
         let fileName = String(String.UnicodeScalarView(
-            url.unicodeScalars.split(separator: "/", omittingEmptySubsequences: false).last ?? Substring.UnicodeScalarView()
+            path.unicodeScalars.split(separator: "/", omittingEmptySubsequences: false).last ?? Substring.UnicodeScalarView()
         ))
         guard let name = dropping(".zip", from: fileName) else { return nil }
         return CleanupGradleDistribution.named(name)
