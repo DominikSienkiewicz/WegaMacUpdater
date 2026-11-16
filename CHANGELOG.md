@@ -23,8 +23,8 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   Downloads, iCloud and other protected locations are never opened. Your shell is run only
   when you press "Odczytaj PATH". The result can be exported as a text or JSON report with
   `~` in place of your home folder.
-- "Porządki" also finds Homebrew leftovers per package (`brew cleanup` for one formula at a
-  time, skipping packages upgraded in the last 7 days, and unused formulae offered as
+- "Porządki" also finds Homebrew leftovers per package (`brew cleanup` for one formula or
+  cask at a time, skipping packages upgraded in the last 7 days, and unused formulae offered as
   `brew uninstall --formula`), unused runtime versions from uv, pyenv, fnm, nvm, SDKMAN, rustup,
   mise, asdf, Volta and pnpm (shown as commands to copy, never removed by Wega), unused Gradle
   wrapper distributions and downloaded JDKs, and folders of JetBrains IDE versions that are no
