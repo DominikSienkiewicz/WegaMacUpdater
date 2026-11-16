@@ -116,18 +116,22 @@ final class CleanupHomebrewDetectorTests: XCTestCase {
 
         let result = await scan(brew)
 
-        XCTAssertEqual(result.findings.count, 1)
+        XCTAssertEqual(result.findings.count, 2, "the log is removed only by a global `brew cleanup`: \(result.findings)")
         let finding = try XCTUnwrap(result.findings.first)
         XCTAssertEqual(finding.detector, .homebrew)
         XCTAssertEqual(finding.action, .brew(.cleanup("node")))
-        XCTAssertEqual(finding.size, 80_004_096)
+        XCTAssertEqual(finding.size, 80_000_000)
         XCTAssertEqual(finding.status, .unused)
-        XCTAssertEqual(finding.reason, .homebrewLeftovers(items: 3))
+        XCTAssertEqual(finding.reason, .homebrewLeftovers(items: 2))
         XCTAssertEqual(finding.risk, .low)
         XCTAssertEqual(finding.bucket, .needsDecision)
         let packageDirectory = underPrefix("Cellar/node")
         XCTAssertEqual(finding.path.path, packageDirectory.path)
         XCTAssertEqual(finding.identity, try fileSystem.entry(at: packageDirectory)?.identity)
+        let logFinding = try XCTUnwrap(result.findings.last)
+        XCTAssertEqual(logFinding.path, log)
+        XCTAssertEqual(logFinding.status, .info)
+        XCTAssertEqual(logFinding.action, .none)
         for finding in result.findings {
             if case .brew(.cleanup(let name)) = finding.action {
                 XCTAssertTrue(CleanupHomebrewNames.isValid(name), "a cleanup without a package is global: \(name)")
@@ -135,6 +139,29 @@ final class CleanupHomebrewDetectorTests: XCTestCase {
             if case .command(let text) = finding.action {
                 XCTAssertFalse(text.contains("brew"), "Homebrew runs only as a per-package action: \(text)")
             }
+        }
+    }
+
+    /// `brew cleanup -- <name>` runs only the formula's and cask's own clean-up; old logs and
+    /// `<version>.reinstall` kegs go only with a global `brew cleanup`, which Wega never runs.
+    /// Offering the package's command for them would leave a row no removal can clear.
+    func testLogsAndReinstallKegsOnlyAGlobalCleanupRemovesAreInformationOnly() async throws {
+        try version("Cellar/node/23.0.0")
+        let reinstallKeg = try version("Cellar/node/23.0.0.reinstall")
+        let log = tmp.url("Library/Logs/Homebrew/node")
+
+        let onlyLog = await scan(FakeBrewDryRuns(cleanup: [item(log, 4096)]))
+        let onlyReinstall = await scan(FakeBrewDryRuns(cleanup: [item(reinstallKeg, 8192)]))
+
+        for (result, path) in [(onlyLog, log), (onlyReinstall, reinstallKeg)] {
+            XCTAssertFalse(
+                result.findings.contains { $0.action == .brew(.cleanup("node")) },
+                "\(path.lastPathComponent) is not the package's leftover: \(result.findings.map(\.action))"
+            )
+            let leftover = try XCTUnwrap(result.findings.first { $0.path.path == path.path }, path.path)
+            XCTAssertEqual(leftover.status, .info)
+            XCTAssertEqual(leftover.action, .none)
+            XCTAssertEqual(leftover.reason, .homebrewLeftovers(items: 1))
         }
     }
 
@@ -366,12 +393,13 @@ final class CleanupHomebrewDetectorTests: XCTestCase {
             ("/opt/homebrew/Caskroom/firefox/120.0", ExpectedPackage(.cask, "firefox")),
             (
                 "\(cache)/downloads/\(Self.downloadHash)--python@3.12--3.12.1.arm64_sequoia.bottle.tar.gz",
-                ExpectedPackage(.cacheOrLog, "python@3.12")
+                ExpectedPackage(.cache, "python@3.12")
             ),
-            ("\(cache)/node--22.1.0.arm64_sequoia.bottle.tar.gz", ExpectedPackage(.cacheOrLog, "node")),
-            ("\(cache)/node_bottle_manifest--22.1.0", ExpectedPackage(.cacheOrLog, "node")),
-            ("\(cache)/Cask/firefox--120.0.dmg", ExpectedPackage(.cacheOrLog, "firefox")),
-            ("/Users/someone/Library/Logs/Homebrew/node", ExpectedPackage(.cacheOrLog, "node")),
+            ("\(cache)/node--22.1.0.arm64_sequoia.bottle.tar.gz", ExpectedPackage(.cache, "node")),
+            ("\(cache)/node_bottle_manifest--22.1.0", ExpectedPackage(.cache, "node")),
+            ("\(cache)/Cask/firefox--120.0.dmg", ExpectedPackage(.cache, "firefox")),
+            ("/Users/someone/Library/Logs/Homebrew/node", nil),
+            ("/opt/homebrew/Cellar/node/23.0.0.reinstall", nil),
             ("\(cache)/downloads/\(Self.downloadHash)--firefox-120.0.dmg", nil),
             ("\(cache)/downloads/not-a-hash--node--22.1.0.bottle.tar.gz", nil),
             ("\(cache)/api/formula.jws.json", nil),

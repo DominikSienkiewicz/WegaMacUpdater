@@ -344,12 +344,12 @@ public struct CleanupRemover: Sendable {
     }
 
     /// The old kegs and cask versions a cleanup dry run lists, `…/Cellar/<n>/<v>` and
-    /// `…/Caskroom/<t>/<v>`, under their listed and physical paths. Caches and logs run nothing.
+    /// `…/Caskroom/<t>/<v>`, under their listed and physical paths. Cache files run nothing.
     private func processesUsing(oldVersionsAmong leftovers: [CleanupBrewCleanupItem]) -> [CleanupProcess] {
         let processes = inspector.userProcesses()
         let versions = leftovers.map(\.path).filter { path in
             guard let package = CleanupHomebrewPackage.name(of: path) else { return false }
-            return package.kind != .cacheOrLog
+            return package.kind != .cache
         }
         let roots = versions + versions.compactMap { try? fileSystem.realpath($0) }
         let matched = roots.flatMap { CleanupInUseMatcher.processes(using: $0, isDirectory: true, among: processes) }

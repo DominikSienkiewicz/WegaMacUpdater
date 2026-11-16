@@ -5,16 +5,20 @@ import Foundation
 /// cache file names.
 enum CleanupHomebrewPackage {
     enum Kind: Equatable, Sendable {
-        case formula, cask, cacheOrLog
+        case formula, cask, cache
     }
 
     /// A cached bottle manifest is linked as `<n>_bottle_manifest--<v>` beside the bottle itself.
     private static let manifestSuffix = Array("_bottle_manifest".unicodeScalars)
+    /// `brew reinstall` sets the keg it replaces aside as `<v>.reinstall`.
+    private static let reinstallSuffix = Array(".reinstall".unicodeScalars)
 
-    /// `…/Cellar/<n>/<v>` is a formula's old keg and `…/Caskroom/<t>/<v>` a cask's old version. A
-    /// download (`…/Caches/Homebrew/downloads/<hex>--<n>--…`), its link (`…/Caches/Homebrew/<n>--…`,
-    /// `…/Caches/Homebrew/Cask/<t>--…`) and a log folder (`…/Logs/Homebrew/<n>`) are a cache or
-    /// log. Anything else names no package.
+    /// What `brew cleanup -- <name>` removes for that package: `…/Cellar/<n>/<v>` is a formula's
+    /// old keg and `…/Caskroom/<t>/<v>` a cask's old version; a download
+    /// (`…/Caches/Homebrew/downloads/<hex>--<n>--…`) and its link (`…/Caches/Homebrew/<n>--…`,
+    /// `…/Caches/Homebrew/<n>_bottle_manifest--…`, `…/Caches/Homebrew/Cask/<t>--…`) are its cache.
+    /// A log folder (`…/Logs/Homebrew/<n>`) and a set-aside keg (`…/Cellar/<n>/<v>.reinstall`)
+    /// go only with a global `brew cleanup`, so they name no package, nor does anything else.
     static func name(of item: URL) -> (kind: Kind, name: String)? {
         let components = CleanupPathText.components(of: item.path)
         guard components.count >= 3 else { return nil }
@@ -24,27 +28,30 @@ enum CleanupHomebrewPackage {
         let greatGrandparent = components.count >= 4 ? components[components.count - 4] : ""
         switch (greatGrandparent, grandparent, parent) {
         case (_, "Cellar", _):
-            return (.formula, parent)
+            return hasSuffix(last, reinstallSuffix) ? nil : (.formula, parent)
         case (_, "Caskroom", _):
             return (.cask, parent)
-        case (_, "Logs", "Homebrew"):
-            return (.cacheOrLog, last)
         case (_, "Caches", "Homebrew"), ("Caches", "Homebrew", "Cask"):
-            return cacheOrLog(fields(of: last), nameAt: 0)
+            return cache(fields(of: last), nameAt: 0)
         case ("Caches", "Homebrew", "downloads"):
             let parts = fields(of: last)
             guard let hash = parts.first, isHexadecimal(hash) else { return nil }
-            return cacheOrLog(parts, nameAt: 1)
+            return cache(parts, nameAt: 1)
         default:
             return nil
         }
     }
 
     /// The name must be followed by another `--` field, the way Homebrew writes its cache names.
-    private static func cacheOrLog(_ fields: [String], nameAt index: Int) -> (kind: Kind, name: String)? {
+    private static func cache(_ fields: [String], nameAt index: Int) -> (kind: Kind, name: String)? {
         guard fields.count > index + 1 else { return nil }
         let name = withoutManifestSuffix(fields[index])
-        return name.isEmpty ? nil : (.cacheOrLog, name)
+        return name.isEmpty ? nil : (.cache, name)
+    }
+
+    private static func hasSuffix(_ text: String, _ suffix: [Unicode.Scalar]) -> Bool {
+        let scalars = Array(text.unicodeScalars)
+        return scalars.count > suffix.count && Array(scalars.suffix(suffix.count)) == suffix
     }
 
     private static func fields(of fileName: String) -> [String] {
@@ -67,11 +74,8 @@ enum CleanupHomebrewPackage {
     }
 
     private static func withoutManifestSuffix(_ field: String) -> String {
-        let scalars = Array(field.unicodeScalars)
-        guard scalars.count > manifestSuffix.count, Array(scalars.suffix(manifestSuffix.count)) == manifestSuffix else {
-            return field
-        }
-        return String(String.UnicodeScalarView(scalars.dropLast(manifestSuffix.count)))
+        guard hasSuffix(field, manifestSuffix) else { return field }
+        return String(String.UnicodeScalarView(Array(field.unicodeScalars).dropLast(manifestSuffix.count)))
     }
 
     private static func isHexadecimal(_ text: String) -> Bool {
@@ -87,7 +91,7 @@ public struct CleanupHomebrewDetector: Sendable {
     private enum Side {
         case formula
         case cask
-        /// A cache or log whose name no old keg or cask version in the same dry run shares.
+        /// A cache file whose name no old keg or cask version in the same dry run shares.
         case unattached
 
         /// Where the side's package directory can be, in the order it is looked for.
@@ -258,7 +262,7 @@ public struct CleanupHomebrewDetector: Sendable {
     }
 
     /// `brew uninstall --formula` leaves a cask of the same name alone, so only the formula side, or
-    /// a cache or log whose package directory is the keg folder, is replaced.
+    /// a cache file whose package directory is the keg folder, is replaced.
     private static func isUninstalled(_ key: GroupKey, package: Package?, by uninstalled: Set<String>) -> Bool {
         guard uninstalled.contains(key.name) else { return false }
         switch key.side {
@@ -269,7 +273,7 @@ public struct CleanupHomebrewDetector: Sendable {
     }
 
     /// One group per package, in dry-run order. A formula and a cask of the same name stay apart;
-    /// a cache or log joins the formula of its name, else the cask, else stands on its own.
+    /// a cache file joins the formula of its name, else the cask, else stands on its own.
     private static func groups(
         of items: [CleanupBrewCleanupItem]
     ) -> (named: [Group], unattributed: [CleanupBrewCleanupItem]) {
@@ -286,7 +290,7 @@ public struct CleanupHomebrewDetector: Sendable {
             let side: Side = switch package.kind {
             case .formula: .formula
             case .cask: .cask
-            case .cacheOrLog: formulas.contains(package.name) ? .formula : casks.contains(package.name) ? .cask : .unattached
+            case .cache: formulas.contains(package.name) ? .formula : casks.contains(package.name) ? .cask : .unattached
             }
             let key = GroupKey(side: side, name: package.name)
             if let index = groups.firstIndex(where: { $0.key == key }) {
@@ -338,7 +342,7 @@ public struct CleanupHomebrewDetector: Sendable {
             if now < eligible { return .recentUpgrade(until: eligible) }
         }
         var users: [CleanupProcess] = []
-        for entry in group.items where entry.kind != .cacheOrLog {
+        for entry in group.items where entry.kind != .cache {
             guard let real = try? fileSystem.realpath(entry.item.path) else { continue }
             for user in CleanupInUseMatcher.processes(using: real, isDirectory: true, among: processes)
             where !users.contains(where: { $0.pid == user.pid }) {
