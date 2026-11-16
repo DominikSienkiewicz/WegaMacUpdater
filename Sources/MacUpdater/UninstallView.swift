@@ -6,6 +6,8 @@ struct UninstallView: View {
     var onWegaState: ((WegaState) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
+    /// The Settings window hosts the helper card that turns Wega's helper on.
+    @Environment(\.openSettings) private var openSettings
 
     @State private var apps:          [ApplicationInfo] = []
     @State private var protections:    [String: UninstallProtection] = [:]
@@ -282,8 +284,7 @@ struct UninstallView: View {
         case .openAppManagementSettings:
             NSWorkspace.shared.open(AppManagementSettings.paneURL)
         case .openHelperSettings:
-            // No result offers this until the helper removal route exists.
-            break
+            openSettings()
         }
     }
 
@@ -346,7 +347,7 @@ struct UninstallView: View {
         guard !targets.isEmpty, !isUninstalling else { return }
         pendingUninstallTargets = targets
         pendingScanIncomplete = scanFailed
-        pendingRoutes = operations.routes(for: targets)
+        pendingRoutes = await operations.routes(for: targets)
         // A blocked target is not attempted: it is neither asked to quit nor offers leftovers.
         let attempted = UninstallQuitFlow.partition(targets: targets, routes: pendingRoutes).attempt
         pendingRunningStates = operations.runningStates(for: attempted)
@@ -553,7 +554,7 @@ struct UninstallDialog: View {
     static func routeNote(for route: UninstallRouteDecision?) -> String? {
         switch route {
         case .userTrash: tr("trafi do Kosza")
-        case .helper: UninstallResultPresentation.blockReason(.needsHelper)
+        case .helper: tr("pomocnik Wega usunie ją bez hasła")
         case .blocked(let block): UninstallResultPresentation.blockReason(block)
         case nil: nil
         }

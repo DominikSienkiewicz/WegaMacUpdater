@@ -69,6 +69,116 @@ struct PrivilegedHelperDeadlineTests {
                 == .mismatch(reported: stale, expected: WegaHelper.version)
         )
     }
+
+    // MARK: - Staging a root-owned app for the Trash (Uninstall)
+
+    /// The helper walks the whole bundle under a lock, so a large app takes a while: the wait is
+    /// generous, but it still ends, so a dead helper never leaves Uninstall hanging.
+    @Test func stagingDeadlineIsBounded() {
+        let deadline = PrivilegedHelperClient.Deadline.stageForTrash
+        #expect(deadline >= .seconds(300), "a large bundle must have time to be handed over")
+        #expect(deadline <= PrivilegedHelperClient.Deadline.replaceBundle, "the wait stays bounded")
+    }
+
+    @Test func stagingCallHandshakesFirstAndWaitsOnItsOwnDeadline() throws {
+        let body = try functionBody(
+            "public func stageApplicationBundleForTrash(",
+            in: "Sources/MacUpdaterCore/PrivilegedHelper/PrivilegedHelperClient.swift"
+        )
+        let handshake = try #require(body.range(of: "try await performHandshake()"), "a stale helper must be refused first")
+        let request = try #require(body.range(of: "call(deadline: Deadline.stageForTrash)"))
+        #expect(handshake.lowerBound < request.lowerBound)
+    }
+
+    /// Registration alone is only the first filter; the handshake before the sheet decides whether
+    /// the helper can be promised.
+    @Test func uninstallUsesTheHelperOnlyWhileItIsRegistered() {
+        #expect(PrivilegedHelperClient.uninstallAvailability(isEnabled: true) == .enabled)
+        #expect(PrivilegedHelperClient.uninstallAvailability(isEnabled: false) == .off)
+    }
+
+    /// A failed handshake never promises the helper: not enabled reads as off, everything else
+    /// (stale version, no answer, lost connection, a raw XPC error) as stale.
+    @Test func handshakeFailureMapsToAvailability() {
+        typealias HelperError = PrivilegedHelperClient.HelperError
+        let xpc = NSError(domain: NSCocoaErrorDomain, code: NSXPCConnectionInterrupted)
+        let cases: [(error: any Error, expected: UninstallHelperAvailability)] = [
+            (HelperError.notEnabled, .off),
+            (HelperError.versionMismatch(helper: "5", expected: "6"), .stale),
+            (HelperError.timedOut, .stale),
+            (HelperError.connectionFailed, .stale),
+            (HelperError.operationFailed("x"), .stale),
+            (HelperError.teamIDNotConfigured, .stale),
+            (xpc, .stale),
+        ]
+        for item in cases {
+            #expect(PrivilegedHelperClient.uninstallAvailability(handshakeFailure: item.error) == item.expected, "\(item.error)")
+        }
+    }
+
+    /// A path with a note means the bundle left /Applications but some items stayed root-owned;
+    /// it is still the staged bundle the app then moves to the Trash.
+    @Test func aStagedPathIsTheResultWithOrWithoutAHandOverNote() throws {
+        let staged = "/Library/Application Support/com.wega.WegaMacUpdater/UninstallStaging/A/Foo.app"
+        let complete = PrivilegedHelperClient.stagingReply(stagedPath: staged, note: nil)
+        let partial = PrivilegedHelperClient.stagingReply(stagedPath: staged, note: "2 items stayed root-owned")
+
+        #expect(try complete.get() == URL(fileURLWithPath: staged))
+        #expect(try partial.get() == URL(fileURLWithPath: staged))
+    }
+
+    @Test func noStagedPathIsTheHelpersRefusalWithItsMessage() {
+        let refusal = PrivilegedHelperClient.stagingReply(stagedPath: nil, note: "Aplikacja nie należy do roota.")
+        let silent = PrivilegedHelperClient.stagingReply(stagedPath: nil, note: nil)
+
+        #expect(operationFailure(refusal) == "Aplikacja nie należy do roota.")
+        #expect(operationFailure(silent)?.isEmpty == false, "a refusal without a note still says what failed")
+    }
+
+    /// Ruling 19: a failure of the handshake is marked as not sent, and a failure of the staging
+    /// request itself as sent, so Uninstall can tell "reinstall the helper" (nothing happened)
+    /// from "the app may already have left /Applications".
+    @Test func stagingFailuresSayWhetherTheRequestWasSent() throws {
+        let body = try functionBody(
+            "public func stageApplicationBundleForTrash(",
+            in: "Sources/MacUpdaterCore/PrivilegedHelper/PrivilegedHelperClient.swift"
+        )
+        let handshake = try #require(body.range(of: "try await performHandshake()"))
+        let notSent = try #require(body.range(of: "StagingFailure(underlying: error, requestSent: false)"))
+        let request = try #require(body.range(of: "call(deadline: Deadline.stageForTrash)"))
+        let sent = try #require(body.range(of: "StagingFailure(underlying: error, requestSent: true)"))
+
+        #expect(handshake.upperBound < notSent.lowerBound)
+        #expect(body[handshake.upperBound..<notSent.lowerBound].contains("catch"),
+                "the handshake's own failure must be caught and marked as not sent")
+        #expect(notSent.upperBound < request.lowerBound)
+        #expect(body[request.upperBound..<sent.lowerBound].contains("catch"))
+    }
+
+    private func operationFailure(_ result: Result<URL, Error>) -> String? {
+        guard case .failure(let error) = result,
+              case .operationFailed(let message) = error as? PrivilegedHelperClient.HelperError
+        else { return nil }
+        return message
+    }
+
+    // MARK: - Source access
+
+    private func packageRoot(file: String = #filePath) -> URL {
+        URL(fileURLWithPath: file)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    /// The text of the function starting at `signature`, up to the closing brace at its own
+    /// indentation.
+    private func functionBody(_ signature: String, in relativePath: String) throws -> Substring {
+        let text = try String(contentsOf: packageRoot().appendingPathComponent(relativePath), encoding: .utf8)
+        let start = try #require(text.range(of: signature), "\(signature) must exist")
+        let end = text[start.upperBound...].range(of: "\n    }\n")?.upperBound ?? text.endIndex
+        return text[start.lowerBound..<end]
+    }
 }
 
 /// Thread-safe one-shot flag for observing whether the deadline's `onTimeout`

@@ -1,7 +1,7 @@
 import Foundation
 import WegaHelperKit
 
-public enum UninstallHelperAvailability: Equatable, Sendable { case notSupported, off, enabled }
+public enum UninstallHelperAvailability: Equatable, Sendable { case notSupported, off, enabled, stale }
 
 public struct UninstallBundleFacts: Equatable, Sendable {
     public var ownerUID: UInt32
@@ -53,6 +53,7 @@ public enum UninstallRoute {
         if facts.helper == .notSupported { return .blocked(.needsAdministratorRights) }
         if !facts.isAdministrator { return .blocked(.needsAdministratorAccount) }
         if facts.helper == .off { return .blocked(.needsHelper) }
+        if facts.helper == .stale { return .blocked(.helperNeedsReinstall) }
         return .helper
     }
 
@@ -78,8 +79,9 @@ extension UninstallBundleFacts {
     /// follow a symlink. A bundle that vanished (`ENOENT`) routes to the user's Trash so the
     /// real "no such file" error surfaces as a failure. Any other inspection failure reads as
     /// not writable and owned by nobody, so the route fails toward a blocked result and never
-    /// toward an attempt as root.
-    public static func live(path: URL, hasBundleIdentifier: Bool) -> UninstallBundleFacts {
+    /// toward an attempt as root. `helper` is the helper's availability as the caller read it
+    /// (`PrivilegedHelperClient.uninstallAvailability`); the facts never contact the daemon.
+    public static func live(path: URL, hasBundleIdentifier: Bool, helper: UninstallHelperAvailability) -> UninstallBundleFacts {
         let currentUser = getuid()
         var status = stat()
         guard lstat(path.path, &status) == 0 else {
@@ -91,7 +93,7 @@ extension UninstallBundleFacts {
                 isTopLevelInApplications: WegaHelper.isTopLevelApplicationBundle(path: path.path),
                 hasBundleIdentifier: hasBundleIdentifier,
                 isAdministrator: AdministratorGroup.contains(uid: currentUser),
-                helper: .notSupported
+                helper: helper
             )
         }
         let owner: UInt32 = status.st_uid
@@ -104,7 +106,7 @@ extension UninstallBundleFacts {
             isTopLevelInApplications: WegaHelper.isTopLevelApplicationBundle(path: path.path),
             hasBundleIdentifier: hasBundleIdentifier,
             isAdministrator: AdministratorGroup.contains(uid: currentUser),
-            helper: .notSupported
+            helper: helper
         )
     }
 }

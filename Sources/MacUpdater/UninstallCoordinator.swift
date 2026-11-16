@@ -94,7 +94,7 @@ final class UninstallCoordinator: ObservableObject {
     }
 
     /// The side effects the coordinator performs, injectable so tests drive removal without
-    /// Homebrew or the user's real Trash.
+    /// Homebrew, the root helper or the user's real Trash.
     struct Dependencies: Sendable {
         var uninstallCask: @Sendable (BrewService, _ token: String, _ zap: Bool) async throws -> Void
         var trashItem: @Sendable (URL) throws -> Void
@@ -105,6 +105,11 @@ final class UninstallCoordinator: ObservableObject {
         var forceKill: @Sendable (Int32) async -> Bool
         var waitBetweenRunningChecks: @Sendable () async -> Void
         var bundleFacts: @Sendable (ApplicationInfo) -> UninstallBundleFacts
+        /// Has Wega's helper move a root-owned app into a staging slot this user owns; returns
+        /// where the bundle now is.
+        var stageForTrash: @Sendable (_ path: URL, _ bundleID: String) async throws -> URL
+        /// One bounded handshake with the helper, run before the sheet promises its route.
+        var helperHandshake: @Sendable () async -> UninstallHelperAvailability = { .enabled }
 
         static let live = Dependencies(
             uninstallCask: { brewService, token, zap in
@@ -117,7 +122,15 @@ final class UninstallCoordinator: ObservableObject {
             requestQuit: { WorkspaceTargetTerminator().requestGracefulTermination($0) },
             forceKill: { await RunningProcessService().forceKill(processIdentifier: $0) },
             waitBetweenRunningChecks: { try? await Task.sleep(for: .milliseconds(250)) },
-            bundleFacts: { UninstallBundleFacts.live(path: $0.path, hasBundleIdentifier: $0.bundleIdentifier != nil) }
+            bundleFacts: {
+                UninstallBundleFacts.live(
+                    path: $0.path,
+                    hasBundleIdentifier: $0.bundleIdentifier != nil,
+                    helper: PrivilegedHelperClient.shared.uninstallAvailability
+                )
+            },
+            stageForTrash: { try await PrivilegedHelperClient.shared.stageApplicationBundleForTrash(at: $0, expectedBundleID: $1) },
+            helperHandshake: { await PrivilegedHelperClient.shared.uninstallAvailabilityAfterHandshake() }
         )
     }
 
@@ -128,6 +141,12 @@ final class UninstallCoordinator: ObservableObject {
         /// could not be moved, so the result is reported honestly rather than swallowed.
         var leftoversTrashed: Int = 0
         var leftoversFailed: Int = 0
+    }
+
+    /// The helper took the request but never answered: it may have moved the app already, so
+    /// the result must not read as "nothing happened". The rescan after the run shows the truth.
+    static var unconfirmedHelperRemoval: String {
+        tr("Pomocnik Wega nie potwierdził usunięcia — aplikacja mogła już opuścić /Applications. Odświeżona lista pokazuje, czy nadal tam jest.")
     }
 
     @Published private(set) var state: State = .idle
@@ -156,11 +175,21 @@ final class UninstallCoordinator: ObservableObject {
     }
 
     /// The route each non-brew target would take, so the confirmation sheet can say what will
-    /// happen before the user consents. Brew-managed targets keep the Homebrew path.
-    func routes(for targets: [ApplicationInfo]) -> [String: UninstallRouteDecision] {
-        Dictionary(uniqueKeysWithValues: targets.filter { !$0.isManagedByBrew }.map {
-            ($0.id, UninstallRoute.preflight(dependencies.bundleFacts($0)))
+    /// happen before the user consents. Brew-managed targets keep the Homebrew path. When a
+    /// target would use the helper, one bounded handshake first checks that it is current, so a
+    /// stale or silent helper blocks the target before anything is quit.
+    func routes(for targets: [ApplicationInfo]) async -> [String: UninstallRouteDecision] {
+        let factsByID = Dictionary(uniqueKeysWithValues: targets.filter { !$0.isManagedByBrew }.map {
+            ($0.id, dependencies.bundleFacts($0))
         })
+        let preflight = factsByID.mapValues { UninstallRoute.preflight($0) }
+        guard preflight.values.contains(.helper) else { return preflight }
+        let handshake = await dependencies.helperHandshake()
+        return factsByID.mapValues { facts in
+            var checked = facts
+            if facts.helper == .enabled { checked.helper = handshake }
+            return UninstallRoute.preflight(checked)
+        }
     }
 
     func runningStates(for targets: [ApplicationInfo]) -> [String: RunningApplicationResolution] {
@@ -355,7 +384,7 @@ final class UninstallCoordinator: ObservableObject {
                     results[app.id] = .failed(error.localizedDescription)
                 }
             } else {
-                results[app.id] = removeNonBrew(app)
+                results[app.id] = await removeNonBrew(app)
             }
         }
         // UX-13: only an app that was actually removed releases its consented `~/Library`
@@ -384,7 +413,7 @@ final class UninstallCoordinator: ObservableObject {
 
     /// Moves one non-brew bundle to the user's Trash unless its route is already blocked.
     /// Only a permission refusal is re-routed; any other error is the app's real failure.
-    private func removeNonBrew(_ app: ApplicationInfo) -> UninstallTargetResult {
+    private func removeNonBrew(_ app: ApplicationInfo) async -> UninstallTargetResult {
         let facts = dependencies.bundleFacts(app)
         if case .blocked(let block) = UninstallRoute.preflight(facts) { return .blocked(block) }
         do {
@@ -394,10 +423,50 @@ final class UninstallCoordinator: ObservableObject {
             guard UninstallRoute.isPermissionDenied(error) else { return .failed(error.localizedDescription) }
             switch UninstallRoute.afterPermissionDenied(facts) {
             case .blocked(let block): return .blocked(block)
-            // Milestone B adds the helper removal here; until then it reads as "needs the helper".
-            case .helper: return .blocked(.needsHelper)
+            case .helper: return await removeThroughHelper(app)
             case .userTrash: return .failed(error.localizedDescription)
             }
+        }
+    }
+
+    /// The helper moves the root-owned bundle into a slot this user owns; the bundle then goes to
+    /// the Trash as the user. A bundle the Trash refuses stays in that slot, out of
+    /// `/Applications`, and nothing is deleted.
+    private func removeThroughHelper(_ app: ApplicationInfo) async -> UninstallTargetResult {
+        guard let bundleID = app.bundleIdentifier else { return .blocked(.needsAdministratorRights) }
+        let staged: URL
+        do {
+            staged = try await dependencies.stageForTrash(app.path, bundleID)
+        } catch let failure as PrivilegedHelperClient.StagingFailure {
+            return Self.helperFailure(failure.underlying, requestSent: failure.requestSent)
+        } catch {
+            // Without its phase the request may have been sent, so the app may already be gone.
+            return Self.helperFailure(error, requestSent: true)
+        }
+        do {
+            try dependencies.trashItem(staged)
+            return .movedToTrashByHelper
+        } catch {
+            return .leftInStaging(staged)
+        }
+    }
+
+    /// A helper that is not registered needs turning on. One that is stale, or did not answer
+    /// before the request was sent, must be reinstalled: nothing happened to the app. No answer
+    /// after the request was sent is not a plain failure, because the app may already be gone.
+    static func helperFailure(_ error: Error, requestSent: Bool) -> UninstallTargetResult {
+        switch error as? PrivilegedHelperClient.HelperError {
+        case .notEnabled:
+            return .blocked(.needsHelper)
+        case .versionMismatch:
+            return .blocked(.helperNeedsReinstall)
+        case .operationFailed(let message):
+            return .failed(message)
+        case .teamIDNotConfigured:
+            return .failed(error.localizedDescription)
+        case .timedOut, .connectionFailed, nil:
+            guard requestSent else { return .blocked(.helperNeedsReinstall) }
+            return .failed(unconfirmedHelperRemoval)
         }
     }
 }

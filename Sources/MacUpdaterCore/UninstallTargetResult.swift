@@ -3,6 +3,9 @@ import Foundation
 /// Why a removal could not proceed without Wega's helper or a permission the user has to grant.
 public enum UninstallBlock: Equatable, Sendable {
     case needsHelper
+    /// The helper is registered but older than this app, or did not answer before the request
+    /// was sent. Only a call to the helper finds this; no route predicts it.
+    case helperNeedsReinstall
     case needsAdministratorAccount
     case needsAdministratorRights
     case needsAppManagement

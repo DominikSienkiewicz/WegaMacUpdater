@@ -30,7 +30,10 @@ final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked 
         newConnection.setCodeSigningRequirement(WegaHelper.clientRequirement())
 
         newConnection.exportedInterface = NSXPCInterface(with: WegaPrivilegedOps.self)
-        newConnection.exportedObject = PrivilegedOps()
+        newConnection.exportedObject = PrivilegedOps(
+            callerUID: newConnection.effectiveUserIdentifier,
+            callerGID: newConnection.effectiveGroupIdentifier
+        )
         newConnection.resume()
         return true
     }
@@ -39,6 +42,20 @@ final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked 
 /// The whitelist. Each method does ONE bounded, well-defined privileged action,
 /// validating its inputs as root. No generic command execution.
 final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
+    /// Who is asking, as the kernel reports it for this connection's audit token — never a
+    /// value the client sends.
+    private let callerUID: uid_t
+    private let callerGID: gid_t
+
+    /// Connections are served on separate queues; staging calls must not sweep, create or hand
+    /// over slots at the same time.
+    private static let stagingLock = NSLock()
+
+    init(callerUID: uid_t, callerGID: gid_t) {
+        self.callerUID = callerUID
+        self.callerGID = callerGID
+        super.init()
+    }
 
     func helperVersion(withReply reply: @escaping @Sendable (String) -> Void) {
         HelperAuditLog.logger.info("helperVersion: sukces")
@@ -234,6 +251,136 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
         } catch {
             HelperAuditLog.logger.error("replaceBundle: błąd")
             reply(false, error.localizedDescription)
+        }
+    }
+
+    /// Stages a root-owned application from `/Applications` for the caller's Trash, in the order
+    /// `UninstallStaging` documents: every gate, then a root-only slot, the move, an identity
+    /// re-check of what was moved, the tree handed to the caller, and the slot last.
+    func stageApplicationBundleForTrash(
+        atPath path: String, expectedBundleID: String, withReply reply: @escaping @Sendable (String?, String?) -> Void
+    ) {
+        Self.stagingLock.lock()
+        defer { Self.stagingLock.unlock() }
+        do { try HelperInstallations.registry.get().requireNoUnresolvedInstallation() }
+        catch { Self.refuseStaging(error.localizedDescription, reason: "installation", reply); return }
+
+        if let rejection = WegaHelper.bundleStagingRejection(targetPath: path) {
+            Self.refuseStaging(rejection, reply); return
+        }
+        guard let inspection = UninstallStaging.inspectTarget(atPath: path) else {
+            Self.refuseStaging("Nie znaleziono aplikacji do usunięcia.", reason: "missing", reply); return
+        }
+        let facts = BundleStagingFacts(
+            targetPath: path,
+            targetResolvedPath: inspection.resolvedPath ?? "",
+            targetIsSymlink: inspection.isSymlink,
+            targetOwnerUID: inspection.ownerUID,
+            targetBundleID: inspection.bundleID,
+            expectedBundleID: expectedBundleID,
+            callerUID: callerUID,
+            consoleUserUID: Self.consoleUserUID(),
+            callerIsAdministrator: AdministratorGroup.contains(uid: callerUID)
+        )
+        if let rejection = WegaHelper.bundleStagingRejection(facts: facts) {
+            Self.refuseStaging(rejection, reply); return
+        }
+        let validated = inspection.identity
+        if let rejection = WegaHelper.bundleStagingRejection(
+            validated: validated, current: inspection.identityAfterReading
+        ) {
+            Self.refuseStaging(rejection, reply); return
+        }
+
+        let root = UninstallStaging.root.path
+        if let rejection = UninstallStaging.prepareRoot(at: root, ownerUID: 0) {
+            Self.refuseStaging(rejection, reply); return
+        }
+        UninstallStaging.sweepEmptySlots(in: root)
+        guard let slot = UninstallStaging.createSlot(in: root) else {
+            Self.refuseStaging("Nie udało się utworzyć miejsca w stagingu.", reason: "slot", reply); return
+        }
+
+        // The entry validated must still be the entry at the path, right before it moves.
+        guard let current = UninstallStaging.identity(atPath: path),
+              WegaHelper.bundleStagingRejection(validated: validated, current: current) == nil else {
+            UninstallStaging.discardSlot(slot)
+            Self.refuseStaging(BundleStagingRejection.targetSwapped, reply); return
+        }
+        let staged: String
+        do {
+            staged = try UninstallStaging.renameIntoSlot(path, slot: slot)
+        } catch {
+            UninstallStaging.discardSlot(slot)
+            Self.refuseStaging(
+                "Nie udało się przenieść aplikacji: \(error.localizedDescription)", reason: "rename", reply
+            )
+            return
+        }
+
+        // The entry now in the slot must be the one validated before anything changes owner. An
+        // exchange right before `rename` moved something else; it stays root's, in a root-only slot.
+        guard let moved = UninstallStaging.identity(atPath: staged),
+              WegaHelper.bundleStagingRejection(validated: validated, current: moved) == nil else {
+            Self.refuseStaging(BundleStagingRejection.targetSwapped, reply); return
+        }
+
+        let report = UninstallStaging.handOverTree(at: staged, expected: validated, toUID: callerUID, gid: callerGID)
+        let slotHandedOver = UninstallStaging.handOverSlot(slot, toUID: callerUID, gid: callerGID)
+        guard report.isComplete, slotHandedOver else {
+            HelperAuditLog.logger.error(
+                "stageApplicationBundleForTrash: przeniesiono, część została u roota (hard linki: \(report.hardLinked.count, privacy: .public), pominięte: \(report.skipped.count, privacy: .public), błędy: \(report.failed.count, privacy: .public), slot przekazany: \(slotHandedOver, privacy: .public))"
+            )
+            reply(staged, Self.handOverNote(report, slotHandedOver: slotHandedOver)); return
+        }
+        HelperAuditLog.logger.info("stageApplicationBundleForTrash: sukces")
+        reply(staged, nil)
+    }
+
+    private static func refuseStaging(
+        _ rejection: BundleStagingRejection, _ reply: @Sendable (String?, String?) -> Void
+    ) {
+        refuseStaging(message(for: rejection), reason: "\(rejection)", reply)
+    }
+
+    private static func refuseStaging(
+        _ message: String, reason: String, _ reply: @Sendable (String?, String?) -> Void
+    ) {
+        HelperAuditLog.logger.error("stageApplicationBundleForTrash: błąd (\(reason, privacy: .public))")
+        reply(nil, message)
+    }
+
+    private static func handOverNote(_ report: UninstallStaging.HandOverReport, slotHandedOver: Bool) -> String {
+        guard slotHandedOver else {
+            return "Aplikacja jest poza /Applications, ale katalog stagingu pozostał własnością roota."
+        }
+        return "Aplikacja jest poza /Applications, ale \(report.leftWithRoot) elementów pozostało własnością roota."
+    }
+
+    static func message(for rejection: BundleStagingRejection) -> String {
+        switch rejection {
+        case .notTopLevelApplication:
+            return "Dozwolona jest tylko aplikacja w /Applications lub w jednym jego podfolderze — odrzucono."
+        case .symlinkedTarget:
+            return "Aplikacja jest dowiązaniem lub prowadzi przez dowiązanie — odrzucono."
+        case .systemLocation:
+            return "Aplikacja należy do systemu — odrzucono."
+        case .notOwnedByRoot:
+            return "Aplikacja nie należy do roota — helper jej nie przenosi."
+        case .identityMismatch:
+            return "To nie jest aplikacja wybrana do usunięcia — odrzucono."
+        case .wegaItself:
+            return "Helper nie usuwa samej Wegi — odrzucono."
+        case .noConsoleUser:
+            return "Nikt nie jest zalogowany przy konsoli — odrzucono."
+        case .callerNotConsoleUser:
+            return "Prośba nie pochodzi od użytkownika przy konsoli — odrzucono."
+        case .callerNotAdministrator:
+            return "Usunięcie wymaga konta administratora — odrzucono."
+        case .targetSwapped:
+            return "Aplikacja zmieniła się w trakcie sprawdzania — odrzucono."
+        case .stagingRootUnsafe:
+            return "Katalog stagingu nie jest bezpieczny — odrzucono."
         }
     }
 

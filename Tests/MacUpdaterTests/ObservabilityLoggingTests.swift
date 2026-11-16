@@ -86,6 +86,7 @@ struct ObservabilityLoggingTests {
             "enableTouchIDForSudo",
             "installVerifiedPackage",
             "replaceBundle",
+            "stageApplicationBundleForTrash",
         ] {
             #expect(helper.contains("\(operation): sukces"),
                     "OBS-01: helper must log the successful result of \(operation)")
@@ -94,6 +95,7 @@ struct ObservabilityLoggingTests {
             "enableTouchIDForSudo",
             "installVerifiedPackage",
             "replaceBundle",
+            "stageApplicationBundleForTrash",
         ] {
             #expect(helper.contains("\(operation): błąd"),
                     "OBS-01: helper must log the failed result of \(operation)")
