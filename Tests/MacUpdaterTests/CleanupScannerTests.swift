@@ -166,6 +166,9 @@ private struct SpaceSetup {
     var cancelsWhenListing: String?
 }
 
+/// A failure of the map's reader that is not a database error, so D10 rethrows it.
+private struct MapReaderFault: Error {}
+
 final class CleanupScannerTests: XCTestCase {
     private static let bootMilliseconds: Int64 = 1_794_297_600_000
     private static let scanDate = Date(timeIntervalSince1970: 1_794_300_000)
@@ -241,7 +244,7 @@ final class CleanupScannerTests: XCTestCase {
 
     private func context(
         path entries: [String], failure: (path: String, error: Error)? = nil, cancelsWhenSizing: Bool = false,
-        isApproximate: Bool = false, space: SpaceSetup = SpaceSetup()
+        isApproximate: Bool = false, space: SpaceSetup = SpaceSetup(), tccMap: CleanupTCCDatabaseReading? = nil
     ) -> CleanupContext {
         let trash = self.trash!
         reference = ReferenceFileSystem(
@@ -264,7 +267,8 @@ final class CleanupScannerTests: XCTestCase {
             ),
             brew: brew, brewPrefix: tmp.url("opt/homebrew"),
             projectRoots: space.projectRoots.map { tmp.url($0) },
-            applicationDirectories: space.applicationDirectories.map { tmp.url($0) }
+            applicationDirectories: space.applicationDirectories.map { tmp.url($0) },
+            tccMap: tccMap, systemConfigurationDirectory: tmp.url("etc")
         )
     }
 
@@ -699,5 +703,131 @@ final class CleanupScannerTests: XCTestCase {
         let unique = CleanupScanner.uniqueProjectFiles([web, app, file("/p/Dev/web/.nvmrc"), app])
 
         XCTAssertEqual(unique.map(\.url.path), [web.url.path, app.url.path])
+    }
+
+    // MARK: Stage 3 — PATH hygiene and the Files and Folders map
+
+    private static let editorBundle = "com.example.editor"
+    private static let pathClient = 1
+    private static let bundleClient = 0
+    private static let allowed = 2
+
+    private var tccDatabase: URL { tmp.url("Library/Application Support/com.apple.TCC/TCC.db") }
+    private var absentEntry: String { tmp.url("gone/bin").path }
+
+    /// One app bundle allowed into the Documents folder.
+    private func bundleMap() -> FakeTCCDatabase {
+        FakeTCCDatabase(fileURL: tccDatabase, rows: [
+            CleanupTCCRow(
+                service: CleanupTCCService.documents.rawValue, client: Self.editorBundle,
+                clientType: Self.bundleClient, authValue: Self.allowed
+            ),
+        ])
+    }
+
+    private func detectorSequence(_ report: CleanupReport) -> [CleanupDetectorID] {
+        report.findings.map(\.detector).reduce(into: [CleanupDetectorID]()) { if $0.last != $1 { $0.append($1) } }
+    }
+
+    func testHygieneAndMapRunAfterShellState() async throws {
+        let path = try buildReferenceTree() + [absentEntry]
+        let map = bundleMap()
+
+        let report = try await scan(context(path: path, tccMap: map)).get()
+
+        XCTAssertEqual(detectorSequence(report), [.pathDuplicates, .versionDirectories, .shellState, .pathHygiene, .tccMap])
+        let dead = try finding(.pathHygiene, absentEntry, in: report)
+        XCTAssertEqual(dead.status, .deadEntry)
+        XCTAssertEqual(dead.action, .instruction(.editShellFiles(entry: absentEntry, locations: [])))
+        let entry = try XCTUnwrap(report.findings.first { $0.detector == .tccMap })
+        XCTAssertEqual(entry.tool, Self.editorBundle)
+        XCTAssertEqual(entry.action, .command("tccutil reset SystemPolicyDocumentsFolder \(Self.editorBundle)"))
+        XCTAssertEqual(map.requestedServices, [CleanupTCCService.allCases], "D10 reads the database once")
+        XCTAssertEqual(report.notes, [])
+        XCTAssertEqual(Set(report.findings.map(\.id)).count, report.findings.count, "finding ids are unique report-wide")
+    }
+
+    /// A context without a database is the switch turned off: D10 leaves nothing, D9 still reports.
+    func testMapOffBuildsNoD10Output() async throws {
+        let path = try buildReferenceTree() + [absentEntry]
+
+        let report = try await scan(context(path: path)).get()
+
+        XCTAssertEqual(try finding(.pathHygiene, absentEntry, in: report).status, .deadEntry, "D9 does not depend on the map")
+        XCTAssertFalse(report.findings.contains { $0.detector == .tccMap })
+        XCTAssertEqual(report.notes, [], "no D10 note, and D9 adds none")
+    }
+
+    func testAThrowingMapLeavesAFailedNoteAndTheRestReports() async throws {
+        let path = try buildReferenceTree() + [absentEntry]
+        let map = FakeTCCDatabase(fileURL: tccDatabase, error: MapReaderFault())
+
+        let report = try await scan(context(path: path, tccMap: map)).get()
+
+        XCTAssertEqual(report.notes, [CleanupDetectorNote(detector: .tccMap, kind: .failed)])
+        XCTAssertEqual(map.calls, 1, "precondition: D10 asked the database")
+        XCTAssertFalse(report.findings.contains { $0.detector == .tccMap })
+        XCTAssertEqual(try finding(.pathHygiene, absentEntry, in: report).status, .deadEntry)
+        XCTAssertEqual(detectorSequence(report), [.pathDuplicates, .versionDirectories, .shellState, .pathHygiene])
+    }
+
+    /// A database D10 cannot read is its own note, not a failure, and the report keeps it.
+    func testAnUnreadableMapLeavesItsOwnNote() async throws {
+        let path = try buildReferenceTree()
+        let map = FakeTCCDatabase(fileURL: tccDatabase, error: CleanupTCCDatabaseError.unreadable)
+
+        let report = try await scan(context(path: path, tccMap: map)).get()
+
+        XCTAssertEqual(report.notes, [CleanupDetectorNote(detector: .tccMap, kind: .tccUnreadable)])
+        XCTAssertFalse(report.findings.contains { $0.detector == .tccMap })
+    }
+
+    func testCancellationBeforeTheMapThrows() async throws {
+        let path = try buildReferenceTree()
+        try tmp.directory("etc/paths.d")
+        let map = bundleMap()
+
+        let result = await scan(context(path: path, space: SpaceSetup(cancelsWhenListing: "etc/paths.d"), tccMap: map))
+
+        guard case .failure(let error) = result else {
+            return XCTFail("a scan cancelled while D9 listed paths.d returned a report")
+        }
+        XCTAssertTrue(error is CancellationError, "expected CancellationError, got \(error)")
+        XCTAssertTrue(recording.touched.contains(tmp.url("etc/paths.d").path), "the task must be cancelled while D9 lists paths.d")
+        XCTAssertEqual(map.calls, 0, "D10 read the database after the cancellation")
+    }
+
+    /// A `PATH` entry inside `~/Documents`, a `~/.zshrc` linked into it and a map entry for a tool in
+    /// `~/Downloads`: each is refused and reported, and no protected path reaches the file system.
+    func testScanNeverTouchesProtectedLocationsWithHygieneAndMap() async throws {
+        var path = try buildReferenceTree()
+        try tmp.file("Documents/bin/tool", size: 16, executable: true)
+        let documentsBin = tmp.url("Documents/bin").path
+        path.insert(documentsBin, at: 1)
+        let shellFile = try tmp.file("Documents/dotfiles/zshrc", text: "export PATH=\"$HOME/Documents/bin:$PATH\"\n")
+        try tmp.symlink(".zshrc", to: shellFile.path)
+        let downloaded = try tmp.file("Downloads/tool", size: 16, executable: true)
+        let map = FakeTCCDatabase(fileURL: tccDatabase, rows: [
+            CleanupTCCRow(
+                service: CleanupTCCService.downloads.rawValue, client: downloaded.path,
+                clientType: Self.pathClient, authValue: Self.allowed
+            ),
+        ])
+
+        let report = try await scan(context(path: path, tccMap: map)).get()
+
+        XCTAssertTrue(recording.touched.contains(tmp.url(".zshrc").path), "precondition: D9 looked at ~/.zshrc")
+        XCTAssertEqual(map.calls, 1, "precondition: D10 asked the database")
+        XCTAssertEqual(report.skippedProtected, [documentsBin, tmp.url("Documents").path])
+        let refusedClient = try finding(.tccMap, downloaded.path, in: report)
+        XCTAssertEqual(refusedClient.status, .skippedProtected)
+        XCTAssertEqual(refusedClient.reason, .protectedLocation)
+        let roots = ProtectedLocationGuard.protectedRoots(home: tmp.home).map(CleanupPathText.components(of:))
+        let offenders = recording.touched.filter { touched in
+            roots.contains { CleanupPathText.components(of: touched).starts(with: $0) }
+        }
+        XCTAssertEqual(offenders, [], "the base file system received a protected path")
+        XCTAssertEqual(trash.urls, [])
+        XCTAssertEqual(reference.mutations, [])
     }
 }

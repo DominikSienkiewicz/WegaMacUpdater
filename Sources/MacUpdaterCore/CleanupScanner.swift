@@ -13,11 +13,17 @@ public struct CleanupContext: Sendable {
     public let projectRoots: [URL]
     /// The folders D7 looks for installed JetBrains IDEs in.
     public let applicationDirectories: [URL]
+    /// The "Files and Folders" database D10 reads; `nil` while the map is switched off, and D10 then does nothing.
+    public let tccMap: CleanupTCCDatabaseReading?
+    /// The folder holding the system shell files and `paths` that D9 attributes entries to.
+    public let systemConfigurationDirectory: URL
 
     public init(
         home: URL, tmpDirectory: URL, path: CleanupPathSnapshot, fileSystem: CleanupFileSystem,
         inspector: ProcessInspecting, brew: CleanupBrewQuerying, brewPrefix: URL?,
-        projectRoots: [URL] = [], applicationDirectories: [URL] = []
+        projectRoots: [URL] = [], applicationDirectories: [URL] = [],
+        tccMap: CleanupTCCDatabaseReading? = nil,
+        systemConfigurationDirectory: URL = URL(filePath: "/etc", directoryHint: .isDirectory)
     ) {
         self.home = home
         self.tmpDirectory = tmpDirectory
@@ -28,16 +34,21 @@ public struct CleanupContext: Sendable {
         self.brewPrefix = brewPrefix
         self.projectRoots = projectRoots
         self.applicationDirectories = applicationDirectories
+        self.tccMap = tccMap
+        self.systemConfigurationDirectory = systemConfigurationDirectory
     }
 }
 
 /// Runs the detectors in order — the `PATH` scan (D1), version directories (D3), the D1 findings
 /// with their Homebrew checks, Homebrew leftovers (D4), one walk over the project roots, runtime
-/// versions (D5), Gradle (D6), JetBrains folders (D7), then per-shell state (D8) — and totals the
-/// result. Every detector and the walk get the context's file system, the guarded one in production.
+/// versions (D5), Gradle (D6), JetBrains folders (D7), per-shell state (D8), `PATH` hygiene (D9,
+/// from the D1 findings), then, only when the context carries a database, the "Files and Folders"
+/// map (D10, linked to the D1 and D3 findings) — and totals the result. Every detector and the walk
+/// get the context's file system, the guarded one in production.
 ///
 /// Each detector is its own failure domain: one that throws leaves a `.failed` note and the others
-/// still report; D4 and D7 return their own notes. A walk that searched no project root, or was cut
+/// still report; D4, D7 and D10 return their own notes, and the paths D9 was refused join the
+/// report's `skippedProtected`. A walk that searched no project root, or was cut
 /// short, leaves a note, because D5 and D6 may then miss a requirement; D6 then keeps every
 /// distribution out of the safe bucket, as it does when the walk was refused a path (already listed
 /// in `skippedProtected`), whose projects' wrappers went unread. Cancellation is checked before
@@ -111,11 +122,34 @@ public struct CleanupScanner: Sendable {
         }
 
         try Task.checkCancellation()
+        var hygieneSkipped: [String] = []
+        let hygieneFindings = try isolated(.pathHygiene, notes: &notes) {
+            let hygiene = CleanupPathHygieneDetector(
+                fileSystem: fileSystem, home: context.home, systemConfigurationDirectory: context.systemConfigurationDirectory
+            ).scan(context.path, duplicates: duplicates.findings)
+            hygieneSkipped = hygiene.skippedProtected
+            return hygiene.findings
+        }
+
+        try Task.checkCancellation()
+        var mapFindings: [CleanupFinding] = []
+        if let database = context.tccMap {
+            var mapNotes: [CleanupDetectorNote] = []
+            mapFindings = try isolated(.tccMap, notes: &notes) {
+                let map = try CleanupTCCMapDetector(database: database, fileSystem: fileSystem)
+                    .scan(linkingTo: duplicates.findings + versionFindings)
+                mapNotes = map.notes
+                return map.findings
+            }
+            notes += mapNotes
+        }
+
+        try Task.checkCancellation()
         let findings = duplicates.findings + versionFindings + homebrew.findings + runtimeFindings + gradleFindings
-            + jetBrains.findings + shellFindings
+            + jetBrains.findings + shellFindings + hygieneFindings + mapFindings
         return CleanupReport(
             createdAt: now(), path: context.path, findings: findings, notes: notes,
-            skippedProtected: Self.merged(pathScan.skippedProtected, walk.skippedProtected)
+            skippedProtected: Self.merged(Self.merged(pathScan.skippedProtected, walk.skippedProtected), hygieneSkipped)
         )
     }
 
