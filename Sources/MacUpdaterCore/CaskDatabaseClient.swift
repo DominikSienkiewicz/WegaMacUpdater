@@ -69,12 +69,21 @@ public final class CaskDatabaseClient: @unchecked Sendable {
     }
 
     /// Uninstall needs the cask's zap paths, not the newest version data, so a cache of any
-    /// age is good enough and the network is only used when there is none.
+    /// age is good enough and the network is only used when there is none, or when the cache no
+    /// longer decodes: the download then replaces it instead of every sheet failing on it.
     public func fetchCasksAcceptingStaleCache() async throws -> [BrewCask] {
-        if let cached = try cache?.loadAnyAge() {
+        if let cached = try loadAnyAgeUnlessCorrupt() {
             return cached
         }
         return try await downloadCasks()
+    }
+
+    private func loadAnyAgeUnlessCorrupt() throws -> [BrewCask]? {
+        do {
+            return try cache?.loadAnyAge()
+        } catch is DecodingError {
+            return nil
+        }
     }
 
     private func downloadCasks() async throws -> [BrewCask] {

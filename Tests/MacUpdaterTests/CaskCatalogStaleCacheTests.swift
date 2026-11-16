@@ -68,6 +68,22 @@ struct CaskCatalogStaleCacheTests {
     }
 
     @Test
+    func corruptCacheIsDownloadedAgainAndReplaced() async throws {
+        let cacheURL = makeCacheURL()
+        defer { try? FileManager.default.removeItem(at: cacheURL.deletingLastPathComponent()) }
+        try FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("not a cask list".utf8).write(to: cacheURL)
+        let transport = CountingTransport(status: 200, body: #"[{"token":"a","name":["A"]}]"#)
+
+        let casks = try? await makeClient(cacheURL: cacheURL, transport: transport).fetchCasksAcceptingStaleCache()
+
+        #expect(casks?.map(\.token) == ["a"])
+        #expect(transport.calls == 1)
+        let saved = try? CaskDatabaseCache(fileURL: cacheURL).loadAnyAge()
+        #expect(saved?.map(\.token) == ["a"])
+    }
+
+    @Test
     func downloadFailureThrows() async {
         let cacheURL = makeCacheURL()
         let transport = CountingTransport(status: 500, body: "")
