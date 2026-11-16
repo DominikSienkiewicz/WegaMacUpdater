@@ -55,7 +55,7 @@ struct ExplicitDestructiveFallbackTests {
                 "UX-04: a failed requested zap must be reported as an explicit incomplete result")
         #expect(presentation.contains("failed.append((app.name, zap))"),
                 "UX-04: the failed zap must enter the failure result, never the success count")
-        #expect(presentation.contains("guard case .failed(let reason) = results[app.id]"),
+        #expect(presentation.contains("guard case .failed = results[app.id]"),
                 "UX-04: the incomplete text is for .failed results only; other reasons name themselves")
         #expect(!view.contains("Odinstalowanie niepełne"),
                 "UX-04: the view must not assemble its own incomplete text")

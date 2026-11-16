@@ -17,32 +17,67 @@ enum UninstallResultAction: Equatable {
     }
 }
 
-/// One button under the result: the app it concerns and what pressing it does.
-struct UninstallResultActionItem: Identifiable, Equatable {
-    let appName: String
-    let action: UninstallResultAction
-
-    var id: String { "\(appName)|\(action.title)" }
+/// One app that was not removed: which copy it is, why it stayed, and what helps.
+struct UninstallResultRow: Identifiable, Equatable {
+    /// `ApplicationInfo.id`, so two copies of one app never share a row or its buttons.
+    let id: String
+    let name: String
+    /// Where this copy lives, set when another reported app shares its name or bundle identifier.
+    let location: String?
+    let reason: String
+    /// The complete error text when `reason` shows only its key line.
+    let detail: String?
+    let actions: [UninstallResultAction]
 }
 
-/// Turns the per-target results of an uninstall run into the one banner and one error the
-/// view shows, so every app that was not removed is named with its own reason.
+/// The outcome of one uninstall run as the view shows it: a success banner naming what was
+/// removed, one summary line, and one row per app that was not removed.
+struct UninstallResultReport: Equatable {
+    let banner: BannerData?
+    let summary: String?
+    let rows: [UninstallResultRow]
+}
+
+/// Turns the per-target results of an uninstall run into what the view shows, so every app
+/// that was not removed is named with its own reason, however many there are.
 enum UninstallResultPresentation {
-    static func summary(
+    static func report(
         results: [String: UninstallTargetResult],
         apps: [ApplicationInfo],
         leftoversTrashed: Int,
         leftoversFailed: Int,
         requestedZap: Bool = false
-    ) -> (banner: BannerData?, error: String?) {
+    ) -> UninstallResultReport {
         let reported = apps.filter { results[$0.id] != nil }
         let removed = reported.filter { results[$0.id]?.isRemoved == true }
-        return (
-            banner: successBanner(removed: removed, leftoversTrashed: leftoversTrashed),
-            error: errorMessage(
-                reported: reported, results: results, leftoversFailed: leftoversFailed, requestedZap: requestedZap
-            )
+        let rows = rows(results: results, apps: reported)
+        return UninstallResultReport(
+            banner: successBanner(removed: removed, results: results, leftoversTrashed: leftoversTrashed),
+            summary: summaryLine(
+                reported: reported, results: results, rows: rows,
+                leftoversFailed: leftoversFailed, requestedZap: requestedZap
+            ),
+            rows: rows
         )
+    }
+
+    /// One row per app that was not removed, in the order of `apps`.
+    static func rows(results: [String: UninstallTargetResult], apps: [ApplicationInfo]) -> [UninstallResultRow] {
+        let sharedNames = Set(Dictionary(grouping: apps, by: \.name).filter { $0.value.count > 1 }.keys)
+        let sharedBundleIDs = InstallationInventory.ambiguousBundleIdentifiers(apps)
+        return apps.compactMap { app -> UninstallResultRow? in
+            guard let result = results[app.id], let explanation = explanation(of: result, app: app) else { return nil }
+            let isShared = sharedNames.contains(app.name)
+                || app.bundleIdentifier.map(sharedBundleIDs.contains) == true
+            return UninstallResultRow(
+                id: app.id,
+                name: app.name,
+                location: isShared ? app.locationLabel : nil,
+                reason: explanation.reason,
+                detail: explanation.detail,
+                actions: actions(for: result, app: app)
+            )
+        }
     }
 
     static func actions(for result: UninstallTargetResult, app: ApplicationInfo) -> [UninstallResultAction] {
@@ -59,24 +94,53 @@ enum UninstallResultPresentation {
         }
     }
 
-    /// The buttons for every app that was not removed, in the order of `apps`.
-    static func actionItems(
-        results: [String: UninstallTargetResult],
-        apps: [ApplicationInfo]
-    ) -> [UninstallResultActionItem] {
-        apps.flatMap { app -> [UninstallResultActionItem] in
-            guard let result = results[app.id] else { return [] }
-            return actions(for: result, app: app).map { UninstallResultActionItem(appName: app.name, action: $0) }
+    /// A failure's key line: brew's `Error:` line when the text has one, otherwise its first
+    /// line. The complete text stays as `detail` whenever the key line leaves part of it out,
+    /// so brew's untranslated, unbounded stderr never stands in for the reason.
+    static func failureReason(_ text: String) -> (reason: String, detail: String?) {
+        let full = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lines = full.components(separatedBy: .newlines)
+        // `BrewServiceError` puts its own "brew … failed with exit code N: " before stderr, so the
+        // line ScanLog finds may start with that prefix; the reason starts at brew's "Error:".
+        let errorLine = ScanLog.brewErrorReason(from: lines).map { line in
+            line.range(of: "Error:").map { String(line[$0.lowerBound...]) } ?? line
+        }
+        let reason = errorLine ?? lines.first ?? full
+        return (reason, reason == full ? nil : full)
+    }
+
+    private static func explanation(
+        of result: UninstallTargetResult,
+        app: ApplicationInfo
+    ) -> (reason: String, detail: String?)? {
+        switch result {
+        case .removedByHomebrew, .movedToTrash, .movedToTrashByHelper:
+            return nil
+        case .failed(let error):
+            let shortened = failureReason(error)
+            return shortened.reason.isEmpty ? (tr("nie udało się jej usunąć."), nil) : shortened
+        case .skippedStillRunning:
+            return (tr("pominięta, bo nadal działa."), nil)
+        case .skippedAmbiguousProcess:
+            return (tr("pominięta, bo nie da się jednoznacznie wskazać jej procesu."), nil)
+        case .blocked(let block):
+            return (blockReason(block), nil)
+        case .leftInStaging(let url):
+            return (trf("została w katalogu tymczasowym: %@", url.path), nil)
+        case .protected(let protection):
+            return (UninstallProtectionPresentation.protectionReason(protection), nil)
         }
     }
 
-    private static func successBanner(removed: [ApplicationInfo], leftoversTrashed: Int) -> BannerData? {
+    private static func successBanner(
+        removed: [ApplicationInfo],
+        results: [String: UninstallTargetResult],
+        leftoversTrashed: Int
+    ) -> BannerData? {
         guard !removed.isEmpty else { return nil }
-        let brewCount = removed.filter(\.isManagedByBrew).count
-        let trashCount = removed.count - brewCount
-        var parts: [String] = []
-        if brewCount > 0 { parts.append(trf("%@ przez brew", "\(brewCount)")) }
-        if trashCount > 0 { parts.append(trf("%@ do Kosza", "\(trashCount)")) }
+        var parts = removed.map { app in
+            results[app.id] == .removedByHomebrew ? trf("%@ przez brew", app.name) : trf("%@ do Kosza", app.name)
+        }
         // UX-13: report the leftovers that reached the Trash alongside the app removals.
         if leftoversTrashed > 0 { parts.append(trf("%@ resztek do Kosza", "\(leftoversTrashed)")) }
         return BannerData(
@@ -86,18 +150,21 @@ enum UninstallResultPresentation {
         )
     }
 
-    private static func errorMessage(
+    /// One line above the rows. The reasons themselves are in the rows, so this stays short
+    /// however many apps were left behind.
+    private static func summaryLine(
         reported: [ApplicationInfo],
         results: [String: UninstallTargetResult],
+        rows: [UninstallResultRow],
         leftoversFailed: Int,
         requestedZap: Bool
     ) -> String? {
         var parts: [String] = []
-        if let failure = failureNote(reported: reported, results: results, zap: requestedZap) { parts.append(failure) }
-        for app in reported {
-            if let result = results[app.id], let line = notRemovedLine(app: app, result: result) {
-                parts.append(line)
-            }
+        let failure = failureNote(reported: reported, results: results, zap: requestedZap)
+        if let failure { parts.append(failure.note) }
+        let skippedCount = rows.count - (failure?.count ?? 0)
+        if skippedCount > 0 {
+            parts.append(trf("Pominięto %@ aplikacji — powody poniżej.", "\(skippedCount)"))
         }
         // UX-13: leftovers that could not be moved are surfaced, not swallowed.
         if leftoversFailed > 0 {
@@ -107,17 +174,15 @@ enum UninstallResultPresentation {
     }
 
     /// The generic "incomplete" text is reserved for removals that failed for a reason the
-    /// app cannot name; every other outcome carries its own reason in `notRemovedLine`.
+    /// app cannot name; every other outcome carries its own reason in its row.
     private static func failureNote(
         reported: [ApplicationInfo],
         results: [String: UninstallTargetResult],
         zap: Bool
-    ) -> String? {
+    ) -> (note: String, count: Int)? {
         var failed: [(name: String, requestedZap: Bool)] = []
-        var details: [String] = []
         for app in reported {
-            guard case .failed(let reason) = results[app.id] else { continue }
-            details.append(reason.isEmpty ? app.name : "\(app.name) (\(reason))")
+            guard case .failed = results[app.id] else { continue }
             if app.isManagedByBrew {
                 failed.append((app.name, zap))
             } else {
@@ -126,30 +191,13 @@ enum UninstallResultPresentation {
         }
         guard !failed.isEmpty else { return nil }
         var note = trf(
-            "Odinstalowanie niepełne — nie usunięto: %@",
-            "\(details.joined(separator: ", "))"
+            "Odinstalowanie niepełne — nie usunięto: %@. Powody poniżej.",
+            "\(failed.map(\.name).joined(separator: ", "))"
         )
         if failed.contains(where: \.requestedZap) {
             note += " " + tr("Nie uruchomiono --force; wybrane usunięcie wraz z resztkami nie zostało po cichu zmienione.")
         }
-        return note
-    }
-
-    private static func notRemovedLine(app: ApplicationInfo, result: UninstallTargetResult) -> String? {
-        switch result {
-        case .removedByHomebrew, .movedToTrash, .movedToTrashByHelper, .failed:
-            return nil
-        case .skippedStillRunning:
-            return trf("%@ — pominięta, bo nadal działa.", app.name)
-        case .skippedAmbiguousProcess:
-            return trf("%@ — pominięta, bo nie da się jednoznacznie wskazać jej procesu.", app.name)
-        case .blocked(let block):
-            return trf("%@ — %@", app.name, blockReason(block))
-        case .leftInStaging(let url):
-            return trf("%@ — została w katalogu tymczasowym: %@", app.name, url.path)
-        case .protected(let protection):
-            return trf("%@ — %@", app.name, UninstallProtectionPresentation.protectionReason(protection))
-        }
+        return (note, failed.count)
     }
 
     /// The reason a removal was blocked, shared with the preflight label in the confirmation.

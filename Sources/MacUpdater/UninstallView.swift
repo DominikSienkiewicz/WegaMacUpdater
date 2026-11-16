@@ -31,9 +31,12 @@ struct UninstallView: View {
     @State private var forceQuitApps: [ApplicationInfo] = []
     @State private var showForceQuit: Bool = false
     @State private var forceQuitAnswer: CheckedContinuation<UninstallForceQuitChoice, Never>?
-    @State private var errorMessage:   String?
-    /// What the user can do about the apps the last run did not remove.
-    @State private var resultActions: [UninstallResultActionItem] = []
+    /// REL-14: why the last scan could not read a source. Kept apart from `result`, so a run's
+    /// result never hides a scan error that is already on screen.
+    @State private var scanError:      String?
+    /// The apps the last run did not remove — summary line and rows — kept together so a
+    /// refresh never leaves a row or its button without its explanation.
+    @State private var result:         UninstallResultReport?
     /// The route each non-brew target would take, computed when the sheet opens.
     @State private var pendingRoutes: [String: UninstallRouteDecision] = [:]
     /// REL-14: the last scan failed to read one or more sources. Distinguishes an empty
@@ -86,7 +89,7 @@ struct UninstallView: View {
                             .foregroundStyle(.tertiary)
                     }
                     Spacer()
-                    Button { Task { await scan() } } label: {
+                    Button { Task { await refresh() } } label: {
                         Label(tr("Odśwież"), systemImage: "arrow.clockwise")
                     }
                     .disabled(isLoading || isUninstalling)
@@ -104,11 +107,12 @@ struct UninstallView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
 
-                if let err = errorMessage {
-                    ErrorBanner(message: err).padding(.horizontal, 16).padding(.bottom, 8)
+                if let scanError {
+                    ErrorBanner(message: scanError).padding(.horizontal, 16).padding(.bottom, 8)
                 }
-                if !resultActions.isEmpty {
-                    resultActionButtons.padding(.horizontal, 16).padding(.bottom, 8)
+                if let result {
+                    UninstallResultList(report: result, onAction: perform) { self.result = nil }
+                        .padding(.horizontal, 16).padding(.bottom, 8)
                 }
                 if let b = banner {
                     BannerView(data: b) { banner = nil }.padding(.horizontal, 16).padding(.bottom, 8)
@@ -271,18 +275,6 @@ struct UninstallView: View {
         .task { await scan() }
     }
 
-    private var resultActionButtons: some View {
-        HStack(spacing: 8) {
-            ForEach(resultActions) { item in
-                Button { perform(item.action) } label: {
-                    Text(trf("%@: %@", item.appName, item.action.title))
-                }
-                .buttonStyle(.bordered)
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
     private func perform(_ action: UninstallResultAction) {
         switch action {
         case .showInFinder(let url):
@@ -418,13 +410,19 @@ struct UninstallView: View {
         Task { await quitThenUninstall(targets: targets, routes: routes, zap: zap, leftovers: leftovers) }
     }
 
+    /// A refresh starts over: the last run's result goes as a whole, summary and rows together.
+    private func refresh() async {
+        result = nil
+        banner = nil
+        await scan()
+    }
+
     private func scan() async {
-        guard let result = await operations.scan(using: model.brewService) else { return }
-        errorMessage = nil
-        apps = result.apps
-        protections = result.protections
-        scanFailed = result.scanFailed
-        errorMessage = result.failures.scanErrorMessage
+        guard let scan = await operations.scan(using: model.brewService) else { return }
+        apps = scan.apps
+        protections = scan.protections
+        scanFailed = scan.scanFailed
+        scanError = scan.failures.scanErrorMessage
     }
 
     /// - Parameter reported: every confirmed target, in confirmation order; each one ends in
@@ -437,9 +435,9 @@ struct UninstallView: View {
         reported reportedApps: [ApplicationInfo]
     ) async {
         guard !targets.isEmpty else {
-            show(UninstallResultPresentation.summary(
+            show(UninstallResultPresentation.report(
                 results: skipped, apps: reportedApps, leftoversTrashed: 0, leftoversFailed: 0, requestedZap: zap
-            ), actions: UninstallResultPresentation.actionItems(results: skipped, apps: reportedApps))
+            ))
             return
         }
         // REL-06 — `brew uninstall --cask` (with `--zap` it also deletes preferences and
@@ -449,7 +447,7 @@ struct UninstallView: View {
         let ticket = MutationGuard.shared.begin(trf("dezinstalacja %@ aplikacji", "\(targets.count)"))
         defer { MutationGuard.shared.end(ticket) }
 
-        errorMessage = nil; banner = nil; resultActions = []
+        banner = nil; result = nil
         onWegaState?(WegaState(pose: .sniff, line: tr("Aport! Zabieram to z dysku…")))
 
         let outcome = await operations.uninstall(
@@ -463,7 +461,7 @@ struct UninstallView: View {
         selected.subtract(succeeded)
         await scan()
 
-        let summary = UninstallResultPresentation.summary(
+        let report = UninstallResultPresentation.report(
             results: outcome.results,
             apps: reportedApps,
             leftoversTrashed: outcome.leftoversTrashed,
@@ -473,13 +471,13 @@ struct UninstallView: View {
         if !succeeded.isEmpty {
             onWegaState?(WegaState(pose: .happy, line: trf("Załatwione — %@ mniej na dysku.", "\(succeeded.count)")))
         }
-        show(summary, actions: UninstallResultPresentation.actionItems(results: outcome.results, apps: reportedApps))
+        show(report)
     }
 
-    private func show(_ summary: (banner: BannerData?, error: String?), actions: [UninstallResultActionItem]) {
-        banner = summary.banner
-        errorMessage = summary.error ?? errorMessage
-        resultActions = actions
+    /// The success banner names what was removed; everything else stays together in `result`.
+    private func show(_ report: UninstallResultReport) {
+        banner = report.banner
+        result = report.summary == nil && report.rows.isEmpty ? nil : report
     }
 }
 
