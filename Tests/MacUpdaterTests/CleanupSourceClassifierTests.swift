@@ -51,6 +51,30 @@ final class CleanupSourceClassifierTests: XCTestCase {
         }
     }
 
+    func testBrewAndAppBundlePrecedencePinned() {
+        XCTAssertEqual(
+            classify("/opt/homebrew/Cellar/node/22.1.0/lib/node_modules/npm/bin/npm-cli.js"),
+            .homebrewFormula(name: "node")
+        )
+        XCTAssertEqual(
+            classify("/opt/homebrew/Caskroom/foo/1.0/Foo.app/Contents/MacOS/foo"), .appBundle(name: "Foo")
+        )
+    }
+
+    func testVersionExtractionIgnoresCombiningMarksAfterSeparators() {
+        func version(_ path: String, _ source: CleanupSource) -> String? {
+            CleanupVersionExtractor.version(fromRealpath: url(path), source: source)
+        }
+        XCTAssertEqual(
+            version("\(home)/.local/share/uv/python/cpython-3.12.12-\u{301}macos/bin/python3", .versionManager(.uv)),
+            "3.12.12"
+        )
+        XCTAssertNil(
+            version("\(home)/.nvm/versions/node/v\u{301}18.0.0/bin/node", .versionManager(.nvm))
+        )
+        XCTAssertNil(version("\(home)/.nvm/versions/node/v/bin/node", .versionManager(.nvm)))
+    }
+
     func testXcodeDeveloperToolsAreSystemNotAppBundle() {
         XCTAssertEqual(classify("/Applications/Xcode.app/Contents/Developer/usr/bin/git"), .system)
         XCTAssertEqual(classify("/Applications/Xcode-beta.app/Contents/Developer/usr/bin/swift"), .system)

@@ -231,11 +231,12 @@ public enum CleanupVersionExtractor {
     }
 
     private static func cpythonVersion(in path: [String]) -> String? {
-        let marker = "cpython-"
-        for item in path where item.hasPrefix(marker) {
-            let rest = item.dropFirst(marker.count)
-            let version = rest.prefix { $0 != "-" }
-            if !version.isEmpty { return String(version) }
+        let marker = "cpython-".unicodeScalars
+        for item in path {
+            let scalars = item.unicodeScalars
+            guard scalars.starts(with: marker) else { continue }
+            let version = scalars.dropFirst(marker.count).prefix { $0 != "-" }
+            if !version.isEmpty { return String(String.UnicodeScalarView(version)) }
         }
         return nil
     }
@@ -244,9 +245,10 @@ public enum CleanupVersionExtractor {
         for index in path.indices {
             let end = index + directory.count
             guard end < path.count, Array(path[index ..< end]) == directory else { continue }
-            let candidate = path[end]
-            guard candidate.hasPrefix("v"), candidate.count > 1 else { continue }
-            return String(candidate.dropFirst())
+            let scalars = path[end].unicodeScalars
+            guard scalars.first == "v", let digit = scalars.dropFirst().first, digit.isASCII,
+                  ("0" ... "9").contains(digit) else { continue }
+            return String(String.UnicodeScalarView(scalars.dropFirst()))
         }
         return nil
     }
