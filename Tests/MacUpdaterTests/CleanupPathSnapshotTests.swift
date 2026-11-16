@@ -20,6 +20,35 @@ final class CleanupPathSnapshotTests: XCTestCase {
         XCTAssertEqual(request.idleTimeout, 10)
     }
 
+    /// M5: a job started from `.zshrc` can hold the shell's output open long after the shell
+    /// exits; the read stops waiting for it after two seconds instead of hanging the screen.
+    func testRequestBoundsTheOutputDrain() throws {
+        let request = try XCTUnwrap(CleanupPathReader.request(shellPath: "/bin/zsh", home: home, user: "tester"))
+
+        XCTAssertEqual(request.outputDrainLimit, 2)
+    }
+
+    func testCancelledRunReadsAsCancelled() async {
+        let cancelled = [
+            ScriptedPathRunner(.failure(ProcessRunnerError.cancelled)),
+            ScriptedPathRunner(.failure(CancellationError())),
+        ]
+        let failing = [
+            ScriptedPathRunner(.failure(ProcessRunnerError.timedOut(seconds: 10))),
+            ScriptedPathRunner(.failure(ScriptedPathRunner.Boom())),
+        ]
+
+        for (runners, expected) in [(cancelled, CleanupPathReadResult.cancelled), (failing, .failed)] {
+            for runner in runners {
+                let reader = CleanupPathReader(
+                    runner: runner, shellPath: "/bin/zsh", home: home, user: "tester", now: { Date() }
+                )
+                let result = await reader.read()
+                XCTAssertEqual(result, expected)
+            }
+        }
+    }
+
     func testBashRequestUsesPrintf() throws {
         let request = try XCTUnwrap(CleanupPathReader.request(shellPath: "/bin/bash", home: home, user: "tester"))
 

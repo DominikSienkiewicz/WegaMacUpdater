@@ -289,7 +289,7 @@ enum CleanupPresentation {
 
     static func pathReadMessage(_ result: CleanupPathReadResult?) -> String? {
         switch result {
-        case nil, .captured: nil
+        case nil, .captured, .cancelled: nil
         case .unsupportedShell(let shell):
             trf("Powłoka %@ nie jest obsługiwana, więc PATH nie został odczytany. Skan użyje poprzedniego odczytu albo przybliżonego PATH.", shell)
         case .failed:
