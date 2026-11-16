@@ -61,6 +61,24 @@ enum CaskArtifacts {
             }
     }
 
+    /// The `trash` and `delete` paths of every `zap` stanza, in file order. `zap` is the
+    /// cask's own list of what the app leaves behind; other directives (`rmdir`, `launchctl`,
+    /// `pkgutil`) are not file paths to move to the Trash and are ignored.
+    static func zapTrashPaths(in artifacts: [JSONValue]) -> [String] {
+        artifacts
+            .compactMap { artifact -> [JSONValue]? in
+                guard case .object(let stanzas) = artifact,
+                      case .array(let zaps)? = stanzas["zap"] else { return nil }
+                return zaps
+            }
+            .flatMap { $0 }
+            .flatMap { zap -> [String] in
+                guard case .object(let directives) = zap else { return [] }
+                return (directives["trash"]?.strings ?? []) + (directives["delete"]?.strings ?? [])
+            }
+            .filter { !$0.isEmpty }
+    }
+
     /// Reads `uninstall` → `pkgutil` only.
     ///
     /// `zap` also carries `pkgutil` entries, but they are the aggressive leftover sweep and
