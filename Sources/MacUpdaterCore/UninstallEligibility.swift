@@ -16,11 +16,9 @@ public enum UninstallEligibility {
             || resolved(app.path) == resolved(ownBundleURL) {
             return .wegaItself
         }
+        if isUnderSystem(resolved(app.path)) { return .systemApplication }
         guard let destination = symlinkDestination(app.path) else { return nil }
-        let components = destination.standardizedFileURL.pathComponents
-        if components.count > 1, components[1] == "System" {
-            return .systemApplication
-        }
+        if isUnderSystem(destination) { return .systemApplication }
         return .symlink(destination: destination.standardizedFileURL.path)
     }
 
@@ -47,11 +45,16 @@ public enum UninstallEligibility {
         apps.filter { protections[$0.id] == nil }
     }
 
+    private static func isUnderSystem(_ url: URL) -> Bool {
+        let components = url.standardizedFileURL.pathComponents
+        return components.count > 1 && components[1] == "System"
+    }
+
     private static func resolved(_ url: URL) -> URL {
         url.standardizedFileURL.resolvingSymlinksInPath()
     }
 
-    private static func liveSymlinkDestination(_ url: URL) -> URL? {
+    static func liveSymlinkDestination(_ url: URL) -> URL? {
         var info = stat()
         guard lstat(url.path, &info) == 0, (info.st_mode & S_IFMT) == S_IFLNK,
               let target = try? FileManager.default.destinationOfSymbolicLink(atPath: url.path)
@@ -60,6 +63,6 @@ public enum UninstallEligibility {
         let destination = target.hasPrefix("/")
             ? URL(fileURLWithPath: target)
             : URL(fileURLWithPath: target, relativeTo: base)
-        return destination.standardizedFileURL
+        return destination.standardizedFileURL.resolvingSymlinksInPath()
     }
 }
