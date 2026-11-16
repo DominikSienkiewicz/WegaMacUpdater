@@ -322,6 +322,8 @@ final class UninstallCoordinator: ObservableObject {
         for app in targets {
             if let protection = dependencies.protection(app) {
                 results[app.id] = .protected(protection)
+            } else if let stillRunning = runningAtRemoval(app) {
+                results[app.id] = stillRunning
             } else if app.isManagedByBrew, let token = app.caskToken {
                 do {
                     try await dependencies.uninstallCask(brewService, token, zap)
@@ -344,6 +346,17 @@ final class UninstallCoordinator: ObservableObject {
             leftoversTrashed: leftoverResult.removed.count,
             leftoversFailed: leftoverResult.failed.count
         )
+    }
+
+    /// The quit phase decided "stopped" before the force-quit sheet and the write lease, both of
+    /// which can wait; the app may have been relaunched since. Resolved again right before its
+    /// bundle would go, so nothing is removed while its process is confirmed running.
+    private func runningAtRemoval(_ app: ApplicationInfo) -> UninstallTargetResult? {
+        switch resolveAll([app])[app.id] ?? .notRunning {
+        case .notRunning: nil
+        case .running: .skippedStillRunning
+        case .ambiguousBundleIdentifier: .skippedAmbiguousProcess
+        }
     }
 
     /// Moves one non-brew bundle to the user's Trash unless its route is already blocked.

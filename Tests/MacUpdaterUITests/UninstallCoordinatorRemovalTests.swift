@@ -199,6 +199,73 @@ struct UninstallCoordinatorRemovalTests {
         #expect(outcome.results[cask.id] == .removedByHomebrew)
     }
 
+    private func process(_ app: ApplicationInfo, pid: Int32) -> RunningApplicationTarget {
+        RunningApplicationTarget(
+            processIdentifier: pid,
+            bundleURL: app.path,
+            bundleIdentifier: app.bundleIdentifier,
+            appName: app.name,
+            processName: app.name
+        )
+    }
+
+    private func coordinator(
+        running: [RunningApplicationTarget],
+        trashCalls: CallCounter,
+        caskCalls: CallCounter,
+        recorder: Recorder
+    ) -> UninstallCoordinator {
+        UninstallCoordinator(dependencies: .init(
+            uninstallCask: { _, _, _ in caskCalls.increment() },
+            trashItem: { _ in trashCalls.increment() },
+            trashLeftovers: { recorder.recordLeftovers($0); return LeftoverCleanup.Result(removed: $0) },
+            protection: { _ in nil },
+            runningApplications: { running },
+            requestQuit: { _ in false },
+            forceKill: { _ in false },
+            waitBetweenRunningChecks: {},
+            bundleFacts: { _ in .userOwnedWritable }
+        ))
+    }
+
+    /// The force-quit sheet and the write lease can both wait; an app relaunched meanwhile is
+    /// running again by the time its bundle would go, so it is skipped with its leftovers.
+    @Test func targetRunningAgainAtRemovalIsSkippedWithItsLeftovers() async {
+        let manual = app("Manual"), cask = app("Cask", brew: true)
+        let trashCalls = CallCounter(), caskCalls = CallCounter(), recorder = Recorder()
+        let sut = coordinator(
+            running: [process(manual, pid: 10), process(cask, pid: 20)],
+            trashCalls: trashCalls, caskCalls: caskCalls, recorder: recorder
+        )
+
+        let outcome = await sut.uninstall(
+            targets: [manual, cask], zap: false, leftovers: [leftovers(for: manual)], using: BrewService()
+        )
+
+        #expect(outcome.results[manual.id] == .skippedStillRunning)
+        #expect(outcome.results[cask.id] == .skippedStillRunning)
+        #expect(trashCalls.count == 0)
+        #expect(caskCalls.count == 0)
+        #expect(recorder.trashedLeftovers.isEmpty)
+    }
+
+    @Test func targetAmbiguousAtRemovalIsSkipped() async {
+        let manual = app("Manual")
+        let trashCalls = CallCounter(), caskCalls = CallCounter(), recorder = Recorder()
+        let sut = coordinator(
+            running: [process(manual, pid: 10), process(manual, pid: 11)],
+            trashCalls: trashCalls, caskCalls: caskCalls, recorder: recorder
+        )
+
+        let outcome = await sut.uninstall(
+            targets: [manual], zap: false, leftovers: [leftovers(for: manual)], using: BrewService()
+        )
+
+        #expect(outcome.results[manual.id] == .skippedAmbiguousProcess)
+        #expect(trashCalls.count == 0)
+        #expect(recorder.trashedLeftovers.isEmpty)
+    }
+
     @Test func protectedTargetIsRefused() async {
         let safari = app("Safari")
         let trashCalls = CallCounter()
