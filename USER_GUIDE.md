@@ -666,6 +666,17 @@ a source, the dialog warns that the target list may be incomplete before anythin
 removed. **Right-click any app in the list** to show it in Finder, copy its path, or toggle
 whether it's marked for removal.
 
+For apps Homebrew doesn't manage, the dialog also lists **App leftovers** found in your home
+folder: items Homebrew's own cleanup list names for the app, items stored under the app's
+bundle identifier, and folders named after the app. The first two groups are ticked; folders
+found only by name sit under **Probable — check before ticking** and stay unticked, as does
+anything outside `~/Library`. An item that another installed app still uses is shown
+unticked and marked "also used by", and an item shared by two apps you remove together goes
+only when both are removed. Sizes appear a moment after the dialog opens (items inside
+Containers show "size unknown"). If the app list couldn't be read completely, nothing is
+ticked by default. Ticked items go to the Trash, never a permanent delete; system-wide
+folders are not touched.
+
 ---
 
 Need something this guide doesn't cover? Open a
