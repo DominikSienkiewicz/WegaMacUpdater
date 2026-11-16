@@ -136,6 +136,43 @@ final class CleanupRuntimeVersionDetectorTests: XCTestCase {
         XCTAssertEqual(try finding(at: fnmOlder, in: found).action, .command("fnm uninstall 20.1.0"))
     }
 
+    /// pyenv-virtualenv keeps an env inside its base interpreter (`versions/3.11.4/envs/myenv`) and
+    /// links `versions/myenv` to it; `pyenv uninstall 3.11.4` would delete the env with it.
+    func testVirtualenvAliasPinProtectsItsBaseInterpreter() throws {
+        let home = try CleanupTempHome()
+        let base = try home.directory(".pyenv/versions/3.11.4")
+        let env = try home.directory(".pyenv/versions/3.11.4/envs/myenv")
+        try home.symlink(".pyenv/versions/myenv", to: env.path)
+        let newer = try home.directory(".pyenv/versions/3.12.1")
+        let global = try home.file(".pyenv/version", text: "myenv\n")
+        let pin = try projectFile(home, "Dev/app/.python-version", .pythonVersion, "myenv\n")
+
+        let found = findings(home, projectFiles: [pin])
+
+        XCTAssertEqual(found.count, 2, "the alias is not an install of its own")
+        XCTAssertEqual(status(of: base, in: found), .pinned(by: [global.path, pin.url.path]))
+        XCTAssertEqual(status(of: newer, in: found), .unused)
+    }
+
+    /// A custom nvm alias in `.nvmrc` names nothing installed; like a built-in alias it keeps the
+    /// newest of each manager. A pin naming an installed version still protects only that one.
+    func testPinNamingNothingInstalledProtectsTheNewest() throws {
+        let home = try CleanupTempHome()
+        let olderNode = try home.directory(".nvm/versions/node/v18.20.0")
+        let newestNode = try home.directory(".nvm/versions/node/v20.11.0")
+        let pinnedJava = try home.directory(".sdkman/candidates/java/17.0.9-tem")
+        let newestJava = try home.directory(".sdkman/candidates/java/21.0.2-tem")
+        let nvmrc = try projectFile(home, "Dev/web/.nvmrc", .nvmrc, "my-project\n")
+        let sdkmanrc = try projectFile(home, "Dev/api/.sdkmanrc", .sdkmanrc, "java=17.0.9-tem\n")
+
+        let found = findings(home, projectFiles: [nvmrc, sdkmanrc])
+
+        XCTAssertEqual(status(of: newestNode, in: found), .pinned(by: [nvmrc.url.path]))
+        XCTAssertEqual(status(of: olderNode, in: found), .unused)
+        XCTAssertEqual(status(of: pinnedJava, in: found), .pinned(by: [sdkmanrc.url.path]))
+        XCTAssertEqual(status(of: newestJava, in: found), .unused)
+    }
+
     /// Review Focus 2: a range no grammar can read must not leave every interpreter unpinned.
     func testGarbageRangeNeverUnpinsEverything() throws {
         let home = try CleanupTempHome()

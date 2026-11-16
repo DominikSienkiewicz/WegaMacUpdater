@@ -23,6 +23,12 @@ public enum CleanupVersionMatcher {
         return version == pin || version.hasPrefix(pin + "-")
     }
 
+    /// Dotted numbers, with an optional leading `v` and a trailing wildcard: `pin(_:matches:)`
+    /// compares such a pin component by component. Any other pin must name a version exactly.
+    public static func isVersionNumber(_ pin: String) -> Bool {
+        numericOperand(pin) != nil
+    }
+
     /// `nil` means the range could not be parsed.
     public static func range(_ range: String, isSatisfiedBy version: String, grammar: CleanupRangeGrammar) -> Bool? {
         var clauses: [[Comparator]] = []

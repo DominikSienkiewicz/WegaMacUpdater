@@ -19,7 +19,8 @@ public struct CleanupRuntimeVersionDetector: Sendable {
         let inventory = CleanupRuntimeInventory(fileSystem: fileSystem, home: home)
         let installs = inventory.installs().map(locate)
         guard !installs.isEmpty else { return [] }
-        let requirements = projectFiles.flatMap(CleanupRequirementParser.requirements(in:)) + inventory.defaults()
+        let stated = projectFiles.flatMap(CleanupRequirementParser.requirements(in:)) + inventory.defaults()
+        let requirements = Self.resolved(stated, aliases: inventory.aliases(), installs: installs.map(\.install))
         let sources = installs.map { pinningSources(of: $0, among: installs, requirements: requirements) }
         let processes = sources.contains(where: \.isEmpty) ? inspector.userProcesses() : []
         return zip(installs, sources).map { finding(for: $0, pinnedBy: $1, processes: processes) }
@@ -40,6 +41,27 @@ public struct CleanupRuntimeVersionDetector: Sendable {
     }
 
     // MARK: Requirements
+
+    /// A pin naming a manager's alias stands for the place the alias links to. A pin that is not a
+    /// version number and names nothing installed, such as a custom nvm alias, cannot be resolved
+    /// without running the manager, so like any alias it keeps the newest of each manager.
+    private static func resolved(
+        _ requirements: [CleanupRequirement], aliases: [CleanupRuntimeAlias], installs: [CleanupRuntimeInstall]
+    ) -> [CleanupRequirement] {
+        requirements.map { requirement in
+            guard case .pin(let pin) = requirement.spec else { return requirement }
+            if let alias = aliases.first(where: {
+                $0.tool == requirement.tool && $0.name.unicodeScalars.elementsEqual(pin.unicodeScalars)
+            }) {
+                return CleanupRequirement(tool: requirement.tool, spec: .path(alias.target.path), source: requirement.source)
+            }
+            let namesAnInstall = installs.contains {
+                $0.tool == requirement.tool && CleanupVersionMatcher.pin(pin, matches: $0.version)
+            }
+            guard !namesAnInstall, !CleanupVersionMatcher.isVersionNumber(pin) else { return requirement }
+            return CleanupRequirement(tool: requirement.tool, spec: .unresolvable(pin), source: requirement.source)
+        }
+    }
 
     private func pinningSources(of located: Located, among all: [Located], requirements: [CleanupRequirement]) -> [String] {
         let paths = requirements

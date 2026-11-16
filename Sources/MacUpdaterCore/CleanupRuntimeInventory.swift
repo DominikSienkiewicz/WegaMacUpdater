@@ -17,6 +17,14 @@ public struct CleanupRuntimeInstall: Equatable, Sendable {
     }
 }
 
+/// A name a version manager links beside its installs to a place inside one of them, such as
+/// pyenv-virtualenv's `~/.pyenv/versions/<env>` for the env it keeps in `<version>/envs/<env>`.
+struct CleanupRuntimeAlias: Equatable, Sendable {
+    let tool: String
+    let name: String
+    let target: URL
+}
+
 /// Lists what each version manager has installed and which version it uses by default, by reading
 /// directories and settings files only; no manager is ever executed. Symlinked and dot entries are
 /// never installs (`current`, `latest` and friends only point at one).
@@ -138,6 +146,25 @@ public struct CleanupRuntimeInventory: Sendable {
         let safe = names.allSatisfy { CleanupDuplicateFindings.isSafeToolToken($0) }
         let removal: CleanupAction = safe ? .command(command.joined(separator: " ")) : .instruction(.removeWithCreatingTool)
         return CleanupRuntimeInstall(manager: manager, tool: identity.tool, version: identity.version, url: url, removal: removal)
+    }
+
+    // MARK: Aliases
+
+    /// The links in `~/.pyenv/versions` whose physical path lies inside a pyenv install: a pin
+    /// naming one names that install. A link that does not resolve, or resolves elsewhere, is none.
+    func aliases() -> [CleanupRuntimeAlias] {
+        let installRoots = pyenvInstalls().flatMap { install -> [[String]] in
+            var roots = [CleanupPathText.components(of: install.url.path)]
+            if let real = try? fileSystem.realpath(install.url) { roots.append(CleanupPathText.components(of: real.path)) }
+            return roots
+        }
+        return links(in: path(".pyenv/versions")).compactMap { link in
+            guard let name = CleanupPathText.components(of: link.url.path).last,
+                  let target = try? fileSystem.realpath(link.url) else { return nil }
+            let components = CleanupPathText.components(of: target.path)
+            guard installRoots.contains(where: { components.starts(with: $0) }) else { return nil }
+            return CleanupRuntimeAlias(tool: "python", name: name, target: target)
+        }
     }
 
     // MARK: Defaults
