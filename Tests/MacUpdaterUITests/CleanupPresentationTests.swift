@@ -12,7 +12,7 @@ final class CleanupPresentationTests: XCTestCase {
         let report = Fixture.report(
             findings: [
                 Fixture.claudeLink, Fixture.claudeCask, Fixture.gitSystem, Fixture.gitHomebrew,
-                Fixture.claudeOldVersion, Fixture.claudeAppManaged, Fixture.fnmStale,
+                Fixture.claudeOldVersion, Fixture.claudeAppManaged, Fixture.fnmStale, Fixture.fnmKept,
             ],
             skippedProtected: ["/Users/cleanup-test/Documents/bin"]
         )
@@ -36,7 +36,9 @@ final class CleanupPresentationTests: XCTestCase {
             ])
             XCTAssertEqual(copies.map(\.groupHeader), ["claude", nil, nil, nil, "git", nil])
             XCTAssertEqual(copies.map(\.status), ["aktywna", "przesłonięta", "nieużywana", "zarządzana przez aplikację", "aktywna", "oczekiwana"])
-            XCTAssertEqual(sections[1].rows.map(\.title), ["~/.local/state/fnm_multishells"])
+            XCTAssertEqual(sections[1].rows.map(\.title), ["~/.local/state/fnm_multishells", "~/.local/state/fnm_multishells"])
+            XCTAssertEqual(sections[1].rows.map(\.findingID), [Fixture.fnmStale.id, Fixture.fnmKept.id])
+            XCTAssertNotEqual(Fixture.fnmStale.id, Fixture.fnmKept.id, "stale and kept entries of one directory are two rows")
             XCTAssertEqual(sections[2].rows.map(\.title), ["~/Documents/bin"])
             XCTAssertEqual(sections[2].rows.map(\.status), ["pominięta (lokalizacja chroniona)"])
             XCTAssertEqual(sections[3].rows, [])
@@ -89,7 +91,10 @@ final class CleanupPresentationTests: XCTestCase {
         withLanguage(.pl) {
             let rows = CleanupPresentation.sections(report, home: Fixture.home).flatMap(\.rows)
 
-            XCTAssertEqual(rows.compactMap(\.finding), [Fixture.gitSystem, Fixture.claudeAppManaged, dependency, excludedWithAnAction])
+            XCTAssertEqual(
+                rows.compactMap(\.findingID),
+                [Fixture.gitSystem, Fixture.claudeAppManaged, dependency, excludedWithAnAction].map(\.id)
+            )
             for row in rows {
                 XCTAssertNil(row.button, row.title)
                 XCTAssertEqual(row.note, tr("tylko informacja"), row.title)
@@ -113,7 +118,7 @@ final class CleanupPresentationTests: XCTestCase {
         try withLanguage(.pl) {
             let rows = CleanupPresentation.sections(report, home: Fixture.home).flatMap(\.rows)
             func row(_ finding: CleanupFinding) throws -> CleanupPresentation.Row {
-                try XCTUnwrap(rows.first { $0.finding == finding })
+                try XCTUnwrap(rows.first { $0.findingID == finding.id })
             }
 
             XCTAssertEqual(try row(npm).button, .copyCommand("npm uninstall -g x"))
@@ -379,6 +384,10 @@ private enum CleanupPresentationFixtures {
             ]
         ),
         bucket: .safe, size: 8192
+    )
+    static let fnmKept = CleanupFinding(
+        .shellState, tool: "fnm", path: "/Users/cleanup-test/.local/state/fnm_multishells", source: nil,
+        status: .info, reason: .keptSinceBoot(count: 3), action: .none, bucket: .excluded
     )
 
     static func url(_ path: String) -> URL {

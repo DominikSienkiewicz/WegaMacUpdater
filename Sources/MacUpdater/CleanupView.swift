@@ -133,7 +133,7 @@ struct CleanupView: View {
                     ForEach(CleanupPresentation.sections(report, home: store.home), id: \.kind) { section in
                         CleanupSectionCard(
                             section: section, canRemove: isIdle, copiedCommand: copiedCommand,
-                            onRemove: { confirming = $0 }, onCopy: copy
+                            onRemove: { id in confirming = report.findings.first { $0.id == id } }, onCopy: copy
                         )
                     }
                 }
@@ -199,7 +199,7 @@ private struct CleanupSectionCard: View {
     let section: CleanupPresentation.Section
     let canRemove: Bool
     let copiedCommand: String?
-    let onRemove: (CleanupFinding) -> Void
+    let onRemove: (_ findingID: String) -> Void
     let onCopy: (String) -> Void
 
     var body: some View {
@@ -252,7 +252,7 @@ private struct CleanupFindingRow: View {
     let row: CleanupPresentation.Row
     let canRemove: Bool
     let copiedCommand: String?
-    let onRemove: (CleanupFinding) -> Void
+    let onRemove: (_ findingID: String) -> Void
     let onCopy: (String) -> Void
 
     var body: some View {
@@ -296,8 +296,8 @@ private struct CleanupFindingRow: View {
             if let button = row.button {
                 switch button {
                 case .trash, .brew:
-                    if let finding = row.finding {
-                        Button(CleanupPresentation.buttonTitle(button)) { onRemove(finding) }
+                    if let findingID = row.findingID {
+                        Button(CleanupPresentation.buttonTitle(button)) { onRemove(findingID) }
                             .controlSize(.small)
                             .disabled(!canRemove)
                     }
@@ -317,7 +317,7 @@ private struct CleanupFindingRow: View {
     }
 
     private var badgeVariant: WegaBadgeVariant {
-        switch row.finding?.bucket {
+        switch row.bucket {
         case .safe: .success
         case .needsDecision: .brew
         case .excluded, nil: .info

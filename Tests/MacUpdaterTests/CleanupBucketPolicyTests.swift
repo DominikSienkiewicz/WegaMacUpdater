@@ -77,6 +77,31 @@ final class CleanupBucketPolicyTests: XCTestCase {
         )
     }
 
+    /// D8 reports a directory's stale entries and its kept entries as two findings for one path;
+    /// SwiftUI lists and `CleanupStore.Phase.removing(findingID:)` need them told apart.
+    func testFindingIDsDifferForStaleAndKeptShellStateFindings() {
+        let directory = URL(filePath: "/Users/cleanup-test/.local/state/fnm_multishells", directoryHint: .isDirectory)
+        func shellState(_ status: CleanupStatus, _ reason: CleanupReason) -> CleanupFinding {
+            CleanupFinding(
+                detector: .shellState, tool: "fnm", path: directory, realpath: nil, source: nil,
+                version: nil, size: nil, status: status, reason: reason, action: .none, risk: .low,
+                bucket: .excluded, identity: nil
+            )
+        }
+
+        let stale = shellState(.stale, .staleSinceBoot(count: 2))
+        let kept = shellState(.info, .keptSinceBoot(count: 3))
+
+        XCTAssertNotEqual(stale.id, kept.id)
+        XCTAssertEqual(stale.id, "D8:stale:/Users/cleanup-test/.local/state/fnm_multishells")
+        XCTAssertEqual(kept.id, "D8:info:/Users/cleanup-test/.local/state/fnm_multishells")
+        XCTAssertEqual(
+            shellState(.inUse([process]), .staleSinceBoot(count: 1)).id,
+            "D8:inUse:/Users/cleanup-test/.local/state/fnm_multishells",
+            "associated values are not part of the id"
+        )
+    }
+
     func testProcessArgumentsAreNeverEncoded() throws {
         let original = CleanupProcess(pid: 7, name: "node", executablePath: "/x/node", arguments: ["--token=abc"])
         let data = try JSONEncoder().encode(original)

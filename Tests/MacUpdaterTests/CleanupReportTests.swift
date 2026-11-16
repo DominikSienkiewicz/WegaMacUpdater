@@ -107,7 +107,7 @@ final class CleanupReportTests: XCTestCase {
             XCTAssertFalse(json.contains(home.path), "path spelling of \(home.path)")
             XCTAssertFalse(json.contains(String(home.absoluteString.dropLast())), "file URL spelling of \(home.path)")
             XCTAssertTrue(json.contains("\"file://~/opt/homebrew/bin/claude\""), json)
-            XCTAssertTrue(json.contains("\"D1:~/opt/homebrew/bin/claude\""), json)
+            XCTAssertTrue(json.contains("\"D1:shadowed:~/opt/homebrew/bin/claude\""), json)
             XCTAssertTrue(json.contains("\"~/Downloads/bin\""), json)
             XCTAssertTrue(json.contains("\"/opt/homebrew/bin\""), "paths outside the home stay as they are")
             XCTAssertNoThrow(try JSONSerialization.jsonObject(with: data))

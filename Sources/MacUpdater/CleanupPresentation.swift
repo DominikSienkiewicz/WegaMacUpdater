@@ -15,10 +15,12 @@ enum CleanupPresentation {
     }
 
     struct Row: Equatable {
-        /// The finding the row stands for; nil for a protected location the scan skipped.
-        let finding: CleanupFinding?
+        /// The id of the finding the row stands for; nil for a protected location the scan skipped.
+        let findingID: String?
         /// The tool's name, on the first of its rows in the duplicates section.
         let groupHeader: String?
+        /// The finding's bucket, which the status badge is coloured by; nil for a skipped location.
+        let bucket: CleanupBucket?
         let status: String
         /// The item's path, with `~` for the home directory.
         let title: String
@@ -28,8 +30,6 @@ enum CleanupPresentation {
         /// Shown beside the button or instead of it: the command to copy, the instruction to
         /// follow, or that the row is for information only.
         let note: String?
-
-        var findingID: String? { finding?.id }
     }
 
     struct Section: Equatable {
@@ -163,7 +163,7 @@ enum CleanupPresentation {
     private static func row(for finding: CleanupFinding, home: URL, groupHeader: String?, namesTool: Bool) -> Row {
         let control = control(for: finding, home: home)
         return Row(
-            finding: finding, groupHeader: groupHeader, status: statusText(finding.status),
+            findingID: finding.id, groupHeader: groupHeader, bucket: finding.bucket, status: statusText(finding.status),
             title: tilde(finding.path.path, home), detail: detail(of: finding, home: home, namesTool: namesTool),
             sizeText: finding.size.map(sizeText), button: control.button, note: control.note
         )
@@ -199,7 +199,7 @@ enum CleanupPresentation {
 
     private static func skippedRow(_ path: String, home: URL) -> Row {
         Row(
-            finding: nil, groupHeader: nil, status: statusText(.skippedProtected), title: tilde(path, home),
+            findingID: nil, groupHeader: nil, bucket: nil, status: statusText(.skippedProtected), title: tilde(path, home),
             detail: reasonText(.protectedLocation), sizeText: nil, button: nil, note: nil
         )
     }

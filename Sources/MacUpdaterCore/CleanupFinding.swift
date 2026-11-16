@@ -162,7 +162,7 @@ public struct CleanupFinding: Codable, Equatable, Identifiable, Sendable {
         bucket: CleanupBucket,
         identity: CleanupFileIdentity?
     ) {
-        self.id = "\(detector.rawValue):\(path.path)"
+        self.id = "\(detector.rawValue):\(Self.statusKey(status)):\(path.path)"
         self.detector = detector
         self.tool = tool
         self.path = path
@@ -176,6 +176,24 @@ public struct CleanupFinding: Codable, Equatable, Identifiable, Sendable {
         self.risk = risk
         self.bucket = bucket
         self.identity = identity
+    }
+
+    /// The status's case name. It is part of the id because D8 reports a directory's stale and
+    /// kept entries as two findings for the same path.
+    private static func statusKey(_ status: CleanupStatus) -> String {
+        switch status {
+        case .active: "active"
+        case .shadowed: "shadowed"
+        case .unused: "unused"
+        case .stale: "stale"
+        case .inUse: "inUse"
+        case .expected: "expected"
+        case .appManaged: "appManaged"
+        case .dependency: "dependency"
+        case .brokenLink: "brokenLink"
+        case .skippedProtected: "skippedProtected"
+        case .info: "info"
+        }
     }
 }
 
