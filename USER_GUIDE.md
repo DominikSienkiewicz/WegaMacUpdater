@@ -668,9 +668,10 @@ whether it's marked for removal.
 
 For apps Homebrew doesn't manage, the dialog also lists **App leftovers** found in your home
 folder: items Homebrew's own cleanup list names for the app, items stored under the app's
-bundle identifier, and folders named after the app. The first two groups are ticked; folders
-found only by name sit under **Probable — check before ticking** and stay unticked, as does
-anything outside `~/Library`. An item that another installed app still uses is shown
+bundle identifier, and folders named after the app. Bundle-identifier items are ticked, and
+so are Homebrew-list items when the app clearly matches that cask and the item is inside
+`~/Library`. Items from a cask matched only by name, anything outside `~/Library`, and
+folders found only by name (under **Probable — check before ticking**) stay unticked. An item that another installed app still uses is shown
 unticked and marked "also used by", and an item shared by two apps you remove together goes
 only when both are removed. Sizes appear a moment after the dialog opens (items inside
 Containers show "size unknown"). If the app list couldn't be read completely, nothing is
