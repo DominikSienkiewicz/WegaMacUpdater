@@ -7,7 +7,14 @@ enum LeftoverPathRules {
         ["Desktop"], ["Documents"], ["Downloads"], ["Pictures"], ["Movies"], ["Music"], ["Public"],
         ["Library", "Mobile Documents"], ["Library", "CloudStorage"], ["Library", "Mail"],
         ["Library", "Messages"], ["Library", "Safari"], ["Library", "Keychains"],
+        ["Library", "Application Support", "CloudDocs"], ["Library", "Application Support", "FileProvider"],
+        ["Library", "Application Support", "MobileSync"],
     ]
+
+    /// Folders holding other apps' containers: only a container folder itself may be offered,
+    /// never anything inside it, so planning never reads there.
+    private static let containerFolders = ["Containers", "Group Containers"]
+    private static let containerDepth = 3
 
     private static let droppedLibraryFolders: [String] = [
         "LaunchAgents", "Internet Plug-Ins", "Audio", "Services", "QuickLook", "PreferencePanes",
@@ -63,10 +70,16 @@ enum LeftoverPathRules {
            droppedLibraryFolders.contains(where: { equals(components[1], $0) }) {
             return false
         }
+        if isInsideContainer(components) { return false }
         if components.contains(where: containsApplePrefix) {
             return isRecentDocumentsFile(components)
         }
         return true
+    }
+
+    private static func isInsideContainer(_ components: [String]) -> Bool {
+        components.count > containerDepth && equals(components[0], "Library")
+            && containerFolders.contains { equals(components[1], $0) }
     }
 
     private static func isWellFormed(_ component: String) -> Bool {

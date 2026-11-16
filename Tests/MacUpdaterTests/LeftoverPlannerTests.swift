@@ -240,6 +240,26 @@ struct LeftoverPlannerTests {
         #expect(plan(agent).isEmpty)
     }
 
+    /// Real zap lists name files inside shared and helper containers; planning never reads there.
+    @Test func nothingInsideAContainerIsPlannedOrRead() throws {
+        try fixture.file("Library/Group Containers/UBF8T346G9.ms/Microsoft Word.MERP.params.txt")
+        try fixture.file("Library/Containers/org.sparkle-project.Downloader/Data/x")
+        let container = try fixture.folder("Library/Containers/com.microsoft.Word")
+        let word = app(name: "Microsoft Word", bundleID: "com.microsoft.Word", cask: cask("microsoft-word", .token, zap: [
+            "~/Library/Group Containers/UBF8T346G9.ms/Microsoft Word.MERP.params.txt",
+            "~/Library/Containers/org.sparkle-project.Downloader/Data/x",
+            "~/Library/Containers/com.microsoft.Word",
+        ]))
+        let recording = RecordingCleanupFileSystem(wrapping: LiveCleanupFileSystem())
+
+        let items = LeftoverPlanner.plan(
+            targets: [word], alsoRemoved: [], others: [], home: fixture.home, fileSystem: recording
+        ).flatMap(\.items)
+
+        #expect(items.map(\.url) == [container])
+        #expect(!recording.touched.contains { $0.contains("/UBF8T346G9.ms") || $0.contains("/org.sparkle-project.Downloader") })
+    }
+
     @Test func symlinkedCachesFolderIsRefused() throws {
         try fixture.outsideFolder("caches/com.acme.app")
         try fixture.symlink("Library/Caches", to: fixture.root.appending(path: "caches", directoryHint: .isDirectory))

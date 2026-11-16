@@ -39,6 +39,26 @@ struct LeftoverPathRulesTests {
         #expect(!LeftoverPathRules.isOfferable(["Library", "Fonts", "x.ttf"]))
     }
 
+    /// Another app's container is never read: only the container folder itself may be offered.
+    @Test func offerableRefusesAnythingInsideAContainer() {
+        #expect(!LeftoverPathRules.isOfferable([
+            "Library", "Group Containers", "UBF8T346G9.ms", "Microsoft Word.MERP.params.txt",
+        ]))
+        #expect(!LeftoverPathRules.isOfferable(["Library", "Containers", "org.sparkle-project.Downloader", "Data", "x"]))
+        #expect(!LeftoverPathRules.isOfferable(["library", "GROUP CONTAINERS", "UBF8T346G9.ms", "x"]))
+        #expect(LeftoverPathRules.isOfferable(["Library", "Group Containers", "ABCDE12345.com.acme.app"]))
+        #expect(LeftoverPathRules.isOfferable(["Library", "Containers", "com.acme.app"]))
+        #expect(LeftoverPathRules.isOfferable(["Library", "Containers Backup", "com.acme.app", "Data"]))
+    }
+
+    @Test(arguments: ["CloudDocs", "FileProvider", "MobileSync"])
+    func offerableRefusesSystemServiceStores(_ folder: String) {
+        #expect(!LeftoverPathRules.isOfferable(["Library", "Application Support", folder]))
+        #expect(!LeftoverPathRules.isOfferable(["Library", "Application Support", folder, "x"]))
+        #expect(!LeftoverPathRules.isOfferable(["library", "APPLICATION SUPPORT", folder.lowercased()]))
+        #expect(LeftoverPathRules.isOfferable(["Library", "Application Support", folder + " Backup"]))
+    }
+
     @Test func offerableRefusesAppleItemsExceptRecentDocuments() {
         #expect(!LeftoverPathRules.isOfferable(["Library", "Preferences", "com.apple.dock.plist"]))
         #expect(!LeftoverPathRules.isOfferable(["Library", "Containers", "com.apple.x", "Data"]))
