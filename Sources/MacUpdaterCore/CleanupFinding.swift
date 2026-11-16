@@ -97,6 +97,8 @@ public enum CleanupAction: Codable, Equatable, Sendable {
 
 public enum CleanupReason: Codable, Equatable, Sendable {
     case olderVersion(current: String)
+    /// A version in a recognised layout that is newer than the current one.
+    case newerVersion(current: String)
     case shadowedBy(path: String)
     case systemCopy
     case managedByApp(owner: String)

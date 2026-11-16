@@ -62,6 +62,42 @@ final class CleanupVersionDirectoryDetectorTests: XCTestCase {
         }
     }
 
+    /// A lock, temporary or dot file in the versions directory is not a version: it is neither
+    /// counted nor offered for the Trash.
+    func testEntriesThatAreNotVersionsAreIgnored() throws {
+        try installClaude(versions: ["2.1.318", "2.1.325"], current: "2.1.325")
+        for name in [".lock", ".DS_Store", "claude.tmp", "latest"] {
+            try tmp.file(".local/share/claude/versions/\(name)", size: 4096, executable: true)
+        }
+
+        let all = versionFindings()
+
+        XCTAssertEqual(all.map(\.path.lastPathComponent).sorted(), ["2.1.318", "2.1.325"])
+        XCTAssertEqual(try finding("2.1.318", in: all).action, .trash([tmp.url(".local/share/claude/versions/2.1.318")]))
+    }
+
+    /// Only a version older than the current one is offered for the Trash; a newer one, or one
+    /// that cannot be shown to be older, is left to the tool and needs a decision.
+    func testUnusedVersionThatIsNotOlderIsNotTrashable() throws {
+        try installClaude(versions: ["2.1.318", "2.1.325", "2.1.400", "2.1.325.partial"], current: "2.1.325")
+
+        let all = versionFindings()
+
+        let newer = try finding("2.1.400", in: all)
+        XCTAssertEqual(newer.status, .unused)
+        XCTAssertEqual(newer.action, .instruction(.removeWithCreatingTool))
+        XCTAssertEqual(newer.reason, .newerVersion(current: "2.1.325"))
+        XCTAssertEqual(newer.bucket, .needsDecision)
+        let unknown = try finding("2.1.325.partial", in: all)
+        XCTAssertEqual(unknown.action, .instruction(.removeWithCreatingTool))
+        XCTAssertEqual(unknown.reason, .unknownVersionDirectory)
+        XCTAssertEqual(unknown.bucket, .needsDecision)
+        let older = try finding("2.1.318", in: all)
+        XCTAssertEqual(older.action, .trash([tmp.url(".local/share/claude/versions/2.1.318")]))
+        XCTAssertEqual(older.reason, .olderVersion(current: "2.1.325"))
+        XCTAssertEqual(older.bucket, .safe)
+    }
+
     func testVersionExecutedByARunningProcessIsInUse() throws {
         try installClaude(versions: ["2.1.318", "2.1.325"], current: "2.1.325")
         let old = tmp.url(".local/share/claude/versions/2.1.318").path

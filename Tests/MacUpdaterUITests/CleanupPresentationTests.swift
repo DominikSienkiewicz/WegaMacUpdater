@@ -152,7 +152,8 @@ final class CleanupPresentationTests: XCTestCase {
             .appManaged, .dependency(["gh"]), .brokenLink, .skippedProtected, .info,
         ]
         let reasons: [CleanupReason] = [
-            .olderVersion(current: "2.1.325"), .shadowedBy(path: "~/.local/bin/claude"), .systemCopy,
+            .olderVersion(current: "2.1.325"), .newerVersion(current: "2.1.325"), .shadowedBy(path: "~/.local/bin/claude"),
+            .systemCopy,
             .managedByApp(owner: "Claude"), .staleSinceBoot(count: 2), .keptSinceBoot(count: 3),
             .unknownVersionDirectory, .currentVersion, .protectedLocation, .brokenLink, .requiredBy(["gh"]),
         ]

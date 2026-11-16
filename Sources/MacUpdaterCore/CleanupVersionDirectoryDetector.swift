@@ -1,7 +1,8 @@
 import Foundation
 
 /// D3: old versions kept by a tool's own installer, copies owned by an application, and version
-/// directories that no known layout explains. Only recognised layouts ever offer the Trash.
+/// directories that no known layout explains. Only version-like entries count; only a recognised
+/// layout ever offers the Trash, and only for a version older than the current one.
 public struct CleanupVersionDirectoryDetector: Sendable {
     private struct Child {
         let entry: CleanupEntry
@@ -82,7 +83,7 @@ public struct CleanupVersionDirectoryDetector: Sendable {
         layout: CleanupNativeLayout, directory: URL, root: URL, copyRealpaths: [URL], processes: [CleanupProcess]
     ) -> [CleanupFinding] {
         guard let entries = try? fileSystem.contents(of: directory) else { return [] }
-        let children = entries.compactMap { entry -> Child? in
+        let children = entries.filter { Self.isVersionLike($0.url.lastPathComponent) }.compactMap { entry -> Child? in
             guard let real = try? fileSystem.realpath(entry.url) else { return nil }
             return Child(entry: entry, realpath: real)
         }
@@ -176,14 +177,29 @@ public struct CleanupVersionDirectoryDetector: Sendable {
         current: String? = nil, users: [CleanupProcess] = []
     ) -> CleanupFinding {
         let status: CleanupStatus = users.isEmpty ? .unused : .inUse(users)
-        let trashable = recognised && current != nil
+        let comparison = Self.comparison(of: child.name, with: recognised ? current : nil)
+        let trashable = comparison.relation == .olderOrSame
         return makeFinding(child, tool: tool, source: source, Verdict(
             status: status,
-            reason: current.map(CleanupReason.olderVersion(current:)) ?? .unknownVersionDirectory,
+            reason: comparison.reason,
             action: trashable ? .trash([child.entry.url]) : .instruction(.removeWithCreatingTool),
             risk: users.isEmpty ? .low : .high,
-            relation: trashable ? .olderOrSame : .unknown, recognised: recognised, sized: true
+            relation: comparison.relation, recognised: trashable, sized: true
         ))
+    }
+
+    /// Only a version that compares as older than the current one is an old version the layout
+    /// explains. A newer one, one equal to it under another name, or one that does not parse is
+    /// left to the tool, and the layout counts as not recognised for it, so it needs a decision.
+    private static func comparison(
+        of name: String, with current: String?
+    ) -> (reason: CleanupReason, relation: CleanupVersionRelation) {
+        guard let current else { return (.unknownVersionDirectory, .unknown) }
+        switch compareVersions(name, current, scheme: .semver) {
+        case .orderedAscending: return (.olderVersion(current: current), .olderOrSame)
+        case .orderedDescending: return (.newerVersion(current: current), .newer)
+        case .orderedSame, .unknown: return (.unknownVersionDirectory, .unknown)
+        }
     }
 
     private func makeFinding(_ child: Child, tool: String, source: CleanupSource, _ verdict: Verdict) -> CleanupFinding {

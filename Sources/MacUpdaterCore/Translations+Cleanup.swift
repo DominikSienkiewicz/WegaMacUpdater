@@ -74,6 +74,7 @@ extension Translations {
 
         // Reasons
         "starsza wersja; bieżąca to %@": "older version; the current one is %@",
+        "nowsza wersja; bieżąca to %@": "newer version; the current one is %@",
         "przesłania ją %@, wcześniej w PATH": "shadowed by %@, earlier in PATH",
         "kopia dostarczana z macOS": "a copy that ships with macOS",
         "aktualizuje ją aplikacja %@": "kept up to date by the %@ app",

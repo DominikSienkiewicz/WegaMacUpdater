@@ -278,6 +278,7 @@ enum CleanupPresentation {
     static func reasonText(_ reason: CleanupReason) -> String {
         switch reason {
         case .olderVersion(let current): trf("starsza wersja; bieżąca to %@", current)
+        case .newerVersion(let current): trf("nowsza wersja; bieżąca to %@", current)
         case .shadowedBy(let path): trf("przesłania ją %@, wcześniej w PATH", path)
         case .systemCopy: tr("kopia dostarczana z macOS")
         case .managedByApp(let owner): trf("aktualizuje ją aplikacja %@", owner)
