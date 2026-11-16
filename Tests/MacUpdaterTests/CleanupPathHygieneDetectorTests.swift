@@ -115,7 +115,11 @@ final class CleanupPathHygieneDetectorTests: XCTestCase {
     func testBrokenLinkOnPathIsDead() throws {
         let link = try tmp.symlink("gone", to: tmp.url("nowhere").path).path
 
-        XCTAssertEqual(scan([link]).findings.map(\.status), [.deadEntry])
+        let findings = scan([link]).findings
+
+        XCTAssertEqual(findings.map(\.status), [.deadEntry])
+        let linkIdentity = try XCTUnwrap(LiveCleanupFileSystem(trash: { _ in }).entry(at: URL(filePath: link))).identity
+        XCTAssertEqual(findings[0].identity, linkIdentity)
     }
 
     func testHealthyDistinctEntriesProduceNothing() throws {

@@ -51,6 +51,23 @@ final class CleanupShellFileAttributionTests: XCTestCase {
         XCTAssertEqual(attribution().locations(of: "/opt/homebrew/bin"), [location(".zshrc", 3)])
     }
 
+    func testEntryIsNotAttributedToALongerPathUnderIt() throws {
+        let home = tmp.home.path
+        try tmp.file(".zshrc", text: """
+        export PATH="$HOME/Library/pnpm/bin:$PATH"
+        export PNPM_HOME="$HOME/Library/pnpm"
+        path+=(~/.local/bin)
+        export PATH=$HOME:$PATH
+        export PATH=/opt/homebrew/bin/:$PATH
+        export PATH="/opt/homebrew/bin/"
+        """)
+
+        let found = attribution()
+        XCTAssertEqual(found.locations(of: home + "/Library/pnpm"), [location(".zshrc", 2)])
+        XCTAssertEqual(found.locations(of: home), [location(".zshrc", 4)])
+        XCTAssertEqual(found.locations(of: "/opt/homebrew/bin"), [location(".zshrc", 5), location(".zshrc", 6)])
+    }
+
     func testTrailingSlashEntryIsAttributed() throws {
         try tmp.file(".zshrc", text: "export PATH=~/.a:$PATH\n")
 

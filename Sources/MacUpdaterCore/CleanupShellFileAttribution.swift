@@ -15,7 +15,7 @@ public struct CleanupShellFileAttribution: Sendable, CustomStringConvertible, Cu
     private static let bashSystemFiles = ["profile", "bashrc"]
     private static let bashHomeFiles = [".bash_profile", ".bash_login", ".profile", ".bashrc"]
     private static let leadingBoundaries: Set<Unicode.Scalar> = [" ", "\t", "=", ":", "\"", "'", "("]
-    private static let trailingBoundaries: Set<Unicode.Scalar> = ["/", ":", "\"", "'", " ", "\t", ";", ")", "}"]
+    private static let trailingBoundaries: Set<Unicode.Scalar> = [":", "\"", "'", " ", "\t", ";", ")", "}"]
 
     /// Paths the guard refused while reading.
     public let skippedProtected: [String]
@@ -48,7 +48,7 @@ public struct CleanupShellFileAttribution: Sendable, CustomStringConvertible, Cu
                 Self.read(child.url, fileSystem: fileSystem, into: &read, skipped: &skipped)
             }
         } catch CleanupFileSystemError.protectedLocation(let refused) {
-            skipped.append(refused)
+            if !skipped.contains(refused) { skipped.append(refused) }
         } catch {
             // An unreadable directory contributes no files.
         }
@@ -112,10 +112,18 @@ public struct CleanupShellFileAttribution: Sendable, CustomStringConvertible, Cu
         for start in 0...(line.count - needle.count) where line[start..<(start + needle.count)].elementsEqual(needle) {
             let end = start + needle.count
             let leadingOK = start == 0 || leadingBoundaries.contains(line[start - 1])
-            let trailingOK = end == line.count || trailingBoundaries.contains(line[end])
+            let trailingOK = endsAtBoundary(line, after: end)
             if leadingOK, trailingOK { return true }
         }
         return false
+    }
+
+    /// The entry ends the line or is followed by a boundary, optionally after one `/`, so `~/.local`
+    /// is not attributed to `~/.local/bin`.
+    private static func endsAtBoundary(_ line: [Unicode.Scalar], after end: Int) -> Bool {
+        var next = end
+        if next < line.count, line[next] == "/" { next += 1 }
+        return next == line.count || trailingBoundaries.contains(line[next])
     }
 
     public var description: String {

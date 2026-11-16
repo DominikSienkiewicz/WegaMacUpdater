@@ -47,6 +47,7 @@ public struct CleanupPathHygieneDetector: Sendable {
             entryFinding(candidate, earlier: candidates[..<index], all: candidates, count: counts[candidate.text] ?? 1, attribution: attribution)
         }
         findings += olderCopyFindings(duplicates, attribution: attribution)
+        // Two spellings of one entry (`/x` and `/x/`) share an id; only the first finding is kept.
         var seen: Set<String> = []
         return (findings.filter { seen.insert($0.id).inserted }, attribution.skippedProtected)
     }
@@ -61,7 +62,8 @@ public struct CleanupPathHygieneDetector: Sendable {
             case .directory:
                 return .alive(entry: entry, realpath: try fileSystem.realpath(url))
             case .symlink:
-                let target = try fileSystem.realpath(url)
+                let target: URL
+                do { target = try fileSystem.realpath(url) } catch CleanupFileSystemError.notFound { return .dead(entry) }
                 guard let resolved = try fileSystem.entry(at: target) else { return .dead(entry) }
                 return resolved.kind == .directory ? .alive(entry: entry, realpath: target) : .dead(entry)
             }
