@@ -71,14 +71,27 @@ public enum UninstallRoute {
 
 extension UninstallBundleFacts {
     /// Reads the facts from the live filesystem. The owner comes from `lstat`, which does not
-    /// follow a symlink. A bundle that cannot be inspected reads as not writable and owned by
-    /// nobody, so the route fails toward a blocked result and never toward an attempt as root.
+    /// follow a symlink. A bundle that vanished (`ENOENT`) routes to the user's Trash so the
+    /// real "no such file" error surfaces as a failure. Any other inspection failure reads as
+    /// not writable and owned by nobody, so the route fails toward a blocked result and never
+    /// toward an attempt as root.
     public static func live(path: URL, hasBundleIdentifier: Bool) -> UninstallBundleFacts {
         let currentUser = getuid()
         var status = stat()
-        let owner: UInt32 = lstat(path.path, &status) == 0 ? status.st_uid : UInt32.max
-        let writable = owner != UInt32.max
-            && access(path.path, W_OK) == 0
+        guard lstat(path.path, &status) == 0 else {
+            let vanished = errno == ENOENT
+            return UninstallBundleFacts(
+                ownerUID: vanished ? currentUser : UInt32.max,
+                currentUserUID: currentUser,
+                isWritableByUser: vanished,
+                isTopLevelInApplications: WegaHelper.isTopLevelApplicationBundle(path: path.path),
+                hasBundleIdentifier: hasBundleIdentifier,
+                isAdministrator: AdministratorGroup.contains(uid: currentUser),
+                helper: .notSupported
+            )
+        }
+        let owner: UInt32 = status.st_uid
+        let writable = access(path.path, W_OK) == 0
             && access(path.deletingLastPathComponent().path, W_OK) == 0
         return UninstallBundleFacts(
             ownerUID: owner,

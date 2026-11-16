@@ -555,8 +555,10 @@ struct UninstallDialog: View {
         }
     }
 
-    private var brewCount: Int { targets.filter(\.isManagedByBrew).count }
-    private var trashCount: Int { targets.count - brewCount }
+    private var counts: UninstallDialogCounts { UninstallDialogCounts(targets: targets, routes: routes) }
+    private var brewCount: Int { counts.brew }
+    private var trashCount: Int { counts.trash }
+    private var blockedCount: Int { counts.blocked }
     private var totalCount: Int { targets.count }
     private var hasMixed: Bool { brewCount > 0 && trashCount > 0 }
     private var hasNonBrew: Bool { trashCount > 0 }
@@ -584,10 +586,15 @@ struct UninstallDialog: View {
                         Text(tr("Aplikacje trafią do Kosza"))
                             .font(.wega(.callout))
                             .foregroundStyle(.secondary)
-                    } else {
+                    } else if blockedCount == 0 {
                         Text(tr("Wybierz, co zostawić"))
                             .font(.wega(.callout))
                             .foregroundStyle(.secondary)
+                    }
+                    if blockedCount > 0 {
+                        Text(trf("%@ nie da się usunąć — szczegóły poniżej", "\(blockedCount)"))
+                            .font(.wega(.callout))
+                            .foregroundStyle(Color.wegaDanger)
                     }
                 }
             }
@@ -785,7 +792,7 @@ struct UninstallDialog: View {
         if brewCount > 0 {
             return zapMode ? tr("Usuń razem z resztkami") : tr("Usuń tylko aplikację")
         }
-        return tr("Przenieś do Kosza")
+        return counts.promisesTrash ? tr("Przenieś do Kosza") : tr("Pokaż, czego nie usunięto")
     }
 }
 

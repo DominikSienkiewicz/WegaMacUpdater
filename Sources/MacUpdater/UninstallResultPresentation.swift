@@ -49,7 +49,7 @@ enum UninstallResultPresentation {
         switch result {
         case .blocked(.needsAppManagement):
             return [.openAppManagementSettings]
-        case .blocked(.needsAdministratorRights):
+        case .blocked(.needsAdministratorRights), .blocked(.needsHelper), .blocked(.needsAdministratorAccount):
             return [.showInFinder(app.path)]
         case .leftInStaging(let url):
             return [.showInFinder(url)]

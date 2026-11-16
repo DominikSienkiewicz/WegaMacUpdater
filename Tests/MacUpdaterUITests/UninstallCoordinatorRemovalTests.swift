@@ -159,6 +159,25 @@ struct UninstallCoordinatorRemovalTests {
         #expect(outcome.leftoversTrashed == 0)
     }
 
+    @Test func vanishedBundleWithLiveFactsIsFailedNotBlocked() async {
+        let target = app("Vanished")
+        let facts = UninstallBundleFacts.live(
+            path: URL(fileURLWithPath: "/nonexistent-\(UUID().uuidString)/Vanished.app"),
+            hasBundleIdentifier: true
+        )
+        let missing = NSError(domain: NSCocoaErrorDomain, code: CocoaError.fileNoSuchFile.rawValue)
+        let calls = CallCounter()
+        let sut = coordinator(facts: facts, trash: { _ in calls.increment(); throw missing })
+
+        let outcome = await sut.uninstall(targets: [target], zap: false, using: BrewService())
+
+        #expect(calls.count == 1)
+        guard case .failed = outcome.results[target.id] else {
+            Issue.record("expected .failed, got \(String(describing: outcome.results[target.id]))")
+            return
+        }
+    }
+
     @Test func brewTargetReportsRemovedByHomebrew() async {
         let cask = app("Charlie", brew: true)
         let coordinator = UninstallCoordinator(dependencies: .init(

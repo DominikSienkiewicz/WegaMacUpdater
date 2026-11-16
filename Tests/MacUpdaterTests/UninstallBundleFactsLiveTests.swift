@@ -22,13 +22,25 @@ struct UninstallBundleFactsLiveTests {
         #expect(facts.helper == .notSupported)
     }
 
-    @Test func missingBundleFailsTowardABlockedRoute() {
+    @Test func missingBundleRoutesToUserTrashSoTheRealErrorSurfaces() {
         let missing = URL(fileURLWithPath: "/nonexistent-\(UUID().uuidString)/Gone.app")
 
         let facts = UninstallBundleFacts.live(path: missing, hasBundleIdentifier: true)
 
+        #expect(UninstallRoute.preflight(facts) == .userTrash)
+    }
+
+    @Test func otherInspectionFailureStaysFailClosed() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try Data().write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let underAFile = file.appendingPathComponent("Odd.app")
+
+        let facts = UninstallBundleFacts.live(path: underAFile, hasBundleIdentifier: true)
+
         #expect(facts.ownerUID == UInt32.max)
         #expect(!facts.isWritableByUser)
+        #expect(UninstallRoute.preflight(facts) != .userTrash)
     }
 
     @Test func readOnlyParentMakesTheBundleNotWritable() throws {

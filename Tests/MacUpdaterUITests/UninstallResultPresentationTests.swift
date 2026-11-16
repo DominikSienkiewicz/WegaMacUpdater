@@ -108,6 +108,10 @@ struct UninstallResultPresentationTests {
                 == [.showInFinder(target.path)])
         #expect(UninstallResultPresentation.actions(for: .leftInStaging(staging), app: target)
                 == [.showInFinder(staging)])
+        #expect(UninstallResultPresentation.actions(for: .blocked(.needsHelper), app: target)
+                == [.showInFinder(target.path)])
+        #expect(UninstallResultPresentation.actions(for: .blocked(.needsAdministratorAccount), app: target)
+                == [.showInFinder(target.path)])
         #expect(UninstallResultPresentation.actions(for: .movedToTrash, app: target).isEmpty)
     }
 

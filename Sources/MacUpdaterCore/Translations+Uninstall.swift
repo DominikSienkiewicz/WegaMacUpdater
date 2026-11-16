@@ -22,6 +22,8 @@ extension Translations {
         "wymaga uprawnień administratora — usuń ją w Finderze.": "needs administrator rights — remove it in Finder.",
         "macOS blokuje usuwanie — zezwól Wega w Zarządzaniu aplikacjami.": "macOS is blocking removal — allow Wega under App Management.",
         "trafi do Kosza": "goes to the Trash",
+        "%@ nie da się usunąć — szczegóły poniżej": "%@ cannot be removed — details below",
+        "Pokaż, czego nie usunięto": "Show what was not removed",
         "Otwórz ustawienia pomocnika": "Open helper settings",
     ]
 }
