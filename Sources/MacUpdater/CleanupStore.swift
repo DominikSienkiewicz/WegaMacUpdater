@@ -80,6 +80,9 @@ final class CleanupStore: ObservableObject {
     @Published private(set) var pathSnapshot: CleanupPathSnapshot?
     @Published private(set) var lastOutcome: CleanupRemovalOutcome?
     @Published private(set) var pathReadResult: CleanupPathReadResult?
+    /// The last scan ended in an error other than a cancellation, so the report on screen is older
+    /// than the user's request. Cleared when a scan starts.
+    @Published private(set) var lastScanFailed = false
 
     /// The running operation `phase` names. Internal so tests can await it.
     private(set) var task: Task<Void, Never>?
@@ -164,6 +167,7 @@ final class CleanupStore: ObservableObject {
 
     /// Under a read lease, so no removal or update changes the disk while the scan reads it.
     private func performScan() async {
+        lastScanFailed = false
         let storedPath = pathSnapshot
         let approximatePath = dependencies.approximatePath
         let scan = dependencies.scan
@@ -172,10 +176,12 @@ final class CleanupStore: ObservableObject {
                 try await scan(storedPath ?? approximatePath())
             }
             self.report = report
+            lastScanFailed = false
             persist("raportu") { try dependencies.saveReport(report) }
         } catch is CancellationError {
             WegaLog.info(.app, "Porządki: skan anulowany, poprzedni raport zostaje.")
         } catch {
+            lastScanFailed = true
             WegaLog.warning(.app, "Porządki: skan nie powiódł się (\(type(of: error))).")
         }
     }

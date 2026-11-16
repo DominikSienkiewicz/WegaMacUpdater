@@ -100,7 +100,36 @@ final class CleanupStoreTests: XCTestCase {
         XCTAssertEqual(boundary.scannedPaths.count, 1)
         XCTAssertEqual(store.report, previous)
         XCTAssertTrue(boundary.savedReports.isEmpty)
+        XCTAssertFalse(store.lastScanFailed, "a cancellation is not a failure")
         XCTAssertEqual(store.phase, .idle)
+    }
+
+    func testFailedScanIsPublishedAndClearedByTheNextSuccess() async {
+        let boundary = FakeCleanupBoundary()
+        let previous = CleanupStoreFixtures.report(tool: "previous")
+        boundary.persistedReport = previous
+        boundary.scanError = FakeScanFailure()
+        let store = CleanupStore(dependencies: boundary.dependencies)
+
+        store.scan()
+        await store.task?.value
+
+        XCTAssertTrue(store.lastScanFailed)
+        XCTAssertEqual(store.report, previous)
+        XCTAssertTrue(boundary.savedReports.isEmpty)
+
+        boundary.scanError = nil
+        let gate = FakeGate()
+        boundary.scanGate = gate
+        store.scan()
+        await fulfillment(of: [gate.entered], timeout: 5)
+        let failedWhileRunning = store.lastScanFailed
+        gate.open()
+        await store.task?.value
+
+        XCTAssertFalse(failedWhileRunning, "a new scan clears the previous failure when it starts")
+        XCTAssertFalse(store.lastScanFailed)
+        XCTAssertEqual(store.report, boundary.scanResult)
     }
 
     func testSuccessfulRemovalRescans() async {
@@ -274,6 +303,8 @@ private final class FakeCleanupBoundary {
     var pathReadResult: CleanupPathReadResult = .failed
     var scanResult = CleanupStoreFixtures.report(tool: "scanned")
     var removalOutcome: CleanupRemovalOutcome = .removed
+    /// Thrown by the fake scan after its gate, as the coordinator's lease errors would be.
+    var scanError: Error?
     var scanGate: FakeGate?
     var removalGate: FakeGate?
 
@@ -309,6 +340,7 @@ private final class FakeCleanupBoundary {
         scannedPaths.append(path)
         await scanGate?.pass()
         try Task.checkCancellation()
+        if let scanError { throw scanError }
         return scanResult
     }
 
@@ -319,6 +351,8 @@ private final class FakeCleanupBoundary {
         return removalOutcome
     }
 }
+
+private struct FakeScanFailure: Error {}
 
 /// Holds a fake operation until `open()` or until its task is cancelled. It suspends and never
 /// blocks a thread: a blocked cooperative pool turns this project's CI timing tests red.
