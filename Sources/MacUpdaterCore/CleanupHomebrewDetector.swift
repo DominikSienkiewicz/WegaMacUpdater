@@ -249,7 +249,7 @@ public struct CleanupHomebrewDetector: Sendable {
         for group in groups {
             let package = existingPackage(of: group.key, prefix: prefix)
             guard !Self.isUninstalled(group.key, package: package, by: uninstalled) else { continue }
-            findings.append(finding(for: group, package: package, processes: processes))
+            findings.append(finding(for: group, package: package, prefix: prefix, processes: processes))
         }
         if let first = unattributed.first {
             findings.append(infoFinding(
@@ -309,10 +309,10 @@ public struct CleanupHomebrewDetector: Sendable {
             .first { (try? fileSystem.entry(at: $0.directory))?.kind == .directory }
     }
 
-    private func finding(for group: Group, package: Package?, processes: [CleanupProcess]) -> CleanupFinding {
+    private func finding(for group: Group, package: Package?, prefix: URL, processes: [CleanupProcess]) -> CleanupFinding {
         let name = group.key.name
         let path = package?.directory ?? group.items[0].item.path
-        let status = status(of: group, package: package, processes: processes)
+        let status = status(of: group, prefix: prefix, processes: processes)
         let reason: CleanupReason
         if case .recentUpgrade = status { reason = .recentlyUpgraded } else { reason = .homebrewLeftovers(items: group.items.count) }
         return CleanupFinding(
@@ -335,9 +335,11 @@ public struct CleanupHomebrewDetector: Sendable {
     }
 
     /// A recent upgrade wins over use: until the window ends nothing in the package is offered.
-    /// Only the old kegs and cask versions are checked for use, never the current version.
-    private func status(of group: Group, package: Package?, processes: [CleanupProcess]) -> CleanupStatus {
-        if let package, let last = Self.lastInstall(in: package.directory, fileSystem: fileSystem) {
+    /// `brew cleanup -- <name>` cleans the formula and the cask of that name, so the newest version
+    /// directory under either decides. Only the old kegs and cask versions are checked for use,
+    /// never the current version.
+    private func status(of group: Group, prefix: URL, processes: [CleanupProcess]) -> CleanupStatus {
+        if let last = lastInstall(ofPackageNamed: group.key.name, under: prefix) {
             let eligible = last.addingTimeInterval(UpdateOperationStore.retentionInterval)
             if now < eligible { return .recentUpgrade(until: eligible) }
         }
@@ -350,6 +352,15 @@ public struct CleanupHomebrewDetector: Sendable {
             }
         }
         return users.isEmpty ? .unused : .inUse(users)
+    }
+
+    /// The newest version directory in `<prefix>/Cellar/<name>` and `<prefix>/Caskroom/<name>`; a
+    /// name `CleanupHomebrewNames` refuses never becomes a path.
+    private func lastInstall(ofPackageNamed name: String, under prefix: URL) -> Date? {
+        guard CleanupHomebrewNames.isValid(name) else { return nil }
+        return Root.allCases.compactMap { root in
+            Self.lastInstall(in: root.directory(of: name, under: prefix), fileSystem: fileSystem)
+        }.max()
     }
 
     /// One finding per keg folder: a tap-qualified name and its short name are the same formula.

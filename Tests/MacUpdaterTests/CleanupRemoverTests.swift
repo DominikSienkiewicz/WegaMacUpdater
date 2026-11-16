@@ -777,6 +777,31 @@ extension CleanupRemoverTests {
         XCTAssertEqual(removal.calls, [])
     }
 
+    /// `brew cleanup -- <name>` cleans the cask of that name too, so a same-named cask upgraded
+    /// within the window is dated beside the scanned package, before Homebrew is asked, and beside
+    /// every package the fresh dry run lists, since a cached bottle's finding names none itself.
+    func testCleanupRefusedWhenTheSameNamedCaskWasUpgraded() async throws {
+        try keg("opt/homebrew/Cellar/docker/27.0.1", age: 60 * Self.day)
+        try keg("opt/homebrew/Cellar/docker/27.1.0", age: 30 * Self.day)
+        try keg("opt/homebrew/Caskroom/docker/4.31.0", age: Self.day)
+        _ = try nodeKegs(newestAge: 20 * Self.day)
+        try keg("opt/homebrew/Caskroom/node/1.1", age: Self.day)
+        let docker = try cleanupFinding(tmp.url("opt/homebrew/Cellar/docker"), name: "docker", source: .homebrewFormula(name: "docker"))
+        let cases = [
+            (docker, [dryRunItem("opt/homebrew/Cellar/docker/27.0.1")], [String]()),
+            (try cacheFinding(name: "node"), [dryRunItem(Self.oldNodeKeg), dryRunItem(Self.nodeCache)], ["cleanup:node"]),
+        ]
+        for (item, listed, asked) in cases {
+            let query = ScriptedCleanupDryRun(items: listed)
+            let removal = RecordingBrewRemoval()
+            let outcome = await remover(brewQuery: query, brewRemoval: removal)
+                .execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+            XCTAssertEqual(outcome, .changedSinceScan, item.tool)
+            XCTAssertEqual(query.calls, asked, item.tool)
+            XCTAssertEqual(removal.calls, [], item.tool)
+        }
+    }
+
     func testUnlistablePackageDirectoryTheDryRunNamesAbortsCleanup() async throws {
         try XCTSkipIf(geteuid() == 0, "root can list a 000 directory")
         let package = try nodeKegs(newestAge: 20 * Self.day)

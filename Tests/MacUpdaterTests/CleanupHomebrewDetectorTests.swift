@@ -179,6 +179,28 @@ final class CleanupHomebrewDetectorTests: XCTestCase {
         XCTAssertEqual(finding.bucket, .excluded)
     }
 
+    /// `brew cleanup -- docker` cleans the formula and the cask of that name, so a recent upgrade
+    /// of either keeps both, whichever directory the finding points at.
+    func testRecentUpgradeOfTheSameNamedCaskOrFormulaExcludesThePackage() async throws {
+        let oldKeg = try version("Cellar/docker/27.0.1", age: 60 * Self.day)
+        try version("Cellar/docker/27.1.0", age: 30 * Self.day)
+        try version("Caskroom/docker/4.30.0", age: 60 * Self.day)
+        try version("Caskroom/docker/4.31.0", age: 2 * Self.day)
+        let caskCache = tmp.url("Library/Caches/Homebrew/Cask/firefox--120.0.dmg")
+        try version("Cellar/firefox/1.0", age: 30 * Self.day)
+        try version("Caskroom/firefox/121.0", age: 2 * Self.day)
+        let eligible = Self.now.addingTimeInterval(-2 * Self.day + 7 * Self.day)
+
+        let result = await scan(FakeBrewDryRuns(cleanup: [item(oldKeg, 60_000_000), item(caskCache, 1024)]))
+
+        for name in ["docker", "firefox"] {
+            let finding = try XCTUnwrap(result.findings.first { $0.tool == name }, name)
+            XCTAssertEqual(finding.status, .recentUpgrade(until: eligible), name)
+            XCTAssertEqual(finding.reason, .recentlyUpgraded, name)
+            XCTAssertEqual(finding.bucket, .excluded, name)
+        }
+    }
+
     func testAutoremoveCandidatesAreNeedsDecisionUninstalls() async throws {
         try version("Cellar/libfoo/1.0")
 

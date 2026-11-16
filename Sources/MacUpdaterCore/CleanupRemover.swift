@@ -139,16 +139,18 @@ public struct CleanupRemover: Sendable {
     /// `brew cleanup -- <name>` removes whatever a fresh dry run lists, which may differ from what
     /// the scan saw: a package upgraded since keeps its old versions for the retention window, and
     /// a package with nothing left needs a rescan. The scanned package directory is dated before
-    /// Homebrew is asked, and every package directory the dry run lists a version in after it,
-    /// because the command cleans a formula and a cask of that name, whichever the finding named
-    /// and even when its path was a cache file. Only the old versions the dry run lists are
-    /// checked for use; the current version stays installed.
+    /// Homebrew is asked, and every package directory the dry run lists a version in after it.
+    /// The command cleans a formula and a cask of that name, whichever the finding named and even
+    /// when its path was a cache file, so beside each of those the same-named `Cellar/<name>` and
+    /// `Caskroom/<name>` are dated too. Only the old versions the dry run lists are checked for
+    /// use; the current version stays installed.
     private func cleanUp(_ name: String, scanned: [Location], inUseAcknowledged: Bool) async throws -> CleanupRemovalOutcome {
         let scannedPackages = scanned.filter { $0.isDirectory && Self.isPackageDirectory($0.url) }.map(\.url)
-        if try isAnyRecentlyUpgraded(scannedPackages) { return .changedSinceScan }
+        if try isAnyRecentlyUpgraded(try withSameNamedPackages(scannedPackages, named: name)) { return .changedSinceScan }
         let leftovers = try await brewQuery.cleanupDryRun(package: name)
         guard !leftovers.isEmpty else { return .changedSinceScan }
-        if try isAnyRecentlyUpgraded(Self.packageDirectories(holding: leftovers)) { return .changedSinceScan }
+        let listedPackages = Self.packageDirectories(holding: leftovers)
+        if try isAnyRecentlyUpgraded(try withSameNamedPackages(listedPackages, named: name)) { return .changedSinceScan }
         let users = processesUsing(oldVersionsAmong: leftovers)
         if !users.isEmpty, !inUseAcknowledged { return .needsInUseAcknowledgement(users) }
         try await perform(.brew(.cleanup(name)))
@@ -314,6 +316,28 @@ public struct CleanupRemover: Sendable {
         }
     }
 
+    /// The package directories given and, under each one's prefix, the `Cellar/<name>` and
+    /// `Caskroom/<name>` directories that exist, once each. A lookup that fails aborts the removal.
+    private func withSameNamedPackages(_ packages: [URL], named name: String) throws -> [URL] {
+        let shortName = CleanupPathText.components(of: name).last ?? name
+        let given = packages.map { CleanupPathText.components(of: $0.path) }
+        var result = given
+        for package in given {
+            let prefix = Array(package.dropLast(2))
+            for root in Self.packageRoots {
+                let sibling = prefix + [root, shortName]
+                guard !result.contains(where: { Self.isSamePath($0, sibling) }),
+                      try fileSystem.entry(at: Self.directory(of: sibling))?.kind == .directory else { continue }
+                result.append(sibling)
+            }
+        }
+        return result.map(Self.directory(of:))
+    }
+
+    private static func directory(of components: [String]) -> URL {
+        URL(filePath: "/" + components.joined(separator: "/"), directoryHint: .isDirectory)
+    }
+
     /// `…/Cellar/<name>` or `…/Caskroom/<token>`.
     private static func isPackageDirectory(_ url: URL) -> Bool {
         let components = CleanupPathText.components(of: url.path)
@@ -332,7 +356,7 @@ public struct CleanupRemover: Sendable {
             let package = Array(components[...(root + 1)])
             if !packages.contains(where: { isSamePath($0, package) }) { packages.append(package) }
         }
-        return packages.map { URL(filePath: "/" + $0.joined(separator: "/"), directoryHint: .isDirectory) }
+        return packages.map(directory(of:))
     }
 
     private static func isPackageRoot(_ component: String) -> Bool {
