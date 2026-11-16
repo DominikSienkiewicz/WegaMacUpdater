@@ -11,6 +11,8 @@ struct CleanupView: View {
     let onWegaState: (WegaState) -> Void
 
     @EnvironmentObject private var store: CleanupStore
+    /// The Settings switch for the Files and Folders map; the section follows it, not the stored report.
+    @AppStorage(CleanupTCCMap.enabledKey) private var tccMapEnabled = CleanupTCCMap.enabledByDefault
     @State private var confirming: CleanupFinding?
     @State private var showsPathWarning = false
     @State private var exportError: String?
@@ -131,7 +133,9 @@ struct CleanupView: View {
         if let report = store.report {
             ScrollView {
                 VStack(spacing: 12) {
-                    ForEach(CleanupPresentation.sections(report, home: store.home), id: \.kind) { section in
+                    ForEach(
+                        CleanupPresentation.sections(report, home: store.home, tccMapEnabled: tccMapEnabled), id: \.kind
+                    ) { section in
                         CleanupSectionCard(
                             section: section, canRemove: isIdle, copiedCommand: copiedCommand,
                             onRemove: { id in confirming = report.findings.first { $0.id == id } }, onCopy: copy
