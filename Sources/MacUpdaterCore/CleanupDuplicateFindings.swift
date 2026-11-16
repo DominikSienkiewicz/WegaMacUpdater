@@ -8,7 +8,7 @@ extension BrewService: CleanupBrewQuerying {}
 
 public struct CleanupDetectorNote: Codable, Equatable, Sendable {
     public enum Kind: String, Codable, Sendable {
-        case homebrewUnavailable, failed
+        case homebrewUnavailable, failed, dryRunFailed, noProjectRoots, projectWalkTruncated, unrecognisedIDEInstall
     }
 
     public let detector: CleanupDetectorID

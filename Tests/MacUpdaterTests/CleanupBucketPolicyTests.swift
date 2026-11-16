@@ -108,4 +108,19 @@ final class CleanupBucketPolicyTests: XCTestCase {
         XCTAssertFalse(String(decoding: data, as: UTF8.self).contains("abc"))
         XCTAssertEqual(try JSONDecoder().decode(CleanupProcess.self, from: data).arguments, [])
     }
+
+    func testLeftoverKindsNeverReachSafeWithoutCompleteEvidence() {
+        for kind in [CleanupLeftoverKind.homebrewCleanup, .homebrewAutoremove, .runtimeVersion, .gradleJDK] {
+            XCTAssertEqual(CleanupBucketPolicy.bucket(status: .unused, kind: kind, evidenceComplete: true), .needsDecision)
+        }
+        XCTAssertEqual(CleanupBucketPolicy.bucket(status: .unused, kind: .gradleDistribution, evidenceComplete: true), .safe)
+        XCTAssertEqual(CleanupBucketPolicy.bucket(status: .unused, kind: .gradleDistribution, evidenceComplete: false), .needsDecision)
+        XCTAssertEqual(CleanupBucketPolicy.bucket(status: .unused, kind: .jetBrainsDirectory, evidenceComplete: true), .safe)
+    }
+
+    func testPinnedAndRecentUpgradeAreExcluded() {
+        XCTAssertEqual(CleanupBucketPolicy.bucket(status: .pinned(by: ["/p/.nvmrc"]), kind: .runtimeVersion, evidenceComplete: true), .excluded)
+        XCTAssertEqual(CleanupBucketPolicy.bucket(status: .recentUpgrade(until: Date()), kind: .homebrewCleanup, evidenceComplete: true), .excluded)
+        XCTAssertEqual(CleanupBucketPolicy.bucket(status: .inUse([]), kind: .jetBrainsDirectory, evidenceComplete: true), .needsDecision)
+    }
 }

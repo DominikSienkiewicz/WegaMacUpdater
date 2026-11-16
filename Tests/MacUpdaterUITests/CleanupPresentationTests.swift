@@ -175,6 +175,22 @@ final class CleanupPresentationTests: XCTestCase {
             "pominięta (lokalizacja chroniona)", "informacja",
         ])
         assertTranslated(statuses, CleanupPresentation.statusText)
+        assertTranslated([.pinned(by: ["~/p/.nvmrc"]), .recentUpgrade(until: Date())], CleanupPresentation.statusText)
+        assertTranslated([
+            .homebrewLeftovers(items: 3), .homebrewKeptVersions(count: 2), .installedOnlyAsDependency, .recentlyUpgraded,
+            .notRequiredByProjects, .requiredByProjects, .unusedGradleDistribution, .unreferencedJDK(major: 17),
+            .systemJDK(major: 21), .ideVersionNotInstalled(installed: ["2025.2"]), .ideNotFound,
+            .newerThanInstalledIDE(installed: ["2025.2"]),
+        ], CleanupPresentation.reasonText)
+        assertTranslated(
+            [.dryRunFailed, .noProjectRoots, .projectWalkTruncated, .unrecognisedIDEInstall]
+                .map { CleanupDetectorNote(detector: .jetBrains, kind: $0) },
+            CleanupPresentation.noteText
+        )
+        assertTranslated(
+            [.runtimeVersions, .jetBrains].map { CleanupDetectorNote(detector: $0, kind: .failed) }, CleanupPresentation.noteText
+        )
+        assertTranslated([CleanupPresentation.ButtonKind.brewCleanup], CleanupPresentation.buttonTitle)
         assertTranslated(reasons, CleanupPresentation.reasonText)
         assertTranslated(instructions, CleanupPresentation.instructionText)
         assertTranslated(notes, CleanupPresentation.noteText)

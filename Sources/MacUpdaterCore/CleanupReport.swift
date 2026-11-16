@@ -34,6 +34,7 @@ public enum CleanupActionText {
         let arguments = switch action {
         case .uninstallFormula(let name): BrewService.uninstallFormulaArguments(name: name)
         case .uninstallCask(let token): BrewService.uninstallCaskArguments(token: token, zap: false, force: false)
+        case .cleanup(let name): ["cleanup", "--", name]
         }
         return (["brew"] + arguments).joined(separator: " ")
     }
@@ -76,6 +77,9 @@ public enum CleanupReportRenderer {
             if case .inUse(let processes) = status {
                 fields.append(processes.map { "\($0.name) (PID \($0.pid))" }.joined(separator: ", "))
             }
+            if case .pinned(let paths) = status {
+                fields.append(paths.joined(separator: ", "))
+            }
             return fields.joined(separator: " | ") + "\n"
         }.joined()
     }
@@ -101,10 +105,16 @@ public enum CleanupReportRenderer {
     }
 
     private static func displayed(_ status: CleanupStatus, home: URL) -> CleanupStatus {
-        guard case .inUse(let processes) = status else { return status }
-        return .inUse(processes.map {
-            CleanupProcess(pid: $0.pid, name: $0.name, executablePath: tildePath($0.executablePath, home: home), arguments: [])
-        })
+        switch status {
+        case .inUse(let processes):
+            return .inUse(processes.map {
+                CleanupProcess(pid: $0.pid, name: $0.name, executablePath: tildePath($0.executablePath, home: home), arguments: [])
+            })
+        case .pinned(let paths):
+            return .pinned(by: paths.map { tildePath($0, home: home) })
+        default:
+            return status
+        }
     }
 
     private static func displayed(_ reason: CleanupReason, home: URL) -> CleanupReason {

@@ -128,6 +128,8 @@ public struct CleanupRemover: Sendable {
             return urls.count == 1
         case .trashBatch(let parent, let entries):
             return !entries.isEmpty && entries.allSatisfy { isDirectlyInside($0, parent) }
+        case .brew(.cleanup):
+            return false
         case .brew:
             return true
         case .command, .instruction, .none:
@@ -237,6 +239,7 @@ public struct CleanupRemover: Sendable {
         let (directory, name) = switch action {
         case .uninstallFormula(let name): ("Cellar", name)
         case .uninstallCask(let token): ("Caskroom", token)
+        case .cleanup(let name): ("Cellar", name)
         }
         for location in locations {
             let components = CleanupPathText.components(of: location.url.path)
@@ -275,6 +278,8 @@ public struct CleanupRemover: Sendable {
             try await brewRemoval.uninstallFormula(name: name)
         case .brew(.uninstallCask(let token)):
             try await brewRemoval.uninstallCask(token: token)
+        case .brew(.cleanup):
+            break
         case .command, .instruction, .none:
             break
         }

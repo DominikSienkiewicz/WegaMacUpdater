@@ -11,6 +11,7 @@ enum CleanupPresentation {
     enum ButtonKind: Equatable {
         case trash
         case brew
+        case brewCleanup
         case copyCommand(String)
     }
 
@@ -155,7 +156,7 @@ enum CleanupPresentation {
         switch status {
         case .active: 0
         case .shadowed, .unused, .stale, .inUse: 1
-        case .dependency, .brokenLink: 2
+        case .dependency, .brokenLink, .pinned, .recentUpgrade: 2
         case .expected, .appManaged, .info, .skippedProtected: 3
         }
     }
@@ -174,6 +175,7 @@ enum CleanupPresentation {
         guard finding.bucket != .excluded else { return (nil, tr("tylko informacja")) }
         switch finding.action {
         case .trash, .trashBatch: return (.trash, nil)
+        case .brew(.cleanup): return (.brewCleanup, nil)
         case .brew: return (.brew, nil)
         case .command(let command): return (.copyCommand(command), command)
         case .instruction(let instruction): return (nil, instructionText(displayed(instruction, home: home)))
@@ -189,7 +191,7 @@ enum CleanupPresentation {
         } else if finding.source == .standalone, finding.status != .brokenLink {
             parts.append(tr("wersja nieznana"))
         }
-        parts.append(reasonText(displayed(finding.reason, home: home)))
+        parts.append(reasonText(displayed(finding.reason, home: home), requiredBy: pinnedPaths(in: finding.status, home: home)))
         let users = processes(in: finding.status)
         if !users.isEmpty {
             parts.append(trf("używa: %@", users.map(processName).joined(separator: ", ")))
@@ -252,6 +254,7 @@ enum CleanupPresentation {
         switch kind {
         case .trash: tr("Do Kosza…")
         case .brew: tr("Odinstaluj…")
+        case .brewCleanup: tr("Wyczyść…")
         case .copyCommand: tr("Kopiuj polecenie")
         }
     }
@@ -270,12 +273,20 @@ enum CleanupPresentation {
         case .dependency: tr("zależność")
         case .brokenLink: tr("uszkodzone dowiązanie")
         case .skippedProtected: tr("pominięta (lokalizacja chroniona)")
+        case .pinned: tr("potrzebna")
+        case .recentUpgrade: tr("świeżo zaktualizowana")
         case .info: tr("informacja")
         }
     }
 
     /// Paths inside a reason are shown as given; callers pass them with `~` already substituted.
     static func reasonText(_ reason: CleanupReason) -> String {
+        reasonText(reason, requiredBy: [])
+    }
+
+    /// `requiredBy` holds the paths of a `.pinned` status, which the reason `.requiredByProjects`
+    /// names; the plain-text export lists them in a field of their own.
+    private static func reasonText(_ reason: CleanupReason, requiredBy paths: [String]) -> String {
         switch reason {
         case .olderVersion(let current): trf("starsza wersja; bieżąca to %@", current)
         case .newerVersion(let current): trf("nowsza wersja; bieżąca to %@", current)
@@ -289,6 +300,22 @@ enum CleanupPresentation {
         case .protectedLocation: tr("lokalizacja chroniona — Wega jej nie odczytuje")
         case .brokenLink: tr("dowiązanie wskazuje nieistniejący plik")
         case .requiredBy(let dependents): trf("potrzebna formułom: %@", dependents.joined(separator: ", "))
+        case .homebrewLeftovers(let items):
+            trf("stare wersje i pobrane pliki do usunięcia przez brew cleanup: %@", "\(items)")
+        case .homebrewKeptVersions(let count):
+            trf("Homebrew zostawia kilka wersji (%@) — przypięta formuła albo cask, który aktualizuje się sam", "\(count)")
+        case .installedOnlyAsDependency: tr("zainstalowana tylko jako zależność; możesz jej jednak używać bezpośrednio")
+        case .recentlyUpgraded: tr("zaktualizowana w ostatnich 7 dniach — poprzednie wersje zostają na wypadek przywracania")
+        case .notRequiredByProjects: tr("nie wskazuje jej żaden projekt w katalogach projektów ani ustawienie menedżera")
+        case .requiredByProjects: trf("wskazuje ją: %@", paths.isEmpty ? "—" : paths.joined(separator: ", "))
+        case .unusedGradleDistribution: tr("nie wskazuje jej żaden wrapper Gradle; wrapper pobierze ją ponownie, gdy będzie potrzebna")
+        case .unreferencedJDK(let major): trf("żaden projekt nie wymaga Javy %@", "\(major)")
+        case .systemJDK(let major): trf("systemowa Java %@", "\(major)")
+        case .ideVersionNotInstalled(let installed):
+            trf("ta wersja IDE nie jest zainstalowana; zainstalowane: %@", installed.joined(separator: ", "))
+        case .ideNotFound: tr("nie znaleziono zainstalowanego IDE tego produktu")
+        case .newerThanInstalledIDE(let installed):
+            trf("nowsza niż zainstalowane IDE (%@)", installed.joined(separator: ", "))
         }
     }
 
@@ -307,6 +334,14 @@ enum CleanupPresentation {
             tr("Homebrew jest niedostępny, więc Wega nie sprawdziła, czy inne formuły zależą od przesłoniętych kopii. Te kopie nie mają akcji usunięcia.")
         case (.failed, .homebrew):
             tr("Sprawdzenie zależności Homebrew nie powiodło się. Formuły, których nie sprawdzono, nie mają akcji usunięcia.")
+        case (.dryRunFailed, _):
+            tr("Homebrew nie odpowiedział na pytanie o pozostałości. Tej części nie ma w raporcie.")
+        case (.noProjectRoots, _):
+            tr("Nie przeszukano żadnego katalogu projektów, więc Wega nie wie, których wersji używają projekty. Dodaj katalogi w Ustawieniach.")
+        case (.projectWalkTruncated, _):
+            tr("Katalogów projektów jest więcej, niż Wega przeszukuje w jednym skanie. Część wersji może być potrzebna projektom, których nie sprawdzono.")
+        case (.unrecognisedIDEInstall, _):
+            tr("Jedno z IDE JetBrains nie ma pliku product-info.json, więc katalogi tego produktu zostają bez zmian.")
         case (.failed, let detector):
             trf("Ta część skanu nie powiodła się: %@. Jej wyników nie ma w raporcie.", detectorName(detector))
         }
@@ -319,6 +354,9 @@ enum CleanupPresentation {
         case .versionDirectories: tr("katalogi wersji")
         case .homebrew: tr("zależności Homebrew")
         case .shellState: tr("stan powłok")
+        case .runtimeVersions: tr("wersje środowisk")
+        case .gradle: tr("Gradle")
+        case .jetBrains: tr("katalogi IDE JetBrains")
         }
     }
 
@@ -351,12 +389,20 @@ enum CleanupPresentation {
         Confirmation(
             paths: targetPaths(of: finding, home: home),
             sizeText: finding.size.map(sizeText) ?? tr("nieznany"),
-            reason: reasonText(displayed(finding.reason, home: home)),
+            reason: reasonText(displayed(finding.reason, home: home), requiredBy: pinnedPaths(in: finding.status, home: home)),
             action: actionText(finding.action, home: home),
             risk: riskText(finding.risk),
             processes: processes(in: finding.status).map(processLine),
-            confirmTitle: finding.action.isBrew ? tr("Odinstaluj") : tr("Przenieś do Kosza")
+            confirmTitle: confirmTitle(for: finding.action)
         )
+    }
+
+    private static func confirmTitle(for action: CleanupAction) -> String {
+        switch action {
+        case .brew(.cleanup): tr("Wyczyść")
+        case .brew: tr("Odinstaluj")
+        default: tr("Przenieś do Kosza")
+        }
     }
 
     /// Name, PID and the arguments held in memory. Arguments can carry tokens: this line is for
@@ -484,6 +530,11 @@ enum CleanupPresentation {
         return processes
     }
 
+    private static func pinnedPaths(in status: CleanupStatus, home: URL) -> [String] {
+        guard case .pinned(let paths) = status else { return [] }
+        return paths.map { tilde($0, home) }
+    }
+
     private static func displayed(_ reason: CleanupReason, home: URL) -> CleanupReason {
         guard case .shadowedBy(let path) = reason else { return reason }
         return .shadowedBy(path: tilde(path, home))
@@ -492,12 +543,5 @@ enum CleanupPresentation {
     private static func displayed(_ instruction: CleanupInstruction, home: URL) -> CleanupInstruction {
         guard case .removeAppLinkWithAdminRights(let link) = instruction else { return instruction }
         return .removeAppLinkWithAdminRights(link: tilde(link, home))
-    }
-}
-
-private extension CleanupAction {
-    var isBrew: Bool {
-        if case .brew = self { return true }
-        return false
     }
 }

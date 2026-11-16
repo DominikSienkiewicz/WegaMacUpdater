@@ -295,7 +295,7 @@ private struct CleanupFindingRow: View {
             }
             if let button = row.button {
                 switch button {
-                case .trash, .brew:
+                case .trash, .brew, .brewCleanup:
                     if let findingID = row.findingID {
                         Button(CleanupPresentation.buttonTitle(button)) { onRemove(findingID) }
                             .controlSize(.small)

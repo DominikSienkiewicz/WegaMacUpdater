@@ -151,6 +151,7 @@ final class CleanupStore: ObservableObject {
         case .trashBatch: "trash-batch"
         case .brew(.uninstallFormula): "brew uninstall"
         case .brew(.uninstallCask): "brew uninstall --cask"
+        case .brew(.cleanup): "brew cleanup"
         case .command: "command"
         case .instruction: "instruction"
         case .none: "none"

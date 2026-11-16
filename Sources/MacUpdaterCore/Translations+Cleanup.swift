@@ -102,6 +102,39 @@ extension Translations {
         "katalogi wersji": "version directories",
         "zależności Homebrew": "Homebrew dependencies",
         "stan powłok": "shell state",
+        "wersje środowisk": "runtime versions",
+        "Gradle": "Gradle",
+        "katalogi IDE JetBrains": "JetBrains IDE folders",
+        "Homebrew nie odpowiedział na pytanie o pozostałości. Tej części nie ma w raporcie.":
+            "Homebrew did not answer the leftovers query. That part is missing from the report.",
+        "Nie przeszukano żadnego katalogu projektów, więc Wega nie wie, których wersji używają projekty. Dodaj katalogi w Ustawieniach.":
+            "No project folder was searched, so Wega does not know which versions projects use. Add folders in Settings.",
+        "Katalogów projektów jest więcej, niż Wega przeszukuje w jednym skanie. Część wersji może być potrzebna projektom, których nie sprawdzono.":
+            "The project folders hold more than one scan searches. Some versions may be needed by projects that were not checked.",
+        "Jedno z IDE JetBrains nie ma pliku product-info.json, więc katalogi tego produktu zostają bez zmian.":
+            "A JetBrains IDE has no product-info.json, so that product's folders are left alone.",
+
+        // Space detectors: statuses, reasons and buttons
+        "potrzebna": "required",
+        "świeżo zaktualizowana": "recently upgraded",
+        "stare wersje i pobrane pliki do usunięcia przez brew cleanup: %@": "old versions and downloads brew cleanup would remove: %@",
+        "Homebrew zostawia kilka wersji (%@) — przypięta formuła albo cask, który aktualizuje się sam":
+            "Homebrew keeps several versions (%@) — a pinned formula or a cask that updates itself",
+        "zainstalowana tylko jako zależność; możesz jej jednak używać bezpośrednio": "installed only as a dependency; you may still call it directly",
+        "zaktualizowana w ostatnich 7 dniach — poprzednie wersje zostają na wypadek przywracania":
+            "upgraded within the last 7 days — previous versions stay for recovery",
+        "nie wskazuje jej żaden projekt w katalogach projektów ani ustawienie menedżera":
+            "no project in the project folders and no manager setting points to it",
+        "wskazuje ją: %@": "required by: %@",
+        "nie wskazuje jej żaden wrapper Gradle; wrapper pobierze ją ponownie, gdy będzie potrzebna":
+            "no Gradle wrapper points to it; the wrapper downloads it again when needed",
+        "żaden projekt nie wymaga Javy %@": "no project requires Java %@",
+        "systemowa Java %@": "system Java %@",
+        "ta wersja IDE nie jest zainstalowana; zainstalowane: %@": "this IDE version is not installed; installed: %@",
+        "nie znaleziono zainstalowanego IDE tego produktu": "no installed IDE of this product was found",
+        "nowsza niż zainstalowane IDE (%@)": "newer than the installed IDE (%@)",
+        "Wyczyść…": "Clean up…",
+        "Wyczyść": "Clean up",
 
         // Sources
         "formuła Homebrew %@": "Homebrew formula %@",
