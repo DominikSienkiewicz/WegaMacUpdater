@@ -328,6 +328,7 @@ final class CleanupScannerTests: XCTestCase {
         XCTAssertEqual(shellState.first?.bucket, .safe)
 
         XCTAssertEqual(report.totals, CleanupTotals(safe: 20 + 300 + 2 * 7_000_000, needsDecision: 1 + 600_000))
+        XCTAssertEqual(Set(report.findings.map(\.id)).count, report.findings.count, "finding ids are unique report-wide")
         XCTAssertEqual(
             report.findings.map(\.detector).reduce(into: [CleanupDetectorID]()) { if $0.last != $1 { $0.append($1) } },
             [.pathDuplicates, .versionDirectories, .shellState]
@@ -555,6 +556,7 @@ final class CleanupScannerTests: XCTestCase {
         XCTAssertFalse(report.findings.contains { $0.path.path == installed }, "case 11: the installed IDE's folder was reported")
 
         XCTAssertEqual(report.totals, CleanupTotals(safe: 11_111_111, needsDecision: 222))
+        XCTAssertEqual(Set(report.findings.map(\.id)).count, report.findings.count, "finding ids are unique report-wide")
         XCTAssertEqual(
             report.findings.map(\.detector).reduce(into: [CleanupDetectorID]()) { if $0.last != $1 { $0.append($1) } },
             [.runtimeVersions, .gradle, .jetBrains]
