@@ -41,16 +41,18 @@ public struct CleanupDuplicateFindings: Sendable {
     private let fileSystem: CleanupFileSystem
     private let brewPrefix: URL?
     private let home: URL
+    private let pathIsApproximate: Bool
 
     public init(
         brew: CleanupBrewQuerying, inspector: ProcessInspecting, fileSystem: CleanupFileSystem,
-        brewPrefix: URL?, home: URL
+        brewPrefix: URL?, home: URL, pathIsApproximate: Bool
     ) {
         self.brew = brew
         self.inspector = inspector
         self.fileSystem = fileSystem
         self.brewPrefix = brewPrefix
         self.home = home
+        self.pathIsApproximate = pathIsApproximate
     }
 
     public func build(_ scan: CleanupPathScan) async -> (findings: [CleanupFinding], notes: [CleanupDetectorNote]) {
@@ -108,12 +110,14 @@ public struct CleanupDuplicateFindings: Sendable {
         )
     }
 
-    /// A copy Wega cannot remove never counts towards the safe total.
+    /// A copy Wega cannot remove never counts towards the safe total, and neither does any copy
+    /// while `PATH` is approximated: its order (`/etc/paths` first) may make a different copy
+    /// active than the user's shell does.
     private func bucket(
         status: CleanupStatus, source: CleanupSource, relation: CleanupVersionRelation, action: CleanupAction
     ) -> CleanupBucket {
         let bucket = CleanupBucketPolicy.bucket(status: status, source: source, relation: relation, recognisedLayout: true)
-        return bucket == .safe && action == .none ? .needsDecision : bucket
+        return bucket == .safe && (action == .none || pathIsApproximate) ? .needsDecision : bucket
     }
 
     private func classify(

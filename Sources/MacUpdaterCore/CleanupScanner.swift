@@ -53,7 +53,7 @@ public struct CleanupScanner: Sendable {
         try Task.checkCancellation()
         let duplicates = await CleanupDuplicateFindings(
             brew: context.brew, inspector: context.inspector, fileSystem: fileSystem,
-            brewPrefix: context.brewPrefix, home: context.home
+            brewPrefix: context.brewPrefix, home: context.home, pathIsApproximate: context.path.isApproximate
         ).build(pathScan)
         var notes = duplicates.notes
 

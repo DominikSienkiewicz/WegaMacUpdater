@@ -180,7 +180,8 @@ final class CleanupScannerTests: XCTestCase {
     }
 
     private func context(
-        path entries: [String], failure: (path: String, error: Error)? = nil, cancelsWhenSizing: Bool = false
+        path entries: [String], failure: (path: String, error: Error)? = nil, cancelsWhenSizing: Bool = false,
+        isApproximate: Bool = false
     ) -> CleanupContext {
         let trash = self.trash!
         reference = ReferenceFileSystem(
@@ -190,7 +191,10 @@ final class CleanupScannerTests: XCTestCase {
         recording = RecordingCleanupFileSystem(wrapping: reference)
         return CleanupContext(
             home: tmp.home, tmpDirectory: tmp.url("tmp"),
-            path: CleanupPathSnapshot(entries: entries, ignoredEntries: [], shell: "zsh", capturedAt: Self.scanDate, isApproximate: false),
+            path: CleanupPathSnapshot(
+                entries: entries, ignoredEntries: [], shell: isApproximate ? nil : "zsh",
+                capturedAt: isApproximate ? nil : Self.scanDate, isApproximate: isApproximate
+            ),
             fileSystem: GuardedCleanupFileSystem(
                 base: recording, guard: ProtectedLocationGuard(home: tmp.home, mounts: FixedMountTable(["/"]))
             ),
@@ -275,6 +279,25 @@ final class CleanupScannerTests: XCTestCase {
         XCTAssertEqual(trash.urls, [], "the scan never moves anything to the Trash")
         XCTAssertEqual(reference.mutations, [], "the scan never creates or moves anything")
         XCTAssertEqual(try treeListing(), before)
+    }
+
+    /// The approximate `PATH` puts `/etc/paths` first, so its active copy may not be the one a
+    /// Terminal runs: no D1 copy counts as safe then, while its action stays as it is.
+    func testApproximatePathNeverMakesADuplicateSafe() async throws {
+        let path = try buildReferenceTree()
+
+        let captured = try await scan(context(path: path)).get()
+        let approximate = try await scan(context(path: path, isApproximate: true)).get()
+
+        let cask = tmp.url("opt/homebrew/bin/claude").path
+        XCTAssertEqual(try finding(.pathDuplicates, cask, in: captured).bucket, .safe, "precondition")
+        let approximated = try finding(.pathDuplicates, cask, in: approximate)
+        XCTAssertEqual(approximated.bucket, .needsDecision)
+        XCTAssertEqual(approximated.action, .brew(.uninstallCask("claude-code")))
+        XCTAssertFalse(approximate.findings.contains { $0.detector == .pathDuplicates && $0.bucket == .safe })
+        let older = try finding(.versionDirectories, tmp.url(".local/share/claude/versions/2.1.322").path, in: approximate)
+        XCTAssertEqual(older.bucket, .safe, "a version directory does not depend on the PATH order")
+        XCTAssertEqual(approximate.totals, CleanupTotals(safe: 20 + 2 * 7_000_000, needsDecision: 1 + 300 + 600_000))
     }
 
     func testScanNeverTouchesProtectedLocations() async throws {

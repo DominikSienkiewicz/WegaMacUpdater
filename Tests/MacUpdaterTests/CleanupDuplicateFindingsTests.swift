@@ -52,7 +52,7 @@ final class CleanupDuplicateFindingsTests: XCTestCase {
         return CleanupDuplicateFindings(
             brew: brew,
             inspector: FakeProcessInspector(processes: processes, bootTime: Date(timeIntervalSince1970: 0)),
-            fileSystem: guarded, brewPrefix: brewPrefix, home: tmp.home
+            fileSystem: guarded, brewPrefix: brewPrefix, home: tmp.home, pathIsApproximate: false
         )
     }
 
