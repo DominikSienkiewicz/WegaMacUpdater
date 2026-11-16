@@ -667,13 +667,18 @@ removed. **Right-click any app in the list** to show it in Finder, copy its path
 whether it's marked for removal.
 
 For apps Homebrew doesn't manage, the dialog also lists **App leftovers** found in your home
-folder: items Homebrew's own cleanup list names for the app, items stored under the app's
+folder: items Homebrew's zap list for the app's cask names, items stored under the app's
 bundle identifier, and folders named after the app. Bundle-identifier items are ticked, and
-so are Homebrew-list items when the app clearly matches that cask and the item is inside
-`~/Library`. Items from a cask matched only by name, anything outside `~/Library`, and
-folders found only by name (under **Probable — check before ticking**) stay unticked. An item that another installed app still uses is shown
-unticked and marked "also used by", and an item shared by two apps you remove together goes
-only when both are removed. Sizes appear a moment after the dialog opens (items inside
+so are Homebrew-list items when the app clearly matches that cask, the item is inside
+`~/Library` and the item's name points to the app (its bundle identifier, its name or its
+cask's name). A folder the list names for a whole vendor or for several apps (Microsoft's
+folder for Word, Google's updater for Chrome) is marked "Homebrew list (shared folder?)" and
+stays unticked, as do items from a cask matched only by name, anything outside `~/Library`
+and folders found only by name; they are listed under **Probable — check before ticking**.
+An item that another installed app still uses is shown unticked and marked "also used by",
+and an item shared by two apps you remove together goes only when both are removed.
+**Select all** ticks the main list only; **Deselect all** clears the whole list, probable
+items included. Sizes appear a moment after the dialog opens (items in Containers and Group
 Containers show "size unknown"). If the app list couldn't be read completely, nothing is
 ticked by default. Ticked items go to the Trash, never a permanent delete; system-wide
 folders are not touched.
