@@ -87,21 +87,32 @@ public struct SQLiteCleanupTCCDatabase: CleanupTCCDatabaseReading {
         var rows: [CleanupTCCRow] = []
         var code = sqlite3_step(statement)
         while code == SQLITE_ROW {
-            if let service = Self.text(statement, column: 0), let client = Self.text(statement, column: 1) {
-                rows.append(CleanupTCCRow(
-                    service: service,
-                    client: client,
-                    clientType: Int(sqlite3_column_int64(statement, 2)),
-                    authValue: Int(sqlite3_column_int64(statement, 3))
-                ))
-            }
+            if let row = Self.row(from: statement) { rows.append(row) }
             code = sqlite3_step(statement)
         }
         guard code == SQLITE_DONE else { throw CleanupTCCDatabaseError.unreadable }
         return rows
     }
 
+    /// A row is kept only when every column is present and the text columns hold no NUL byte,
+    /// which `String(cString:)` would silently cut off.
+    private static func row(from statement: OpaquePointer?) -> CleanupTCCRow? {
+        guard sqlite3_column_type(statement, 2) != SQLITE_NULL,
+              sqlite3_column_type(statement, 3) != SQLITE_NULL,
+              let service = text(statement, column: 0),
+              let client = text(statement, column: 1) else { return nil }
+        return CleanupTCCRow(
+            service: service,
+            client: client,
+            clientType: Int(sqlite3_column_int64(statement, 2)),
+            authValue: Int(sqlite3_column_int64(statement, 3))
+        )
+    }
+
     private static func text(_ statement: OpaquePointer?, column: Int32) -> String? {
-        sqlite3_column_text(statement, column).map { String(cString: $0) }
+        guard let pointer = sqlite3_column_text(statement, column) else { return nil }
+        let length = Int(sqlite3_column_bytes(statement, column))
+        guard strlen(UnsafeRawPointer(pointer).assumingMemoryBound(to: CChar.self)) == length else { return nil }
+        return String(cString: pointer)
     }
 }

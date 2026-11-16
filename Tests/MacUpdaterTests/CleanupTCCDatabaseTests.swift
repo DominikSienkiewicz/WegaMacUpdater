@@ -81,9 +81,38 @@ final class CleanupTCCDatabaseTests: XCTestCase {
     func testRowsWithoutAClientAreSkipped() throws {
         let url = try makeDatabase(setup: [
             Self.accessTable,
-            "INSERT INTO access VALUES ('kTCCServiceSystemPolicyDocumentsFolder', NULL, 1, 2, 0, NULL)"
+            "INSERT INTO access VALUES ('kTCCServiceSystemPolicyDocumentsFolder', NULL, 1, 2, 0, NULL)",
+            "INSERT INTO access VALUES ('kTCCServiceSystemPolicyDocumentsFolder', '/Users/a/bin/tool', 1, 2, 0, NULL)"
         ])
-        XCTAssertEqual(try SQLiteCleanupTCCDatabase(fileURL: url).rows(for: [.documents]), [])
+        XCTAssertEqual(
+            try SQLiteCleanupTCCDatabase(fileURL: url).rows(for: [.documents]),
+            [expectedTwo[0]]
+        )
+    }
+
+    func testClientWithAnEmbeddedNulIsSkipped() throws {
+        let url = try makeDatabase(setup: [
+            Self.accessTable,
+            "INSERT INTO access VALUES ('kTCCServiceSystemPolicyDocumentsFolder', '/x/tool' || char(0) || '/evil', 1, 2, 0, NULL)",
+            "INSERT INTO access VALUES ('kTCCServiceSystemPolicyDocumentsFolder', '/Users/a/bin/tool', 1, 2, 0, NULL)"
+        ])
+        XCTAssertEqual(
+            try SQLiteCleanupTCCDatabase(fileURL: url).rows(for: [.documents]),
+            [expectedTwo[0]]
+        )
+    }
+
+    func testNullClientTypeOrAuthValueIsSkipped() throws {
+        let url = try makeDatabase(setup: [
+            Self.accessTable,
+            "INSERT INTO access VALUES ('kTCCServiceSystemPolicyDocumentsFolder', '/a', NULL, 2, 0, NULL)",
+            "INSERT INTO access VALUES ('kTCCServiceSystemPolicyDocumentsFolder', '/b', 1, NULL, 0, NULL)",
+            "INSERT INTO access VALUES ('kTCCServiceSystemPolicyDocumentsFolder', '/Users/a/bin/tool', 1, 2, 0, NULL)"
+        ])
+        XCTAssertEqual(
+            try SQLiteCleanupTCCDatabase(fileURL: url).rows(for: [.documents]),
+            [expectedTwo[0]]
+        )
     }
 
     func testMissingAuthValueIsUnsupported() throws {
@@ -120,6 +149,7 @@ final class CleanupTCCDatabaseTests: XCTestCase {
 
     func testWALDatabaseWithAnOpenWriterIsReadable() throws {
         let url = try makeDatabase(setup: twoRows(extra: ["PRAGMA journal_mode=WAL"]), keepOpen: true)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path + "-wal"), "the database is not in WAL mode")
         let before = try Data(contentsOf: url)
         let rows = try SQLiteCleanupTCCDatabase(fileURL: url).rows(for: [.documents, .downloads])
         XCTAssertEqual(sorted(rows), expectedTwo)
@@ -129,14 +159,15 @@ final class CleanupTCCDatabaseTests: XCTestCase {
     func testReadLeavesTheDatabaseBytesUnchanged() throws {
         let url = try makeDatabase(setup: twoRows())
         let before = try Data(contentsOf: url)
-        _ = try SQLiteCleanupTCCDatabase(fileURL: url).rows(for: [.documents, .downloads])
+        let rows = try SQLiteCleanupTCCDatabase(fileURL: url).rows(for: [.documents, .downloads])
+        XCTAssertEqual(sorted(rows), expectedTwo)
         XCTAssertEqual(try Data(contentsOf: url), before)
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path + "-journal"))
     }
 
     func testPathWithSpacesOpens() throws {
         let url = temporaryFolder
-            .appending(path: "Library/Application Support/com.apple.TCC/TCC.db", directoryHint: .notDirectory)
+            .appending(path: "Library/Application Support/com.apple.TCC #1%/TCC.db", directoryHint: .notDirectory)
         try makeDatabase(at: url, setup: twoRows())
         let rows = try SQLiteCleanupTCCDatabase(fileURL: url).rows(for: [.documents, .downloads])
         XCTAssertEqual(sorted(rows), expectedTwo)

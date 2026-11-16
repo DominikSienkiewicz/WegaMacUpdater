@@ -406,15 +406,26 @@ struct ArchitectureReviewRegressionTests {
         let code = executableSource(try source("Sources/MacUpdaterCore/CleanupTCCDatabase.swift", root: root))
         let range = NSRange(code.startIndex..., in: code)
         #expect(code.contains("SQLITE_OPEN_READONLY"))
-        for forbidden in ["SQLITE_OPEN_READWRITE", "SQLITE_OPEN_CREATE", "immutable"] {
+        let forbiddenNames = [
+            "SQLITE_OPEN_READWRITE", "SQLITE_OPEN_CREATE", "immutable", "readonly_shm",
+            "sqlite3_open(", "sqlite3_open16", "sqlite3_exec"
+        ]
+        for forbidden in forbiddenNames {
             #expect(!code.contains(forbidden), "the TCC reader must not use \(forbidden)")
         }
+        let literals = try NSRegularExpression(pattern: #""[^"\n]*""#)
+        let sqlText = literals.matches(in: code, range: range)
+            .compactMap { Range($0.range, in: code).map { String(code[$0]) } }
+            .joined(separator: "\n")
+        let sqlRange = NSRange(sqlText.startIndex..., in: sqlText)
+        #expect(sqlText.contains("SELECT"), "no SQL literal was found, the guard would pass vacuously")
         let writeVerbs = try NSRegularExpression(
-            pattern: #"\b(INSERT|UPDATE|DELETE|DROP|ATTACH|CREATE|REPLACE|VACUUM)\b"#
+            pattern: #"\b(INSERT|UPDATE|DELETE|DROP|ATTACH|CREATE|REPLACE|VACUUM)\b"#,
+            options: .caseInsensitive
         )
-        #expect(writeVerbs.firstMatch(in: code, range: range) == nil, "the TCC reader holds a write statement")
-        let pragmas = try NSRegularExpression(pattern: #"PRAGMA\b(?!\s+table_info)"#)
-        #expect(pragmas.firstMatch(in: code, range: range) == nil, "only PRAGMA table_info may be used")
+        #expect(writeVerbs.firstMatch(in: sqlText, range: sqlRange) == nil, "the TCC reader holds a write statement")
+        let pragmas = try NSRegularExpression(pattern: #"PRAGMA\b(?!\s+table_info)"#, options: .caseInsensitive)
+        #expect(pragmas.firstMatch(in: sqlText, range: sqlRange) == nil, "only PRAGMA table_info may be used")
     }
 
     private func swiftSources(under relativePath: String) throws -> [(name: String, text: String)] {
