@@ -66,13 +66,14 @@ public struct CleanupPathReader: Sendable {
 
     public static func request(shellPath: String, home: URL, user: String) -> ProcessRequest? {
         guard let script = scripts[shellName(shellPath)] else { return nil }
+        let environment = [
+            "HOME": home.path, "USER": user, "LOGNAME": user, "SHELL": shellPath,
+            "LANG": "en_US.UTF-8", "TERM": "dumb", "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        ]
         var request = ProcessRequest(
             executableURL: URL(filePath: shellPath, directoryHint: .notDirectory),
             arguments: ["-ilc", script],
-            environment: [
-                "HOME": home.path, "USER": user, "LOGNAME": user, "SHELL": shellPath,
-                "LANG": "en_US.UTF-8", "TERM": "dumb", "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-            ],
+            environment: environment,
             inheritParentEnvironment: false,
             timeout: 10,
             idleTimeout: 10
