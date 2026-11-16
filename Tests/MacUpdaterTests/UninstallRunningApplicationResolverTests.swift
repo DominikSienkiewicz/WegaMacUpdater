@@ -49,6 +49,18 @@ struct UninstallRunningApplicationResolverTests {
         )
     }
 
+    @Test func mixedExactAndPathlessIsAmbiguous() {
+        let exact = target(pid: 46, path: "/Applications/Foo.app", bundleIdentifier: "com.example.foo")
+        let pathless = target(pid: 47, path: nil, bundleIdentifier: "com.example.foo")
+
+        #expect(
+            UninstallRunningApplicationResolver.resolve(
+                app: application(path: "/Applications/Foo.app", bundleIdentifier: "com.example.foo"),
+                running: [exact, pathless]
+            ) == .ambiguousBundleIdentifier("com.example.foo")
+        )
+    }
+
     @Test func noBundleIDAndNoPathMatchIsNotRunning() {
         let pathless = target(pid: 55, path: nil, bundleIdentifier: nil)
         let otherCopy = target(pid: 56, path: "/Users/me/Applications/Foo.app", bundleIdentifier: nil)

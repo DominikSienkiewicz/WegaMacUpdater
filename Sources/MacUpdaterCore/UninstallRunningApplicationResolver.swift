@@ -11,18 +11,16 @@ public enum UninstallRunningApplicationResolver {
         let pathMatches = running.filter { target in
             target.bundleURL.map(canonicalURL) == expectedURL
         }
-        if pathMatches.count == 1, let match = pathMatches.first {
-            return .running(match)
-        }
-        if pathMatches.count > 1 {
+        let hasPathlessMatch = app.bundleIdentifier.map { bundleIdentifier in
+            running.contains { $0.bundleURL == nil && $0.bundleIdentifier == bundleIdentifier }
+        } ?? false
+
+        // A pathless process with this bundle identifier may be this copy, so even an exact
+        // path match is not enough to name the one process to quit.
+        if pathMatches.count > 1 || hasPathlessMatch {
             return .ambiguousBundleIdentifier(app.bundleIdentifier ?? app.id)
         }
-
-        guard let bundleIdentifier = app.bundleIdentifier else { return .notRunning }
-        let pathlessMatches = running.filter {
-            $0.bundleURL == nil && $0.bundleIdentifier == bundleIdentifier
-        }
-        return pathlessMatches.isEmpty ? .notRunning : .ambiguousBundleIdentifier(bundleIdentifier)
+        return pathMatches.first.map(RunningApplicationResolution.running) ?? .notRunning
     }
 
     private static func canonicalURL(_ url: URL) -> URL {
