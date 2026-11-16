@@ -71,9 +71,25 @@ final class UninstallCoordinator: ObservableObject {
         case uninstalling
     }
 
+    /// The side effects the coordinator performs, injectable so tests drive removal without
+    /// Homebrew or the user's real Trash.
+    struct Dependencies: Sendable {
+        var uninstallCask: @Sendable (BrewService, _ token: String, _ zap: Bool) async throws -> Void
+        var trashItem: @Sendable (URL) throws -> Void
+        var trashLeftovers: @Sendable ([URL]) -> LeftoverCleanup.Result
+
+        static let live = Dependencies(
+            uninstallCask: { brewService, token, zap in
+                _ = try await brewService.uninstallCask(token: token, zap: zap)
+            },
+            trashItem: { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) },
+            trashLeftovers: { LeftoverCleanup.removeToTrash($0) }
+        )
+    }
+
     struct Outcome {
-        let succeeded: Set<String>
-        let failedIDs: Set<String>
+        /// One result per target id.
+        let results: [String: UninstallTargetResult]
         /// UX-13: how many consented `~/Library` leftovers reached the Trash, and how many
         /// could not be moved, so the result is reported honestly rather than swallowed.
         var leftoversTrashed: Int = 0
@@ -81,6 +97,12 @@ final class UninstallCoordinator: ObservableObject {
     }
 
     @Published private(set) var state: State = .idle
+
+    private let dependencies: Dependencies
+
+    init(dependencies: Dependencies = .live) {
+        self.dependencies = dependencies
+    }
 
     var isScanning: Bool { state == .scanning }
     var isUninstalling: Bool { state == .uninstalling }
@@ -131,7 +153,7 @@ final class UninstallCoordinator: ObservableObject {
     func uninstall(
         targets: [ApplicationInfo],
         zap: Bool,
-        leftovers: [URL] = [],
+        leftovers: [LeftoverGroup] = [],
         using brewService: BrewService
     ) async -> Outcome {
         do {
@@ -144,44 +166,46 @@ final class UninstallCoordinator: ObservableObject {
                 )
             }
         } catch {
-            return Outcome(succeeded: [], failedIDs: Set(targets.map(\.id)))
+            let failure = UninstallTargetResult.failed(error.localizedDescription)
+            return Outcome(results: Dictionary(uniqueKeysWithValues: targets.map { ($0.id, failure) }))
         }
     }
 
     private func uninstallCoordinated(
         targets: [ApplicationInfo],
         zap: Bool,
-        leftovers: [URL],
+        leftovers: [LeftoverGroup],
         using brewService: BrewService
     ) async -> Outcome {
         state = .uninstalling
         defer { state = .idle }
 
-        var succeeded: Set<String> = []
-        var failedIDs: Set<String> = []
+        var results: [String: UninstallTargetResult] = [:]
         for app in targets {
             if app.isManagedByBrew, let token = app.caskToken {
                 do {
-                    _ = try await brewService.uninstallCask(token: token, zap: zap)
-                    succeeded.insert(app.id)
+                    try await dependencies.uninstallCask(brewService, token, zap)
+                    results[app.id] = .removedByHomebrew
                 } catch {
-                    failedIDs.insert(app.id)
+                    results[app.id] = .failed(error.localizedDescription)
                 }
             } else {
                 do {
-                    try FileManager.default.trashItem(at: app.path, resultingItemURL: nil)
-                    succeeded.insert(app.id)
+                    try dependencies.trashItem(app.path)
+                    results[app.id] = .movedToTrash
                 } catch {
-                    failedIDs.insert(app.id)
+                    results[app.id] = .failed(error.localizedDescription)
                 }
             }
         }
-        // UX-13: with the apps gone, move the consented `~/Library` leftovers to the Trash.
-        // Same planner (`MigrationPlanner`), same recoverable Trash the app already uses.
-        let leftoverResult = LeftoverCleanup.removeToTrash(leftovers)
+        // UX-13: only an app that was actually removed releases its consented `~/Library`
+        // leftovers; the data of an app that stays installed is never touched.
+        let releasedLeftovers = leftovers
+            .filter { results[$0.id]?.isRemoved == true }
+            .flatMap(\.items)
+        let leftoverResult = dependencies.trashLeftovers(releasedLeftovers)
         return Outcome(
-            succeeded: succeeded,
-            failedIDs: failedIDs,
+            results: results,
             leftoversTrashed: leftoverResult.removed.count,
             leftoversFailed: leftoverResult.failed.count
         )

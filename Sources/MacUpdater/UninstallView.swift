@@ -313,9 +313,10 @@ struct UninstallView: View {
 
     private func confirmUninstall(zap: Bool) {
         let targets = pendingUninstallTargets
-        let leftovers = pendingLeftoverGroups
-            .flatMap(\.items)
-            .filter { selectedLeftovers.contains($0.path) }
+        let leftovers = pendingLeftoverGroups.compactMap { group -> LeftoverGroup? in
+            let consented = group.items.filter { selectedLeftovers.contains($0.path) }
+            return consented.isEmpty ? nil : LeftoverGroup(app: group.app, items: consented)
+        }
         showDialog = false
         pendingUninstallTargets = []
         pendingScanIncomplete = false
@@ -332,7 +333,7 @@ struct UninstallView: View {
         errorMessage = result.failures.scanErrorMessage
     }
 
-    private func uninstall(targets: [ApplicationInfo], zap: Bool, leftovers: [URL]) async {
+    private func uninstall(targets: [ApplicationInfo], zap: Bool, leftovers: [LeftoverGroup]) async {
         guard !targets.isEmpty else { return }
         // REL-06 — `brew uninstall --cask` (with `--zap` it also deletes preferences and
         // Application Support) rewrites the Caskroom, and `UpgradeMutex` only covers upgrades.
@@ -350,9 +351,9 @@ struct UninstallView: View {
             leftovers: leftovers,
             using: model.brewService
         )
-        let succeeded = outcome.succeeded
+        let succeeded = Set(targets.map(\.id).filter { outcome.results[$0]?.isRemoved == true })
         var failed: [(name: String, requestedZap: Bool)] = []
-        for app in targets where outcome.failedIDs.contains(app.id) {
+        for app in targets where outcome.results[app.id]?.isRemoved != true {
             if app.isManagedByBrew {
                 failed.append((app.name, zap))
             } else {
