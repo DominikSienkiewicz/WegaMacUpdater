@@ -5,12 +5,12 @@ import MacUpdaterCore
 //
 // Before UX-10 the app defined no `.commands` at all: the only way to start a scan was the
 // toolbar button, and none of the destinations had a keyboard shortcut. This file adds the
-// menu bar commands and their macOS-conventional shortcuts (⌘R, ⌘⏎, ⌘1…⌘5, ⌘F).
+// menu bar commands and their macOS-conventional shortcuts (⌘R, ⌘⏎, ⌘1…⌘7, ⌘F).
 //
 // Scan and update actions are published *from the view tree* as `WegaMenuAction`s, so a menu
 // shortcut is greyed out in exactly the situations its on-screen control is (a shortcut that
 // silently no-ops reads as a bug). Navigation writes the same `@AppStorage` selection the
-// sidebar binds to, so ⌘1…⌘5 and a sidebar click are the one code path. ⌘F reaches the
+// sidebar binds to, so ⌘1…⌘7 and a sidebar click are the one code path. ⌘F reaches the
 // inventory's existing search field through `WegaCommandCenter`.
 
 /// A menu-invocable action mirrored from the window's view tree. `isEnabled` tracks the
@@ -85,7 +85,7 @@ enum WegaMenuNavigation {
     ]
 }
 
-/// UX-10 — the app's menu bar commands. Every shortcut the card asks for (⌘R, ⌘⏎, ⌘1…⌘5, ⌘F)
+/// UX-10 — the app's menu bar commands. Every shortcut the card asks for (⌘R, ⌘⏎, ⌘1…⌘7, ⌘F)
 /// lives in this one `CommandMenu` so it reads as a single, discoverable place.
 struct WegaCommands: Commands {
     let commandCenter: WegaCommandCenter

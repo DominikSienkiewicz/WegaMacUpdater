@@ -48,7 +48,7 @@ struct WegaMacUpdaterApp: App {
         }
         .windowToolbarStyle(.unified)
         .windowStyle(.titleBar)
-        // UX-10 — the app's `CommandMenu` and its keyboard shortcuts (⌘R, ⌘⏎, ⌘1…⌘5, ⌘F).
+        // UX-10 — the app's `CommandMenu` and its keyboard shortcuts (⌘R, ⌘⏎, ⌘1…⌘7, ⌘F).
         // The menu itself is `WegaCommands`; it reads `@FocusedValue`s the view tree publishes,
         // which a `Commands` conformer can do and this `.commands` closure cannot.
         .commands {
