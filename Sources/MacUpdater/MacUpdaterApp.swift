@@ -18,6 +18,9 @@ struct WegaMacUpdaterApp: App {
     @StateObject private var scan = ScanStore()
     /// Migration can remain active while `.id(localization.language)` rebuilds its view.
     @StateObject private var migration = MigrationStore()
+    /// Cleanup ("Porządki") keeps a running scan or removal, and its last report, across the
+    /// language re-key below.
+    @StateObject private var cleanup = CleanupStore()
     /// Whether the detail column shows its inspector. Held here, above the language re-key, so a
     /// switch does not close a panel the user opened. `@State` on the scene — never persisted —
     /// keeps every launch starting closed, which `ContentView.showsInspectorAtLaunch` demands.
@@ -36,6 +39,7 @@ struct WegaMacUpdaterApp: App {
                 .environmentObject(policies)
                 .environmentObject(scan)
                 .environmentObject(migration)
+                .environmentObject(cleanup)
                 .environmentObject(commandCenter)
                 // Re-key the whole tree on language change so every tr(...) re-evaluates.
                 .id(localization.language)
