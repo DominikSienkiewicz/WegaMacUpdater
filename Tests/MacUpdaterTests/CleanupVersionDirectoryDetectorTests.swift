@@ -154,6 +154,67 @@ final class CleanupVersionDirectoryDetectorTests: XCTestCase {
         XCTAssertEqual(old.path, one)
     }
 
+    private func versionFindings() -> [CleanupFinding] {
+        findings().filter { $0.status != .appManaged }
+    }
+
+    private func assertNoTrash(_ all: [CleanupFinding], line: UInt = #line) {
+        for item in all {
+            if case .trash = item.action { XCTFail("\(item.path.lastPathComponent) offered for Trash", line: line) }
+        }
+    }
+
+    func testAliasedChildOfTheCurrentVersionNeverGetsTrash() throws {
+        try installClaude(versions: ["2.1.318", "2.1.325"], current: "2.1.325")
+        try tmp.symlink(".local/share/claude/versions/2.1", to: "2.1.325")
+
+        let all = versionFindings()
+
+        XCTAssertEqual(try finding("2.1.325", in: all).status, .active)
+        XCTAssertEqual(try finding("2.1", in: all).status, .active)
+        XCTAssertEqual(try finding("2.1.318", in: all).action, .trash([tmp.url(".local/share/claude/versions/2.1.318")]))
+        XCTAssertEqual(all.filter { $0.action != .none }.count, 1)
+    }
+
+    func testSymlinkLeavingTheVersionsDirectoryIsNotTrashable() throws {
+        try installClaude(versions: ["2.1.325"], current: "2.1.325")
+        let outside = try tmp.file("elsewhere/2.0.0", size: 10, executable: true)
+        try tmp.symlink(".local/share/claude/versions/2.0.0", to: outside.path)
+
+        let item = try finding("2.0.0", in: versionFindings())
+
+        XCTAssertEqual(item.action, .instruction(.removeWithCreatingTool))
+        XCTAssertEqual(item.bucket, .needsDecision)
+    }
+
+    func testDanglingPointerNeverGetsTrash() throws {
+        try installClaude(versions: ["2.1.318", "2.1.325"], current: nil)
+        try tmp.symlink(".local/bin/claude", to: tmp.url(".local/share/claude/versions/9.9.9").path)
+
+        assertNoTrash(versionFindings())
+    }
+
+    func testPointerIntoAnotherDirectoryNeverGetsTrash() throws {
+        try installClaude(versions: ["2.1.318", "2.1.325"], current: nil)
+        let other = try tmp.file("elsewhere/claude", size: 10, executable: true)
+        try tmp.symlink(".local/bin/claude", to: other.path)
+
+        let all = versionFindings()
+
+        XCTAssertEqual(all.count, 2)
+        assertNoTrash(all)
+    }
+
+    func testSingleChildThatIsPointedToIsTheOnlyActiveFinding() throws {
+        try installClaude(versions: ["2.1.325"], current: "2.1.325")
+
+        let all = versionFindings()
+
+        XCTAssertEqual(all.count, 1)
+        XCTAssertEqual(all.first?.status, .active)
+        assertNoTrash(all)
+    }
+
     func testHeuristicNeedsTwoVersionLikeSiblings() throws {
         let lone = try tmp.file("tools/bar/versions/1.0", size: 10, executable: true)
         try tmp.file("tools/bar/versions/latest", size: 10)

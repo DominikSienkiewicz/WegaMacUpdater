@@ -89,22 +89,32 @@ public struct CleanupVersionDirectoryDetector: Sendable {
         var targets = copyRealpaths.filter { isInside($0, root) }
         let pointer = home.appending(path: layout.pointer, directoryHint: .notDirectory)
         if let pointed = try? fileSystem.realpath(pointer) { targets.insert(pointed, at: 0) }
-        let current = targets.lazy.compactMap { target in children.first { isInside(target, $0.realpath, orEqual: true) } }.first
+        let pointed = children.filter { child in targets.contains { isInside($0, child.realpath, orEqual: true) } }
+        let current = pointed.first { isOwnCopy($0, inside: root) }?.name ?? pointed.first?.name
         let source = CleanupSource.nativeVersionDirectory(tool: layout.tool)
         return children.map { child in
+            if pointed.contains(where: { $0.entry.url == child.entry.url }) {
+                return activeFinding(child, tool: layout.tool, source: source)
+            }
             guard let current else {
                 return unusedFinding(child, tool: layout.tool, source: source, recognised: false)
-            }
-            if child.entry.url == current.entry.url {
-                return activeFinding(child, tool: layout.tool, source: source)
             }
             let users = CleanupInUseMatcher.processes(
                 using: child.realpath, isDirectory: child.entry.kind == .directory, among: processes
             )
+            guard isOwnCopy(child, inside: root) else {
+                return unusedFinding(child, tool: layout.tool, source: source, recognised: false, users: users)
+            }
             return unusedFinding(
-                child, tool: layout.tool, source: source, recognised: true, current: current.name, users: users
+                child, tool: layout.tool, source: source, recognised: true, current: current, users: users
             )
         }
+    }
+
+    /// Only a real item strictly inside the versions directory may be offered for the Trash; a
+    /// link that aliases a sibling or leaves the directory is not a copy of its own.
+    private func isOwnCopy(_ child: Child, inside root: URL) -> Bool {
+        child.entry.kind != .symlink && isInside(child.realpath, root)
     }
 
     private func heuristicFindings(pathScan: CleanupPathScan, recognisedRoots: [[String]]) -> [CleanupFinding] {
