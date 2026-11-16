@@ -59,7 +59,11 @@ struct UninstallCoordinatorRemovalTests {
                 recorder.recordLeftovers(items)
                 return LeftoverCleanup.Result(removed: items)
             },
-            protection: { _ in nil }
+            protection: { _ in nil },
+            runningApplications: { [] },
+            requestQuit: { _ in false },
+            forceKill: { _ in false },
+            waitBetweenRunningChecks: {}
         ))
 
         let outcome = await coordinator.uninstall(
@@ -78,7 +82,11 @@ struct UninstallCoordinatorRemovalTests {
             uninstallCask: { _, _, _ in },
             trashItem: { _ in },
             trashLeftovers: { LeftoverCleanup.Result(removed: $0) },
-            protection: { _ in nil }
+            protection: { _ in nil },
+            runningApplications: { [] },
+            requestQuit: { _ in false },
+            forceKill: { _ in false },
+            waitBetweenRunningChecks: {}
         ))
 
         let outcome = await coordinator.uninstall(
@@ -95,7 +103,11 @@ struct UninstallCoordinatorRemovalTests {
             uninstallCask: { _, _, _ in },
             trashItem: { _ in trashCalls.increment() },
             trashLeftovers: { LeftoverCleanup.Result(removed: $0) },
-            protection: { _ in .systemApplication }
+            protection: { _ in .systemApplication },
+            runningApplications: { [] },
+            requestQuit: { _ in false },
+            forceKill: { _ in false },
+            waitBetweenRunningChecks: {}
         ))
 
         let outcome = await coordinator.uninstall(

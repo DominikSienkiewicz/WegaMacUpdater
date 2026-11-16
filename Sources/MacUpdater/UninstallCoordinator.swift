@@ -72,6 +72,17 @@ struct LeftoverGroup: Identifiable, Equatable, Sendable {
     var id: String { app.id }
 }
 
+/// The outcome of asking running apps to quit, keyed by `ApplicationInfo.id`.
+struct UninstallQuitResult: Equatable {
+    /// Targets that are no longer running, including those that never were.
+    var stopped: Set<String> = []
+    /// Targets whose process is still alive.
+    var stillRunning: [ApplicationInfo] = []
+    /// Targets that cannot be told apart from another copy of the app, so no process
+    /// was asked to quit or killed.
+    var ambiguous: Set<String> = []
+}
+
 /// Performs application discovery and destructive uninstall I/O outside SwiftUI.
 @MainActor
 final class UninstallCoordinator: ObservableObject {
@@ -88,6 +99,10 @@ final class UninstallCoordinator: ObservableObject {
         var trashItem: @Sendable (URL) throws -> Void
         var trashLeftovers: @Sendable ([URL]) -> LeftoverCleanup.Result
         var protection: @Sendable (ApplicationInfo) -> UninstallProtection?
+        var runningApplications: @MainActor @Sendable () -> [RunningApplicationTarget]
+        var requestQuit: @MainActor @Sendable (RunningApplicationTarget) -> Bool
+        var forceKill: @Sendable (Int32) async -> Bool
+        var waitBetweenRunningChecks: @Sendable () async -> Void
 
         static let live = Dependencies(
             uninstallCask: { brewService, token, zap in
@@ -95,7 +110,11 @@ final class UninstallCoordinator: ObservableObject {
             },
             trashItem: { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) },
             trashLeftovers: { LeftoverCleanup.removeToTrash($0) },
-            protection: { UninstallEligibility.protections(for: [$0])[$0.id] }
+            protection: { UninstallEligibility.protections(for: [$0])[$0.id] },
+            runningApplications: { WorkspaceRunningApplicationInspector().runningApplications() },
+            requestQuit: { WorkspaceTargetTerminator().requestGracefulTermination($0) },
+            forceKill: { await RunningProcessService().forceKill(processIdentifier: $0) },
+            waitBetweenRunningChecks: { try? await Task.sleep(for: .milliseconds(250)) }
         )
     }
 
@@ -118,6 +137,82 @@ final class UninstallCoordinator: ObservableObject {
 
     var isScanning: Bool { state == .scanning }
     var isUninstalling: Bool { state == .uninstalling }
+
+    func runningStates(for targets: [ApplicationInfo]) -> [String: RunningApplicationResolution] {
+        resolveAll(targets)
+    }
+
+    /// Asks every running target to quit before polling them all together. A refused
+    /// request is not a failure by itself: the app may still quit after a save prompt.
+    func requestQuit(_ targets: [ApplicationInfo]) async -> UninstallQuitResult {
+        var result = UninstallQuitResult()
+        var pending: [ApplicationInfo] = []
+        let states = resolveAll(targets)
+        for app in targets {
+            switch states[app.id] ?? .notRunning {
+            case .notRunning: result.stopped.insert(app.id)
+            case .ambiguousBundleIdentifier: result.ambiguous.insert(app.id)
+            case .running(let target):
+                _ = dependencies.requestQuit(target)
+                pending.append(app)
+            }
+        }
+        await pollUntilStopped(pending, into: &result)
+        return result
+    }
+
+    /// Kills only the process each app resolves to right now, never one resolved earlier:
+    /// the app may have quit, or relaunched under a new PID, since the quit phase.
+    func forceQuit(_ apps: [ApplicationInfo]) async -> UninstallQuitResult {
+        var result = UninstallQuitResult()
+        var pending: [ApplicationInfo] = []
+        for app in apps {
+            switch resolveAll([app])[app.id] ?? .notRunning {
+            case .notRunning: result.stopped.insert(app.id)
+            case .ambiguousBundleIdentifier: result.ambiguous.insert(app.id)
+            case .running(let target):
+                if await dependencies.forceKill(target.processIdentifier) {
+                    pending.append(app)
+                } else {
+                    result.stillRunning.append(app)
+                }
+            }
+        }
+        await pollUntilStopped(pending, into: &result)
+        return result
+    }
+
+    private static let runningCheckRounds = 10
+
+    private func pollUntilStopped(_ apps: [ApplicationInfo], into result: inout UninstallQuitResult) async {
+        var pending = apps
+        for round in 0..<Self.runningCheckRounds where !pending.isEmpty {
+            let states = resolveAll(pending)
+            pending = pending.filter { app in
+                switch states[app.id] ?? .notRunning {
+                case .notRunning:
+                    result.stopped.insert(app.id)
+                    return false
+                case .ambiguousBundleIdentifier:
+                    result.ambiguous.insert(app.id)
+                    return false
+                case .running:
+                    return true
+                }
+            }
+            if !pending.isEmpty, round < Self.runningCheckRounds - 1 {
+                await dependencies.waitBetweenRunningChecks()
+            }
+        }
+        result.stillRunning.append(contentsOf: pending)
+    }
+
+    private func resolveAll(_ targets: [ApplicationInfo]) -> [String: RunningApplicationResolution] {
+        let running = dependencies.runningApplications()
+        return Dictionary(uniqueKeysWithValues: targets.map {
+            ($0.id, UninstallRunningApplicationResolver.resolve(app: $0, running: running))
+        })
+    }
 
     func scan(using brewService: BrewService) async -> UninstallScan {
         guard state == .idle else { return UninstallScan(apps: []) }
