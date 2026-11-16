@@ -226,6 +226,41 @@ final class CleanupPathHygieneDetectorTests: XCTestCase {
         XCTAssertFalse(json.contains("SENTINEL_9f3"))
     }
 
+    /// `/etc/paths.d/10-cryptex` is Apple's, restored by every OS update, and its directories often
+    /// do not exist. Nothing on disk exists here, so every other entry is dead; the detector's own
+    /// calls are recorded above the guard, which shows the cryptex entries are never looked at.
+    func testMacOSCryptexEntriesAreNeverFindings() {
+        let cryptex = "/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr"
+        let entries = [
+            cryptex + "/local/bin", cryptex + "/bin", cryptex + "/appleinternal/bin",
+            "/private" + cryptex + "/bin", "/var/run/com.apple.security.cryptexd", cryptex + "/bin",
+            "/var/run/com.apple.security.cryptexd2/bin", "/private/var/run/other/bin",
+        ]
+        let direct = RecordingCleanupFileSystem(wrapping: GuardedCleanupFileSystem(
+            base: NothingOnDiskFileSystem(),
+            guard: ProtectedLocationGuard(home: tmp.home, mounts: FixedMountTable(["/"]))
+        ))
+        let detector = CleanupPathHygieneDetector(fileSystem: direct, home: tmp.home, systemConfigurationDirectory: etc)
+        let olderActiveInCryptex = [
+            CleanupFinding(
+                detector: .pathDuplicates, tool: "tool", path: URL(filePath: cryptex + "/bin/tool", directoryHint: .notDirectory),
+                realpath: nil, source: .system, version: "1.0.0", size: nil, status: .active, reason: .currentVersion,
+                action: .none, risk: .low, bucket: .excluded, identity: nil
+            ),
+            duplicate(.shadowed, "opt/homebrew/bin/tool", version: "2.0.0", tool: "tool"),
+        ]
+
+        let findings = detector.scan(snapshot(entries), duplicates: olderActiveInCryptex).findings
+
+        XCTAssertEqual(findings.map(\.path.path), ["/var/run/com.apple.security.cryptexd2/bin", "/private/var/run/other/bin"])
+        XCTAssertEqual(findings.map(\.reason), [.missingPathEntry, .missingPathEntry])
+        let cryptexRoots = [["var", "run", "com.apple.security.cryptexd"], ["private", "var", "run", "com.apple.security.cryptexd"]]
+        let touchedCryptex = direct.touched.filter { path in
+            cryptexRoots.contains { CleanupPathText.components(of: path).starts(with: $0) }
+        }
+        XCTAssertEqual(touchedCryptex, [], "a cryptex entry is never looked at")
+    }
+
     func testIdsAreUnique() throws {
         let repeated = try tmp.directory("a").path
         let parent = try tmp.directory("p").path
@@ -241,4 +276,17 @@ final class CleanupPathHygieneDetectorTests: XCTestCase {
         XCTAssertEqual(result.count, 4)
         XCTAssertEqual(Set(result.map(\.id)).count, result.count)
     }
+}
+
+/// A disk with nothing on it: every lookup finds nothing and nothing real is ever touched.
+private struct NothingOnDiskFileSystem: CleanupFileSystem {
+    func entry(at url: URL) throws -> CleanupEntry? { nil }
+    func contents(of directory: URL) throws -> [CleanupEntry] { throw CleanupFileSystemError.notFound(directory.path) }
+    func symlinkDestination(of url: URL) throws -> String { throw CleanupFileSystemError.notFound(url.path) }
+    func realpath(_ url: URL) throws -> URL { throw CleanupFileSystemError.notFound(url.path) }
+    func allocatedSize(of url: URL) throws -> Int64 { throw CleanupFileSystemError.notFound(url.path) }
+    func readText(_ url: URL, maxBytes: Int) throws -> String { throw CleanupFileSystemError.notFound(url.path) }
+    func createDirectory(_ url: URL) throws { throw CleanupFileSystemError.notFound(url.path) }
+    func moveItem(_ source: URL, to destination: URL) throws { throw CleanupFileSystemError.notFound(source.path) }
+    func trash(_ url: URL) throws { throw CleanupFileSystemError.notFound(url.path) }
 }

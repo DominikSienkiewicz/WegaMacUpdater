@@ -4,6 +4,7 @@ import Foundation
 /// or nested inside another one, and the tools whose active copy is older than a copy it shadows.
 /// Every finding names the shell files and lines that mention the entry (`file:line`, never the
 /// line's text). It works only on a `PATH` read from the shell; an approximated `PATH` reads nothing.
+/// macOS's own cryptex entries are never looked at (see `isSystemCryptexEntry`).
 public struct CleanupPathHygieneDetector: Sendable {
     private enum Standing {
         case dead(CleanupEntry?)
@@ -19,6 +20,13 @@ public struct CleanupPathHygieneDetector: Sendable {
             if case .alive(_, let real) = standing { real } else { nil }
         }
     }
+
+    /// `/etc/paths.d/10-cryptex` is installed by macOS and restored by its updates; the directories
+    /// it adds often do not exist, and the file is not the user's to edit.
+    private static let systemCryptexRoots: [[String]] = [
+        ["var", "run", "com.apple.security.cryptexd"],
+        ["private", "var", "run", "com.apple.security.cryptexd"],
+    ]
 
     private let fileSystem: CleanupFileSystem
     private let home: URL
@@ -38,7 +46,8 @@ public struct CleanupPathHygieneDetector: Sendable {
         )
         var counts: [String: Int] = [:]
         var distinct: [String] = []
-        for text in path.entries where CleanupPathText.isAbsolute(text) && !CleanupPathText.containsNUL(text) {
+        for text in path.entries
+        where CleanupPathText.isAbsolute(text) && !CleanupPathText.containsNUL(text) && !Self.isSystemCryptexEntry(text) {
             counts[text, default: 0] += 1
             if counts[text] == 1 { distinct.append(text) }
         }
@@ -50,6 +59,12 @@ public struct CleanupPathHygieneDetector: Sendable {
         // Two spellings of one entry (`/x` and `/x/`) share an id; only the first finding is kept.
         var seen: Set<String> = []
         return (findings.filter { seen.insert($0.id).inserted }, attribution.skippedProtected)
+    }
+
+    /// The path is, or lies under, the cryptex daemon's run directory; compared by scalar components.
+    private static func isSystemCryptexEntry(_ path: String) -> Bool {
+        let components = CleanupPathText.components(of: path)
+        return systemCryptexRoots.contains { components.starts(with: $0) }
     }
 
     private func standing(of text: String) -> Standing {
@@ -126,6 +141,7 @@ public struct CleanupPathHygieneDetector: Sendable {
                   let newest = Self.newest(in: group), let newestVersion = newest.version,
                   compareVersions(version, newestVersion, scheme: .semver) == .orderedAscending else { return nil }
             let directory = active.path.deletingLastPathComponent().path
+            guard !Self.isSystemCryptexEntry(directory) else { return nil }
             return CleanupFinding(
                 detector: .pathHygiene, tool: tool, path: active.path, realpath: active.realpath, source: nil,
                 version: version, size: nil, status: .info,
