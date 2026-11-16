@@ -188,6 +188,20 @@ struct UninstallLeftoverPresentationTests {
         #expect(selection.contains("applicationsIncomplete: applicationsIncomplete"))
         #expect(present.contains("pendingApplicationsIncomplete = applicationsIncomplete"))
     }
+
+    /// Preparing the sheet awaits the routes and the leftover plan. A second press meanwhile must
+    /// not start a second preparation, and the button stays disabled until the first one ends.
+    @Test func uninstallButtonCannotPrepareTheSheetTwice() throws {
+        let view = try Fixture.source("Sources/MacUpdater/UninstallView.swift")
+        let present = try Fixture.body(of: "private func presentUninstallDialog()", endingAt: "private func cancelUninstall()", in: view)
+        let firstAwait = try #require(present.range(of: "await "))
+        let beforeFirstAwait = present[..<firstAwait.lowerBound]
+
+        #expect(beforeFirstAwait.contains("!isPreparingDialog else { return }"))
+        #expect(beforeFirstAwait.contains("isPreparingDialog = true"))
+        #expect(beforeFirstAwait.contains("defer { isPreparingDialog = false }"), "cleared on every exit path")
+        #expect(view.contains(".disabled(targets.isEmpty || isUninstalling || isPreparingDialog)"))
+    }
 }
 
 private enum UninstallLeftoverPresentationFixtures {

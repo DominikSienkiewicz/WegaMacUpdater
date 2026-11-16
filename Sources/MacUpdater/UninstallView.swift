@@ -34,6 +34,8 @@ struct UninstallView: View {
     @State private var selectedLeftovers: Set<String> = []
     /// The running state of `pendingUninstallTargets`, computed when the sheet opens.
     @State private var pendingRunningStates: [String: RunningApplicationResolution] = [:]
+    /// The sheet is being prepared (routes and leftovers awaited); a second press waits for it.
+    @State private var isPreparingDialog: Bool = false
     @State private var forceQuitApps: [ApplicationInfo] = []
     @State private var showForceQuit: Bool = false
     @State private var forceQuitAnswer: CheckedContinuation<UninstallForceQuitChoice, Never>?
@@ -111,7 +113,7 @@ struct UninstallView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.wegaDanger)
-                    .disabled(targets.isEmpty || isUninstalling)
+                    .disabled(targets.isEmpty || isUninstalling || isPreparingDialog)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -351,10 +353,13 @@ struct UninstallView: View {
     }
 
     /// UX-13: freezes the confirmation targets (UX-01), then plans their home-folder
-    /// leftovers via the coordinator so the sheet opens with the checkbox list ready.
+    /// leftovers via the coordinator so the sheet opens with the checkbox list ready. A second
+    /// call while one is preparing returns at once.
     private func presentUninstallDialog() async {
         let targets = self.targets
-        guard !targets.isEmpty, !isUninstalling else { return }
+        guard !targets.isEmpty, !isUninstalling, !isPreparingDialog else { return }
+        isPreparingDialog = true
+        defer { isPreparingDialog = false }
         pendingUninstallTargets = targets
         pendingScanIncomplete = scanFailed
         // Read together before any wait: a scan finishing during one would otherwise pair its
