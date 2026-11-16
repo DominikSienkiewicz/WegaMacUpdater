@@ -11,6 +11,7 @@ enum CleanupPresentation {
     enum ButtonKind: Equatable {
         case trash
         case brew
+        case brewCleanup
         case copyCommand(String)
     }
 
@@ -34,7 +35,7 @@ enum CleanupPresentation {
 
     struct Section: Equatable {
         enum Kind: Hashable {
-            case duplicates, shellState, protectedLocations, filesAndFolders
+            case duplicates, homebrew, runtimes, gradle, jetBrains, shellState, protectedLocations, filesAndFolders
         }
 
         let kind: Kind
@@ -90,26 +91,34 @@ enum CleanupPresentation {
 
     // MARK: - Sections
 
-    /// The stage-1 sections in order: copies of one tool (grouped by tool), shell state, skipped
-    /// protected locations (only when there are some) and the "Files and Folders" explanation.
+    /// The sections in the sidebar sketch's order: copies of one tool, Homebrew leftovers, version
+    /// managers, Gradle, JetBrains, shell state, skipped protected locations (only when there are
+    /// some) and the "Files and Folders" explanation. Each detector's findings and notes go to its
+    /// own section, and every section but the shell state groups its rows by tool.
     static func sections(_ report: CleanupReport, home: URL) -> [Section] {
         let isProtected: (CleanupFinding) -> Bool = { $0.status == .skippedProtected }
-        let copies = report.findings.filter { !isProtected($0) && $0.detector != .shellState }
-        let shellState = report.findings.filter { !isProtected($0) && $0.detector == .shellState }
-        let shellNotes = report.notes.filter { $0.detector == .shellState }.map(noteText)
-        var copyNotes = report.notes.filter { $0.detector != .shellState }.map(noteText)
-        if report.path.isApproximate, copies.contains(where: { $0.detector == .pathDuplicates }) {
-            copyNotes.append(trf(
+        let listed = report.findings.filter { !isProtected($0) }
+        let findings = { (kind: Section.Kind) in listed.filter { sectionKind(of: $0.detector) == kind } }
+        let notes = { (kind: Section.Kind) in report.notes.filter { sectionKinds(of: $0).contains(kind) }.map(noteText) }
+        let grouped = { (kind: Section.Kind, title: String, extraNotes: [String], empty: String) in
+            section(kind, title, notes: notes(kind) + extraNotes, rows: groupedRows(findings(kind), home: home), empty: empty)
+        }
+        var approximatePathNotes: [String] = []
+        if report.path.isApproximate, listed.contains(where: { $0.detector == .pathDuplicates }) {
+            approximatePathNotes.append(trf(
                 "PATH jest %@, więc to, która kopia jest aktywna, może się różnić od Terminala. Odczytaj PATH z powłoki, żeby to potwierdzić.",
                 tr("przybliżony")
             ))
         }
 
         var sections = [
-            section(.duplicates, tr("Wiele kopii tego samego narzędzia"), notes: copyNotes,
-                    rows: groupedRows(copies, home: home), empty: tr("Nie znaleziono kopii ani starych wersji narzędzi.")),
-            section(.shellState, tr("Stan powłok"), notes: shellNotes,
-                    rows: shellState.map { row(for: $0, home: home, groupHeader: nil, namesTool: true) },
+            grouped(.duplicates, tr("Wiele kopii tego samego narzędzia"), approximatePathNotes, tr("Nie znaleziono kopii ani starych wersji narzędzi.")),
+            grouped(.homebrew, tr("Homebrew"), [], tr("Homebrew nie ma nic do sprzątnięcia.")),
+            grouped(.runtimes, tr("Menedżery wersji"), [], tr("Nie znaleziono nieużywanych wersji.")),
+            grouped(.gradle, tr("Gradle"), [], tr("Nie znaleziono nieużywanych dystrybucji ani JDK.")),
+            grouped(.jetBrains, tr("JetBrains"), [], tr("Nie znaleziono katalogów starych wersji IDE.")),
+            section(.shellState, tr("Stan powłok"), notes: notes(.shellState),
+                    rows: findings(.shellState).map { row(for: $0, home: home, groupHeader: nil, namesTool: true) },
                     empty: tr("Nie znaleziono pozostałości po sesjach powłoki.")),
         ]
         let skipped = report.skippedProtected.map { skippedRow($0, home: home) }
@@ -127,6 +136,30 @@ enum CleanupPresentation {
 
     private static func section(_ kind: Section.Kind, _ title: String, notes: [String], rows: [Row], empty: String) -> Section {
         Section(kind: kind, title: title, notes: rows.isEmpty && notes.isEmpty ? [empty] : notes, rows: rows)
+    }
+
+    /// The section a detector's findings are listed in.
+    private static func sectionKind(of detector: CleanupDetectorID) -> Section.Kind {
+        switch detector {
+        case .pathDuplicates, .source, .versionDirectories: .duplicates
+        case .homebrew: .homebrew
+        case .runtimeVersions: .runtimes
+        case .gradle: .gradle
+        case .jetBrains: .jetBrains
+        case .shellState: .shellState
+        }
+    }
+
+    /// The sections a detector note is shown in. Homebrew's dependency-check notes concern the
+    /// copies; only its failed leftovers query belongs to the Homebrew section. Gradle reads the
+    /// same project walk as the version managers, so it repeats why the walk may have missed one.
+    private static func sectionKinds(of note: CleanupDetectorNote) -> [Section.Kind] {
+        switch (note.detector, note.kind) {
+        case (.homebrew, .dryRunFailed): [.homebrew]
+        case (.homebrew, _): [.duplicates]
+        case (.runtimeVersions, .noProjectRoots), (.runtimeVersions, .projectWalkTruncated): [.runtimes, .gradle]
+        case (let detector, _): [sectionKind(of: detector)]
+        }
     }
 
     /// Rows of one tool stay together, tools in the order the report first names them. The match
@@ -155,7 +188,7 @@ enum CleanupPresentation {
         switch status {
         case .active: 0
         case .shadowed, .unused, .stale, .inUse: 1
-        case .dependency, .brokenLink: 2
+        case .dependency, .brokenLink, .pinned, .recentUpgrade: 2
         case .expected, .appManaged, .info, .skippedProtected: 3
         }
     }
@@ -169,11 +202,16 @@ enum CleanupPresentation {
         )
     }
 
-    /// The button comes from the finding's action alone; an excluded finding never offers one.
+    /// The button comes from the finding's action alone; an excluded finding never offers one. A
+    /// JetBrains folder of a version an installed IDE replaced also names the IDE's own cleanup,
+    /// which knows its folders best; it does not clear a folder no installed IDE explains.
     private static func control(for finding: CleanupFinding, home: URL) -> (button: ButtonKind?, note: String?) {
         guard finding.bucket != .excluded else { return (nil, tr("tylko informacja")) }
         switch finding.action {
-        case .trash, .trashBatch: return (.trash, nil)
+        case .trash, .trashBatch:
+            guard finding.detector == .jetBrains, case .ideVersionNotInstalled = finding.reason else { return (.trash, nil) }
+            return (.trash, tr("Zalecane: w IDE wybierz Help → Delete Leftover IDE Directories. Wega może też przenieść ten katalog do Kosza."))
+        case .brew(.cleanup): return (.brewCleanup, nil)
         case .brew: return (.brew, nil)
         case .command(let command): return (.copyCommand(command), command)
         case .instruction(let instruction): return (nil, instructionText(displayed(instruction, home: home)))
@@ -189,7 +227,7 @@ enum CleanupPresentation {
         } else if finding.source == .standalone, finding.status != .brokenLink {
             parts.append(tr("wersja nieznana"))
         }
-        parts.append(reasonText(displayed(finding.reason, home: home)))
+        parts.append(reasonText(displayed(finding.reason, home: home), requiredBy: pinnedPaths(in: finding.status, home: home)))
         let users = processes(in: finding.status)
         if !users.isEmpty {
             parts.append(trf("używa: %@", users.map(processName).joined(separator: ", ")))
@@ -238,6 +276,14 @@ enum CleanupPresentation {
         }
     }
 
+    /// What Wega says when a scan ends. A stopped scan is not announced as done: the report on
+    /// screen is still the previous one.
+    static func scanEndedState(failed: Bool, cancelled: Bool) -> WegaState {
+        if failed { return WegaState(pose: .sad, line: tr("Skan się nie udał.")) }
+        if cancelled { return WegaState(pose: .idle, line: tr("Skan przerwany — poprzedni raport zostaje.")) }
+        return WegaState(pose: .happy, line: tr("Gotowe. Zobacz, co mogę posprzątać."))
+    }
+
     static func pathReadMessage(_ result: CleanupPathReadResult?) -> String? {
         switch result {
         case nil, .captured: nil
@@ -252,6 +298,7 @@ enum CleanupPresentation {
         switch kind {
         case .trash: tr("Do Kosza…")
         case .brew: tr("Odinstaluj…")
+        case .brewCleanup: tr("Posprzątaj…")
         case .copyCommand: tr("Kopiuj polecenie")
         }
     }
@@ -270,12 +317,20 @@ enum CleanupPresentation {
         case .dependency: tr("zależność")
         case .brokenLink: tr("uszkodzone dowiązanie")
         case .skippedProtected: tr("pominięta (lokalizacja chroniona)")
+        case .pinned: tr("potrzebna")
+        case .recentUpgrade: tr("świeżo zaktualizowana")
         case .info: tr("informacja")
         }
     }
 
     /// Paths inside a reason are shown as given; callers pass them with `~` already substituted.
     static func reasonText(_ reason: CleanupReason) -> String {
+        reasonText(reason, requiredBy: [])
+    }
+
+    /// `requiredBy` holds the paths of a `.pinned` status, which the reason `.requiredByProjects`
+    /// names; the plain-text export lists them in a field of their own.
+    private static func reasonText(_ reason: CleanupReason, requiredBy paths: [String]) -> String {
         switch reason {
         case .olderVersion(let current): trf("starsza wersja; bieżąca to %@", current)
         case .newerVersion(let current): trf("nowsza wersja; bieżąca to %@", current)
@@ -289,6 +344,22 @@ enum CleanupPresentation {
         case .protectedLocation: tr("lokalizacja chroniona — Wega jej nie odczytuje")
         case .brokenLink: tr("dowiązanie wskazuje nieistniejący plik")
         case .requiredBy(let dependents): trf("potrzebna formułom: %@", dependents.joined(separator: ", "))
+        case .homebrewLeftovers(let items):
+            trf("stare wersje i pobrane pliki do usunięcia przez brew cleanup: %@", "\(items)")
+        case .homebrewKeptVersions(let count):
+            trf("Homebrew zostawia kilka wersji (%@) — przypięta formuła albo cask, który aktualizuje się sam", "\(count)")
+        case .installedOnlyAsDependency: tr("zainstalowana tylko jako zależność; możesz jej jednak używać bezpośrednio")
+        case .recentlyUpgraded: tr("zaktualizowana w ostatnich 7 dniach — poprzednie wersje zostają na wypadek przywracania")
+        case .notRequiredByProjects: tr("nie wskazuje jej żaden projekt w katalogach projektów ani ustawienie menedżera")
+        case .requiredByProjects: trf("wskazuje ją: %@", paths.isEmpty ? "—" : paths.joined(separator: ", "))
+        case .unusedGradleDistribution: tr("nie wskazuje jej żaden wrapper Gradle; wrapper pobierze ją ponownie, gdy będzie potrzebna")
+        case .unreferencedJDK(let major): trf("żaden projekt nie wymaga Javy %@", "\(major)")
+        case .systemJDK(let major): trf("systemowa Java %@", "\(major)")
+        case .ideVersionNotInstalled(let installed):
+            trf("ta wersja IDE nie jest zainstalowana; zainstalowane: %@", installed.joined(separator: ", "))
+        case .ideNotFound: tr("nie znaleziono zainstalowanego IDE tego produktu")
+        case .newerThanInstalledIDE(let installed):
+            trf("nowsza niż zainstalowane IDE (%@)", installed.joined(separator: ", "))
         }
     }
 
@@ -307,6 +378,14 @@ enum CleanupPresentation {
             tr("Homebrew jest niedostępny, więc Wega nie sprawdziła, czy inne formuły zależą od przesłoniętych kopii. Te kopie nie mają akcji usunięcia.")
         case (.failed, .homebrew):
             tr("Sprawdzenie zależności Homebrew nie powiodło się. Formuły, których nie sprawdzono, nie mają akcji usunięcia.")
+        case (.dryRunFailed, _):
+            tr("Homebrew nie odpowiedział na pytanie o pozostałości. Tej części nie ma w raporcie.")
+        case (.noProjectRoots, _):
+            tr("Nie przeszukano żadnego katalogu projektów, więc Wega nie wie, których wersji używają projekty. Dodaj katalogi w Ustawieniach.")
+        case (.projectWalkTruncated, _):
+            tr("Katalogów projektów jest więcej, niż Wega przeszukuje w jednym skanie. Część wersji może być potrzebna projektom, których nie sprawdzono.")
+        case (.unrecognisedIDEInstall, _):
+            tr("Jedno z IDE JetBrains nie ma pliku product-info.json, więc katalogi tego produktu zostają bez zmian.")
         case (.failed, let detector):
             trf("Ta część skanu nie powiodła się: %@. Jej wyników nie ma w raporcie.", detectorName(detector))
         }
@@ -319,6 +398,9 @@ enum CleanupPresentation {
         case .versionDirectories: tr("katalogi wersji")
         case .homebrew: tr("zależności Homebrew")
         case .shellState: tr("stan powłok")
+        case .runtimeVersions: tr("wersje środowisk")
+        case .gradle: tr("Gradle")
+        case .jetBrains: tr("katalogi IDE JetBrains")
         }
     }
 
@@ -351,12 +433,20 @@ enum CleanupPresentation {
         Confirmation(
             paths: targetPaths(of: finding, home: home),
             sizeText: finding.size.map(sizeText) ?? tr("nieznany"),
-            reason: reasonText(displayed(finding.reason, home: home)),
+            reason: reasonText(displayed(finding.reason, home: home), requiredBy: pinnedPaths(in: finding.status, home: home)),
             action: actionText(finding.action, home: home),
             risk: riskText(finding.risk),
             processes: processes(in: finding.status).map(processLine),
-            confirmTitle: finding.action.isBrew ? tr("Odinstaluj") : tr("Przenieś do Kosza")
+            confirmTitle: confirmTitle(for: finding.action)
         )
+    }
+
+    private static func confirmTitle(for action: CleanupAction) -> String {
+        switch action {
+        case .brew(.cleanup): tr("Posprzątaj")
+        case .brew: tr("Odinstaluj")
+        default: tr("Przenieś do Kosza")
+        }
     }
 
     /// Name, PID and the arguments held in memory. Arguments can carry tokens: this line is for
@@ -484,6 +574,11 @@ enum CleanupPresentation {
         return processes
     }
 
+    private static func pinnedPaths(in status: CleanupStatus, home: URL) -> [String] {
+        guard case .pinned(let paths) = status else { return [] }
+        return paths.map { tilde($0, home) }
+    }
+
     private static func displayed(_ reason: CleanupReason, home: URL) -> CleanupReason {
         guard case .shadowedBy(let path) = reason else { return reason }
         return .shadowedBy(path: tilde(path, home))
@@ -492,12 +587,5 @@ enum CleanupPresentation {
     private static func displayed(_ instruction: CleanupInstruction, home: URL) -> CleanupInstruction {
         guard case .removeAppLinkWithAdminRights(let link) = instruction else { return instruction }
         return .removeAppLinkWithAdminRights(link: tilde(link, home))
-    }
-}
-
-private extension CleanupAction {
-    var isBrew: Bool {
-        if case .brew = self { return true }
-        return false
     }
 }

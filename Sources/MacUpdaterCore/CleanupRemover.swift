@@ -4,6 +4,7 @@ import Foundation
 public protocol CleanupBrewRemoving: Sendable {
     func uninstallCask(token: String) async throws
     func uninstallFormula(name: String) async throws
+    func cleanupPackage(name: String) async throws
 }
 
 /// `BrewService` cannot conform itself: its uninstall methods take defaulted options and return the
@@ -21,6 +22,10 @@ public struct BrewServiceCleanupRemoval: CleanupBrewRemoving {
 
     public func uninstallFormula(name: String) async throws {
         _ = try await brew.uninstallFormula(name: name)
+    }
+
+    public func cleanupPackage(name: String) async throws {
+        _ = try await brew.cleanupPackage(name: name)
     }
 }
 
@@ -52,10 +57,13 @@ public enum CleanupRemovalOutcome: Equatable, Sendable {
 /// The only Cleanup code that changes anything. Under one write lease, so no scan or update runs in
 /// between, it re-checks that the item is still the one the scan identified, is not what its tool's
 /// link now points to, is still shadowed by a working copy of its own when D1 found it shadowed, is
-/// not used by a process the user has not acknowledged and, for a formula, still has no
-/// dependents; only then does it act. Files only ever go to the Trash.
+/// not used by a process the user has not acknowledged, for D6 and D7 still not referenced by a
+/// project or an installed IDE, for a formula still has no dependents and, for `brew cleanup`,
+/// still has leftovers and no recent upgrade; only then does it act. Files only ever go to the
+/// Trash.
 public struct CleanupRemover: Sendable {
     static let leaseLabel = "cleanup.remove"
+    private static let packageRoots = ["Cellar", "Caskroom"]
 
     /// Where the pointer and in-use checks look for one removed item.
     private struct Location {
@@ -77,11 +85,13 @@ public struct CleanupRemover: Sendable {
     private let coordinator: OperationCoordinator
     private let home: URL
     private let today: @Sendable () -> Date
+    private let referenceRecheck: CleanupReferenceRechecking
 
     public init(
         fileSystem: CleanupFileSystem, inspector: ProcessInspecting, brewQuery: CleanupBrewQuerying,
         brewRemoval: CleanupBrewRemoving, coordinator: OperationCoordinator, home: URL,
-        today: @escaping @Sendable () -> Date
+        today: @escaping @Sendable () -> Date,
+        referenceRecheck: CleanupReferenceRechecking = CleanupNoReferenceRecheck()
     ) {
         self.fileSystem = fileSystem
         self.inspector = inspector
@@ -90,6 +100,7 @@ public struct CleanupRemover: Sendable {
         self.coordinator = coordinator
         self.home = home
         self.today = today
+        self.referenceRecheck = referenceRecheck
     }
 
     public func execute(_ intent: CleanupRemovalIntent) async -> CleanupRemovalOutcome {
@@ -109,8 +120,14 @@ public struct CleanupRemover: Sendable {
         let targets = try targets(of: entries, action: finding.action)
         if try isPointedToByCurrentLink(finding, locations: targets.locations) { return .changedSinceScan }
         guard isStillShadowed(finding, locations: targets.locations) else { return .changedSinceScan }
-        let users = processesUsing(targets)
+        if case .brew(.cleanup(let name)) = finding.action {
+            return try await cleanUp(name, scanned: targets.locations, inUseAcknowledged: intent.inUseAcknowledged)
+        }
+        let users = processesUsing(targets, of: finding)
         if !users.isEmpty, !intent.inUseAcknowledged { return .needsInUseAcknowledgement(users) }
+        if Self.isJudgedByReferences(finding), try await !referenceRecheck.isStillUnreferenced(finding) {
+            return .changedSinceScan
+        }
         if case .brew(.uninstallFormula(let name)) = finding.action {
             let dependents = try await brewQuery.usesInstalled(formula: name)
             if !dependents.isEmpty { return .nowRequiredBy(dependents) }
@@ -119,20 +136,56 @@ public struct CleanupRemover: Sendable {
         return .removed
     }
 
+    /// `brew cleanup -- <name>` removes whatever a fresh dry run lists, which may differ from what
+    /// the scan saw: a package upgraded since keeps its old versions for the retention window, and
+    /// a package with nothing left needs a rescan. The scanned package directory is dated before
+    /// Homebrew is asked, and every package directory the dry run lists a version in after it.
+    /// The command cleans a formula and a cask of that name, whichever the finding named and even
+    /// when its path was a cache file, so beside each of those the same-named `Cellar/<name>` and
+    /// `Caskroom/<name>` are dated too. Only the old versions the dry run lists are checked for
+    /// use; the current version stays installed.
+    private func cleanUp(_ name: String, scanned: [Location], inUseAcknowledged: Bool) async throws -> CleanupRemovalOutcome {
+        let scannedPackages = scanned.filter { $0.isDirectory && Self.isPackageDirectory($0.url) }.map(\.url)
+        if try isAnyRecentlyUpgraded(try withSameNamedPackages(scannedPackages, named: name)) { return .changedSinceScan }
+        let leftovers = try await brewQuery.cleanupDryRun(package: name)
+        guard !leftovers.isEmpty else { return .changedSinceScan }
+        let listedPackages = Self.packageDirectories(holding: leftovers)
+        if try isAnyRecentlyUpgraded(try withSameNamedPackages(listedPackages, named: name)) { return .changedSinceScan }
+        let users = processesUsing(oldVersionsAmong: leftovers)
+        if !users.isEmpty, !inUseAcknowledged { return .needsInUseAcknowledgement(users) }
+        try await perform(.brew(.cleanup(name)))
+        return .removed
+    }
+
     /// Commands and instructions are the user's to run. A Trash action names exactly one item, the
     /// one whose identity the scan recorded. A batch must name entries directly inside its folder,
-    /// because they are staged beside each other there.
+    /// because they are staged beside each other there. A Homebrew name must pass the gate before
+    /// it can reach `brew`.
     private static func isRemoval(_ action: CleanupAction) -> Bool {
         switch action {
         case .trash(let urls):
             return urls.count == 1
         case .trashBatch(let parent, let entries):
             return !entries.isEmpty && entries.allSatisfy { isDirectlyInside($0, parent) }
-        case .brew:
-            return true
+        case .brew(let brewAction):
+            return CleanupHomebrewNames.isValid(packageName(of: brewAction))
         case .command, .instruction, .none:
             return false
         }
+    }
+
+    private static func packageName(of action: CleanupBrewAction) -> String {
+        switch action {
+        case .uninstallFormula(let name), .cleanup(let name): name
+        case .uninstallCask(let token): token
+        }
+    }
+
+    /// D6 and D7 judged the item unneeded from what referenced it at scan time: the wrappers and
+    /// toolchains in the projects, and the installed IDEs.
+    private static func isJudgedByReferences(_ finding: CleanupFinding) -> Bool {
+        guard case .trash = finding.action else { return false }
+        return finding.detector == .gradle || finding.detector == .jetBrains
     }
 
     private static func isDirectlyInside(_ entry: URL, _ parent: URL) -> Bool {
@@ -237,6 +290,7 @@ public struct CleanupRemover: Sendable {
         let (directory, name) = switch action {
         case .uninstallFormula(let name): ("Cellar", name)
         case .uninstallCask(let token): ("Caskroom", token)
+        case .cleanup(let name): ("Cellar", name)
         }
         for location in locations {
             let components = CleanupPathText.components(of: location.url.path)
@@ -249,8 +303,98 @@ public struct CleanupRemover: Sendable {
         return nil
     }
 
-    private func processesUsing(_ targets: Targets) -> [CleanupProcess] {
-        var candidates = inspector.userProcesses()
+    /// The scan dated a package by its newest version directory, and so does the removal: a
+    /// package upgraded within the retention window keeps its old versions, so the upgrade can
+    /// still be undone. Each directory is listed once, and one that cannot be listed aborts the
+    /// removal instead of reading as a package without versions.
+    private func isAnyRecentlyUpgraded(_ packageDirectories: [URL]) throws -> Bool {
+        try packageDirectories.contains { directory in
+            guard let lastInstall = CleanupHomebrewDetector.lastInstall(among: try fileSystem.contents(of: directory)) else {
+                return false
+            }
+            return today() < lastInstall.addingTimeInterval(UpdateOperationStore.retentionInterval)
+        }
+    }
+
+    /// The package directories given and, under each one's prefix, the `Cellar/<name>` and
+    /// `Caskroom/<name>` directories that exist, once each. A lookup that fails aborts the removal.
+    private func withSameNamedPackages(_ packages: [URL], named name: String) throws -> [URL] {
+        let shortName = CleanupPathText.components(of: name).last ?? name
+        let given = packages.map { CleanupPathText.components(of: $0.path) }
+        var result = given
+        for package in given {
+            let prefix = Array(package.dropLast(2))
+            for root in Self.packageRoots {
+                let sibling = prefix + [root, shortName]
+                guard !result.contains(where: { Self.isSamePath($0, sibling) }),
+                      try fileSystem.entry(at: Self.directory(of: sibling))?.kind == .directory else { continue }
+                result.append(sibling)
+            }
+        }
+        return result.map(Self.directory(of:))
+    }
+
+    private static func directory(of components: [String]) -> URL {
+        URL(filePath: "/" + components.joined(separator: "/"), directoryHint: .isDirectory)
+    }
+
+    /// `…/Cellar/<name>` or `…/Caskroom/<token>`.
+    private static func isPackageDirectory(_ url: URL) -> Bool {
+        let components = CleanupPathText.components(of: url.path)
+        return components.count >= 2 && isPackageRoot(components[components.count - 2])
+    }
+
+    /// The `…/Cellar/<name>` or `…/Caskroom/<token>` of every listed path that lies in a version
+    /// directory, once each, read from the first `Cellar` or `Caskroom` component.
+    private static func packageDirectories(holding leftovers: [CleanupBrewCleanupItem]) -> [URL] {
+        var packages: [[String]] = []
+        for item in leftovers {
+            let components = CleanupPathText.components(of: item.path.path)
+            guard let root = components.indices.first(where: { $0 + 2 < components.count && isPackageRoot(components[$0]) }) else {
+                continue
+            }
+            let package = Array(components[...(root + 1)])
+            if !packages.contains(where: { isSamePath($0, package) }) { packages.append(package) }
+        }
+        return packages.map(directory(of:))
+    }
+
+    private static func isPackageRoot(_ component: String) -> Bool {
+        packageRoots.contains { $0.unicodeScalars.elementsEqual(component.unicodeScalars) }
+    }
+
+    private static func isSamePath(_ lhs: [String], _ rhs: [String]) -> Bool {
+        lhs.count == rhs.count && zip(lhs, rhs).allSatisfy { $0.unicodeScalars.elementsEqual($1.unicodeScalars) }
+    }
+
+    /// The old kegs and cask versions a cleanup dry run lists, `…/Cellar/<n>/<v>` and
+    /// `…/Caskroom/<t>/<v>`, under their listed and physical paths. Cache files run nothing.
+    private func processesUsing(oldVersionsAmong leftovers: [CleanupBrewCleanupItem]) -> [CleanupProcess] {
+        let processes = inspector.userProcesses()
+        let versions = leftovers.map(\.path).filter { path in
+            guard let package = CleanupHomebrewPackage.name(of: path) else { return false }
+            return package.kind != .cache
+        }
+        let roots = versions + versions.compactMap { try? fileSystem.realpath($0) }
+        let matched = roots.flatMap { CleanupInUseMatcher.processes(using: $0, isDirectory: true, among: processes) }
+        return processes.filter { matched.contains($0) }
+    }
+
+    /// The processes using the targets. A Gradle daemon names its distribution only inside a
+    /// `-javaagent:` or classpath argument, and an IDE its folders inside `-D` properties, so for D6
+    /// and D7 an argument naming the item, under its listed or physical path, counts as well — as
+    /// it did in their scan.
+    private func processesUsing(_ targets: Targets, of finding: CleanupFinding) -> [CleanupProcess] {
+        let processes = inspector.userProcesses()
+        let users = processesUsing(targets, among: processes)
+        guard Self.isJudgedByReferences(finding), case .trash(let listed) = finding.action else { return users }
+        let roots = listed + targets.locations.map(\.url)
+        let naming = roots.flatMap { CleanupInUseMatcher.processes(referencing: $0, among: processes) }
+        return processes.filter { users.contains($0) || naming.contains($0) }
+    }
+
+    private func processesUsing(_ targets: Targets, among processes: [CleanupProcess]) -> [CleanupProcess] {
+        var candidates = processes
         if let directory = targets.enclosingDirectory {
             candidates = CleanupInUseMatcher.processes(using: directory, isDirectory: true, among: candidates)
         }
@@ -275,6 +419,8 @@ public struct CleanupRemover: Sendable {
             try await brewRemoval.uninstallFormula(name: name)
         case .brew(.uninstallCask(let token)):
             try await brewRemoval.uninstallCask(token: token)
+        case .brew(.cleanup(let name)):
+            try await brewRemoval.cleanupPackage(name: name)
         case .command, .instruction, .none:
             break
         }

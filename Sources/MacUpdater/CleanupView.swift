@@ -187,9 +187,7 @@ struct CleanupView: View {
         if new == .scanning {
             onWegaState(WegaState(pose: .sniff, line: tr("Węszę po katalogach z narzędziami…")))
         } else if old == .scanning, new == .idle {
-            onWegaState(store.lastScanFailed
-                ? WegaState(pose: .sad, line: tr("Skan się nie udał."))
-                : WegaState(pose: .happy, line: tr("Gotowe. Zobacz, co mogę posprzątać.")))
+            onWegaState(CleanupPresentation.scanEndedState(failed: store.lastScanFailed, cancelled: store.lastScanCancelled))
         }
     }
 }
@@ -239,6 +237,10 @@ private struct CleanupSectionCard: View {
     private var icon: String {
         switch section.kind {
         case .duplicates: "square.on.square"
+        case .homebrew: "mug"
+        case .runtimes: "square.stack.3d.up"
+        case .gradle: "hammer"
+        case .jetBrains: "chevron.left.forwardslash.chevron.right"
         case .shellState: "terminal"
         case .protectedLocations: "lock.shield"
         case .filesAndFolders: "hand.raised"
@@ -295,7 +297,7 @@ private struct CleanupFindingRow: View {
             }
             if let button = row.button {
                 switch button {
-                case .trash, .brew:
+                case .trash, .brew, .brewCleanup:
                     if let findingID = row.findingID {
                         Button(CleanupPresentation.buttonTitle(button)) { onRemove(findingID) }
                             .controlSize(.small)

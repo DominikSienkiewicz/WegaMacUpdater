@@ -23,12 +23,21 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   Downloads, iCloud and other protected locations are never opened. Your shell is run only
   when you press "Odczytaj PATH". The result can be exported as a text or JSON report with
   `~` in place of your home folder.
+- "Porządki" also finds Homebrew leftovers per package (`brew cleanup` for one formula or
+  cask at a time, skipping packages upgraded in the last 7 days, and unused formulae offered as
+  `brew uninstall --formula`), unused runtime versions from uv, pyenv, fnm, nvm, SDKMAN, rustup,
+  mise, asdf, Volta and pnpm (shown as commands to copy, never removed by Wega), unused Gradle
+  wrapper distributions and downloaded JDKs, and folders of JetBrains IDE versions that are no
+  longer installed (with the IDE's "Delete Leftover IDE Directories" recommended). A new
+  "Katalogi projektów" card in Settings (default `~/Dev`) says which folders to read for
+  project requirements. Stopping a scan now says the previous report is kept.
 
 ### Changed
 - The Logs keyboard shortcut moved from ⌘6 to ⌘7, because the new "Porządki" section takes ⌘6
   in the sidebar order.
 
 ### Fixed
+- Exported Cleanup commands no longer keep your home folder, for example in `npm uninstall -g --prefix <prefix> <package>`.
 - Obsidian no longer shows a GitHub update it has already installed. The GitHub Releases check
   compared the release with the installer version in the app bundle, not with the newer package
   Obsidian actually runs, so the row stayed after every in-app update. A row already handed off

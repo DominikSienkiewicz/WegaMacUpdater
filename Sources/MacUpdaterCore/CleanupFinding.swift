@@ -5,6 +5,9 @@ public enum CleanupDetectorID: String, Codable, Equatable, Sendable {
     case source = "D2"
     case versionDirectories = "D3"
     case homebrew = "D4"
+    case runtimeVersions = "D5"
+    case gradle = "D6"
+    case jetBrains = "D7"
     case shellState = "D8"
 }
 
@@ -74,11 +77,15 @@ public enum CleanupStatus: Codable, Equatable, Sendable {
     case brokenLink
     case skippedProtected
     case info
+    /// Absolute paths of the files or manager settings that reference the item.
+    case pinned(by: [String])
+    case recentUpgrade(until: Date)
 }
 
 public enum CleanupBrewAction: Codable, Equatable, Sendable {
     case uninstallFormula(String)
     case uninstallCask(String)
+    case cleanup(String)
 }
 
 public enum CleanupInstruction: Codable, Equatable, Sendable {
@@ -109,6 +116,18 @@ public enum CleanupReason: Codable, Equatable, Sendable {
     case protectedLocation
     case brokenLink
     case requiredBy([String])
+    case homebrewLeftovers(items: Int)
+    case homebrewKeptVersions(count: Int)
+    case installedOnlyAsDependency
+    case recentlyUpgraded
+    case notRequiredByProjects
+    case requiredByProjects
+    case unusedGradleDistribution
+    case unreferencedJDK(major: Int)
+    case systemJDK(major: Int)
+    case ideVersionNotInstalled(installed: [String])
+    case ideNotFound
+    case newerThanInstalledIDE(installed: [String])
 }
 
 public enum CleanupVersionRelation: Codable, Equatable, Sendable {
@@ -195,8 +214,14 @@ public struct CleanupFinding: Codable, Equatable, Identifiable, Sendable {
         case .brokenLink: "brokenLink"
         case .skippedProtected: "skippedProtected"
         case .info: "info"
+        case .pinned: "pinned"
+        case .recentUpgrade: "recentUpgrade"
         }
     }
+}
+
+public enum CleanupLeftoverKind: Sendable {
+    case homebrewCleanup, homebrewAutoremove, runtimeVersion, gradleDistribution, gradleJDK, jetBrainsDirectory
 }
 
 public enum CleanupBucketPolicy {
@@ -213,9 +238,24 @@ public enum CleanupBucketPolicy {
         return .safe
     }
 
+    /// The detectors that find leftovers rather than copies: only a Gradle distribution or a JetBrains
+    /// folder can be safe, and only when the evidence behind "unused" is complete.
+    public static func bucket(
+        status: CleanupStatus,
+        kind: CleanupLeftoverKind,
+        evidenceComplete: Bool
+    ) -> CleanupBucket {
+        if isExcluded(status) { return .excluded }
+        guard case .unused = status, evidenceComplete else { return .needsDecision }
+        switch kind {
+        case .gradleDistribution, .jetBrainsDirectory: return .safe
+        case .homebrewCleanup, .homebrewAutoremove, .runtimeVersion, .gradleJDK: return .needsDecision
+        }
+    }
+
     private static func isExcluded(_ status: CleanupStatus) -> Bool {
         switch status {
-        case .active, .expected, .appManaged, .dependency, .info, .brokenLink, .skippedProtected:
+        case .active, .expected, .appManaged, .dependency, .info, .brokenLink, .skippedProtected, .pinned, .recentUpgrade:
             return true
         case .shadowed, .unused, .stale, .inUse:
             return false

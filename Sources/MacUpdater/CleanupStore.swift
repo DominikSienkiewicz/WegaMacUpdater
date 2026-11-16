@@ -17,7 +17,8 @@ struct CleanupStoreDependencies {
     var savePath: @MainActor (CleanupPathSnapshot) throws -> Void
 
     /// One guarded file system serves the scan, the approximate `PATH` and the remover, so every
-    /// Cleanup read and every move to the Trash passes the protected-location guard.
+    /// Cleanup read and every move to the Trash passes the protected-location guard. The project
+    /// roots are read from Settings at every scan and every removal's re-check, never cached here.
     static var live: CleanupStoreDependencies {
         let home = URL(filePath: NSHomeDirectory(), directoryHint: .isDirectory)
         let tmpDirectory = URL(filePath: NSTemporaryDirectory(), directoryHint: .isDirectory)
@@ -29,10 +30,16 @@ struct CleanupStoreDependencies {
         let inspector = LiveProcessInspector()
         let brew = BrewService()
         let coordinator = OperationCoordinator.shared
+        let projectRoots: @Sendable () -> [URL] = { CleanupProjectRoots.roots(from: .standard, home: home) }
+        let applicationDirectories = CleanupJetBrainsDetector.defaultApplicationDirectories(home: home)
         let remover = CleanupRemover(
             fileSystem: fileSystem, inspector: inspector, brewQuery: brew,
             brewRemoval: BrewServiceCleanupRemoval(brew: brew), coordinator: coordinator, home: home,
-            today: Date.init
+            today: Date.init,
+            referenceRecheck: CleanupLiveReferenceRecheck(
+                fileSystem: fileSystem, home: home, inspector: inspector,
+                projectRoots: projectRoots, applicationDirectories: applicationDirectories
+            )
         )
         return CleanupStoreDependencies(
             home: home,
@@ -46,7 +53,8 @@ struct CleanupStoreDependencies {
             scan: { path in
                 try await CleanupScanner().scan(CleanupContext(
                     home: home, tmpDirectory: tmpDirectory, path: path, fileSystem: fileSystem,
-                    inspector: inspector, brew: brew, brewPrefix: BinaryLocator().locateBrewPrefix()
+                    inspector: inspector, brew: brew, brewPrefix: BinaryLocator().locateBrewPrefix(),
+                    projectRoots: projectRoots(), applicationDirectories: applicationDirectories
                 ))
             },
             remove: { await remover.execute($0) },
@@ -83,6 +91,9 @@ final class CleanupStore: ObservableObject {
     /// The last scan ended in an error other than a cancellation, so the report on screen is older
     /// than the user's request. Cleared when a scan starts.
     @Published private(set) var lastScanFailed = false
+    /// The last scan was stopped, so the report on screen is the one from before it. Cleared when
+    /// a scan starts.
+    @Published private(set) var lastScanCancelled = false
 
     /// The running operation `phase` names. Internal so tests can await it.
     private(set) var task: Task<Void, Never>?
@@ -151,6 +162,7 @@ final class CleanupStore: ObservableObject {
         case .trashBatch: "trash-batch"
         case .brew(.uninstallFormula): "brew uninstall"
         case .brew(.uninstallCask): "brew uninstall --cask"
+        case .brew(.cleanup): "brew cleanup"
         case .command: "command"
         case .instruction: "instruction"
         case .none: "none"
@@ -171,6 +183,7 @@ final class CleanupStore: ObservableObject {
     /// Under a read lease, so no removal or update changes the disk while the scan reads it.
     private func performScan() async {
         lastScanFailed = false
+        lastScanCancelled = false
         let storedPath = pathSnapshot
         let approximatePath = dependencies.approximatePath
         let scan = dependencies.scan
@@ -182,6 +195,7 @@ final class CleanupStore: ObservableObject {
             lastScanFailed = false
             persist("raportu") { try dependencies.saveReport(report) }
         } catch is CancellationError {
+            lastScanCancelled = true
             WegaLog.info(.app, "Porządki: skan anulowany, poprzedni raport zostaje.")
         } catch {
             lastScanFailed = true

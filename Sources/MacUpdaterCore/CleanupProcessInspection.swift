@@ -114,6 +114,22 @@ public enum CleanupInUseMatcher {
         }
     }
 
+    /// The processes with an argument naming `directory` or a path inside it. Each argument is split
+    /// on `:` and `=` first, so a classpath (`-cp a.jar:/dir/b.jar`), an agent
+    /// (`-javaagent:/dir/agent.jar`) or a property (`-Dgradle.home=/dir`) counts — the way a Gradle
+    /// daemon names its distribution. Only this comparison reads the arguments.
+    public static func processes(referencing directory: URL, among: [CleanupProcess]) -> [CleanupProcess] {
+        let root = CleanupPathText.components(of: directory.path)
+        return among.filter { process in
+            process.arguments.contains { argument in
+                argument.unicodeScalars.split { $0 == ":" || $0 == "=" }.contains { piece in
+                    let path = String(String.UnicodeScalarView(piece))
+                    return CleanupPathText.isAbsolute(path) && isUnder(CleanupPathText.components(of: path), root, orEqual: true)
+                }
+            }
+        }
+    }
+
     private static func isUnder(_ candidate: [String], _ root: [String], orEqual: Bool) -> Bool {
         guard !root.isEmpty, candidate.starts(with: root) else { return false }
         return orEqual || candidate.count > root.count

@@ -170,6 +170,34 @@ final class CleanupReportTests: XCTestCase {
         XCTAssertEqual(restored.findings.first?.action, .command(command))
     }
 
+    func testHomeBeforeASpaceInACommandIsAbbreviatedAndRestored() throws {
+        let shortHome = URL(filePath: "/Users/t", directoryHint: .isDirectory)
+        let tool = shortHome.appending(path: "bin/tsc", directoryHint: .notDirectory)
+        let command = "npm uninstall -g --prefix /Users/t pkg /Users/tom"
+        let report = CleanupReport(
+            createdAt: Date(timeIntervalSince1970: 1_794_300_000), path: sampleReport(home: shortHome).path,
+            findings: [CleanupFinding(
+                detector: .pathDuplicates, tool: "tsc", path: tool, realpath: tool, source: .packageManager(.npm),
+                version: nil, size: nil, status: .shadowed, reason: .shadowedBy(path: "/opt/homebrew/bin/tsc"),
+                action: .command(command), risk: .low, bucket: .needsDecision,
+                identity: CleanupFileIdentity(device: 1, inode: 22)
+            )],
+            notes: [], skippedProtected: []
+        )
+
+        let json = String(decoding: try CleanupReportRenderer.json(report, home: shortHome), as: UTF8.self)
+
+        XCTAssertTrue(json.contains("--prefix ~ pkg"), json)
+        XCTAssertFalse(json.contains("/Users/t pkg"), json)
+        XCTAssertTrue(json.contains("/Users/tom"), "a longer name is not the home: \(json)")
+        let restored = try CleanupReportRenderer.report(fromJSON: Data(json.utf8), home: shortHome)
+        XCTAssertEqual(restored.findings.first?.action, .command(command))
+        let io = InMemoryReportIO()
+        let file = CleanupReportFile(home: shortHome, io: io)
+        try file.save(report)
+        XCTAssertEqual(try XCTUnwrap(file.load()).findings.first?.action, .command(command))
+    }
+
     func testTextSpellsBrewCommandsTheSharedWay() {
         let link = plainHome.appending(path: "opt/homebrew/bin/gh", directoryHint: .notDirectory)
         let formula = CleanupFinding(
@@ -235,5 +263,44 @@ final class CleanupReportTests: XCTestCase {
 
     func testDefaultFileLivesInApplicationSupport() {
         XCTAssertTrue(CleanupReportFile.defaultFileURL.path.hasSuffix("/Library/Application Support/WegaMacUpdater/cleanup-report.json"))
+    }
+
+    private func leftoverReport(status: CleanupStatus, action: CleanupAction, home: URL) -> CleanupReport {
+        let directory = home.appending(path: ".nvm/versions/node/v20.1.0", directoryHint: .isDirectory)
+        return CleanupReport(
+            createdAt: Date(timeIntervalSince1970: 1_794_300_000), path: sampleReport(home: home).path,
+            findings: [CleanupFinding(
+                detector: .runtimeVersions, tool: "node", path: directory, realpath: directory, source: nil,
+                version: "20.1.0", size: 1_024, status: status, reason: .requiredByProjects, action: action,
+                risk: .low, bucket: .excluded, identity: CleanupFileIdentity(device: 1, inode: 41)
+            )],
+            notes: [], skippedProtected: []
+        )
+    }
+
+    func testPinnedPathsAreWrittenWithTildeInBothExportsAndRoundTrip() throws {
+        let pin = plainHome.appending(path: "Dev/app/.nvmrc", directoryHint: .notDirectory).path
+        let report = leftoverReport(status: .pinned(by: [pin]), action: .none, home: plainHome)
+
+        let json = String(decoding: try CleanupReportRenderer.json(report, home: plainHome), as: UTF8.self)
+        let text = CleanupReportRenderer.text(report, home: plainHome, reasonText: reasonLabel, statusText: statusLabel)
+
+        XCTAssertTrue(json.contains("~/Dev/app/.nvmrc"), json)
+        XCTAssertFalse(json.contains(plainHome.path), json)
+        XCTAssertTrue(text.contains("~/Dev/app/.nvmrc"), text)
+        XCTAssertFalse(text.contains(plainHome.path), text)
+        let io = InMemoryReportIO()
+        let file = CleanupReportFile(home: plainHome, io: io)
+        try file.save(report)
+        XCTAssertEqual(file.load()?.findings.first?.status, .pinned(by: [pin]))
+    }
+
+    func testTextSpellsTheBrewCleanupCommand() {
+        let report = leftoverReport(status: .unused, action: .brew(.cleanup("node")), home: plainHome)
+
+        let text = CleanupReportRenderer.text(report, home: plainHome, reasonText: reasonLabel, statusText: statusLabel)
+
+        XCTAssertTrue(text.contains("brew cleanup -- node"), text)
+        XCTAssertEqual(CleanupActionText.command(for: .cleanup("node")), "brew cleanup -- node")
     }
 }

@@ -2,13 +2,28 @@ import Foundation
 
 public protocol CleanupBrewQuerying: Sendable {
     func usesInstalled(formula: String) async throws -> [String]
+    /// `brew cleanup --dry-run [-- <package>]`: what Homebrew would delete, without deleting it.
+    func cleanupDryRun(package: String?) async throws -> [CleanupBrewCleanupItem]
+    /// `brew autoremove --dry-run`: the formulae Homebrew would uninstall as unneeded.
+    func autoremoveDryRun() async throws -> [String]
+}
+
+/// One path `brew cleanup --dry-run` would remove, with the size Homebrew printed for it.
+public struct CleanupBrewCleanupItem: Equatable, Sendable {
+    public let path: URL
+    public let size: Int64?
+
+    public init(path: URL, size: Int64?) {
+        self.path = path
+        self.size = size
+    }
 }
 
 extension BrewService: CleanupBrewQuerying {}
 
 public struct CleanupDetectorNote: Codable, Equatable, Sendable {
     public enum Kind: String, Codable, Sendable {
-        case homebrewUnavailable, failed
+        case homebrewUnavailable, failed, dryRunFailed, noProjectRoots, projectWalkTruncated, unrecognisedIDEInstall
     }
 
     public let detector: CleanupDetectorID

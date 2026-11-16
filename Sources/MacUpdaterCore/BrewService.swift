@@ -165,6 +165,96 @@ public final class BrewService: @unchecked Sendable {
         ["uninstall", "--formula", "--", name]
     }
 
+    /// Read-only: lists what `brew cleanup` would delete, for one package or for all of them.
+    public func cleanupDryRun(package: String?) async throws -> [CleanupBrewCleanupItem] {
+        let arguments = Self.cleanupDryRunArguments(package: package)
+        let result = try await runBrew(arguments, environment: HomebrewEnvironment.cleanupQueryEnvironment)
+        try ensureSuccess(result, arguments: arguments)
+        return Self.parseCleanupDryRun(result.stdout)
+    }
+
+    /// Read-only: lists the formulae `brew autoremove` would uninstall.
+    public func autoremoveDryRun() async throws -> [String] {
+        let arguments = Self.autoremoveDryRunArguments()
+        let result = try await runBrew(arguments, environment: HomebrewEnvironment.cleanupQueryEnvironment)
+        try ensureSuccess(result, arguments: arguments)
+        return Self.parseAutoremoveDryRun(result.stdout)
+    }
+
+    /// Cleans the old versions and downloads of one package; never the whole Cellar.
+    public func cleanupPackage(name: String) async throws -> ProcessResult {
+        let arguments = Self.cleanupPackageArguments(name: name)
+        let result = try await runBrew(arguments)
+        try ensureSuccess(result, arguments: arguments)
+        return result
+    }
+
+    public static func cleanupDryRunArguments(package: String?) -> [String] {
+        // SEC-10: `--` fences the name off from Homebrew's option parsing.
+        ["cleanup", "--dry-run"] + (package.map { ["--", $0] } ?? [])
+    }
+
+    public static func autoremoveDryRunArguments() -> [String] {
+        ["autoremove", "--dry-run"]
+    }
+
+    /// Arguments of `cleanupPackage(name:)`; Cleanup shows them as the command it runs.
+    public static func cleanupPackageArguments(name: String) -> [String] {
+        // SEC-10: `--` fences the name off from Homebrew's option parsing.
+        ["cleanup", "--", name]
+    }
+
+    /// Reads the `Would remove: <path> (<size>)` lines; `Would prune:` and other lines are not
+    /// removals of files the user owns and are skipped, as is any line without a path.
+    public static func parseCleanupDryRun(_ stdout: String) -> [CleanupBrewCleanupItem] {
+        stdout.split(whereSeparator: \.isNewline).compactMap { line -> CleanupBrewCleanupItem? in
+            guard line.hasPrefix("Would remove"),
+                  let separator = line.range(of: ": ") else { return nil }
+            let rest = line[separator.upperBound...]
+            let pathText: Substring
+            var size: Int64?
+            if let open = rest.range(of: " (", options: .backwards), rest.hasSuffix(")") {
+                pathText = rest[..<open.lowerBound]
+                let inside = rest[open.upperBound...].dropLast()
+                size = inside.split(separator: ",").last.flatMap { readableSize($0) }
+            } else {
+                pathText = rest
+            }
+            guard pathText.hasPrefix("/") else { return nil }
+            return CleanupBrewCleanupItem(
+                path: URL(filePath: String(pathText), directoryHint: .inferFromPath), size: size
+            )
+        }
+    }
+
+    public static func parseAutoremoveDryRun(_ stdout: String) -> [String] {
+        var listing = false
+        var formulae: [String] = []
+        for line in stdout.split(whereSeparator: \.isNewline) {
+            let text = line.trimmingCharacters(in: .whitespaces)
+            if text.hasPrefix("==>") {
+                listing = text.hasPrefix("==> Would autoremove")
+            } else if listing, !text.isEmpty {
+                formulae.append(text)
+            }
+        }
+        return formulae
+    }
+
+    /// Homebrew's `disk_usage_readable`: binary multipliers behind `B`, `KB`, `MB` and `GB`. A
+    /// size that is not finite or does not fit in `Int64` is unknown.
+    private static func readableSize(_ token: Substring) -> Int64? {
+        let text = token.trimmingCharacters(in: .whitespaces)
+        let units: [(suffix: String, factor: Double)] = [
+            ("GB", 1_073_741_824), ("MB", 1_048_576), ("KB", 1024), ("B", 1)
+        ]
+        guard let unit = units.first(where: { text.hasSuffix($0.suffix) }),
+              let value = Double(text.dropLast(unit.suffix.count)), value >= 0 else { return nil }
+        let bytes = value * unit.factor
+        guard bytes.isFinite, bytes < Double(Int64.max) else { return nil }
+        return Int64(bytes)
+    }
+
     public func upgradeFormulae() async throws -> ProcessResult {
         let arguments = ["upgrade", "--formula"]
         let result = try await runBrew(arguments)
