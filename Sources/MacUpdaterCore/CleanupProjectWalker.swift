@@ -21,9 +21,9 @@ public struct CleanupProjectFile: Equatable, Sendable {
 /// What one walk over the configured project roots found.
 public struct CleanupProjectWalk: Equatable, Sendable {
     public let files: [CleanupProjectFile]
-    /// The roots whose own listing succeeded.
+    /// The roots, as given, whose physical directory was listed.
     public let walkedRoots: [URL]
-    /// The roots with no directory at their path: absent, a file, or a symlink (never followed).
+    /// The roots, as given, that name no directory: absent, a dangling link, or not a directory.
     public let missingRoots: [URL]
     /// The paths the protected-location guard refused, spelled as the guard reports them.
     public let skippedProtected: [String]
@@ -45,8 +45,11 @@ public struct CleanupProjectWalk: Equatable, Sendable {
 /// Reads the requirement files under the project roots once per scan (spec §6.5.1), through the
 /// injected (guarded) file system only.
 ///
-/// Only entries whose `lstat` kind is `.directory` are descended, so no symlink is ever followed;
-/// the skip list is never entered, and `.venv` only for its `pyvenv.cfg`. Only the listed file
+/// A root is resolved with the file system's `realpath`, which the guard checks hop by hop, and its
+/// physical directory is walked, so `files` carry physical paths; a root whose link leads into a
+/// protected location is refused like any other protected path. Inside a root only entries whose
+/// `lstat` kind is `.directory` are descended, so no symlink there is ever followed; the skip list
+/// is never entered, and `.venv` only for its `pyvenv.cfg`. Only the listed file
 /// names are read — never `gradle.properties` or `local.properties` — each as UTF-8 of at most
 /// `maxFileBytes`; any other file is skipped. A refused path is recorded and the walk goes on.
 /// Any other listing failure, or reaching `maxDirectories` or `maxFiles`, truncates the walk.
@@ -122,8 +125,8 @@ public struct CleanupProjectWalker: Sendable {
     }
 
     private func walk(root: URL, progress: inout Progress) throws {
-        guard try isWalkable(root, progress: &progress) else { return }
-        var pending = [Directory(url: root, depth: 0, names: [])]
+        guard let physicalRoot = try physicalDirectory(of: root, progress: &progress) else { return }
+        var pending = [Directory(url: physicalRoot, depth: 0, names: [])]
         while let directory = pending.popLast(), !progress.stopped {
             try Task.checkCancellation()
             guard let entries = try list(directory.url, progress: &progress) else { continue }
@@ -154,13 +157,16 @@ public struct CleanupProjectWalker: Sendable {
         return subdirectories
     }
 
-    private func isWalkable(_ root: URL, progress: inout Progress) throws -> Bool {
+    /// The physical directory `root` names, every link hop resolved and checked by the file system;
+    /// nil after recording why there is none.
+    private func physicalDirectory(of root: URL, progress: inout Progress) throws -> URL? {
         do {
-            guard let entry = try fileSystem.entry(at: root), entry.kind == .directory else {
+            let physical = try fileSystem.realpath(root)
+            guard let entry = try fileSystem.entry(at: physical), entry.kind == .directory else {
                 progress.missingRoots.append(root)
-                return false
+                return nil
             }
-            return true
+            return physical
         } catch CleanupFileSystemError.notFound {
             progress.missingRoots.append(root)
         } catch CleanupFileSystemError.protectedLocation(let refused) {
@@ -170,7 +176,7 @@ public struct CleanupProjectWalker: Sendable {
         } catch {
             progress.truncated = true
         }
-        return false
+        return nil
     }
 
     /// The directory's entries; nil when it was refused, could not be listed or the cap was reached.

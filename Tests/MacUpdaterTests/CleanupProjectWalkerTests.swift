@@ -208,23 +208,71 @@ final class CleanupProjectWalkerTests: XCTestCase {
     func testMissingRootIsReported() throws {
         let root = try tmp.directory("Dev")
         let nvmrc = try tmp.file("Dev/.nvmrc", text: "20\n")
+        let linked = try tmp.file("Work/.nvmrc", text: "22\n")
         let missing = tmp.url("Gone")
         let file = try tmp.file("NotAFolder", text: "")
-        let link = try tmp.symlink("LinkedDev", to: root.path)
+        let link = try tmp.symlink("LinkedWork", to: "Work")
         let walker = CleanupProjectWalker(fileSystem: live)
 
         let walk = try walker.walk(roots: [missing, root, file, link])
 
-        XCTAssertEqual(walk.missingRoots.map(\.path), [missing.path, file.path, link.path])
-        XCTAssertEqual(walk.walkedRoots.map(\.path), [root.path])
-        XCTAssertEqual(walk.files.map(\.url.path), [nvmrc.path], "a symlinked root is not followed")
+        XCTAssertEqual(walk.missingRoots.map(\.path), [missing.path, file.path])
+        XCTAssertEqual(walk.walkedRoots.map(\.path), [root.path, link.path])
+        XCTAssertEqual(walk.files.map(\.url.path), [nvmrc.path, linked.path], "a symlinked root is walked at its physical path")
         XCTAssertTrue(walk.isComplete)
+
+        let onlyLink = try walker.walk(roots: [link])
+
+        XCTAssertEqual(onlyLink.walkedRoots.map(\.path), [link.path])
+        XCTAssertEqual(onlyLink.files.map(\.url.path), [linked.path])
+        XCTAssertTrue(onlyLink.isComplete, "the linked root was really walked")
 
         let nothing = try walker.walk(roots: [missing])
 
         XCTAssertEqual(nothing.missingRoots.map(\.path), [missing.path])
         XCTAssertFalse(nothing.truncated)
         XCTAssertFalse(nothing.isComplete, "no root was walked")
+    }
+
+    func testRootLinkIntoAProtectedLocationIsSkippedNotWalked() throws {
+        try tmp.file("Documents/code/.nvmrc", text: "18\n")
+        let link = try tmp.symlink("Dev", to: tmp.url("Documents/code").path)
+        let recording = RecordingCleanupFileSystem(wrapping: live)
+        let guarded = GuardedCleanupFileSystem(
+            base: recording, guard: ProtectedLocationGuard(home: tmp.home, mounts: FixedMountTable(["/"]))
+        )
+
+        let walk = try CleanupProjectWalker(fileSystem: guarded).walk(roots: [link])
+
+        XCTAssertEqual(walk.skippedProtected, [tmp.url("Documents").path])
+        XCTAssertEqual(walk.missingRoots, [])
+        XCTAssertEqual(walk.walkedRoots, [])
+        XCTAssertEqual(walk.files, [])
+        XCTAssertFalse(walk.truncated)
+        XCTAssertFalse(walk.isComplete)
+        XCTAssertTrue(recording.touched.contains(link.path), "the recording file system was never reached")
+        let roots = ProtectedLocationGuard.protectedRoots(home: tmp.home).map(CleanupPathText.components(of:))
+        let offenders = recording.touched.filter { touched in
+            roots.contains { CleanupPathText.components(of: touched).starts(with: $0) }
+        }
+        XCTAssertEqual(offenders, [], "the base file system received a protected path")
+    }
+
+    func testDanglingRootLinkIsMissing() throws {
+        let link = try tmp.symlink("Dev", to: tmp.url("Gone").path)
+        let guarded = GuardedCleanupFileSystem(
+            base: live, guard: ProtectedLocationGuard(home: tmp.home, mounts: FixedMountTable(["/"]))
+        )
+
+        for fileSystem in [live, guarded] as [CleanupFileSystem] {
+            let walk = try CleanupProjectWalker(fileSystem: fileSystem).walk(roots: [link])
+
+            XCTAssertEqual(walk.missingRoots.map(\.path), [link.path], "\(type(of: fileSystem))")
+            XCTAssertEqual(walk.walkedRoots, [], "\(type(of: fileSystem))")
+            XCTAssertEqual(walk.skippedProtected, [], "\(type(of: fileSystem))")
+            XCTAssertFalse(walk.truncated, "\(type(of: fileSystem))")
+            XCTAssertFalse(walk.isComplete, "\(type(of: fileSystem))")
+        }
     }
 
     func testAnUnlistableDirectoryTruncatesTheWalkWhichGoesOn() throws {
