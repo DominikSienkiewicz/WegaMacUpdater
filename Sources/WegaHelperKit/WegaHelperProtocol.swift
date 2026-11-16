@@ -285,3 +285,159 @@ extension WegaHelper {
         return components.count == 3 || !components[2].hasSuffix(".app")
     }
 }
+
+/// Why the root helper refuses to move an application out of `/Applications` into a staging
+/// slot owned by the caller, or why it cannot trust the staging root it would move it into.
+public enum BundleStagingRejection: Equatable, Sendable {
+    /// The path is not a plainly spelled `/Applications/<name>.app` or
+    /// `/Applications/<folder>/<name>.app`.
+    case notTopLevelApplication
+    /// The target is a symlink, or `realpath` names a different entry than the path asked for.
+    case symlinkedTarget
+    /// The target resolves into the system volume.
+    case systemLocation
+    /// The bundle does not belong to root. A user-owned bundle never needs the helper: when the
+    /// user cannot move it, App Management blocks it, and the helper must not override that.
+    case notOwnedByRoot
+    /// The bundle carries no identifier, or not the one the user saw in the scan.
+    case identityMismatch
+    /// The bundle is Wega itself, which carries this helper.
+    case wegaItself
+    /// Nobody is logged in at the console.
+    case noConsoleUser
+    /// The caller is not the user at the console (fast user switching).
+    case callerNotConsoleUser
+    /// The caller is not a member of the `admin` group.
+    case callerNotAdministrator
+    /// The entry changed between validation and the move.
+    case targetSwapped
+    /// The staging root is not root's alone.
+    case stagingRootUnsafe
+}
+
+/// What the daemon learned, as root and right before the move, about the caller and the bundle
+/// it asked to stage. Passed in rather than read here so the decision stays testable.
+public struct BundleStagingFacts: Equatable, Sendable {
+    /// The path the client asked for, exactly as it was sent.
+    public var targetPath: String
+    /// `realpath` of the target, with every symlink resolved.
+    public var targetResolvedPath: String
+    /// Whether the target itself is a symbolic link (`lstat`, not `stat`).
+    public var targetIsSymlink: Bool
+    /// Owner of the bundle directory (`lstat`).
+    public var targetOwnerUID: UInt32
+    /// `CFBundleIdentifier` from the bundle's `Info.plist`, or `nil` when unreadable.
+    public var targetBundleID: String?
+    /// The identifier the client says the user saw in the scan.
+    public var expectedBundleID: String
+    /// `effectiveUserIdentifier` of the XPC connection.
+    public var callerUID: UInt32
+    /// Owner of the current console session, or `nil` when nobody is logged in.
+    public var consoleUserUID: UInt32?
+    /// Whether the caller is a member of the `admin` group.
+    public var callerIsAdministrator: Bool
+
+    public init(
+        targetPath: String,
+        targetResolvedPath: String,
+        targetIsSymlink: Bool,
+        targetOwnerUID: UInt32,
+        targetBundleID: String?,
+        expectedBundleID: String,
+        callerUID: UInt32,
+        consoleUserUID: UInt32?,
+        callerIsAdministrator: Bool
+    ) {
+        self.targetPath = targetPath
+        self.targetResolvedPath = targetResolvedPath
+        self.targetIsSymlink = targetIsSymlink
+        self.targetOwnerUID = targetOwnerUID
+        self.targetBundleID = targetBundleID
+        self.expectedBundleID = expectedBundleID
+        self.callerUID = callerUID
+        self.consoleUserUID = consoleUserUID
+        self.callerIsAdministrator = callerIsAdministrator
+    }
+}
+
+extension WegaHelper {
+    /// The lexical gate for staging an application for the Trash.
+    ///
+    /// Stricter than `isTopLevelApplicationBundle`, which the app's preflight uses and which
+    /// accepts a `..` that standardizes back into `/Applications`: the root helper takes only a
+    /// plainly spelled path, so the string it approves is the entry the kernel resolves.
+    public static func bundleStagingRejection(targetPath: String) -> BundleStagingRejection? {
+        guard namesEveryComponentPlainly(targetPath),
+              isTopLevelApplicationBundle(path: targetPath) else {
+            return .notTopLevelApplication
+        }
+        return nil
+    }
+
+    /// The facts gate for staging an application for the Trash.
+    ///
+    /// Checked in a fixed order: the caller first, so somebody who may not ask learns nothing
+    /// about the target; then where the target really is; then its owner; then its identity.
+    public static func bundleStagingRejection(facts: BundleStagingFacts) -> BundleStagingRejection? {
+        if let rejection = callerRejection(facts) { return rejection }
+        if let rejection = locationRejection(facts) { return rejection }
+        if facts.targetOwnerUID != 0 { return .notOwnedByRoot }
+        return identityRejection(facts)
+    }
+
+    /// The entry validated must be the entry moved: a device/inode pair that changed in between
+    /// is a swap, and refused.
+    public static func bundleStagingRejection(
+        validated: PackageStaging.ArtifactIdentity,
+        current: PackageStaging.ArtifactIdentity
+    ) -> BundleStagingRejection? {
+        validated == current ? nil : .targetSwapped
+    }
+
+    private static func callerRejection(_ facts: BundleStagingFacts) -> BundleStagingRejection? {
+        guard let consoleUserUID = facts.consoleUserUID else { return .noConsoleUser }
+        guard facts.callerUID == consoleUserUID else { return .callerNotConsoleUser }
+        guard facts.callerIsAdministrator else { return .callerNotAdministrator }
+        return nil
+    }
+
+    /// The resolved path must be the path asked for, and must clear the lexical gate on its own,
+    /// so this gate holds even if the daemon passed it a path the lexical gate never saw.
+    private static func locationRejection(_ facts: BundleStagingFacts) -> BundleStagingRejection? {
+        if isInSystemVolume(facts.targetResolvedPath) { return .systemLocation }
+        if facts.targetIsSymlink || facts.targetResolvedPath != facts.targetPath { return .symlinkedTarget }
+        return bundleStagingRejection(targetPath: facts.targetResolvedPath)
+    }
+
+    /// A missing or empty identifier is a rejection, not a pass. Wega is excluded ignoring case,
+    /// as Launch Services compares bundle identifiers.
+    private static func identityRejection(_ facts: BundleStagingFacts) -> BundleStagingRejection? {
+        guard let bundleID = facts.targetBundleID, !bundleID.isEmpty, bundleID == facts.expectedBundleID else {
+            return .identityMismatch
+        }
+        return bundleID.caseInsensitiveCompare(appBundleID) == .orderedSame ? .wegaItself : nil
+    }
+
+    private static func isInSystemVolume(_ path: String) -> Bool {
+        let components = path.utf8.split(separator: pathSeparator)
+        return components.first?.elementsEqual("System".utf8) ?? false
+    }
+
+    /// Absolute, with every component a real name: no `.`, no `..`, no empty component (`//` or
+    /// a trailing `/`, after which `lstat` follows a final symlink) and no NUL. Read as UTF-8
+    /// bytes, the way the kernel reads it — a split on Swift `Character`s misses a `/` that a
+    /// following combining mark fuses into one grapheme.
+    private static func namesEveryComponentPlainly(_ path: String) -> Bool {
+        let bytes = Array(path.utf8)
+        guard bytes.first == pathSeparator, !bytes.contains(0) else { return false }
+        return bytes.dropFirst()
+            .split(separator: pathSeparator, omittingEmptySubsequences: false)
+            .allSatisfy { component in
+                !component.isEmpty
+                    && !component.elementsEqual(".".utf8)
+                    && !component.elementsEqual("..".utf8)
+            }
+    }
+
+    private static let pathSeparator = UInt8(ascii: "/")
+}
