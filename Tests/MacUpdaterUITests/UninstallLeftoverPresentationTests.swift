@@ -114,6 +114,28 @@ struct UninstallLeftoverPresentationTests {
         #expect(unknown == trf("%@ · %@ zaznaczone", "2", Fixture.bytes(178_000_000)))
     }
 
+    /// The total reads as a number ("0 KB"), never "Zero KB", while nothing ticked has a size.
+    @Test func headerTotalIsNumericWhenNothingIsMeasured() throws {
+        let header = Presentation.header(groups: [Fixture.obsidian], selected: [], sizes: [:])
+        let total = try #require(header.split(separator: "·").last)
+
+        #expect(total.trimmingCharacters(in: .whitespaces).first == "0", "\(header)")
+    }
+
+    /// VoiceOver can jump to the probable part by its heading, and a truncated label such as a long
+    /// "also used by …" list can be read in full on hover.
+    @Test func probableHeadingIsAHeaderAndSourceLabelShowsOnHover() throws {
+        let view = try Fixture.source("Sources/MacUpdater/UninstallLeftoverSelection.swift")
+        let heading = try Fixture.body(
+            of: "Text(tr(\"Prawdopodobne — sprawdź przed zaznaczeniem\"))", endingAt: "rows(section.probable)", in: view
+        )
+        let row = try Fixture.body(of: "private struct UninstallLeftoverRow: View {", endingAt: ".toggleStyle(", in: view)
+
+        #expect(heading.contains(".accessibilityAddTraits(.isHeader)"))
+        #expect(row.contains("Text(sourceLabel)"))
+        #expect(row.contains(".help(sourceLabel)"))
+    }
+
     @Test func sectionShownForCatalogNoteEvenWithoutItems() {
         #expect(Presentation.showsSection(groups: [], catalogUnavailable: true))
         #expect(!Presentation.showsSection(groups: [], catalogUnavailable: false))

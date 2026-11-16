@@ -81,12 +81,16 @@ enum UninstallLeftoverPresentation {
             guard case .bytes(let bytes) = sizes[item.url.path] else { return sum }
             return sum + bytes
         }
-        let text = trf(
-            "%@ · %@ zaznaczone",
-            "\(ticked.count)",
-            ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
-        )
+        let text = trf("%@ · %@ zaznaczone", "\(ticked.count)", totalText(total))
         return ticked.contains { sizes[$0.url.path] == nil } ? text + " …" : text
+    }
+
+    /// A number even for nothing: "0 KB", never "Zero KB".
+    private static func totalText(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        formatter.allowsNonnumericFormatting = false
+        return formatter.string(fromByteCount: bytes)
     }
 
     /// Without any item the section still has to say that the Homebrew list could not be read.
@@ -196,6 +200,7 @@ struct UninstallLeftoverSelection: View {
                             .font(.wega(.footnote, weight: .semibold))
                             .foregroundStyle(.secondary)
                             .padding(.top, 4)
+                            .accessibilityAddTraits(.isHeader)
                         rows(section.probable)
                     }
                 }
@@ -240,6 +245,8 @@ private struct UninstallLeftoverRow: View {
     let isOn: Bool
     let toggle: @MainActor @Sendable () -> Void
 
+    private var sourceLabel: String { UninstallLeftoverPresentation.sourceLabel(item) }
+
     var body: some View {
         Toggle(isOn: selectionToggleBinding(isOn: isOn, toggle: toggle)) {
             VStack(alignment: .leading, spacing: 1) {
@@ -252,10 +259,11 @@ private struct UninstallLeftoverRow: View {
                     Text(UninstallLeftoverPresentation.sizeText(size))
                         .font(.wega(.footnote, monospaced: true))
                         .foregroundStyle(.secondary)
-                    Text(UninstallLeftoverPresentation.sourceLabel(item))
+                    Text(sourceLabel)
                         .font(.wega(.footnote))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .help(sourceLabel)
                 }
                 Text(UninstallLeftoverPresentation.displayPath(item))
                     .font(.wega(.footnote, monospaced: true))
