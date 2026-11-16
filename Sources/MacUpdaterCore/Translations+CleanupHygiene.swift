@@ -57,5 +57,15 @@ extension Translations {
         "może mieć wpisy": "may have entries",
         "kopie w PATH: %@": "copies on PATH: %@",
         "wpisy w „Pliki i foldery”: %@": "Files and Folders entries: %@",
+
+        "Mapa wpisów „Pliki i foldery”": "Files and Folders map",
+        "Narzędzie wiersza poleceń nie ma pakietu aplikacji, więc macOS zapisuje jego zgody w „Pliki i foldery” osobno dla każdej ścieżki, z której zostało uruchomione. Mapa przypisuje te wpisy do kopii, które znajdują Porządki: podczas skanu Wega odczytuje bazę zgód (TCC.db) i nigdy jej nie zmienia.":
+            "A command-line tool has no app bundle, so macOS records its Files and Folders consents separately for every path it was run from. The map ties those entries to the copies Porządki finds: during a scan Wega reads the permissions database (TCC.db) and never changes it.",
+        "Mapa wymaga Pełnego dostępu do dysku. macOS daje ten sam dostęp każdemu programowi, który Wega uruchamia: brew (także skryptom casków), npm (także skryptom pakietów), mas i powłoce, którą uruchamia „Odczytaj PATH”. Przyznaj go tylko na czas przeglądania mapy, a potem usuń Wegę z listy Pełny dostęp do dysku.":
+            "The map needs Full Disk Access. macOS gives the same access to every program Wega starts: brew (cask scripts included), npm (package scripts included), mas and the shell that “Read PATH” runs. Grant it only while you look at the map, then remove Wega from Full Disk Access.",
+        "Odczytuj mapę podczas skanu Porządków": "Read the map during a Porządki scan",
+        "Czy Wega ma ten dostęp, pokaże dopiero następny skan Porządków.":
+            "Whether Wega has this access shows only after the next Porządki scan.",
+        "Otwórz Pełny dostęp do dysku": "Open Full Disk Access",
     ]
 }
