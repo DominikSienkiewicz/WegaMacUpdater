@@ -48,6 +48,10 @@ final class CleanupPathDuplicateDetectorTests: XCTestCase {
         XCTAssertEqual(claude.copies[1].source, .homebrewCask(token: "claude-code"))
         XCTAssertEqual(claude.copies[1].version, "2.1.311")
         XCTAssertEqual(claude.copies[1].realpath, cask)
+        let linkIdentity = try XCTUnwrap(LiveCleanupFileSystem(trash: { _ in }).entry(at: claude.copies[1].path)).identity
+        XCTAssertEqual(claude.copies[1].identity, linkIdentity, "identity is the link's own lstat")
+        let targetIdentity = try XCTUnwrap(LiveCleanupFileSystem(trash: { _ in }).entry(at: cask)).identity
+        XCTAssertNotEqual(claude.copies[1].identity, targetIdentity)
     }
 
     func testStandaloneFileWinsOverHomebrewFormula() throws {
@@ -104,6 +108,20 @@ final class CleanupPathDuplicateDetectorTests: XCTestCase {
         XCTAssertEqual(result.groups, [])
     }
 
+    /// Positive control: the recorder must have seen the unprotected parts of the tree, so an
+    /// empty `touched` cannot pass for "nothing under ~/Documents".
+    private func assertDocumentsUntouched(file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(
+            recording.touched.contains { $0 == tmp.home.path || $0.hasPrefix(tmp.home.path + "/") },
+            "the recording file system was never reached", file: file, line: line
+        )
+        let documents = tmp.url("Documents").path
+        let offenders = recording.touched.filter {
+            $0 == documents || $0.unicodeScalars.starts(with: (documents + "/").unicodeScalars)
+        }
+        XCTAssertEqual(offenders, [], "the base file system received a path under ~/Documents", file: file, line: line)
+    }
+
     func testProtectedPathEntryIsSkippedUntouched() throws {
         try tmp.file("Documents/bin/secret", executable: true)
         let documentsBin = tmp.url("Documents/bin").path
@@ -111,11 +129,7 @@ final class CleanupPathDuplicateDetectorTests: XCTestCase {
         let result = scan([documentsBin, tmp.url("opt/homebrew/bin").path])
 
         XCTAssertEqual(result.skippedProtected, [documentsBin])
-        let documents = tmp.url("Documents").path
-        let offenders = recording.touched.filter {
-            $0 == documents || $0.unicodeScalars.starts(with: (documents + "/").unicodeScalars)
-        }
-        XCTAssertEqual(offenders, [], "the base file system received a path under ~/Documents")
+        assertDocumentsUntouched()
     }
 
     func testMissingDirectoryIsReported() throws {
@@ -154,6 +168,7 @@ final class CleanupPathDuplicateDetectorTests: XCTestCase {
         let tool = try XCTUnwrap(group("tool", in: result))
         XCTAssertEqual(tool.copies.map(\.role), [.active, .brokenLink])
         XCTAssertEqual(result.skippedProtected, [tmp.url("Documents").path], "the guard names the protected root it refused")
+        assertDocumentsUntouched()
     }
 
     func testNonExecutableAndDirectoryChildrenAreIgnored() throws {
