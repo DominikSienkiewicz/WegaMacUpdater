@@ -22,6 +22,9 @@ private final class ScriptedBrew: CleanupBrewQuerying, @unchecked Sendable {
         if failingFormulas.contains(formula) { throw BrewFailure() }
         return uses[formula] ?? []
     }
+
+    func cleanupDryRun(package: String?) async throws -> [CleanupBrewCleanupItem] { [] }
+    func autoremoveDryRun() async throws -> [String] { [] }
 }
 
 private struct BrewFailure: Error {}

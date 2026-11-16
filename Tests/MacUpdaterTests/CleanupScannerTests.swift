@@ -11,6 +11,9 @@ private final class RecordingBrew: CleanupBrewQuerying, @unchecked Sendable {
         lock.withLock { recorded.append(formula) }
         return []
     }
+
+    func cleanupDryRun(package: String?) async throws -> [CleanupBrewCleanupItem] { [] }
+    func autoremoveDryRun() async throws -> [String] { [] }
 }
 
 /// The reference Mac on top of the temporary home: a virtual `/usr/bin/git` (with its ancestors,

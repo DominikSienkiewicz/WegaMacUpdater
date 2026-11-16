@@ -26,6 +26,9 @@ private final class ScriptedBrewQuery: CleanupBrewQuerying, @unchecked Sendable 
         }
         return try result.get()
     }
+
+    func cleanupDryRun(package: String?) async throws -> [CleanupBrewCleanupItem] { [] }
+    func autoremoveDryRun() async throws -> [String] { [] }
 }
 
 /// Records every uninstall (`cask:<token>` / `formula:<name>`) and the write lease held while it
@@ -51,6 +54,10 @@ private final class RecordingBrewRemoval: CleanupBrewRemoving, @unchecked Sendab
 
     func uninstallFormula(name: String) async throws {
         try await record("formula:\(name)")
+    }
+
+    func cleanupPackage(name: String) async throws {
+        try await record("cleanup:\(name)")
     }
 
     private func record(_ call: String) async throws {

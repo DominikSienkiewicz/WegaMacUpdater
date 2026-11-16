@@ -34,7 +34,7 @@ public enum CleanupActionText {
         let arguments = switch action {
         case .uninstallFormula(let name): BrewService.uninstallFormulaArguments(name: name)
         case .uninstallCask(let token): BrewService.uninstallCaskArguments(token: token, zap: false, force: false)
-        case .cleanup(let name): ["cleanup", "--", name]
+        case .cleanup(let name): BrewService.cleanupPackageArguments(name: name)
         }
         return (["brew"] + arguments).joined(separator: " ")
     }

@@ -4,6 +4,7 @@ import Foundation
 public protocol CleanupBrewRemoving: Sendable {
     func uninstallCask(token: String) async throws
     func uninstallFormula(name: String) async throws
+    func cleanupPackage(name: String) async throws
 }
 
 /// `BrewService` cannot conform itself: its uninstall methods take defaulted options and return the
@@ -21,6 +22,10 @@ public struct BrewServiceCleanupRemoval: CleanupBrewRemoving {
 
     public func uninstallFormula(name: String) async throws {
         _ = try await brew.uninstallFormula(name: name)
+    }
+
+    public func cleanupPackage(name: String) async throws {
+        _ = try await brew.cleanupPackage(name: name)
     }
 }
 
