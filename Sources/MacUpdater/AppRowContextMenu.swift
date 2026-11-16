@@ -26,13 +26,14 @@ struct AppRowContextMenuItem: Identifiable, Equatable {
 enum AppRowContextMenu {
     /// The menu items for one row, in display order. `isSelected` flips the toggle item's
     /// wording between adding the row to and removing it from the uninstall selection.
-    static func items(isSelected: Bool) -> [AppRowContextMenuItem] {
-        [
-            AppRowContextMenuItem(
-                action: .toggleSelection,
-                title: isSelected ? tr("Odznacz") : tr("Zaznacz do odinstalowania"),
-                systemImage: isSelected ? "square" : "checkmark.square"
-            ),
+    /// `canToggle` is false for protected rows, which can never join the selection.
+    static func items(isSelected: Bool, canToggle: Bool = true) -> [AppRowContextMenuItem] {
+        let toggle = AppRowContextMenuItem(
+            action: .toggleSelection,
+            title: isSelected ? tr("Odznacz") : tr("Zaznacz do odinstalowania"),
+            systemImage: isSelected ? "square" : "checkmark.square"
+        )
+        return (canToggle ? [toggle] : []) + [
             AppRowContextMenuItem(
                 action: .revealInFinder,
                 title: tr("Pokaż w Finderze"),

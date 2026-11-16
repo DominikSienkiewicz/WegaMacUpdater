@@ -8,6 +8,7 @@ struct UninstallView: View {
     @EnvironmentObject private var model: AppViewModel
 
     @State private var apps:          [ApplicationInfo] = []
+    @State private var protections:    [String: UninstallProtection] = [:]
     @State private var selected:       Set<String>       = []
     @State private var search:         String            = ""
     @StateObject private var operations = UninstallCoordinator()
@@ -57,7 +58,11 @@ struct UninstallView: View {
     }
 
     private var targets: [ApplicationInfo] {
-        InstallationInventory.selected(filtered, identities: selected)
+        UninstallSelection.targets(filtered: filtered, selected: selected, protections: protections)
+    }
+
+    private var selectableCount: Int {
+        UninstallSelection.selectable(filtered, protections: protections).count
     }
 
     var body: some View {
@@ -108,11 +113,11 @@ struct UninstallView: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel(tr("Zaznacz wszystko"))
                         .accessibilityValue(
-                            trf("%@ z %@ zaznaczonych", "\(targets.count)", "\(filtered.count)")
+                            trf("%@ z %@ zaznaczonych", "\(targets.count)", "\(selectableCount)")
                         )
                         Text(targets.isEmpty
                              ? trf("%@ aplikacji", "\(filtered.count)")
-                             : trf("%@ zaznaczonych z %@", "\(targets.count)", "\(filtered.count)"))
+                             : trf("%@ zaznaczonych z %@", "\(targets.count)", "\(selectableCount)"))
                             .font(.wega(.callout))
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -165,7 +170,9 @@ struct UninstallView: View {
                     ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(filtered) { app in
-                                let isSelected = selected.contains(app.id)
+                                let protection = protections[app.id]
+                                let isSelected = protection == nil && selected.contains(app.id)
+                                let reason = protection.map(UninstallProtectionPresentation.protectionReason)
                                 // UX-02 — a real `Toggle`, so the row announces itself as a
                                 // checkbox with a state rather than as a button with a value.
                                 Toggle(isOn: selectionToggleBinding(isOn: isSelected) { toggle(app.id) }) {
@@ -185,6 +192,12 @@ struct UninstallView: View {
                                                     .font(.caption.monospaced())
                                                     .foregroundStyle(.tertiary)
                                             }
+                                            if let reason {
+                                                Text(reason)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                                    .lineLimit(2)
+                                            }
                                         }
                                         Spacer()
                                         if let v = app.version {
@@ -197,14 +210,15 @@ struct UninstallView: View {
                                     .contentShape(Rectangle())
                                 }
                                 .toggleStyle(WegaCheckboxToggleStyle())
+                                .disabled(protection != nil)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 9)
                                 .background(isSelected ? Color.wegaDanger.opacity(0.06) : Color.clear)
-                                .accessibilityLabel(selectionAccessibilityLabel(for: app, showsLocation: showsLocation(app)))
+                                .accessibilityLabel(selectionAccessibilityLabel(for: app, showsLocation: showsLocation(app), protectionReason: reason))
                                 // UX-11d: right-click gives the row the actions it otherwise
                                 // lacked — reveal it in Finder, copy its path, or toggle its
                                 // removal selection.
-                                .contextMenu { rowContextMenu(for: app, isSelected: isSelected) }
+                                .contextMenu { rowContextMenu(for: app, isSelected: isSelected, canToggle: protection == nil) }
 
                                 Divider().opacity(0.4).padding(.leading, 54)
                             }
@@ -240,8 +254,8 @@ struct UninstallView: View {
     /// UX-11d: the row's right-click menu. Its contents live in `AppRowContextMenu` so the
     /// wording and ordering are unit-testable; this renders them and routes each selection.
     @ViewBuilder
-    private func rowContextMenu(for app: ApplicationInfo, isSelected: Bool) -> some View {
-        ForEach(AppRowContextMenu.items(isSelected: isSelected)) { item in
+    private func rowContextMenu(for app: ApplicationInfo, isSelected: Bool, canToggle: Bool) -> some View {
+        ForEach(AppRowContextMenu.items(isSelected: isSelected, canToggle: canToggle)) { item in
             Button {
                 performRowAction(item.action, for: app)
             } label: {
@@ -262,9 +276,7 @@ struct UninstallView: View {
     }
 
     private var selectAllSymbol: String {
-        if targets.isEmpty { return "square" }
-        if targets.count == filtered.count { return "checkmark.square.fill" }
-        return "minus.square.fill"
+        UninstallSelection.selectAllSymbol(filtered: filtered, selected: selected, protections: protections)
     }
 
     private func toggle(_ id: String) {
@@ -286,8 +298,9 @@ struct UninstallView: View {
     }
 
     private func toggleAll() {
-        if Set(targets.map(\.id)) == Set(filtered.map(\.id)) { selected.removeAll() }
-        else { selected = Set(filtered.map(\.id)) }
+        let selectableIds = UninstallSelection.selectAll(filtered: filtered, protections: protections)
+        if Set(targets.map(\.id)) == selectableIds { selected.removeAll() }
+        else { selected = selectableIds }
     }
 
     /// UX-13: freezes the confirmation targets (UX-01), then plans their `~/Library`
@@ -329,6 +342,7 @@ struct UninstallView: View {
         errorMessage = nil
         let result = await operations.scan(using: model.brewService)
         apps = result.apps
+        protections = result.protections
         scanFailed = result.scanFailed
         errorMessage = result.failures.scanErrorMessage
     }

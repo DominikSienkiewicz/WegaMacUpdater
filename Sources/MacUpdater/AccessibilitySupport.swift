@@ -69,9 +69,12 @@ struct ScanStatusAccessibilitySemantics: Equatable {
 /// installation location only when the caller has determined that the name is ambiguous.
 func selectionAccessibilityLabel(
     for app: ApplicationInfo,
-    showsLocation: Bool
+    showsLocation: Bool,
+    protectionReason: String? = nil
 ) -> String {
-    showsLocation ? "\(app.name), \(app.locationLabel)" : app.name
+    let base = showsLocation ? "\(app.name), \(app.locationLabel)" : app.name
+    guard let protectionReason else { return base }
+    return "\(base), \(protectionReason)"
 }
 
 enum PackageRowKeyboardCommand {
