@@ -45,10 +45,26 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   and macOS gives that to every program Wega starts (Homebrew, npm, mas and the shell that reads
   `PATH`), so grant it only while you read the map and remove Wega from the list afterwards.
   Switching the map off forgets a stored map at once, including in exports.
+- Uninstall can remove apps owned by `root`, such as those installed from a `.pkg`: Wega's
+  helper moves them to your Trash. This needs the helper switched on in Settings and an
+  administrator account; without them the app stays where it is and the result says what to
+  do. If the helper still runs an older version after this update, Uninstall says so before
+  quitting anything and asks you to remove and reinstall it in Settings.
 
 ### Changed
 - The Logs keyboard shortcut moved from ⌘6 to ⌘7, because the new "Porządki" section takes ⌘6
   in the sidebar order.
+- Uninstall asks each selected app that is running to quit before removing it, and offers to
+  force quit an app that does not close, only after you confirm (unsaved changes in it are
+  lost). Only the copy you selected counts: the same app running from another folder is left
+  alone, and an app whose running copy cannot be told apart from it is skipped. Each app is
+  checked again right before it is removed.
+- Wega itself, apps that are part of macOS and apps reached through a symbolic link are shown
+  in the Uninstall list but cannot be selected, with the reason beside each.
+- After uninstalling, every app that was not removed is listed with its reason (still running,
+  needs the helper or an administrator account, blocked by the App Management permission, and
+  so on), with a Finder button where that helps. Leftovers go to the Trash only for apps that
+  were actually removed.
 - Uninstalling an app that Homebrew doesn't manage now finds its leftovers in more places and
   says why each one is listed: Homebrew's zap list for the app's cask, locations tied to its
   bundle identifier, and folders named after it (the last group is marked probable and left
@@ -64,6 +80,11 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   holding its output no longer keeps that read waiting: Wega stops waiting 2 seconds after the
   shell exits and keeps what it already received.
 - Exported Cleanup commands no longer keep your home folder, for example in `npm uninstall -g --prefix <prefix> <package>`.
+- Homebrew tap-trust fixes: an action that fails or does not finish stays available instead of
+  being withdrawn. When Homebrew refuses to untap because of an untrusted package definition,
+  Wega offers a separate `brew trust` action for that exact cask or formula; trusting and
+  retrying the untap are separate clicks. Unused taps are removed one action per tap, so a
+  later failure no longer repeats taps already removed.
 - Obsidian no longer shows a GitHub update it has already installed. The GitHub Releases check
   compared the release with the installer version in the app bundle, not with the newer package
   Obsidian actually runs, so the row stayed after every in-app update. A row already handed off
