@@ -15,6 +15,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
+# shellcheck source=scripts/sign-with-retry.sh
+source "$SCRIPT_DIR/sign-with-retry.sh"
 
 BUNDLE_ID="com.wega.WegaMacUpdater"
 APP_NAME="WegaMacUpdater"
@@ -185,24 +187,26 @@ PLIST
 # ---------------------------------------------------------------------------
 # Podpis INSIDE-OUT (DEBT-01): najpierw zagnieżdżone komponenty, potem kontener.
 # Apple odradza --deep do podpisywania — psuje notaryzację przy zagnieżdżonym kodzie.
+# Podpis Developer ID pyta serwer znaczników czasu Apple, więc idzie przez
+# sign_with_retry (scripts/sign-with-retry.sh) — wariant ad-hoc nie musi.
 echo "→ Podpisuję (inside-out: helper → app)..."
 HELPER_SIGN_ID="com.wega.WegaMacUpdater.helper"
 ASKPASS_SIGN_ID="com.wega.WegaMacUpdater.askpass"
 SUDO_SHIM_SIGN_ID="com.wega.WegaMacUpdater.sudo-shim"
 if [[ -n "$SIGN_IDENTITY" ]]; then
-    codesign --force --options runtime --timestamp \
+    sign_with_retry codesign --force --options runtime --timestamp \
         -i "$ASKPASS_SIGN_ID" \
         --sign "$SIGN_IDENTITY" \
         "$CONTENTS/Helpers/WegaAskpass"
-    codesign --force --options runtime --timestamp \
+    sign_with_retry codesign --force --options runtime --timestamp \
         -i "$SUDO_SHIM_SIGN_ID" \
         --sign "$SIGN_IDENTITY" \
         "$CONTENTS/Helpers/sudo-shim/sudo"
-    codesign --force --options runtime --timestamp \
+    sign_with_retry codesign --force --options runtime --timestamp \
         -i "$HELPER_SIGN_ID" \
         --sign "$SIGN_IDENTITY" \
         "$CONTENTS/MacOS/WegaPrivilegedHelper"
-    codesign --force --options runtime --timestamp \
+    sign_with_retry codesign --force --options runtime --timestamp \
         --sign "$SIGN_IDENTITY" \
         "$APP_BUNDLE"
     echo "   ✓ Podpisano (Developer ID + hardened runtime): $SIGN_IDENTITY"
@@ -243,7 +247,7 @@ chmod 0555 \
 # certyfikat "Developer ID Installer" — tożsamość "Developer ID Application" (arg 1)
 # nie podpisze pakietu, dlatego .pkg ma własną, drugą tożsamość (arg 2).
 if [[ -n "$INSTALLER_IDENTITY" ]]; then
-    pkgbuild \
+    sign_with_retry pkgbuild \
         --root "$PKG_ROOT" \
         --install-location / \
         --ownership recommended \
@@ -289,7 +293,7 @@ else
         "$OUTPUT_DMG" >/dev/null
 fi
 if [[ -n "$SIGN_IDENTITY" ]]; then
-    codesign --force --sign "$SIGN_IDENTITY" "$OUTPUT_DMG"
+    sign_with_retry codesign --force --sign "$SIGN_IDENTITY" "$OUTPUT_DMG"
 fi
 
 echo ""

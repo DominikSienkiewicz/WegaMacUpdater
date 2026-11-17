@@ -19,6 +19,7 @@ set -euo pipefail
 #   0i. test-release-headings-guard — release.sh republishes a hand-written changelog
 #                                     heading exactly as written
 #   0j. test-timing-suites-guard — wall-clock suites are listed and run apart, serially
+#   0k. test-sign-retry-guard — Developer ID signing retries a timestamp-server timeout
 #   1. swift build              — compiles app + helper + core
 #   2. swift test               — wall-clock suites serially, then the rest of the suite
 #   3. swiftlint lint --strict  — zero lint violations (warnings fail too)
@@ -104,6 +105,13 @@ echo "→ ./scripts/test-release-signing-guard.sh"
 # fails when a new wall-clock assertion lands outside it, or the serial step goes missing.
 echo "→ ./scripts/test-timing-suites-guard.sh"
 ./scripts/test-timing-suites-guard.sh
+
+# v0.7.0's release build failed twice at its first Developer ID signature: codesign waited ~15 s
+# for Apple's timestamp server, which the runner could not reach, and gave up. One network blip
+# ended the whole job. build-pkg.sh now retries a timestamp failure, and only that; this pins both
+# the retry and that every Developer ID signing call goes through it. Pure bash, codesign stubbed.
+echo "→ ./scripts/test-sign-retry-guard.sh"
+./scripts/test-sign-retry-guard.sh
 
 # Fail fast on a CommandLineTools-only toolchain: it lacks a SourceKit that SwiftLint
 # can load, so the lint step breaks with confusing errors after build and test have
