@@ -13,6 +13,8 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-11-17
+
 ### Added
 - **Porządki (⌘6): clean up after your tools.** A read-only scan that shows what is installed
   more than once and what can safely go:
@@ -427,7 +429,8 @@ their terms are still theirs.
   what changed in it, because there is no published predecessor to have changed from.
 -->
 
-[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.6.0...v0.7.1
 [0.6.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.5...v0.6.0
 [0.5.5]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.3...v0.5.4
