@@ -230,6 +230,18 @@ pins the list; if it is green and the job still stalls, the remaining suspect is
 exported with only one of the two identities, which the *Verify the imported signing identities*
 step now reports before anything is built.
 
+**`A timestamp was expected but was not found.`**
+A Developer ID signature asks Apple's timestamp server for a secure timestamp; when the runner
+gets no answer, `codesign` gives up after about 15 seconds. This is what failed the v0.7.0 build
+twice in a row, while the same server answered from other networks. `build-pkg.sh` therefore runs
+every Developer ID signing command (`codesign` and the signed `pkgbuild`) through
+`sign_with_retry` in `scripts/sign-with-retry.sh`: an error that mentions the timestamp is retried
+up to 5 times, after 15, 30, 60 and 120 seconds; any other signing error stops the build at once.
+`SIGN_RETRY_ATTEMPTS` and `SIGN_RETRY_DELAY_SECONDS` change those numbers, and
+`scripts/test-sign-retry-guard.sh` pins the behaviour. If the step still fails after the last
+attempt, the server stayed out of reach for minutes: rerun the failed job later with
+`gh run rerun <run-id> --failed`. Nothing was published, and the tag can stay.
+
 **The workflow failed after the tag was pushed**
 Nothing was published. Fix the cause on `main`, then remove the tag from both places and cut
 the release again:

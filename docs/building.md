@@ -151,7 +151,7 @@ The package targets the **Swift 6 language mode** (`swift-tools-version: 6.0`), 
 
 `scripts/build-pkg.sh` builds a universal binary by default (override with `ARCHS="arm64"`) and copies the SPM resource bundle (`app-catalog.json`) into the `.app`, so `Bundle.module` resolves at runtime.
 
-Open `Package.swift` directly in Xcode for the full IDE experience. No Xcode project or provisioning profile is needed for signing: `scripts/build-pkg.sh` signs the hand-rolled bundle with `codesign` (hardened runtime + timestamp, inside-out: authorization components and privileged helper first, then the app) when given Developer ID identities as arguments — see [Cutting a release](distribution.md#cutting-a-release).
+Open `Package.swift` directly in Xcode for the full IDE experience. No Xcode project or provisioning profile is needed for signing: `scripts/build-pkg.sh` signs the hand-rolled bundle with `codesign` (hardened runtime + timestamp, inside-out: authorization components and privileged helper first, then the app) when given Developer ID identities as arguments — see [Cutting a release](distribution.md#cutting-a-release). Every Developer ID signing command goes through `sign_with_retry` (`scripts/sign-with-retry.sh`), which retries a failure caused by Apple's timestamp server not answering and stops at once on any other signing error.
 
 ### Version — single source of truth
 
