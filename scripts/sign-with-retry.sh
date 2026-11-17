@@ -1,6 +1,8 @@
-# shellcheck shell=bash
+#!/usr/bin/env bash
 # ---------------------------------------------------------------------------
 # sign-with-retry.sh — biblioteka do wczytania (`source`), nie skrypt do uruchamiania.
+# Ma bit wykonywalności jak każdy scripts/*.sh (QA-03), ale uruchomiona wprost tylko
+# to mówi i kończy się kodem 2.
 #
 # Podpis tożsamością Developer ID pyta serwer znaczników czasu Apple. Gdy runner
 # chwilowo nie dostaje odpowiedzi, codesign czeka ~15 s i kończy się komunikatem
@@ -20,6 +22,11 @@
 #
 # Pinowane przez scripts/test-sign-retry-guard.sh.
 # ---------------------------------------------------------------------------
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    echo "sign-with-retry.sh to biblioteka — wczytaj ją: source \"\$SCRIPT_DIR/sign-with-retry.sh\"" >&2
+    exit 2
+fi
 
 sign_with_retry() {
     local attempts="${SIGN_RETRY_ATTEMPTS:-5}"
