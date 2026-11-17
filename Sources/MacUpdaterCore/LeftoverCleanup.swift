@@ -3,16 +3,15 @@ import Foundation
 /// UX-13: the "app + leftovers" cleanup for an uninstalled application, made to work
 /// regardless of where the app was installed from.
 ///
-/// The `~/Library` paths come from ``MigrationPlanner/libraryLeftoverCandidates(bundleId:home:)``
-/// — the same per-bundle-id builder (with SEC-06 sanitisation) the app already trusts —
-/// so there is a single source of truth for what "leftovers" means, whether the app was
-/// managed by Homebrew or dropped into `/Applications` by hand.
+/// What counts as a leftover is decided by ``LeftoverPlanner``; this type only removes the
+/// items the user consented to.
 ///
-/// SEC-01: items are only ever **moved to the Trash**, never deleted with `removeItem`,
-/// and nothing is planned for an unsafe bundle id. Planning is pure and separated from
-/// removal so the two can be unit-tested without a real home directory or a real Trash.
+/// SEC-01: items are only ever **moved to the Trash**, never deleted with `removeItem`.
+/// Removal takes the Trash as an injected closure so it can be unit-tested without the
+/// user's real Trash.
 public enum LeftoverCleanup {
-    /// The outcome of a removal: which planned items reached the Trash and which failed.
+    /// The outcome of a removal: which planned items reached the Trash (or were already gone) and
+    /// which failed.
     public struct Result: Equatable, Sendable {
         public var removed: [URL]
         public var failed: [URL]
@@ -23,32 +22,23 @@ public enum LeftoverCleanup {
         }
     }
 
-    /// The `~/Library` items an app left behind that still exist on disk, in the
-    /// planner's canonical order.
-    ///
-    /// Reuses ``MigrationPlanner/libraryLeftoverCandidates(bundleId:home:)`` and keeps only
-    /// the paths that are actually present, so the checkbox sheet never offers a file that
-    /// isn't there. Pure: `fileExists` is injected, so this is exercised against a temp
-    /// directory in tests and against the real filesystem in the app.
-    public static func plan(
-        bundleID: String,
-        home: URL,
-        fileExists: (URL) -> Bool = { FileManager.default.fileExists(atPath: $0.path) }
-    ) -> [URL] {
-        MigrationPlanner.libraryLeftoverCandidates(bundleId: bundleID, home: home)
-            .filter(fileExists)
-    }
-
     /// Moves the given items to the Trash (never a permanent delete — SEC-01), reporting
-    /// which succeeded and which failed instead of swallowing per-item errors. `trash` is
-    /// injected so tests can drive it without touching the user's real Trash.
+    /// which succeeded and which failed instead of swallowing per-item errors. An item `lstat`
+    /// finds missing at its turn counts as removed: a folder trashed earlier in the list took it
+    /// along, or `brew --zap` removed it for another app of the run. `trash` and `lstat` are
+    /// injected so tests can drive them without touching the user's real Trash.
     @discardableResult
     public static func removeToTrash(
         _ items: [URL],
-        trash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+        trash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) },
+        lstat: (URL) throws -> CleanupEntry? = { try LiveCleanupFileSystem().entry(at: $0) }
     ) -> Result {
         var result = Result()
         for item in items {
+            if isGone(item, lstat: lstat) {
+                result.removed.append(item)
+                continue
+            }
             do {
                 try trash(item)
                 result.removed.append(item)
@@ -57,5 +47,14 @@ public enum LeftoverCleanup {
             }
         }
         return result
+    }
+
+    /// Only a successful `lstat` that finds nothing; an item that cannot be checked is not gone.
+    private static func isGone(_ item: URL, lstat: (URL) throws -> CleanupEntry?) -> Bool {
+        do {
+            return try lstat(item) == nil
+        } catch {
+            return false
+        }
     }
 }

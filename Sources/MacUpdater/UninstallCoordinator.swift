@@ -63,13 +63,62 @@ struct UninstallScan: Equatable, Sendable {
     }
 }
 
-/// UX-13: the `~/Library` leftovers of one non-brew uninstall target that still exist on
-/// disk, so the confirm sheet can offer them as checkboxes before anything is removed.
+/// UX-13: the leftovers of one non-brew uninstall target that still exist on disk, as
+/// `LeftoverPlanner` labelled them, so the confirm sheet can offer them before anything is removed.
 struct LeftoverGroup: Identifiable, Equatable, Sendable {
     let app: ApplicationInfo
-    let items: [URL]
+    let items: [LeftoverItem]
 
     var id: String { app.id }
+}
+
+/// The leftovers planned for one uninstall, and whether the cask catalog — and with it every
+/// Homebrew zap list — could not be loaded.
+struct LeftoverScan: Equatable, Sendable {
+    var groups: [LeftoverGroup]
+    var catalogUnavailable: Bool
+}
+
+/// The apps of one uninstall as the leftover planner sees them: the non-brew targets it plans,
+/// the brew targets removed alongside them, and the installed apps that stay.
+private struct LeftoverPlanningRun: Sendable {
+    let planned: [ApplicationInfo]
+    let alsoRemoved: [ApplicationInfo]
+    let others: [ApplicationInfo]
+
+    init(targets: [ApplicationInfo], installed: [ApplicationInfo]) {
+        planned = targets.filter { !$0.isManagedByBrew }
+        alsoRemoved = targets.filter(\.isManagedByBrew)
+        let targetIDs = Set(targets.map(\.id))
+        others = installed.filter { !targetIDs.contains($0.id) }
+    }
+
+    /// Matches every app of the run to `catalog`, reads the planned targets' team ids and plans.
+    /// The planned targets' matches honour the channel policy, because their zap lists are offered;
+    /// the other apps' matches do not, because theirs only say what those apps still use.
+    func groups(
+        catalog: [BrewCask]?,
+        home: URL,
+        teamIdentifier: (URL) -> String?,
+        fileSystem: any CleanupFileSystem
+    ) -> [LeftoverGroup] {
+        let offered = catalog.map { LeftoverCaskMatching.evidence(for: planned, casks: $0) } ?? [:]
+        let claiming = catalog.map {
+            LeftoverCaskMatching.evidence(for: alsoRemoved + others, casks: $0, honouringChannelPolicy: false)
+        } ?? [:]
+        let unsigned = { (app: ApplicationInfo) in LeftoverApp(app, teamIdentifier: nil, cask: claiming[app.id]) }
+        let plan = LeftoverPlanner.plan(
+            targets: planned.map { LeftoverApp($0, teamIdentifier: teamIdentifier($0.path), cask: offered[$0.id]) },
+            alsoRemoved: alsoRemoved.map(unsigned),
+            others: others.map(unsigned),
+            home: home,
+            fileSystem: fileSystem
+        )
+        let plannedByID = Dictionary(planned.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return plan.compactMap { group in
+            plannedByID[group.appID].map { LeftoverGroup(app: $0, items: group.items) }
+        }
+    }
 }
 
 /// The outcome of asking running apps to quit, keyed by `ApplicationInfo.id`.
@@ -110,6 +159,12 @@ final class UninstallCoordinator: ObservableObject {
         var stageForTrash: @Sendable (_ path: URL, _ bundleID: String) async throws -> URL
         /// One bounded handshake with the helper, run before the sheet promises its route.
         var helperHandshake: @Sendable () async -> UninstallHelperAvailability = { .enabled }
+        /// The cask catalog whose zap lists name leftovers; nil when it cannot be loaded.
+        var loadCaskCatalog: @Sendable () async -> [BrewCask]? = { nil }
+        /// The team id an app bundle is signed with, which names its group containers.
+        var teamIdentifier: @Sendable (URL) -> String? = { _ in nil }
+        /// The planner and the size measurement read the disk only through this.
+        var leftoverFileSystem: any CleanupFileSystem = LiveCleanupFileSystem()
 
         static let live = Dependencies(
             uninstallCask: { brewService, token, zap in
@@ -130,14 +185,16 @@ final class UninstallCoordinator: ObservableObject {
                 )
             },
             stageForTrash: { try await PrivilegedHelperClient.shared.stageApplicationBundleForTrash(at: $0, expectedBundleID: $1) },
-            helperHandshake: { await PrivilegedHelperClient.shared.uninstallAvailabilityAfterHandshake() }
+            helperHandshake: { await PrivilegedHelperClient.shared.uninstallAvailabilityAfterHandshake() },
+            loadCaskCatalog: { try? await CaskDatabaseClient.uninstallCatalog().fetchCasksAcceptingStaleCache() },
+            teamIdentifier: { CodeSignatureVerifier.teamID(ofAppAt: $0) }
         )
     }
 
     struct Outcome {
         /// One result per target id.
         let results: [String: UninstallTargetResult]
-        /// UX-13: how many consented `~/Library` leftovers reached the Trash, and how many
+        /// UX-13: how many consented home-folder leftovers reached the Trash, and how many
         /// could not be moved, so the result is reported honestly rather than swallowed.
         var leftoversTrashed: Int = 0
         var leftoversFailed: Int = 0
@@ -315,24 +372,39 @@ final class UninstallCoordinator: ObservableObject {
         }
     }
 
-    /// UX-13: plans the `~/Library` leftovers for the non-brew targets, so the confirm
-    /// sheet can present them as checkboxes before the user consents.
+    /// UX-13: plans the leftovers of the non-brew targets with `LeftoverPlanner`, so the
+    /// confirm sheet can present them before the user consents.
     ///
-    /// Brew casks clean their own `~/Library` via `brew uninstall --zap`, so they are
-    /// excluded here — the "app + leftovers" promise holds for both sources, by two
-    /// mechanisms that never overlap. One group is returned per app that actually has
-    /// leftovers on disk; apps with none (or without a bundle id) are dropped. Planning
-    /// runs off the main actor because it touches the filesystem.
+    /// Brew casks clean their own leftovers via `brew uninstall --zap`, so they are not planned,
+    /// but they still claim the items they share with a planned target. `installed` is the whole
+    /// Uninstall scan: every app in it that is not a target stays installed, including a target
+    /// left out because its route is blocked. The cask catalog is loaded only when something is
+    /// planned; cask matching, reading team ids and planning run off the main actor.
+    /// One group is returned per target that has leftovers on disk.
     func scanLeftovers(
         for targets: [ApplicationInfo],
+        installed: [ApplicationInfo],
         home: URL = FileManager.default.homeDirectoryForCurrentUser
-    ) async -> [LeftoverGroup] {
-        await Task.detached(priority: .userInitiated) {
-            targets.compactMap { app -> LeftoverGroup? in
-                guard !app.isManagedByBrew, let bundleID = app.bundleIdentifier else { return nil }
-                let items = LeftoverCleanup.plan(bundleID: bundleID, home: home)
-                return items.isEmpty ? nil : LeftoverGroup(app: app, items: items)
-            }
+    ) async -> LeftoverScan {
+        let run = LeftoverPlanningRun(targets: targets, installed: installed)
+        guard !run.planned.isEmpty else { return LeftoverScan(groups: [], catalogUnavailable: false) }
+        let catalog = await dependencies.loadCaskCatalog()
+        let teamIdentifier = dependencies.teamIdentifier
+        let fileSystem = dependencies.leftoverFileSystem
+        let groups = await Task.detached(priority: .userInitiated) {
+            run.groups(catalog: catalog, home: home, teamIdentifier: teamIdentifier, fileSystem: fileSystem)
+        }.value
+        return LeftoverScan(groups: groups, catalogUnavailable: catalog == nil)
+    }
+
+    /// The size of one planned leftover, measured off the main actor.
+    func measureLeftover(
+        _ url: URL,
+        home: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) async -> LeftoverSize {
+        let fileSystem = dependencies.leftoverFileSystem
+        return await Task.detached(priority: .userInitiated) {
+            LeftoverSizing.measure(url, home: home, fileSystem: fileSystem)
         }.value
     }
 
@@ -387,17 +459,25 @@ final class UninstallCoordinator: ObservableObject {
                 results[app.id] = await removeNonBrew(app)
             }
         }
-        // UX-13: only an app that was actually removed releases its consented `~/Library`
-        // leftovers; the data of an app that stays installed is never touched.
-        let releasedLeftovers = leftovers
-            .filter { results[$0.id]?.isRemoved == true }
-            .flatMap(\.items)
-        let leftoverResult = dependencies.trashLeftovers(releasedLeftovers)
+        let leftoverResult = dependencies.trashLeftovers(Self.releasedLeftovers(leftovers, results: results))
         return Outcome(
             results: results,
             leftoversTrashed: leftoverResult.removed.count,
             leftoversFailed: leftoverResult.failed.count
         )
+    }
+
+    /// UX-13: a consented leftover is released only when its own app and every other target that
+    /// claims it (`coTargets`) were actually removed; the data of an app that stays installed is
+    /// never touched.
+    private static func releasedLeftovers(
+        _ leftovers: [LeftoverGroup],
+        results: [String: UninstallTargetResult]
+    ) -> [URL] {
+        let isRemoved = { (id: String) in results[id]?.isRemoved == true }
+        return leftovers.flatMap { group in
+            group.items.filter { isRemoved(group.id) && $0.coTargets.allSatisfy(isRemoved) }.map(\.url)
+        }
     }
 
     /// The quit phase decided "stopped" before the force-quit sheet and the write lease, both of

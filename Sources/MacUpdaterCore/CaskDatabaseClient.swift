@@ -24,6 +24,16 @@ public struct CaskDatabaseCache {
         return try JSONDecoder().decode([BrewCask].self, from: data)
     }
 
+    /// Reads the cache regardless of its age, for callers that prefer slightly old data to a
+    /// network wait.
+    public func loadAnyAge() throws -> [BrewCask]? {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            return nil
+        }
+        let data = try Data(contentsOf: fileURL)
+        return try JSONDecoder().decode([BrewCask].self, from: data)
+    }
+
     public func save(_ casks: [BrewCask]) throws {
         let data = try JSONEncoder().encode(casks)
         try FileManager.default.createDirectory(
@@ -55,7 +65,28 @@ public final class CaskDatabaseClient: @unchecked Sendable {
         if let cached = try cache?.loadIfFresh() {
             return cached
         }
+        return try await downloadCasks()
+    }
 
+    /// Uninstall needs the cask's zap paths, not the newest version data, so a cache of any
+    /// age is good enough and the network is only used when there is none, or when the cache no
+    /// longer decodes: the download then replaces it instead of every sheet failing on it.
+    public func fetchCasksAcceptingStaleCache() async throws -> [BrewCask] {
+        if let cached = try loadAnyAgeUnlessCorrupt() {
+            return cached
+        }
+        return try await downloadCasks()
+    }
+
+    private func loadAnyAgeUnlessCorrupt() throws -> [BrewCask]? {
+        do {
+            return try cache?.loadAnyAge()
+        } catch is DecodingError {
+            return nil
+        }
+    }
+
+    private func downloadCasks() async throws -> [BrewCask] {
         // Disk freshness is handled by `cache`; the client provides uniform
         // timeout / User-Agent / retry.
         let response = try await client.get(sourceURL)
@@ -82,6 +113,18 @@ public extension CaskDatabaseClient {
         cacheURL: URL = AppScanDirectories.caskDatabaseCacheURL
     ) -> CaskDatabaseClient {
         CaskDatabaseClient(cache: CaskDatabaseCache(fileURL: cacheURL))
+    }
+
+    /// The catalog the Uninstall sheet reads: the same shared cache, but with no download
+    /// retries, so the shared session's 15 s request / 30 s resource timeout is the longest
+    /// the sheet waits when the cache is missing.
+    static func uninstallCatalog(
+        cacheURL: URL = AppScanDirectories.caskDatabaseCacheURL
+    ) -> CaskDatabaseClient {
+        CaskDatabaseClient(
+            cache: CaskDatabaseCache(fileURL: cacheURL),
+            client: HTTPClient(maxRetries: 0)
+        )
     }
 }
 

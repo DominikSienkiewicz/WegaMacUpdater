@@ -49,6 +49,15 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 ### Changed
 - The Logs keyboard shortcut moved from ⌘6 to ⌘7, because the new "Porządki" section takes ⌘6
   in the sidebar order.
+- Uninstalling an app that Homebrew doesn't manage now finds its leftovers in more places and
+  says why each one is listed: Homebrew's zap list for the app's cask, locations tied to its
+  bundle identifier, and folders named after it (the last group is marked probable and left
+  unticked, as is anything outside `~/Library`). Items on that zap list named for a vendor or
+  for other apps rather than the app itself (such as Microsoft's or Google's shared folders)
+  start unticked, marked "shared folder?". Items another installed app still uses are shown
+  unticked as "also used by", sizes are shown for each item and for the ticked total, and
+  nothing is ticked by default when the app list could not be read completely. Everything
+  still goes to the Trash, and only inside your home folder.
 
 ### Fixed
 - "Anuluj" in "Porządki" now also stops "Odczytaj PATH", and a shell that leaves a background job

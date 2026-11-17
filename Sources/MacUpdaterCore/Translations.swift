@@ -567,9 +567,8 @@ extension Translations {
         "Usuń razem z resztkami": "Remove along with leftovers",
         "Usuń tylko aplikację": "Remove app only",
         "Przenieś do Kosza": "Move to Trash",
-        // UX-13 — "app + leftovers" for non-brew apps: a checkbox list of the ~/Library
-        // items the app left behind, moved to the (recoverable) Trash on consent.
-        "Resztki w ~/Library": "Leftovers in ~/Library",
+        // UX-13 — "app + leftovers" for non-brew apps: a checkbox list of what the app
+        // left behind, moved to the (recoverable) Trash on consent.
         "Zaznaczone pliki trafią do Kosza — możesz je stamtąd przywrócić.":
             "Checked files will go to the Trash — you can restore them from there.",
         "Odznacz wszystko": "Deselect all",

@@ -87,8 +87,8 @@ struct UninstallCoordinatorRemovalTests {
 
     private func leftovers(for app: ApplicationInfo) -> LeftoverGroup {
         LeftoverGroup(app: app, items: [
-            URL(fileURLWithPath: "/tmp/\(app.name)/Preferences.plist"),
-            URL(fileURLWithPath: "/tmp/\(app.name)/Application Support"),
+            LeftoverItem(url: URL(fileURLWithPath: "/tmp/\(app.name)/Preferences.plist"), source: .bundleIdentifier),
+            LeftoverItem(url: URL(fileURLWithPath: "/tmp/\(app.name)/Application Support"), source: .bundleIdentifier),
         ])
     }
 
@@ -119,7 +119,7 @@ struct UninstallCoordinatorRemovalTests {
 
         #expect(outcome.results[a.id] == .failed("trash refused"))
         #expect(outcome.results[b.id] == .movedToTrash)
-        #expect(recorder.trashedLeftovers == bLeftovers.items)
+        #expect(recorder.trashedLeftovers == bLeftovers.items.map(\.url))
         #expect(outcome.leftoversTrashed == bLeftovers.items.count)
     }
 
@@ -141,6 +141,71 @@ struct UninstallCoordinatorRemovalTests {
             bundleFacts: { _ in facts },
             stageForTrash: stage
         ))
+    }
+
+    /// Two copies of one app, removed together: the first copy's group holds its own item and
+    /// one the second copy also claims.
+    private struct TwoCopies {
+        let first: ApplicationInfo
+        let second: ApplicationInfo
+        let own: LeftoverItem
+        let shared: LeftoverItem
+
+        var group: LeftoverGroup { LeftoverGroup(app: first, items: [shared, own]) }
+    }
+
+    private func twoCopies() -> TwoCopies {
+        let first = app("Twin")
+        var second = app("Twin")
+        second.path = URL(filePath: "/Users/Shared/Twin.app", directoryHint: .isDirectory)
+        return TwoCopies(
+            first: first,
+            second: second,
+            own: LeftoverItem(url: URL(filePath: "/tmp/Twin/Caches", directoryHint: .isDirectory), source: .bundleIdentifier),
+            shared: LeftoverItem(
+                url: URL(filePath: "/tmp/Twin/Application Support", directoryHint: .isDirectory),
+                source: .bundleIdentifier,
+                coTargets: [second.id]
+            )
+        )
+    }
+
+    @Test func sharedItemStaysWhenOneCopyFails() async {
+        let copies = twoCopies()
+        let recorder = Recorder()
+        let failingPath = copies.second.path
+        let sut = coordinator(
+            facts: .userOwnedWritable,
+            trash: { url in if url == failingPath { throw TrashRefused() } },
+            trashLeftovers: { recorder.recordLeftovers($0); return LeftoverCleanup.Result(removed: $0) }
+        )
+
+        let outcome = await sut.uninstall(
+            targets: [copies.first, copies.second], zap: false, leftovers: [copies.group], using: BrewService()
+        )
+
+        #expect(outcome.results[copies.first.id] == .movedToTrash)
+        #expect(outcome.results[copies.second.id] == .failed("trash refused"))
+        #expect(recorder.trashedLeftovers == [copies.own.url])
+        #expect(outcome.leftoversTrashed == 1)
+    }
+
+    @Test func sharedItemGoesWhenBothCopiesRemoved() async {
+        let copies = twoCopies()
+        let recorder = Recorder()
+        let sut = coordinator(
+            facts: .userOwnedWritable,
+            trash: { _ in },
+            trashLeftovers: { recorder.recordLeftovers($0); return LeftoverCleanup.Result(removed: $0) }
+        )
+
+        let outcome = await sut.uninstall(
+            targets: [copies.first, copies.second], zap: false, leftovers: [copies.group], using: BrewService()
+        )
+
+        #expect(outcome.results[copies.first.id] == .movedToTrash)
+        #expect(outcome.results[copies.second.id] == .movedToTrash)
+        #expect(recorder.trashedLeftovers == [copies.shared.url, copies.own.url])
     }
 
     @Test func blockedTargetIsNotAttempted() async {
@@ -252,7 +317,7 @@ struct UninstallCoordinatorRemovalTests {
         #expect(outcome.results[target.id] == .movedToTrashByHelper)
         #expect(recorder.stagingRequests == [StagingRequest(path: original, bundleID: "com.example.root")])
         #expect(recorder.trashed.last == staged)
-        #expect(recorder.trashedLeftovers == leftovers(for: target).items)
+        #expect(recorder.trashedLeftovers == leftovers(for: target).items.map(\.url))
     }
 
     /// The helper moved the app out of /Applications but the Trash refused the staged bundle: it
