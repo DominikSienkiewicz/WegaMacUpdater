@@ -116,6 +116,26 @@ else
     fi
 fi
 
+# Każdy scripts/*.sh musi mieć bit wykonywalności (QA-03 w swift test), także biblioteka
+# wczytywana przez `source`. Pierwsza wersja trafiła na main jako 100644 i zaczerwieniła
+# bramkę jakości, od której zależy publikacja wydania. Uruchomiona wprost niczego by nie
+# zrobiła, więc ma to powiedzieć i zakończyć się błędem, zamiast milczeć.
+echo "→ sign-with-retry.sh jest wykonywalny, a uruchomiony wprost mówi, że trzeba go wczytać"
+
+if [[ -x "$LIB" ]]; then
+    record_pass "sign-with-retry.sh ma bit wykonywalności"
+else
+    record_fail "sign-with-retry.sh bez bitu wykonywalności — QA-03 zatrzyma swift test, a z nim wydanie"
+fi
+
+direct_output="$(bash "$LIB" 2>&1)"
+direct_status=$?
+if [[ "$direct_status" -eq 2 && "$direct_output" == *source* ]]; then
+    record_pass "uruchomiony wprost kończy się kodem 2 i wskazuje source"
+else
+    record_fail "uruchomiony wprost: kod $direct_status (oczekiwano 2 i wskazówki o source)"
+fi
+
 echo "→ każdy podpis Developer ID w build-pkg.sh idzie przez sign_with_retry"
 
 if grep -Eq '^(source|\.) "\$SCRIPT_DIR/sign-with-retry\.sh"' "$BUILD_SCRIPT"; then
