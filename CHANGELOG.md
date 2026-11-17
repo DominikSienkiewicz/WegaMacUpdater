@@ -13,100 +13,83 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-11-17
+
+Wega 0.7.0 adds **Porządki**, a new section that finds what developer tools leave behind on
+your Mac, and makes **Uninstall** safer and more thorough. It also stops several apps from
+showing updates they don't actually offer.
+
 ### Added
-- A "Porządki" section (sidebar, ⌘6) that finds what a tool leaves behind in several copies.
-  It explains why a command appears more than once on your `PATH` (the usual cause of repeated
-  "Files and Folders" prompts), and lists old versions kept by native installers, Homebrew
-  copies shadowed by another install, copies owned by an app (marked, never offered for
-  removal) and stale `fnm` shell entries from before the last restart. The scan only reads.
-  Confirmed items go to the Trash, or are removed with Homebrew; Documents, Desktop,
-  Downloads, iCloud and other protected locations are never opened. Your shell is run only
-  when you press "Odczytaj PATH". The result can be exported as a text or JSON report with
-  `~` in place of your home folder.
-- "Porządki" also finds Homebrew leftovers per package (`brew cleanup` for one formula or
-  cask at a time, skipping packages upgraded in the last 7 days, and unused formulae offered as
-  `brew uninstall --formula`), unused runtime versions from uv, pyenv, fnm, nvm, SDKMAN, rustup,
-  mise, asdf, Volta and pnpm (shown as commands to copy, never removed by Wega), unused Gradle
-  wrapper distributions and downloaded JDKs, and folders of JetBrains IDE versions that are no
-  longer installed (with the IDE's "Delete Leftover IDE Directories" recommended). A new
-  "Katalogi projektów" card in Settings (default `~/Dev`) says which folders to read for
-  project requirements. Stopping a scan now says the previous report is kept.
-- "Porządki" checks your `PATH` itself (new "PATH" section, after you press "Odczytaj PATH"):
-  entries whose directory is gone, entries listed more than once, entries that are the same
-  place as an earlier one or lie inside another, and tools whose active copy is older than a
-  copy it shadows. Each entry names the shell files and line numbers that add it (never the
-  line's text) and says what to do there: remove a dead entry, keep one line of a repeated one,
-  check whether you need a nested one, or put the newer copy's folder earlier in `PATH`; Wega never
-  changes those files. The entries macOS adds itself for its cryptexes are left out.
-- An optional "Files and Folders" map in "Porządki", off by default and switched on in a new
-  Settings card. It reads the macOS permissions database (`TCC.db`, read-only, never changed) and
-  shows one row per program with its Files and Folders grants, tied to the matching copy found
-  by the scan, with a `tccutil reset` command per service for apps. It needs Full Disk Access,
-  and macOS gives that to every program Wega starts (Homebrew, npm, mas and the shell that reads
-  `PATH`), so grant it only while you read the map and remove Wega from the list afterwards.
-  Switching the map off forgets a stored map at once, including in exports.
-- Uninstall can remove apps owned by `root`, such as those installed from a `.pkg`: Wega's
+- **Porządki (⌘6): clean up after your tools.** A read-only scan that shows what is installed
+  more than once and what can safely go:
+  - **Duplicate commands on your `PATH`**, the usual cause of repeated "Files and Folders"
+    prompts: old versions kept by native installers, Homebrew copies hidden by another
+    install, copies managed by an app (shown, never offered for removal) and stale `fnm`
+    shell entries from before the last restart.
+  - **Homebrew leftovers, one package at a time**: `brew cleanup` per formula or cask
+    (skipping anything upgraded in the last 7 days) and unused formulae via
+    `brew uninstall --formula`.
+  - **Runtime versions no project needs** from uv, pyenv, fnm, nvm, SDKMAN, rustup, mise,
+    asdf, Volta and pnpm, shown as commands to copy; Wega never removes these itself. The new
+    "Katalogi projektów" card in Settings (default `~/Dev`) says where your projects live.
+  - **Gradle and JetBrains**: unused Gradle wrapper distributions, downloaded JDKs and
+    folders of JetBrains IDE versions that are no longer installed.
+  - **A `PATH` check**: missing, repeated and nested entries, and tools whose active copy is
+    older than one it hides, each with the shell file and line that adds it and what to
+    change there. Wega never edits your shell files.
+  - **An optional Files and Folders map** (off by default, switched on in Settings): which
+    programs hold Files and Folders permission, matched to the copies the scan found, with a
+    `tccutil reset` command for each. It needs Full Disk Access, which macOS then gives to
+    every program Wega starts, so grant it only while you read the map.
+  - **Safe by default**: nothing is removed until you confirm, and confirmed items go to the
+    Trash or are removed with Homebrew. Documents, Desktop, Downloads, iCloud and other
+    protected folders are never opened. Your shell runs only when you press "Odczytaj PATH",
+    and "Anuluj" stops it. Reports export as text or JSON with `~` in place of your home
+    folder.
+- **Uninstall removes apps owned by `root`**, such as those installed from a `.pkg`: Wega's
   helper moves them to your Trash. This needs the helper switched on in Settings and an
-  administrator account; without them the app stays where it is and the result says what to
-  do. If the helper still runs an older version after this update, Uninstall says so before
-  quitting anything and asks you to remove and reinstall it in Settings.
+  administrator account; otherwise the app stays where it is and Wega says what to do. If
+  Uninstall reports that the helper is out of date after this update, remove and reinstall it
+  in Settings.
 
 ### Changed
-- The Logs keyboard shortcut moved from ⌘6 to ⌘7, because the new "Porządki" section takes ⌘6
-  in the sidebar order.
-- Uninstall asks each selected app that is running to quit before removing it, and offers to
-  force quit an app that does not close, only after you confirm (unsaved changes in it are
-  lost). Only the copy you selected counts: the same app running from another folder is left
-  alone, and an app whose running copy cannot be told apart from it is skipped. Each app is
-  checked again right before it is removed.
-- Wega itself, apps that are part of macOS and apps reached through a symbolic link are shown
-  in the Uninstall list but cannot be selected, with the reason beside each.
-- After uninstalling, every app that was not removed is listed with its reason (still running,
-  needs the helper or an administrator account, blocked by the App Management permission, and
-  so on), with a Finder button where that helps. Leftovers go to the Trash only for apps that
-  were actually removed.
-- Uninstalling an app that Homebrew doesn't manage now finds its leftovers in more places and
-  says why each one is listed: Homebrew's zap list for the app's cask, locations tied to its
-  bundle identifier, and folders named after it (the last group is marked probable and left
-  unticked, as is anything outside `~/Library`). Items on that zap list named for a vendor or
-  for other apps rather than the app itself (such as Microsoft's or Google's shared folders)
-  start unticked, marked "shared folder?". Items another installed app still uses are shown
-  unticked as "also used by", sizes are shown for each item and for the ticked total, and
-  nothing is ticked by default when the app list could not be read completely. Everything
-  still goes to the Trash, and only inside your home folder.
+- **Uninstall is safer.**
+  - Running apps are asked to quit first. An app that won't close is force quit only after
+    you confirm (its unsaved changes are lost), and every app is checked again right before
+    it is removed.
+  - Only the copy you selected counts: the same app running from another folder is left
+    alone.
+  - Wega itself, apps that are part of macOS and apps reached through a symbolic link can't
+    be selected, and the list says why.
+  - Every app that wasn't removed is listed with its reason and, where it helps, a button to
+    show it in Finder.
+- **Uninstall finds more leftovers** of apps Homebrew doesn't manage, and says why each one is
+  listed: the app's Homebrew zap list, locations tied to its bundle identifier, and folders
+  named after it (marked "probable" and left unticked). Shared vendor folders start unticked
+  as "shared folder?", items another installed app still uses as "also used by", and every
+  item shows its size. Leftovers go to the Trash, only from your home folder and only for apps
+  that were actually removed.
+- The Logs shortcut moved from ⌘6 to ⌘7 to make room for Porządki.
 
 ### Fixed
-- "Anuluj" in "Porządki" now also stops "Odczytaj PATH", and a shell that leaves a background job
-  holding its output no longer keeps that read waiting: Wega stops waiting 2 seconds after the
-  shell exits and keeps what it already received.
-- Exported Cleanup commands no longer keep your home folder, for example in `npm uninstall -g --prefix <prefix> <package>`.
-- Homebrew tap-trust fixes: an action that fails or does not finish stays available instead of
-  being withdrawn. When Homebrew refuses to untap because of an untrusted package definition,
-  Wega offers a separate `brew trust` action for that exact cask or formula; trusting and
-  retrying the untap are separate clicks. Unused taps are removed one action per tap, so a
-  later failure no longer repeats taps already removed.
-- Obsidian no longer shows a GitHub update it has already installed. The GitHub Releases check
-  compared the release with the installer version in the app bundle, not with the newer package
-  Obsidian actually runs, so the row stayed after every in-app update. A row already handed off
-  to GitHub Releases now disappears on the next start instead of waiting for a check that no
-  longer runs. Homebrew's older record of the `obsidian` cask no longer brings the row back
-  either: the cask drift check now reads the package Obsidian runs, not the installer bundle.
-- Unit-test settings fixtures keep values in memory and clear them during teardown, avoiding
-  leftover `wega.tests.*.plist` files in the user's preferences directory.
-- Apps whose bundle version carries a git-tag prefix, such as Raspberry Pi Imager's `v2.0.12`,
-  no longer show a phantom Homebrew update that `brew reinstall` could never clear.
-- A self-updating cask app is listed once when its vendor offers a build of the same release
-  the cask names, such as ChatGPT `26.1103.41825 (25679)` against the cask's `26.1103.41825`.
-- Casks that install through a package or installer script, such as Logi Options+, no longer
-  reappear as outdated after each scan once the app has updated itself to the cask's version.
-- The background check no longer counts, announces or upgrades casks whose app has already
-  updated itself, so the menu-bar badge matches the window and an opted-in background update
-  can no longer install an older cask version over a newer self-updated app.
-- Google Chrome and Google Drive no longer show an update their own updater does not offer:
-  Chrome versions still in a staged rollout and Drive's canary builds are not reported.
-- ChatGPT no longer shows an update it does not offer yet. Wega asks OpenAI's rollout service
-  which release every installation is served instead of reading the feed that already lists
-  releases still rolling out.
+- **Fewer phantom updates.**
+  - **ChatGPT** offers only the release that OpenAI's staged rollout serves to everyone.
+  - **Google Chrome and Google Drive** no longer show Chrome versions still rolling out or
+    Drive canary builds.
+  - **Obsidian** no longer keeps showing an update it has already installed, and an older
+    Homebrew record no longer brings that row back.
+  - **Apps that update themselves**, such as Logi Options+, no longer reappear as outdated
+    after every scan, and such an app is listed once when its vendor and its Homebrew cask
+    name the same release.
+  - **Versions written as tags**, such as Raspberry Pi Imager's `v2.0.12`, no longer cause an
+    update that `brew reinstall` could never clear.
+- **Background updates** no longer count, announce or install casks whose app has already
+  updated itself, so the menu-bar badge matches the window and an older cask can never be
+  installed over a newer app.
+- **Homebrew tap trust**: a fix that fails stays available to retry. When an untap is blocked
+  by an untrusted package, Wega offers a separate `brew trust` for that exact package, and
+  unused taps are removed one at a time, so a later failure doesn't repeat taps already
+  removed.
 
 ## [0.6.0] — 2026-11-02
 
@@ -450,7 +433,8 @@ their terms are still theirs.
   what changed in it, because there is no published predecessor to have changed from.
 -->
 
-[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.5...v0.6.0
 [0.5.5]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.3...v0.5.4
