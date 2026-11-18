@@ -362,7 +362,7 @@ final class ScanStore: ObservableObject {
 #endif
         guard !startedLaunchRefresh, !updating, status != .checking else { return }
         startedLaunchRefresh = true
-        startCheck(quiet: status == .results)
+        startCheck()
     }
 
     /// The scan's one door onto `isRefreshing`, which is why the property itself is

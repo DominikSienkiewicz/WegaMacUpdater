@@ -36,6 +36,10 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   Wega updates in a batch, then what the vendor or you finish. Each row names its source and
   shows when automatic rollback cannot cover it. **Group › by source** brings back the
   grouping the Inventory window uses; the choice is remembered.
+- **Updates: scans run in place.** **Check now** and **⌘R** no longer take the screen away
+  when there is a list to keep: the list stays, stood down, and the header shows each
+  source's progress (Homebrew, App Store, npm, vendors). Only the very first scan shows the
+  full scanning scene.
 
 ### Added
 - **Wega chases her ball.** Now and then a ball rolls past her card in the sidebar; she

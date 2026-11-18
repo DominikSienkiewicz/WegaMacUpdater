@@ -16,13 +16,22 @@ extension ScanStore {
     /// is ignored rather than racing a second `brew update` against the first.
     ///
     /// `quiet` runs it underneath the result already on screen — see ``ScanStore/isRefreshing``.
-    func startCheck(quiet: Bool = false) {
+    /// Left out, the scan runs in place whenever there is a result to keep (UX-19).
+    func startCheck(quiet: Bool? = nil) {
         guard scanTask == nil else { return }
+        let inPlace = quiet ?? scansInPlace
         scanTask = Task { @MainActor [weak self] in
-            await self?.runCheck(quiet: quiet)
+            await self?.runCheck(quiet: inPlace)
             self?.scanTask = nil
         }
     }
+
+    /// UX-19 — a scan the user starts over a result on screen runs in place, like the launch
+    /// refresh: the list stays, stood down, and the header reports each source's phase. With
+    /// nothing on screen there is nothing to keep, so the scan takes the window with the full
+    /// scanning scene. The rescans after an update or an undo keep taking the window: they
+    /// hand over from the update's own overlay, which stays up until they finish.
+    var scansInPlace: Bool { status == .results }
 
     /// M2(c) — cancellation is not new plumbing: `ProcessRunner` already honours
     /// `Task.isCancelled` end to end and surfaces `.cancelled`. It just had no button.

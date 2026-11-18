@@ -9,6 +9,8 @@ extension Translations {
             "Update plan",
         "Kategoria aktualizacji":
             "Update category",
+        "Producenci":
+            "Vendors",
         "Grupuj":
             "Group",
         "według pilności":
