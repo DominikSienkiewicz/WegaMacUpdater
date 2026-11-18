@@ -1,0 +1,60 @@
+import SwiftUI
+import MacUpdaterCore
+
+/// UX-16 — how many updates each scope of the Updates list holds. The sidebar badge and the
+/// scope bar read the same numbers (`ScanStore.scopeCounts`), so they cannot disagree.
+struct UpdateScopeCounts: Equatable {
+    let apps: Int
+    let cli: Int
+    /// Manually updated apps whose release notes read as a security fix.
+    let security: Int
+
+    var all: Int { apps + cli }
+}
+
+/// One segment of the scope bar.
+struct UpdateScopeOption: Equatable {
+    let filter: UpdateFilter
+    let title: String
+    let count: Int
+
+    static func options(counts: UpdateScopeCounts) -> [UpdateScopeOption] {
+        [
+            UpdateScopeOption(filter: .all, title: tr("Wszystkie"), count: counts.all),
+            UpdateScopeOption(filter: .apps, title: tr("Aplikacje"), count: counts.apps),
+            UpdateScopeOption(filter: .cli, title: tr("Narzędzia CLI"), count: counts.cli),
+            UpdateScopeOption(filter: .security, title: tr("Poprawki bezp."), count: counts.security),
+        ]
+    }
+}
+
+/// UX-16 — the category filter, above the list it filters. It used to be four sidebar rows,
+/// which made the sidebar count the same updates twice. Too narrow for four segments, it
+/// becomes a pop-up menu with the same options.
+struct UpdateScopeBar: View {
+    let filter: UpdateFilter
+    let counts: UpdateScopeCounts
+    let onChange: (UpdateFilter) -> Void
+
+    var body: some View {
+        let options = UpdateScopeOption.options(counts: counts)
+        let selection = Binding(get: { filter }, set: { onChange($0) })
+        ViewThatFits(in: .horizontal) {
+            picker(options, selection: selection)
+                .pickerStyle(.segmented)
+                .fixedSize()
+            picker(options, selection: selection)
+                .pickerStyle(.menu)
+                .fixedSize()
+        }
+    }
+
+    private func picker(_ options: [UpdateScopeOption], selection: Binding<UpdateFilter>) -> some View {
+        Picker(tr("Kategoria aktualizacji"), selection: selection) {
+            ForEach(options, id: \.filter) { option in
+                Text(verbatim: "\(option.title) \(option.count)").tag(option.filter)
+            }
+        }
+        .labelsHidden()
+    }
+}

@@ -2,19 +2,21 @@ import XCTest
 
 @testable import WegaMacUpdater
 
-/// UX-11e — the detail column's toolbar carries two icon-only controls: the `gearshape`
-/// `SettingsLink` and the `sidebar.trailing` inspector toggle. Both spoke only through `.help()`,
+/// UX-11e — the detail column's toolbar carried two icon-only controls: the `gearshape`
+/// `SettingsLink` (removed in UX-16) and the `sidebar.trailing` inspector toggle. Both spoke only through `.help()`,
 /// which AppKit surfaces as a hover tooltip but never as a VoiceOver name, so the buttons read as
 /// bare SF Symbol glyphs. Each icon must now carry an `.accessibilityLabel` alongside its `.help()`.
 ///
 /// A package test target cannot drive `XCUIApplication`, so this pins the SwiftUI wiring in source.
 final class ToolbarIconAccessibilityTests: XCTestCase {
-    func testSettingsIconExposesAnAccessibilityLabel() throws {
+    /// UX-16 — the gear duplicated ⌘, and the app menu's Settings item, so it left the toolbar.
+    /// What this test used to pin (the gear's VoiceOver name) no longer has a control to apply
+    /// to; it now pins that Settings stays reachable through the Settings scene instead.
+    func testSettingsAreReachedThroughTheAppMenuNotAToolbarGear() throws {
         let content = try source("Sources/MacUpdater/ContentView.swift")
-        XCTAssertTrue(
-            content.contains(#".accessibilityLabel(tr("Ustawienia"))"#),
-            "The gearshape SettingsLink must spell its name for VoiceOver, not only .help()."
-        )
+        let app = try source("Sources/MacUpdater/MacUpdaterApp.swift")
+        XCTAssertFalse(content.contains("SettingsLink"), "The toolbar no longer carries a Settings gear.")
+        XCTAssertTrue(app.contains("Settings {"), "Settings stay reachable through ⌘, and the app menu.")
     }
 
     func testInspectorToggleIconExposesAnAccessibilityLabel() throws {

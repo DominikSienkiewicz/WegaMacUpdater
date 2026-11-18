@@ -146,17 +146,17 @@ struct ContentView: View {
                     .accessibilityLabel(tr("Język interfejsu"))
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    SettingsLink { Image(systemName: "gearshape") }
-                        .help(tr("Ustawienia"))
-                        .accessibilityLabel(tr("Ustawienia"))
-                }
-                ToolbarItem(placement: .primaryAction) {
                     Button { showInspector.toggle() } label: {
                         Image(systemName: "sidebar.trailing")
                     }
                     .help(tr("Panel szczegółów"))
                     .accessibilityLabel(tr("Panel szczegółów"))
                     .disabled(selection.tab != .update)
+                    // UX-16 — gone, not dimmed, outside Updates. Faded rather than removed so
+                    // the toolbar item keeps its width: a toolbar whose geometry changes can
+                    // invalidate the window's safe area (see `ScanControl`).
+                    .opacity(selection.tab == .update ? 1 : 0)
+                    .accessibilityHidden(selection.tab != .update)
                 }
             }
         }

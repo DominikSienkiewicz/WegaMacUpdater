@@ -20,10 +20,8 @@ extension SidebarSelection {
 
     var label: String {
         switch self {
-        case .updates(.all):      return tr("Wszystkie")
-        case .updates(.apps):     return tr("Aplikacje")
-        case .updates(.cli):      return tr("Narzędzia CLI")
-        case .updates(.security): return tr("Poprawki bezp.")
+        // UX-16 — one destination: the category is the scope bar's, not the title's.
+        case .updates:            return tr("Aktualizacje")
         case .migration:          return tr("Do przepięcia")
         case .inventory:          return tr("Spis aplikacji")
         case .rollback:           return tr("Cofnij aktualizacje")
@@ -62,5 +60,22 @@ extension SidebarSelection {
         case .inventory: return .inventory
         case .logs:      return .logs
         }
+    }
+}
+
+/// UX-16 — the sidebar shows one Updates row; the category filter lives in the scope bar
+/// above the list but still travels in the selection, so it is persisted and restored.
+extension SidebarSelection {
+    /// The sidebar row this selection highlights: every filtered Updates list is the one row.
+    var sidebarRow: SidebarSelection {
+        if case .updates = self { return .updates(.all) }
+        return self
+    }
+
+    /// The selection after the user picks `pick` in the sidebar. Picking the Updates row while
+    /// already on Updates keeps the chosen scope; arriving from elsewhere starts unfiltered.
+    func applyingSidebarPick(_ pick: SidebarSelection) -> SidebarSelection {
+        if case .updates = pick, case .updates = self { return self }
+        return pick
     }
 }

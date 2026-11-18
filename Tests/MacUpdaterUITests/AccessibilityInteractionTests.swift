@@ -102,10 +102,8 @@ final class AccessibilityInteractionTests: XCTestCase {
     func testSidebarAndUpdateRowsHaveDeterministicKeyboardFocusOrder() throws {
         let sidebar = try source("Sources/MacUpdater/SidebarList.swift")
         let orderedRows = [
+            // UX-16 — the category filters left the sidebar for the scope bar above the list.
             "row(.updates(.all)",
-            "row(.updates(.apps)",
-            "row(.updates(.cli)",
-            "row(.updates(.security)",
             "row(.migration)",
             "row(.inventory)",
             "row(.uninstall)",

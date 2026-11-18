@@ -609,11 +609,19 @@ final class ScanStore: ObservableObject {
     func emitCounts() {
         sinks.badgeChange?(updateCount.badgeCount)
         sinks.errorCount?(failedSources)
-        sinks.footerInfo?(lastCheck, visibleManual.filter(isSecurityApp).count)
-        let appsCount = ServiceVendorUpdatePolicy.batchItems(DockerDesktopUpdatePolicy.batchItems(allItems)).filter { $0.kind.category == .apps }.count
-            + visibleManual.count + unresolvedDockerItems.count + unresolvedServiceItems.count
-        let cliCount  = allItems.filter { $0.kind.category == .cli }.count
-        sinks.categoryCounts?(appsCount, cliCount)
+        let counts = scopeCounts
+        sinks.footerInfo?(lastCheck, counts.security)
+        sinks.categoryCounts?(counts.apps, counts.cli)
+    }
+
+    /// UX-16 — the per-category counts the Updates scope bar shows and the sidebar badge sums.
+    var scopeCounts: UpdateScopeCounts {
+        UpdateScopeCounts(
+            apps: ServiceVendorUpdatePolicy.batchItems(DockerDesktopUpdatePolicy.batchItems(allItems)).filter { $0.kind.category == .apps }.count
+                + visibleManual.count + unresolvedDockerItems.count + unresolvedServiceItems.count,
+            cli: allItems.filter { $0.kind.category == .cli }.count,
+            security: visibleManual.filter(isSecurityApp).count
+        )
     }
 
     /// Publishes the "Cofnij aktualizacje" badge. `sinks` is private to this file, so the

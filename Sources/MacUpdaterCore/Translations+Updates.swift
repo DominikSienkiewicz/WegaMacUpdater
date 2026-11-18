@@ -7,5 +7,9 @@ extension Translations {
             "%@ with automatic rollback",
         "Plan aktualizacji":
             "Update plan",
+        "Kategoria aktualizacji":
+            "Update category",
+        "W tej kategorii nie ma teraz aktualizacji. Przełącz kategorię nad listą.":
+            "There are no updates in this category right now. Switch categories above the list.",
     ]
 }

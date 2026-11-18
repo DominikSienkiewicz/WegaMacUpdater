@@ -28,8 +28,8 @@ struct UpdateView: View {
     /// Drives the window's status footer: last scan time + count of manual updates
     /// whose release notes look like a security fix.
     var onFooterInfo:  ((Date?, Int) -> Void)? = nil
-    /// Which category of updates to show, driven by the sidebar. Defaults to
-    /// showing everything until the sidebar selection wires this up.
+    /// Which category of updates to show, picked in the scope bar above the list (UX-16) and
+    /// carried in the window's selection. Defaults to showing everything.
     var updateFilter:     UpdateFilter = .all
     /// Reports (apps count, CLI count) after each scan, for sidebar badges.
     var onCategoryCounts: ((Int, Int) -> Void)? = nil
@@ -37,6 +37,8 @@ struct UpdateView: View {
     /// badge. Reported from here, not from `RollbackView`, because this view stays mounted
     /// for the whole session: the badge is right before that destination is ever opened.
     var onUndoableCount:  ((Int) -> Void)? = nil
+    /// UX-16 — the scope bar picks a category; the selection that carries it is the window's.
+    var onScopeChange:    ((UpdateFilter) -> Void)? = nil
 
     @EnvironmentObject private var model: AppViewModel
     @EnvironmentObject private var policies: UpdatePolicyStore
@@ -203,10 +205,13 @@ struct UpdateView: View {
         VStack(spacing: 0) {
             // UX-14 — the header reports the scan and nothing else; acting on the result
             // happens in the action bar under the list.
-            resultsHeading
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, WegaLayout.selectionColumnInset)
-                .padding(.vertical, WegaLayout.sectionSpacing)
+            VStack(alignment: .leading, spacing: 12) {
+                resultsHeading
+                scopeBar
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, WegaLayout.selectionColumnInset)
+            .padding(.vertical, WegaLayout.sectionSpacing)
 
             // Everything below the header is what a running update could be raced by, so for
             // the run's duration it is inert and covered by the run itself — see
@@ -305,6 +310,16 @@ struct UpdateView: View {
                     }
                 }
                 .animation(.easeInOut(duration: 0.2), value: scan.isRefreshing)
+        }
+    }
+
+    /// UX-16 — shown once there is something to filter, and kept while a scope is applied so
+    /// an empty category never strands the user without the way back.
+    @ViewBuilder
+    private var scopeBar: some View {
+        let counts = scan.scopeCounts
+        if counts.all > 0 || updateFilter != .all {
+            UpdateScopeBar(filter: updateFilter, counts: counts) { onScopeChange?($0) }
         }
     }
 
@@ -560,7 +575,7 @@ struct UpdateView: View {
             EmptyHero(
                 pose: .idle,
                 title: tr("Nic w tej kategorii"),
-                message: tr("W tej kategorii nie ma teraz aktualizacji. Przełącz kategorię w panelu bocznym."),
+                message: tr("W tej kategorii nie ma teraz aktualizacji. Przełącz kategorię nad listą."),
                 compact: true
             )
         }
