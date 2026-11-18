@@ -281,7 +281,7 @@ it always did.
 
 ### Watching an update run
 
-While an update installs, a progress bar sits under the header. It counts **whole
+While an update installs, its progress takes the action bar's place at the bottom of the list. It counts **whole
 packages**, and the line under it names what the run is doing: preparing backups,
 downloading, or installing. It names the package too — "Installing firefox — 3 of 7" — but
 only while that package is the only one installing; once several are running at once the
@@ -307,9 +307,10 @@ npm uses, so a log you paste into a bug report stays searchable by it.
 ### Stopping an update
 
 While an update runs, the Updates screen belongs to it: the list, its checkboxes, banner
-actions and manual installs are greyed out behind an overlay that shows the progress, the
-package being installed and the live log. Nothing can be selected or started until the run
-lands. The one control the overlay keeps is **Cancel**. Wega stops at the **next package boundary** — the installs already running are
+actions and manual installs are greyed out behind a material with a note saying why, and the
+bar at the bottom shows the progress, the package being installed, **Show log** and **Stop
+after this one**. Nothing can be selected or started until the run lands. Stopping is the one
+control the run keeps. Wega stops at the **next package boundary** — the installs already running are
 allowed to finish, because a package manager killed halfway through a download or an app
 replacement is exactly how a broken app happens. Nothing new is started and everything still
 queued is skipped, and the summary says how many packages were updated and how many were

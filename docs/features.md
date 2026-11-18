@@ -196,6 +196,12 @@ the button's tooltip names the running scan instead of blaming an empty selectio
 
 #### Running the update
 
+While a run is in progress the rest of the screen is disabled and stood down by a material,
+with a note explaining why. The run takes the action bar's place and shape at the bottom —
+both draw through one chrome (`wegaBottomBar()`) — with the progress, the live log toggle and
+**Stop after this one**. That bar is part of the run overlay, the one layer above the
+disabled screen, so the stop button is never disabled along with what it covers.
+
 - **Selected updates run side by side.** A run no longer walks its selection one package at a
   time: each cask and each npm global gets its own package-manager process, with **at most
   three in flight**, while the Homebrew formula batch and the App Store batch run alongside

@@ -11,6 +11,8 @@ extension Translations {
             "Update category",
         "Producenci":
             "Vendors",
+        "Zatrzymaj po bieżącym":
+            "Stop after this one",
         "Grupuj":
             "Group",
         "według pilności":

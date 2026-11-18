@@ -40,6 +40,9 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   when there is a list to keep: the list stays, stood down, and the header shows each
   source's progress (Homebrew, App Store, npm, vendors). Only the very first scan shows the
   full scanning scene.
+- **Updates: a running update lives in the bottom bar.** Progress, the log and **Stop after
+  this one** take the action bar's place instead of a card in the middle of the screen; the
+  list stays stood down behind a note until the run lands.
 
 ### Added
 - **Wega chases her ball.** Now and then a ball rolls past her card in the sidebar; she
