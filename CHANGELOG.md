@@ -27,6 +27,15 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 - **Wega has a card at the bottom of the sidebar.** It shows her line for the current screen,
   her comment on a finished scan, when she last checked, and the one-time notification
   question. The status footer and the speech bubble over the list are gone.
+- **Updates: categories moved into a scope bar.** The sidebar has one Updates row (its badge
+  turns red while a security fix waits); all, apps, CLI tools and security fixes are a
+  scope bar above the list, with counts. The toolbar no longer has a Settings gear (use ⌘,
+  or the app menu), and the inspector toggle disappears outside Updates.
+
+### Added
+- **Wega chases her ball.** Now and then a ball rolls past her card in the sidebar; she
+  glances after it, runs off and comes back carrying it. On the "everything up to date"
+  screen the full Wega does the same chase as her first trick. Off under Reduce motion.
 
 ## [0.7.1] — 2026-11-17
 

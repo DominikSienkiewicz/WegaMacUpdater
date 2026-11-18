@@ -30,21 +30,22 @@ struct SidebarList: View {
     let quip:           String?
 
     /// `List` must be able to express "no selection"; the window never can. Writes of `nil`
-    /// (a deselect click) are dropped so a destination always stays chosen.
+    /// (a deselect click) are dropped so a destination always stays chosen. UX-16 — every
+    /// filtered Updates list highlights the one Updates row, and picking that row while
+    /// already on Updates keeps the scope chosen above the list.
     private var listSelection: Binding<SidebarSelection?> {
         Binding(
-            get: { selection },
-            set: { if let new = $0 { selection = new } }
+            get: { selection.sidebarRow },
+            set: { if let new = $0 { selection = selection.applyingSidebarPick(new) } }
         )
     }
 
     var body: some View {
         List(selection: listSelection) {
+            // UX-16 — one row; the categories are the scope bar above the list. The badge
+            // turns red while a security fix is waiting, which its own row used to say.
             Section {
-                row(.updates(.all),      badge: appsBadge + cliBadge, spins: true)
-                row(.updates(.apps),     badge: appsBadge)
-                row(.updates(.cli),      badge: cliBadge)
-                row(.updates(.security), badge: securityBadge, isDanger: true)
+                row(.updates(.all), badge: appsBadge + cliBadge, isDanger: securityBadge > 0, spins: true)
             } header: { header(tr("Do aktualizacji")) }
             Section {
                 row(.migration)

@@ -157,7 +157,8 @@ struct DetailColumn: View {
                 onFooterInfo:  { lastCheck = $0; securityBadge = $1 },
                 updateFilter:  selection.filter ?? .all,
                 onCategoryCounts: { appsBadge = $0; cliBadge = $1 },
-                onUndoableCount:  { rollbackBadge = $0 }
+                onUndoableCount:  { rollbackBadge = $0 },
+                onScopeChange:    { onNavigate(.updates($0)) }
             )
             .opacity(selection.tab == .update ? 1 : 0)
             .allowsHitTesting(selection.tab == .update)

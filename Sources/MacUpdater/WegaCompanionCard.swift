@@ -42,12 +42,35 @@ struct WegaCompanionCardContent: View {
     var asksForNotifications = false
     var onDecline: () -> Void = {}
     var onAgree: () -> Void = {}
+    /// UX-17 — only the live card in the sidebar plays the ball chase; a measured or
+    /// previewed card stays still.
+    var playsWithBall = false
 
     @ScaledMetric(relativeTo: .body) private var cardHeight: CGFloat = 84
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    // UX-17 — the card is the stage: the ball rolls along its bottom edge, and Wega runs off
+    // its right edge and back in from the left. Offsets and rotation only, clipped to the
+    // card, so the card's geometry never moves.
+    @State private var stageWidth: CGFloat = 220
+    @State private var iconOffset: CGFloat = 0
+    @State private var iconRotation: Double = 0
+    @State private var ballVisible = false
+    @State private var ballX: CGFloat = 0
+    @State private var ballAngle: Double = 0
+    @State private var carriesBall = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             WegaIcon(size: 36)
+                .overlay(alignment: .bottomTrailing) {
+                    if carriesBall {
+                        WegaBall(diameter: 11).offset(x: 4, y: 3)
+                    }
+                }
+                .rotationEffect(.degrees(iconRotation))
+                .offset(x: iconOffset)
+                .zIndex(1)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(asksForNotifications ? tr("Powiadamiać o nowych aktualizacjach?") : presentation.line)
@@ -76,9 +99,56 @@ struct WegaCompanionCardContent: View {
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: cardHeight)
+        .overlay(alignment: .bottomLeading) {
+            if ballVisible {
+                WegaBall(diameter: 10)
+                    .rotationEffect(.degrees(ballAngle))
+                    .offset(x: ballX, y: -5)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { stageWidth = $0 }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Wega")
+        // Restarted whenever what may play changes, so a stale loop never chases over the
+        // notification question or after "Ogranicz ruch" is switched on.
+        .task(id: [playsWithBall, asksForNotifications, reduceMotion]) { await playLoop() }
+    }
+
+    private func playLoop() async {
+        resetStage()
+        guard ContinuousMotion.loopsIdleAnimations(reduceMotion: reduceMotion) else { return }
+        try? await Task.sleep(for: .seconds(8))
+        while !Task.isCancelled {
+            await chase()
+            try? await Task.sleep(for: .seconds(Double.random(in: 45...90)))
+        }
+    }
+
+    /// The ball rolls along the card from left to right; Wega glances after it once it has
+    /// passed her, runs off the right edge, and comes back in from the left carrying it.
+    private func chase() async {
+        guard playsWithBall, !asksForNotifications else { return }
+        let chase = BallChase(direction: 1, span: stageWidth)
+        withAnimation(nil) { ballX = -12; ballAngle = 0; ballVisible = true }
+        withAnimation(.linear(duration: BallChase.ballFlight)) { ballX = stageWidth + 12; ballAngle = chase.ballSpin }
+        try? await Task.sleep(for: .seconds(BallChase.glanceDelay))
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { iconRotation = chase.glanceRotation }
+        try? await Task.sleep(for: .seconds(BallChase.glanceHold))
+        withAnimation(.easeIn(duration: BallChase.run)) { iconOffset = chase.runOut }
+        try? await Task.sleep(for: .seconds(BallChase.run))
+        guard !Task.isCancelled else { return }
+        withAnimation(nil) { ballVisible = false; iconOffset = chase.reentry; iconRotation = 0; carriesBall = true }
+        withAnimation(.easeOut(duration: BallChase.comeBack)) { iconOffset = 0 }
+        try? await Task.sleep(for: .seconds(BallChase.comeBack + BallChase.proud))
+        withAnimation(.easeOut(duration: 0.3)) { carriesBall = false }
+    }
+
+    private func resetStage() {
+        withAnimation(nil) {
+            iconOffset = 0; iconRotation = 0; ballVisible = false; carriesBall = false
+        }
     }
 }
 
@@ -103,7 +173,8 @@ struct WegaCompanionCard: View {
             presentation: WegaCompanionPresentation(state: state, quip: quip, lastCheck: lastCheck),
             asksForNotifications: agent.needsNotificationExplanation,
             onDecline: { agent.declineNotifications() },
-            onAgree: { Task { await agent.agreeToNotifications() } }
+            onAgree: { Task { await agent.agreeToNotifications() } },
+            playsWithBall: true
         )
         .animation(.easeInOut(duration: 0.2), value: quip)
     }

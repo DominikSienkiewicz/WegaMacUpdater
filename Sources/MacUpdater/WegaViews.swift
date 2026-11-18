@@ -230,27 +230,8 @@ struct WegaFull: View {
                     .offset(x: size * 0.24, y: size * 0.42 + (ballBounce ? size * 0.015 : 0))
 
                 // Ball
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                Color(red: 1.0, green: 0.38, blue: 0.22),
-                                Color(red: 0.62, green: 0.06, blue: 0.0),
-                            ],
-                            center: .init(x: 0.35, y: 0.28),
-                            startRadius: 0,
-                            endRadius: size * 0.07
-                        )
-                    )
-                    .overlay(
-                        Circle()
-                            .fill(Color.white.opacity(0.25))
-                            .scaleEffect(0.35)
-                            .offset(x: -size * 0.02, y: -size * 0.02)
-                    )
-                    .frame(width: size * 0.13, height: size * 0.13)
+                WegaBall(diameter: size * 0.13)
                     .offset(x: size * 0.24, y: ballBounce ? size * 0.40 : size * 0.38)
-                    .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
             }
         }
         .frame(width: size, height: size * 200 / 220)
