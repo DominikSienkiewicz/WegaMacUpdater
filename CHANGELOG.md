@@ -49,6 +49,12 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   glances after it, runs off and comes back carrying it. On the "everything up to date"
   screen the full Wega does the same chase as her first trick. Off under Reduce motion.
 
+### Fixed
+- **Scans no longer depend on where Wega was started from.** Every `brew`, `npm` and `mas`
+  call, the Touch ID setup script and the relaunch after a self-update now start in `/`.
+  Started from a folder that was later deleted, every source used to fail ("$PWD must be
+  set", `uv_cwd ENOENT`). A launch from Finder or the Dock already started in `/`.
+
 ## [0.7.1] — 2026-11-17
 
 ### Added

@@ -42,6 +42,7 @@ final class TouchIDSetupController: ObservableObject {
           + "tell application \"Terminal\" to activate"
         let task = Process()
         task.executableURL = SystemPaths.osascript
+        task.currentDirectoryURL = ProcessRunner.childWorkingDirectory
         task.arguments = ["-e", script]
         try? task.run()
       }

@@ -155,6 +155,14 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         self.maxCapturedBytesPerStream = maxCapturedBytesPerStream
     }
 
+    /// The directory every child process starts in, rather than whatever directory Wega itself
+    /// was started from. Inheriting it made a scan depend on how the app was launched: started
+    /// from a folder that was later deleted (a removed git worktree), every `brew` call failed
+    /// with "$PWD must be set to run brew" and every `npm` call with `uv_cwd ENOENT`. `/` is what
+    /// a launch from Finder or the Dock gives the app anyway, so for those nothing changes —
+    /// including which tool versions a version manager such as mise resolves.
+    public static let childWorkingDirectory = URL(fileURLWithPath: "/", isDirectory: true)
+
     public func run(_ request: ProcessRequest) async throws -> ProcessResult {
         try await run(request, onOutput: nil)
     }
@@ -222,6 +230,7 @@ public final class ProcessRunner: ProcessRunning, Sendable {
         let process = Process()
         process.executableURL = request.executableURL
         process.arguments = request.arguments
+        process.currentDirectoryURL = Self.childWorkingDirectory
 
         if !request.environment.isEmpty {
             var environment = request.inheritParentEnvironment
