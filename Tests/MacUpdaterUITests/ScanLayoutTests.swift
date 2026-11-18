@@ -31,7 +31,10 @@ final class ScanLayoutTests: XCTestCase {
             securityBadge: 0,
             logsErrorBadge: 0,
             rollbackBadge: 0,
-            updateActivity: activity
+            updateActivity: activity,
+            wegaState: .forTab(.update),
+            lastCheck: nil,
+            quip: nil
         )
         let hostingView = NSHostingView(rootView: view)
 

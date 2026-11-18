@@ -21,6 +21,12 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 - **Updates: one row layout.** Manually updated apps line up with Homebrew rows: same icon
   column, version in the version column. Release notes open in the inspector instead of
   unfolding inside the list; notes a feed only links to are still fetched in the app.
+- **One style for notices.** The Homebrew invitation, result and error banners, the
+  stale-cask offer and the missing-checksum warning share one shape; only their level
+  (information, success, warning, urgent) changes the colour and symbol.
+- **Wega has a card at the bottom of the sidebar.** It shows her line for the current screen,
+  her comment on a finished scan, when she last checked, and the one-time notification
+  question. The status footer and the speech bubble over the list are gone.
 
 ## [0.7.1] — 2026-11-17
 

@@ -62,6 +62,9 @@ struct ContentView: View {
     /// F4 — informational, not a gate: drives the "install Homebrew" invitation card.
     @State private var brewInstalled: Bool
     @State private var lastCheck:     Date? = nil
+    /// UX-15 — Wega's comment on a scan that just finished: set by `DetailColumn`, which
+    /// observes the scan, and shown by the sidebar's card.
+    @State private var quip:          String? = nil
     @State private var securityBadge: Int   = 0
     @State private var appsBadge:     Int   = 0
     @State private var cliBadge:      Int   = 0
@@ -93,7 +96,10 @@ struct ContentView: View {
                 securityBadge:  securityBadge,
                 logsErrorBadge: logsErrorBadge,
                 rollbackBadge:  rollbackBadge,
-                updateActivity: updateActivity
+                updateActivity: updateActivity,
+                wegaState:      wegaState,
+                lastCheck:      lastCheck,
+                quip:           quip
             )
             // Fixed, not a range: with a min/ideal/max the split view re-solved the sidebar
             // width against the detail column's changing content and shifted it left during a
@@ -109,6 +115,7 @@ struct ContentView: View {
                 logsInitialFilter: $logsInitialFilter,
                 logsErrorBadge:    $logsErrorBadge,
                 lastCheck:         $lastCheck,
+                quip:              $quip,
                 securityBadge:     $securityBadge,
                 appsBadge:         $appsBadge,
                 cliBadge:          $cliBadge,

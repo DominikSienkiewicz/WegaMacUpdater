@@ -115,23 +115,6 @@ struct WegaIcon: View {
     }
 }
 
-struct WegaSpeechBubble: View {
-    let text: String
-
-    var body: some View {
-        HStack(spacing: 6) {
-            PawPrint(size: 10, color: Color.wegaHoney)
-            Text(text)
-                .font(.wega(.subheadline).italic())
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .glassEffect(in: .capsule)
-    }
-}
-
 // MARK: - Helper chip
 
 /// M3(a) — reports the privileged helper's real `SMAppService` status instead of a
