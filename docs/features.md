@@ -27,6 +27,15 @@ Source labels stay neutral; warning, rollback and security states retain their s
 colours. The inspector puts trust information, release notes and actions before routine
 metadata. Selection, keyboard actions and vendor-update handoffs keep the same rules.
 
+Every notice on the main screens is one shape, `WegaCallout`: a tinted field whose level
+(information, success, warning, urgent) alone sets its colour and symbol, with the message
+capped at three lines. The Homebrew invitation, result and error banners, the stale-cask
+offer and the missing-checksum warning all use it. Wega has a fixed-height card at the
+bottom of the sidebar on every destination: it says her line for the current screen, comments
+on a scan that just finished, shows when she last looked and asks the one-time notification
+question. It replaced the status footer, whose counts were already the sidebar's badges, and
+the speech bubble that appeared over the list.
+
 The app icon uses the approved Wega portrait. The animated mascot shares its rounded
 upright ears, cream muzzle and dark eyes; the full mascot wears a sage collar. Its poses,
 blinks and Reduce Motion handling remain available. The monochrome menu-bar icon uses
@@ -585,7 +594,7 @@ save panel. It does not collect private vendor or Docker daemon logs and does no
 the internal cause of a vendor updater failure.
 
 ### Menu-bar agent
-A Wega silhouette lives in the menu bar, **badged with the number of available updates**. On a configurable schedule (off / hourly / every 6 hours / daily, default every 6 hours) it runs a **read-only** background check — never `brew update`, never a mutation — and posts a notification when new updates appear. **A background check never raises the macOS permission dialog**: the first time the agent has something to announce, Wega shows an explanation card in its own window, and only a user who accepts it spends the one-shot system prompt (`NotificationPrompt` in Core decides this; declining is remembered, so the card never returns).
+A Wega silhouette lives in the menu bar, **badged with the number of available updates**. On a configurable schedule (off / hourly / every 6 hours / daily, default every 6 hours) it runs a **read-only** background check — never `brew update`, never a mutation — and posts a notification when new updates appear. **A background check never raises the macOS permission dialog**: the first time the agent has something to announce, Wega asks in her card at the bottom of the sidebar, and only a user who accepts there spends the one-shot system prompt (`NotificationPrompt` in Core decides this; declining is remembered, so the question never returns).
 
 **Docker Desktop is always excluded from unattended upgrades**, even with saved opt-in
 consent; Settings shows the reason.

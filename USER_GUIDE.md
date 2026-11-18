@@ -246,8 +246,8 @@ On a schedule you choose (off / hourly / every 6 hours / daily — default every
 runs a quiet, **read-only** background check and notifies you when new updates appear.
 Closing the main window keeps this agent running; use **Quit** in its dropdown to stop it.
 
-> The first time the agent has something to announce, Wega shows an explanation card in
-> its own window before it ever raises the macOS notification prompt — so a background
+> The first time the agent has something to announce, Wega asks in her card at the bottom
+> of the sidebar before she ever raises the macOS notification prompt — so a background
 > check never surprises you with a system dialog.
 
 **Clicking a notification takes you to what it is about**, not just to whatever screen Wega

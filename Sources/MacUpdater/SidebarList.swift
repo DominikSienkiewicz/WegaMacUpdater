@@ -24,6 +24,10 @@ struct SidebarList: View {
     /// alarm, so it is badged in caramel like the update counts rather than in danger red.
     let rollbackBadge:  Int
     let updateActivity: UpdateActivity
+    /// UX-15 — what Wega's card at the bottom of the sidebar says and comments on.
+    let wegaState:      WegaState
+    let lastCheck:      Date?
+    let quip:           String?
 
     /// `List` must be able to express "no selection"; the window never can. Writes of `nil`
     /// (a deselect click) are dropped so a destination always stays chosen.
@@ -59,6 +63,13 @@ struct SidebarList: View {
         // activity changes NSSplitView geometry during a safe-area update and can create an
         // unbounded AppKit constraints loop. Sticky headers need their own matching inset.
         .safeAreaPadding(.leading, 18)
+        // UX-15 — Wega's card. Its height is fixed (see `WegaCompanionCardContent`), so this
+        // inset is the same before, during and after a scan.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            WegaCompanionCard(state: wegaState, lastCheck: lastCheck, quip: quip)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 10)
+        }
     }
 
     /// A section header carrying the same leading inset the rows get from `safeAreaPadding`,

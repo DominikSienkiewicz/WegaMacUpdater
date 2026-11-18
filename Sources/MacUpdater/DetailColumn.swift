@@ -42,82 +42,8 @@ private struct BrewInviteCard: View {
     }
 }
 
-// MARK: - Notification explanation (M3d)
-
-/// Explains, in Wega's own window, why it would like to post notifications — before macOS
-/// throws its one-shot permission dialog at a user who is looking at another app. Appears
-/// only once the background agent has actually found something worth announcing, and never
-/// again after the user answers either way.
-private struct NotificationExplanationCard: View {
-    @ObservedObject private var agent = MenuBarAgent.shared
-
-    var body: some View {
-        if agent.needsNotificationExplanation {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "bell.badge").foregroundStyle(Color.wegaHoney)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(tr("Powiadamiać o nowych aktualizacjach?"))
-                        .font(.wega(.callout, weight: .semibold))
-                    Text(tr("Wega sprawdza w tle i może dać znać, gdy pojawi się coś nowego. macOS zapyta o zgodę tylko raz."))
-                        .font(.wega(.subheadline))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer()
-                Button(tr("Nie teraz")) { agent.declineNotifications() }
-                Button(tr("Powiadamiaj")) { Task { await agent.agreeToNotifications() } }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.wegaHoneyFill)
-                    .foregroundStyle(Color.wegaInk)
-            }
-            .padding(12)
-            .background(Color.wegaHoney.opacity(0.06))
-        }
-    }
-}
-
-// MARK: - Status footer
-
-/// Persistent, window-wide footer showing scan freshness and update/security counts.
-/// Visible on every tab (attached via `DetailColumn`'s `.safeAreaInset(edge: .bottom)`).
-private struct StatusFooter: View {
-    let lastCheck:     Date?
-    let updateCount:   Int
-    let securityCount: Int
-
-    private var freshnessText: String {
-        if let lastCheck {
-            return trf("Sprawdzono %@", "\(lastCheck.formatted(date: .omitted, time: .shortened))")
-        }
-        return tr("Jeszcze nie sprawdzano")
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            PawPrint(size: 11, color: Color.wegaToffee)
-            Text(freshnessText)
-                .font(.wega(.subheadline))
-                .foregroundStyle(.tertiary)
-
-            Spacer()
-
-            Text(trf("%@ do aktualizacji", "\(updateCount)"))
-                .font(.wega(.subheadline))
-                .foregroundStyle(.tertiary)
-
-            if securityCount > 0 {
-                Label(trf("%@ poprawki bezp.", "\(securityCount)"), systemImage: "shield.lefthalf.filled")
-                    .font(.wega(.subheadline))
-                    .foregroundStyle(Color.wegaDanger)
-            }
-        }
-        .frame(height: 28)
-        .padding(.horizontal, 16)
-        .glassEffect()
-    }
-}
-
-/// The right-hand column: banners, the tab body, the mascot's bubble, and the status footer.
+/// The right-hand column: banners and the tab body. Wega's lines, the scan's freshness and
+/// the notification question live in the sidebar's `WegaCompanionCard` (UX-15).
 ///
 /// Extracted from the old `ContentArea`, minus the 44 pt strip that imitated a toolbar —
 /// `.navigationTitle` and `.navigationSubtitle` carry its label and hint now.
@@ -129,6 +55,8 @@ struct DetailColumn: View {
     @Binding var logsInitialFilter: LogLevelFilter
     @Binding var logsErrorBadge:    Int
     @Binding var lastCheck:         Date?
+    /// UX-15 — written here, where the scan is observed, and shown by the sidebar's card.
+    @Binding var quip:              String?
     @Binding var securityBadge:     Int
     @Binding var appsBadge:         Int
     @Binding var cliBadge:          Int
@@ -139,9 +67,8 @@ struct DetailColumn: View {
 
     @EnvironmentObject private var scan: ScanStore
 
-    @State private var quip: String? = nil
     /// Cancelled and replaced (never left to race) whenever a new quip starts, so a scan
-    /// that finishes while the previous bubble is still showing cannot clear it early or
+    /// that finishes while the previous comment is still showing cannot clear it early or
     /// leave it stuck once the new sleep completes.
     @State private var quipTask: Task<Void, Never>?
 
@@ -165,13 +92,6 @@ struct DetailColumn: View {
             tabBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .safeAreaInset(edge: .top, spacing: 0) { banners }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    StatusFooter(
-                        lastCheck:     lastCheck,
-                        updateCount:   updateBadge,
-                        securityCount: securityBadge
-                    )
-                }
         }
             .inspector(isPresented: inspectorPresented) {
                 InspectorPane(
@@ -182,17 +102,6 @@ struct DetailColumn: View {
                 )
                 .inspectorColumnWidth(min: 280, ideal: 340, max: 460)
             }
-            .overlay(alignment: .bottom) {
-                if let quip {
-                    WegaSpeechBubble(text: quip)
-                        .padding(.bottom, 24)
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .scale(scale: 0.88, anchor: .bottom)),
-                            removal:   .opacity
-                        ))
-                }
-            }
-            .animation(.spring(response: 0.38, dampingFraction: 0.72), value: quip != nil)
             .onReceive(scan.$inspectedKey) { key in
                 guard key != nil else { return }
                 showInspector = true
@@ -202,22 +111,13 @@ struct DetailColumn: View {
                 // status transition alone is not enough — only a finished scan earns a comment.
                 guard old == .checking, new == .results, scan.progress == .finished else { return }
                 quipTask?.cancel()
-                withAnimation { quip = finishedQuip() }
+                quip = WegaCompanionPresentation.finishedQuip(updateCount: updateBadge, securityCount: securityBadge)
                 quipTask = Task {
-                    try? await Task.sleep(for: .seconds(4.5))
+                    try? await Task.sleep(for: .seconds(6))
                     guard !Task.isCancelled else { return }
-                    withAnimation { quip = nil }
+                    quip = nil
                 }
             }
-    }
-
-    /// Wega comments on the result, not on the clock. Security wins over the update count:
-    /// a pending security fix still gets flagged even when it happens to be the only item,
-    /// which would otherwise round `updateBadge` down to a false "all clear".
-    private func finishedQuip() -> String {
-        if securityBadge > 0 { return tr("Znalazłam coś pilnego.") }
-        if updateBadge == 0  { return tr("Wszystko pod kontrolą!") }
-        return tr("Hau! Nowe paczki?")
     }
 
     /// F4 — Homebrew's absence is an invitation, not a wall. The card sits above the working UI
@@ -229,7 +129,6 @@ struct DetailColumn: View {
             if !brewInstalled {
                 BrewInviteCard { brewInstalled = BinaryLocator().locateBrew() != nil }
             }
-            NotificationExplanationCard()
         }
     }
 
