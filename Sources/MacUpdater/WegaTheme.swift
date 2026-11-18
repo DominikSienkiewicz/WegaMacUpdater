@@ -304,6 +304,10 @@ enum WegaLayout {
     /// Gap between a checkbox and whatever it labels, so a group header and the rows under
     /// it put their content in the same column.
     static let checkboxSpacing: CGFloat  = 12
+    static let updateIconSize: CGFloat   = 36
+    static let updateRowPadding: CGFloat = 13
+    static let sectionSpacing: CGFloat  = 20
+    static let versionColumnWidth: CGFloat = 148
     /// Where the column of checkboxes on the Updates screen starts. The per-row and
     /// per-group checkboxes reach it through the card's own padding; the global
     /// "select all" control sits outside the cards and has to reproduce it, which is why

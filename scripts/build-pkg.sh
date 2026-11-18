@@ -138,6 +138,15 @@ fi
 
 echo "   ✓ Architektury binarki: $(lipo -archs "$CONTENTS/MacOS/$APP_NAME")"
 
+ARTWORK_BUNDLE="$RESOURCE_BIN_DIR/${APP_NAME}_${APP_NAME}.bundle"
+if [[ -d "$ARTWORK_BUNDLE" ]]; then
+  cp -R "$ARTWORK_BUNDLE" "$CONTENTS/Resources/"
+  echo "   ✓ Skopiowano grafikę Wegi: $(basename "$ARTWORK_BUNDLE")"
+else
+  echo "❌ Nie znaleziono bundla grafiki $ARTWORK_BUNDLE"
+  exit 1
+fi
+
 # ---------------------------------------------------------------------------
 echo "→ Generuję ikonę aplikacji..."
 swift scripts/make-icon.swift

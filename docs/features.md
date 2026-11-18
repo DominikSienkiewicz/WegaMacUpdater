@@ -16,6 +16,17 @@ no full Brew scan or background updater monitoring is started. See the
 One screen that checks every source in one pass, shows the exact commands before running
 them, and reports one honest outcome per item afterwards.
 
+The results header separates scan freshness from the selected-update action. Shared cards
+and rows use consistent spacing, larger application icons and readable version changes.
+Source labels stay neutral; warning, rollback and security states retain their semantic
+colours. The inspector puts trust information, release notes and actions before routine
+metadata. Selection, keyboard actions and vendor-update handoffs keep the same rules.
+
+The app icon uses the approved Wega portrait. The animated mascot shares its rounded
+upright ears, cream muzzle and dark eyes; the full mascot wears a sage collar. Its poses,
+blinks and Reduce Motion handling remain available. The monochrome menu-bar icon uses
+the same head and ear silhouette.
+
 #### What it checks
 
 Homebrew formulae + casks (greedy), Mac App Store, npm globals, and every manual-app
@@ -475,7 +486,6 @@ sections:
   inspecting never mutates the baseline), and, for Homebrew casks, whether the download is
   **checksum-verified**. Batch items with no inspectable bundle (formulae, npm, App Store)
   honestly read *"weryfikacja niedostępna"* rather than a faked verdict.
-- **Szczegóły** lists versions, install origin and path.
 - **Co nowego** shows the real release notes for every version you are behind, not just the
   newest one, wherever the source publishes them — a Sparkle appcast or a GitHub release. When
   the feed publishes a link instead of the text, Wega fetches that page the moment you expand
@@ -483,6 +493,7 @@ sections:
   "možliwa poprawka bezpieczeństwa" badge reads the whole history, so a security fix two
   releases back is still flagged.
 - **Akcje** reuses the row's own per-source update control.
+- **Szczegóły** lists versions, install origin and path.
 
 Homebrew casks also offer **Check release notes** in the row and inspector, even when
 duplicate suppression skipped their manual checker. Fetching is deferred until requested;
@@ -569,7 +580,7 @@ save panel. It does not collect private vendor or Docker daemon logs and does no
 the internal cause of a vendor updater failure.
 
 ### Menu-bar agent
-A box icon lives in the menu bar, **badged with the number of available updates**. On a configurable schedule (off / hourly / every 6 hours / daily, default every 6 hours) it runs a **read-only** background check — never `brew update`, never a mutation — and posts a notification when new updates appear. **A background check never raises the macOS permission dialog**: the first time the agent has something to announce, Wega shows an explanation card in its own window, and only a user who accepts it spends the one-shot system prompt (`NotificationPrompt` in Core decides this; declining is remembered, so the card never returns).
+A Wega silhouette lives in the menu bar, **badged with the number of available updates**. On a configurable schedule (off / hourly / every 6 hours / daily, default every 6 hours) it runs a **read-only** background check — never `brew update`, never a mutation — and posts a notification when new updates appear. **A background check never raises the macOS permission dialog**: the first time the agent has something to announce, Wega shows an explanation card in its own window, and only a user who accepts it spends the one-shot system prompt (`NotificationPrompt` in Core decides this; declining is remembered, so the card never returns).
 
 **Docker Desktop is always excluded from unattended upgrades**, even with saved opt-in
 consent; Settings shows the reason.

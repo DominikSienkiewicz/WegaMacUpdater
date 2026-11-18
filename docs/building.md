@@ -16,6 +16,20 @@ GUI apps do not inherit an interactive shell environment. Wega resolves all tool
 
 ## Build and test
 
+The approved app artwork lives in `Sources/MacUpdater/Resources/WegaAppIcon.png`.
+SwiftPM includes it in `WegaMacUpdater_WegaMacUpdater.bundle`; the packaging script copies
+that bundle into the application's `Contents/Resources`. `scripts/make-icon.swift`
+resizes the same PNG for the `.icns` file, so the installed icon and in-app portrait use
+one source. `WegaBrandAsset` resolves the artwork in both SwiftPM and packaged layouts
+without relying on the trapping `Bundle.module` accessor.
+
+The focused artwork regression renders the icon in memory and compares it with the
+approved PNG. It does not launch the app or perform an update:
+
+```bash
+swift test --jobs 1 --no-parallel --filter WegaBrandArtworkTests
+```
+
 The shared settings fixtures keep unit-test values in memory and clear them during teardown.
 `TestDefaultsCleanupTests` covers preference-file prevention, value conversions, immutable
 snapshots, fixture isolation and isolation from standard defaults:
