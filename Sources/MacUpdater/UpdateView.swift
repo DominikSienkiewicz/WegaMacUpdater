@@ -310,7 +310,7 @@ struct UpdateView: View {
                 .frame(maxWidth: .infinity)
                 .disabled(!ScanSelectionGate.allowsSelection(isRefreshing: scan.isRefreshing))
                 .overlay {
-                    if scan.isRefreshing {
+                    if ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows) {
                         ScanBusyOverlay(progress: scan.progress)
                     }
                 }
@@ -425,6 +425,13 @@ struct UpdateView: View {
         }
     }
 
+    /// Whether the list shows rows rather than one of its empty states — the one answer
+    /// `listColumn` and the scan overlay over it both read.
+    private var showsRows: Bool {
+        let hasAnything = !(allItems.isEmpty && visibleManual.isEmpty && scan.restartCandidates.isEmpty)
+        return hasAnything && (filterHasContent(updateFilter) || !scan.restartCandidates.isEmpty)
+    }
+
     @ViewBuilder
     private var listColumn: some View {
         if allItems.isEmpty && visibleManual.isEmpty && scan.restartCandidates.isEmpty {
@@ -439,7 +446,7 @@ struct UpdateView: View {
                           message: tr("Ostatni skan nie dostał odpowiedzi od wszystkich źródeł — pusta lista nic tu nie znaczy. Odśwież, gdy wróci połączenie."),
                           compact: true)
             }
-        } else if filterHasContent(updateFilter) || !scan.restartCandidates.isEmpty {
+        } else if showsRows {
             ScrollView {
                 LazyVStack(spacing: WegaLayout.sectionSpacing) {
                     switch grouping {
