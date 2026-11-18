@@ -79,171 +79,8 @@ struct WegaHead: View {
     }
 
     static func draw(ctx: GraphicsContext, s: CGFloat, earL: Double, earR: Double, pose: WegaPose, blinking: Bool = false) {
-        // Left ear (pivot 33,44)
-        var lCtx = ctx
-        lCtx.translateBy(x: 33*s, y: 44*s)
-        lCtx.rotate(by: .degrees(earL))
-        lCtx.translateBy(x: -33*s, y: -44*s)
-        lCtx.fill(leftEarOuter(s), with: .color(.wegaEarDark))
-        lCtx.fill(leftEarFront(s), with: .color(.wegaBodyTan))
-
-        // Right ear (pivot 67,44)
-        var rCtx = ctx
-        rCtx.translateBy(x: 67*s, y: 44*s)
-        rCtx.rotate(by: .degrees(earR))
-        rCtx.translateBy(x: -67*s, y: -44*s)
-        rCtx.fill(rightEarOuter(s), with: .color(.wegaEarDark))
-        rCtx.fill(rightEarFront(s), with: .color(.wegaBodyTan))
-
-        // Head
-        ctx.fill(headShape(s), with: .color(.wegaBodyTan))
-        ctx.fill(muzzleShape(s), with: .color(Color.wegaMuzzle.opacity(0.55)))
-        ctx.fill(chinShape(s),   with: .color(Color.wegaChest.opacity(0.6)))
-
-        // Eyes
-        let lw = 2.2 * s
-        if pose == .sleep || blinking {
-            ctx.stroke(closedEyePath(side: .left,  s: s), with: .color(.wegaFeature), lineWidth: lw)
-            ctx.stroke(closedEyePath(side: .right, s: s), with: .color(.wegaFeature), lineWidth: lw)
-        } else if pose == .happy {
-            ctx.stroke(happyEyePath(side: .left,  s: s), with: .color(.wegaFeature), lineWidth: lw)
-            ctx.stroke(happyEyePath(side: .right, s: s), with: .color(.wegaFeature), lineWidth: lw)
-        } else {
-            ctx.fill(eyeLiner(side: .left,  s: s), with: .color(Color.wegaFeature.opacity(0.5)))
-            ctx.fill(eyeLiner(side: .right, s: s), with: .color(Color.wegaFeature.opacity(0.5)))
-            ctx.fill(ellipse(40, 53, 3.1, 3.4, s), with: .color(.wegaFeature))
-            ctx.fill(ellipse(60, 53, 3.1, 3.4, s), with: .color(.wegaFeature))
-            let highlight = Color(red: 0.96, green: 0.85, blue: 0.66)
-            ctx.fill(ellipse(41, 51.7, 1, 1, s), with: .color(highlight))
-            ctx.fill(ellipse(61, 51.7, 1, 1, s), with: .color(highlight))
-        }
-
-        // Nose
-        ctx.fill(noseShape(s), with: .color(.wegaFeature))
-        ctx.fill(ellipse(48, 64.5, 1.3, 0.7, s), with: .color(Color.white.opacity(0.3)))
-
-        // Mouth
-        switch pose {
-        case .happy:
-            ctx.stroke(mouthLine(s),  with: .color(.wegaFeature), lineWidth: 1.4*s)
-            ctx.stroke(happyMouth(s), with: .color(.wegaFeature), lineWidth: 1.8*s)
-            ctx.fill(ellipse(50, 78, 3, 1.5, s), with: .color(.wegaTongue))
-        case .sleep:
-            ctx.stroke(sleepMouth(s), with: .color(.wegaFeature), lineWidth: 1.4*s)
-        case .sad:
-            ctx.stroke(sadMouth(s), with: .color(.wegaFeature), lineWidth: 1.6*s)
-        default:
-            ctx.stroke(mouthLine(s),    with: .color(.wegaFeature), lineWidth: 1.4*s)
-            ctx.stroke(normalMouthL(s), with: .color(.wegaFeature), lineWidth: 1.4*s)
-            ctx.stroke(normalMouthR(s), with: .color(.wegaFeature), lineWidth: 1.4*s)
-        }
+        WegaPortrait.draw(ctx: ctx, scale: s, earAngles: (earL, earR), pose: pose, blinking: blinking)
     }
-
-    // MARK: Path helpers
-
-    private static func pt(_ x: CGFloat, _ y: CGFloat, _ s: CGFloat) -> CGPoint { CGPoint(x: x*s, y: y*s) }
-
-    private static func ellipse(_ cx: CGFloat, _ cy: CGFloat, _ rx: CGFloat, _ ry: CGFloat, _ s: CGFloat) -> Path {
-        Path(ellipseIn: CGRect(x: (cx-rx)*s, y: (cy-ry)*s, width: rx*2*s, height: ry*2*s))
-    }
-
-    private static func leftEarOuter(_ s: CGFloat) -> Path {
-        Path { p in p.move(to: pt(22,46,s)); p.addLine(to: pt(30,4,s)); p.addLine(to: pt(42,42,s)); p.closeSubpath() }
-    }
-    private static func leftEarFront(_ s: CGFloat) -> Path {
-        Path { p in p.move(to: pt(25,45,s)); p.addLine(to: pt(32,12,s)); p.addLine(to: pt(41,41,s)); p.closeSubpath() }
-    }
-    private static func rightEarOuter(_ s: CGFloat) -> Path {
-        Path { p in p.move(to: pt(58,42,s)); p.addLine(to: pt(70,4,s)); p.addLine(to: pt(78,46,s)); p.closeSubpath() }
-    }
-    private static func rightEarFront(_ s: CGFloat) -> Path {
-        Path { p in p.move(to: pt(59,41,s)); p.addLine(to: pt(68,12,s)); p.addLine(to: pt(75,45,s)); p.closeSubpath() }
-    }
-    private static func headShape(_ s: CGFloat) -> Path {
-        Path { p in
-            p.move(to: pt(26,44,s))
-            p.addQuadCurve(to: pt(34,35,s), control: pt(26,36,s))
-            p.addLine(to: pt(66,35,s))
-            p.addQuadCurve(to: pt(74,44,s), control: pt(74,36,s))
-            p.addLine(to: pt(74,64,s))
-            p.addQuadCurve(to: pt(62,80,s), control: pt(74,76,s))
-            p.addQuadCurve(to: pt(38,80,s), control: pt(50,84,s))
-            p.addQuadCurve(to: pt(26,64,s), control: pt(26,76,s))
-            p.closeSubpath()
-        }
-    }
-    private static func muzzleShape(_ s: CGFloat) -> Path {
-        Path { p in
-            p.move(to: pt(36,60,s))
-            p.addQuadCurve(to: pt(40,57,s), control: pt(36,58,s))
-            p.addLine(to: pt(60,57,s))
-            p.addQuadCurve(to: pt(64,60,s), control: pt(64,58,s))
-            p.addLine(to: pt(64,70,s))
-            p.addQuadCurve(to: pt(50,78,s), control: pt(62,76,s))
-            p.addQuadCurve(to: pt(36,70,s), control: pt(38,76,s))
-            p.closeSubpath()
-        }
-    }
-    private static func chinShape(_ s: CGFloat) -> Path {
-        Path { p in
-            p.move(to: pt(42,72,s))
-            p.addQuadCurve(to: pt(58,72,s), control: pt(50,78,s))
-            p.addLine(to: pt(56,76,s))
-            p.addQuadCurve(to: pt(44,76,s), control: pt(50,79,s))
-            p.closeSubpath()
-        }
-    }
-    private static func noseShape(_ s: CGFloat) -> Path {
-        Path { p in
-            p.move(to: pt(44,64,s))
-            p.addQuadCurve(to: pt(56,64,s), control: pt(50,62,s))
-            p.addQuadCurve(to: pt(56,70,s), control: pt(58,68,s))
-            p.addQuadCurve(to: pt(44,70,s), control: pt(50,72,s))
-            p.addQuadCurve(to: pt(44,64,s), control: pt(42,68,s))
-            p.closeSubpath()
-        }
-    }
-
-    enum Side { case left, right }
-
-    private static func eyeLiner(side: Side, s: CGFloat) -> Path {
-        switch side {
-        case .left:
-            Path { p in
-                p.move(to: pt(33,51,s))
-                p.addQuadCurve(to: pt(46,49,s), control: pt(39,48,s))
-                p.addQuadCurve(to: pt(46,55,s), control: pt(47,53,s))
-                p.addQuadCurve(to: pt(34,55,s), control: pt(39,57,s))
-                p.closeSubpath()
-            }
-        case .right:
-            Path { p in
-                p.move(to: pt(54,49,s))
-                p.addQuadCurve(to: pt(67,51,s), control: pt(61,48,s))
-                p.addQuadCurve(to: pt(61,57,s), control: pt(66,55,s))
-                p.addQuadCurve(to: pt(54,55,s), control: pt(54,57,s))
-                p.closeSubpath()
-            }
-        }
-    }
-    private static func closedEyePath(side: Side, s: CGFloat) -> Path {
-        switch side {
-        case .left:  Path { p in p.move(to: pt(36,52,s)); p.addQuadCurve(to: pt(46,52,s), control: pt(41,55,s)) }
-        case .right: Path { p in p.move(to: pt(54,52,s)); p.addQuadCurve(to: pt(64,52,s), control: pt(59,55,s)) }
-        }
-    }
-    private static func happyEyePath(side: Side, s: CGFloat) -> Path {
-        switch side {
-        case .left:  Path { p in p.move(to: pt(36,54,s)); p.addQuadCurve(to: pt(46,54,s), control: pt(41,49,s)) }
-        case .right: Path { p in p.move(to: pt(54,54,s)); p.addQuadCurve(to: pt(64,54,s), control: pt(59,49,s)) }
-        }
-    }
-    private static func mouthLine(_ s: CGFloat)    -> Path { Path { p in p.move(to: pt(50,71,s)); p.addLine(to: pt(50,74,s)) } }
-    private static func normalMouthL(_ s: CGFloat) -> Path { Path { p in p.move(to: pt(45,75,s)); p.addQuadCurve(to: pt(50,74,s), control: pt(47.5,77,s)) } }
-    private static func normalMouthR(_ s: CGFloat) -> Path { Path { p in p.move(to: pt(50,74,s)); p.addQuadCurve(to: pt(55,75,s), control: pt(52.5,77,s)) } }
-    private static func happyMouth(_ s: CGFloat)   -> Path { Path { p in p.move(to: pt(42,75,s)); p.addQuadCurve(to: pt(58,75,s), control: pt(50,82,s)) } }
-    private static func sleepMouth(_ s: CGFloat)   -> Path { Path { p in p.move(to: pt(48,72,s)); p.addQuadCurve(to: pt(52,72,s), control: pt(50,73.5,s)) } }
-    private static func sadMouth(_ s: CGFloat)     -> Path { Path { p in p.move(to: pt(44,74,s)); p.addQuadCurve(to: pt(56,74,s), control: pt(50,71,s)) } }
 }
 
 // MARK: - WegaIcon (app icon tile for sidebar brand area)
@@ -253,65 +90,26 @@ struct WegaIcon: View {
     var radius: CGFloat = 9
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: radius)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.94, green: 0.78, blue: 0.54),
-                            Color(red: 0.72, green: 0.48, blue: 0.23)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
-
-            Canvas { ctx, cs in
-                let s = cs.width / 100
-                // Left ear
-                ctx.fill(
-                    Path { p in p.move(to: CGPoint(x: 22*s, y: 46*s)); p.addLine(to: CGPoint(x: 30*s, y: 4*s)); p.addLine(to: CGPoint(x: 42*s, y: 42*s)); p.closeSubpath() },
-                    with: .color(Color(red: 0.23, green: 0.16, blue: 0.09))
-                )
-                // Right ear
-                ctx.fill(
-                    Path { p in p.move(to: CGPoint(x: 58*s, y: 42*s)); p.addLine(to: CGPoint(x: 70*s, y: 4*s)); p.addLine(to: CGPoint(x: 78*s, y: 46*s)); p.closeSubpath() },
-                    with: .color(Color(red: 0.23, green: 0.16, blue: 0.09))
-                )
-                // Head
-                ctx.fill(Path { p in
-                    p.move(to: CGPoint(x: 26*s, y: 44*s))
-                    p.addQuadCurve(to: CGPoint(x: 34*s, y: 35*s), control: CGPoint(x: 26*s, y: 36*s))
-                    p.addLine(to: CGPoint(x: 66*s, y: 35*s))
-                    p.addQuadCurve(to: CGPoint(x: 74*s, y: 44*s), control: CGPoint(x: 74*s, y: 36*s))
-                    p.addLine(to: CGPoint(x: 74*s, y: 64*s))
-                    p.addQuadCurve(to: CGPoint(x: 62*s, y: 80*s), control: CGPoint(x: 74*s, y: 76*s))
-                    p.addQuadCurve(to: CGPoint(x: 38*s, y: 80*s), control: CGPoint(x: 50*s, y: 84*s))
-                    p.addQuadCurve(to: CGPoint(x: 26*s, y: 64*s), control: CGPoint(x: 26*s, y: 76*s))
-                    p.closeSubpath()
-                }, with: .color(Color(red: 0.94, green: 0.85, blue: 0.71)))
-                // Left eye
-                ctx.fill(
-                    Path(ellipseIn: CGRect(x: 33*s, y: 50*s, width: 8*s, height: 9*s)),
-                    with: .color(Color(red: 0.12, green: 0.08, blue: 0.04))
-                )
-                // Right eye
-                ctx.fill(
-                    Path(ellipseIn: CGRect(x: 59*s, y: 50*s, width: 8*s, height: 9*s)),
-                    with: .color(Color(red: 0.12, green: 0.08, blue: 0.04))
-                )
-                // Nose
-                ctx.fill(Path { p in
-                    p.move(to: CGPoint(x: 44*s, y: 64*s))
-                    p.addQuadCurve(to: CGPoint(x: 56*s, y: 64*s), control: CGPoint(x: 50*s, y: 62*s))
-                    p.addQuadCurve(to: CGPoint(x: 56*s, y: 70*s), control: CGPoint(x: 58*s, y: 68*s))
-                    p.addQuadCurve(to: CGPoint(x: 44*s, y: 70*s), control: CGPoint(x: 50*s, y: 72*s))
-                    p.addQuadCurve(to: CGPoint(x: 44*s, y: 64*s), control: CGPoint(x: 42*s, y: 68*s))
-                    p.closeSubpath()
-                }, with: .color(Color(red: 0.05, green: 0.03, blue: 0.02)))
+        Group {
+            if let image = WegaBrandAsset.image {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+            } else {
+                ZStack {
+                    RoundedRectangle(cornerRadius: radius)
+                        .fill(LinearGradient(
+                            colors: [WegaCoat.cream, WegaCoat.sunlitTan],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
+                    Canvas { ctx, cs in
+                        WegaHead.draw(ctx: ctx, s: cs.width / 100, earL: 0, earR: 0, pose: .idle)
+                    }
+                    .padding(2)
+                }
             }
-            .padding(2)
         }
         .frame(width: size, height: size)
     }
@@ -504,7 +302,7 @@ struct WegaFull: View {
             p.addQuadCurve(to: pt(168, 122), control: pt(160, 148))
             p.addQuadCurve(to: pt(162, 94),  control: pt(172, 100))
         }
-        ctx.stroke(tailPath, with: .color(.wegaBodyTan), style: StrokeStyle(lineWidth: 9*s, lineCap: .round))
+        ctx.stroke(tailPath, with: .color(WegaCoat.tan), style: StrokeStyle(lineWidth: 9*s, lineCap: .round))
 
         // Body right shading
         ctx.fill(Path { p in
@@ -513,7 +311,7 @@ struct WegaFull: View {
             p.addQuadCurve(to: pt(126, 178), control: pt(136, 178))
             p.addLine(to: pt(126, 110))
             p.closeSubpath()
-        }, with: .color(Color.wegaBodyShade.opacity(0.5)))
+        }, with: .color(WegaCoat.shade.opacity(0.5)))
 
         // Main body
         ctx.fill(Path { p in
@@ -526,32 +324,33 @@ struct WegaFull: View {
             p.addQuadCurve(to: pt(82,  165), control: pt(88,  178))
             p.addQuadCurve(to: pt(90,  108), control: pt(78,  138))
             p.closeSubpath()
-        }, with: .color(.wegaBodyTan))
+        }, with: .color(WegaCoat.tan))
 
         // Chest cream patch
         ctx.fill(Path { p in
-            p.move(to: pt(100, 108))
-            p.addQuadCurve(to: pt(120, 108), control: pt(110, 106))
-            p.addLine(to: pt(119, 154))
-            p.addQuadCurve(to: pt(101, 154), control: pt(110, 158))
+            p.move(to: pt(96, 108))
+            p.addQuadCurve(to: pt(124, 108), control: pt(110, 104))
+            p.addCurve(to: pt(118, 157), control1: pt(130, 129), control2: pt(123, 148))
+            p.addQuadCurve(to: pt(102, 157), control: pt(110, 164))
+            p.addCurve(to: pt(96, 108), control1: pt(97, 148), control2: pt(90, 129))
             p.closeSubpath()
-        }, with: .color(.wegaChest))
+        }, with: .color(WegaCoat.cream))
 
         // Front legs
         for lx: CGFloat in [92, 115] {
             ctx.fill(
                 Path(roundedRect: CGRect(x: lx*s, y: 148*s, width: 13*s, height: 42*s), cornerRadius: 6*s),
-                with: .color(.wegaBodyTan)
+                with: .color(WegaCoat.tan)
             )
             ctx.fill(
-                Path(roundedRect: CGRect(x: (lx+1)*s, y: 155*s, width: 3*s, height: 32*s), cornerRadius: 1.3*s),
-                with: .color(Color.wegaChest.opacity(0.5))
+                Path(roundedRect: CGRect(x: (lx+1)*s, y: 155*s, width: 7*s, height: 32*s), cornerRadius: 1.3*s),
+                with: .color(WegaCoat.cream)
             )
         }
         // Paws
         for cx: CGFloat in [98.5, 121.5] {
-            ctx.fill(ellipse(cx, 190, 10, 5),   with: .color(.wegaBodyShade))
-            ctx.fill(ellipse(cx, 192, 5.5, 2),  with: .color(Color.wegaFeature.opacity(0.5)))
+            ctx.fill(ellipse(cx, 190, 10, 5),   with: .color(WegaCoat.cream))
+            ctx.fill(ellipse(cx, 192, 5.5, 2),  with: .color(WegaCoat.charcoal.opacity(0.5)))
         }
 
         // Collar
@@ -561,9 +360,12 @@ struct WegaFull: View {
             p.addLine(to: pt(125, 106))
             p.addQuadCurve(to: pt(95, 106), control: pt(110, 111))
             p.closeSubpath()
-        }, with: .color(.wegaCollar))
+        }, with: .color(WegaCoat.collar))
 
-        // Collar tag
-        ctx.fill(ellipse(115, 110, 3.2, 3.2), with: .color(.wegaBodyTan))
+        // Collar buckle
+        ctx.stroke(
+            Path(roundedRect: CGRect(x: 117*s, y: 103*s, width: 6*s, height: 6*s), cornerRadius: 1.5*s),
+            with: .color(WegaCoat.buckle), lineWidth: 1.2*s
+        )
     }
 }

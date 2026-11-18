@@ -26,13 +26,13 @@ struct InspectorPane: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         header(for: update)
-                        VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: WegaLayout.sectionSpacing) {
                             trustSection(for: update)
-                            detailsSection(for: update)
                             whatsNewSection(for: update)
                             actionsSection(for: update)
+                            detailsSection(for: update)
                         }
-                        .padding(.top, 16)
+                        .padding(.top, WegaLayout.sectionSpacing)
                     }
                 }
             } else {
@@ -43,7 +43,7 @@ struct InspectorPane: View {
                 .frame(maxHeight: .infinity, alignment: .top)
             }
         }
-        .padding(16)
+        .padding(20)
     }
 
     // MARK: Empty state
@@ -89,7 +89,7 @@ struct InspectorPane: View {
                     isSecurityFix: false,
                     requiresForce: false
                 ),
-                sourceBadge: WegaBadge(label: kindLabel(item.kind), variant: kindVariant(item.kind))
+                sourceBadge: WegaBadge(label: kindLabel(item.kind), variant: kindVariant(item.kind), role: .source)
             ))
         case .manual(let app):
             let isSecurity = app.releaseNotes.map { ReleaseNotesTriage.heuristic($0.plainText).isLikelySecurityFix } ?? false
@@ -103,7 +103,7 @@ struct InspectorPane: View {
                     isSecurityFix: isSecurity,
                     requiresForce: false
                 ),
-                sourceBadge: WegaBadge(label: app.source.badgeLabel, color: app.source.provenance.badgeColor)
+                sourceBadge: WegaBadge(label: app.source.badgeLabel, color: app.source.provenance.badgeColor, role: .source)
             ))
         }
     }
@@ -112,12 +112,12 @@ struct InspectorPane: View {
     private func headerContent(_ info: HeaderInfo) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             if let iconPath = info.iconPath {
-                AppIcon(path: iconPath, size: 40)
+                AppIcon(path: iconPath, size: 48)
             } else {
-                PackageLetterIcon(name: info.name, size: 40)
+                PackageLetterIcon(name: info.name, size: 48)
             }
             Text(info.name)
-                .font(.wega(.title3, weight: .semibold))
+                .font(.wega(.title2, weight: .semibold))
                 .fixedSize(horizontal: false, vertical: true)
             VersionArrow(from: info.from, to: info.to, emphasis: info.emphasis)
             info.sourceBadge

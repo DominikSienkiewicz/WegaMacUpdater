@@ -200,62 +200,20 @@ struct UpdateView: View {
     // MARK: Results
     private var resultsView: some View {
         VStack(spacing: 0) {
-            // Top bar
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(headline)
-                        .font(.wega(.title2, weight: .semibold))
-                    if let d = scan.lastCheck {
-                        // M2 — a restored list must never pass for a fresh one. Anything
-                        // older than a quarter of an hour carries its date, and a day-old
-                        // result says so in words.
-                        let freshness = scan.freshness() ?? .fresh
-                        HStack(spacing: 4) {
-                            Text(freshness == .stale
-                                 ? trf("Znaleziono %@", "\(d.formatted(date: .abbreviated, time: .shortened))")
-                                 : trf("Sprawdzono %@", "\(d.formatted(date: .omitted, time: .shortened))"))
-                            Text("·")
-                            // While a quiet refresh runs, the phase it is on replaces the
-                            // source stamp: the list below is still last time's, and a line
-                            // that only ever said when it was taken would not say that it is
-                            // being replaced right now.
-                            Text(scan.isRefreshing ? refreshingStamp : sourceStamp)
-                                .font(.wega(.subheadline, monospaced: true))
-                        }
-                        .font(.wega(.subheadline))
-                        .foregroundStyle(freshness.needsExplicitTimestamp ? AnyShapeStyle(Color.wegaToffee) : AnyShapeStyle(.tertiary))
-                    }
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 24) {
+                    resultsHeading.fixedSize(horizontal: true, vertical: false)
+                    Spacer(minLength: 16)
+                    resultsActions
                 }
-                Spacer()
-                if !visibleItems.isEmpty {
-                    // The batch button names the selection and nothing else. It used to read
-                    // "Update all (N)" whenever nothing was ticked and upgrade every visible
-                    // row on the first click — the widest possible action, one click deep,
-                    // reached by doing nothing. Now an empty selection disables it, and the
-                    // hint beside it says why rather than leaving a dead control unexplained.
-                    // Silent during a refresh: the reason the button is dead there is the
-                    // scan, not an empty selection, and the overlay below already says so.
-                    if !scan.updating && !scan.isRefreshing && updateTargets.isEmpty {
-                        Text(tr("Zaznacz, co mam zaktualizować"))
-                            .font(.wega(.subheadline))
-                            .foregroundStyle(.secondary)
-                    }
-                    Button(action: requestUpdate) {
-                        if scan.updating {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Label(trf("Zaktualizuj wybrane (%@)", "\(updateTargets.count)"), systemImage: "arrow.down.circle.fill")
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.wegaHoneyFill)
-                    .foregroundStyle(Color.wegaInk)
-                    .disabled(!allowsUpdateRun)
-                    .help(updateButtonHelp)
+                VStack(alignment: .leading, spacing: 16) {
+                    resultsHeading
+                    resultsActions
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, WegaLayout.selectionColumnInset)
+            .padding(.vertical, WegaLayout.sectionSpacing)
 
             // Everything below the header is what a running update could be raced by, so for
             // the run's duration it is inert and covered by the run itself — see
@@ -270,6 +228,52 @@ struct UpdateView: View {
                     }
                 }
                 .animation(.easeInOut(duration: 0.2), value: scan.updating)
+        }
+    }
+
+    private var resultsHeading: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(headline)
+                .font(.wega(.largeTitle, weight: .semibold))
+                .fixedSize(horizontal: false, vertical: true)
+            if let date = scan.lastCheck {
+                let freshness = scan.freshness() ?? .fresh
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(freshness == .stale
+                         ? trf("Znaleziono %@", "\(date.formatted(date: .abbreviated, time: .shortened))")
+                         : trf("Sprawdzono %@", "\(date.formatted(date: .omitted, time: .shortened))"))
+                    Text(scan.isRefreshing ? refreshingStamp : sourceStamp)
+                }
+                .font(.wega(.subheadline))
+                .foregroundStyle(freshness.needsExplicitTimestamp ? AnyShapeStyle(Color.wegaToffee) : AnyShapeStyle(.secondary))
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var resultsActions: some View {
+        if !visibleItems.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Button(action: requestUpdate) {
+                    if scan.updating {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label(trf("Zaktualizuj wybrane (%@)", "\(updateTargets.count)"), systemImage: "arrow.down.circle.fill")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .tint(Color.wegaHoneyFill)
+                .foregroundStyle(Color.wegaInk)
+                .disabled(!allowsUpdateRun)
+                .help(updateButtonHelp)
+                if !scan.updating && !scan.isRefreshing && updateTargets.isEmpty {
+                    Text(tr("Zaznacz, co mam zaktualizować"))
+                        .font(.wega(.subheadline))
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 
@@ -377,7 +381,7 @@ struct UpdateView: View {
                 .padding(.vertical, 8)
 
                 ScrollView {
-                    LazyVStack(spacing: 12) {
+                    LazyVStack(spacing: WegaLayout.sectionSpacing) {
                         let formulae = visibleItems.filter { $0.kind == .formula }
                         let casks    = visibleItems.filter { $0.kind == .cask }
                         let store    = visibleItems.filter { $0.kind == .appStore }

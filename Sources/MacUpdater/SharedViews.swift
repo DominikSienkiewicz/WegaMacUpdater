@@ -85,24 +85,31 @@ enum WegaBadgeVariant {
     }
 }
 
+enum WegaBadgeRole {
+    case status, source
+}
+
 struct WegaBadge: View {
     let label: String
     var variant: WegaBadgeVariant = .brew
+    var role: WegaBadgeRole = .status
     private var explicitColor: Color?
 
-    init(label: String, variant: WegaBadgeVariant = .brew) {
+    init(label: String, variant: WegaBadgeVariant = .brew, role: WegaBadgeRole = .status) {
         self.label = label
         self.variant = variant
+        self.role = role
         self.explicitColor = nil
     }
 
     /// Renders with an explicit colour instead of a `WegaBadgeVariant` — same
     /// layout/metrics as the variant initializer, used for provenance-based
     /// colour-coding where the colour isn't one of the fixed variants.
-    init(label: String, color: Color) {
+    init(label: String, color: Color, role: WegaBadgeRole = .status) {
         self.label = label
         self.variant = .brew
         self.explicitColor = color
+        self.role = role
     }
 
     private var fg: Color { explicitColor ?? variant.fg }
@@ -110,12 +117,12 @@ struct WegaBadge: View {
 
     var body: some View {
         Text(label)
-            .font(.wega(.subheadline, weight: .medium, monospaced: true))
-            .foregroundStyle(fg)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
-            .background(bg, in: RoundedRectangle(cornerRadius: 5))
-            .overlay(RoundedRectangle(cornerRadius: 5).stroke(fg.opacity(0.25), lineWidth: 1))
+            .font(.wega(.subheadline, weight: .medium))
+            .foregroundStyle(role == .source ? Color.secondary : fg)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(role == .source ? Color.primary.opacity(0.04) : bg,
+                        in: RoundedRectangle(cornerRadius: 6))
     }
 }
 
@@ -183,7 +190,7 @@ struct WegaCard<Content: View>: View {
         VStack(spacing: 0) {
             content()
         }
-        .background(.background.opacity(0.5))
+        .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: WegaLayout.cardRadius))
     }
 }
@@ -248,19 +255,20 @@ struct WegaCardHeader<Trailing: View>: View {
                 if let caption {
                     Text(caption)
                         .font(.wega(.subheadline))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
         .padding(.horizontal, WegaLayout.cardPadding)
-        .padding(.vertical, 10)
-        .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+        .padding(.vertical, 14)
+        .overlay(alignment: .bottom) { Divider().opacity(0.3) }
     }
 
     private var headerRow: some View {
         HStack(spacing: 8) {
-            Image(systemName: icon).foregroundStyle(tint)
+            Image(systemName: icon)
+                .foregroundStyle(titleTinted ? tint : AnyShapeStyle(.secondary))
             Text(title)
                 .font(.wega(.headline))
                 .foregroundStyle(titleTinted ? tint : AnyShapeStyle(.primary))
@@ -370,11 +378,11 @@ struct PackageLetterIcon: View {
 // MARK: - VersionArrow
 
 extension VersionEmphasisKind {
-    /// Maps semantic emphasis to a Wega palette colour. Normal = honey, major =
+    /// Maps semantic emphasis to a Wega palette colour. Normal = primary, major =
     /// caramel, security = danger red, forced (brew --force) = toffee.
     var versionColor: Color {
         switch self {
-        case .normal:   return .wegaHoney
+        case .normal:   return .primary
         case .major:    return .wegaCaramel
         case .security: return .wegaDanger
         case .forced:   return .wegaToffee
@@ -391,9 +399,10 @@ struct VersionArrow: View {
         HStack(spacing: 5) {
             Text(from).foregroundStyle(.secondary)
             Image(systemName: "arrow.right").foregroundStyle(.tertiary).font(.caption2)
-            Text(to).foregroundStyle(emphasis.versionColor)
+            Text(to).foregroundStyle(emphasis.versionColor).fontWeight(.medium)
         }
-        .font(.caption.monospaced())
+        .font(.wega(.callout, monospaced: true))
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -434,33 +443,23 @@ struct PackageRow: View {
                 .accessibilityLabel(name)
             }
             if let path = iconPath {
-                AppIcon(path: path, size: 28)
+                AppIcon(path: path, size: WegaLayout.updateIconSize)
             } else {
-                PackageLetterIcon(name: name)
+                PackageLetterIcon(name: name, size: WegaLayout.updateIconSize)
             }
-            VStack(alignment: .leading, spacing: 1) {
-                Text(name).fontWeight(.medium)
-                if let t = token {
-                    Text(t)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.tertiary)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) {
+                    identity.fixedSize(horizontal: true, vertical: false)
+                    Spacer(minLength: 8)
+                    versionDetails
+                        .frame(idealWidth: WegaLayout.versionColumnWidth, alignment: .trailing)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
-                if rollback == .protected {
-                    RollbackScopeNotice(scope: RollbackProtection.scope(token: token ?? name), compact: true)
+                VStack(alignment: .leading, spacing: 8) {
+                    identity
+                    versionDetails
                 }
-            }
-            Spacer()
-            if let rollback { RollbackBadge(verdict: rollback, scope: RollbackProtection.scope(token: token ?? name)) }
-            if let from = currentVersion, let to = latestVersion {
-                let kind = versionChangeKind(from: from, to: to)
-                let emphasis = versionEmphasis(changeKind: kind,
-                                               isSecurityFix: securityFix,
-                                               requiresForce: requiresForce)
-                VersionArrow(from: from, to: to, emphasis: emphasis)
-            } else if let v = currentVersion ?? latestVersion {
-                Text(v)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             if onIgnore != nil || onPin != nil || onSkip != nil {
                 Menu {
@@ -489,9 +488,9 @@ struct PackageRow: View {
             }
         }
         .padding(.horizontal, WegaLayout.cardPadding)
-        .padding(.vertical, 9)
+        .padding(.vertical, WegaLayout.updateRowPadding)
         .background(isSelected ? Color.wegaHoney.opacity(0.05) : Color.clear)
-        .background(isInspected ? Color.wegaHoney.opacity(0.14) : Color.clear)
+        .background(isInspected ? Color.wegaHoney.opacity(0.08) : Color.clear)
         .overlay(alignment: .leading) {
             if isInspected {
                 Rectangle().fill(Color.wegaHoney).frame(width: 2)
@@ -515,6 +514,41 @@ struct PackageRow: View {
             ) ? .handled : .ignored
         }
     }
+
+    private var identity: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(name).fontWeight(.semibold)
+                .fixedSize(horizontal: false, vertical: true)
+            if let token, token != name {
+                Text(token)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.tertiary)
+            }
+            if rollback == .protected {
+                RollbackScopeNotice(scope: RollbackProtection.scope(token: token ?? name), compact: true)
+            }
+        }
+    }
+
+    private var versionDetails: some View {
+        HStack(spacing: 8) {
+            if let rollback {
+                RollbackBadge(verdict: rollback, scope: RollbackProtection.scope(token: token ?? name))
+            }
+            if let from = currentVersion, let to = latestVersion {
+                let kind = versionChangeKind(from: from, to: to)
+                let emphasis = versionEmphasis(changeKind: kind,
+                                               isSecurityFix: securityFix,
+                                               requiresForce: requiresForce)
+                VersionArrow(from: from, to: to, emphasis: emphasis)
+            } else if let version = currentVersion ?? latestVersion {
+                Text(version)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
 }
 
 // MARK: - Rollback badge (M5)

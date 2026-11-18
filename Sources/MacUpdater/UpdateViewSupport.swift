@@ -476,9 +476,9 @@ struct ManualUpdateSection: View {
                 let isInspected = "m:" + item.path.path == inspectedKey
                 VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    AppIcon(path: item.path, size: 32)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.name).font(.wega(.body, weight: .medium))
+                    AppIcon(path: item.path, size: WegaLayout.updateIconSize)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.name).font(.wega(.body, weight: .semibold))
                         Text((item.path.path as NSString).abbreviatingWithTildeInPath)
                             .font(.wega(.footnote))
                             .foregroundStyle(.secondary)
@@ -506,8 +506,8 @@ struct ManualUpdateSection: View {
                     Spacer()
                     ManualUpdateActionView(item: item, busyToken: busyToken, onInstall: onInstall)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, WegaLayout.cardPadding)
+                .padding(.vertical, WegaLayout.updateRowPadding)
 
                 // F1 — the release notes, inline, from whichever source could supply them.
                 // Rows whose source publishes none simply have no disclosure: the UI says
@@ -518,7 +518,7 @@ struct ManualUpdateSection: View {
                         .padding(.bottom, 10)
                 }
                 }
-                .background(isInspected ? Color.wegaHoney.opacity(0.14) : Color.clear)
+                .background(isInspected ? Color.wegaHoney.opacity(0.08) : Color.clear)
                 .overlay(alignment: .leading) {
                     if isInspected {
                         Rectangle().fill(Color.wegaHoney).frame(width: 2)
@@ -582,7 +582,7 @@ struct ManualUpdateActionView: View {
     var body: some View {
         VStack(alignment: .trailing, spacing: 8) {
             HStack(spacing: 8) {
-                WegaBadge(label: item.source.badgeLabel, color: item.source.provenance.badgeColor)
+                WegaBadge(label: item.source.badgeLabel, color: item.source.provenance.badgeColor, role: .source)
                 // REL-07: the Brew action retries a prior auto-rollback with a force-reinstall.
                 if item.rolledBack {
                     WegaBadge(label: tr("cofnięto — ponów próbę"), variant: .danger)

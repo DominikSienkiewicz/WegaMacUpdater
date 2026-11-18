@@ -18,9 +18,10 @@ import MacUpdaterCore
 enum WegaMain {
 
     /// Undocumented on purpose — this is a build-pipeline probe (`scripts/test-app-launches.sh`),
-    /// not a feature. It reads two bundled JSON files and exits; there is nothing here to misuse.
+    /// not a feature. It reads bundled data and artwork, then exits without starting the app.
     static let selfCheckFlag = "--wega-selfcheck-resources"
 
+    @MainActor
     static func main() {
         if CommandLine.arguments.contains(selfCheckFlag) {
             exit(runResourceSelfCheck())
@@ -31,18 +32,22 @@ enum WegaMain {
     /// Loads exactly what the app loads, through the same public entry points, so the probe
     /// cannot pass while the real call sites fail. Checking that the files exist would not have
     /// caught v0.2.0 — they existed.
+    @MainActor
     private static func runResourceSelfCheck() -> Int32 {
         do {
             _ = try AppEndpoints.loadBundled()
             _ = try AppCatalog.loadBundled()
-            print("wega: bundled resources are readable (endpoints.json, app-catalog.json)")
+            guard WegaBrandAsset.image != nil else {
+                throw CocoaError(.fileReadCorruptFile, userInfo: [NSFilePathErrorKey: "WegaAppIcon.png"])
+            }
+            print("wega: bundled resources are readable (endpoints.json, app-catalog.json, WegaAppIcon.png)")
             return 0
         } catch {
             FileHandle.standardError.write(Data("""
                 wega: bundled resources are UNREADABLE — \(error)
-                The packaged app cannot load endpoints.json / app-catalog.json. Compare where
-                build-pkg.sh copies the MacUpdaterCore resource bundle with the directories
-                ModuleResources searches.
+                The packaged app cannot load its bundled data or artwork. Compare where
+                build-pkg.sh copies the resource bundles with the directories searched by
+                ModuleResources and WegaBrandAsset.
 
                 """.utf8))
             return 1
