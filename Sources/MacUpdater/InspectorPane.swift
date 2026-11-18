@@ -277,10 +277,17 @@ struct InspectorPane: View {
                 ForEach(notes.history.notes) { note in
                     ReleaseNoteView(note: note, bodyFont: .wega(.callout))
                 }
+                if notes.history.omitted > 0 {
+                    Text(trf("…i %@ wcześniejszych wydań", String(notes.history.omitted)))
+                        .font(.wega(.subheadline))
+                        .foregroundStyle(.tertiary)
+                }
             }
-        } else if let link = notes?.link {
-            Link(tr("Zobacz notatki wydania"), destination: link)
-                .font(.wega(.callout))
+        } else if let notes, notes.link != nil {
+            // UX-14 — the list no longer unfolds notes, so the inspector fetches a feed's
+            // linked page in the app, with the publisher's link as the fallback, as the
+            // row's disclosure did.
+            ReleaseNotesDisclosure(notes: notes, expanded: true)
         } else {
             Text(tr("Brak informacji o zmianach"))
                 .font(.wega(.subheadline))

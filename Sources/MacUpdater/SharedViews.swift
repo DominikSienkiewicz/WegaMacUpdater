@@ -447,19 +447,10 @@ struct PackageRow: View {
             } else {
                 PackageLetterIcon(name: name, size: WegaLayout.updateIconSize)
             }
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 16) {
-                    identity.fixedSize(horizontal: true, vertical: false)
-                    Spacer(minLength: 8)
-                    versionDetails
-                        .frame(idealWidth: WegaLayout.versionColumnWidth, alignment: .trailing)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    identity
-                    versionDetails
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            UpdateRowColumns {
+                identity
+            } version: {
+                versionDetails
             }
             if onIgnore != nil || onPin != nil || onSkip != nil {
                 Menu {
@@ -857,5 +848,49 @@ struct WegaDisclosure<Content: View, Label: View>: View {
 
             if isExpanded { content() }
         }
+    }
+}
+
+// MARK: - Update row columns (UX-14)
+
+/// The name and version columns every row on the Updates screen shares — package rows and
+/// manually updated apps alike — so versions line up down a card instead of each row kind
+/// placing them its own way. Too narrow for one line, the version drops under the name.
+struct UpdateRowColumns<Identity: View, Version: View>: View {
+    private let identity: Identity
+    private let version: Version
+
+    init(@ViewBuilder _ identity: () -> Identity, @ViewBuilder version: () -> Version) {
+        self.identity = identity()
+        self.version = version()
+    }
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 16) {
+                identity.fixedSize(horizontal: true, vertical: false)
+                Spacer(minLength: 8)
+                version
+                    .frame(idealWidth: WegaLayout.versionColumnWidth, alignment: .trailing)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                identity
+                version
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+/// UX-14 — holds a selection checkbox's column open in a row that has nothing to select, so
+/// its icon lines up with the selectable rows' icons. It draws the checkbox's own glyph,
+/// hidden, so the two stay the same width at every system text size.
+struct SelectionColumnSpacer: View {
+    var body: some View {
+        Image(systemName: "square")
+            .font(WegaCheckboxToggleStyle().glyphFont)
+            .hidden()
+            .accessibilityHidden(true)
     }
 }

@@ -926,7 +926,6 @@ extension Translations {
         "Notatki są dłuższe — to początek": "The notes are longer — this is the start",
         "Zobacz pełne notatki": "See the full notes",
         "Zobacz u wydawcy": "See at the publisher",
-        "Zobacz notatki wydania": "See the release notes",
         "Spróbuj ponownie": "Try again",
         "Akcje": "Actions",
         "Brak informacji o zmianach": "No release notes available",
