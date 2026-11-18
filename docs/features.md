@@ -184,7 +184,7 @@ rather than a menu. The header shows one chip per source in scan order (Homebrew
 npm, vendors), each done, running, stopped or not yet started; nothing is estimated, because
 the scan is strictly sequential. The rows sit under a material that stands them down, with a
 note that selecting comes back when the scan ends, and they stop accepting selections. The
-material is deliberately not opaque: the previous result never leaves the window. Only a scan
+material is deliberately not opaque: the previous result never leaves the window. An empty state — *everything up to date*, or a list the last scan could not confirm — has no rows to stand down, so the material never covers it and Wega stays clear. Only a scan
 with nothing to keep on screen — the very first one — takes the window with the full scanning
 scene (`ScanProgressScene`: the progress bar, the command the current phase runs and Wega
 sniffing across the binary stream). The rescans after an update or an undo also take the

@@ -21,6 +21,13 @@ enum ScanSelectionGate {
         !isUpdating
     }
 
+    /// Whether the in-place scan's overlay covers the list. It stands rows down, so it covers
+    /// rows only: over an empty state its material just veiled Wega and her tricks for the
+    /// whole scan, with nothing on screen to protect.
+    static func coversList(isRefreshing: Bool, showsRows: Bool) -> Bool {
+        isRefreshing && showsRows
+    }
+
     /// Whether a batch update may be started right now — by the button or by ⌘⏎.
     static func allowsUpdateRun(isRefreshing: Bool, isUpdating: Bool, hasTargets: Bool) -> Bool {
         !isRefreshing && !isUpdating && hasTargets
