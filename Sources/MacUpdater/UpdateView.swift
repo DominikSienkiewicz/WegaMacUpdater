@@ -377,15 +377,7 @@ struct UpdateView: View {
                     actionBarContent(summary, showsProtection: false, compactPlan: true)
                 }
             }
-            .padding(.leading, WegaLayout.selectionColumnInset)
-            .padding(.trailing, WegaLayout.listGutter + WegaLayout.actionBarInnerPadding)
-            .padding(.vertical, WegaLayout.actionBarInnerPadding)
-            .background {
-                Color.clear
-                    .glassEffect(.regular, in: .capsule)
-                    .padding(.horizontal, WegaLayout.listGutter)
-            }
-            .padding(.bottom, WegaLayout.listGutter)
+            .wegaBottomBar()
         }
     }
 
@@ -962,4 +954,31 @@ extension UpdateView {
         case .cask:     return nil
         }
     }
+}
+
+// MARK: - Bottom bar chrome (UX-20)
+
+/// The chrome of the bar at the bottom of the Updates list: the action bar, and the running
+/// update that takes its place (`UpdateRunOverlay`), so the two read as one bar changing state.
+///
+/// Its content is padded from the column edge by `selectionColumnInset`, so the action bar's
+/// list-wide checkbox lands in the column every group header and package row uses, while the
+/// glass behind it is inset by the list gutter.
+struct WegaBottomBar: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(.leading, WegaLayout.selectionColumnInset)
+            .padding(.trailing, WegaLayout.listGutter + WegaLayout.actionBarInnerPadding)
+            .padding(.vertical, WegaLayout.actionBarInnerPadding)
+            .background {
+                Color.clear
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .padding(.horizontal, WegaLayout.listGutter)
+            }
+            .padding(.bottom, WegaLayout.listGutter)
+    }
+}
+
+extension View {
+    func wegaBottomBar() -> some View { modifier(WegaBottomBar()) }
 }
