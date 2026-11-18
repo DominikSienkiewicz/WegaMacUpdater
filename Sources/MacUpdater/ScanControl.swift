@@ -27,9 +27,9 @@ struct ScanControl: View {
                 Button { scan.startCheck() } label: {
                     Label(tr("Sprawdź teraz"), systemImage: "arrow.triangle.2.circlepath")
                 }
-                .buttonStyle(.glassProminent)
-                .tint(Color.wegaHoneyFill)
-                .foregroundStyle(Color.wegaInk)
+                // UX-14 — plain glass: the honey-filled prominent style belongs to the one
+                // action that changes the Mac, "Zaktualizuj wybrane" in the action bar.
+                .buttonStyle(.glass)
                 .glassEffectID("scan", in: namespace)
                 // A rescan during an install would race the upgrade it is meant to describe.
                 // The button this control replaced carried the same guard.

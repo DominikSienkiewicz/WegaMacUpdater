@@ -313,6 +313,8 @@ enum WegaLayout {
     /// "select all" control sits outside the cards and has to reproduce it, which is why
     /// the sum is written down once here instead of guessed twice.
     static let selectionColumnInset: CGFloat = listGutter + cardPadding
+    /// UX-14 — the gap between the Updates action bar's glass edge and its buttons.
+    static let actionBarInnerPadding: CGFloat = 8
     static let windowMinWidth: CGFloat   = 980
     static let windowMinHeight: CGFloat  = 640
     /// UX-03 — the Settings window was pinned to exactly 640×600. At the larger system text
