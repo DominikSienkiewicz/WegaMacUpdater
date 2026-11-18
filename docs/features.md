@@ -63,9 +63,15 @@ checker, in one pass.
   applicable** (`SourceCheckOutcome.notInstalled`), never as a failed check — so a machine
   without brew no longer wears a permanent red "the list may be incomplete" banner over a
   list that is complete.
-- **Grouped by install origin.** Updates are grouped by the same `AppOrigin` the Inventory
-  window badges by, so a self-updating Homebrew cask like Postman appears under
-  **Homebrew Casks** — never "Manually installed" — keeping the two windows in agreement.
+- **Grouped by urgency, or by install origin.** By default the list is grouped by what you
+  do next: **Possible security fixes** (the manually updated apps whose release notes read as
+  a security fix, the same set as the security scope), **Apps** and **CLI tools** that Wega
+  updates in a batch, and **Needs your move** for what the vendor's updater or you finish.
+  Those cards mix sources, so each package row names its source, and a row the rollback net
+  cannot cover carries a muted shield whose tooltip says why. **Group › by source** restores
+  the grouping by the same `AppOrigin` the Inventory window badges by, so a self-updating
+  Homebrew cask like Postman appears under **Homebrew Casks** — never "Manually installed" —
+  keeping the two windows in agreement. The choice is remembered.
 - Selectable list — update all or pick individually.
 
 #### Installer applications and Java runtimes

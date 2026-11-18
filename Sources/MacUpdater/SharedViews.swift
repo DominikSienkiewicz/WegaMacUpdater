@@ -418,6 +418,11 @@ struct PackageRow: View {
     /// question does not apply (formulae, npm, App Store), so the row stays silent rather
     /// than implying a verdict it does not have.
     var rollback: RollbackProtection.Verdict? = nil
+    /// UX-18 — the row's source, shown when its card mixes sources (grouping by urgency).
+    var source: String? = nil
+    /// UX-18 — why the rollback net cannot cover this row, for sources that keep no previous
+    /// version. Shown as a muted shield on the row when its card has no per-source caption.
+    var rollbackUnavailableReason: String? = nil
     var onToggle: (@MainActor @Sendable () -> Void)? = nil
     var onSelect: (() -> Void)? = nil
     /// M5 — the ignore / pin actions, previously reachable only by right-click.
@@ -506,6 +511,11 @@ struct PackageRow: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(name).fontWeight(.semibold)
                 .fixedSize(horizontal: false, vertical: true)
+            if let source {
+                Text(source)
+                    .font(.wega(.footnote))
+                    .foregroundStyle(.secondary)
+            }
             if let token, token != name {
                 Text(token)
                     .font(.caption.monospaced())
@@ -521,6 +531,12 @@ struct PackageRow: View {
         HStack(spacing: 8) {
             if let rollback {
                 RollbackBadge(verdict: rollback, scope: RollbackProtection.scope(token: token ?? name))
+            } else if let rollbackUnavailableReason {
+                Image(systemName: "shield.slash")
+                    .font(.wega(.callout))
+                    .foregroundStyle(.tertiary)
+                    .help(rollbackUnavailableReason)
+                    .accessibilityLabel(rollbackUnavailableReason)
             }
             if let from = currentVersion, let to = latestVersion {
                 let kind = versionChangeKind(from: from, to: to)

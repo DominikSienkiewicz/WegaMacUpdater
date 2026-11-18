@@ -219,7 +219,7 @@ struct CheckingBar: View {
 
 struct UpdateSection: View {
     let title:     String
-    let subtitle:  String
+    var subtitle:  String? = nil
     let icon:      String
     let items:     [OutdatedItem]
     var iconPaths: [String: URL]  = [:]
@@ -229,6 +229,9 @@ struct UpdateSection: View {
     /// LT-01 — sources Wega cannot roll back say so under their header, instead of
     /// letting the cask shield imply a safety net the other sections do not have.
     var rollbackCaption: String? = nil
+    /// UX-18 — a card grouped by urgency mixes sources, so each row names its source and,
+    /// where the rollback net cannot reach it, says so itself (LT-01 on the row).
+    var showsSource = false
     @Binding var selected: Set<String>
     var inspectedKey: String? = nil
     var onIgnore: ((OutdatedItem) -> Void)?
@@ -270,6 +273,8 @@ struct UpdateSection: View {
                         isSelected:     selected.contains(item.key),
                         isInspected:    item.key == inspectedKey,
                         rollback:       rollbackProtection[item.name],
+                        source:         showsSource ? item.kind.sourceLabel : nil,
+                        rollbackUnavailableReason: showsSource ? UpdateView.rollbackCaption(for: item.kind) : nil,
                         onToggle:       { toggle(item.key) },
                         onSelect:       { onInspect?(item) },
                         onIgnore:       { onIgnore?(item) },
@@ -445,6 +450,8 @@ struct ManualUpdateSection: View {
     /// group sits apart (Homebrew doesn't version-manage `auto_updates` casks), so the
     /// section reads as intentional rather than an inconsistency.
     var caption:   String? = nil
+    /// UX-18 — tints the header (icon and title), e.g. danger red for possible security fixes.
+    var headerTint: Color? = nil
     var inspectedKey: String? = nil
     var onIgnore:  ((ManualOutdatedApp) -> Void)?
     var onPin:     ((ManualOutdatedApp) -> Void)?
@@ -459,7 +466,8 @@ struct ManualUpdateSection: View {
 
     var body: some View {
         WegaCard {
-            WegaCardHeader(icon: icon, title: title, count: items.count,
+            WegaCardHeader(icon: icon, tint: headerTint ?? .wegaHoney, title: title,
+                           titleTinted: headerTint != nil, count: items.count,
                            note: subtitle, caption: caption)
 
             ForEach(items, id: \.path) { item in
