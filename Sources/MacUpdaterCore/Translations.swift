@@ -21,6 +21,7 @@ public enum Translations {
         .merging(cleanup.merging(cleanupHygiene) { first, _ in first }) { first, _ in first }
         .merging(MicrosoftAutoUpdateTranslations.english) { first, _ in first }
         .merging(uninstallTexts) { first, _ in first }
+        .merging(updatesActionBar) { first, _ in first }
 }
 
 extension Translations {
@@ -925,7 +926,6 @@ extension Translations {
         "Notatki są dłuższe — to początek": "The notes are longer — this is the start",
         "Zobacz pełne notatki": "See the full notes",
         "Zobacz u wydawcy": "See at the publisher",
-        "Zobacz notatki wydania": "See the release notes",
         "Spróbuj ponownie": "Try again",
         "Akcje": "Actions",
         "Brak informacji o zmianach": "No release notes available",

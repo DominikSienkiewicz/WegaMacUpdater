@@ -16,8 +16,13 @@ no full Brew scan or background updater monitoring is started. See the
 One screen that checks every source in one pass, shows the exact commands before running
 them, and reports one honest outcome per item afterwards.
 
-The results header separates scan freshness from the selected-update action. Shared cards
-and rows use consistent spacing, larger application icons and readable version changes.
+The results header only reports the scan. A glass action bar pinned under the list carries
+the rest of the flow: the list-wide checkbox, the selection count, how many ticked casks the
+rollback net covers, the dry-run plan and **Update selected (N)**, the screen's one prominent
+action. Package rows and manually updated apps share one row layout: a row with nothing to
+select keeps the checkbox column empty, so icons line up, and the version sits in the version
+column. Release notes are read in the inspector instead of unfolding inside the list. Shared
+cards and rows use consistent spacing, larger application icons and readable version changes.
 Source labels stay neutral; warning, rollback and security states retain their semantic
 colours. The inspector puts trust information, release notes and actions before routine
 metadata. Selection, keyboard actions and vendor-update handoffs keep the same rules.
@@ -95,7 +100,7 @@ command is run by Wega.
 
 #### Before anything runs — the dry-run panel
 
-**"Show exactly what I will do"** expands a **dry-run panel** above the update button. It
+**"Show exactly what I will do"** in the action bar opens the **dry-run panel** as a sheet. It
 shows the literal commands (`brew upgrade --cask -- a b`, `npm install -g -- x@latest`, …,
 where the `--` fences package names off from option parsing — SEC-10) read from
 `UpdatePlanner.commands(for:)` — *the same call the upgrade itself executes*, so the preview
@@ -488,14 +493,14 @@ sections:
   honestly read *"weryfikacja niedostępna"* rather than a faked verdict.
 - **Co nowego** shows the real release notes for every version you are behind, not just the
   newest one, wherever the source publishes them — a Sparkle appcast or a GitHub release. When
-  the feed publishes a link instead of the text, Wega fetches that page the moment you expand
-  the row, never during a scan. Sources that publish nothing show nothing. The advisory
+  the feed publishes a link instead of the text, Wega fetches that page when you open the
+  inspector, never during a scan. Sources that publish nothing show nothing. The advisory
   "možliwa poprawka bezpieczeństwa" badge reads the whole history, so a security fix two
   releases back is still flagged.
 - **Akcje** reuses the row's own per-source update control.
 - **Szczegóły** lists versions, install origin and path.
 
-Homebrew casks also offer **Check release notes** in the row and inspector, even when
+Homebrew casks also offer **Check release notes** in the inspector, even when
 duplicate suppression skipped their manual checker. Fetching is deferred until requested;
 only the offered Sparkle version/build or GitHub tag is shown, never a guessed newer release.
 

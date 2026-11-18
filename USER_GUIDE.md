@@ -87,9 +87,9 @@ Wega goes and gets them anyway:
   Inventory window uses.
 - The header names two numbers, for example **"12 to install + 3 manual"**. The two halves
   behave differently: the *install* half is what Wega can upgrade for you; the *manual*
-  half are apps whose own updater or store page has to finish the job. The **Update all
-  (N)** button counts only the installable half, so it never promises something Wega
-  can't do.
+  half are apps whose own updater or store page has to finish the job. The **Update
+  selected (N)** button in the action bar under the list counts only installable updates
+  you ticked, so it never promises something Wega can't do.
 - **The window opens with a result, not a blank screen.** Wega restores your last scan
   from disk (or from the background menu-bar check, whichever is newer). If a restored
   result is stale it says so — e.g. *"Found 12 Jul, 21:14"* in a warning tint — rather than
@@ -186,7 +186,7 @@ installation success; completion requires independent evidence from the selected
 
 ### Release notes for Homebrew casks
 
-Click **Sprawdź notatki wydania** (Check release notes) under a cask row or in its inspector.
+Select a cask row and click **Sprawdź notatki wydania** (Check release notes) in its inspector.
 Wega reads the resolved app's Sparkle feed or its catalogued GitHub releases only on request;
 it does not add another update or change the Brew installation route. Notes describe the
 offered release, which can be older than the newest release in the feed.
@@ -264,8 +264,11 @@ it always did.
 
 ### Choose what to update
 
-- Tick individual apps, or use **Update all (N)** to take every installable update at once.
-- Before committing, expand **"Show exactly what I will do"** to see a **dry-run panel**:
+- Tick individual apps, a whole group with its header checkbox, or everything with the
+  checkbox in the action bar under the list. **Update selected (N)** in that bar takes only
+  what you ticked.
+- Before committing, click **"Show exactly what I will do"** in the action bar to open the
+  **dry-run panel**:
   the literal commands Wega will run (`brew upgrade --cask …`, `npm install -g x@latest`,
   …) — read from the *same* code that performs the upgrade, so the preview can't drift from
   reality. Per cask it also shows the download host, whether Homebrew will verify the

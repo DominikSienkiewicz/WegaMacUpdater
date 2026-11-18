@@ -277,18 +277,8 @@ struct UpdateSection: View {
                         onSkip:         skipAction(for: item),
                         backgroundUpdateToken: item.kind == .cask ? item.name : nil
                     )
-                    // F1 — the same disclosure the manual rows use. Rows whose source
-                    // published nothing have none, rather than an empty "no changes".
-                    if let notes = item.releaseNotes, !notes.isEmpty {
-                        ReleaseNotesDisclosure(notes: notes)
-                            .padding(.horizontal, 14)
-                            .padding(.bottom, 10)
-                    } else if let request = CaskReleaseNotesRequest(item: item, appPath: iconPaths[item.name]) {
-                        CaskReleaseNotesView(request: request)
-                            .id(request)
-                            .padding(.horizontal, 14)
-                            .padding(.bottom, 10)
-                    }
+                    // UX-14 — F1's release notes live in the inspector only: unfolding them
+                    // here gave every row a different height and repeated the inspector.
                 }
                 .contextMenu {
                     UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) }, onSkip: skipAction(for: item))
@@ -475,17 +465,31 @@ struct ManualUpdateSection: View {
             ForEach(items, id: \.path) { item in
                 let isInspected = "m:" + item.path.path == inspectedKey
                 VStack(spacing: 0) {
-                HStack(spacing: 12) {
+                // UX-14 — the same columns as a package row: an empty checkbox slot, so this
+                // icon lines up with every selectable row's, and the version in the version
+                // column rather than under the name. F1's release notes are in the inspector.
+                HStack(spacing: WegaLayout.checkboxSpacing) {
+                    SelectionColumnSpacer()
                     AppIcon(path: item.path, size: WegaLayout.updateIconSize)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(item.name).font(.wega(.body, weight: .semibold))
-                        Text((item.path.path as NSString).abbreviatingWithTildeInPath)
-                            .font(.wega(.footnote))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .help(item.path.path)
-                        let isSecurity = item.releaseNotes.map { ReleaseNotesTriage.heuristic($0.plainText).isLikelySecurityFix } ?? false
+                    let isSecurity = item.releaseNotes.map { ReleaseNotesTriage.heuristic($0.plainText).isLikelySecurityFix } ?? false
+                    UpdateRowColumns {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item.name).font(.wega(.body, weight: .semibold))
+                            Text((item.path.path as NSString).abbreviatingWithTildeInPath)
+                                .font(.wega(.footnote))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .frame(maxWidth: WegaLayout.rowDetailMaxWidth, alignment: .leading)
+                                .help(item.path.path)
+                            // FEAT-06: doradczy badge z triage notatek wydania (np. GitHub).
+                            if isSecurity {
+                                Label(tr("możliwa poprawka bezpieczeństwa"), systemImage: "shield.lefthalf.filled")
+                                    .font(.wega(.footnote, weight: .medium))
+                                    .foregroundStyle(Color.wegaDanger)
+                            }
+                        }
+                    } version: {
                         VersionArrow(
                             from: item.installedVersion ?? "—",
                             to: item.availableVersion ?? "—",
@@ -496,27 +500,11 @@ struct ManualUpdateSection: View {
                                 requiresForce: false
                             )
                         )
-                        // FEAT-06: doradczy badge z triage notatek wydania (np. GitHub).
-                        if isSecurity {
-                            Label(tr("możliwa poprawka bezpieczeństwa"), systemImage: "shield.lefthalf.filled")
-                                .font(.wega(.footnote, weight: .medium))
-                                .foregroundStyle(Color.wegaDanger)
-                        }
                     }
-                    Spacer()
                     ManualUpdateActionView(item: item, busyToken: busyToken, onInstall: onInstall)
                 }
                 .padding(.horizontal, WegaLayout.cardPadding)
                 .padding(.vertical, WegaLayout.updateRowPadding)
-
-                // F1 — the release notes, inline, from whichever source could supply them.
-                // Rows whose source publishes none simply have no disclosure: the UI says
-                // nothing rather than inventing a "no changes" that it cannot know.
-                if let notes = item.releaseNotes, !notes.isEmpty {
-                    ReleaseNotesDisclosure(notes: notes)
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 10)
-                }
                 }
                 .background(isInspected ? Color.wegaHoney.opacity(0.08) : Color.clear)
                 .overlay(alignment: .leading) {

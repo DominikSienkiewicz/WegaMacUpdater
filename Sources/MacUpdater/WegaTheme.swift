@@ -308,11 +308,16 @@ enum WegaLayout {
     static let updateRowPadding: CGFloat = 13
     static let sectionSpacing: CGFloat  = 20
     static let versionColumnWidth: CGFloat = 148
+    /// UX-14 — the widest a row's secondary line (a manual app's path) may ask to be, so a
+    /// deep path truncates in the middle instead of pushing the version under the name.
+    static let rowDetailMaxWidth: CGFloat = 260
     /// Where the column of checkboxes on the Updates screen starts. The per-row and
     /// per-group checkboxes reach it through the card's own padding; the global
     /// "select all" control sits outside the cards and has to reproduce it, which is why
     /// the sum is written down once here instead of guessed twice.
     static let selectionColumnInset: CGFloat = listGutter + cardPadding
+    /// UX-14 — the gap between the Updates action bar's glass edge and its buttons.
+    static let actionBarInnerPadding: CGFloat = 8
     static let windowMinWidth: CGFloat   = 980
     static let windowMinHeight: CGFloat  = 640
     /// UX-03 — the Settings window was pinned to exactly 640×600. At the larger system text

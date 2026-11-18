@@ -86,6 +86,7 @@ struct UpdateView: View {
                     policies.pin(key: req.key, name: req.name, version: version)
                 }
             }
+            .sheet(isPresented: $scan.showPlanPreview) { planSheet }
             .confirmationDialog(
                 trf("Zaktualizować %@ pozycji?", "\(pendingUpdateTargets.count)"),
                 isPresented: $showUpdateConfirmation,
@@ -200,20 +201,12 @@ struct UpdateView: View {
     // MARK: Results
     private var resultsView: some View {
         VStack(spacing: 0) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 24) {
-                    resultsHeading.fixedSize(horizontal: true, vertical: false)
-                    Spacer(minLength: 16)
-                    resultsActions
-                }
-                VStack(alignment: .leading, spacing: 16) {
-                    resultsHeading
-                    resultsActions
-                }
+            // UX-14 — the header reports the scan and nothing else; acting on the result
+            // happens in the action bar under the list.
+            resultsHeading
                 .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.horizontal, WegaLayout.selectionColumnInset)
-            .padding(.vertical, WegaLayout.sectionSpacing)
+                .padding(.horizontal, WegaLayout.selectionColumnInset)
+                .padding(.vertical, WegaLayout.sectionSpacing)
 
             // Everything below the header is what a running update could be raced by, so for
             // the run's duration it is inert and covered by the run itself — see
@@ -247,32 +240,6 @@ struct UpdateView: View {
                 .font(.wega(.subheadline))
                 .foregroundStyle(freshness.needsExplicitTimestamp ? AnyShapeStyle(Color.wegaToffee) : AnyShapeStyle(.secondary))
                 .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var resultsActions: some View {
-        if !visibleItems.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                Button(action: requestUpdate) {
-                    if scan.updating {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Label(trf("Zaktualizuj wybrane (%@)", "\(updateTargets.count)"), systemImage: "arrow.down.circle.fill")
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .tint(Color.wegaHoneyFill)
-                .foregroundStyle(Color.wegaInk)
-                .disabled(!allowsUpdateRun)
-                .help(updateButtonHelp)
-                if !scan.updating && !scan.isRefreshing && updateTargets.isEmpty {
-                    Text(tr("Zaznacz, co mam zaktualizować"))
-                        .font(.wega(.subheadline))
-                        .foregroundStyle(.secondary)
-                }
             }
         }
     }
@@ -322,8 +289,6 @@ struct UpdateView: View {
                     .padding(.bottom, 8)
             }
 
-            planPreview
-
             staleCaskCard
 
             // The rows on screen are the ones the scan is in the middle of replacing, so for
@@ -343,6 +308,97 @@ struct UpdateView: View {
         }
     }
 
+    // MARK: Action bar
+
+    /// UX-14 — one bar under the list carries the whole path from selection to update: the
+    /// list-wide checkbox, what is ticked, how much of it the rollback net covers, the plan
+    /// and the update itself. It replaced a select-all row above the list, the update button
+    /// in the header and the plan disclosure between them — one flow in three places.
+    ///
+    /// It lives inside `listColumn`, so a refresh or a running update stands it down together
+    /// with the rows it acts on.
+    @ViewBuilder
+    private var actionBar: some View {
+        if !visibleItems.isEmpty {
+            let summary = UpdateActionBarSummary(
+                selectedCount: selectedVisibleCount,
+                visibleCount:  visibleItems.count,
+                targets:       updateTargets,
+                protection:    scan.caskProtection
+            )
+            HStack(spacing: WegaLayout.checkboxSpacing) {
+                // Select-all row. The bar's glass is inset by the list gutter, but its content
+                // is padded from the column edge by `selectionColumnInset`, so this checkbox
+                // lands in the column every group header and package row uses: a stray offset
+                // made the widest of the three read as an unrelated control.
+                SelectionCheckbox(
+                    state: selectAllState,
+                    accessibilityLabel: tr("Zaznacz wszystko"),
+                    accessibilityValue: selectionSummary,
+                    toggle: { scan.toggleAll(filter: updateFilter) }
+                )
+                ViewThatFits(in: .horizontal) {
+                    actionBarContent(summary, showsProtection: true, compactPlan: false)
+                    actionBarContent(summary, showsProtection: false, compactPlan: false)
+                    actionBarContent(summary, showsProtection: false, compactPlan: true)
+                }
+            }
+            .padding(.leading, WegaLayout.selectionColumnInset)
+            .padding(.trailing, WegaLayout.listGutter + WegaLayout.actionBarInnerPadding)
+            .padding(.vertical, WegaLayout.actionBarInnerPadding)
+            .background {
+                Color.clear
+                    .glassEffect(.regular, in: .capsule)
+                    .padding(.horizontal, WegaLayout.listGutter)
+            }
+            .padding(.bottom, WegaLayout.listGutter)
+        }
+    }
+
+    /// The bar's contents at one level of detail. `ViewThatFits` drops the rollback summary
+    /// first and the plan button's text second, so the update button never truncates.
+    private func actionBarContent(
+        _ summary: UpdateActionBarSummary,
+        showsProtection: Bool,
+        compactPlan: Bool
+    ) -> some View {
+        HStack(spacing: 10) {
+            Text(summary.selectionText)
+                .font(.wega(.callout, weight: summary.selectedCount == 0 ? .regular : .semibold))
+                .foregroundStyle(summary.selectedCount == 0 ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                .lineLimit(1)
+            if showsProtection, let protection = summary.protectionText {
+                Label(protection, systemImage: "shield.lefthalf.filled")
+                    .font(.wega(.subheadline))
+                    .foregroundStyle(Color.wegaSuccess)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            if !updateTargets.isEmpty {
+                Button { scan.showPlanPreview = true } label: {
+                    if compactPlan {
+                        Image(systemName: "list.bullet.rectangle")
+                    } else {
+                        Text(tr("Pokaż, co dokładnie zrobię"))
+                    }
+                }
+                .buttonStyle(.glass)
+                .controlSize(.large)
+                .help(tr("Pokaż, co dokładnie zrobię"))
+                .accessibilityLabel(tr("Pokaż, co dokładnie zrobię"))
+            }
+            Button(action: requestUpdate) {
+                Label(trf("Zaktualizuj wybrane (%@)", "\(updateTargets.count)"), systemImage: "arrow.down.circle.fill")
+            }
+            .buttonStyle(.glassProminent)
+            .controlSize(.large)
+            .tint(Color.wegaHoneyFill)
+            .foregroundStyle(Color.wegaInk)
+            .disabled(!allowsUpdateRun)
+            .help(updateButtonHelp)
+        }
+    }
+
     @ViewBuilder
     private var listColumn: some View {
         if allItems.isEmpty && visibleManual.isEmpty && scan.restartCandidates.isEmpty {
@@ -358,170 +414,148 @@ struct UpdateView: View {
                           compact: true)
             }
         } else if filterHasContent(updateFilter) || !scan.restartCandidates.isEmpty {
-            VStack(spacing: 0) {
-                // Select-all row. It sits outside the cards, so it reproduces their inset
-                // by hand (`selectionColumnInset`) and wears the row-sized glyph: this
-                // control, every group header's checkbox and every package row's checkbox
-                // form one column, and a stray offset made the widest of the three read as
-                // an unrelated control floating in the middle of the screen.
-                HStack(spacing: WegaLayout.checkboxSpacing) {
-                    SelectionCheckbox(
-                        state: selectAllState,
-                        accessibilityLabel: tr("Zaznacz wszystko"),
-                        accessibilityValue: selectionSummary,
-                        toggle: { scan.toggleAll(filter: updateFilter) }
-                    )
-                    Text(selectedVisibleCount == 0 ? tr("Zaznacz wszystko") : selectionSummary)
-                        .font(.wega(.callout))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-                .padding(.leading, WegaLayout.selectionColumnInset)
-                .padding(.trailing, WegaLayout.listGutter)
-                .padding(.vertical, 8)
-
-                ScrollView {
-                    LazyVStack(spacing: WegaLayout.sectionSpacing) {
-                        let formulae = visibleItems.filter { $0.kind == .formula }
-                        let casks    = visibleItems.filter { $0.kind == .cask }
-                        let store    = visibleItems.filter { $0.kind == .appStore }
-                        let npmPkgs  = visibleItems.filter { $0.kind == .npm }
-                        if !formulae.isEmpty && updateFilter.allowsCli {
-                            UpdateSection(
-                                title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"), icon: "terminal",
-                                items: formulae,
-                                rollbackCaption: tr("Bez automatycznego cofnięcia — Homebrew nie zachowuje poprzednich wersji formuł."),
-                                selected: $scan.selected, inspectedKey: scan.inspectedKey,
-                                onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
-                                onInspect: { scan.inspectedKey = $0.key }
-                            )
-                        }
-                        if !casks.isEmpty && updateFilter.allowsApps {
-                            UpdateSection(
-                                title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), icon: "app.gift",
-                                items: casks, iconPaths: scan.caskIconPaths, rollbackProtection: scan.caskProtection,
-                                selected: $scan.selected, inspectedKey: scan.inspectedKey,
-                                onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
-                                onInspect: { scan.inspectedKey = $0.key }
-                            )
-                            caskTransparencyNote(casks: casks)
-                        }
-                        if !store.isEmpty && updateFilter.allowsApps {
-                            UpdateSection(
-                                title: tr("Mac App Store"), subtitle: tr("via mas-cli"), icon: "bag",
-                                items: store,
-                                rollbackCaption: tr("Bez automatycznego cofnięcia — App Store nie pozwala wrócić do poprzedniej wersji."),
-                                selected: $scan.selected, inspectedKey: scan.inspectedKey,
-                                onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
-                                onInspect: { scan.inspectedKey = $0.key }
-                            )
-                        }
-                        if !npmPkgs.isEmpty && updateFilter.allowsCli {
-                            UpdateSection(
-                                title: tr("npm globalne"), subtitle: tr("pakiety -g"), icon: "shippingbox",
-                                items: npmPkgs,
-                                rollbackCaption: tr("Bez automatycznego cofnięcia — npm nie zachowuje poprzednich wersji pakietów."),
-                                selected: $scan.selected, inspectedKey: scan.inspectedKey,
-                                onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
-                                onInspect: { scan.inspectedKey = $0.key }
-                            )
-                        }
-                        // Group manual updates by INSTALL ORIGIN (same axis the Inventory
-                        // window labels), not by update source. A self-updating Homebrew
-                        // cask (Postman, ChatGPT…) stays under "Homebrew Casks" so
-                        // both windows agree it's Brew — only genuinely non-package-manager
-                        // apps land under "Ręcznie zainstalowane".
-                        let dockerManual = visibleManual.filter { DockerDesktopUpdatePolicy.isDocker($0) }
-                        let visibleDocker = updateFilter.isSecurityOnly ? dockerManual.filter(scan.isSecurityApp) : dockerManual
-                        if !visibleDocker.isEmpty && updateFilter != .cli {
-                            ManualUpdateSection(
-                                items: visibleDocker, busyToken: scan.manualBusy,
-                                onInstall: { token in Task { await scan.installManual(token: token) } },
-                                title: "Docker Desktop", icon: "shippingbox",
-                                subtitle: tr("aktualizator producenta"),
-                                caption: tr("Domyślnie użyj aktualizatora Docker Desktop. Homebrew wymaga osobnego potwierdzenia i bezpiecznego zatrzymania."),
-                                inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,
-                                onPin: requestPinManual, onSkip: scan.skipManual,
-                                onInspect: { scan.inspectedKey = "m:" + $0.path.path }
-                            )
-                        }
-                        if updateFilter == .all || updateFilter == .apps {
-                            ForEach(scan.unresolvedDockerItems) { item in
-                                UnresolvedDockerUpdateRow(item: item) { scan.inspectedKey = item.key }
-                            }
-                        }
-                        let serviceManual = visibleManual.filter { ServiceVendorUpdatePolicy.profile(for: $0) != nil }
-                        let visibleServices = updateFilter.isSecurityOnly ? serviceManual.filter(scan.isSecurityApp) : serviceManual
-                        if !visibleServices.isEmpty && updateFilter != .cli {
-                            ManualUpdateSection(
-                                items: visibleServices, busyToken: scan.manualBusy,
-                                onInstall: { token in Task { await scan.installManual(token: token) } },
-                                title: tr("Usługi aktualizowane przez producenta"), icon: "gearshape.2",
-                                subtitle: tr("aktualizator producenta"),
-                                caption: tr("Homebrew wskazuje wersję pakietu. Aktualizację wykonaj w aplikacji, zgodnie z polityką administratora."),
-                                inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,
-                                onPin: requestPinManual, onSkip: scan.skipManual,
-                                onInspect: { scan.inspectedKey = "m:" + $0.path.path }
-                            )
-                        }
-                        if updateFilter == .all || updateFilter == .apps {
-                            ForEach(scan.unresolvedServiceItems) { item in
-                                UnresolvedServiceUpdateRow(item: item) { scan.inspectedKey = item.key }
-                            }
-                        }
-                        let manualGroups = UpdatePlanner.groupManual(visibleManual.filter {
-                            !DockerDesktopUpdatePolicy.isDocker($0) && ServiceVendorUpdatePolicy.profile(for: $0) == nil
-                        })
-                        let brewManual = updateFilter.isSecurityOnly ? manualGroups.brew.filter(scan.isSecurityApp) : manualGroups.brew
-                        if !brewManual.isEmpty && updateFilter != .cli {
-                            ManualUpdateSection(
-                                items: brewManual,
-                                busyToken: scan.manualBusy,
-                                onInstall: { token in Task { await scan.installManual(token: token) } },
-                                title: tr("Homebrew Casks"),
-                                icon: "app.gift",
-                                subtitle: tr("samoaktualizujące się"),
-                                caption: tr("Homebrew nie pilnuje wersji tych apek (auto_updates) — robią to same. Wega sprawdza je u źródła."),
-                                inspectedKey: scan.inspectedKey,
-                                onIgnore: scan.ignoreManual,
-                                onPin: requestPinManual,
-                                onSkip: scan.skipManual,
-                                onInspect: { scan.inspectedKey = "m:" + $0.path.path }
-                            )
-                        }
-                        let manualOnly = updateFilter.isSecurityOnly ? manualGroups.manual.filter(scan.isSecurityApp) : manualGroups.manual
-                        if !manualOnly.isEmpty && updateFilter != .cli {
-                            ManualUpdateSection(
-                                items: manualOnly,
-                                busyToken: scan.manualBusy,
-                                onInstall: { token in Task { await scan.installManual(token: token) } },
-                                title: tr("Ręcznie zainstalowane"),
-                                icon: "sparkle",
-                                caption: tr("Bez automatycznego cofnięcia — poprzednią wersję pobierzesz od wydawcy."),
-                                inspectedKey: scan.inspectedKey,
-                                onIgnore: scan.ignoreManual,
-                                onPin: requestPinManual,
-                                onSkip: scan.skipManual,
-                                onInspect: { scan.inspectedKey = "m:" + $0.path.path }
-                            )
-                        }
-                        if !scan.restartCandidates.isEmpty {
-                            RestartSection(
-                                candidates: scan.restartCandidates,
-                                busyProcess: scan.restartBusy,
-                                onRestart: { info in Task { await scan.restartApp(info) } }
-                            )
-                        }
-                        // During a run the log lives in `UpdateRunOverlay`; a second copy
-                        // under it would only be covered.
-                        if scan.showLog && !scan.updating {
-                            BrewLogPanel(lines: scan.brewLog, tapTrust: scan.tapTrustActions) { scan.showLog = false }
+            ScrollView {
+                LazyVStack(spacing: WegaLayout.sectionSpacing) {
+                    let formulae = visibleItems.filter { $0.kind == .formula }
+                    let casks    = visibleItems.filter { $0.kind == .cask }
+                    let store    = visibleItems.filter { $0.kind == .appStore }
+                    let npmPkgs  = visibleItems.filter { $0.kind == .npm }
+                    if !formulae.isEmpty && updateFilter.allowsCli {
+                        UpdateSection(
+                            title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"), icon: "terminal",
+                            items: formulae,
+                            rollbackCaption: tr("Bez automatycznego cofnięcia — Homebrew nie zachowuje poprzednich wersji formuł."),
+                            selected: $scan.selected, inspectedKey: scan.inspectedKey,
+                            onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
+                            onInspect: { scan.inspectedKey = $0.key }
+                        )
+                    }
+                    if !casks.isEmpty && updateFilter.allowsApps {
+                        UpdateSection(
+                            title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), icon: "app.gift",
+                            items: casks, iconPaths: scan.caskIconPaths, rollbackProtection: scan.caskProtection,
+                            selected: $scan.selected, inspectedKey: scan.inspectedKey,
+                            onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
+                            onInspect: { scan.inspectedKey = $0.key }
+                        )
+                        caskTransparencyNote(casks: casks)
+                    }
+                    if !store.isEmpty && updateFilter.allowsApps {
+                        UpdateSection(
+                            title: tr("Mac App Store"), subtitle: tr("via mas-cli"), icon: "bag",
+                            items: store,
+                            rollbackCaption: tr("Bez automatycznego cofnięcia — App Store nie pozwala wrócić do poprzedniej wersji."),
+                            selected: $scan.selected, inspectedKey: scan.inspectedKey,
+                            onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
+                            onInspect: { scan.inspectedKey = $0.key }
+                        )
+                    }
+                    if !npmPkgs.isEmpty && updateFilter.allowsCli {
+                        UpdateSection(
+                            title: tr("npm globalne"), subtitle: tr("pakiety -g"), icon: "shippingbox",
+                            items: npmPkgs,
+                            rollbackCaption: tr("Bez automatycznego cofnięcia — npm nie zachowuje poprzednich wersji pakietów."),
+                            selected: $scan.selected, inspectedKey: scan.inspectedKey,
+                            onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
+                            onInspect: { scan.inspectedKey = $0.key }
+                        )
+                    }
+                    // Group manual updates by INSTALL ORIGIN (same axis the Inventory
+                    // window labels), not by update source. A self-updating Homebrew
+                    // cask (Postman, ChatGPT…) stays under "Homebrew Casks" so
+                    // both windows agree it's Brew — only genuinely non-package-manager
+                    // apps land under "Ręcznie zainstalowane".
+                    let dockerManual = visibleManual.filter { DockerDesktopUpdatePolicy.isDocker($0) }
+                    let visibleDocker = updateFilter.isSecurityOnly ? dockerManual.filter(scan.isSecurityApp) : dockerManual
+                    if !visibleDocker.isEmpty && updateFilter != .cli {
+                        ManualUpdateSection(
+                            items: visibleDocker, busyToken: scan.manualBusy,
+                            onInstall: { token in Task { await scan.installManual(token: token) } },
+                            title: "Docker Desktop", icon: "shippingbox",
+                            subtitle: tr("aktualizator producenta"),
+                            caption: tr("Domyślnie użyj aktualizatora Docker Desktop. Homebrew wymaga osobnego potwierdzenia i bezpiecznego zatrzymania."),
+                            inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,
+                            onPin: requestPinManual, onSkip: scan.skipManual,
+                            onInspect: { scan.inspectedKey = "m:" + $0.path.path }
+                        )
+                    }
+                    if updateFilter == .all || updateFilter == .apps {
+                        ForEach(scan.unresolvedDockerItems) { item in
+                            UnresolvedDockerUpdateRow(item: item) { scan.inspectedKey = item.key }
                         }
                     }
-                    .padding(WegaLayout.listGutter)
+                    let serviceManual = visibleManual.filter { ServiceVendorUpdatePolicy.profile(for: $0) != nil }
+                    let visibleServices = updateFilter.isSecurityOnly ? serviceManual.filter(scan.isSecurityApp) : serviceManual
+                    if !visibleServices.isEmpty && updateFilter != .cli {
+                        ManualUpdateSection(
+                            items: visibleServices, busyToken: scan.manualBusy,
+                            onInstall: { token in Task { await scan.installManual(token: token) } },
+                            title: tr("Usługi aktualizowane przez producenta"), icon: "gearshape.2",
+                            subtitle: tr("aktualizator producenta"),
+                            caption: tr("Homebrew wskazuje wersję pakietu. Aktualizację wykonaj w aplikacji, zgodnie z polityką administratora."),
+                            inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,
+                            onPin: requestPinManual, onSkip: scan.skipManual,
+                            onInspect: { scan.inspectedKey = "m:" + $0.path.path }
+                        )
+                    }
+                    if updateFilter == .all || updateFilter == .apps {
+                        ForEach(scan.unresolvedServiceItems) { item in
+                            UnresolvedServiceUpdateRow(item: item) { scan.inspectedKey = item.key }
+                        }
+                    }
+                    let manualGroups = UpdatePlanner.groupManual(visibleManual.filter {
+                        !DockerDesktopUpdatePolicy.isDocker($0) && ServiceVendorUpdatePolicy.profile(for: $0) == nil
+                    })
+                    let brewManual = updateFilter.isSecurityOnly ? manualGroups.brew.filter(scan.isSecurityApp) : manualGroups.brew
+                    if !brewManual.isEmpty && updateFilter != .cli {
+                        ManualUpdateSection(
+                            items: brewManual,
+                            busyToken: scan.manualBusy,
+                            onInstall: { token in Task { await scan.installManual(token: token) } },
+                            title: tr("Homebrew Casks"),
+                            icon: "app.gift",
+                            subtitle: tr("samoaktualizujące się"),
+                            caption: tr("Homebrew nie pilnuje wersji tych apek (auto_updates) — robią to same. Wega sprawdza je u źródła."),
+                            inspectedKey: scan.inspectedKey,
+                            onIgnore: scan.ignoreManual,
+                            onPin: requestPinManual,
+                            onSkip: scan.skipManual,
+                            onInspect: { scan.inspectedKey = "m:" + $0.path.path }
+                        )
+                    }
+                    let manualOnly = updateFilter.isSecurityOnly ? manualGroups.manual.filter(scan.isSecurityApp) : manualGroups.manual
+                    if !manualOnly.isEmpty && updateFilter != .cli {
+                        ManualUpdateSection(
+                            items: manualOnly,
+                            busyToken: scan.manualBusy,
+                            onInstall: { token in Task { await scan.installManual(token: token) } },
+                            title: tr("Ręcznie zainstalowane"),
+                            icon: "sparkle",
+                            caption: tr("Bez automatycznego cofnięcia — poprzednią wersję pobierzesz od wydawcy."),
+                            inspectedKey: scan.inspectedKey,
+                            onIgnore: scan.ignoreManual,
+                            onPin: requestPinManual,
+                            onSkip: scan.skipManual,
+                            onInspect: { scan.inspectedKey = "m:" + $0.path.path }
+                        )
+                    }
+                    if !scan.restartCandidates.isEmpty {
+                        RestartSection(
+                            candidates: scan.restartCandidates,
+                            busyProcess: scan.restartBusy,
+                            onRestart: { info in Task { await scan.restartApp(info) } }
+                        )
+                    }
+                    // During a run the log lives in `UpdateRunOverlay`; a second copy
+                    // under it would only be covered.
+                    if scan.showLog && !scan.updating {
+                        BrewLogPanel(lines: scan.brewLog, tapTrust: scan.tapTrustActions) { scan.showLog = false }
+                    }
                 }
-                .scrollEdgeEffectStyle(.soft, for: .top)
+                .padding(WegaLayout.listGutter)
             }
+            .scrollEdgeEffectStyle(.soft, for: .top)
+            .safeAreaInset(edge: .bottom, spacing: 0) { actionBar }
         } else {
             EmptyHero(
                 pose: .idle,
@@ -539,10 +573,14 @@ struct UpdateView: View {
     /// host and whether Homebrew will verify its checksum, whether the rollback net covers
     /// it, whether the cask *may* ask for an admin password, and how big the download is —
     /// with **unknown** shown as itself, never as a guess.
-    @ViewBuilder
-    private var planPreview: some View {
-        if !updateTargets.isEmpty {
-            WegaDisclosure(isExpanded: $scan.showPlanPreview) {
+    ///
+    /// UX-14 — opened from the action bar as a sheet, so reading the plan no longer pushes
+    /// the list down; it probes download sizes each time it opens, as the disclosure did.
+    private var planSheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(tr("Plan aktualizacji"))
+                .font(.wega(.title3, weight: .semibold))
+            ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(scan.plannedCommands(targetKeys: updateTargetKeys).enumerated()), id: \.offset) { _, command in
                         Text("$ \(command.executable) \(command.arguments.joined(separator: " "))")
@@ -570,17 +608,16 @@ struct UpdateView: View {
                         }
                     }
                 }
-                .padding(.top, 8)
-            } label: {
-                Text(tr("Pokaż, co dokładnie zrobię"))
-                    .font(.wega(.callout, weight: .medium))
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
-            .onChange(of: scan.showPlanPreview) { _, expanded in
-                if expanded { Task { await scan.probeDownloadSizes(targetKeys: updateTargetKeys) } }
+            HStack {
+                Spacer()
+                Button(tr("Zamknij")) { scan.showPlanPreview = false }
+                    .keyboardShortcut(.cancelAction)
             }
         }
+        .padding(20)
+        .frame(minWidth: 520, idealWidth: 620, minHeight: 320, idealHeight: 460)
+        .task { await scan.probeDownloadSizes(targetKeys: updateTargetKeys) }
     }
 
     /// M3(b) — offers the cleanup that "check for updates" used to perform behind the
@@ -774,5 +811,35 @@ private struct PlanPreviewCaskRow: View {
                 RollbackScopeNotice(scope: RollbackProtection.scope(token: token))
             }
         }
+    }
+}
+
+/// UX-14 — what the action bar under the Updates list says about the selection.
+struct UpdateActionBarSummary: Equatable {
+    let selectedCount: Int
+    let visibleCount: Int
+    let protectedCount: Int
+
+    init(
+        selectedCount: Int,
+        visibleCount: Int,
+        targets: [OutdatedItem],
+        protection: [String: RollbackProtection.Verdict]
+    ) {
+        self.selectedCount = selectedCount
+        self.visibleCount = visibleCount
+        self.protectedCount = targets.filter { $0.kind == .cask && protection[$0.name] == .protected }.count
+    }
+
+    /// An empty selection says what is missing instead of offering a dead button silently.
+    var selectionText: String {
+        selectedCount == 0
+            ? tr("Zaznacz, co mam zaktualizować")
+            : trf("%@ z %@ zaznaczonych", "\(selectedCount)", "\(visibleCount)")
+    }
+
+    /// Only casks the rollback net covers count; the bar says nothing rather than zero.
+    var protectionText: String? {
+        protectedCount == 0 ? nil : trf("%@ z automatycznym cofnięciem", "\(protectedCount)")
     }
 }
