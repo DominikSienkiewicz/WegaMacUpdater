@@ -2,7 +2,7 @@ import SwiftUI
 
 /// A `WegaFull` that rests in `restPose` and, on a randomized cadence, performs
 /// one of several playful "tricks" — a tail wag, a hop, a curious head-tilt, a
-/// stretch, a shake-off or a full spin — before settling back to rest.
+/// stretch, a shake-off, a full spin or a ball chase — before settling back to rest.
 ///
 /// Changing the underlying pose animates Wega's ears and expression for free
 /// (see `WegaHead.onChange(of:)`), while transient transforms move the whole
@@ -21,6 +21,13 @@ struct PlayfulWega: View {
     @State private var offsetY:  CGFloat = 0
     @State private var scaleX:   CGFloat = 1
     @State private var scaleY:   CGFloat = 1
+    @State private var opacity:  Double  = 1
+    // UX-17 — the ball chase: the ball rolling past, and the one she brings back.
+    @State private var ballVisible = false
+    @State private var ballX:       CGFloat = 0
+    @State private var ballAngle:   Double  = 0
+    @State private var ballOpacity: Double  = 0
+    @State private var hasBall = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -31,13 +38,25 @@ struct PlayfulWega: View {
     }
 
     /// The repertoire of tricks Wega can pull.
-    enum Trick: CaseIterable { case wag, hop, tilt, stretch, shake, spin }
+    enum Trick: CaseIterable { case wag, hop, tilt, stretch, shake, spin, chase }
+
+    /// UX-17 — the first trick of a visit is the ball chase, the one worth waiting for.
+    static let openingTrick: Trick = .chase
 
     var body: some View {
-        WegaFull(pose: pose, size: size)
-            .rotationEffect(.degrees(rotation), anchor: .bottom)
-            .scaleEffect(x: scaleX, y: scaleY, anchor: .bottom)
-            .offset(x: offsetX, y: offsetY)
+        ZStack {
+            WegaFull(pose: pose, size: size, showBall: hasBall)
+                .rotationEffect(.degrees(rotation), anchor: .bottom)
+                .scaleEffect(x: scaleX, y: scaleY, anchor: .bottom)
+                .offset(x: offsetX, y: offsetY)
+                .opacity(opacity)
+            if ballVisible {
+                WegaBall(diameter: size * 0.13)
+                    .rotationEffect(.degrees(ballAngle))
+                    .offset(x: ballX, y: size * 0.39)
+                    .opacity(ballOpacity)
+            }
+        }
             // UX-03 — the trick schedule never ends, so "Ogranicz ruch" cancels it rather
             // than slowing it down: Wega holds her resting pose. Keyed on the setting so
             // turning it on interrupts a trick already under way.
@@ -56,6 +75,7 @@ struct PlayfulWega: View {
         withAnimation(nil) {
             pose = restPose
             rotation = 0; offsetX = 0; offsetY = 0; scaleX = 1; scaleY = 1
+            opacity = 1; ballVisible = false; ballOpacity = 0; hasBall = false
         }
     }
 
@@ -69,7 +89,7 @@ struct PlayfulWega: View {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(Double.random(in: 3.0...6.5)))
             if Task.isCancelled { return }
-            var next = all.randomElement() ?? .wag
+            var next = last == nil ? Self.openingTrick : (all.randomElement() ?? .wag)
             if next == last, all.count > 1 {
                 next = all.filter { $0 != last }.randomElement() ?? next
             }
@@ -88,6 +108,7 @@ struct PlayfulWega: View {
         case .stretch: await stretch()
         case .shake:   await shake()
         case .spin:    await spin()
+        case .chase:   await chase()
         }
     }
 
@@ -100,7 +121,50 @@ struct PlayfulWega: View {
     private func settle() {
         withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
             pose = restPose
-            rotation = 0; offsetX = 0; offsetY = 0; scaleX = 1; scaleY = 1
+            rotation = 0; offsetX = 0; offsetY = 0; scaleX = 1; scaleY = 1; opacity = 1
+        }
+    }
+
+    /// UX-17 — the ball rolls past, she glances after it, runs off the way it went and comes
+    /// back from the other side with the ball. She fades as she leaves the stage, so the run
+    /// never draws across whatever sits beside the empty state.
+    private func chase() async {
+        let chase = BallChase.random(span: size * 1.4)
+        withAnimation(nil) { ballX = chase.ballStart; ballAngle = 0; ballOpacity = 0; ballVisible = true }
+        withAnimation(.easeOut(duration: 0.15)) { ballOpacity = 1 }
+        withAnimation(.linear(duration: BallChase.ballFlight)) { ballX = chase.ballEnd; ballAngle = chase.ballSpin }
+        try? await Task.sleep(for: .seconds(BallChase.glanceDelay))
+
+        wake(.alert)
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+            rotation = chase.glanceRotation
+            offsetX = chase.direction * size * 0.03
+        }
+        try? await Task.sleep(for: .seconds(BallChase.glanceHold))
+        withAnimation(.easeIn(duration: 0.15)) { ballOpacity = 0 }
+
+        wake(.happy)
+        withAnimation(.easeIn(duration: BallChase.run)) { offsetX = chase.runOut; opacity = 0 }
+        await hop(count: 3, over: BallChase.run)
+
+        withAnimation(nil) { ballVisible = false; offsetX = chase.reentry; rotation = 0; hasBall = true }
+        withAnimation(.easeOut(duration: BallChase.comeBack)) { offsetX = 0; opacity = 1 }
+        await hop(count: 3, over: BallChase.comeBack)
+        try? await Task.sleep(for: .seconds(BallChase.proud))
+
+        settle()
+        try? await Task.sleep(for: .seconds(1.2))
+        hasBall = false
+    }
+
+    /// Small running hops spread over `duration`, layered on whatever else is moving.
+    private func hop(count: Int, over duration: Double) async {
+        let step = duration / Double(count * 2)
+        for _ in 0..<count {
+            withAnimation(.easeOut(duration: step)) { offsetY = -size * 0.06 }
+            try? await Task.sleep(for: .seconds(step))
+            withAnimation(.easeIn(duration: step)) { offsetY = 0 }
+            try? await Task.sleep(for: .seconds(step))
         }
     }
 

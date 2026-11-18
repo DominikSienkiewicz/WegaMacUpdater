@@ -34,7 +34,10 @@ offer and the missing-checksum warning all use it. Wega has a fixed-height card 
 bottom of the sidebar on every destination: it says her line for the current screen, comments
 on a scan that just finished, shows when she last looked and asks the one-time notification
 question. It replaced the status footer, whose counts were already the sidebar's badges, and
-the speech bubble that appeared over the list.
+the speech bubble that appeared over the list. Every minute or so a ball rolls along the card; Wega
+glances after it, runs off the card's edge and comes back carrying it. The full Wega on the
+"everything up to date" screen opens her repertoire of tricks with the same chase. Both are
+offset-only animations that never move the layout, and "Reduce motion" turns them off.
 
 The sidebar has one **Updates** row; its badge turns red while a security fix is waiting.
 The category — all, apps, CLI tools or security fixes — is a scope bar above the list, each

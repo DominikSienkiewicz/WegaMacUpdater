@@ -32,6 +32,11 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   scope bar above the list, with counts. The toolbar no longer has a Settings gear (use ⌘,
   or the app menu), and the inspector toggle disappears outside Updates.
 
+### Added
+- **Wega chases her ball.** Now and then a ball rolls past her card in the sidebar; she
+  glances after it, runs off and comes back carrying it. On the "everything up to date"
+  screen the full Wega does the same chase as her first trick. Off under Reduce motion.
+
 ## [0.7.1] — 2026-11-17
 
 ### Added
