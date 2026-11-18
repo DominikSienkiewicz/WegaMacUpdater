@@ -82,7 +82,10 @@ Wega goes and gets them anyway:
 
 ### Reading the results
 
-- The list shows every app with an available update, grouped by where it came from
+- The list shows every app with an available update, grouped by what to do next:
+  **Possible security fixes** first, then **Apps** and **CLI tools** Wega can update for you,
+  then **Needs your move** for updates the vendor or you finish. Each row names its source.
+  Pick **Group › by source** next to the categories to group by where each app came from
   (**Homebrew Casks**, **App Store**, **Manually installed**, …) — the same grouping the
   Inventory window uses.
 - The header names two numbers, for example **"12 to install + 3 manual"**. The two halves

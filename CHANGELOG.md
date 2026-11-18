@@ -32,6 +32,11 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   scope bar above the list, with counts. The toolbar no longer has a Settings gear (use ⌘,
   or the app menu), and the inspector toggle disappears outside Updates.
 
+- **Updates: grouped by urgency.** Possible security fixes come first, then apps and CLI tools
+  Wega updates in a batch, then what the vendor or you finish. Each row names its source and
+  shows when automatic rollback cannot cover it. **Group › by source** brings back the
+  grouping the Inventory window uses; the choice is remembered.
+
 ### Added
 - **Wega chases her ball.** Now and then a ball rolls past her card in the sidebar; she
   glances after it, runs off and comes back carrying it. On the "everything up to date"
