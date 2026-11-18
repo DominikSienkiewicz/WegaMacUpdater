@@ -274,8 +274,6 @@ extension Translations {
         // M2 — stara lista mówi wprost, kiedy powstała.
         "Znaleziono %@": "Found %@",
         // Ciche odświeżenie po starcie: lista zostaje na ekranie, nagłówek mówi, że trwa skan.
-        "odświeżam…": "refreshing…",
-        "odświeżam… %@": "refreshing… %@",
         // Nakładka nad listą na czas cichego odświeżenia — lista jest wtedy raportem, nie menu.
         "Odświeżam listę…": "Refreshing the list…",
         "Zaznaczanie wróci, gdy skan się skończy.": "Selecting comes back when the scan finishes.",

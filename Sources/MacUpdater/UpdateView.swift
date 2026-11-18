@@ -158,13 +158,6 @@ struct UpdateView: View {
             ))
     }
 
-    /// What the header says in place of the source stamp while the launch refresh runs.
-    /// Names the phase, so a minute of waiting is a minute of visible progress.
-    private var refreshingStamp: String {
-        guard case .running(let phase) = scan.progress else { return tr("odświeżam…") }
-        return trf("odświeżam… %@", phase.commandLabel)
-    }
-
     @ViewBuilder
     private var content: some View {
         switch scan.status {
@@ -246,7 +239,13 @@ struct UpdateView: View {
                     Text(freshness == .stale
                          ? trf("Znaleziono %@", "\(date.formatted(date: .abbreviated, time: .shortened))")
                          : trf("Sprawdzono %@", "\(date.formatted(date: .omitted, time: .shortened))"))
-                    Text(scan.isRefreshing ? refreshingStamp : sourceStamp)
+                    // UX-19 — while a scan runs in place, the header shows each source's
+                    // phase instead of the stamp naming the sources of the result below.
+                    if scan.isRefreshing {
+                        ScanPhaseStrip(progress: scan.progress)
+                    } else {
+                        Text(sourceStamp)
+                    }
                 }
                 .font(.wega(.subheadline))
                 .foregroundStyle(freshness.needsExplicitTimestamp ? AnyShapeStyle(Color.wegaToffee) : AnyShapeStyle(.secondary))

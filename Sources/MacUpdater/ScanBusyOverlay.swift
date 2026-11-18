@@ -116,32 +116,29 @@ struct ScanProgressScene: View {
     ]
 }
 
-/// The scan, drawn over the list it is replacing.
+/// The list a scan is replacing, stood down while the scan runs in place (UX-19).
 ///
-/// The same scene as the full-screen scan, at the same size and with the same padding, over a
-/// material that covers the whole list area. It used to sit in a bordered card at a reduced
-/// scale, which read as a different screen rather than as the same scan in a different place.
-///
-/// The material is what stands the rows down, rather than a separate dimming of the list: one
-/// mechanism, so the two cannot be tuned against each other. It is deliberately not opaque —
-/// the rows stay faintly visible, because the whole point of the quiet refresh is that the
-/// restored result never leaves the window.
-///
-/// One line is added that the full-screen scan has no need for: selecting is off until the
-/// scan lands. A disabled control that does not explain itself reads as a broken one.
+/// The scan itself reports in the header (`ScanPhaseStrip`), so this no longer draws a second
+/// scanning scene over the rows: it covers them with a material, which is what stands them
+/// down — one mechanism, not a separate dimming of the list — and says why they cannot be
+/// selected. The material is deliberately not opaque: the whole point of scanning in place is
+/// that the previous result never leaves the window.
 struct ScanBusyOverlay: View {
     let progress: ScanProgress?
 
     private var presentation: ScanBusyPresentation { ScanBusyPresentation(progress: progress) }
 
     var body: some View {
-        VStack(spacing: 4) {
-            ScanProgressScene(progress: progress)
+        VStack(spacing: 0) {
             Text(tr("Zaznaczanie wróci, gdy skan się skończy."))
                 .font(.wega(.subheadline))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.bottom, 24)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .glassEffect(.regular, in: Capsule())
+                .padding(24)
+            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.regularMaterial)

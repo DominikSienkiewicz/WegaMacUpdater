@@ -55,8 +55,9 @@ newer release and offers a one-click **Download and install**.
    straight away, and starts refreshing it by itself. That refresh runs underneath the list
    — the rows stay put, the header says which phase it is on, and **Cancel** stops it. On a
    first launch there is nothing to show yet, so the scan takes the window instead.
-2. Press **⌘R** (or **Check now**) whenever you want another scan. The sidebar icon shows a
-   spinner while it runs, and you can press **Cancel** to stop it where it stands.
+2. Press **⌘R** (or **Check now**) whenever you want another scan. It runs underneath the
+   list too: the header shows a chip per source (Homebrew, App Store, npm, vendors) as each
+   one is checked, the sidebar icon spins, and **Cancel** stops it where it stands.
 
 **A scan never changes your system.** Checking for updates is read-only — Wega does not
 install, remove, or `brew cleanup` anything during a scan.

@@ -178,15 +178,17 @@ tint instead of a bare time. Progress during a scan is **real** — the scan is 
 sequential (brew → mas → npm → manual), the bar reports the phase it is genuinely in, and
 **Cancel** stops it where it stands. Live log streamed into an inline panel.
 
-That first scan runs *underneath* the restored list rather than replacing it, and for its
-duration the list is a report rather than a menu: the scan is drawn over the rows — the same
-scene the full-screen scan uses, at the same size, with the progress bar, the command the
-current phase runs and Wega sniffing across the binary stream — over a material that covers the
-list area and stands the rows down, and they stop accepting selections. One view
-(`ScanProgressScene`) serves both screens and owns its own sizing and padding, so neither can be
-restyled — or scaled — without the other following. The material is deliberately not opaque:
-the rows stay faintly visible, because the point of the quiet refresh is that the restored
-result never leaves the window.
+Every scan that starts with a result on screen — the launch refresh, **Check now** and **⌘R** —
+runs *underneath* that list rather than replacing it, and for its duration the list is a report
+rather than a menu. The header shows one chip per source in scan order (Homebrew, App Store,
+npm, vendors), each done, running, stopped or not yet started; nothing is estimated, because
+the scan is strictly sequential. The rows sit under a material that stands them down, with a
+note that selecting comes back when the scan ends, and they stop accepting selections. The
+material is deliberately not opaque: the previous result never leaves the window. Only a scan
+with nothing to keep on screen — the very first one — takes the window with the full scanning
+scene (`ScanProgressScene`: the progress bar, the command the current phase runs and Wega
+sniffing across the binary stream). The rescans after an update or an undo also take the
+window, handing over from the update's own overlay.
 **Update selected (N)** and its **⌘⏎**
 shortcut are held back by the same rule, because a batch approved against the restored rows
 would otherwise install whatever the scan had settled on by the time the dialog was answered;
