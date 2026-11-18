@@ -15,36 +15,30 @@ private struct BrewInviteCard: View {
     @State private var copied = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "shippingbox").foregroundStyle(Color.wegaHoney)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(tr("Zainstaluj Homebrew, żeby odblokować więcej aktualizacji"))
-                    .font(.wega(.callout, weight: .semibold))
-                Text(tr("Wega działa bez niego — sprawdza Mac App Store, Sparkle, feedy producentów i npm. Homebrew dokłada formuły i caski."))
-                    .font(.wega(.subheadline))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(installCommand)
-                    .font(.wega(.footnote, monospaced: true))
-                    .foregroundStyle(.tertiary)
-                    .textSelection(.enabled)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            Spacer()
+        // UX-15 — an invitation, so the callout's info level; the recheck is no longer drawn
+        // as a prominent button, which belongs to the update itself.
+        WegaCallout(
+            .info,
+            title: tr("Zainstaluj Homebrew, żeby odblokować więcej aktualizacji"),
+            message: tr("Wega działa bez niego — sprawdza Mac App Store, Sparkle, feedy producentów i npm. Homebrew dokłada formuły i caski."),
+            symbol: "shippingbox.fill"
+        ) {
+            Text(installCommand)
+                .font(.wega(.footnote, monospaced: true))
+                .foregroundStyle(.tertiary)
+                .textSelection(.enabled)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        } actions: {
             Button(copied ? tr("Skopiowano") : tr("Kopiuj polecenie")) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(installCommand, forType: .string)
                 copied = true
             }
             Button(tr("Sprawdź ponownie"), action: onRecheck)
-                .buttonStyle(.borderedProminent)
-                .tint(Color.wegaHoneyFill)
-                .foregroundStyle(Color.wegaInk)
         }
-        .padding(12)
-        .background(Color.wegaHoney.opacity(0.06))
-        .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+        .padding(.horizontal, WegaLayout.listGutter)
+        .padding(.top, 8)
     }
 }
 

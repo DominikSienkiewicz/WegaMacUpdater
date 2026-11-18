@@ -47,14 +47,10 @@ struct ErrorBanner: View {
     let message: String
 
     var body: some View {
-        Label(message, systemImage: "exclamationmark.triangle")
-            .foregroundStyle(.red)
-            // UX-07 — same cap as `BannerView`: a raw error message must not stretch the
-            // banner past the window (see the note there).
+        // UX-15 — the shared callout's urgent level; UX-07's three-line cap lives there too,
+        // so a raw error message cannot stretch the banner past the window.
+        WegaCallout(.urgent, title: message)
             .lineLimit(3)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(10)
-            .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -712,62 +708,15 @@ struct BannerView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: data.variant == .success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(data.variant == .success ? Color.wegaSuccess : Color.wegaDanger)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(data.title).font(.wega(.headline))
-                // UX-07 — a failure's full, untranslated `stderr` can be arbitrarily long;
-                // cap the message at three lines so it never grows the banner past the
-                // window. The complete technical output stays in the log (see "Zobacz w
-                // logach").
-                Text(data.message)
-                    .font(.wega(.callout))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-            }
-            Spacer()
-            if let action = data.action {
-                let actionLabel: String = {
-                    switch action {
-                    case .openLogs:     return tr("Zobacz w logach")
-                    case .openSettings: return tr("Włącz Touch ID")
-                    case .openAppManagementSettings: return tr("Otwórz ustawienia prywatności")
-                    case .reinstallCask: return tr("Przeinstaluj przez Brew")
-                    case .trustPublisher: return tr("Zaufaj nowemu wydawcy")
-                    }
-                }()
-                let actionIcon: String = {
-                    switch action {
-                    case .reinstallCask: return "arrow.clockwise.circle"
-                    case .trustPublisher: return "checkmark.shield"
-                    case .openLogs, .openSettings, .openAppManagementSettings: return "info.circle"
-                    }
-                }()
-                Button { onAction?(action) } label: {
-                    Label(actionLabel, systemImage: actionIcon)
-                        .font(.wega(.callout, weight: .medium))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.wegaHoney)
-                .accessibilityLabel(actionLabel)
-            }
-            Button { close() } label: { Image(systemName: "xmark") }
-                .buttonStyle(.plain)
-                .foregroundStyle(.tertiary)
-                .accessibilityLabel(tr("Zamknij"))
-        }
-        .padding(14)
-        .background(
-            data.variant == .success ? Color.wegaSuccess.opacity(0.08) : Color.wegaDanger.opacity(0.08),
-            in: RoundedRectangle(cornerRadius: 10)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(
-                    data.variant == .success ? Color.wegaSuccess.opacity(0.3) : Color.wegaDanger.opacity(0.3),
-                    lineWidth: 1
-                )
+        // UX-15 — drawn through the shared callout; UX-07's three-line cap on the message
+        // lives there. A failure's full, untranslated `stderr` stays in the log (see
+        // "Zobacz w logach").
+        WegaCallout(
+            WegaCalloutLevel(banner: data.variant),
+            title: data.title,
+            message: data.message,
+            onClose: { close() },
+            actions: { actionButton }
         )
         .transition(BannerDismissal.transition(reduceMotion: reduceMotion))
         // Keyed on the banner itself: a banner replaced by a newer one restarts the countdown
@@ -785,6 +734,37 @@ struct BannerView: View {
     /// each own that state differently.
     private func close() {
         withAnimation(BannerDismissal.removal(reduceMotion: reduceMotion)) { onClose() }
+    }
+
+    @ViewBuilder
+    private var actionButton: some View {
+        if let action = data.action {
+            Button { onAction?(action) } label: {
+                Label(Self.label(for: action), systemImage: Self.symbol(for: action))
+                    .font(.wega(.callout, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.wegaHoney)
+            .accessibilityLabel(Self.label(for: action))
+        }
+    }
+
+    private static func label(for action: BannerAction) -> String {
+        switch action {
+        case .openLogs:     return tr("Zobacz w logach")
+        case .openSettings: return tr("Włącz Touch ID")
+        case .openAppManagementSettings: return tr("Otwórz ustawienia prywatności")
+        case .reinstallCask: return tr("Przeinstaluj przez Brew")
+        case .trustPublisher: return tr("Zaufaj nowemu wydawcy")
+        }
+    }
+
+    private static func symbol(for action: BannerAction) -> String {
+        switch action {
+        case .reinstallCask: return "arrow.clockwise.circle"
+        case .trustPublisher: return "checkmark.shield"
+        case .openLogs, .openSettings, .openAppManagementSettings: return "info.circle"
+        }
     }
 }
 

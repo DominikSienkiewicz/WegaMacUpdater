@@ -626,23 +626,21 @@ struct UpdateView: View {
     @ViewBuilder
     private var staleCaskCard: some View {
         if !scan.staleCasks.isEmpty {
-            WegaCard {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "trash").foregroundStyle(Color.wegaToffee)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(trf("%@ casków bez aplikacji", "\(scan.staleCasks.count)"))
-                            .font(.wega(.callout, weight: .semibold))
-                        Text(trf("Homebrew wciąż śledzi: %@. Aplikacji nie ma na dysku — możesz je wyrejestrować.", "\(scan.staleCasks.joined(separator: ", "))"))
-                            .font(.wega(.subheadline)).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer()
-                    Button(tr("Nie teraz")) { scan.dismissStaleCasks() }
-                        .disabled(scan.cleaningStaleCasks)
-                    Button(tr("Wyrejestruj")) { Task { await scan.cleanUpStaleCasks() } }
-                        .disabled(scan.cleaningStaleCasks)
-                }
-                .padding(12)
+            // UX-15 — an offer, not a fault: the shared callout's info level. The names stay
+            // in the detail, unclipped, because they are what the button acts on.
+            WegaCallout(
+                .info,
+                title: trf("%@ casków bez aplikacji", "\(scan.staleCasks.count)"),
+                symbol: "trash.fill"
+            ) {
+                Text(trf("Homebrew wciąż śledzi: %@. Aplikacji nie ma na dysku — możesz je wyrejestrować.", "\(scan.staleCasks.joined(separator: ", "))"))
+                    .font(.wega(.subheadline)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } actions: {
+                Button(tr("Nie teraz")) { scan.dismissStaleCasks() }
+                    .disabled(scan.cleaningStaleCasks)
+                Button(tr("Wyrejestruj")) { Task { await scan.cleanUpStaleCasks() } }
+                    .disabled(scan.cleaningStaleCasks)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
@@ -721,19 +719,17 @@ struct UpdateView: View {
     private func caskTransparencyNote(casks: [OutdatedItem]) -> some View {
         let noCheck = UpdatePlanner.casksWithoutChecksum(casks, downloads: scan.caskDownloads)
         if !noCheck.isEmpty {
-            WegaCard {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "exclamationmark.shield").foregroundStyle(Color.wegaDanger)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(tr("Bez weryfikacji sumy kontrolnej"))
-                            .font(.wega(.callout, weight: .semibold))
-                        Text(trf("Homebrew zainstaluje bez sprawdzenia sumy: %@", "\(noCheck.map(\.name).joined(separator: ", "))"))
-                            .font(.wega(.subheadline)).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer()
-                }
-                .padding(12)
+            // UX-15 — a risk the user should weigh before updating: the callout's warning level.
+            WegaCallout(
+                .warning,
+                title: tr("Bez weryfikacji sumy kontrolnej"),
+                symbol: "exclamationmark.shield.fill"
+            ) {
+                Text(trf("Homebrew zainstaluje bez sprawdzenia sumy: %@", "\(noCheck.map(\.name).joined(separator: ", "))"))
+                    .font(.wega(.subheadline)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } actions: {
+                EmptyView()
             }
         }
     }
