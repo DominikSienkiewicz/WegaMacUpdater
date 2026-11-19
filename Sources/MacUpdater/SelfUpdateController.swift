@@ -66,6 +66,7 @@ final class SelfUpdateController: ObservableObject {
                 // guard rejects it. A detached shell waits, then reopens the bundle by path.
                 let relauncher = Process()
                 relauncher.executableURL = SystemPaths.posixShell
+                relauncher.currentDirectoryURL = ProcessRunner.childWorkingDirectory
                 relauncher.arguments = ["-c", #"sleep 1; /usr/bin/open "$0""#, Bundle.main.bundleURL.path]
                 do {
                     try relauncher.run()
