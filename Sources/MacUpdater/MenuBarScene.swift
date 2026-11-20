@@ -56,8 +56,9 @@ struct MenuBarContent: View {
         .disabled(agent.isChecking)
 
         Button(tr("Otwórz Wega")) {
-            NotificationRouter.shared.showMainWindow(opening: { openWindow(id: "main") })
+            // Activate first: while the app is hidden its window counts as closed.
             NSApplication.shared.activate(ignoringOtherApps: true)
+            NotificationRouter.shared.showMainWindow(opening: { openWindow(id: "main") })
         }
 
         Divider()

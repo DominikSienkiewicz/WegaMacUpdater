@@ -105,6 +105,26 @@ struct OBS02NotificationRouterTests {
                 "I1: the menu no longer opens a window unconditionally")
     }
 
+    /// F2 — a hidden app (⌘H) reports its window as neither visible nor miniaturised, so a
+    /// lookup made before activation misses it and opens a twin. Both entry points activate
+    /// first, then look.
+    @Test func bothEntryPointsActivateBeforeLookingForTheWindow() throws {
+        let router = NotificationRouter(defaults: TestDefaults.isolated("obs02-notification-router-order").0)
+        var events: [String] = []
+        router.activateApp = { events.append("activate") }
+        router.findMainWindow = { events.append("find"); return nil }
+        router.openMainWindow = { events.append("open") }
+        router.route(to: nil)
+        #expect(events == ["activate", "find", "open"])
+
+        let menuBar = try read("Sources/MacUpdater/MenuBarScene.swift")
+        let command = try #require(menuBar.range(of: "Button(tr(\"Otwórz Wega\"))"))
+        let body = menuBar[command.upperBound...].prefix(250)
+        let activate = try #require(body.range(of: "NSApplication.shared.activate("))
+        let show = try #require(body.range(of: "NotificationRouter.shared.showMainWindow("))
+        #expect(activate.lowerBound < show.lowerBound, "F2: „Otwórz Wega” activates before it looks for the window")
+    }
+
     /// Only the windows of the main group count, and only while they are on screen or in the
     /// Dock — a closed window is left to `openWindow`.
     @Test func onlyAnOnScreenWindowOfTheMainGroupCounts() {
