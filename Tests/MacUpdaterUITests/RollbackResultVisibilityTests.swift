@@ -55,6 +55,21 @@ struct RollbackResultVisibilityTests {
         #expect(!view.contains("Po każdej aktualizacji Wega trzyma kopię"))
     }
 
+    /// M12 — „Zobacz w logach” on an Undo banner opened Logs unfiltered, while the same banner
+    /// on Updates opened it on errors only. Both screens now go through one helper.
+    @Test func everyBannerOpensTheLogsOnErrorsOnly() throws {
+        let detail = try source("Sources/MacUpdater/DetailColumn.swift")
+        let helper = try #require(detail.range(of: "private func navigate(fromBanner tab: SidebarTab)"),
+                                  "M12: one helper decides what a banner's navigation does")
+        #expect(detail[helper.upperBound...].prefix(200).contains("logsInitialFilter = .errorsOnly"))
+        #expect(detail.contains("RollbackView(onNavigate: navigate(fromBanner:))"),
+                "M12: the Undo screen's banners use the same helper")
+        #expect(detail.contains("onNavigate:    navigate(fromBanner:)"),
+                "the Updates screen's banners use it too")
+        #expect(detail.components(separatedBy: "logsInitialFilter = .errorsOnly").count == 2,
+                "the filter is set in one place only")
+    }
+
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {
         let root = URL(fileURLWithPath: file)
             .deletingLastPathComponent()

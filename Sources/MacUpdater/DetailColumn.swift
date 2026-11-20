@@ -147,6 +147,14 @@ struct DetailColumn: View {
         }
     }
 
+    /// Where a banner's action takes the window, whichever screen raised the banner. „Zobacz w
+    /// logach” opens Logs on errors only and clears their badge, because that is what the
+    /// banner is pointing at.
+    private func navigate(fromBanner tab: SidebarTab) {
+        if tab == .logs { logsInitialFilter = .errorsOnly; logsErrorBadge = 0 }
+        onNavigate(SidebarSelection.forTab(tab))
+    }
+
     // UpdateView stays mounted for the whole session (just hidden when another destination is
     // active) instead of being swapped in/out by the `switch`. A `switch` removes the inactive
     // view from the tree, which tears down its `@State` and orphans any in-flight `Task` — so a
@@ -163,10 +171,7 @@ struct DetailColumn: View {
             UpdateView(
                 onWegaState:   { wegaState = $0 },
                 onBadgeChange: { updateBadge = $0 },
-                onNavigate:    { tab in
-                    if tab == .logs { logsInitialFilter = .errorsOnly; logsErrorBadge = 0 }
-                    onNavigate(SidebarSelection.forTab(tab))
-                },
+                onNavigate:    navigate(fromBanner:),
                 onErrorCount:  { logsErrorBadge = $0 },
                 onActivity:    { updateActivity = $0 },
                 onFooterInfo:  { lastCheck = $0; securityBadge = $1 },
@@ -193,7 +198,7 @@ struct DetailColumn: View {
                 case .inventory:
                     InventoryView(onWegaState: { wegaState = $0 })
                 case .rollback:
-                    RollbackView(onNavigate: { tab in onNavigate(SidebarSelection.forTab(tab)) })
+                    RollbackView(onNavigate: navigate(fromBanner:))
                 case .logs:
                     LogsView(onWegaState: { wegaState = $0 }, initialFilter: logsInitialFilter)
                         .id(logsInitialFilter)
