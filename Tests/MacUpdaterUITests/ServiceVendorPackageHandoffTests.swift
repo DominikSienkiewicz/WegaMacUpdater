@@ -44,6 +44,71 @@ struct ServiceVendorPackageHandoffTests {
         #expect(store.unresolvedServiceItems.isEmpty)
     }
 
+    @Test func aScanDropsAVendorCaskWhoseAppIsNotInstalledEntirely() async {
+        let store = scannedStore(installations: [], failedChecks: 0)
+        await store.runCheck()
+        #expect(store.lastScanComplete)
+        #expect(store.allItems.isEmpty)
+        #expect(store.visibleManual.isEmpty)
+        #expect(store.unresolvedServiceItems.isEmpty)
+        #expect(store.updateCount == UnifiedUpdateCount(installable: 0, manual: 0))
+    }
+
+    @Test func aScanDropsAVendorCaskWhoseInstalledAppAlreadyHasTheTarget() async {
+        let store = scannedStore(
+            installations: [InstallationCheck(app: application(version: "2"), sources: [], checkedAt: Date())],
+            failedChecks: 0
+        )
+        await store.runCheck()
+        #expect(store.allItems.isEmpty)
+        #expect(store.unresolvedServiceItems.isEmpty)
+        #expect(store.updateCount == UnifiedUpdateCount(installable: 0, manual: 0))
+    }
+
+    @Test func anIncompleteScanKeepsTheVendorCardItCannotJudge() async {
+        let store = scannedStore(installations: [], failedChecks: 1)
+        await store.runCheck()
+        #expect(!store.lastScanComplete)
+        #expect(store.allItems.map(\.name) == ["logi-options+"])
+        #expect(store.unresolvedServiceItems.map(\.name) == ["logi-options+"])
+        #expect(store.updateCount == UnifiedUpdateCount(installable: 0, manual: 1))
+    }
+
+    @Test func anInstalledAppBelowTheTargetStaysAsARow() async {
+        let store = scannedStore(
+            installations: [InstallationCheck(app: application(version: "1"), sources: [], checkedAt: Date())],
+            failedChecks: 0
+        )
+        await store.runCheck()
+        #expect(store.allItems.map(\.name) == ["logi-options+"])
+        #expect(store.updateCount.manual == 1)
+    }
+
+    private func scannedStore(installations: [InstallationCheck], failedChecks: Int) -> ScanStore {
+        let runner = ScanStoreRuntimeProcessRunner { request in
+            switch request.arguments {
+            case ["update"], ["list", "--cask", "-1"]:
+                return ProcessResult(exitCode: 0, stdout: "", stderr: "")
+            case ["outdated", "--json=v2", "--greedy", "--greedy-latest", "--greedy-auto-updates"]:
+                let json = #"{"formulae":[],"casks":[{"name":"logi-options+","installed_versions":["1"],"current_version":"2"}]}"#
+                return ProcessResult(exitCode: 0, stdout: json, stderr: "")
+            case ["outdated"]:
+                return ProcessResult(exitCode: 0, stdout: "", stderr: "")
+            case ["outdated", "-g", "--json"]:
+                return ProcessResult(exitCode: 0, stdout: "{}", stderr: "")
+            default:
+                return ProcessResult(exitCode: 1, stdout: "", stderr: "")
+            }
+        }
+        let harness = makeScanStoreRuntimeHarness(runner: runner)
+        var dependencies = harness.store.dependencies
+        let report = ManualScanReport(apps: [], failedChecks: failedChecks, installations: installations)
+        dependencies.detailedManualScan = { _, _ in report }
+        let store = ScanStore(resultStore: ScanResultStore(io: harness.snapshots), dependencies: dependencies)
+        if let model = harness.store.model { store.attach(model: model) }
+        return store
+    }
+
     /// The scan decides whether a vanished hand-off may be dropped from `lastScanComplete`, so
     /// the live scan must publish its own completeness before closing hand-offs, not the
     /// previous scan's.

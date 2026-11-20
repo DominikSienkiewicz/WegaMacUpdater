@@ -33,14 +33,18 @@ struct ServiceVendorHandoffTests {
         store.status = .results
         store.brewOutdated = .init(formulae: [], casks: [.init(name: "cloudflare-warp", installedVersions: ["1"], currentVersion: "2")])
         store.selected = ["c:cloudflare-warp"]
+        #expect(store.updateCount == UnifiedUpdateCount(installable: 0, manual: 0),
+                "a complete scan that found no WARP installation counts nothing")
+        // WARP is installed, but the cask cannot resolve it (no cask token, no icon path).
+        let installedWarp = application()
+        store.installationChecks = [InstallationCheck(app: installedWarp, sources: [], checkedAt: Date())]
         #expect(store.visibleItems(for: .all).isEmpty)
         #expect(store.updateTargets(for: .all).isEmpty)
         #expect(store.plannedCommands(targetKeys: store.selected).isEmpty)
         #expect(store.plannedCaskTokens(targetKeys: store.selected).isEmpty)
         #expect(store.updateCount == UnifiedUpdateCount(installable: 0, manual: 1))
-        let app = application()
+        let app = installedWarp
         store.caskIconPaths = ["cloudflare-warp": app.path]
-        store.installationChecks = [InstallationCheck(app: app, sources: [], checkedAt: Date())]
         let row = try #require(store.visibleManual.first)
         #expect(row.path == app.path)
         #expect(store.updateCount == UnifiedUpdateCount(installable: 0, manual: 1))

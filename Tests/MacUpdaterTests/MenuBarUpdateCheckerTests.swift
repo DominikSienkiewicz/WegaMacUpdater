@@ -74,6 +74,27 @@ final class MenuBarUpdateCheckerTests: XCTestCase {
         XCTAssertEqual(result.manualApps, manual)
     }
 
+    /// The owner's Logi case: Homebrew still lists a vendor cask whose app is gone. The dock
+    /// badge must agree with the window, which counts nothing.
+    func testAVendorCaskWhoseAppIsNotInstalledIsNotCounted() async {
+        let brew = BrewOutdated(
+            formulae: [],
+            casks: [BrewOutdatedItem(name: "logi-options+", installedVersions: ["2.9.994631"], currentVersion: "2.9.1013853")]
+        )
+        let result = await checker(brew: .success(brew), scanner: FakeScanner()).availableUpdateCount()
+        XCTAssertEqual(result.total, 0)
+        XCTAssertEqual(result.brew?.casks, [])
+    }
+
+    func testAVendorCaskWhoseAppIsNotInstalledIsKeptWhenTheScanWasIncomplete() async {
+        let brew = BrewOutdated(
+            formulae: [],
+            casks: [BrewOutdatedItem(name: "logi-options+", installedVersions: ["1"], currentVersion: "2")]
+        )
+        let result = await checker(brew: .success(brew), scanner: FakeScanner(failedChecks: 1)).availableUpdateCount()
+        XCTAssertEqual(result.total, 1)
+    }
+
     /// The badge total must equal the package items plus the visible manual updates.
     func testTotalEqualsItemsPlusVisibleManual() async {
         let brew = BrewOutdated(

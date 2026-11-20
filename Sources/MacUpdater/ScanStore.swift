@@ -491,14 +491,17 @@ final class ScanStore: ObservableObject {
         ServiceVendorUpdatePolicy.managedUpdates(items: allItems, appPaths: caskIconPaths, installationChecks: installationChecks)
     }
 
+    /// A backstop for what the scan's own filter cannot reach (a restored snapshot): a vendor
+    /// cask that a complete scan shows not installed or already current is no card.
     var unresolvedServiceItems: [OutdatedItem] {
         let covered = Set((serviceManagedUpdates + vendorHandoffs).compactMap(\.caskPolicyToken))
+        let stale = lastScanComplete
+            ? ServiceVendorUpdatePolicy.staleVendorTokens(
+                outdated: brewOutdated?.casks ?? [], installationChecks: installationChecks)
+            : []
         return allItems.filter { item in
             item.kind == .cask && ServiceVendorUpdatePolicy.requiresVendor(token: item.name)
-                && !covered.contains(item.name)
-                && !ServiceVendorUpdatePolicy.isNotInstalled(
-                    token: item.name, installationChecks: installationChecks, scanComplete: lastScanComplete
-                )
+                && !covered.contains(item.name) && !stale.contains(item.name)
         }
     }
 

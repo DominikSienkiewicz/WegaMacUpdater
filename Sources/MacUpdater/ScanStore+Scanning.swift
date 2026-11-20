@@ -274,9 +274,19 @@ extension ScanStore {
                 WegaLog.info(.scanner, line)
             }
 
+            // A vendor cask whose app is gone, or already at Homebrew's target, is no update.
+            // Only a scan that heard from every source can say an app is gone.
+            let staleVendor = reports.isComplete
+                ? ServiceVendorUpdatePolicy.staleVendorTokens(outdated: casks, installationChecks: scan.installations)
+                : []
+            if !staleVendor.isEmpty, var updated = brewOutdated {
+                updated.casks.removeAll { staleVendor.contains($0.name) }
+                brewOutdated = updated
+            }
+
             caskIconPaths = dependencies.caskAppPathResolver.appPaths(
                 from: infos,
-                excluding: drifted
+                excluding: drifted.union(staleVendor)
             )
         }
 

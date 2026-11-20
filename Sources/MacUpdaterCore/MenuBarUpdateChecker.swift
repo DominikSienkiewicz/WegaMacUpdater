@@ -254,6 +254,13 @@ public struct MenuBarUpdateChecker: Sendable {
         failed += manual.failedChecks
         reports.manual = manual.sourceReport
         brew = await removingCasksCurrentOnDisk(from: brew, installations: manual.installations)
+        if reports.isComplete, var current = brew {
+            let stale = ServiceVendorUpdatePolicy.staleVendorTokens(
+                outdated: current.casks, installationChecks: manual.installations
+            )
+            current.casks.removeAll { stale.contains($0.name) }
+            brew = current
+        }
         let reconciled = UpdatePlanner.reconciledUpdates(
             items: UpdatePlanner.outdatedItems(brew: brew, mas: mas, npm: npm), manual: manual.apps
         )
