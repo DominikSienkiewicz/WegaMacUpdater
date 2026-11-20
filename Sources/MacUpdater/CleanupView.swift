@@ -9,6 +9,8 @@ import MacUpdaterCore
 /// one is enabled only while it is idle.
 struct CleanupView: View {
     let onWegaState: (WegaState) -> Void
+    /// Opens "Odinstaluj aplikacje" with the app at this bundle preselected.
+    var onUninstallApp: (URL) -> Void = { _ in }
 
     @EnvironmentObject private var store: CleanupStore
     /// The Settings switch for the Files and Folders map; the section follows it, not the stored report.
@@ -138,7 +140,8 @@ struct CleanupView: View {
                     ) { section in
                         CleanupSectionCard(
                             section: section, canRemove: isIdle, copiedCommand: copiedCommand,
-                            onRemove: { id in confirming = report.findings.first { $0.id == id } }, onCopy: copy
+                            onRemove: { id in confirming = report.findings.first { $0.id == id } }, onCopy: copy,
+                            onKeep: { store.keep($0) }, onUninstallApp: onUninstallApp
                         )
                     }
                 }
@@ -204,6 +207,8 @@ private struct CleanupSectionCard: View {
     let copiedCommand: String?
     let onRemove: (_ findingID: String) -> Void
     let onCopy: (String) -> Void
+    let onKeep: (_ findingID: String) -> Void
+    let onUninstallApp: (URL) -> Void
 
     var body: some View {
         WegaCard(padded: false) {
@@ -228,7 +233,7 @@ private struct CleanupSectionCard: View {
                     }
                     CleanupFindingRow(
                         row: row, canRemove: canRemove, copiedCommand: copiedCommand,
-                        onRemove: onRemove, onCopy: onCopy
+                        onRemove: onRemove, onCopy: onCopy, onKeep: onKeep, onUninstallApp: onUninstallApp
                     )
                     if index < section.rows.count - 1 {
                         Divider().opacity(0.3)
@@ -254,17 +259,23 @@ private struct CleanupSectionCard: View {
     }
 }
 
-/// Status, path, detail and size, then the row's one control: a removal that opens the
-/// confirmation sheet, a copy button, or a note in its place.
+/// The "zostaw" radio of a copy that offers the choice, then status, path, detail and size, then
+/// the row's one control: a removal that opens the confirmation sheet, the hand-off to
+/// "Odinstaluj aplikacje", a copy button, or a note in its place.
 private struct CleanupFindingRow: View {
     let row: CleanupPresentation.Row
     let canRemove: Bool
     let copiedCommand: String?
     let onRemove: (_ findingID: String) -> Void
     let onCopy: (String) -> Void
+    let onKeep: (_ findingID: String) -> Void
+    let onUninstallApp: (URL) -> Void
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
+            if let keep = row.keep, let findingID = row.findingID {
+                keepRadio(keep, findingID: findingID)
+            }
             WegaBadge(label: row.status, variant: badgeVariant)
                 .frame(minWidth: 120, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
@@ -314,9 +325,24 @@ private struct CleanupFindingRow: View {
                         onCopy(command)
                     }
                     .controlSize(.small)
+                case .uninstallApp(_, let bundle):
+                    Button(CleanupPresentation.buttonTitle(button)) { onUninstallApp(bundle) }
+                        .controlSize(.small)
                 }
             }
         }
+    }
+
+    /// Choosing the copy that already stays is recorded too, so a later `PATH` change keeps it.
+    private func keepRadio(_ keep: CleanupPresentation.KeepControl, findingID: String) -> some View {
+        Button { onKeep(findingID) } label: {
+            Label(CleanupPresentation.keepTitle, systemImage: keep == .kept ? "largecircle.fill.circle" : "circle")
+                .font(.wega(.subheadline))
+        }
+        .buttonStyle(.borderless)
+        .disabled(!canRemove)
+        .accessibilityLabel(CleanupPresentation.keepAccessibilityLabel(for: row))
+        .accessibilityAddTraits(keep == .kept ? .isSelected : [])
     }
 
     private var isCommand: Bool {

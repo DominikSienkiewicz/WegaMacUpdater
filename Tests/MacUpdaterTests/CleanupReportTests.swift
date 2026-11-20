@@ -103,7 +103,7 @@ final class CleanupReportTests: XCTestCase {
             let data = try CleanupReportRenderer.json(sampleReport(home: home), home: home)
             let json = String(decoding: data, as: UTF8.self)
 
-            XCTAssertTrue(json.contains("\"schemaVersion\":1"), json)
+            XCTAssertTrue(json.contains("\"schemaVersion\":2"), json)
             XCTAssertFalse(json.contains(home.path), "path spelling of \(home.path)")
             XCTAssertFalse(json.contains(String(home.absoluteString.dropLast())), "file URL spelling of \(home.path)")
             XCTAssertTrue(json.contains("\"file://~/opt/homebrew/bin/claude\""), json)
@@ -256,9 +256,80 @@ final class CleanupReportTests: XCTestCase {
         XCTAssertNil(file.load())
 
         let current = String(decoding: try CleanupReportRenderer.json(sampleReport(home: plainHome), home: plainHome), as: UTF8.self)
-        XCTAssertTrue(current.contains("\"schemaVersion\":1"))
-        io.data = Data(current.replacingOccurrences(of: "\"schemaVersion\":1", with: "\"schemaVersion\":2").utf8)
+        XCTAssertTrue(current.contains("\"schemaVersion\":2"))
+        io.data = Data(current.replacingOccurrences(of: "\"schemaVersion\":2", with: "\"schemaVersion\":3").utf8)
         XCTAssertNil(file.load())
+    }
+
+    func testReportFileWithSchemaVersionOneLoadsAsNoReport() throws {
+        let io = InMemoryReportIO()
+        let file = CleanupReportFile(home: plainHome, io: io)
+        let current = String(decoding: try CleanupReportRenderer.json(sampleReport(home: plainHome), home: plainHome), as: UTF8.self)
+        io.data = Data(current.replacingOccurrences(of: "\"schemaVersion\":2", with: "\"schemaVersion\":1").utf8)
+
+        XCTAssertNil(file.load())
+    }
+
+    func testFindingWithCandidateRoundTripsThroughJSON() throws {
+        let candidate = CleanupCandidate(
+            pathRole: .active, removal: .brew(.uninstallFormula("ollama")), removalSize: 70_000_000, dependents: [],
+            processes: [CleanupProcess(pid: 7, name: "ollama", executablePath: "/x", arguments: ["serve"])],
+            keep: .notKept(keptPath: "/usr/local/bin/ollama"), takesOver: "/usr/local/bin/ollama"
+        )
+        let finding = CleanupFinding(
+            detector: .pathDuplicates, tool: "ollama", path: URL(filePath: "/opt/homebrew/bin/ollama"), realpath: nil,
+            source: .homebrewFormula(name: "ollama"), version: nil, size: 70_000_000, status: .active,
+            reason: .keptInstead(path: "/usr/local/bin/ollama"), action: .brew(.uninstallFormula("ollama")),
+            risk: .low, bucket: .needsDecision, identity: nil, candidate: candidate
+        )
+        let report = CleanupReport(
+            createdAt: Date(timeIntervalSince1970: 1_794_300_000),
+            path: CleanupPathSnapshot(entries: [], ignoredEntries: [], shell: "zsh", capturedAt: Date(timeIntervalSince1970: 1_794_000_000), isApproximate: false),
+            findings: [finding], notes: [], skippedProtected: []
+        )
+
+        let data = try CleanupReportRenderer.json(report, home: plainHome)
+        let restored = try CleanupReportRenderer.report(fromJSON: data, home: plainHome)
+
+        let expected = CleanupCandidate(
+            pathRole: .active, removal: candidate.removal, removalSize: 70_000_000, dependents: [],
+            processes: [CleanupProcess(pid: 7, name: "ollama", executablePath: "/x", arguments: [])],
+            keep: candidate.keep, takesOver: candidate.takesOver
+        )
+        XCTAssertEqual(restored.findings.first?.candidate, expected)
+        XCTAssertEqual(restored.findings.first?.reason, .keptInstead(path: "/usr/local/bin/ollama"))
+    }
+
+    func testKeptInsteadPathAndUninstallAppActionAreWrittenWithTilde() throws {
+        let kept = plainHome.appending(path: ".local/bin/ollama", directoryHint: .notDirectory).path
+        let bundle = plainHome.appending(path: "Applications/Ollama.app", directoryHint: .isDirectory)
+        let finding = CleanupFinding(
+            detector: .pathDuplicates, tool: "ollama", path: URL(filePath: "/usr/local/bin/ollama"), realpath: nil,
+            source: .appBundle(name: "Ollama"), version: nil, size: nil, status: .shadowed,
+            reason: .keptInstead(path: kept), action: .uninstallApp(name: "Ollama", bundle: bundle), risk: .low,
+            bucket: .needsDecision, identity: nil,
+            candidate: CleanupCandidate(
+                pathRole: .shadowed, removal: .uninstallApp(name: "Ollama", bundle: bundle), removalSize: nil,
+                dependents: [], processes: [], keep: .notKept(keptPath: kept)
+            )
+        )
+        let report = CleanupReport(
+            createdAt: Date(timeIntervalSince1970: 1_794_300_000), path: sampleReport(home: plainHome).path,
+            findings: [finding], notes: [], skippedProtected: []
+        )
+
+        let text = CleanupReportRenderer.text(
+            report, home: plainHome, reasonText: { String(describing: $0) }, statusText: { String(describing: $0) }
+        )
+        let json = String(decoding: try CleanupReportRenderer.json(report, home: plainHome), as: UTF8.self)
+
+        XCTAssertTrue(text.contains("uninstall app ~/Applications/Ollama.app"), text)
+        XCTAssertTrue(text.contains(#"keptInstead(path: "~/.local/bin/ollama")"#), text)
+        XCTAssertFalse(text.contains(plainHome.path), text)
+        XCTAssertTrue(json.contains(#""path":"~/.local/bin/ollama""#), json)
+        XCTAssertTrue(json.contains(#""keptPath":"~/.local/bin/ollama""#), json)
+        XCTAssertFalse(json.contains(plainHome.path), json)
+        XCTAssertEqual(try CleanupReportRenderer.report(fromJSON: Data(json.utf8), home: plainHome), report)
     }
 
     func testDefaultFileLivesInApplicationSupport() {

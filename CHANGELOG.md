@@ -14,6 +14,14 @@ them verbatim under the new version heading, so that step is never done by hand 
 
 ## [Unreleased]
 
+### Added
+- **Choose which copy of a tool stays.** In Cleanup, a tool installed more than once now has a
+  **keep** choice on each of its copies, so the copy you keep is no longer just the one first on
+  `PATH`; the other copies offer their removal, and Wega remembers the choice for later scans.
+  A copy that came with an app offers **Uninstall <app>…**, which opens Uninstall apps with
+  that app selected. While `PATH` is only approximate, nothing is chosen for you. A link left
+  dangling afterwards gets a copyable **`unlink`** (or **`sudo unlink`** outside your home) command.
+
 ### Fixed
 - **Fewer false alarms on release notes.** A flagged term now has to start a word, so
   ordinary words that merely contain one no longer put an update among the urgent ones or

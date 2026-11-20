@@ -272,7 +272,7 @@ final class CleanupRuntimeVersionDetectorTests: XCTestCase {
         for finding in found {
             switch finding.action {
             case .command, .instruction: break
-            case .trash, .trashBatch, .brew, .none: XCTFail("\(finding.path.lastPathComponent) offers \(finding.action)")
+            case .trash, .trashBatch, .brew, .uninstallApp, .none: XCTFail("\(finding.path.lastPathComponent) offers \(finding.action)")
             }
         }
         XCTAssertEqual(try finding(at: home.url(layouts[2]), in: found).action, .instruction(.removeWithCreatingTool))

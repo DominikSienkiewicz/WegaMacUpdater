@@ -86,6 +86,20 @@ final class CleanupDuplicateFindingsTests: XCTestCase {
         try XCTUnwrap(result.findings.first { $0.status != .active })
     }
 
+    /// The owner's case: the Homebrew formula is PATH-active, the app's link is shadowed.
+    private func ollamaScan() throws -> CleanupPathScan {
+        let formula = try tmp.file("opt/homebrew/Cellar/ollama/0.40.16/bin/ollama", size: 4096, executable: true)
+        let active = copy(
+            tmp.url("opt/homebrew/bin/ollama"), real: formula, source: .homebrewFormula(name: "ollama"),
+            version: "0.40.16", role: .active, index: 0
+        )
+        let app = copy(
+            tmp.url("usr/local/bin/ollama"), real: tmp.url("Applications/Ollama.app/Contents/Resources/ollama"),
+            source: .appBundle(name: "Ollama"), version: "0.40.16", role: .shadowed, index: 1
+        )
+        return scan("ollama", [active, app])
+    }
+
     func testShadowedCaskGetsUninstallCaskAndIsSafeWhenOlder() async throws {
         let real = try tmp.file("opt/homebrew/Caskroom/claude-code/2.1.311/claude", size: 4096, executable: true)
         let result = await builder().build(shadowed(source: .homebrewCask(token: "claude-code"), real: real))
@@ -150,11 +164,21 @@ final class CleanupDuplicateFindingsTests: XCTestCase {
         XCTAssertEqual(finding.bucket, .excluded)
     }
 
-    func testAppProvidedLinkGetsAdminInstruction() async throws {
-        let result = await builder().build(shadowed(source: .appBundle(name: "Ollama")))
+    /// A not-kept app copy offers to uninstall the app whose bundle holds it; without a bundle in its
+    /// real path it keeps the instruction to remove the link with administrator rights.
+    func testAppProvidedLinkOffersToUninstallTheApp() async throws {
+        let real = tmp.url("Applications/Ollama.app/Contents/Resources/tool")
+        let result = await builder().build(shadowed(source: .appBundle(name: "Ollama"), real: real))
 
         let finding = try shadowedFinding(result)
-        XCTAssertEqual(finding.action, .instruction(.removeAppLinkWithAdminRights(link: tmp.url("bin2/tool").path)))
+        let bundle = tmp.home.appending(path: "Applications/Ollama.app", directoryHint: .isDirectory)
+        XCTAssertEqual(finding.action, .uninstallApp(name: "Ollama", bundle: bundle))
+        XCTAssertEqual(finding.candidate?.removal, .uninstallApp(name: "Ollama", bundle: bundle))
+        XCTAssertNil(finding.size)
+        XCTAssertNil(finding.candidate?.removalSize)
+
+        let outside = try shadowedFinding(await builder().build(shadowed(source: .appBundle(name: "Ollama"))))
+        XCTAssertEqual(outside.action, .instruction(.removeAppLinkWithAdminRights(link: tmp.url("bin2/tool").path)))
     }
 
     func testExpectedSystemCopyHasNoActionAndNoSize() async throws {
@@ -172,15 +196,122 @@ final class CleanupDuplicateFindingsTests: XCTestCase {
         XCTAssertEqual(activeFinding.action, .none)
     }
 
-    func testBrokenLinkHasNoAction() async throws {
-        let broken = copy(tmp.url("bin2/tool"), real: nil, source: .standalone, role: .brokenLink, index: 1)
-        let active = copy(tmp.url(".local/bin/tool"), source: .standalone, role: .active, index: 0)
-        let result = await builder().build(scan("tool", [active, broken]))
+    /// B4: a dangling link gets a copyable `unlink`, with `sudo` outside the home; Wega never runs it.
+    func testBrokenLinkOffersUnlinkCommand() async throws {
+        let cases: [(path: URL, action: CleanupAction)] = [
+            (tmp.url("bin2/tool"), .command("unlink \(tmp.url("bin2/tool").path)")),
+            (URL(filePath: "/usr/local/bin/tool", directoryHint: .notDirectory), .command("sudo unlink /usr/local/bin/tool")),
+            (tmp.url("bin 2/tool"), .none),
+        ]
+        for (path, expected) in cases {
+            let broken = CleanupCopy(
+                path: path, realpath: nil, pathIndex: 1, source: .standalone, version: nil,
+                identity: CleanupFileIdentity(device: 1, inode: 9), role: .brokenLink
+            )
+            let active = copy(tmp.url(".local/bin/tool"), source: .standalone, role: .active, index: 0)
+            let result = await builder().build(scan("tool", [active, broken]))
 
-        let finding = try XCTUnwrap(result.findings.first { $0.status == .brokenLink })
-        XCTAssertEqual(finding.reason, .brokenLink)
+            let finding = try XCTUnwrap(result.findings.first { $0.status == .brokenLink })
+            XCTAssertEqual(finding.reason, .brokenLink, path.path)
+            XCTAssertEqual(finding.action, expected, path.path)
+            XCTAssertEqual(finding.bucket, .excluded, path.path)
+            XCTAssertNil(finding.size, path.path)
+            XCTAssertNil(finding.candidate, path.path)
+        }
+    }
+
+    /// B4 only for links that really dangle: Wega re-resolves the link and offers `unlink` when its
+    /// target is missing or it loops. A link Wega merely could not follow (a protected location, an
+    /// I/O error) or one that resolves again may be a working copy, so it gets nothing to paste.
+    func testUnlinkIsOfferedOnlyForADanglingLink() async throws {
+        let dangling = try tmp.symlink("bin2/tool", to: tmp.url("gone/tool").path)
+        let loop = try tmp.symlink("bin3/tool", to: tmp.url("bin3/tool").path)
+        let hidden = try tmp.file("Documents/tool", size: 16, executable: true)
+        let intoProtected = try tmp.symlink("bin4/tool", to: hidden.path)
+        let real = try tmp.file("bin5/real", size: 16, executable: true)
+        let resolvesAgain = try tmp.symlink("bin5/tool", to: real.path)
+        let besideHome = URL(filePath: tmp.home.path + "2/bin/tool", directoryHint: .notDirectory)
+        let cases: [(path: URL, action: CleanupAction)] = [
+            (dangling, .command("unlink \(dangling.path)")),
+            (loop, .command("unlink \(loop.path)")),
+            (intoProtected, .none),
+            (resolvesAgain, .none),
+            (besideHome, .command("sudo unlink \(besideHome.path)")),
+        ]
+        for (path, expected) in cases {
+            let broken = CleanupCopy(
+                path: path, realpath: nil, pathIndex: 1, source: .standalone, version: nil,
+                identity: CleanupFileIdentity(device: 1, inode: 9), role: .brokenLink
+            )
+            let active = copy(tmp.url(".local/bin/tool"), source: .standalone, role: .active, index: 0)
+            let result = await builder().build(scan("tool", [active, broken]))
+
+            let finding = try XCTUnwrap(result.findings.first { $0.status == .brokenLink })
+            XCTAssertEqual(finding.action, expected, path.path)
+        }
+    }
+
+    func testActiveFormulaWhoseDependentsQueryFailedHasNoRemoval() async throws {
+        let result = await builder(ScriptedBrew(error: BrewFailure())).build(try ollamaScan())
+
+        let active = try XCTUnwrap(result.findings.first { $0.path == tmp.url("opt/homebrew/bin/ollama") })
+        XCTAssertEqual(active.status, .active)
+        XCTAssertEqual(active.candidate?.removal, CleanupAction.none)
+        XCTAssertNil(active.candidate?.removalSize)
+        XCTAssertEqual(result.notes, [CleanupDetectorNote(detector: .homebrew, kind: .failed)])
+    }
+
+    func testActiveFormulaIsCheckedForDependents() async throws {
+        let brew = ScriptedBrew()
+        _ = await builder(brew).build(try ollamaScan())
+
+        XCTAssertTrue(brew.calls.contains("ollama"), "\(brew.calls)")
+    }
+
+    func testActiveCandidateCarriesItsRemovalAndKeepsActiveStatus() async throws {
+        let result = await builder().build(try ollamaScan())
+
+        let active = try XCTUnwrap(result.findings.first { $0.path == tmp.url("opt/homebrew/bin/ollama") })
+        XCTAssertEqual(active.status, .active)
+        XCTAssertEqual(active.reason, .currentVersion)
+        XCTAssertEqual(active.action, .none)
+        XCTAssertEqual(active.candidate?.pathRole, .active)
+        XCTAssertEqual(active.candidate?.removal, .brew(.uninstallFormula("ollama")))
+        XCTAssertGreaterThan(try XCTUnwrap(active.candidate?.removalSize), 0)
+        XCTAssertEqual(active.candidate?.keep, .kept)
+        let app = try XCTUnwrap(result.findings.first { $0.path == tmp.url("usr/local/bin/ollama") })
+        XCTAssertEqual(app.candidate?.pathRole, .shadowed)
+        XCTAssertEqual(app.candidate?.keep, .notKept(keptPath: tmp.url("opt/homebrew/bin/ollama").path))
+    }
+
+    /// B5: badges stay `PATH` facts; what blocks or flags removing the active copy travels with it.
+    func testActiveCandidateInUseOrRequiredStaysActive() async throws {
+        let scan = try ollamaScan()
+        let real = try XCTUnwrap(scan.groups.first?.copies.first?.realpath)
+        let process = CleanupProcess(pid: 9, name: "ollama", executablePath: real.path, arguments: [])
+        processes = [process]
+        let result = await builder(ScriptedBrew(uses: ["ollama": ["llm-tool"]])).build(scan)
+
+        let active = try XCTUnwrap(result.findings.first { $0.path == tmp.url("opt/homebrew/bin/ollama") })
+        XCTAssertEqual(active.status, .active)
+        XCTAssertEqual(active.candidate?.dependents, ["llm-tool"])
+        XCTAssertEqual(active.candidate?.processes, [process])
+    }
+
+    /// A tool whose only other copy is a system one gets no choice: the copy is not a candidate.
+    func testLoneCandidateBesideASystemCopyLooksAsToday() async throws {
+        let real = try tmp.file("opt/homebrew/Cellar/git/2.50.0/bin/git", size: 64, executable: true)
+        let active = copy(tmp.url("opt/homebrew/bin/git"), real: real, source: .homebrewFormula(name: "git"), role: .active, index: 0)
+        let system = copy(URL(filePath: "/usr/bin/git", directoryHint: .notDirectory), source: .system, role: .expected, index: 1)
+        let brew = ScriptedBrew()
+        let result = await builder(brew).build(scan("git", [active, system]))
+
+        let finding = try XCTUnwrap(result.findings.first { $0.status == .active })
+        XCTAssertNil(finding.candidate)
+        XCTAssertEqual(finding.reason, .currentVersion)
         XCTAssertEqual(finding.action, .none)
         XCTAssertEqual(finding.bucket, .excluded)
+        XCTAssertEqual(brew.calls, [])
     }
 
     func testMissingHomebrewDegradesToANote() async throws {

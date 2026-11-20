@@ -13,6 +13,8 @@ enum CleanupPresentation {
         case brew
         case brewCleanup
         case copyCommand(String)
+        /// Opens "Odinstaluj aplikacje" with the app preselected; nothing is removed here.
+        case uninstallApp(name: String, bundle: URL)
     }
 
     struct Row: Equatable {
@@ -31,11 +33,13 @@ enum CleanupPresentation {
         /// Shown beside the button or instead of it: the command to copy, the instruction to
         /// follow, or that the row is for information only.
         let note: String?
+        /// The "keep this copy" radio of a copy that offers the choice; nil for every other row.
+        var keep: KeepControl? = nil
 
         func appendingDetail(_ text: String) -> Row {
             Row(
                 findingID: findingID, groupHeader: groupHeader, bucket: bucket, status: status, title: title,
-                detail: detail + " · " + text, sizeText: sizeText, button: button, note: note
+                detail: detail + " · " + text, sizeText: sizeText, button: button, note: note, keep: keep
             )
         }
     }
@@ -62,6 +66,8 @@ enum CleanupPresentation {
         /// The processes that used the item during the scan, arguments included. Shown live only.
         let processes: [String]
         let confirmTitle: String
+        /// For the copy `PATH` uses now: which copy Terminal uses once it is gone.
+        let takeover: String?
     }
 
     /// Where the confirmation sheet's own removal request stands.
@@ -146,7 +152,8 @@ enum CleanupPresentation {
             sections.append(Section(kind: .protectedLocations, title: tr("Pominięte lokalizacje chronione"), notes: [], rows: skipped))
         }
         sections.append(filesAndFoldersSection(
-            map, notes: notes(.filesAndFolders), rows: groupedRows(findings(.filesAndFolders), home: home),
+            map, notes: notes(.filesAndFolders),
+            rows: groupedRows(findings(.filesAndFolders), home: home, linkKeeps: linkKeeps(in: report)),
             offRows: mayHaveEntriesRows(listed, home: home)
         ))
         return map == .read ? addingLinkedEntries(to: sections, from: report.findings) : sections
@@ -184,7 +191,11 @@ enum CleanupPresentation {
 
     /// Rows of one tool stay together, tools in the order the report first names them. The match
     /// ignores case, so an app-managed copy owned by "Claude" joins the `claude` tool's rows.
-    private static func groupedRows(_ findings: [CleanupFinding], home: URL) -> [Row] {
+    /// `linkKeeps` holds the keep state of each D1 candidate by finding id, which a Files and
+    /// Folders entry linked to that copy is labelled by.
+    private static func groupedRows(
+        _ findings: [CleanupFinding], home: URL, linkKeeps: [String: CleanupKeep] = [:]
+    ) -> [Row] {
         var order: [String] = []
         var groups: [String: [CleanupFinding]] = [:]
         for finding in findings {
@@ -198,7 +209,10 @@ enum CleanupPresentation {
                 .sorted { (rank($0.element.status), $0.offset) < (rank($1.element.status), $1.offset) }
                 .map(\.element)
             return sorted.enumerated().map { index, finding in
-                row(for: finding, home: home, groupHeader: index == 0 ? members.first?.tool : nil, namesTool: false)
+                row(
+                    for: finding, home: home, groupHeader: index == 0 ? members.first?.tool : nil, namesTool: false,
+                    linkKeeps: linkKeeps
+                )
             }
         }
     }
@@ -214,13 +228,17 @@ enum CleanupPresentation {
         }
     }
 
-    private static func row(for finding: CleanupFinding, home: URL, groupHeader: String?, namesTool: Bool) -> Row {
+    private static func row(
+        for finding: CleanupFinding, home: URL, groupHeader: String?, namesTool: Bool,
+        linkKeeps: [String: CleanupKeep] = [:]
+    ) -> Row {
         let control = control(for: finding, home: home)
         return Row(
             findingID: finding.id, groupHeader: groupHeader, bucket: finding.bucket, status: statusText(finding.status),
             title: isMapBundleEntry(finding) ? finding.tool : tilde(finding.path.path, home),
-            detail: detail(of: finding, home: home, namesTool: namesTool),
-            sizeText: finding.size.map(sizeText), button: control.button, note: control.note
+            detail: detail(of: finding, home: home, namesTool: namesTool, linkKeeps: linkKeeps),
+            sizeText: finding.size.map(sizeText), button: control.button, note: control.note,
+            keep: keepControl(of: finding)
         )
     }
 
@@ -228,6 +246,7 @@ enum CleanupPresentation {
     /// remove. A JetBrains folder of a version an installed IDE replaced also names the IDE's own
     /// cleanup, which knows its folders best; it does not clear a folder no installed IDE explains.
     private static func control(for finding: CleanupFinding, home: URL) -> (button: ButtonKind?, note: String?) {
+        if let note = keepNote(for: finding) { return (nil, note) }
         guard finding.bucket != .excluded else { return excludedControl(for: finding, home: home) }
         switch finding.action {
         case .trash, .trashBatch:
@@ -237,23 +256,29 @@ enum CleanupPresentation {
         case .brew: return (.brew, nil)
         case .command(let command): return (.copyCommand(command), command)
         case .instruction(let instruction): return (nil, instructionNote(for: finding, instruction, home: home))
+        case .uninstallApp(let name, let bundle): return (.uninstallApp(name: name, bundle: bundle), nil)
         case .none: return (nil, tr("tylko informacja"))
         }
     }
 
-    /// `PATH` hygiene and the Files and Folders map are advice only, so their excluded rows still
-    /// show the instruction to follow or the command to copy; Wega runs neither.
+    /// `PATH` hygiene, the Files and Folders map and a broken link on `PATH` are advice only, so
+    /// their excluded rows still show the instruction to follow or the command to copy; Wega runs
+    /// neither.
     private static func excludedControl(for finding: CleanupFinding, home: URL) -> (button: ButtonKind?, note: String?) {
         let informationOnly: (button: ButtonKind?, note: String?) = (nil, tr("tylko informacja"))
-        guard finding.detector == .pathHygiene || finding.detector == .tccMap else { return informationOnly }
+        guard finding.detector == .pathHygiene || finding.detector == .tccMap || isBrokenLinkOnPath(finding) else {
+            return informationOnly
+        }
         switch finding.action {
         case .instruction(let instruction): return (nil, instructionNote(for: finding, instruction, home: home))
         case .command(let command): return (.copyCommand(command), command)
-        case .trash, .trashBatch, .brew, .none: return informationOnly
+        case .trash, .trashBatch, .brew, .uninstallApp, .none: return informationOnly
         }
     }
 
-    private static func detail(of finding: CleanupFinding, home: URL, namesTool: Bool) -> String {
+    private static func detail(
+        of finding: CleanupFinding, home: URL, namesTool: Bool, linkKeeps: [String: CleanupKeep]
+    ) -> String {
         var parts: [String] = namesTool ? [finding.tool] : []
         if let source = finding.source, !isMapBundleEntry(finding) { parts.append(sourceText(source)) }
         if let version = finding.version {
@@ -261,8 +286,11 @@ enum CleanupPresentation {
         } else if finding.source == .standalone, finding.status != .brokenLink {
             parts.append(tr("wersja nieznana"))
         }
-        parts.append(reasonText(displayed(finding.reason, home: home), requiredBy: pinnedPaths(in: finding.status, home: home)))
-        let users = processes(in: finding.status)
+        parts.append(
+            linkedEntryText(finding.reason, linkKeeps: linkKeeps)
+                ?? reasonText(displayed(finding.reason, home: home), requiredBy: pinnedPaths(in: finding.status, home: home))
+        )
+        let users = processes(of: finding)
         if !users.isEmpty {
             parts.append(trf("używa: %@", users.map(processName).joined(separator: ", ")))
         }
@@ -334,6 +362,7 @@ enum CleanupPresentation {
         case .brew: tr("Odinstaluj…")
         case .brewCleanup: tr("Posprzątaj…")
         case .copyCommand: tr("Kopiuj polecenie")
+        case .uninstallApp(let name, _): trf("Odinstaluj %@…", name)
         }
     }
 
@@ -395,12 +424,13 @@ enum CleanupPresentation {
         case .ideNotFound: tr("nie znaleziono zainstalowanego IDE tego produktu")
         case .newerThanInstalledIDE(let installed):
             trf("nowsza niż zainstalowane IDE (%@)", installed.joined(separator: ", "))
-        case .missingPathEntry, .repeatedPathEntry, .samePlaceAs, .nestedIn, .olderCopyWins, .tccEntry, .tccEntryFileGone:
+        case .missingPathEntry, .repeatedPathEntry, .samePlaceAs, .nestedIn, .olderCopyWins, .tccEntry, .tccEntryFileGone,
+             .keptInstead, .keptByChoice, .noCopyKept:
             hygieneReasonText(reason, requiredBy: paths)
         }
     }
 
-    /// The `PATH` hygiene and Files and Folders reasons. The other reasons are listed rather than
+    /// The `PATH` hygiene, Files and Folders and keep-choice reasons. The other reasons are listed rather than
     /// defaulted, so a reason added later fails to compile here until it has a text.
     private static func hygieneReasonText(_ reason: CleanupReason, requiredBy paths: [String]) -> String {
         switch reason {
@@ -414,6 +444,9 @@ enum CleanupPresentation {
             tccEntryText(grants: grants, link: link)
         case .tccEntryFileGone(let grants):
             trf("wpis w „Pliki i foldery” (%@) wskazuje plik, którego już nie ma", grantsText(grants))
+        case .keptInstead(let path): trf("zostawiasz %@", path)
+        case .keptByChoice: tr("tę kopię zostawiasz")
+        case .noCopyKept: tr("nie wybrano kopii do zostawienia")
         case .olderVersion, .newerVersion, .shadowedBy, .systemCopy, .managedByApp, .staleSinceBoot, .keptSinceBoot,
              .unknownVersionDirectory, .currentVersion, .protectedLocation, .brokenLink, .requiredBy, .homebrewLeftovers,
              .homebrewKeptVersions, .installedOnlyAsDependency, .recentlyUpgraded, .notRequiredByProjects, .requiredByProjects,
@@ -422,9 +455,11 @@ enum CleanupPresentation {
         }
     }
 
-    private static func tccEntryText(grants: [CleanupTCCGrant], link: CleanupTCCLink?) -> String {
+    /// `label` replaces the stored link kind's text, for an entry of a copy the user chose about.
+    static func tccEntryText(grants: [CleanupTCCGrant], link: CleanupTCCLink?, label: String? = nil) -> String {
         let entry = trf("wpis w „Pliki i foldery”: %@", grantsText(grants))
         guard let link else { return entry }
+        if let label { return "\(entry); \(label)" }
         let kind = switch link.kind {
         case .activeCopy: tr("dotyczy aktywnej kopii")
         case .copyToRemove: tr("dotyczy kopii do usunięcia")
@@ -536,8 +571,9 @@ enum CleanupPresentation {
             reason: reasonText(displayed(finding.reason, home: home), requiredBy: pinnedPaths(in: finding.status, home: home)),
             action: actionText(finding.action, home: home),
             risk: riskText(finding.risk),
-            processes: processes(in: finding.status).map(processLine),
-            confirmTitle: confirmTitle(for: finding.action)
+            processes: processes(of: finding).map(processLine),
+            confirmTitle: confirmTitle(for: finding.action),
+            takeover: takeoverText(for: finding, home: home)
         )
     }
 
@@ -620,6 +656,8 @@ enum CleanupPresentation {
             CleanupActionText.command(for: brew)
         case .command(let command):
             command
+        case .uninstallApp(let name, let bundle):
+            trf("Odinstaluj aplikację %@ (%@)", name, tilde(bundle.path, home))
         case .instruction(let instruction):
             instructionText(displayed(instruction, home: home))
         case .none:
@@ -627,8 +665,11 @@ enum CleanupPresentation {
         }
     }
 
-    // MARK: - Export
+}
 
+// MARK: - Export
+
+extension CleanupPresentation {
     /// The plain-text export: a header with the totals, the detector notes and the skipped
     /// protected locations, then the renderer's line per finding. No process arguments.
     static func exportText(_ report: CleanupReport, home: URL) -> String {
@@ -651,7 +692,10 @@ enum CleanupPresentation {
             lines.append(tr("Pominięte lokalizacje chronione") + ":")
             lines += report.skippedProtected.map { "- " + tilde($0, home) }
         }
-        let findings = CleanupReportRenderer.text(report, home: home, reasonText: reasonText, statusText: statusText)
+        let keeps = linkKeeps(in: report)
+        let findings = CleanupReportRenderer.text(
+            report, home: home, reasonText: { linkedEntryText($0, linkKeeps: keeps) ?? reasonText($0) }, statusText: statusText
+        )
         return lines.joined(separator: "\n") + "\n\n" + findings
     }
 
@@ -669,9 +713,11 @@ enum CleanupPresentation {
         "\(process.name) (PID \(process.pid))"
     }
 
-    private static func processes(in status: CleanupStatus) -> [CleanupProcess] {
-        guard case .inUse(let processes) = status else { return [] }
-        return processes
+    /// The processes the scan saw using the item. A `PATH`-active copy keeps the status `active`
+    /// even while in use, so its candidate's own list stands in.
+    private static func processes(of finding: CleanupFinding) -> [CleanupProcess] {
+        if case .inUse(let processes) = finding.status { return processes }
+        return finding.candidate?.processes ?? []
     }
 
     private static func pinnedPaths(in status: CleanupStatus, home: URL) -> [String] {
@@ -686,6 +732,7 @@ enum CleanupPresentation {
         case .nestedIn(let parent): .nestedIn(parent: tilde(parent, home))
         case .olderCopyWins(let version, let newer, let newerVersion):
             .olderCopyWins(version: version, newer: tilde(newer, home), newerVersion: newerVersion)
+        case .keptInstead(let path): .keptInstead(path: tilde(path, home))
         default: reason
         }
     }

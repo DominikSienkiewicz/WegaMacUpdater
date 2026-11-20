@@ -1,6 +1,6 @@
 import Foundation
 
-public enum CleanupCopyRole: Equatable, Sendable {
+public enum CleanupCopyRole: String, Codable, Equatable, Sendable {
     case active, shadowed, expected, brokenLink
 }
 

@@ -4,6 +4,9 @@ import MacUpdaterCore
 
 struct UninstallView: View {
     var onWegaState: ((WegaState) -> Void)?
+    /// An app bundle a Cleanup row handed over; selected once, after the first scan lists it.
+    var preselection: URL? = nil
+    var onPreselectionUsed: () -> Void = {}
 
     @EnvironmentObject private var model: AppViewModel
     /// The Settings window hosts the helper card that turns Wega's helper on.
@@ -449,6 +452,10 @@ struct UninstallView: View {
         guard let scan = await operations.scan(using: model.brewService) else { return }
         apps = scan.apps
         protections = scan.protections
+        if let preselection {
+            selected = UninstallSelection.preselection(for: preselection, in: apps, protections: protections)
+            onPreselectionUsed()
+        }
         scanFailed = scan.scanFailed
         applicationsSourceFailed = scan.failures.contains { $0.source == .applications }
         scanError = scan.failures.scanErrorMessage

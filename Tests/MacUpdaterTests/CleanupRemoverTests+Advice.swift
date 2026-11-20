@@ -89,6 +89,27 @@ extension CleanupRemoverTests {
         XCTAssertTrue(FileManager.default.fileExists(atPath: client.path))
     }
 
+    func testUninstallAppActionIsNotRemovable() async throws {
+        let home = try CleanupTempHome()
+        let recording = RecordingCleanupFileSystem(wrapping: LiveCleanupFileSystem(trash: { _ in }))
+        let brew = RecordingBrewCalls()
+        let remover = CleanupRemover(
+            fileSystem: recording, inspector: FakeProcessInspector(processes: [], bootTime: Date(timeIntervalSince1970: 0)),
+            brewQuery: brew, brewRemoval: brew, coordinator: OperationCoordinator(), home: home.home,
+            today: { Date(timeIntervalSince1970: 0) }
+        )
+        let tool = try home.file("bin/ollama", size: 16, executable: true)
+        let action = CleanupAction.uninstallApp(name: "Ollama", bundle: URL(filePath: "/Applications/Ollama.app"))
+        let item = adviceFinding(.pathDuplicates, tool, status: .active, reason: .keptByChoice, action: action)
+
+        let outcome = await remover.execute(CleanupRemovalIntent(finding: item, inUseAcknowledged: true))
+
+        XCTAssertEqual(outcome, .notRemovable)
+        XCTAssertEqual(brew.calls, [])
+        XCTAssertEqual(recording.touched, [])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tool.path))
+    }
+
     private func adviceFinding(
         _ detector: CleanupDetectorID, _ path: URL, status: CleanupStatus, reason: CleanupReason,
         action: CleanupAction, identity: CleanupFileIdentity? = nil

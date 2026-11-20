@@ -2,7 +2,7 @@ import Foundation
 
 /// The result of one Cleanup scan. Totals are computed from the findings, so they always agree.
 public struct CleanupReport: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public let schemaVersion: Int
     public let createdAt: Date
@@ -124,6 +124,7 @@ public enum CleanupReportRenderer {
         case .nestedIn(let parent): .nestedIn(parent: tildePath(parent, home: home))
         case .olderCopyWins(let version, let newer, let newerVersion):
             .olderCopyWins(version: version, newer: tildePath(newer, home: home), newerVersion: newerVersion)
+        case .keptInstead(let path): .keptInstead(path: tildePath(path, home: home))
         default: reason
         }
     }
@@ -148,6 +149,8 @@ public enum CleanupReportRenderer {
                 : locations.map { "\(tildePath($0.file, home: home)):\($0.line)" }.joined(separator: ", "))
         case .instruction(.switchOffInFilesAndFolders):
             "instruction switch-off-in-files-and-folders"
+        case .uninstallApp(_, let bundle):
+            "uninstall app " + tildePath(bundle.path, home: home)
         case .none:
             "-"
         }

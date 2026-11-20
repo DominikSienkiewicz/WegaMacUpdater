@@ -1,3 +1,4 @@
+import Foundation
 import MacUpdaterCore
 
 /// Selection rules for the uninstall list. Protected rows stay visible but are never
@@ -23,6 +24,17 @@ enum UninstallSelection {
         protections: [String: UninstallProtection]
     ) -> [ApplicationInfo] {
         InstallationInventory.selected(selectable(filtered, protections: protections), identities: selected)
+    }
+
+    /// The selectable apps installed at `bundle`, the app a Cleanup row handed over. A protected
+    /// or missing app starts with nothing selected.
+    static func preselection(
+        for bundle: URL,
+        in apps: [ApplicationInfo],
+        protections: [String: UninstallProtection]
+    ) -> Set<String> {
+        let path = bundle.standardizedFileURL.path
+        return Set(selectable(apps, protections: protections).filter { $0.path.standardizedFileURL.path == path }.map(\.id))
     }
 
     static func selectAllSymbol(

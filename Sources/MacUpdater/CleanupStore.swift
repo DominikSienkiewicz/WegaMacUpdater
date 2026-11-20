@@ -17,6 +17,9 @@ struct CleanupStoreDependencies {
     var savePath: @MainActor (CleanupPathSnapshot) throws -> Void
     /// The Settings switch for the Files and Folders map (D10), read each time it is needed.
     var tccMapEnabled: @MainActor () -> Bool = { CleanupTCCMap.enabledByDefault }
+    /// The "keep this copy" choices per tool, local to this user and never exported.
+    var loadKeptCopies: @MainActor () -> [String: CleanupKeptCopy] = { [:] }
+    var saveKeptCopies: @MainActor ([String: CleanupKeptCopy]) -> Void = { _ in }
 
     /// One guarded file system serves the scan, the approximate `PATH` and the remover, so every
     /// Cleanup read and every move to the Trash passes the protected-location guard. The project
@@ -70,7 +73,9 @@ struct CleanupStoreDependencies {
             saveReport: { try CleanupReportFile(home: home).save($0) },
             loadPath: { CleanupPathSnapshotFile().load() },
             savePath: { try CleanupPathSnapshotFile().save($0) },
-            tccMapEnabled: tccMapEnabled
+            tccMapEnabled: tccMapEnabled,
+            loadKeptCopies: { CleanupKeptCopies.load(from: .standard) },
+            saveKeptCopies: { CleanupKeptCopies.save($0, to: .standard) }
         )
     }
 }
@@ -109,13 +114,17 @@ final class CleanupStore: ObservableObject {
 
     private let dependencies: CleanupStoreDependencies
     private var settingsObserver: (any NSObjectProtocol)?
+    /// Which copy of each duplicated tool the user keeps, by lowercased tool name.
+    private var keptCopies: [String: CleanupKeptCopy]
 
     /// The home the report was scanned under; the view and the exports write it as `~`.
     var home: URL { dependencies.home }
 
     init(dependencies: CleanupStoreDependencies = .live) {
         self.dependencies = dependencies
-        report = dependencies.loadReport()
+        let keptCopies = dependencies.loadKeptCopies()
+        self.keptCopies = keptCopies
+        report = dependencies.loadReport().map { CleanupKeepChoice.apply(keptCopies, to: $0) }
         pathSnapshot = dependencies.loadPath()
         applyTCCMapSetting()
         settingsObserver = NotificationCenter.default.addObserver(
@@ -159,6 +168,20 @@ final class CleanupStore: ObservableObject {
         task?.cancel()
     }
 
+    /// Keeps the copy `findingID` names and resolves its tool's other copies against it at once,
+    /// without a scan. Only while nothing runs, and only for a copy that offers the choice; the
+    /// default copy chosen explicitly is remembered too, so a later `PATH` change does not move it.
+    func keep(_ findingID: String) {
+        guard phase == .idle, let report,
+              let finding = report.findings.first(where: { $0.id == findingID && $0.candidate != nil }),
+              let source = finding.source else { return }
+        keptCopies[finding.tool.lowercased()] = CleanupKeptCopy(path: finding.path.path, source: source)
+        dependencies.saveKeptCopies(keptCopies)
+        let resolved = CleanupKeepChoice.apply(keptCopies, to: report)
+        self.report = resolved
+        persist("raportu") { try dependencies.saveReport(resolved) }
+    }
+
     /// While the Files and Folders switch is off, a map in the stored report is forgotten at once,
     /// also under a running scan or removal: the report on screen, its saved copy and so every
     /// export lose the D10 findings and notes. All of it runs on the main actor, and the report a
@@ -172,7 +195,17 @@ final class CleanupStore: ObservableObject {
     /// Carries out one confirmed removal; the remover re-validates it under a write lease. Only a
     /// `.removed` outcome is logged and followed by a rescan; any other outcome is left for the
     /// view to explain through `lastOutcome`.
+    ///
+    /// Another window shares this store, so the report can change under an open sheet. A
+    /// confirmation the report no longer backs (the finding is gone, or its keep state, reason or
+    /// action moved) starts nothing and reads `.changedSinceScan`: the disk rechecks cannot see a
+    /// copy the user has since chosen to keep.
     func remove(_ intent: CleanupRemovalIntent) {
+        guard phase == .idle else { return }
+        guard reportStillBacks(intent.finding) else {
+            lastOutcome = .changedSinceScan
+            return
+        }
         start(.removing(findingID: intent.finding.id)) {
             self.lastOutcome = nil
             let outcome = await self.dependencies.remove(intent)
@@ -182,6 +215,13 @@ final class CleanupStore: ObservableObject {
             self.phase = .scanning
             await self.performScan()
         }
+    }
+
+    private func reportStillBacks(_ confirmed: CleanupFinding) -> Bool {
+        guard let current = report?.findings.first(where: { $0.id == confirmed.id }) else { return false }
+        return current.candidate?.keep == confirmed.candidate?.keep
+            && current.reason == confirmed.reason
+            && current.action == confirmed.action
     }
 
     /// The finding's path with `~` for the home and the kind of action taken. Never the processes
@@ -200,6 +240,7 @@ final class CleanupStore: ObservableObject {
         case .brew(.cleanup): "brew cleanup"
         case .command: "command"
         case .instruction: "instruction"
+        case .uninstallApp: "uninstall app"
         case .none: "none"
         }
     }
@@ -243,7 +284,7 @@ final class CleanupStore: ObservableObject {
             let scanned = try await dependencies.coordinator.withRead(label: Self.scanLeaseLabel) {
                 try await scan(storedPath ?? approximatePath())
             }
-            let report = reportFollowingTCCMapSetting(scanned) ?? scanned
+            let report = resolvedForKeptCopies(reportFollowingTCCMapSetting(scanned) ?? scanned)
             self.report = report
             lastScanFailed = false
             persist("raportu") { try dependencies.saveReport(report) }
@@ -254,6 +295,17 @@ final class CleanupStore: ObservableObject {
             lastScanFailed = true
             WegaLog.warning(.app, "Porządki: skan nie powiódł się (\(type(of: error))).")
         }
+    }
+
+    /// A remembered choice whose copy the scan no longer found, at that path and from that source,
+    /// is dropped for good; the rest decide the report.
+    private func resolvedForKeptCopies(_ report: CleanupReport) -> CleanupReport {
+        let valid = CleanupKeepChoice.validChoices(keptCopies, in: report)
+        if valid != keptCopies {
+            keptCopies = valid
+            dependencies.saveKeptCopies(valid)
+        }
+        return CleanupKeepChoice.apply(valid, to: report)
     }
 
     /// A failed write costs only the copy shown at the next launch, so it is logged, not raised.

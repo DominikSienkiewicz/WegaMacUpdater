@@ -216,6 +216,7 @@ final class CleanupStoreTests: XCTestCase {
         let boundary = FakeCleanupBoundary()
         let gate = FakeGate()
         boundary.removalGate = gate
+        boundary.persistedReport = CleanupStoreFixtures.report(tool: "claude")
         let store = CleanupStore(dependencies: boundary.dependencies)
         let intent = CleanupStoreFixtures.intent()
 
@@ -462,6 +463,133 @@ final class CleanupStoreTests: XCTestCase {
     }
 }
 
+// MARK: - Keep choice
+
+extension CleanupStoreTests {
+    private typealias Keep = CleanupKeepFixtures
+
+    func testLaunchReAppliesTheRememberedChoice() {
+        let boundary = FakeCleanupBoundary()
+        boundary.persistedReport = Keep.report()
+        boundary.keptCopies = Keep.keepLink
+
+        let store = CleanupStore(dependencies: boundary.dependencies)
+
+        XCTAssertEqual(store.report, Keep.report(choices: Keep.keepLink))
+    }
+
+    func testKeepRecordsTheChoiceAndReResolvesTheReport() throws {
+        let boundary = FakeCleanupBoundary()
+        boundary.persistedReport = Keep.report()
+        let store = CleanupStore(dependencies: boundary.dependencies)
+
+        store.keep(Keep.appLink.id)
+
+        XCTAssertEqual(boundary.savedKeptCopies, [
+            ["ollama": CleanupKeptCopy(path: "/usr/local/bin/ollama", source: .appBundle(name: "Ollama"))],
+        ])
+        let report = try XCTUnwrap(store.report)
+        XCTAssertEqual(Keep.finding(Keep.formula.id, in: report)?.action, .brew(.uninstallFormula("ollama")))
+        XCTAssertEqual(Keep.finding(Keep.appLink.id, in: report)?.candidate?.keep, .kept)
+        XCTAssertEqual(report, Keep.report(choices: Keep.keepLink))
+        XCTAssertEqual(boundary.savedReports.last, store.report)
+        XCTAssertEqual(store.phase, .idle)
+    }
+
+    func testKeepIgnoresAFindingWithoutACandidate() {
+        let boundary = FakeCleanupBoundary()
+        let previous = CleanupStoreFixtures.report(tool: "previous")
+        boundary.persistedReport = previous
+        let store = CleanupStore(dependencies: boundary.dependencies)
+
+        store.keep(CleanupStoreFixtures.finding(tool: "previous").id)
+        store.keep("D1:shadowed:/nowhere")
+
+        XCTAssertTrue(boundary.savedKeptCopies.isEmpty)
+        XCTAssertTrue(boundary.savedReports.isEmpty)
+        XCTAssertEqual(store.report, previous)
+    }
+
+    func testScanAppliesTheRememberedChoice() async {
+        let boundary = FakeCleanupBoundary()
+        boundary.keptCopies = Keep.keepLink
+        boundary.scanResult = Keep.report()
+        let store = CleanupStore(dependencies: boundary.dependencies)
+
+        store.scan()
+        await store.task?.value
+
+        let resolved = Keep.report(choices: Keep.keepLink)
+        XCTAssertEqual(store.report, resolved)
+        XCTAssertEqual(boundary.savedReports, [resolved])
+        XCTAssertEqual(store.report.flatMap { Keep.finding(Keep.formula.id, in: $0) }?.action, .brew(.uninstallFormula("ollama")))
+        XCTAssertTrue(boundary.savedKeptCopies.isEmpty, "a choice that still matches is not rewritten")
+    }
+
+    func testScanDropsAChoiceThatNoLongerMatches() async {
+        let boundary = FakeCleanupBoundary()
+        boundary.keptCopies = ["ollama": CleanupKeptCopy(path: Keep.linkPath, source: .homebrewFormula(name: "ollama"))]
+        boundary.scanResult = Keep.report()
+        let store = CleanupStore(dependencies: boundary.dependencies)
+
+        store.scan()
+        await store.task?.value
+
+        XCTAssertEqual(boundary.savedKeptCopies, [[:]])
+        XCTAssertEqual(store.report, Keep.report())
+        XCTAssertEqual(store.report.flatMap { Keep.finding(Keep.formula.id, in: $0) }?.candidate?.keep, .kept)
+
+        store.keep(Keep.appLink.id)
+        XCTAssertEqual(boundary.savedKeptCopies.last, Keep.keepLink, "the dropped choice is gone, the new one alone is saved")
+    }
+
+    func testKeepIsIgnoredWhileAnOperationRuns() async {
+        let boundary = FakeCleanupBoundary()
+        boundary.persistedReport = Keep.report()
+        let gate = FakeGate()
+        boundary.scanGate = gate
+        let store = CleanupStore(dependencies: boundary.dependencies)
+
+        store.scan()
+        await fulfillment(of: [gate.entered], timeout: 5)
+        store.keep(Keep.appLink.id)
+        let reportWhileRunning = store.report
+        gate.open()
+        await store.task?.value
+
+        XCTAssertTrue(boundary.savedKeptCopies.isEmpty)
+        XCTAssertEqual(reportWhileRunning, Keep.report())
+        XCTAssertEqual(store.report, boundary.scanResult)
+    }
+
+    /// A second window shares the store: a sheet opened for a copy to remove must not remove it
+    /// once the user keeps that copy elsewhere, also from the in-use acknowledgement step.
+    func testAStaleConfirmationNeverRemovesTheCopyNowKept() async throws {
+        let boundary = FakeCleanupBoundary()
+        boundary.persistedReport = Keep.report()
+        boundary.removalOutcome = .notRemovable
+        let store = CleanupStore(dependencies: boundary.dependencies)
+        store.keep(Keep.appLink.id)
+        let shown = try XCTUnwrap(store.report.flatMap { Keep.finding(Keep.formula.id, in: $0) })
+        XCTAssertEqual(shown.action, .brew(.uninstallFormula("ollama")))
+
+        store.keep(Keep.formula.id)
+        store.remove(CleanupRemovalIntent(finding: shown, inUseAcknowledged: false))
+        await store.task?.value
+        store.remove(CleanupRemovalIntent(finding: shown, inUseAcknowledged: true))
+        await store.task?.value
+
+        XCTAssertTrue(boundary.removedIntents.isEmpty, "the copy now kept never reaches the remover")
+        XCTAssertEqual(store.lastOutcome, .changedSinceScan)
+        XCTAssertEqual(store.phase, .idle)
+
+        store.keep(Keep.appLink.id)
+        store.remove(CleanupRemovalIntent(finding: shown, inUseAcknowledged: false))
+        await store.task?.value
+        XCTAssertEqual(boundary.removedIntents.map(\.finding), [shown], "a confirmation that matches the report still goes")
+    }
+}
+
 /// Values only; nothing here exists on disk and nothing reads the real home.
 private enum CleanupStoreFixtures {
     static let home = URL(filePath: "/Users/cleanup-test", directoryHint: .isDirectory)
@@ -567,6 +695,8 @@ private final class FakeCleanupBoundary {
     var removalOutcome: CleanupRemovalOutcome = .removed
     /// The Settings switch for the Files and Folders map; off, like its default.
     var tccMapEnabled = false
+    /// The remembered "keep this copy" choices the store loads at launch.
+    var keptCopies: [String: CleanupKeptCopy] = [:]
     /// Thrown by the fake scan after its gate, as the coordinator's lease errors would be.
     var scanError: Error?
     var readGate: FakeGate?
@@ -580,6 +710,7 @@ private final class FakeCleanupBoundary {
     private(set) var removalSawCancellation: [Bool] = []
     private(set) var savedReports: [CleanupReport] = []
     private(set) var savedPaths: [CleanupPathSnapshot] = []
+    private(set) var savedKeptCopies: [[String: CleanupKeptCopy]] = []
 
     var dependencies: CleanupStoreDependencies {
         CleanupStoreDependencies(
@@ -593,7 +724,9 @@ private final class FakeCleanupBoundary {
             saveReport: { self.savedReports.append($0) },
             loadPath: { self.persistedPath },
             savePath: { self.savedPaths.append($0) },
-            tccMapEnabled: { self.tccMapEnabled }
+            tccMapEnabled: { self.tccMapEnabled },
+            loadKeptCopies: { self.keptCopies },
+            saveKeptCopies: { self.savedKeptCopies.append($0) }
         )
     }
 
