@@ -70,7 +70,8 @@ DerivedData/
 *.swp
 /build/
 /.idea/
-/.claude/
+/.claude/*
+!/.claude/skills/
 # Local project concepts; maintained documentation in docs/ stays tracked.
 /docs/concepts/
 

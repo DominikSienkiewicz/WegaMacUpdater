@@ -414,6 +414,32 @@ else
     record_fail "missing [Unreleased] (exit $RC) or state changed"
 fi
 
+# --- 17 -----------------------------------------------------------------------
+# Skill wydania wywołuje skrypt i push dokładnie w formie, którą przyjmują release.sh
+# i hook git-guard: bez usuniętych trybów i bez `git -C … push`, którego hook nie wpuści.
+printf 'skill calls what the script and hook accept\n'
+skill="$ROOT/.claude/skills/release/SKILL.md"
+if [ ! -f "$skill" ]; then
+    record_fail "SKILL.md missing: $skill"
+else
+    absent=""
+    for needle in './scripts/release.sh' '--notes' '--dry-run' 'git push --atomic origin main v'; do
+        grep -qF -- "$needle" "$skill" || absent="$absent '$needle'"
+    done
+    if [ -z "$absent" ]; then
+        record_pass "names release.sh, --notes, --dry-run and the atomic push"
+    else
+        record_fail "SKILL.md lacks:$absent"
+    fi
+    if grep -qF -- '--continue' "$skill"; then
+        record_fail "SKILL.md uses the removed --continue mode"
+    elif grep -qE -- 'git -C [^ ]* push' "$skill"; then
+        record_fail "SKILL.md pushes with git -C, which the hook denies"
+    else
+        record_pass "no removed mode, no git -C push"
+    fi
+fi
+
 echo
 if [ "$failures" -ne 0 ]; then
     echo "test-release-guard: $failures failure(s)" >&2
