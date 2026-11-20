@@ -24,10 +24,11 @@ enum UpdateBandLayout {
 /// The dark band above the Updates list: Wega, what was found, what is queued and the round
 /// update button. Always `WegaLayout.bandHeight` tall so the list below never moves; text
 /// truncates before the band grows. The caller builds the button, so its gate stays with the
-/// update path.
+/// update path, and says whether the plan link may open (`planLinkEnabled`).
 struct UpdateBand<Action: View>: View {
     let presentation: UpdateBandPresentation
     let refreshProgress: ScanProgress?
+    let planLinkEnabled: Bool
     let onShowPlan: () -> Void
     let action: (UpdateBandLayout) -> Action
 
@@ -36,11 +37,13 @@ struct UpdateBand<Action: View>: View {
     init(
         presentation: UpdateBandPresentation,
         refreshProgress: ScanProgress?,
+        planLinkEnabled: Bool,
         onShowPlan: @escaping () -> Void,
         @ViewBuilder action: @escaping (UpdateBandLayout) -> Action
     ) {
         self.presentation = presentation
         self.refreshProgress = refreshProgress
+        self.planLinkEnabled = planLinkEnabled
         self.onShowPlan = onShowPlan
         self.action = action
     }
@@ -116,6 +119,7 @@ struct UpdateBand<Action: View>: View {
             ScanPhaseStrip(progress: refreshProgress)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .clipped()
+                .environment(\.colorScheme, .dark)
         } else if layout == .narrow {
             freshnessLabel
         } else {
@@ -204,8 +208,9 @@ struct UpdateBand<Action: View>: View {
             Button(tr("Pokaż, co dokładnie zrobię"), action: onShowPlan)
                 .buttonStyle(.plain)
                 .font(.wega(.caption, weight: .semibold))
-                .foregroundStyle(Color.wegaBandAccentText)
+                .foregroundStyle(planLinkEnabled ? Color.wegaBandAccentText : Color.wegaBandSecondaryText.opacity(0.5))
                 .lineLimit(1)
+                .disabled(!planLinkEnabled)
         }
     }
 

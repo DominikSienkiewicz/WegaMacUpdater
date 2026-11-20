@@ -71,6 +71,18 @@ struct UpdateActionBarTests {
         #expect(view.contains(".sheet(isPresented: $scan.showPlanPreview)"))
         #expect(!view.contains("WegaDisclosure(isExpanded: $scan.showPlanPreview)"),
                 "the plan no longer pushes the list down from inside the screen")
+        #expect(band.contains("planLinkEnabled: ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating)"),
+                "a running update owns the screen, the plan preview included")
+    }
+
+    /// During a run the button is disabled because the run owns the screen, not because the
+    /// selection is empty, so the tooltip names the run first.
+    @Test func theTooltipNamesARunningUpdateFirst() throws {
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        let help = try slice(view, from: "private var updateButtonHelp: String", to: "var body: some View")
+        let updating = try #require(help.range(of: "if scan.updating { return tr(\"Aktualizuję wybrane pakiety\") }"))
+        let refreshing = try #require(help.range(of: "scan.isRefreshing"))
+        #expect(updating.lowerBound < refreshing.lowerBound)
     }
 
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {

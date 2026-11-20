@@ -79,7 +79,7 @@ final class UpdateBandViewTests: XCTestCase {
     func testTheNarrowBandFitsTheInspectorOpenWindow() throws {
         for progress in [nil, ScanProgress.running(.npm)] {
             let band = UpdateBand(
-                presentation: fullPresentation, refreshProgress: progress, onShowPlan: {},
+                presentation: fullPresentation, refreshProgress: progress, planLinkEnabled: true, onShowPlan: {},
                 action: { _ in Color.clear.frame(width: WegaLayout.bandButtonNarrowSize, height: WegaLayout.bandButtonNarrowSize) }
             )
             .frame(width: 368)
@@ -99,7 +99,7 @@ final class UpdateBandViewTests: XCTestCase {
         for progress in [nil, ScanProgress.running(.npm)] {
             for width in [240, 368, 380, 520, 700, 819, 820, 1100] as [CGFloat] {
                 let band = UpdateBand(
-                    presentation: fullPresentation, refreshProgress: progress, onShowPlan: {},
+                    presentation: fullPresentation, refreshProgress: progress, planLinkEnabled: true, onShowPlan: {},
                     action: { _ in Color.clear.frame(width: 96, height: 96) }
                 )
                 .frame(width: width)
@@ -113,7 +113,7 @@ final class UpdateBandViewTests: XCTestCase {
 
     func testTheRefreshingEyebrowNeverWidensOrGrowsTheBand() throws {
         let band = UpdateBand(
-            presentation: fullPresentation, refreshProgress: .running(.npm), onShowPlan: {},
+            presentation: fullPresentation, refreshProgress: .running(.npm), planLinkEnabled: true, onShowPlan: {},
             action: { _ in Color.clear.frame(width: 96, height: 96) }
         )
         .frame(width: 380)
@@ -125,6 +125,23 @@ final class UpdateBandViewTests: XCTestCase {
         XCTAssertTrue(
             text[strip.upperBound...].prefix(120).contains(".clipped()"),
             "the strip is clipped to its column"
+        )
+        XCTAssertTrue(
+            text[strip.upperBound...].prefix(200).contains(".environment(\\.colorScheme, .dark)"),
+            "the strip's spinner and primary fills resolve for the dark band in the light appearance"
+        )
+    }
+
+    /// A running update owns the screen, the plan preview included, and a sheet opened mid-run
+    /// would cover the run's stop button.
+    func testThePlanLinkStandsDownWhenDisabled() throws {
+        let text = try source("Sources/MacUpdater/UpdateBand.swift")
+        let link = try XCTUnwrap(text.range(of: "private var planLink: some View")).upperBound
+        let planLink = text[link...].prefix(600)
+        XCTAssertTrue(planLink.contains(".disabled(!planLinkEnabled)"))
+        XCTAssertTrue(
+            planLink.contains("planLinkEnabled ? Color.wegaBandAccentText : Color.wegaBandSecondaryText.opacity("),
+            "a disabled link dims itself, since its foreground is explicit"
         )
     }
 

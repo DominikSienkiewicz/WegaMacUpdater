@@ -78,10 +78,11 @@ struct UpdateView: View {
             hasTargets:   !updateTargets.isEmpty
         )
     }
-    /// A disabled control has to say which of its two reasons is the live one — the tooltip
-    /// used to blame an empty selection even when the real answer was "a scan is running".
+    /// A disabled control has to say which of its reasons is the live one — the tooltip used
+    /// to blame an empty selection even when the real answer was "a scan is running".
     private var updateButtonHelp: String {
-        scan.isRefreshing
+        if scan.updating { return tr("Aktualizuję wybrane pakiety") }
+        return scan.isRefreshing
             ? tr("Najpierw skończę skanowanie — lista zaraz się zmieni.")
             : tr("Zaznacz przynajmniej jedną pozycję — Wega nie aktualizuje niczego, czego sam nie wskażesz.")
     }
@@ -262,6 +263,7 @@ struct UpdateView: View {
         UpdateBand(
             presentation: bandPresentation,
             refreshProgress: scan.isRefreshing ? scan.progress : nil,
+            planLinkEnabled: ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating),
             onShowPlan: { scan.showPlanPreview = true },
             action: { layout in
                 UpdateBandButton(
