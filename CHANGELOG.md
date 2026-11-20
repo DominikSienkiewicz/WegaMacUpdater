@@ -13,6 +13,13 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Added
+- **Choose which copy of a tool stays.** In Cleanup, a tool installed more than once now has a
+  **keep** choice on each of its copies, so the copy you keep is no longer just the one first on
+  `PATH`; the other copies offer their removal, and Wega remembers the choice for later scans.
+  A copy that came with an app offers **Uninstall <app>…**, which opens Uninstall apps with
+  that app selected. While `PATH` is only approximate, nothing is chosen for you.
+
 ### Fixed
 - **Fewer false alarms on release notes.** A flagged term now has to start a word, so
   ordinary words that merely contain one no longer put an update among the urgent ones or

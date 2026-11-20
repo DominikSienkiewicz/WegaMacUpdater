@@ -54,6 +54,8 @@ struct DetailColumn: View {
     @Binding var updateActivity:    UpdateActivity
     @Binding var logsInitialFilter: LogLevelFilter
     @Binding var logsErrorBadge:    Int
+    /// The app bundle a Cleanup row hands to "Odinstaluj aplikacje"; cleared once that tab used it.
+    @Binding var uninstallPreselection: URL?
     @Binding var lastCheck:         Date?
     /// UX-15 — written here, where the scan is observed, and shown by the sidebar's card.
     @Binding var quip:              String?
@@ -170,9 +172,19 @@ struct DetailColumn: View {
                 case .updates:
                     EmptyView()   // shown by the always-mounted UpdateView above
                 case .uninstall:
-                    UninstallView(onWegaState: { wegaState = $0 })
+                    UninstallView(
+                        onWegaState: { wegaState = $0 },
+                        preselection: uninstallPreselection,
+                        onPreselectionUsed: { uninstallPreselection = nil }
+                    )
                 case .cleanup:
-                    CleanupView(onWegaState: { wegaState = $0 })
+                    CleanupView(
+                        onWegaState: { wegaState = $0 },
+                        onUninstallApp: { bundle in
+                            uninstallPreselection = bundle
+                            onNavigate(.uninstall)
+                        }
+                    )
                 case .migration:
                     MigrationView(onWegaState: { wegaState = $0 })
                 case .inventory:

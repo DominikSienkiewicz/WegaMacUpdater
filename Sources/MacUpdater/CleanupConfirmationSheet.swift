@@ -70,6 +70,12 @@ struct CleanupConfirmationSheet: View {
             }
             field(tr("Rozmiar")) { Text(confirmation.sizeText).font(.wega(.callout)) }
             field(tr("Powód")) { Text(confirmation.reason).font(.wega(.callout)) }
+            if let takeover = confirmation.takeover {
+                Label(takeover, systemImage: "exclamationmark.triangle.fill")
+                    .font(.wega(.callout, weight: .semibold))
+                    .foregroundStyle(Color.wegaDanger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             field(tr("Działanie")) {
                 Text(confirmation.action)
                     .font(.wega(.callout, monospaced: true))

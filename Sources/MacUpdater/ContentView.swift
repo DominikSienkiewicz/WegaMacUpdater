@@ -58,6 +58,7 @@ struct ContentView: View {
     @State private var updateBadge:       Int             = 0
     @State private var logsInitialFilter: LogLevelFilter  = .all
     @State private var logsErrorBadge:    Int             = 0
+    @State private var uninstallPreselection: URL?        = nil
     @State private var updateActivity:    UpdateActivity  = .idle
     /// F4 — informational, not a gate: drives the "install Homebrew" invitation card.
     @State private var brewInstalled: Bool
@@ -114,6 +115,7 @@ struct ContentView: View {
                 updateActivity:    $updateActivity,
                 logsInitialFilter: $logsInitialFilter,
                 logsErrorBadge:    $logsErrorBadge,
+                uninstallPreselection: $uninstallPreselection,
                 lastCheck:         $lastCheck,
                 quip:              $quip,
                 securityBadge:     $securityBadge,
