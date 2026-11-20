@@ -7,8 +7,9 @@ import MacUpdaterCore
 /// and the manual "install" buttons used to stay live. Each of them either changes a selection
 /// the run has already committed to, or starts a second package-manager operation that
 /// `UpgradeMutex` would refuse with a danger banner mid-run. The screen now belongs to the run
-/// until it lands: the content below is disabled, a material stands it down, and a note says
-/// why.
+/// until it lands: the content below is disabled, the veil a scan in place uses
+/// (`ScanBusyOverlay.scrimOpacity`) stands it down, and a note says why. A material blurred the
+/// rows into an empty column, so the veil keeps them readable instead.
 ///
 /// UX-20 — the run itself takes a bar at the bottom of the list (the shared
 /// `wegaBottomBar()` chrome) instead of a card in the middle of the screen: progress, the log
@@ -50,7 +51,7 @@ struct UpdateRunOverlay<Progress: View>: View {
             runBar
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.regularMaterial)
+        .background(Color(nsColor: .windowBackgroundColor).opacity(ScanBusyOverlay.scrimOpacity))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(tr("Trwa aktualizacja"))
     }

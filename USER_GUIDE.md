@@ -308,7 +308,7 @@ npm uses, so a log you paste into a bug report stays searchable by it.
 ### Stopping an update
 
 While an update runs, the Updates screen belongs to it: the list, its checkboxes, banner
-actions and manual installs are greyed out behind a material with a note saying why, and the
+actions and manual installs stay visible but greyed out, with a note saying why, and the
 bar at the bottom shows the progress, the package being installed, **Show log** and **Stop
 after this one**. Nothing can be selected or started until the run lands. Stopping is the one
 control the run keeps. Wega stops at the **next package boundary** — the installs already running are
