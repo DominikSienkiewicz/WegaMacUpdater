@@ -1,4 +1,5 @@
 import AppKit
+import MacUpdaterCore
 import SwiftUI
 import XCTest
 
@@ -38,6 +39,59 @@ final class UpdateBandViewTests: XCTestCase {
             XCTAssertTrue(text.contains(literal), literal)
         }
         XCTAssertFalse(text.contains(".system(size:"))
+    }
+
+    // MARK: - The band
+
+    private var fullPresentation: UpdateBandPresentation {
+        UpdateBandPresentation(
+            totalCount: 22, urgentCount: 4, queueCount: 12,
+            protectionText: "12 z automatycznym cofnięciem",
+            lastCheck: Date(timeIntervalSince1970: 1_800_000_000), freshness: .stale,
+            activeSources: [.homebrew, .appStore, .npm, .manual],
+            wegaLine: "Mam kilka rzeczy do zaktualizowania, a jedna z nich jest naprawdę pilna i wymaga uwagi"
+        )
+    }
+
+    func testTheLayoutRuleSwitchesAtTheBreakpoint() {
+        XCTAssertEqual(UpdateBandLayout.style(forWidth: 699), .compact)
+        XCTAssertEqual(UpdateBandLayout.style(forWidth: 700), .regular)
+        XCTAssertEqual(UpdateBandLayout.style(forWidth: 380), .compact)
+    }
+
+    func testTheBandNeverChangesHeight() {
+        for progress in [nil, ScanProgress.running(.npm)] {
+            for width in [380, 520, 699, 700, 1100] as [CGFloat] {
+                let band = UpdateBand(
+                    presentation: fullPresentation, refreshProgress: progress, onShowPlan: {},
+                    action: { _ in Color.clear.frame(width: 96, height: 96) }
+                )
+                .frame(width: width)
+                XCTAssertEqual(
+                    NSHostingView(rootView: band).fittingSize.height, WegaLayout.bandHeight,
+                    "width \(width), refreshing \(progress != nil)"
+                )
+            }
+        }
+    }
+
+    func testTheBandIsReadInOrder() throws {
+        let text = try source("Sources/MacUpdater/UpdateBand.swift")
+        for literal in [
+            ".accessibilityAddTraits(.isHeader)", "ScanPhaseStrip(progress: refreshProgress)",
+            ".frame(height: WegaLayout.bandHeight)", "UpdateBandLayout.style(forWidth:",
+            ".foregroundStyle(Color.wegaBandText)",
+        ] {
+            XCTAssertTrue(text.contains(literal), literal)
+        }
+        let head = try XCTUnwrap(text.range(of: "WegaHead("))
+        XCTAssertTrue(
+            text[head.upperBound...].prefix(200).contains(".accessibilityHidden(true)"),
+            "the mascot is hidden from VoiceOver"
+        )
+        for forbidden in [".glassEffect(", "Color.wegaToffee", "Color.wegaSuccess", "Color.wegaHoney"] {
+            XCTAssertFalse(text.contains(forbidden), forbidden)
+        }
     }
 
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {
