@@ -30,10 +30,13 @@ struct UpdateBandPresentation: Equatable {
     /// The eyebrow's source chips, in scan order.
     var sourceChips: [SourceChip] { sources }
 
+    /// The count, then the incomplete-check note, then the security nuance. The note comes
+    /// before the nuance because the headline truncates at its tail, and losing "the check was
+    /// incomplete" turns a partial answer into a complete-looking one.
     var headline: String {
         var parts = [trp("%@ aktualizacji", totalCount)]
-        if urgentCount > 0 { parts.append(trp("%@ z możliwą poprawką bezp.", urgentCount)) }
         if let incompleteNote { parts.append(incompleteNote) }
+        if urgentCount > 0 { parts.append(trp("%@ z możliwą poprawką bezp.", urgentCount)) }
         return parts.joined(separator: " · ")
     }
 

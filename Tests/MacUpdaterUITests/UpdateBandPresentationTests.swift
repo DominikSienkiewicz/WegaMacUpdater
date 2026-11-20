@@ -26,7 +26,8 @@ struct UpdateBandPresentationTests {
         withLanguage(.pl) {
             var p = presentation(total: 3, urgent: 1)
             p.incompleteNote = tr("sprawdzenie niepełne")
-            #expect(p.headline == "3 aktualizacje · 1 z możliwą poprawką bezp. · sprawdzenie niepełne")
+            // M3 — the note follows the count, so truncation never takes it first.
+            #expect(p.headline == "3 aktualizacje · sprawdzenie niepełne · 1 z możliwą poprawką bezp.")
         }
     }
 

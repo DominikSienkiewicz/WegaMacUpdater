@@ -214,6 +214,60 @@ final class UpdateBandViewTests: XCTestCase {
         XCTAssertTrue(detail.contains("wegaLine: quip ?? wegaState.line"))
     }
 
+    // MARK: - M3: the honesty note is never cut off
+
+    /// The headline's text column in each layout, from the band's own `HStack`s: padding, the
+    /// mascot, the summary column, the button and the spacings between them.
+    private func headlineColumnWidth(bandWidth: CGFloat) -> CGFloat {
+        switch UpdateBandLayout.style(forWidth: bandWidth) {
+        case .narrow:
+            return bandWidth - 2 * 16 - WegaLayout.bandButtonNarrowSize - 12
+        case .compact:
+            return bandWidth - 2 * 20 - WegaLayout.bandWegaCompactSize - WegaLayout.bandButtonCompactSize - 2 * 14
+        case .regular:
+            return bandWidth - 2 * 20 - WegaLayout.bandWegaSize - WegaLayout.bandSummaryWidth
+                - WegaLayout.bandButtonSize - 3 * 20
+        }
+    }
+
+    /// M3 — with both nuances present the headline used to end in the incomplete-check note,
+    /// the first thing truncation cuts. Everything up to and including that note — the count
+    /// and „sprawdzenie niepełne” — must fit in the headline's line limit at the minimum detail
+    /// column (420 pt, which gives the narrow band). Red before the reorder: the Polish
+    /// headline needed 65 pt of the two lines' 43.
+    func testTheCountAndTheIncompleteNoteAreNeverTruncated() {
+        let detailWidth: CGFloat = 420
+        let bandWidth = detailWidth - 2 * WegaLayout.listGutter
+        let layout = UpdateBandLayout.style(forWidth: bandWidth)
+        let font = Font.wega(layout == .narrow ? .title2 : .title, weight: .semibold)
+        let lineLimit = layout == .narrow ? 2 : 1
+        let column = headlineColumnWidth(bandWidth: bandWidth)
+        let allowed = NSHostingView(rootView: Text(verbatim: Array(repeating: "Ag", count: lineLimit).joined(separator: "\n"))
+            .font(font).frame(width: column)).fittingSize.height
+        let base = fullPresentation
+
+        for language in [AppLanguage.pl, .en] {
+            for count in [12, 22] {
+                let visible = withLanguage(language) {
+                    let note = tr("sprawdzenie niepełne")
+                    let headline = UpdateBandPresentation(
+                        totalCount: count, urgentCount: count, queueCount: base.queueCount,
+                        protectionText: base.protectionText, lastCheck: base.lastCheck, freshness: base.freshness,
+                        sources: base.sources, wegaLine: base.wegaLine, incompleteNote: note
+                    ).headline
+                    let end = headline.range(of: note)?.upperBound ?? headline.endIndex
+                    return String(headline[..<end])
+                }
+                let needed = NSHostingView(rootView: Text(verbatim: visible).font(font)
+                    .frame(width: column).fixedSize(horizontal: false, vertical: true)).fittingSize.height
+                XCTAssertLessThanOrEqual(
+                    needed, allowed,
+                    "M3: \(language), \(count), detail \(detailWidth) pt (\(layout)): \"\(visible)\" needs \(needed) pt of \(allowed)"
+                )
+            }
+        }
+    }
+
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {
         let root = URL(fileURLWithPath: file)
             .deletingLastPathComponent()
