@@ -54,14 +54,15 @@ final class UpdateBandViewTests: XCTestCase {
     }
 
     func testTheLayoutRuleSwitchesAtTheBreakpoint() {
-        XCTAssertEqual(UpdateBandLayout.style(forWidth: 699), .compact)
-        XCTAssertEqual(UpdateBandLayout.style(forWidth: 700), .regular)
+        XCTAssertEqual(UpdateBandLayout.style(forWidth: 819), .compact)
+        XCTAssertEqual(UpdateBandLayout.style(forWidth: 820), .regular)
+        XCTAssertEqual(UpdateBandLayout.style(forWidth: 740), .compact)
         XCTAssertEqual(UpdateBandLayout.style(forWidth: 380), .compact)
     }
 
     func testTheBandNeverChangesHeight() {
         for progress in [nil, ScanProgress.running(.npm)] {
-            for width in [380, 520, 699, 700, 1100] as [CGFloat] {
+            for width in [380, 520, 700, 819, 820, 1100] as [CGFloat] {
                 let band = UpdateBand(
                     presentation: fullPresentation, refreshProgress: progress, onShowPlan: {},
                     action: { _ in Color.clear.frame(width: 96, height: 96) }
@@ -73,6 +74,23 @@ final class UpdateBandViewTests: XCTestCase {
                 )
             }
         }
+    }
+
+    func testTheRefreshingEyebrowNeverWidensOrGrowsTheBand() throws {
+        let band = UpdateBand(
+            presentation: fullPresentation, refreshProgress: .running(.npm), onShowPlan: {},
+            action: { _ in Color.clear.frame(width: 96, height: 96) }
+        )
+        .frame(width: 380)
+        let size = NSHostingView(rootView: band).fittingSize
+        XCTAssertLessThanOrEqual(size.width, 380)
+        XCTAssertEqual(size.height, WegaLayout.bandHeight)
+        let text = try source("Sources/MacUpdater/UpdateBand.swift")
+        let strip = try XCTUnwrap(text.range(of: "ScanPhaseStrip(progress: refreshProgress)"))
+        XCTAssertTrue(
+            text[strip.upperBound...].prefix(120).contains(".clipped()"),
+            "the strip is clipped to its column"
+        )
     }
 
     func testTheBandIsReadInOrder() throws {

@@ -98,6 +98,8 @@ struct UpdateBand<Action: View>: View {
     private var eyebrow: some View {
         if refreshProgress != nil {
             ScanPhaseStrip(progress: refreshProgress)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .clipped()
         } else {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 8) {

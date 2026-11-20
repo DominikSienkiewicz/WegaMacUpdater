@@ -439,7 +439,9 @@ enum WegaLayout {
     static let queueRowOutline: CGFloat    = 1.5
     static let queueRowLedge: CGFloat      = 3
     /// C2 band: fixed height and corner radius, mascot and button sizes, and the list-column
-    /// width under which it switches to its compact layout.
+    /// width under which it switches to its compact layout. The breakpoint is 820 because the
+    /// regular layout needs about 340 pt of text column for the headline; the usual
+    /// inspector-closed list column (about 740 pt) would leave it about 224 pt.
     static let bandHeight: CGFloat             = 188
     static let bandRadius: CGFloat             = 20
     static let bandWegaSize: CGFloat           = 120
@@ -447,6 +449,6 @@ enum WegaLayout {
     static let bandButtonSize: CGFloat         = 126
     static let bandButtonCompactSize: CGFloat  = 96
     static let bandButtonLedge: CGFloat        = 4
-    static let bandCompactBreakpoint: CGFloat  = 700
+    static let bandCompactBreakpoint: CGFloat  = 820
     static let bandSummaryWidth: CGFloat       = 170
 }
