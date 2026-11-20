@@ -17,6 +17,9 @@ public enum CleanupKeepChoice {
 
     private struct Context {
         let groups: [String: Group]
+        /// Paths of the app bundles that provide a copy which stays: every group's kept copy and
+        /// every lone copy that offers no choice.
+        let keptBundles: Set<String>
         let pathIsApproximate: Bool
     }
 
@@ -42,12 +45,13 @@ public enum CleanupKeepChoice {
         }
     }
 
-    /// The outermost path component of `realpath` that ends in `.app`, as a URL, or nil.
+    /// The outermost path component of `realpath` that ends in `.app` and holds a `Contents`
+    /// directory on the way to `realpath`, as a URL, or nil.
     static func enclosingAppBundle(of realpath: URL) -> URL? {
         let components = CleanupPathText.components(of: realpath.path)
-        guard let index = components.firstIndex(where: { CleanupSourceClassifier.hasScalarSuffix($0, ".app") }) else {
-            return nil
-        }
+        guard let index = components.indices.dropLast().first(where: {
+            components[$0 + 1] == "Contents" && CleanupSourceClassifier.hasScalarSuffix(components[$0], ".app")
+        }) else { return nil }
         return URL(filePath: "/" + components[...index].joined(separator: "/"), directoryHint: .isDirectory)
     }
 
@@ -56,9 +60,9 @@ public enum CleanupKeepChoice {
     static func resolve(
         _ findings: [CleanupFinding], choices: [String: CleanupKeptCopy], pathIsApproximate: Bool
     ) -> [CleanupFinding] {
+        let groups = groups(of: findings, choices: choices, pathIsApproximate: pathIsApproximate)
         let context = Context(
-            groups: groups(of: findings, choices: choices, pathIsApproximate: pathIsApproximate),
-            pathIsApproximate: pathIsApproximate
+            groups: groups, keptBundles: keptBundles(findings, groups), pathIsApproximate: pathIsApproximate
         )
         return findings.map { finding in
             guard finding.detector == .pathDuplicates, let candidate = finding.candidate,
@@ -95,11 +99,10 @@ public enum CleanupKeepChoice {
         return pathIsApproximate ? nil : candidates.first { $0.candidate?.pathRole == .active }
     }
 
-    private static func keptElsewhere(_ finding: CleanupFinding, _ context: Context) -> Set<String> {
-        let own = finding.tool.lowercased()
-        let bundles = context.groups.filter { $0.key != own }.compactMap { $0.value.kept?.realpath }
-            .compactMap { enclosingAppBundle(of: $0)?.path }
-        return Set(bundles)
+    private static func keptBundles(_ findings: [CleanupFinding], _ groups: [String: Group]) -> Set<String> {
+        let lone = findings.filter { $0.detector == .pathDuplicates && $0.candidate == nil && $0.status == .active }
+        let kept = groups.values.compactMap(\.kept) + lone
+        return Set(kept.compactMap { $0.realpath.flatMap(enclosingAppBundle(of:))?.path })
     }
 
     private static func resolved(
@@ -110,8 +113,12 @@ public enum CleanupKeepChoice {
         return notKept(finding, candidate, kept: kept, group: group, context: context)
     }
 
-    private static func blockedReason(_ finding: CleanupFinding, _ candidate: CleanupCandidate) -> CleanupReason? {
-        if !candidate.dependents.isEmpty { return .requiredBy(candidate.dependents) }
+    /// A copy that stays, or waits for the choice, is only "required by" when its status says so;
+    /// a copy to remove is blocked by any installed formula that depends on it.
+    private static func blockedReason(
+        _ finding: CleanupFinding, _ candidate: CleanupCandidate, isRemoved: Bool
+    ) -> CleanupReason? {
+        if isRemoved, !candidate.dependents.isEmpty { return .requiredBy(candidate.dependents) }
         if case .dependency(let dependents) = finding.status { return .requiredBy(dependents) }
         return nil
     }
@@ -123,8 +130,8 @@ public enum CleanupKeepChoice {
         return rebuilt(
             finding,
             Outcome(
-                reason: blockedReason(finding, candidate) ?? .noCopyKept, action: .none,
-                risk: finding.risk, bucket: .excluded, size: nil
+                reason: blockedReason(finding, candidate, isRemoved: false) ?? .noCopyKept, action: .none,
+                risk: riskOf(finding, candidate), bucket: .excluded, size: nil
             ),
             candidate: updated
         )
@@ -134,9 +141,10 @@ public enum CleanupKeepChoice {
         var updated = candidate
         updated.keep = .kept
         updated.takesOver = nil
-        let reason = blockedReason(finding, candidate) ?? (candidate.pathRole == .active ? .currentVersion : .keptByChoice)
+        let reason = blockedReason(finding, candidate, isRemoved: false)
+            ?? (candidate.pathRole == .active ? .currentVersion : .keptByChoice)
         return rebuilt(
-            finding, Outcome(reason: reason, action: .none, risk: finding.risk, bucket: .excluded, size: nil),
+            finding, Outcome(reason: reason, action: .none, risk: riskOf(finding, candidate), bucket: .excluded, size: nil),
             candidate: updated
         )
     }
@@ -150,7 +158,7 @@ public enum CleanupKeepChoice {
         updated.keep = .notKept(keptPath: kept.path.path)
         updated.takesOver = isActive && !context.pathIsApproximate ? takeOver(finding, in: group) : nil
         let risk = riskOf(finding, candidate)
-        if let blocked = blockedReason(finding, candidate) {
+        if let blocked = blockedReason(finding, candidate, isRemoved: true) {
             return rebuilt(
                 finding, Outcome(reason: blocked, action: .none, risk: risk, bucket: .excluded, size: nil),
                 candidate: updated
@@ -158,7 +166,7 @@ public enum CleanupKeepChoice {
         }
         let keptIsActive = kept.candidate?.pathRole == .active
         let reason: CleanupReason = keptIsActive ? .shadowedBy(path: kept.path.path) : .keptInstead(path: kept.path.path)
-        let action = removalAction(finding, candidate, kept: kept, keptBundles: keptElsewhere(finding, context))
+        let action = removalAction(finding, candidate, kept: kept, keptBundles: context.keptBundles)
         let size = action == candidate.removal && action != .none ? candidate.removalSize : nil
         let bucket = bucketOf(finding, candidate, kept: kept, action: action, pathIsApproximate: context.pathIsApproximate)
         return rebuilt(

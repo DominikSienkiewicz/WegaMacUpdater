@@ -11,14 +11,14 @@ final class CleanupKeepChoiceTests: XCTestCase {
         role: CleanupCopyRole, status: CleanupStatus? = nil, removal: CleanupAction = .none, size: Int64? = nil,
         dependents: [String] = [], processes: [CleanupProcess] = []
     ) -> CleanupFinding {
-        let isActive = role == .active
-        return CleanupFinding(
+        CleanupFinding(
             detector: .pathDuplicates, tool: tool, path: URL(filePath: path), realpath: realpath.map { URL(filePath: $0) },
-            source: source, version: version, size: nil, status: status ?? (isActive ? .active : .shadowed),
-            reason: isActive ? .currentVersion : .shadowedBy(path: "/x"), action: removal, risk: .low, bucket: .needsDecision,
+            source: source, version: version, size: 1, status: status ?? (role == .active ? .active : .shadowed),
+            reason: .protectedLocation, action: .none, risk: .medium, bucket: .excluded,
             identity: nil,
             candidate: CleanupCandidate(
-                pathRole: role, removal: removal, removalSize: size, dependents: dependents, processes: processes
+                pathRole: role, removal: removal, removalSize: size, dependents: dependents, processes: processes,
+                keep: .undecided, takesOver: nil
             )
         )
     }
@@ -94,7 +94,7 @@ final class CleanupKeepChoiceTests: XCTestCase {
     }
 
     func testApproximatePathWithoutChoiceIsUndecided() {
-        let result = resolve(ollamaGroup(), approximate: true)
+        let result = resolve(resolve(ollamaGroup(), chooseLink), approximate: true)
         for finding in result {
             XCTAssertEqual(finding.candidate?.keep, .undecided)
             XCTAssertEqual(finding.reason, .noCopyKept)
@@ -109,9 +109,37 @@ final class CleanupKeepChoiceTests: XCTestCase {
 
     func testApproximatePathWithRememberedChoiceOffersRemovalWithoutTakeover() {
         let result = resolve(ollamaGroup(), chooseLink, approximate: true)
+        XCTAssertEqual(result[0].candidate?.keep, .notKept(keptPath: ollamaLink))
+        XCTAssertEqual(result[0].reason, .keptInstead(path: ollamaLink))
         XCTAssertEqual(result[0].bucket, .needsDecision)
         XCTAssertEqual(result[0].action, .brew(.uninstallFormula("ollama")))
         XCTAssertNil(result[0].candidate?.takesOver)
+        XCTAssertEqual(result[1].candidate?.keep, .kept)
+    }
+
+    func testChoiceWithTheRightPathButAnotherSourceFallsBackToTheDefault() {
+        let otherSource = ["ollama": CleanupKeptCopy(path: ollamaLink, source: .homebrewFormula(name: "ollama"))]
+        let result = resolve(ollamaGroup(), otherSource)
+        XCTAssertEqual(result[0].candidate?.keep, .kept)
+        XCTAssertEqual(result[1].candidate?.keep, .notKept(keptPath: ollamaFormula))
+        XCTAssertEqual(resolve(ollamaGroup(), otherSource, approximate: true).map(\.candidate?.keep), [.undecided, .undecided])
+    }
+
+    func testResolvingAResolvedGroupAgainDependsOnlyOnTheLastChoice() {
+        let process = CleanupProcess(pid: 1, name: "ollama", executablePath: ollamaFormula, arguments: [])
+        var findings = ollamaGroup()
+        findings[0] = candidate(
+            tool: "ollama", path: ollamaFormula, source: .homebrewFormula(name: "ollama"), version: "0.40.16",
+            role: .active, removal: .brew(.uninstallFormula("ollama")), size: 70_000_000, processes: [process]
+        )
+        XCTAssertEqual(resolve(resolve(findings, chooseLink), [:]), resolve(findings, [:]))
+        XCTAssertEqual(resolve(resolve(findings, [:]), chooseLink), resolve(findings, chooseLink))
+        XCTAssertEqual(
+            resolve(resolve(findings, chooseLink), [:], approximate: true), resolve(findings, [:], approximate: true)
+        )
+        XCTAssertEqual(resolve(findings)[0].risk, .high)
+        XCTAssertEqual(resolve(findings)[1].risk, .low)
+        XCTAssertEqual(resolve(findings, approximate: true)[0].risk, .high)
     }
 
     func testSameHomebrewPackageIsNeverRemovedForTheKeptCopy() {
@@ -139,6 +167,24 @@ final class CleanupKeepChoiceTests: XCTestCase {
         XCTAssertEqual(result[0].status, .active)
     }
 
+    func testDependentsDoNotChangeTheReasonOfAKeptOrUndecidedActiveCopy() {
+        let findings = [
+            candidate(
+                tool: "mlx", path: "/opt/homebrew/bin/mlx", source: .homebrewFormula(name: "mlx"), role: .active,
+                status: .active, removal: .brew(.uninstallFormula("mlx")), dependents: ["mlx"]
+            ),
+            candidate(
+                tool: "mlx", path: "/usr/local/bin/mlx", source: .homebrewFormula(name: "mlx-lm"), role: .shadowed,
+                status: .dependency(["mlx-vlm"]), removal: .brew(.uninstallFormula("mlx-lm")), dependents: ["mlx-vlm"]
+            ),
+        ]
+        XCTAssertEqual(resolve(findings)[0].reason, .currentVersion)
+        XCTAssertEqual(resolve(findings, approximate: true)[0].reason, .noCopyKept)
+        let keepShadowed = ["mlx": CleanupKeptCopy(path: "/usr/local/bin/mlx", source: .homebrewFormula(name: "mlx-lm"))]
+        XCTAssertEqual(resolve(findings, keepShadowed)[1].reason, .requiredBy(["mlx-vlm"]))
+        XCTAssertEqual(resolve(findings, approximate: true)[1].reason, .requiredBy(["mlx-vlm"]))
+    }
+
     func testInUseActiveCopyIsHighRiskNeedsDecision() {
         let process = CleanupProcess(pid: 1, name: "ollama", executablePath: ollamaFormula, arguments: [])
         var findings = ollamaGroup()
@@ -149,6 +195,25 @@ final class CleanupKeepChoiceTests: XCTestCase {
         let result = resolve(findings, chooseLink)
         XCTAssertEqual(result[0].risk, .high)
         XCTAssertEqual(result[0].bucket, .needsDecision)
+        XCTAssertEqual(result[0].status, .active)
+    }
+
+    func testProcessesDecideTheBucketOfAnOlderNotKeptFormula() {
+        let process = CleanupProcess(pid: 2, name: "tool", executablePath: "/opt/homebrew/bin/tool", arguments: [])
+        func group(processes: [CleanupProcess]) -> [CleanupFinding] {
+            [
+                candidate(
+                    tool: "tool", path: "/Users/me/.local/bin/tool", source: .standalone, version: "2.0.0", role: .active,
+                    removal: .trash([URL(filePath: "/Users/me/.local/bin/tool")])
+                ),
+                candidate(
+                    tool: "tool", path: "/opt/homebrew/bin/tool", source: .homebrewFormula(name: "tool"), version: "1.9.0",
+                    role: .shadowed, status: .shadowed, removal: .brew(.uninstallFormula("tool")), processes: processes
+                ),
+            ]
+        }
+        XCTAssertEqual(resolve(group(processes: [process]))[1].bucket, .needsDecision)
+        XCTAssertEqual(resolve(group(processes: []))[1].bucket, .safe)
     }
 
     func testAppKeptInAnotherGroupGetsTheLinkInstructionInstead() {
@@ -171,6 +236,51 @@ final class CleanupKeepChoiceTests: XCTestCase {
         ]
         let result = resolve(findings)
         XCTAssertEqual(result[1].action, .instruction(.removeAppLinkWithAdminRights(link: "/usr/local/bin/kubectl")))
+    }
+
+    func testNotKeptCopyFromTheKeptCopysOwnAppGetsTheLinkInstruction() {
+        let app = "/Applications/Postgres.app"
+        let bundle = URL(filePath: app, directoryHint: .isDirectory)
+        let latest = "\(app)/Contents/Versions/latest/bin/psql"
+        let old = "\(app)/Contents/Versions/14/bin/psql"
+        let findings = [
+            candidate(
+                tool: "psql", path: latest, realpath: "\(app)/Contents/Versions/17/bin/psql", source: .appBundle(name: "Postgres"),
+                version: "17.0", role: .active, removal: .uninstallApp(name: "Postgres", bundle: bundle)
+            ),
+            candidate(
+                tool: "psql", path: old, realpath: old, source: .appBundle(name: "Postgres"), version: "14.0",
+                role: .shadowed, removal: .uninstallApp(name: "Postgres", bundle: bundle)
+            ),
+        ]
+        XCTAssertEqual(resolve(findings)[1].action, .instruction(.removeAppLinkWithAdminRights(link: old)))
+    }
+
+    func testLoneAppCopyStillProtectsItsAppUnderApproximatePath() {
+        let docker = URL(filePath: "/Applications/Docker.app", directoryHint: .isDirectory)
+        let lone = CleanupFinding(
+            detector: .pathDuplicates, tool: "docker", path: URL(filePath: "/usr/local/bin/docker"),
+            realpath: URL(filePath: "/Applications/Docker.app/Contents/Resources/bin/docker"), source: .appBundle(name: "Docker"),
+            version: "27.0.0", size: nil, status: .active, reason: .currentVersion, action: .none, risk: .low,
+            bucket: .excluded, identity: nil
+        )
+        let findings = [
+            lone,
+            plain(tool: "docker", path: "/usr/bin/docker", status: .expected, source: .system),
+            candidate(
+                tool: "kubectl", path: "/opt/homebrew/bin/kubectl", source: .homebrewFormula(name: "kubernetes-cli"),
+                version: "1.30.0", role: .active, removal: .brew(.uninstallFormula("kubernetes-cli"))
+            ),
+            candidate(
+                tool: "kubectl", path: "/usr/local/bin/kubectl", realpath: "/Applications/Docker.app/Contents/Resources/bin/kubectl",
+                source: .appBundle(name: "Docker"), version: "1.29.0", role: .shadowed,
+                removal: .uninstallApp(name: "Docker", bundle: docker)
+            ),
+        ]
+        let choice = ["kubectl": CleanupKeptCopy(path: "/opt/homebrew/bin/kubectl", source: .homebrewFormula(name: "kubernetes-cli"))]
+        let result = resolve(findings, choice, approximate: true)
+        XCTAssertEqual(result[3].action, .instruction(.removeAppLinkWithAdminRights(link: "/usr/local/bin/kubectl")))
+        XCTAssertEqual(result[0], lone)
     }
 
     func testTakeoverNamesTheFirstRemainingCopyInPathOrder() {
@@ -230,5 +340,10 @@ final class CleanupKeepChoiceTests: XCTestCase {
             CleanupKeepChoice.enclosingAppBundle(of: URL(filePath: "\(ollamaApp)/Contents/Resources/ollama"))?.path, ollamaApp
         )
         XCTAssertNil(CleanupKeepChoice.enclosingAppBundle(of: URL(filePath: "/opt/homebrew/bin/x")))
+        XCTAssertNil(CleanupKeepChoice.enclosingAppBundle(of: URL(filePath: "/Volumes/X.app/bin/tool")))
+        XCTAssertEqual(
+            CleanupKeepChoice.enclosingAppBundle(of: URL(filePath: "/Volumes/X.app/Apps/Y.app/Contents/MacOS/y"))?.path,
+            "/Volumes/X.app/Apps/Y.app"
+        )
     }
 }
