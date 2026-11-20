@@ -93,4 +93,59 @@ struct UpdateUrgencyGroupingTests {
         #expect(view.contains("sourceGroupedSections"))
         #expect(shared.contains("rollbackUnavailableReason"), "a row without the net says so")
     }
+
+    @Test func groupNumbersCountOnlyTheGroupsOnScreen() {
+        let groups = UrgencyGroups.make(items: [firefox, wget], manual: [], filter: .all, isSecurity: { _ in false })
+        #expect(groups.ordinal(of: .security) == nil)
+        #expect(groups.ordinal(of: .apps) == 1)
+        #expect(groups.ordinal(of: .cli) == 2)
+        #expect(groups.ordinal(of: .needsYou) == nil)
+    }
+
+    @Test func aSecurityManualAppShiftsEveryNumberAfterIt() {
+        let risky = manual("Risky")
+        let calm = manual("Calm")
+        let groups = UrgencyGroups.make(
+            items: [firefox, wget], manual: [risky, calm], filter: .all, isSecurity: { $0.name == "Risky" }
+        )
+        #expect(groups.ordinal(of: .security) == 1)
+        #expect(groups.ordinal(of: .apps) == 2)
+        #expect(groups.ordinal(of: .cli) == 3)
+        #expect(groups.ordinal(of: .needsYou) == 4)
+    }
+
+    @Test func groupHeaderLabelPadsItsNumber() {
+        #expect(UpdateGroupHeader.label(ordinal: 1, title: "Aplikacje") == "01 · Aplikacje")
+        #expect(UpdateGroupHeader.label(ordinal: nil, title: "Homebrew Casks") == "Homebrew Casks")
+    }
+
+    @Test func groupHeadersUseTheC2Style() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        func source(_ name: String) throws -> String {
+            try String(contentsOf: root.appendingPathComponent("Sources/MacUpdater/\(name)"), encoding: .utf8)
+        }
+        let header = try source("UpdateGroupHeader.swift")
+        let support = try source("UpdateViewSupport.swift")
+        let view = try source("UpdateView.swift")
+
+        #expect(header.contains(".textCase(.uppercase)"))
+        #expect(header.contains("monospaced: true"))
+        #expect(header.contains(".accessibilityAddTraits(.isHeader)"))
+        #expect(header.contains("QueueColumnPlaceholder()"),
+                "a header without select-all keeps its dot and number in the batch headers' column")
+
+        let slices = [
+            ("struct UpdateSection: View", "private struct UpdatePolicyMenu: View"),
+            ("struct ManualUpdateSection: View", "struct ManualUpdateActionView: View")
+        ]
+        for (from, to) in slices {
+            let start = try #require(support.range(of: from))
+            let end = try #require(support.range(of: to, range: start.upperBound..<support.endIndex))
+            let slice = String(support[start.lowerBound..<end.lowerBound])
+            #expect(slice.contains("UpdateGroupHeader("), "\(from) uses the C2 header")
+            #expect(!slice.contains("WegaCardHeader("), "\(from) no longer uses the card header")
+        }
+        #expect(view.contains("ordinal: groups.ordinal(of: .security)"))
+    }
 }

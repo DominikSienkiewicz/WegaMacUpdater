@@ -141,6 +141,36 @@ enum WegaPalette {
     /// with the window background, and the fill is a light colour in every appearance.
     static let ink = WegaAdaptiveColor.Components(0x291C12)
 
+    /// C2 inspected-row fill: lavender, where you are.
+    static let selectionFill = WegaAdaptiveColor(
+        light: 0xECE4FB, dark: 0x352E46,
+        lightIncreasedContrast: 0xECE4FB, darkIncreasedContrast: 0x352E46
+    )
+
+    /// C2 inspected-row outline: the ink outline that marks the row.
+    static let selectionOutline = WegaAdaptiveColor(
+        light: 0x241A33, dark: 0xB8A9E6,
+        lightIncreasedContrast: 0x241A33, darkIncreasedContrast: 0xC7B7F9
+    )
+
+    /// C2 inspected-row ledge: the offset shadow under the outline.
+    static let selectionLedge = WegaAdaptiveColor(
+        light: 0x241A33, dark: 0x5E4F8F,
+        lightIncreasedContrast: 0x241A33, darkIncreasedContrast: 0x5E4F8F
+    )
+
+    /// C2 queued-circle outline: honey, what will happen.
+    static let actionOutline = WegaAdaptiveColor(
+        light: 0x241A33, dark: 0xFFE2B0,
+        lightIncreasedContrast: 0x241A33, darkIncreasedContrast: 0xFFE2B0
+    )
+
+    /// C2 queued-circle ledge: the offset shadow under the outline.
+    static let actionLedge = WegaAdaptiveColor(
+        light: 0x241A33, dark: 0x7A4A20,
+        lightIncreasedContrast: 0x241A33, darkIncreasedContrast: 0x7A4A20
+    )
+
     /// Every colour that is used as a foreground on the window background, named — the input
     /// to the contrast regression test.
     static let foregroundRoles: [(name: String, value: WegaAdaptiveColor)] = [
@@ -169,6 +199,11 @@ extension Color {
     static let wegaDanger   = WegaPalette.danger.color
     static let wegaInfo     = WegaPalette.info.color
     static let wegaHoneyFill = WegaPalette.honeyFill.color
+    static let wegaSelectionFill    = WegaPalette.selectionFill.color
+    static let wegaSelectionOutline = WegaPalette.selectionOutline.color
+    static let wegaSelectionLedge   = WegaPalette.selectionLedge.color
+    static let wegaActionOutline    = WegaPalette.actionOutline.color
+    static let wegaActionLedge      = WegaPalette.actionLedge.color
 
     /// The hairline that used to be written as `Color.white.opacity(0.06)` — invisible on a
     /// light desktop, because it assumed the window behind it was dark.
@@ -328,4 +363,12 @@ enum WegaLayout {
     static let settingsIdealWidth: CGFloat   = 640
     static let settingsMinHeight: CGFloat    = 400
     static let settingsIdealHeight: CGFloat  = 600
+    /// C2 queue circle: diameter, outline and ledge of the control that queues an update.
+    static let queueCircleSize: CGFloat    = 30
+    static let queueCircleOutline: CGFloat = 2
+    static let queueCircleLedge: CGFloat   = 2
+    /// C2 inspected row: corner radius, outline and ledge.
+    static let queueRowRadius: CGFloat     = 12
+    static let queueRowOutline: CGFloat    = 1.5
+    static let queueRowLedge: CGFloat      = 3
 }

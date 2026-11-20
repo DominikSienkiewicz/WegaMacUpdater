@@ -46,13 +46,16 @@ struct UnresolvedServiceUpdateRow: View {
     var body: some View {
         if let profile = ServiceVendorUpdateProfile.profile(caskToken: item.name) {
             WegaCard {
-                VStack(alignment: .leading, spacing: 8) {
-                    WegaCardHeader(icon: "gearshape.2", title: profile.name, count: 1, note: "Homebrew")
-                    VersionArrow(from: item.from ?? "—", to: item.to ?? "—")
-                    Text(tr("Homebrew zgłasza aktualizację, ale nie potwierdzono ścieżki tej aplikacji. Otwórz ją samodzielnie lub ponów skanowanie."))
-                        .font(.wega(.subheadline)).foregroundStyle(.secondary)
-                    ServiceVendorUpdateControls(profile: profile, appURL: nil)
-                    Button(tr("Pokaż szczegóły"), action: onInspect).controlSize(.small)
+                HStack(alignment: .top, spacing: WegaLayout.checkboxSpacing) {
+                    QueueHandoffMark()
+                    VStack(alignment: .leading, spacing: 8) {
+                        WegaCardHeader(icon: "gearshape.2", title: profile.name, count: 1, note: "Homebrew")
+                        VersionArrow(from: item.from ?? "—", to: item.to ?? "—")
+                        Text(tr("Homebrew zgłasza aktualizację, ale nie potwierdzono ścieżki tej aplikacji. Otwórz ją samodzielnie lub ponów skanowanie."))
+                            .font(.wega(.subheadline)).foregroundStyle(.secondary)
+                        ServiceVendorUpdateControls(profile: profile, appURL: nil)
+                        Button(tr("Pokaż szczegóły"), action: onInspect).controlSize(.small)
+                    }
                 }
                 .padding(12)
             }

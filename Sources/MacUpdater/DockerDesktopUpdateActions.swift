@@ -57,14 +57,17 @@ struct UnresolvedDockerUpdateRow: View {
 
     var body: some View {
         WegaCard {
-            VStack(alignment: .leading, spacing: 8) {
-                WegaCardHeader(icon: "shippingbox", title: "Docker Desktop", count: 1, note: item.name)
-                VersionArrow(from: item.from ?? "—", to: item.to ?? "—")
-                Text(tr("Wykryto aktualizację Docker Desktop, ale ścieżka aplikacji jest nieznana. Otwórz Docker Desktop samodzielnie lub ponów skanowanie."))
-                    .font(.wega(.subheadline))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button(tr("Pokaż szczegóły"), action: onInspect).controlSize(.small)
+            HStack(alignment: .top, spacing: WegaLayout.checkboxSpacing) {
+                QueueHandoffMark()
+                VStack(alignment: .leading, spacing: 8) {
+                    WegaCardHeader(icon: "shippingbox", title: "Docker Desktop", count: 1, note: item.name)
+                    VersionArrow(from: item.from ?? "—", to: item.to ?? "—")
+                    Text(tr("Wykryto aktualizację Docker Desktop, ale ścieżka aplikacji jest nieznana. Otwórz Docker Desktop samodzielnie lub ponów skanowanie."))
+                        .font(.wega(.subheadline))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button(tr("Pokaż szczegóły"), action: onInspect).controlSize(.small)
+                }
             }
             .padding(12)
         }

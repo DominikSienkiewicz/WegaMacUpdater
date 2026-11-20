@@ -21,6 +21,12 @@ enum ScanSelectionGate {
         !isUpdating
     }
 
+    /// Whether the list-wide "Zaznacz wszystko" accepts input. It sits in the list header,
+    /// outside the regions the other two gates disable, so it must ask both.
+    static func allowsListSelection(isRefreshing: Bool, isUpdating: Bool) -> Bool {
+        allowsSelection(isRefreshing: isRefreshing) && allowsScreenInteraction(isUpdating: isUpdating)
+    }
+
     /// Whether the in-place scan's overlay covers the list. It stands rows down, so it covers
     /// rows only: over an empty state its material just veiled Wega and her tricks for the
     /// whole scan, with nothing on screen to protect.

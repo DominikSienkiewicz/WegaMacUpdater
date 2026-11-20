@@ -24,8 +24,8 @@ final class AccessibilityInteractionTests: XCTestCase {
         )
 
         XCTAssertTrue(packageRow.contains("Toggle(isOn: selectionToggleBinding(isOn: isSelected, toggle: onToggle))"))
-        XCTAssertTrue(packageRow.contains(".toggleStyle(WegaCheckboxToggleStyle())"))
-        XCTAssertTrue(packageRow.contains(".accessibilityLabel(name)"))
+        XCTAssertTrue(packageRow.contains(".toggleStyle(WegaQueueToggleStyle())"))
+        XCTAssertTrue(packageRow.contains(".accessibilityLabel(trf(\"W kolejce: %@\", name))"))
         XCTAssertFalse(packageRow.contains(".onTapGesture { onToggle?() }"))
 
         let uninstall = try source("Sources/MacUpdater/UninstallView.swift")
@@ -72,7 +72,7 @@ final class AccessibilityInteractionTests: XCTestCase {
         let selectAllRow = try section(
             in: update,
             startingAt: "// Select-all row",
-            endingAt: "ScrollView {"
+            endingAt: "private var resultsHeading: some View"
         )
 
         // The three-state control itself moved into the shared `SelectionCheckbox` when
@@ -89,7 +89,10 @@ final class AccessibilityInteractionTests: XCTestCase {
         let sharedViews = try source("Sources/MacUpdater/SharedViews.swift")
         XCTAssertTrue(sharedViews.contains("Button(action: toggle)"),
                       "the select-all control stays an action, not a two-state checkbox")
-        XCTAssertTrue(sharedViews.contains("case .partial: return \"minus.square.fill\""),
+        XCTAssertTrue(sharedViews.contains("QueueCircleControlLabel(state: QueueCircleState(state))"),
+                      "the select-all control wears the queue circle")
+        let queueCircle = try source("Sources/MacUpdater/QueueCircle.swift")
+        XCTAssertTrue(queueCircle.contains("case .partial: return \"minus\""),
                       "the partial state must remain visually distinct too")
     }
 
@@ -135,7 +138,7 @@ final class AccessibilityInteractionTests: XCTestCase {
         let selectAllRow = try section(
             in: update,
             startingAt: "// Select-all row",
-            endingAt: "ScrollView {"
+            endingAt: "private var resultsHeading: some View"
         )
         XCTAssertTrue(selectAllRow.contains("SelectionCheckbox("))
         XCTAssertTrue(selectAllRow.contains("scan.toggleAll(filter: updateFilter)"))
@@ -257,6 +260,39 @@ final class AccessibilityInteractionTests: XCTestCase {
             updateDate: nil,
             isManagedByBrew: false
         )
+    }
+
+    func testQueueCircleIsACheckboxAndTheHandoffMarkIsNot() throws {
+        let queueCircle = try source("Sources/MacUpdater/QueueCircle.swift")
+
+        let style = try section(
+            in: queueCircle,
+            startingAt: "struct WegaQueueToggleStyle: ToggleStyle",
+            endingAt: "struct QueueHandoffMark: View"
+        )
+        XCTAssertTrue(style.contains("configuration.isOn.toggle()"))
+        XCTAssertTrue(style.contains(
+            ".accessibilityAddTraits(configuration.isOn ? [.isToggle, .isSelected] : .isToggle)"
+        ))
+        XCTAssertTrue(style.contains(".accessibilityValue(selectionAccessibilityValue(configuration.isOn))"))
+
+        let label = try section(
+            in: queueCircle,
+            startingAt: "struct QueueCircleControlLabel: View",
+            endingAt: "struct WegaQueueToggleStyle: ToggleStyle"
+        )
+        XCTAssertTrue(label.contains("@Environment(\\.isFocused)"))
+        XCTAssertTrue(
+            label.contains(".contentShape(Circle())"),
+            "a plain button hit-tests only what it draws, so the whole circle needs a content shape"
+        )
+
+        let markStart = try XCTUnwrap(queueCircle.range(of: "struct QueueHandoffMark: View")?.lowerBound)
+        let mark = queueCircle[markStart...]
+        XCTAssertTrue(mark.contains(".accessibilityHidden(true)"))
+        for forbidden in ["Button", "Toggle(", ".focusable"] {
+            XCTAssertFalse(mark.contains(forbidden), "the hand-off mark must not contain \(forbidden)")
+        }
     }
 
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {

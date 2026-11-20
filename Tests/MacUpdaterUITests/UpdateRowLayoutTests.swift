@@ -12,19 +12,6 @@ import Testing
 @Suite("Update row layout")
 @MainActor
 struct UpdateRowLayoutTests {
-    /// A row with nothing to select keeps the checkbox's width empty, so icons, names and
-    /// versions form one column across every card on the screen.
-    @Test func theSelectionSpacerIsExactlyAsWideAsTheCheckbox() {
-        let checkbox = NSHostingView(
-            rootView: Toggle(isOn: .constant(true)) { EmptyView() }
-                .toggleStyle(WegaCheckboxToggleStyle())
-        )
-        let spacer = NSHostingView(rootView: SelectionColumnSpacer())
-
-        #expect(spacer.fittingSize.width > 0)
-        #expect(spacer.fittingSize.width == checkbox.fittingSize.width)
-    }
-
     @Test func bothRowKindsShareTheColumns() throws {
         let packageRow = try slice(
             try source("Sources/MacUpdater/SharedViews.swift"),
@@ -39,8 +26,25 @@ struct UpdateRowLayoutTests {
             #expect(row.contains("UpdateRowColumns {"), "both rows place name and version through one layout")
             #expect(row.contains("} version: {"))
         }
-        #expect(manualRows.contains("SelectionColumnSpacer()"),
-                "a row without a checkbox still reserves its column")
+        #expect(manualRows.contains("QueueHandoffMark()"),
+                "a row Wega does not batch shows the hand-off mark in the queue column")
+        #expect(!manualRows.contains("SelectionColumnSpacer()"))
+    }
+
+    @Test func theQueueColumnPlaceholderIsExactlyAsWideAsTheQueueCircle() {
+        let width = NSHostingView(rootView: QueueColumnPlaceholder()).fittingSize.width
+        #expect(width == WegaLayout.queueCircleSize)
+    }
+
+    @Test func vendorCardsWithoutAPathShowTheHandoffMark() throws {
+        for (file, anchor) in [
+            ("Sources/MacUpdater/DockerDesktopUpdateActions.swift", "struct UnresolvedDockerUpdateRow: View"),
+            ("Sources/MacUpdater/ServiceVendorUpdateControls.swift", "struct UnresolvedServiceUpdateRow: View"),
+        ] {
+            let text = try source(file)
+            let start = try #require(text.range(of: anchor)?.lowerBound, "missing anchor: \(anchor)")
+            #expect(text[start...].contains("QueueHandoffMark()"), "\(anchor) shows the hand-off mark")
+        }
     }
 
     @Test func releaseNotesLiveOnlyInTheInspector() throws {
@@ -82,6 +86,47 @@ struct UpdateRowLayoutTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    @Test func theHandoffMarkIsExactlyAsWideAsTheQueueCircle() {
+        let circle = NSHostingView(
+            rootView: Toggle(isOn: .constant(true)) { EmptyView() }.toggleStyle(WegaQueueToggleStyle())
+        )
+        let mark = NSHostingView(rootView: QueueHandoffMark())
+
+        #expect(circle.fittingSize.width == WegaLayout.queueCircleSize)
+        #expect(mark.fittingSize.width == circle.fittingSize.width)
+    }
+
+    @Test func everyQueueStateHasItsOwnGlyph() {
+        #expect(QueueCircleState(SelectAllState.none) == .notQueued)
+        #expect(QueueCircleState(SelectAllState.all) == .queued)
+        #expect(QueueCircleState(SelectAllState.partial) == .partial)
+        let states: [QueueCircleState] = [.notQueued, .queued, .partial, .handoff]
+        #expect(Set(states.map(\.symbolName)).count == states.count)
+        #expect(QueueCircleState.queued.symbolName == "checkmark")
+        #expect(QueueCircleState.handoff.symbolName == "arrow.up.right")
+    }
+
+    @Test func theInspectedRowHasAnInkOutlineAndQueuedRowsStayUntinted() throws {
+        let packageRow = try slice(
+            try source("Sources/MacUpdater/SharedViews.swift"),
+            from: "struct PackageRow: View", to: "// MARK: - Rollback badge"
+        )
+        let manualRows = try slice(
+            try source("Sources/MacUpdater/UpdateViewSupport.swift"),
+            from: "struct ManualUpdateSection: View", to: "struct ManualUpdateActionView: View"
+        )
+        for row in [packageRow, manualRows] {
+            #expect(row.contains(".queueRowSelection(isInspected)"))
+            #expect(!row.contains("Color.wegaHoney.opacity(0.05)"), "queued rows lose the honey tint")
+            #expect(!row.contains("Color.wegaHoney.opacity(0.08)"), "the inspected row is lavender, not honey")
+            #expect(!row.contains("Rectangle().fill(Color.wegaHoney).frame(width: 2)"))
+        }
+        let surface = try source("Sources/MacUpdater/QueueRowSurface.swift")
+        for role in ["Color.wegaSelectionFill", "Color.wegaSelectionOutline", "Color.wegaSelectionLedge"] {
+            #expect(surface.contains(role), "the surface draws with \(role)")
+        }
     }
 
     private func slice(_ source: String, from start: String, to end: String) throws -> Substring {

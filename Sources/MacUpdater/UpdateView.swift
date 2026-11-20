@@ -198,15 +198,11 @@ struct UpdateView: View {
     // MARK: Results
     private var resultsView: some View {
         VStack(spacing: 0) {
-            // UX-14 — the header reports the scan and nothing else; acting on the result
-            // happens in the action bar under the list.
+            // UX-14 — the header reports the scan and carries select-all next to the
+            // categories; updating happens in the action bar under the list.
             VStack(alignment: .leading, spacing: 12) {
                 resultsHeading
-                HStack(spacing: 12) {
-                    scopeBar
-                    Spacer(minLength: 0)
-                    groupingMenu
-                }
+                listHeader
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, WegaLayout.selectionColumnInset)
@@ -225,6 +221,28 @@ struct UpdateView: View {
                     }
                 }
                 .animation(.easeInOut(duration: 0.2), value: scan.updating)
+        }
+    }
+
+    /// The list's header row: the list-wide queue circle, the scope bar and the grouping menu.
+    private var listHeader: some View {
+        HStack(spacing: WegaLayout.checkboxSpacing) {
+            // Select-all row. It sits outside `listColumn` and `screenBody`, so it inherits
+            // neither of their disabled regions and carries both gates itself.
+            if !visibleItems.isEmpty {
+                SelectionCheckbox(
+                    state: selectAllState,
+                    accessibilityLabel: tr("Zaznacz wszystko"),
+                    accessibilityValue: selectionSummary,
+                    toggle: { scan.toggleAll(filter: updateFilter) }
+                )
+                .disabled(!ScanSelectionGate.allowsListSelection(isRefreshing: scan.isRefreshing, isUpdating: scan.updating))
+            } else {
+                QueueColumnPlaceholder()
+            }
+            scopeBar
+            Spacer(minLength: 0)
+            groupingMenu
         }
     }
 
@@ -344,10 +362,10 @@ struct UpdateView: View {
 
     // MARK: Action bar
 
-    /// UX-14 — one bar under the list carries the whole path from selection to update: the
-    /// list-wide checkbox, what is ticked, how much of it the rollback net covers, the plan
-    /// and the update itself. It replaced a select-all row above the list, the update button
-    /// in the header and the plan disclosure between them — one flow in three places.
+    /// UX-14 — one bar under the list carries the whole path from selection to update: what
+    /// is ticked, how much of it the rollback net covers, the plan and the update itself. It
+    /// replaced the update button in the header and the plan disclosure between them — one flow
+    /// in three places.
     ///
     /// It lives inside `listColumn`, so a refresh or a running update stands it down together
     /// with the rows it acts on.
@@ -360,22 +378,10 @@ struct UpdateView: View {
                 targets:       updateTargets,
                 protection:    scan.caskProtection
             )
-            HStack(spacing: WegaLayout.checkboxSpacing) {
-                // Select-all row. The bar's glass is inset by the list gutter, but its content
-                // is padded from the column edge by `selectionColumnInset`, so this checkbox
-                // lands in the column every group header and package row uses: a stray offset
-                // made the widest of the three read as an unrelated control.
-                SelectionCheckbox(
-                    state: selectAllState,
-                    accessibilityLabel: tr("Zaznacz wszystko"),
-                    accessibilityValue: selectionSummary,
-                    toggle: { scan.toggleAll(filter: updateFilter) }
-                )
-                ViewThatFits(in: .horizontal) {
-                    actionBarContent(summary, showsProtection: true, compactPlan: false)
-                    actionBarContent(summary, showsProtection: false, compactPlan: false)
-                    actionBarContent(summary, showsProtection: false, compactPlan: true)
-                }
+            ViewThatFits(in: .horizontal) {
+                actionBarContent(summary, showsProtection: true, compactPlan: false)
+                actionBarContent(summary, showsProtection: false, compactPlan: false)
+                actionBarContent(summary, showsProtection: false, compactPlan: true)
             }
             .wegaBottomBar()
         }
@@ -767,7 +773,7 @@ extension UpdateView {
         let npmPkgs  = visibleItems.filter { $0.kind == .npm }
         if !formulae.isEmpty && updateFilter.allowsCli {
             UpdateSection(
-                title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"), icon: "terminal",
+                title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"), tint: .wegaInfo,
                 items: formulae,
                 rollbackCaption: Self.rollbackCaption(for: .formula),
                 selected: $scan.selected, inspectedKey: scan.inspectedKey,
@@ -777,7 +783,7 @@ extension UpdateView {
         }
         if !casks.isEmpty && updateFilter.allowsApps {
             UpdateSection(
-                title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), icon: "app.gift",
+                title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), tint: .wegaLavender,
                 items: casks, iconPaths: scan.caskIconPaths, rollbackProtection: scan.caskProtection,
                 selected: $scan.selected, inspectedKey: scan.inspectedKey,
                 onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
@@ -787,7 +793,7 @@ extension UpdateView {
         }
         if !store.isEmpty && updateFilter.allowsApps {
             UpdateSection(
-                title: tr("Mac App Store"), subtitle: tr("via mas-cli"), icon: "bag",
+                title: tr("Mac App Store"), subtitle: tr("via mas-cli"), tint: .wegaLavender,
                 items: store,
                 rollbackCaption: Self.rollbackCaption(for: .appStore),
                 selected: $scan.selected, inspectedKey: scan.inspectedKey,
@@ -797,7 +803,7 @@ extension UpdateView {
         }
         if !npmPkgs.isEmpty && updateFilter.allowsCli {
             UpdateSection(
-                title: tr("npm globalne"), subtitle: tr("pakiety -g"), icon: "shippingbox",
+                title: tr("npm globalne"), subtitle: tr("pakiety -g"), tint: .wegaInfo,
                 items: npmPkgs,
                 rollbackCaption: Self.rollbackCaption(for: .npm),
                 selected: $scan.selected, inspectedKey: scan.inspectedKey,
@@ -816,7 +822,7 @@ extension UpdateView {
             ManualUpdateSection(
                 items: visibleDocker, busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
-                title: "Docker Desktop", icon: "shippingbox",
+                title: "Docker Desktop", tint: .wegaToffee,
                 subtitle: tr("aktualizator producenta"),
                 caption: tr("Domyślnie użyj aktualizatora Docker Desktop. Homebrew wymaga osobnego potwierdzenia i bezpiecznego zatrzymania."),
                 inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,
@@ -835,7 +841,7 @@ extension UpdateView {
             ManualUpdateSection(
                 items: visibleServices, busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
-                title: tr("Usługi aktualizowane przez producenta"), icon: "gearshape.2",
+                title: tr("Usługi aktualizowane przez producenta"), tint: .wegaToffee,
                 subtitle: tr("aktualizator producenta"),
                 caption: tr("Homebrew wskazuje wersję pakietu. Aktualizację wykonaj w aplikacji, zgodnie z polityką administratora."),
                 inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,
@@ -858,7 +864,7 @@ extension UpdateView {
                 busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
                 title: tr("Homebrew Casks"),
-                icon: "app.gift",
+                tint: .wegaToffee,
                 subtitle: tr("samoaktualizujące się"),
                 caption: tr("Homebrew nie pilnuje wersji tych apek (auto_updates) — robią to same. Wega sprawdza je u źródła."),
                 inspectedKey: scan.inspectedKey,
@@ -875,7 +881,7 @@ extension UpdateView {
                 busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
                 title: tr("Ręcznie zainstalowane"),
-                icon: "sparkle",
+                tint: .wegaToffee,
                 caption: tr("Bez automatycznego cofnięcia — poprzednią wersję pobierzesz od wydawcy."),
                 inspectedKey: scan.inspectedKey,
                 onIgnore: scan.ignoreManual,
@@ -898,9 +904,9 @@ extension UpdateView {
             ManualUpdateSection(
                 items: groups.security, busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
-                title: tr("Możliwe poprawki bezpieczeństwa"), icon: "shield.lefthalf.filled",
+                title: tr("Możliwe poprawki bezpieczeństwa"),
+                tint: .wegaDanger, ordinal: groups.ordinal(of: .security),
                 caption: tr("Wega rozpoznała je po notatkach wydania. Szczegóły są w inspektorze."),
-                headerTint: .wegaDanger,
                 inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,
                 onPin: requestPinManual, onSkip: scan.skipManual,
                 onInspect: { scan.inspectedKey = "m:" + $0.path.path }
@@ -908,7 +914,7 @@ extension UpdateView {
         }
         if !groups.apps.isEmpty {
             UpdateSection(
-                title: tr("Aplikacje"), icon: "square.grid.2x2",
+                title: tr("Aplikacje"), tint: .wegaLavender, ordinal: groups.ordinal(of: .apps),
                 items: groups.apps, iconPaths: scan.caskIconPaths, rollbackProtection: scan.caskProtection,
                 showsSource: true,
                 selected: $scan.selected, inspectedKey: scan.inspectedKey,
@@ -919,7 +925,7 @@ extension UpdateView {
         }
         if !groups.cli.isEmpty {
             UpdateSection(
-                title: tr("Narzędzia CLI"), icon: "terminal",
+                title: tr("Narzędzia CLI"), tint: .wegaInfo, ordinal: groups.ordinal(of: .cli),
                 items: groups.cli,
                 showsSource: true,
                 selected: $scan.selected, inspectedKey: scan.inspectedKey,
@@ -931,7 +937,8 @@ extension UpdateView {
             ManualUpdateSection(
                 items: groups.needsYou, busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
-                title: tr("Wymaga Twojego ruchu"), icon: "arrow.up.forward.app",
+                title: tr("Wymaga Twojego ruchu"),
+                tint: .wegaToffee, ordinal: groups.ordinal(of: .needsYou),
                 caption: tr("Te aktualizacje kończy producent albo Ty. Przy każdej Wega podpowiada, jak."),
                 inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,
                 onPin: requestPinManual, onSkip: scan.skipManual,
@@ -968,9 +975,9 @@ extension UpdateView {
 /// The chrome of the bar at the bottom of the Updates list: the action bar, and the running
 /// update that takes its place (`UpdateRunOverlay`), so the two read as one bar changing state.
 ///
-/// Its content is padded from the column edge by `selectionColumnInset`, so the action bar's
-/// list-wide checkbox lands in the column every group header and package row uses, while the
-/// glass behind it is inset by the list gutter.
+/// Its content is padded from the column edge by `selectionColumnInset`, so the bar lines up
+/// with the column every group header and package row uses, while the glass behind it is
+/// inset by the list gutter.
 struct WegaBottomBar: ViewModifier {
     func body(content: Content) -> some View {
         content

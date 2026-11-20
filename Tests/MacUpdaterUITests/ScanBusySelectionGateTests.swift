@@ -55,6 +55,19 @@ struct ScanBusySelectionGateTests {
         #expect(!ScanSelectionGate.allowsSelection(isRefreshing: true))
     }
 
+    @Test func selectAllInTheListHeaderFollowsBothGates() throws {
+        #expect(ScanSelectionGate.allowsListSelection(isRefreshing: false, isUpdating: false))
+        #expect(!ScanSelectionGate.allowsListSelection(isRefreshing: true, isUpdating: false),
+                "a refresh is replacing the list the selection would be made against")
+        #expect(!ScanSelectionGate.allowsListSelection(isRefreshing: false, isUpdating: true),
+                "a running update owns the screen")
+        #expect(!ScanSelectionGate.allowsListSelection(isRefreshing: true, isUpdating: true))
+
+        let view = executableSource(try source("Sources/MacUpdater/UpdateView.swift"))
+        #expect(view.contains(".disabled(!ScanSelectionGate.allowsListSelection(isRefreshing: scan.isRefreshing, isUpdating: scan.updating))"),
+                "the header sits outside listColumn and screenBody, so select-all must carry both gates itself")
+    }
+
     /// The bar reports the phase the scan is genuinely in, and declines to report one when the
     /// scan has not named it — including after a finished run leaves `.finished` standing,
     /// which would otherwise open the next refresh on a full bar.

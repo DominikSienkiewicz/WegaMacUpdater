@@ -139,24 +139,12 @@ extension Provenance {
 
 // MARK: - Tri-state selection checkbox
 
-extension SelectAllState {
-    /// The glyph each state wears. One mapping, so the global "select all" control and every
-    /// group header speak the same visual language as the row checkboxes beneath them.
-    var symbolName: String {
-        switch self {
-        case .none:    return "square"
-        case .all:     return "checkmark.square.fill"
-        case .partial: return "minus.square.fill"
-        }
-    }
-}
-
 /// The checkbox that selects a whole collection of rows at once — the list-wide
 /// "Zaznacz wszystko" and the per-group checkbox in each card header.
 ///
-/// It renders the same glyph, at the same size, as `PackageRow`'s own checkbox, because all
-/// three sit in one column (`WegaLayout.selectionColumnInset`): a bigger or differently
-/// placed glyph reads as an unrelated control rather than as "the same choice, wider".
+/// It renders the same queue circle, at the same size, as `PackageRow`'s own control, because
+/// all three sit in one column (`WegaLayout.selectionColumnInset`): a bigger or differently
+/// placed circle reads as an unrelated control rather than as "the same choice, wider".
 struct SelectionCheckbox: View {
     let state: SelectAllState
     let accessibilityLabel: String
@@ -165,9 +153,7 @@ struct SelectionCheckbox: View {
 
     var body: some View {
         Button(action: toggle) {
-            Image(systemName: state.symbolName)
-                .foregroundStyle(state == .none ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.wegaHoney))
-                .contentShape(Rectangle())
+            QueueCircleControlLabel(state: QueueCircleState(state))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
@@ -440,8 +426,8 @@ struct PackageRow: View {
                 Toggle(isOn: selectionToggleBinding(isOn: isSelected, toggle: onToggle)) {
                     EmptyView()
                 }
-                .toggleStyle(WegaCheckboxToggleStyle())
-                .accessibilityLabel(name)
+                .toggleStyle(WegaQueueToggleStyle())
+                .accessibilityLabel(trf("W kolejce: %@", name))
             }
             if let path = iconPath {
                 AppIcon(path: path, size: WegaLayout.updateIconSize)
@@ -481,13 +467,7 @@ struct PackageRow: View {
         }
         .padding(.horizontal, WegaLayout.cardPadding)
         .padding(.vertical, WegaLayout.updateRowPadding)
-        .background(isSelected ? Color.wegaHoney.opacity(0.05) : Color.clear)
-        .background(isInspected ? Color.wegaHoney.opacity(0.08) : Color.clear)
-        .overlay(alignment: .leading) {
-            if isInspected {
-                Rectangle().fill(Color.wegaHoney).frame(width: 2)
-            }
-        }
+        .queueRowSelection(isInspected)
         .contentShape(Rectangle())
         .onTapGesture { onSelect?() }
         .focusable(onSelect != nil)
@@ -876,17 +856,5 @@ struct UpdateRowColumns<Identity: View, Version: View>: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-}
-
-/// UX-14 — holds a selection checkbox's column open in a row that has nothing to select, so
-/// its icon lines up with the selectable rows' icons. It draws the checkbox's own glyph,
-/// hidden, so the two stay the same width at every system text size.
-struct SelectionColumnSpacer: View {
-    var body: some View {
-        Image(systemName: "square")
-            .font(WegaCheckboxToggleStyle().glyphFont)
-            .hidden()
-            .accessibilityHidden(true)
     }
 }

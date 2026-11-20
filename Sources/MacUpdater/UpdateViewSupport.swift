@@ -220,7 +220,9 @@ struct CheckingBar: View {
 struct UpdateSection: View {
     let title:     String
     var subtitle:  String? = nil
-    let icon:      String
+    var tint:      Color
+    /// UX-18 — the group's number, set only in urgency grouping.
+    var ordinal:   Int? = nil
     let items:     [OutdatedItem]
     var iconPaths: [String: URL]  = [:]
     /// M5 — rollback coverage per cask token. Empty for sections where the question does
@@ -252,16 +254,16 @@ struct UpdateSection: View {
 
     var body: some View {
         WegaCard {
-            WegaCardHeader(icon: icon, title: title, count: items.count, note: subtitle,
-                           caption: rollbackCaption,
-                           selection: SelectionCheckbox(
-                               state: groupState,
-                               accessibilityLabel: trf("Zaznacz całą grupę: %@", title),
-                               accessibilityValue: trf("%@ z %@ zaznaczonych",
-                                                       "\(items.filter { selected.contains($0.key) }.count)",
-                                                       "\(items.count)"),
-                               toggle: { toggleGroup() }
-                           ))
+            UpdateGroupHeader(title: title, tint: tint, ordinal: ordinal, count: items.count,
+                              note: subtitle, caption: rollbackCaption,
+                              selection: SelectionCheckbox(
+                                  state: groupState,
+                                  accessibilityLabel: trf("Zaznacz całą grupę: %@", title),
+                                  accessibilityValue: trf("%@ z %@ zaznaczonych",
+                                                          "\(items.filter { selected.contains($0.key) }.count)",
+                                                          "\(items.count)"),
+                                  toggle: { toggleGroup() }
+                              ))
 
             ForEach(items) { item in
                 VStack(spacing: 0) {
@@ -444,14 +446,14 @@ struct ManualUpdateSection: View {
     let busyToken: String?
     let onInstall: (String) -> Void
     let title:     String
-    let icon:      String
+    let tint:      Color
+    /// UX-18 — the group's number, set only in urgency grouping.
+    var ordinal:   Int? = nil
     var subtitle:  String? = nil
     /// Optional one-line explanation under the header — used to say *why* a brew-cask
     /// group sits apart (Homebrew doesn't version-manage `auto_updates` casks), so the
     /// section reads as intentional rather than an inconsistency.
     var caption:   String? = nil
-    /// UX-18 — tints the header (icon and title), e.g. danger red for possible security fixes.
-    var headerTint: Color? = nil
     var inspectedKey: String? = nil
     var onIgnore:  ((ManualOutdatedApp) -> Void)?
     var onPin:     ((ManualOutdatedApp) -> Void)?
@@ -466,18 +468,18 @@ struct ManualUpdateSection: View {
 
     var body: some View {
         WegaCard {
-            WegaCardHeader(icon: icon, tint: headerTint ?? .wegaHoney, title: title,
-                           titleTinted: headerTint != nil, count: items.count,
-                           note: subtitle, caption: caption)
+            UpdateGroupHeader(title: title, tint: tint, ordinal: ordinal, count: items.count,
+                              note: subtitle, caption: caption)
 
             ForEach(items, id: \.path) { item in
                 let isInspected = "m:" + item.path.path == inspectedKey
                 VStack(spacing: 0) {
-                // UX-14 — the same columns as a package row: an empty checkbox slot, so this
-                // icon lines up with every selectable row's, and the version in the version
-                // column rather than under the name. F1's release notes are in the inspector.
+                // UX-14 — the same columns as a package row: the hand-off mark holds the
+                // queue column, so this icon lines up with every selectable row's, and the
+                // version in the version column rather than under the name. F1's release notes
+                // are in the inspector.
                 HStack(spacing: WegaLayout.checkboxSpacing) {
-                    SelectionColumnSpacer()
+                    QueueHandoffMark()
                     AppIcon(path: item.path, size: WegaLayout.updateIconSize)
                     let isSecurity = item.releaseNotes.map { ReleaseNotesTriage.heuristic($0.plainText).isLikelySecurityFix } ?? false
                     UpdateRowColumns {
@@ -514,12 +516,7 @@ struct ManualUpdateSection: View {
                 .padding(.horizontal, WegaLayout.cardPadding)
                 .padding(.vertical, WegaLayout.updateRowPadding)
                 }
-                .background(isInspected ? Color.wegaHoney.opacity(0.08) : Color.clear)
-                .overlay(alignment: .leading) {
-                    if isInspected {
-                        Rectangle().fill(Color.wegaHoney).frame(width: 2)
-                    }
-                }
+                .queueRowSelection(isInspected)
                 .contentShape(Rectangle())
                 .gesture(TapGesture().onEnded { onInspect?(item) })
                 .focusable(onInspect != nil)

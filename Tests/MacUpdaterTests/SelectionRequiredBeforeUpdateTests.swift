@@ -80,14 +80,19 @@ struct SelectionRequiredBeforeUpdateTests {
         #expect(UpdatePlanner.groupSelectionState(selected: cleared, groupKeys: casks) == .none)
     }
 
-    /// Every checkbox on the Updates screen shares one column. The card-internal ones get
-    /// there through the card's padding; the list-wide one has to add the gutter itself.
+    /// Every selection control on the Updates screen shares one column. The card-internal ones
+    /// get there through the card's padding; select-all sits in the list header, which is
+    /// inset by `selectionColumnInset` to land in the same column.
     @Test func everySelectionControlSitsInOneColumn() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         let support = try source("Sources/MacUpdater/UpdateViewSupport.swift")
 
-        #expect(view.contains(".padding(.leading, WegaLayout.selectionColumnInset)"),
-                "the list-wide select-all control must reproduce the card inset, not float free")
+        let results = try #require(view.range(of: "private var resultsView: some View"))
+        let header = try #require(view.range(of: "private var listHeader: some View"))
+        let resultsSlice = String(view[results.lowerBound..<header.lowerBound])
+        #expect(resultsSlice.contains("listHeader"))
+        #expect(resultsSlice.contains(".padding(.horizontal, WegaLayout.selectionColumnInset)"),
+                "the header that carries select-all reproduces the card inset")
         #expect(!view.contains(".padding(.horizontal, 20)"),
                 "a hand-picked inset puts the select-all checkbox in a column of its own")
         #expect(support.contains("selection: SelectionCheckbox("),

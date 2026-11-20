@@ -14,8 +14,12 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 ## [Unreleased]
 
 ### Changed
-- **Updates: one action bar under the list.** The list-wide checkbox, the selection count,
-  how many ticked casks automatic rollback covers, the dry-run plan (now a sheet) and
+- **Updates: the queue.** Items Wega will update wear a honey circle with a tick instead of a
+  checkbox. Items the vendor or you finish show a ↗ circle. **Select all** sits next to the
+  categories above the list. Group headers are numbered in urgency grouping. The row open in
+  the inspector is filled lavender and outlined.
+- **Updates: one action bar under the list.** The selection count, how many
+  ticked casks automatic rollback covers, the dry-run plan (now a sheet) and
   **Update selected** sit together in a bar pinned under the list. The header only reports
   the scan, and **Check now** is no longer styled as the primary action.
 - **Updates: one row layout.** Manually updated apps line up with Homebrew rows: same icon

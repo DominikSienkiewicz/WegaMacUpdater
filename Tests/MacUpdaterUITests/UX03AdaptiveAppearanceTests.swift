@@ -237,6 +237,24 @@ struct AdaptivePaletteTests {
         }
     }
 
+    @Test("C2 outlines stay visible and text on the selection fill stays readable")
+    func c2OutlineRolesStayLegible() {
+        let nonTextMinimum = 3.0
+        for outline in [WegaPalette.selectionOutline, WegaPalette.actionOutline] {
+            #expect(outline.light.wcag.contrast(against: Self.lightBackground) >= nonTextMinimum)
+            #expect(outline.lightIncreasedContrast.wcag.contrast(against: Self.lightBackground) >= nonTextMinimum)
+            #expect(outline.dark.wcag.contrast(against: Self.darkBackground) >= nonTextMinimum)
+            #expect(outline.darkIncreasedContrast.wcag.contrast(against: Self.darkBackground) >= nonTextMinimum)
+        }
+        // Approximations of the system label colour the row text uses.
+        let lightLabel = WegaAdaptiveColor.Components(0x262626).wcag
+        let darkLabel = WegaAdaptiveColor.Components(0xE5E5E5).wcag
+        #expect(lightLabel.contrast(against: WegaPalette.selectionFill.light.wcag) >= Self.normalMinimum)
+        #expect(lightLabel.contrast(against: WegaPalette.selectionFill.lightIncreasedContrast.wcag) >= Self.normalMinimum)
+        #expect(darkLabel.contrast(against: WegaPalette.selectionFill.dark.wcag) >= Self.normalMinimum)
+        #expect(darkLabel.contrast(against: WegaPalette.selectionFill.darkIncreasedContrast.wcag) >= Self.normalMinimum)
+    }
+
     /// A single fixed value would have been silently correct in one appearance and wrong in
     /// the other, which is the bug this card is about.
     @Test("Light and dark are genuinely different values")
