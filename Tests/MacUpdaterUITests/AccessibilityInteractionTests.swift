@@ -24,8 +24,8 @@ final class AccessibilityInteractionTests: XCTestCase {
         )
 
         XCTAssertTrue(packageRow.contains("Toggle(isOn: selectionToggleBinding(isOn: isSelected, toggle: onToggle))"))
-        XCTAssertTrue(packageRow.contains(".toggleStyle(WegaCheckboxToggleStyle())"))
-        XCTAssertTrue(packageRow.contains(".accessibilityLabel(name)"))
+        XCTAssertTrue(packageRow.contains(".toggleStyle(WegaQueueToggleStyle())"))
+        XCTAssertTrue(packageRow.contains(".accessibilityLabel(trf(\"W kolejce: %@\", name))"))
         XCTAssertFalse(packageRow.contains(".onTapGesture { onToggle?() }"))
 
         let uninstall = try source("Sources/MacUpdater/UninstallView.swift")
@@ -89,7 +89,10 @@ final class AccessibilityInteractionTests: XCTestCase {
         let sharedViews = try source("Sources/MacUpdater/SharedViews.swift")
         XCTAssertTrue(sharedViews.contains("Button(action: toggle)"),
                       "the select-all control stays an action, not a two-state checkbox")
-        XCTAssertTrue(sharedViews.contains("case .partial: return \"minus.square.fill\""),
+        XCTAssertTrue(sharedViews.contains("QueueCircleControlLabel(state: QueueCircleState(state))"),
+                      "the select-all control wears the queue circle")
+        let queueCircle = try source("Sources/MacUpdater/QueueCircle.swift")
+        XCTAssertTrue(queueCircle.contains("case .partial: return \"minus\""),
                       "the partial state must remain visually distinct too")
     }
 
