@@ -7,9 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 The version lives in exactly one place — `AppMetadata.version`
 (`Sources/WegaHelperKit/AppMetadata.swift`); the release workflow refuses to publish
-a tag whose version doesn't match it. Keep the `[Unreleased]` section ahead of each
-bump; `scripts/release.sh` moves its entries under the new version heading when cutting a
-release, so that step is never done by hand — see [RELEASING.md](RELEASING.md).
+a tag whose version doesn't match it. `[Unreleased]` entries are written ahead of each
+release; the release notes are approved at release time, and `scripts/release.sh` writes
+them verbatim under the new version heading, so that step is never done by hand — see
+[RELEASING.md](RELEASING.md).
 
 ## [Unreleased]
 

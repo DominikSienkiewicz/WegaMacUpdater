@@ -34,7 +34,7 @@ Wega's docs are split by audience. **Start with the one that matches what you wa
 | Ship a release | [Distribution](docs/distribution.md) — cutting a release and how the app self-updates |
 | Contribute code | [CONTRIBUTING.md](CONTRIBUTING.md) — build/test setup, CI gates, the catalog-signature gate |
 | Report a vulnerability | [SECURITY.md](SECURITY.md) — the private disclosure channel; please don't use public issues |
-| Follow the release runbook | [RELEASING.md](RELEASING.md) — the two-phase `release.sh` flow and the first-release case |
+| Follow the release runbook | [RELEASING.md](RELEASING.md) — the single-phase `release.sh` or the `release` skill |
 
 ## What it updates
 

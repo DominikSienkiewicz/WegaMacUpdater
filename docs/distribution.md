@@ -18,20 +18,16 @@ self-update verification only trust binaries signed by that team, so release sig
 
 ### Cutting a release
 
-`scripts/build-pkg.sh` builds a universal, ad-hoc-or-signed `.pkg` **and** a drag-to-Applications `.dmg`. Pushing a version tag drives the rest, and `scripts/release.sh` is what creates that tag — in two phases, with a review gate in between:
+`scripts/build-pkg.sh` builds a universal, ad-hoc-or-signed `.pkg` **and** a drag-to-Applications `.dmg`. Pushing a version tag drives the rest, and `scripts/release.sh` is what creates that tag, in a single phase. The easiest way is to ask Claude Code for a release in a session opened in the repository root (the `release` skill): it proposes the version and the notes, and pushes only after your explicit approval. The manual equivalent:
 
 ```bash
-./scripts/release.sh patch      # prepare: bump AppMetadata.version, draft notes, stage
-# review CHANGELOG.md, edit until the notes read well
-./scripts/release.sh --continue # finalise: commit + annotated tag
-git push origin main --follow-tags
+./scripts/release.sh minor [--notes FILE]   # bump AppMetadata.version, publish the notes, commit + annotated tag
+git push --atomic origin main vX.Y.Z
 ```
 
 Never edit `AppMetadata.version` or move the `[Unreleased]` entries by hand — the script owns
-both, and the workflow refuses any tag that disagrees with the version. The full procedure,
-the signing secrets and the first-release case (**the project has no tags yet**, so the first
-release is cut from `[Unreleased]` alone and its version must be higher than `0.1.0`) are in
-**[RELEASING.md](../RELEASING.md)**.
+both, and the workflow refuses any tag that disagrees with the version. The full procedure
+and the signing secrets are in **[RELEASING.md](../RELEASING.md)**.
 
 `.github/workflows/release.yml` (on `push: tags: v*`) first runs the **same reusable quality workflow CI runs** — build, test, lint, catalog verification, packaging and the bundle gate, on the same pinned `macos-26`/Xcode 26 toolchain. The publishing job `needs:` it, so a release can never be built on a different toolchain than CI proved green, nor published ahead of the quality gates. It then verifies tag == `AppMetadata.version`, builds the artifacts, notarizes and staples them, and runs `scripts/verify-bundle.sh` over the result — bundle layout, helper signature, notarization, stapling and required resources — as a final gate before it publishes a GitHub Release with the `.pkg` + `.dmg`. **Signing and notarization are optional and activate automatically once the secrets exist** — until then the job still publishes *unsigned* artifacts so the pipeline is verifiable end-to-end without an Apple Developer account (the **Preflight** step in each run prints which signing/notary secrets are configured).
 

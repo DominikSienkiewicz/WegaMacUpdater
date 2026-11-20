@@ -14,10 +14,7 @@ set -euo pipefail
 #                                     and unwraps byte-for-byte
 #   0g. test-coverage-bundle-guard — coverage picks a test bundle covering the app target
 #                                     under both SwiftPM build-system layouts
-#   0h. test-release-baseline-guard — release.sh reads "previous release" from the subject,
-#                                     not from any line of the message body
-#   0i. test-release-headings-guard — release.sh republishes a hand-written changelog
-#                                     heading exactly as written
+#   0h. test-release-guard — release.sh copies the approved notes verbatim, refuses what it must
 #   0j. test-timing-suites-guard — wall-clock suites are listed and run apart, serially
 #   0k. test-sign-retry-guard — Developer ID signing retries a timestamp-server timeout
 #   1. swift build              — compiles app + helper + core
@@ -79,19 +76,12 @@ echo "→ ./scripts/test-catalog-envelope-guard.sh"
 echo "→ ./scripts/test-coverage-bundle-guard.sh"
 ./scripts/test-coverage-bundle-guard.sh
 
-# REL-06: release.sh decides what "since the last release" means, and it got that wrong in
-# the direction nothing else can see — a commit quoting `chore(release):` in its body was
-# read as a previous release, so the first release notes replayed 85 subjects the changelog
-# already described by hand. Pure bash, throwaway repositories under $TMPDIR.
-echo "→ ./scripts/test-release-baseline-guard.sh"
-./scripts/test-release-baseline-guard.sh
-
-# REL-07: the same script decides how a hand-written heading is spelled in the GitHub
-# Release description. Section files were named after a stripped copy of the heading and the
-# heading was rebuilt from that name, so `### Known issues` shipped as `### Knownissues` —
-# and `### Fixed!` was absorbed into the canonical `### Fixed`. Also pure bash.
-echo "→ ./scripts/test-release-headings-guard.sh"
-./scripts/test-release-headings-guard.sh
+# release.sh is one phase now and copies the approved notes verbatim. This guard replaced
+# REL-06 (the baseline search) and REL-07 (heading spelling): the first tested a feature that
+# was removed, the second's intent -- never lose or garble hand-written text -- survives as
+# "notes are copied verbatim" (spec 5.6). Pure bash, throwaway repositories under $TMPDIR.
+echo "→ ./scripts/test-release-guard.sh"
+./scripts/test-release-guard.sh
 
 # The v0.2.0 attempt that hung: the signing key admitted only codesign, so pkgbuild waited on a
 # keychain prompt no runner can answer, and the job burned GitHub's six-hour maximum without
