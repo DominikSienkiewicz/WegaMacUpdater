@@ -27,7 +27,8 @@ public struct ReleaseTriageResult: Equatable, Sendable {
 }
 
 public enum ReleaseNotesTriage {
-    /// Substrings that strongly indicate a security-relevant change (lowercased).
+    /// Lowercased word starts that strongly indicate a security-relevant change. A signal may run
+    /// on ("vulnerab" matches "vulnerability") but must begin a word: see `startsAWord`.
     static let securitySignals: [String] = [
         "cve-", "cwe-", "security", "vulnerab", "exploit", "rce", "remote code",
         "privilege escalation", "sandbox escape", "0-day", "zero-day",
@@ -37,7 +38,21 @@ public enum ReleaseNotesTriage {
     /// Pure heuristic triage — no network, no model. Always available.
     public static func heuristic(_ notes: String) -> ReleaseTriageResult {
         let lower = notes.lowercased()
-        let hits = securitySignals.filter { lower.contains($0) }
+        let hits = securitySignals.filter { startsAWord($0, in: lower) }
         return ReleaseTriageResult(isLikelySecurityFix: !hits.isEmpty, matchedSignals: hits)
+    }
+
+    /// Whether `signal` occurs in `text` right after a character that is neither a letter nor a
+    /// digit, or at its very start. "rce" inside "source" or "force", or "0-day" inside "30-day",
+    /// says nothing about security.
+    static func startsAWord(_ signal: String, in text: String) -> Bool {
+        var searchStart = text.startIndex
+        while let found = text.range(of: signal, range: searchStart..<text.endIndex) {
+            guard found.lowerBound > text.startIndex else { return true }
+            let previous = text[text.index(before: found.lowerBound)]
+            if !previous.isLetter && !previous.isNumber { return true }
+            searchStart = text.index(after: found.lowerBound)
+        }
+        return false
     }
 }
