@@ -771,7 +771,7 @@ extension UpdateView {
         let npmPkgs  = visibleItems.filter { $0.kind == .npm }
         if !formulae.isEmpty && updateFilter.allowsCli {
             UpdateSection(
-                title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"), icon: "terminal",
+                title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"), tint: .wegaInfo,
                 items: formulae,
                 rollbackCaption: Self.rollbackCaption(for: .formula),
                 selected: $scan.selected, inspectedKey: scan.inspectedKey,
@@ -781,7 +781,7 @@ extension UpdateView {
         }
         if !casks.isEmpty && updateFilter.allowsApps {
             UpdateSection(
-                title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), icon: "app.gift",
+                title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), tint: .wegaLavender,
                 items: casks, iconPaths: scan.caskIconPaths, rollbackProtection: scan.caskProtection,
                 selected: $scan.selected, inspectedKey: scan.inspectedKey,
                 onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
@@ -791,7 +791,7 @@ extension UpdateView {
         }
         if !store.isEmpty && updateFilter.allowsApps {
             UpdateSection(
-                title: tr("Mac App Store"), subtitle: tr("via mas-cli"), icon: "bag",
+                title: tr("Mac App Store"), subtitle: tr("via mas-cli"), tint: .wegaLavender,
                 items: store,
                 rollbackCaption: Self.rollbackCaption(for: .appStore),
                 selected: $scan.selected, inspectedKey: scan.inspectedKey,
@@ -801,7 +801,7 @@ extension UpdateView {
         }
         if !npmPkgs.isEmpty && updateFilter.allowsCli {
             UpdateSection(
-                title: tr("npm globalne"), subtitle: tr("pakiety -g"), icon: "shippingbox",
+                title: tr("npm globalne"), subtitle: tr("pakiety -g"), tint: .wegaInfo,
                 items: npmPkgs,
                 rollbackCaption: Self.rollbackCaption(for: .npm),
                 selected: $scan.selected, inspectedKey: scan.inspectedKey,
@@ -820,7 +820,7 @@ extension UpdateView {
             ManualUpdateSection(
                 items: visibleDocker, busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
-                title: "Docker Desktop", icon: "shippingbox",
+                title: "Docker Desktop", tint: .wegaToffee,
                 subtitle: tr("aktualizator producenta"),
                 caption: tr("Domyślnie użyj aktualizatora Docker Desktop. Homebrew wymaga osobnego potwierdzenia i bezpiecznego zatrzymania."),
                 inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,
@@ -839,7 +839,7 @@ extension UpdateView {
             ManualUpdateSection(
                 items: visibleServices, busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
-                title: tr("Usługi aktualizowane przez producenta"), icon: "gearshape.2",
+                title: tr("Usługi aktualizowane przez producenta"), tint: .wegaToffee,
                 subtitle: tr("aktualizator producenta"),
                 caption: tr("Homebrew wskazuje wersję pakietu. Aktualizację wykonaj w aplikacji, zgodnie z polityką administratora."),
                 inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,
@@ -862,7 +862,7 @@ extension UpdateView {
                 busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
                 title: tr("Homebrew Casks"),
-                icon: "app.gift",
+                tint: .wegaToffee,
                 subtitle: tr("samoaktualizujące się"),
                 caption: tr("Homebrew nie pilnuje wersji tych apek (auto_updates) — robią to same. Wega sprawdza je u źródła."),
                 inspectedKey: scan.inspectedKey,
@@ -879,7 +879,7 @@ extension UpdateView {
                 busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
                 title: tr("Ręcznie zainstalowane"),
-                icon: "sparkle",
+                tint: .wegaToffee,
                 caption: tr("Bez automatycznego cofnięcia — poprzednią wersję pobierzesz od wydawcy."),
                 inspectedKey: scan.inspectedKey,
                 onIgnore: scan.ignoreManual,
@@ -902,9 +902,9 @@ extension UpdateView {
             ManualUpdateSection(
                 items: groups.security, busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
-                title: tr("Możliwe poprawki bezpieczeństwa"), icon: "shield.lefthalf.filled",
+                title: tr("Możliwe poprawki bezpieczeństwa"),
+                tint: .wegaDanger, ordinal: groups.ordinal(of: .security),
                 caption: tr("Wega rozpoznała je po notatkach wydania. Szczegóły są w inspektorze."),
-                headerTint: .wegaDanger,
                 inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,
                 onPin: requestPinManual, onSkip: scan.skipManual,
                 onInspect: { scan.inspectedKey = "m:" + $0.path.path }
@@ -912,7 +912,7 @@ extension UpdateView {
         }
         if !groups.apps.isEmpty {
             UpdateSection(
-                title: tr("Aplikacje"), icon: "square.grid.2x2",
+                title: tr("Aplikacje"), tint: .wegaLavender, ordinal: groups.ordinal(of: .apps),
                 items: groups.apps, iconPaths: scan.caskIconPaths, rollbackProtection: scan.caskProtection,
                 showsSource: true,
                 selected: $scan.selected, inspectedKey: scan.inspectedKey,
@@ -923,7 +923,7 @@ extension UpdateView {
         }
         if !groups.cli.isEmpty {
             UpdateSection(
-                title: tr("Narzędzia CLI"), icon: "terminal",
+                title: tr("Narzędzia CLI"), tint: .wegaInfo, ordinal: groups.ordinal(of: .cli),
                 items: groups.cli,
                 showsSource: true,
                 selected: $scan.selected, inspectedKey: scan.inspectedKey,
@@ -935,7 +935,8 @@ extension UpdateView {
             ManualUpdateSection(
                 items: groups.needsYou, busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
-                title: tr("Wymaga Twojego ruchu"), icon: "arrow.up.forward.app",
+                title: tr("Wymaga Twojego ruchu"),
+                tint: .wegaToffee, ordinal: groups.ordinal(of: .needsYou),
                 caption: tr("Te aktualizacje kończy producent albo Ty. Przy każdej Wega podpowiada, jak."),
                 inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,
                 onPin: requestPinManual, onSkip: scan.skipManual,

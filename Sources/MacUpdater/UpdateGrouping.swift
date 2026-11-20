@@ -32,6 +32,24 @@ struct UrgencyGroups: Equatable {
     /// Everything else the vendor's updater or the user has to finish.
     let needsYou: [ManualOutdatedApp]
 
+    /// The four groups, in the order they appear on screen.
+    enum Kind: CaseIterable { case security, apps, cli, needsYou }
+
+    /// The 1-based position of a group among the non-empty ones, or nil for an empty group.
+    func ordinal(of kind: Kind) -> Int? {
+        let present = Kind.allCases.filter { !isEmpty($0) }
+        return present.firstIndex(of: kind).map { $0 + 1 }
+    }
+
+    private func isEmpty(_ kind: Kind) -> Bool {
+        switch kind {
+        case .security: return security.isEmpty
+        case .apps:     return apps.isEmpty
+        case .cli:      return cli.isEmpty
+        case .needsYou: return needsYou.isEmpty
+        }
+    }
+
     /// Splits the lists, keeping their order, and applies the scope bar's filter: grouping
     /// decides the order on screen, never what is on it.
     static func make(
