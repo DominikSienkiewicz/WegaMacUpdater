@@ -255,6 +255,21 @@ struct AdaptivePaletteTests {
         #expect(darkLabel.contrast(against: WegaPalette.selectionFill.darkIncreasedContrast.wcag) >= Self.normalMinimum)
     }
 
+    @Test("The band's text stays readable on every gradient stop, in every appearance")
+    func bandTextStaysReadable() {
+        let stops = [WegaPalette.bandStart, WegaPalette.bandMid, WegaPalette.bandEnd]
+        for text in [WegaPalette.bandText, WegaPalette.bandSecondaryText, WegaPalette.bandAccentText] {
+            for stop in stops {
+                #expect(text.light.wcag.contrast(against: stop.light.wcag) >= Self.normalMinimum)
+                #expect(text.dark.wcag.contrast(against: stop.dark.wcag) >= Self.normalMinimum)
+                #expect(text.lightIncreasedContrast.wcag.contrast(against: stop.lightIncreasedContrast.wcag) >= 7.0)
+                #expect(text.darkIncreasedContrast.wcag.contrast(against: stop.darkIncreasedContrast.wcag) >= 7.0)
+            }
+        }
+        #expect(WegaPalette.bandBorder.light.wcag.contrast(against: Self.lightBackground) >= 3.0)
+        #expect(WegaPalette.bandBorder.dark.wcag.contrast(against: Self.darkBackground) >= 3.0)
+    }
+
     /// A single fixed value would have been silently correct in one appearance and wrong in
     /// the other, which is the bug this card is about.
     @Test("Light and dark are genuinely different values")
