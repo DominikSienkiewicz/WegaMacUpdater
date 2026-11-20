@@ -77,6 +77,28 @@ final class VendorHandoffScanClosureTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(ScanResultStore(io: harness.snapshots).load()).vendorHandoffs.isEmpty)
     }
 
+    func testRestoredHandoffOfAnAppThatIsGoneIsDroppedThroughTheBundleExistsSeam() throws {
+        let gone = ManualOutdatedApp(
+            name: "Logi Options+", path: URL(fileURLWithPath: "/bin/ls"), installedVersion: "2.9.1013853",
+            availableVersion: "2.9.1013853", source: .cask(token: "logi-options+"), origin: .brew,
+            bundleIdentifier: "com.logi.optionsplus",
+            completionRequirement: .init(version: "2.9.1013853"), caskPolicyToken: "logi-options+"
+        )
+        // /bin/ls really exists; only the injected seam says the bundle is gone.
+        let harness = makeScanStoreRuntimeHarness(runner: runner(), bundleExists: { $0.path == "/bin" })
+        var dependencies = harness.store.dependencies
+        dependencies.recordUpdateRun = { _ in XCTFail("A vanished app is not a finished update") }
+        try ScanResultStore(io: harness.snapshots).save(ScanSnapshot(
+            scannedAt: Date(timeIntervalSince1970: 3_000), brew: nil, mas: [], npm: [], manual: [],
+            installationChecks: [], vendorHandoffs: [gone]
+        ))
+        let store = ScanStore(resultStore: ScanResultStore(io: harness.snapshots), dependencies: dependencies)
+
+        store.restoreLastScan()
+
+        XCTAssertTrue(store.vendorHandoffs.isEmpty)
+    }
+
     private func storeScanning(
         sourceOutcome: InstallationSourceCheck.Outcome,
         record: @escaping (UpdateJournalEntry) -> Void

@@ -68,7 +68,7 @@ extension ScanStore {
         )
         let vanished = VendorHandoffScanEvidence.vanished(
             vendorHandoffs, installationChecks: installationChecks, scanComplete: lastScanComplete,
-            fileExists: { FileManager.default.fileExists(atPath: $0.path) }
+            fileExists: dependencies.bundleExists
         )
         guard !retired.isEmpty || !confirmed.isEmpty || !vanished.isEmpty else { return }
         let closed = Set((retired + vanished + confirmed).map(\.path))

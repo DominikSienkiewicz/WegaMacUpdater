@@ -72,14 +72,18 @@ public enum VendorHandoffScanEvidence {
     }
 
     /// Handoffs a complete scan can no longer verify because the app is gone: no installation
-    /// check for the exact path and no bundle on disk. Dropping one confirms nothing.
+    /// check for the exact path and no bundle on disk, while its parent folder is reachable. Dropping one confirms nothing.
     public static func vanished(
         _ handoffs: [ManualOutdatedApp], installationChecks: [InstallationCheck],
         scanComplete: Bool, fileExists: (URL) -> Bool
     ) -> [ManualOutdatedApp] {
         guard scanComplete else { return [] }
         let checked = Set(installationChecks.map { InstallationIdentity(path: $0.path) })
-        return handoffs.filter { !checked.contains(InstallationIdentity(path: $0.path)) && !fileExists($0.path) }
+        // A missing parent directory means an unmounted volume, not an uninstalled app.
+        return handoffs.filter {
+            !checked.contains(InstallationIdentity(path: $0.path)) && !fileExists($0.path)
+                && fileExists($0.path.deletingLastPathComponent())
+        }
     }
 
     /// Handoffs whose own source has stopped checking their app, so neither a scan nor a

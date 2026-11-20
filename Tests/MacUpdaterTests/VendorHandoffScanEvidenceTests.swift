@@ -97,21 +97,29 @@ struct VendorHandoffScanEvidenceTests {
 
     @Test func handoffOfAnAppAbsentFromACompleteScanAndFromDiskVanished() {
         let gone = VendorHandoffScanEvidence.vanished(
-            [logiHandoff()], installationChecks: [], scanComplete: true, fileExists: { _ in false }
+            [logiHandoff()], installationChecks: [], scanComplete: true, fileExists: { $0.path == "/Applications" }
         )
         #expect(gone == [logiHandoff()])
     }
 
     @Test func handoffIsNotVanishedWhenTheScanWasIncompleteTheBundleExistsOrACheckExists() {
         #expect(VendorHandoffScanEvidence.vanished(
-            [logiHandoff()], installationChecks: [], scanComplete: false, fileExists: { _ in false }
+            [logiHandoff()], installationChecks: [], scanComplete: false, fileExists: { $0.path == "/Applications" }
         ).isEmpty)
         #expect(VendorHandoffScanEvidence.vanished(
             [logiHandoff()], installationChecks: [], scanComplete: true, fileExists: { _ in true }
         ).isEmpty)
         #expect(VendorHandoffScanEvidence.vanished(
-            [logiHandoff()], installationChecks: [logiCheck(version: "2.9.994631")], scanComplete: true, fileExists: { _ in false }
+            [logiHandoff()], installationChecks: [logiCheck(version: "2.9.994631")], scanComplete: true, fileExists: { $0.path == "/Applications" }
         ).isEmpty)
+    }
+
+    @Test func handoffOnAnUnreachableVolumeIsNotVanished() {
+        var external = logiHandoff()
+        external.path = URL(fileURLWithPath: "/Volumes/Ext/Logi.app")
+        #expect(VendorHandoffScanEvidence.vanished(
+            [external], installationChecks: [], scanComplete: true, fileExists: { _ in false }
+        ).isEmpty, "a missing parent directory means the volume is unmounted, not that the app is gone")
     }
 
     private func logiHandoff() -> ManualOutdatedApp {
