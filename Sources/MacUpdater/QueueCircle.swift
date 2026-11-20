@@ -74,6 +74,7 @@ struct QueueCircleControlLabel: View {
 
     var body: some View {
         QueueCircle(state: state)
+            .contentShape(Circle())
             .overlay {
                 if isFocused {
                     Circle()

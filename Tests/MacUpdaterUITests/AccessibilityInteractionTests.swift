@@ -282,6 +282,10 @@ final class AccessibilityInteractionTests: XCTestCase {
             endingAt: "struct WegaQueueToggleStyle: ToggleStyle"
         )
         XCTAssertTrue(label.contains("@Environment(\\.isFocused)"))
+        XCTAssertTrue(
+            label.contains(".contentShape(Circle())"),
+            "a plain button hit-tests only what it draws, so the whole circle needs a content shape"
+        )
 
         let markStart = try XCTUnwrap(queueCircle.range(of: "struct QueueHandoffMark: View")?.lowerBound)
         let mark = queueCircle[markStart...]
