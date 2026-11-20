@@ -136,8 +136,8 @@ an update. `WegaSelfUpdateChecker` skips draft and prerelease tags, so an unsign
 never offered to anyone as a self-update — while the pipeline itself stays fully runnable
 without an Apple Developer account.
 
-Watch it under the repository's **Actions** tab. If the run fails, nothing is published; fix
-the cause, delete the tag locally and on the remote, and cut the release again.
+Watch it under the repository's **Actions** tab. If the run fails, nothing is published; see
+"The workflow failed after the tag was pushed" in [Troubleshooting](#8-troubleshooting).
 
 ## 7. Signing and notarization secrets
 
@@ -230,12 +230,21 @@ attempt, the server stayed out of reach for minutes: rerun the failed job later 
 `gh run rerun <run-id> --failed`. Nothing was published, and the tag can stay.
 
 **The workflow failed after the tag was pushed**
-Nothing was published. Fix the cause on `main`, then remove the tag from both places and cut
-the release again:
+Nothing was published, but the release commit and the tag are on origin, and `main` already
+carries the version, so `release.sh` will not cut that version again. There are two ways out:
 
-```bash
-git tag -d v0.1.6 && git push origin :refs/tags/v0.1.6
-```
+- No code change needed (a runner hiccup, the timestamp server, a secret fixed in the
+  repository settings): rerun the failed jobs. The tag stays.
+
+  ```bash
+  gh run rerun <run-id> --failed
+  ```
+
+- A code change needed: fix it on `main` like any change and release the next patch version.
+  In the fix, move the unpublished version's entries from its `## [X.Y.Z]` section back under
+  `[Unreleased]`, so they ship with the next release. The in-app "what's new" reads only
+  published releases, so notes left under a version that never published never reach users.
+  0.7.0 went this way into 0.7.1.
 
 **A bad release was already published**
 Delete the GitHub Release and its tag, then cut a new patch version. Do not re-point an

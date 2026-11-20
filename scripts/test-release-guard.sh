@@ -12,7 +12,10 @@
 # skrypt ma je przepisać bajt w bajt (poza obciętymi pustymi liniami na brzegach),
 # odmówić tego, czego przepisać nie może, i niczego nie wypychać.
 #
-# Guard sprawdza zachowanie prawdziwego skryptu na jednorazowych repozytoriach.
+# Przypadki 1–16 sprawdzają zachowanie prawdziwego skryptu na jednorazowych repozytoriach.
+# Przypadek 17 czyta skill wydania (.claude/skills/release/SKILL.md) z drzewa repozytorium
+# i pilnuje, żeby wywoływał skrypt i push dokładnie w formie, którą przyjmują release.sh
+# i hook git-guard.
 # ---------------------------------------------------------------------------
 set -uo pipefail
 
@@ -416,7 +419,36 @@ fi
 
 # --- 17 -----------------------------------------------------------------------
 # Skill wydania wywołuje skrypt i push dokładnie w formie, którą przyjmują release.sh
-# i hook git-guard: bez usuniętych trybów i bez `git -C … push`, którego hook nie wpuści.
+# i hook git-guard: bez usuniętych trybów i bez pushu w innej formie niż
+# `git push --atomic origin main vX.Y.Z` (hook wpuszcza tylko tę, bez łańcucha i bez -C).
+#
+# Wypisuje linie spoza bloków ```text, w których po `git` pada `push`, a które nie są
+# dokładnie tym pushem: w bloku kodu cała linia, w prozie każdy fragment w backtickach.
+# Bloki ```text to polecenia pokazywane właścicielowi do uruchomienia, nie przez skill.
+stray_pushes() {
+    awk '
+        BEGIN { exact = "git push --atomic origin main vX.Y.Z"; open = 0 }
+        match($0, /^[[:space:]]*```+/) {
+            run = substr($0, RSTART, RLENGTH); sub(/^[[:space:]]*/, "", run)
+            rest = substr($0, RSTART + RLENGTH)
+            if (!open) { open = length(run); lang = rest; next }
+            if (length(run) >= open && rest ~ /^[[:space:]]*$/) { open = 0; next }
+        }
+        open && lang ~ /^text/ { next }
+        open {
+            line = $0
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+            if (line ~ /(^|[^[:alnum:]_-])git[[:space:]].*push/ && line != exact) print NR ": " $0
+            next
+        }
+        {
+            line = $0
+            gsub("`" exact "`", "", line)
+            if (line ~ /(^|[^[:alnum:]_-])git[[:space:]][^`]*push/) print NR ": " $0
+        }
+    ' "$1"
+}
+
 printf 'skill calls what the script and hook accept\n'
 skill="$ROOT/.claude/skills/release/SKILL.md"
 if [ ! -f "$skill" ]; then
@@ -437,6 +469,12 @@ else
         record_fail "SKILL.md pushes with git -C, which the hook denies"
     else
         record_pass "no removed mode, no git -C push"
+    fi
+    stray="$(stray_pushes "$skill")"
+    if [ -z "$stray" ]; then
+        record_pass "every push outside text blocks is exactly the release push"
+    else
+        record_fail "SKILL.md pushes in a form the hook denies: $stray"
     fi
 fi
 
