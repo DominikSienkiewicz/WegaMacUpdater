@@ -296,7 +296,8 @@ struct UpdateView: View {
             lastCheck:      scan.lastCheck,
             freshness:      scan.freshness() ?? .fresh,
             sources:        UpdateBandPresentation.SourceChip.chips(from: scan.sourceReports),
-            wegaLine:       wegaLine
+            wegaLine:       wegaLine,
+            incompleteNote: scan.lastScanComplete ? nil : tr("sprawdzenie niepełne")
         )
     }
 

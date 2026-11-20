@@ -21,7 +21,7 @@ public enum Translations {
         .merging(cleanup.merging(cleanupHygiene) { first, _ in first }) { first, _ in first }
         .merging(MicrosoftAutoUpdateTranslations.english) { first, _ in first }
         .merging(uninstallTexts) { first, _ in first }
-        .merging(updatesActionBar) { first, _ in first }
+        .merging(updatesActionBar.merging(uxReview) { first, _ in first }) { first, _ in first }
 }
 
 extension Translations {

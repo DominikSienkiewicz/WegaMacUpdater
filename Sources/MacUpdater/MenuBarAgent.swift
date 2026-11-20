@@ -24,6 +24,8 @@ final class MenuBarAgent: ObservableObject {
     @Published private(set) var lastCheck: Date?
     /// True when the most recent check found nothing but at least one source failed.
     @Published private(set) var lastCheckFailed = false
+    /// True when at least one source failed, whatever the update count: the count is then a floor.
+    @Published private(set) var lastCheckIncomplete = false
     /// M3(d) — set when the agent had something to announce but has never been allowed to
     /// ask for permission. The window renders an explanation card; the system dialog waits.
     @Published private(set) var needsNotificationExplanation = false
@@ -179,6 +181,7 @@ final class MenuBarAgent: ObservableObject {
         lastResult = current
         updateCount = current.total
         lastCheckFailed = current.total == 0 && current.failedChecks > 0
+        lastCheckIncomplete = current.failedChecks > 0
         lastCheck = Date()
         persist()
         updateDockBadge()
@@ -201,6 +204,7 @@ final class MenuBarAgent: ObservableObject {
     func reportWindowScan(count: Int, failedChecks: Int, fingerprint: String) {
         updateCount = count
         lastCheckFailed = count == 0 && failedChecks > 0
+        lastCheckIncomplete = failedChecks > 0
         lastCheck = Date()
         rememberNotified(fingerprint)
         persist()
@@ -221,6 +225,7 @@ final class MenuBarAgent: ObservableObject {
             result.total = count
             lastResult = result
             lastCheckFailed = count == 0 && result.failedChecks > 0
+            lastCheckIncomplete = result.failedChecks > 0
         }
         updateCount = count
         rememberNotified(fingerprint)

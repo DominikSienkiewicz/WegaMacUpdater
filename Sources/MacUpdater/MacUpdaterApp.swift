@@ -75,7 +75,10 @@ struct WegaMacUpdaterApp: App {
             MenuBarContent(agent: menuBar)
                 .environmentObject(localization)
         } label: {
-            MenuBarLabel(count: menuBar.updateCount, isChecking: menuBar.isChecking)
+            MenuBarLabel(status: MenuBarStatusPresentation(
+                count: menuBar.updateCount, isChecking: menuBar.isChecking, failed: menuBar.lastCheckFailed,
+                incomplete: menuBar.lastCheckIncomplete, lastCheck: menuBar.lastCheck
+            ))
         }
     }
 }

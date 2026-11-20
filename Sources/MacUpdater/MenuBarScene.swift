@@ -8,8 +8,9 @@ import MacUpdaterCore
 /// `WegaHeadGlyph` draws the same head as the app icon, as a template image, so the bar tints it
 /// for light, dark and the inverted state it takes on while the menu is open.
 struct MenuBarLabel: View {
-    let count: Int
-    let isChecking: Bool
+    let status: MenuBarStatusPresentation
+
+    private var count: Int { status.count }
 
     var body: some View {
         Group {
@@ -19,9 +20,7 @@ struct MenuBarLabel: View {
                 Image(nsImage: WegaHeadGlyph.menuBarImage)
             }
         }
-        .accessibilityLabel(count > 0
-            ? trp("%@ aktualizacji dostępnych", count)
-            : tr("Wszystko aktualne"))
+        .accessibilityLabel(status.accessibilityLabel)
     }
 }
 
@@ -107,11 +106,10 @@ struct MenuBarContent: View {
     }
 
     private var statusText: String {
-        if agent.isChecking { return tr("Sprawdzam aktualizacje…") }
-        if agent.updateCount > 0 { return trp("%@ aktualizacji dostępnych", agent.updateCount) }
-        if agent.lastCheckFailed { return tr("Nie udało się sprawdzić") }
-        if agent.lastCheck == nil { return tr("Jeszcze nie sprawdzano") }
-        return tr("Wszystko aktualne")
+        MenuBarStatusPresentation(
+            count: agent.updateCount, isChecking: agent.isChecking, failed: agent.lastCheckFailed,
+            incomplete: agent.lastCheckIncomplete, lastCheck: agent.lastCheck
+        ).statusText
     }
 
     private func intervalLabel(_ interval: CheckInterval) -> String {

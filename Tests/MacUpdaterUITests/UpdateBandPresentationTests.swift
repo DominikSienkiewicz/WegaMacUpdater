@@ -22,6 +22,14 @@ struct UpdateBandPresentationTests {
         )
     }
 
+    @Test func anIncompleteScanSaysSoInTheHeadline() {
+        withLanguage(.pl) {
+            var p = presentation(total: 3, urgent: 1)
+            p.incompleteNote = tr("sprawdzenie niepełne")
+            #expect(p.headline == "3 aktualizacje · 1 pilna · sprawdzenie niepełne")
+        }
+    }
+
     @Test func headlinePluralises() {
         withLanguage(.pl) {
             let expected = [0: "0 aktualizacji", 1: "1 aktualizacja", 2: "2 aktualizacje",

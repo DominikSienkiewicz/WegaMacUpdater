@@ -12,6 +12,8 @@ struct UpdateBandPresentation: Equatable {
     let freshness: ScanFreshness
     let sources: [SourceChip]
     let wegaLine: String
+    /// Set when a source stayed quiet, so the headline never reads as the whole story.
+    var incompleteNote: String? = nil
 
     /// Today's results-heading rule: only a stale snapshot names its date ("Znaleziono"); the
     /// rest say "Sprawdzono" and a time. `freshnessIsExplicit` still colours anything older
@@ -29,9 +31,10 @@ struct UpdateBandPresentation: Equatable {
     var sourceChips: [SourceChip] { sources }
 
     var headline: String {
-        let total = trp("%@ aktualizacji", totalCount)
-        guard urgentCount > 0 else { return total }
-        return total + " · " + trp("%@ pilnych", urgentCount)
+        var parts = [trp("%@ aktualizacji", totalCount)]
+        if urgentCount > 0 { parts.append(trp("%@ pilnych", urgentCount)) }
+        if let incompleteNote { parts.append(incompleteNote) }
+        return parts.joined(separator: " · ")
     }
 
     var line: String { wegaLine }

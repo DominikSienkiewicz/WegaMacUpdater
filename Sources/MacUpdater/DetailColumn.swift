@@ -111,7 +111,8 @@ struct DetailColumn: View {
                 // status transition alone is not enough — only a finished scan earns a comment.
                 guard old == .checking, new == .results, scan.progress == .finished else { return }
                 quipTask?.cancel()
-                quip = WegaCompanionPresentation.finishedQuip(updateCount: updateBadge, securityCount: securityBadge)
+                quip = WegaCompanionPresentation.finishedQuip(updateCount: updateBadge, securityCount: securityBadge,
+                                                                  scanComplete: scan.lastScanComplete)
                 quipTask = Task {
                     try? await Task.sleep(for: .seconds(6))
                     guard !Task.isCancelled else { return }
