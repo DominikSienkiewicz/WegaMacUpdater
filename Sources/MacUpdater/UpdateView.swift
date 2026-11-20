@@ -454,7 +454,8 @@ struct UpdateView: View {
                             onRestart: { info in Task { await scan.restartApp(info) } },
                             pendingForce: scan.pendingForceRestart,
                             onForce: { info in Task { await scan.confirmForceRestart(info) } },
-                            onKeepOpen: { info in scan.keepAppOpen(info) }
+                            onKeepOpen: { info in scan.keepAppOpen(info) },
+                            onDismissForcePrompt: { info in scan.dismissForceRestartPrompt(info) }
                         )
                     }
                     // During a run the log lives in `UpdateRunOverlay`; a second copy

@@ -12,6 +12,17 @@ struct RestartSection: View {
     let pendingForce: RestartInfo?
     let onForce:      (RestartInfo) -> Void
     let onKeepOpen:   (RestartInfo) -> Void
+    /// The alert went away without either button. Not `onKeepOpen`: SwiftUI also sets the
+    /// binding to `false` after „Wymuś zamknięcie”, and that must not record a refusal.
+    var onDismissForcePrompt: (RestartInfo) -> Void = { _ in }
+
+    /// A dismissal leaves the app open, as „Zostaw otwartą” does, and clears the prompt
+    /// instead of leaving it pending behind a closed alert.
+    var forcePromptPresented: Binding<Bool> {
+        Binding(get: { pendingForce != nil }, set: { shown in
+            if !shown, let info = pendingForce { onDismissForcePrompt(info) }
+        })
+    }
 
     var body: some View {
         WegaCard {
@@ -45,10 +56,13 @@ struct RestartSection: View {
         }
         .alert(
             trf("%@ nie chce się zamknąć.", pendingForce?.appName ?? ""),
-            isPresented: Binding(get: { pendingForce != nil }, set: { _ in }),
+            isPresented: forcePromptPresented,
             presenting: pendingForce
         ) { info in
+            // Return lands here, never on the force. Checked on macOS 27: SwiftUI gives this
+            // button Return and the destructive one no key; Escape then no longer closes it.
             Button(tr("Zostaw otwartą"), role: .cancel) { onKeepOpen(info) }
+                .keyboardShortcut(.defaultAction)
             Button(tr("Wymuś zamknięcie"), role: .destructive) { onForce(info) }
         } message: { _ in
             Text(tr("Wymuszenie może stracić niezapisaną pracę."))

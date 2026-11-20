@@ -454,6 +454,14 @@ extension ScanStore {
         UpdateDiagnostics.record("restart.flowCompleted", fields: ["processName": info.processName, "forced": "true"])
     }
 
+    /// The force alert closed without an answer. The app stays open, as „Zostaw otwartą” leaves
+    /// it, but no refusal is recorded — the user gave none. A dismissal for another app (a stale
+    /// one) leaves the current prompt alone.
+    func dismissForceRestartPrompt(_ info: RestartInfo) {
+        guard pendingForceRestart?.processName == info.processName else { return }
+        pendingForceRestart = nil
+    }
+
     func keepAppOpen(_ info: RestartInfo) {
         pendingForceRestart = nil
         UpdateDiagnostics.record("restart.forceDeclined", fields: ["processName": info.processName])

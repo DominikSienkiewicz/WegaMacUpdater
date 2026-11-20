@@ -121,4 +121,46 @@ struct DestructiveConsentTests {
         #expect(keep.lowerBound < force.lowerBound)
         #expect(!view.contains("if !shown, let info = pendingForce { onKeepOpen(info) }"))
     }
+
+    /// I6 — Return never forces: „Zostaw otwartą” is the alert's default button. A scratch
+    /// probe on macOS 27 confirmed SwiftUI honours `.defaultAction` on a cancel-role alert
+    /// button (it gets Return; the destructive one gets no key at all).
+    @Test func returnLeavesTheAppOpen() throws {
+        let view = try source("Sources/MacUpdater/UpdateViewSupport.swift")
+        let keep = try #require(view.range(of: "Button(tr(\"Zostaw otwartą\"), role: .cancel)"))
+        #expect(view[keep.upperBound...].prefix(120).contains(".keyboardShortcut(.defaultAction)"),
+                "I6: Return must land on „Zostaw otwartą”")
+        let force = try #require(view.range(of: "Button(tr(\"Wymuś zamknięcie\"), role: .destructive)"))
+        #expect(!view[force.upperBound...].prefix(120).contains(".keyboardShortcut("))
+    }
+
+    /// I6 — an alert dismissed without either button leaves the app open and clears the prompt,
+    /// instead of leaving `pendingForceRestart` set behind a closed alert. It records no answer:
+    /// SwiftUI also sets the binding after „Wymuś zamknięcie”, so the setter must not say
+    /// „Zostaw otwartą” (that is `onKeepOpen`, which only the button calls).
+    @Test func dismissingTheAlertLeavesTheAppOpen() {
+        var dismissed: [RestartInfo] = []
+        var kept = 0
+        let section = RestartSection(
+            candidates: [info], busyProcess: nil, onRestart: { _ in },
+            pendingForce: info, onForce: { _ in }, onKeepOpen: { _ in kept += 1 },
+            onDismissForcePrompt: { dismissed.append($0) }
+        )
+        #expect(section.forcePromptPresented.wrappedValue)
+        section.forcePromptPresented.wrappedValue = true
+        #expect(dismissed.isEmpty)
+        section.forcePromptPresented.wrappedValue = false
+        #expect(dismissed == [info])
+        #expect(kept == 0)
+    }
+
+    @Test func theStoreClearsOnlyThePromptThatWasDismissed() {
+        let store = makeScanStoreRuntimeHarness(runner: ScanStoreRuntimeProcessRunner { _ in
+            ProcessResult(exitCode: 0, stdout: "", stderr: "") }).store
+        store.pendingForceRestart = info
+        store.dismissForceRestartPrompt(RestartInfo(processName: "Other", appName: "Other"))
+        #expect(store.pendingForceRestart == info, "a stale dismissal leaves a newer prompt alone")
+        store.dismissForceRestartPrompt(info)
+        #expect(store.pendingForceRestart == nil)
+    }
 }
