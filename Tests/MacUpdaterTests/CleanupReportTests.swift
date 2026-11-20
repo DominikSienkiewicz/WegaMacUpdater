@@ -300,6 +300,38 @@ final class CleanupReportTests: XCTestCase {
         XCTAssertEqual(restored.findings.first?.reason, .keptInstead(path: "/usr/local/bin/ollama"))
     }
 
+    func testKeptInsteadPathAndUninstallAppActionAreWrittenWithTilde() throws {
+        let kept = plainHome.appending(path: ".local/bin/ollama", directoryHint: .notDirectory).path
+        let bundle = plainHome.appending(path: "Applications/Ollama.app", directoryHint: .isDirectory)
+        let finding = CleanupFinding(
+            detector: .pathDuplicates, tool: "ollama", path: URL(filePath: "/usr/local/bin/ollama"), realpath: nil,
+            source: .appBundle(name: "Ollama"), version: nil, size: nil, status: .shadowed,
+            reason: .keptInstead(path: kept), action: .uninstallApp(name: "Ollama", bundle: bundle), risk: .low,
+            bucket: .needsDecision, identity: nil,
+            candidate: CleanupCandidate(
+                pathRole: .shadowed, removal: .uninstallApp(name: "Ollama", bundle: bundle), removalSize: nil,
+                dependents: [], processes: [], keep: .notKept(keptPath: kept)
+            )
+        )
+        let report = CleanupReport(
+            createdAt: Date(timeIntervalSince1970: 1_794_300_000), path: sampleReport(home: plainHome).path,
+            findings: [finding], notes: [], skippedProtected: []
+        )
+
+        let text = CleanupReportRenderer.text(
+            report, home: plainHome, reasonText: { String(describing: $0) }, statusText: { String(describing: $0) }
+        )
+        let json = String(decoding: try CleanupReportRenderer.json(report, home: plainHome), as: UTF8.self)
+
+        XCTAssertTrue(text.contains("uninstall app ~/Applications/Ollama.app"), text)
+        XCTAssertTrue(text.contains(#"keptInstead(path: "~/.local/bin/ollama")"#), text)
+        XCTAssertFalse(text.contains(plainHome.path), text)
+        XCTAssertTrue(json.contains(#""path":"~/.local/bin/ollama""#), json)
+        XCTAssertTrue(json.contains(#""keptPath":"~/.local/bin/ollama""#), json)
+        XCTAssertFalse(json.contains(plainHome.path), json)
+        XCTAssertEqual(try CleanupReportRenderer.report(fromJSON: Data(json.utf8), home: plainHome), report)
+    }
+
     func testDefaultFileLivesInApplicationSupport() {
         XCTAssertTrue(CleanupReportFile.defaultFileURL.path.hasSuffix("/Library/Application Support/WegaMacUpdater/cleanup-report.json"))
     }

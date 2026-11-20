@@ -314,6 +314,8 @@ private struct CleanupFindingRow: View {
                         onCopy(command)
                     }
                     .controlSize(.small)
+                case .uninstallApp:
+                    EmptyView()
                 }
             }
         }

@@ -164,6 +164,7 @@ final class CleanupPresentationTests: XCTestCase {
             .systemCopy,
             .managedByApp(owner: "Claude"), .staleSinceBoot(count: 2), .keptSinceBoot(count: 3),
             .unknownVersionDirectory, .currentVersion, .protectedLocation, .brokenLink, .requiredBy(["gh"]),
+            .keptInstead(path: "~/.local/bin/ollama"), .keptByChoice, .noCopyKept,
         ]
         let instructions: [CleanupInstruction] = [
             .removeWithCreatingTool, .removeAppLinkWithAdminRights(link: "/usr/local/bin/code"),
@@ -198,7 +199,10 @@ final class CleanupPresentationTests: XCTestCase {
         assertTranslated(
             [.runtimeVersions, .jetBrains].map { CleanupDetectorNote(detector: $0, kind: .failed) }, CleanupPresentation.noteText
         )
-        assertTranslated([CleanupPresentation.ButtonKind.brewCleanup], CleanupPresentation.buttonTitle)
+        assertTranslated([
+            CleanupPresentation.ButtonKind.brewCleanup, .trash, .brew, .copyCommand("unlink /x"),
+            .uninstallApp(name: "Ollama", bundle: URL(filePath: "/Applications/Ollama.app")),
+        ], CleanupPresentation.buttonTitle)
         assertTranslated(reasons, CleanupPresentation.reasonText)
         assertTranslated(instructions, CleanupPresentation.instructionText)
         assertTranslated(notes, CleanupPresentation.noteText)
