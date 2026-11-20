@@ -18,7 +18,8 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   **keep** choice on each of its copies, so the copy you keep is no longer just the one first on
   `PATH`; the other copies offer their removal, and Wega remembers the choice for later scans.
   A copy that came with an app offers **Uninstall <app>…**, which opens Uninstall apps with
-  that app selected. While `PATH` is only approximate, nothing is chosen for you.
+  that app selected. While `PATH` is only approximate, nothing is chosen for you. A link left
+  dangling afterwards gets a copyable **`unlink`** (or **`sudo unlink`** outside your home) command.
 
 ### Fixed
 - **Fewer false alarms on release notes.** A flagged term now has to start a word, so

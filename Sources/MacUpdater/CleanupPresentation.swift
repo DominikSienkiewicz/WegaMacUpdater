@@ -290,7 +290,7 @@ enum CleanupPresentation {
             linkedEntryText(finding.reason, linkKeeps: linkKeeps)
                 ?? reasonText(displayed(finding.reason, home: home), requiredBy: pinnedPaths(in: finding.status, home: home))
         )
-        let users = processes(in: finding.status)
+        let users = processes(of: finding)
         if !users.isEmpty {
             parts.append(trf("używa: %@", users.map(processName).joined(separator: ", ")))
         }
@@ -571,7 +571,7 @@ enum CleanupPresentation {
             reason: reasonText(displayed(finding.reason, home: home), requiredBy: pinnedPaths(in: finding.status, home: home)),
             action: actionText(finding.action, home: home),
             risk: riskText(finding.risk),
-            processes: processes(in: finding.status).map(processLine),
+            processes: processes(of: finding).map(processLine),
             confirmTitle: confirmTitle(for: finding.action),
             takeover: takeoverText(for: finding, home: home)
         )
@@ -713,9 +713,11 @@ extension CleanupPresentation {
         "\(process.name) (PID \(process.pid))"
     }
 
-    private static func processes(in status: CleanupStatus) -> [CleanupProcess] {
-        guard case .inUse(let processes) = status else { return [] }
-        return processes
+    /// The processes the scan saw using the item. A `PATH`-active copy keeps the status `active`
+    /// even while in use, so its candidate's own list stands in.
+    private static func processes(of finding: CleanupFinding) -> [CleanupProcess] {
+        if case .inUse(let processes) = finding.status { return processes }
+        return finding.candidate?.processes ?? []
     }
 
     private static func pinnedPaths(in status: CleanupStatus, home: URL) -> [String] {

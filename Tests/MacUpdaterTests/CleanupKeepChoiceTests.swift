@@ -335,6 +335,72 @@ final class CleanupKeepChoiceTests: XCTestCase {
         XCTAssertEqual(CleanupKeepChoice.validChoices(exact, in: rep), exact)
     }
 
+    /// After "keep the link, remove the formula" a broken link keeps the group alive with the kept
+    /// copy as its only candidate-less copy; the choice must survive until a rival comes back.
+    func testValidChoicesKeepsAChoiceWhoseToolIsDownToTheKeptCopy() {
+        let lone = CleanupFinding(
+            detector: .pathDuplicates, tool: "ollama", path: URL(filePath: ollamaLink),
+            realpath: URL(filePath: "\(ollamaApp)/Contents/Resources/ollama"), source: .appBundle(name: "Ollama"),
+            version: "0.40.16", size: nil, status: .active, reason: .currentVersion, action: .none, risk: .low,
+            bucket: .excluded, identity: nil
+        )
+        let rep = report([plain(tool: "ollama", path: ollamaFormula, status: .brokenLink, source: .standalone), lone], approximate: false)
+        XCTAssertEqual(CleanupKeepChoice.validChoices(chooseLink, in: rep), chooseLink)
+        let otherSource = ["ollama": CleanupKeptCopy(path: ollamaLink, source: .homebrewFormula(name: "ollama"))]
+        XCTAssertTrue(CleanupKeepChoice.validChoices(otherSource, in: rep).isEmpty)
+        let system = report([plain(tool: "ollama", path: "/usr/bin/ollama", status: .expected, source: .system)], approximate: false)
+        let keepSystem = ["ollama": CleanupKeptCopy(path: "/usr/bin/ollama", source: .system)]
+        XCTAssertTrue(CleanupKeepChoice.validChoices(keepSystem, in: system).isEmpty, "a system copy never holds a choice")
+    }
+
+    /// B1 while `docker` waits for the choice: Docker.app may still be the copy the user keeps, so
+    /// kubectl's not-kept Docker link must not offer to uninstall the app.
+    func testUndecidedGroupStillProtectsItsAppFromAnotherGroupsUninstall() {
+        let docker = URL(filePath: "/Applications/Docker.app", directoryHint: .isDirectory)
+        let findings = [
+            candidate(
+                tool: "docker", path: "/usr/local/bin/docker", realpath: "/Applications/Docker.app/Contents/Resources/bin/docker",
+                source: .appBundle(name: "Docker"), version: "27.0.0", role: .active, removal: .uninstallApp(name: "Docker", bundle: docker)
+            ),
+            candidate(
+                tool: "docker", path: "/opt/homebrew/bin/docker", source: .homebrewFormula(name: "docker"), version: "27.1.0",
+                role: .shadowed, removal: .brew(.uninstallFormula("docker"))
+            ),
+            candidate(
+                tool: "kubectl", path: "/usr/local/bin/kubectl", realpath: "/Applications/Docker.app/Contents/Resources/bin/kubectl",
+                source: .appBundle(name: "Docker"), version: "1.29.0", role: .active, removal: .uninstallApp(name: "Docker", bundle: docker)
+            ),
+            candidate(
+                tool: "kubectl", path: "/opt/homebrew/bin/kubectl", source: .homebrewFormula(name: "kubernetes-cli"),
+                version: "1.30.0", role: .shadowed, removal: .brew(.uninstallFormula("kubernetes-cli"))
+            ),
+        ]
+        let choice = ["kubectl": CleanupKeptCopy(path: "/opt/homebrew/bin/kubectl", source: .homebrewFormula(name: "kubernetes-cli"))]
+        let result = resolve(findings, choice, approximate: true)
+        XCTAssertEqual(result[0].candidate?.keep, .undecided)
+        XCTAssertEqual(result[2].candidate?.keep, .notKept(keptPath: "/opt/homebrew/bin/kubectl"))
+        XCTAssertEqual(result[2].action, .instruction(.removeAppLinkWithAdminRights(link: "/usr/local/bin/kubectl")))
+    }
+
+    /// The detector marks the first non-system copy active, so with `/usr/bin/x` first on `PATH`
+    /// Terminal does not use the active copy now and nothing "takes over" from it.
+    func testNoTakeoverWhenAnotherCopyComesFirstOnPath() {
+        let local = "/Users/me/.local/bin/x"
+        let rivals = [
+            candidate(
+                tool: "x", path: "/opt/homebrew/bin/x", source: .homebrewFormula(name: "x"), role: .active,
+                removal: .brew(.uninstallFormula("x"))
+            ),
+            candidate(tool: "x", path: local, source: .standalone, role: .shadowed, removal: .trash([URL(filePath: local)])),
+        ]
+        let choice = ["x": CleanupKeptCopy(path: local, source: .standalone)]
+        let afterSystem = resolve([plain(tool: "x", path: "/usr/bin/x", status: .expected, source: .system)] + rivals, choice)
+        XCTAssertEqual(afterSystem[1].candidate?.keep, .notKept(keptPath: local))
+        XCTAssertNil(afterSystem[1].candidate?.takesOver)
+        let afterBrokenLink = resolve([plain(tool: "x", path: "/usr/local/bin/x", status: .brokenLink, source: .standalone)] + rivals, choice)
+        XCTAssertEqual(afterBrokenLink[1].candidate?.takesOver, local, "a broken link earlier on PATH is skipped by the shell")
+    }
+
     /// Entries the real D10 detector writes for both copies of a tool: the shadowed copy's entry
     /// carries its scan-time advice, the active copy's none. The advice then follows the choice.
     func testFilesAndFoldersAdviceFollowsTheKeptCopy() throws {

@@ -136,6 +136,54 @@ extension CleanupPresentationTests {
         }
     }
 
+    /// The `PATH`-active copy keeps the status `active` (B5), so its processes travel with the
+    /// candidate; the row and the sheet name them before the remover's own check does.
+    func testNotKeptActiveCopyInUseListsItsProcessesUpFront() throws {
+        let process = CleanupProcess(pid: 4242, name: "ollama", executablePath: Keep.formulaPath, arguments: ["serve"])
+        let formula = Keep.formula
+        let busy = CleanupFinding(
+            detector: formula.detector, tool: formula.tool, path: formula.path, realpath: formula.realpath,
+            source: formula.source, version: formula.version, size: nil, status: .active, reason: formula.reason,
+            action: formula.action, risk: formula.risk, bucket: formula.bucket, identity: formula.identity,
+            candidate: CleanupCandidate(
+                pathRole: .active, removal: .brew(.uninstallFormula("ollama")), removalSize: 70_000_000, dependents: [],
+                processes: [process]
+            )
+        )
+        let report = CleanupKeepChoice.apply(Keep.keepLink, to: CleanupReport(
+            createdAt: Keep.createdAt, path: Keep.path(approximate: false), findings: [busy, Keep.appLink],
+            notes: [], skippedProtected: []
+        ))
+        let resolved = try XCTUnwrap(Keep.finding(busy.id, in: report))
+        XCTAssertEqual(resolved.candidate?.keep, .notKept(keptPath: Keep.linkPath))
+        XCTAssertEqual(CleanupPresentation.confirmation(for: resolved, home: Self.keepHome).processes, ["ollama (PID 4242): serve"])
+        try withLanguage(.pl) {
+            XCTAssertTrue(try row(busy.id, in: rows(report)).detail.hasSuffix(" · używa: ollama (PID 4242)"))
+        }
+    }
+
+    func testKeptInsteadShowsTheKeptCopyWithATilde() throws {
+        let local = "/Users/cleanup-test/.local/bin/ollama"
+        let localCopy = CleanupFinding(
+            detector: .pathDuplicates, tool: "ollama", path: URL(filePath: local), realpath: URL(filePath: local),
+            source: .standalone, version: "0.40.16", size: nil, status: .shadowed, reason: .noCopyKept, action: .none,
+            risk: .low, bucket: .excluded, identity: nil,
+            candidate: CleanupCandidate(
+                pathRole: .shadowed, removal: .trash([URL(filePath: local)]), removalSize: 1, dependents: [], processes: []
+            )
+        )
+        let report = CleanupKeepChoice.apply(["ollama": CleanupKeptCopy(path: local, source: .standalone)], to: CleanupReport(
+            createdAt: Keep.createdAt, path: Keep.path(approximate: false), findings: [Keep.formula, localCopy],
+            notes: [], skippedProtected: []
+        ))
+        let formula = try XCTUnwrap(Keep.finding(Keep.formula.id, in: report))
+        XCTAssertEqual(formula.reason, .keptInstead(path: local))
+        try withLanguage(.pl) {
+            XCTAssertEqual(CleanupPresentation.confirmation(for: formula, home: Self.keepHome).reason, "zostawiasz ~/.local/bin/ollama")
+            XCTAssertTrue(try row(Keep.formula.id, in: rows(report)).detail.hasSuffix(" · zostawiasz ~/.local/bin/ollama"))
+        }
+    }
+
     func testKeepControlTextsAreTranslated() {
         let row = Row(
             findingID: "D1:active:/opt/homebrew/bin/ollama", groupHeader: nil, bucket: .excluded, status: "aktywna",

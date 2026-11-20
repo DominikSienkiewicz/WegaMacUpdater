@@ -32,13 +32,15 @@ public enum CleanupKeepChoice {
         )
     }
 
-    /// Keeps only the choices whose tool still has a copy with exactly that path and source.
+    /// Keeps only the choices whose tool still has a copy with exactly that path and source: a
+    /// candidate, or the active copy left alone once its rivals are gone, so the choice holds when
+    /// one comes back.
     public static func validChoices(
         _ choices: [String: CleanupKeptCopy], in report: CleanupReport
     ) -> [String: CleanupKeptCopy] {
         choices.filter { key, choice in
             report.findings.contains { finding in
-                finding.detector == .pathDuplicates && finding.candidate != nil
+                finding.detector == .pathDuplicates && (finding.candidate != nil || finding.status == .active)
                     && finding.tool.lowercased() == key
                     && matches(finding, choice)
             }
@@ -122,10 +124,13 @@ public enum CleanupKeepChoice {
         return pathIsApproximate ? nil : candidates.first { $0.candidate?.pathRole == .active }
     }
 
+    /// A group still waiting for the choice may yet keep any of its candidates, so all of them count.
     private static func keptBundles(_ findings: [CleanupFinding], _ groups: [String: Group]) -> Set<String> {
         let lone = findings.filter { $0.detector == .pathDuplicates && $0.candidate == nil && $0.status == .active }
-        let kept = groups.values.compactMap(\.kept) + lone
-        return Set(kept.compactMap { $0.realpath.flatMap(enclosingAppBundle(of:))?.path })
+        let staying = groups.values.flatMap { group in
+            group.kept.map { [$0] } ?? group.members.filter { $0.candidate != nil }
+        }
+        return Set((staying + lone).compactMap { $0.realpath.flatMap(enclosingAppBundle(of:))?.path })
     }
 
     private static func resolved(
@@ -198,8 +203,12 @@ public enum CleanupKeepChoice {
         )
     }
 
+    /// Only a copy no other working copy precedes on `PATH` is the one Terminal uses now; the next
+    /// working copy takes over. A broken link resolves to nothing, so the shell skips it.
     private static func takeOver(_ finding: CleanupFinding, in group: Group) -> String? {
-        group.members.first { $0.path != finding.path && $0.status != .brokenLink }?.path.path
+        let working = group.members.filter { $0.status != .brokenLink }
+        guard working.first?.id == finding.id else { return nil }
+        return working.dropFirst().first?.path.path
     }
 
     private static func riskOf(_ finding: CleanupFinding, _ candidate: CleanupCandidate) -> CleanupRisk {
