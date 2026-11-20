@@ -24,12 +24,12 @@ extension TrpLocalizationTests {
             queue: Int = 3,
             lastCheck: Date? = nil,
             freshness: ScanFreshness = .fresh,
-            sources: [ScanSource] = []
+            sources: [UpdateBandPresentation.SourceChip] = []
         ) -> UpdateBandPresentation {
             UpdateBandPresentation(
                 totalCount: total, urgentCount: urgent, queueCount: queue,
                 protectionText: nil, lastCheck: lastCheck, freshness: freshness,
-                activeSources: sources, wegaLine: "Wega"
+                sources: sources, wegaLine: "Wega"
             )
         }
 
@@ -83,10 +83,29 @@ extension TrpLocalizationTests {
             }
         }
 
-        @Test func sourcesBecomeTokens() {
-            let tokens = presentation(sources: [.homebrew, .npm]).sourceTokens
-            #expect(tokens == [SourceCommunication.stampToken(.homebrew),
-                               SourceCommunication.stampToken(.npm)])
+        /// A source that failed still took part in the scan, so it keeps its token, but only a
+        /// source that answered is checked.
+        @Test func onlySourcesThatAnsweredAreChecked() {
+            let answered = ScanSourceReport(outcome: .succeeded)
+            let reports = ScanSourceReports(
+                brew: answered, mas: answered,
+                npm: ScanSourceReport(outcome: .failed("npm"), error: "timeout"), manual: answered
+            )
+            let chips = UpdateBandPresentation.SourceChip.chips(from: reports)
+            #expect(chips == [
+                .init(token: SourceCommunication.stampToken(.homebrew), isVerified: true),
+                .init(token: SourceCommunication.stampToken(.appStore), isVerified: true),
+                .init(token: SourceCommunication.stampToken(.npm), isVerified: false),
+                .init(token: SourceCommunication.stampToken(.manual), isVerified: true),
+            ])
+            #expect(presentation(sources: chips).sourceChips == chips)
+        }
+
+        /// With no per-source detail the band names every source Wega checks and checks none.
+        @Test func withoutPerSourceDetailNoSourceIsChecked() {
+            let chips = UpdateBandPresentation.SourceChip.chips(from: ScanSourceReports())
+            #expect(chips.map(\.token) == ScanSource.allCases.map(SourceCommunication.stampToken))
+            #expect(chips.allSatisfy { !$0.isVerified })
         }
 
         @Test func englishPlurals() {

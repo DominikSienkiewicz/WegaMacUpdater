@@ -48,7 +48,10 @@ final class UpdateBandViewTests: XCTestCase {
             totalCount: 22, urgentCount: 4, queueCount: 12,
             protectionText: "12 z automatycznym cofnięciem",
             lastCheck: Date(timeIntervalSince1970: 1_800_000_000), freshness: .stale,
-            activeSources: [.homebrew, .appStore, .npm, .manual],
+            sources: [
+                .init(token: "brew", isVerified: true), .init(token: "mas", isVerified: true),
+                .init(token: "npm", isVerified: false), .init(token: "apki", isVerified: true),
+            ],
             wegaLine: "Mam kilka rzeczy do zaktualizowania, a jedna z nich jest naprawdę pilna i wymaga uwagi"
         )
     }
@@ -110,6 +113,13 @@ final class UpdateBandViewTests: XCTestCase {
         for forbidden in [".glassEffect(", "Color.wegaToffee", "Color.wegaSuccess", "Color.wegaHoney"] {
             XCTAssertFalse(text.contains(forbidden), forbidden)
         }
+    }
+
+    func testOnlyAVerifiedSourceWearsACheck() throws {
+        let text = try source("Sources/MacUpdater/UpdateBand.swift")
+        XCTAssertTrue(text.contains("chip.isVerified ? \"✓ \" + chip.token : chip.token"),
+                      "a source that did not answer shows its bare token")
+        XCTAssertEqual(text.components(separatedBy: "\"✓ \"").count, 2, "the check is drawn in one place only")
     }
 
     func testTheBandShowsOnlyWithResults() throws {

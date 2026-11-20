@@ -125,8 +125,8 @@ struct UpdateBand<Action: View>: View {
 
     private var sourceChips: some View {
         HStack(spacing: 4) {
-            ForEach(presentation.sourceTokens, id: \.self) { token in
-                Text("✓ " + token)
+            ForEach(presentation.sourceChips, id: \.token) { chip in
+                Text(chip.isVerified ? "✓ " + chip.token : chip.token)
                     .font(.wega(.caption2, weight: .semibold, monospaced: true))
                     .foregroundStyle(Color.wegaBandSecondaryText)
                     .lineLimit(1)

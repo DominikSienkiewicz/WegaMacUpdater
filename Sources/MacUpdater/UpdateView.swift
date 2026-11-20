@@ -279,7 +279,6 @@ struct UpdateView: View {
 
     private var bandPresentation: UpdateBandPresentation {
         let counts = scan.scopeCounts
-        let active = ScanSource.active(in: scan.sourceReports)
         let summary = UpdateActionBarSummary(
             selectedCount: selectedVisibleCount,
             visibleCount:  visibleItems.count,
@@ -293,7 +292,7 @@ struct UpdateView: View {
             protectionText: summary.protectionText,
             lastCheck:      scan.lastCheck,
             freshness:      scan.freshness() ?? .fresh,
-            activeSources:  active.isEmpty ? ScanSource.allCases : active,
+            sources:        UpdateBandPresentation.SourceChip.chips(from: scan.sourceReports),
             wegaLine:       wegaLine
         )
     }
