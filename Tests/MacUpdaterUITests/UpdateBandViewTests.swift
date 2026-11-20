@@ -134,6 +134,21 @@ final class UpdateBandViewTests: XCTestCase {
 
     /// A running update owns the screen, the plan preview included, and a sheet opened mid-run
     /// would cover the run's stop button.
+    func testTheBandsEdgesStayQuiet() throws {
+        XCTAssertEqual(WegaLayout.bandSummaryWidth, 190, "spec §4.3 allows 150–190")
+        let text = try source("Sources/MacUpdater/UpdateBand.swift")
+        XCTAssertTrue(text.contains("@Environment(\\.colorSchemeContrast) private var contrast"))
+        XCTAssertTrue(text.contains("if contrast != .increased {"), "no glows under Increase Contrast")
+        XCTAssertTrue(text.contains("color.opacity(0.45)"))
+        XCTAssertFalse(text.contains("color.opacity(0.6)"))
+        let theme = try source("Sources/MacUpdater/WegaTheme.swift")
+        let rim = try XCTUnwrap(theme.range(of: "static let wegaBandButtonRim"))
+        XCTAssertTrue(
+            theme[rim.upperBound...].prefix(while: { $0 != "\n" }).contains("WegaPalette.caramel.dark"),
+            "the rim is caramel's dark value, derived as the glows derive theirs"
+        )
+    }
+
     func testThePlanLinkStandsDownWhenDisabled() throws {
         let text = try source("Sources/MacUpdater/UpdateBand.swift")
         let link = try XCTUnwrap(text.range(of: "private var planLink: some View")).upperBound
@@ -154,11 +169,17 @@ final class UpdateBandViewTests: XCTestCase {
         ] {
             XCTAssertTrue(text.contains(literal), literal)
         }
-        let head = try XCTUnwrap(text.range(of: "WegaHead("))
-        XCTAssertTrue(
-            text[head.upperBound...].prefix(200).contains(".accessibilityHidden(true)"),
-            "the mascot is hidden from VoiceOver"
-        )
+        var heads = 0
+        var rest = text.startIndex..<text.endIndex
+        while let head = text.range(of: "WegaHead(", range: rest) {
+            XCTAssertTrue(
+                text[head.upperBound...].prefix(200).contains(".accessibilityHidden(true)"),
+                "every mascot is hidden from VoiceOver (occurrence \(heads + 1))"
+            )
+            heads += 1
+            rest = head.upperBound..<text.endIndex
+        }
+        XCTAssertEqual(heads, 2, "the regular and compact layouts draw Wega; the narrow one does not")
         for forbidden in [".glassEffect(", "Color.wegaToffee", "Color.wegaSuccess", "Color.wegaHoney"] {
             XCTAssertFalse(text.contains(forbidden), forbidden)
         }
@@ -171,14 +192,22 @@ final class UpdateBandViewTests: XCTestCase {
         XCTAssertEqual(text.components(separatedBy: "\"✓ \"").count, 2, "the check is drawn in one place only")
     }
 
+    /// The band shows only when there is something to update. A result that only waits for
+    /// restarts keeps today's heading ("Wszystko aktualne"), while the list still shows it.
     func testTheBandShowsOnlyWithResults() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         let lower = try XCTUnwrap(view.range(of: "private var resultsView: some View")).lowerBound
         let upper = try XCTUnwrap(view.range(of: "private var listHeader: some View")).lowerBound
         let results = view[lower..<upper]
-        XCTAssertTrue(results.contains("if hasResults"))
+        XCTAssertTrue(results.contains("if hasUpdates {"))
         XCTAssertTrue(results.contains("resultsBand"))
-        XCTAssertTrue(results.contains("resultsHeading"), "no results keep today's heading")
+        XCTAssertFalse(results.contains("hasResults"), "restarts alone do not bring the band")
+        let otherwise = try XCTUnwrap(results.range(of: "if !hasUpdates {"), "no updates keep today's heading")
+        XCTAssertTrue(
+            results[otherwise.upperBound...].drop(while: \.isWhitespace).hasPrefix("resultsHeading"),
+            "the heading is the band's other branch"
+        )
+        XCTAssertTrue(view.contains("private var hasUpdates: Bool {\n        !(allItems.isEmpty && visibleManual.isEmpty)\n    }"))
         let column = try XCTUnwrap(view.range(of: "private var listColumn: some View")).lowerBound
         XCTAssertTrue(view[column...].prefix(200).contains("if !hasResults"))
         let detail = try source("Sources/MacUpdater/DetailColumn.swift")

@@ -13,10 +13,12 @@ struct UpdateBandPresentation: Equatable {
     let sources: [SourceChip]
     let wegaLine: String
 
-    /// Today's results-heading rule: the stale snapshot names its date, the rest a time.
+    /// Today's results-heading rule: only a stale snapshot names its date ("Znaleziono"); the
+    /// rest say "Sprawdzono" and a time. `freshnessIsExplicit` still colours anything older
+    /// than fresh.
     var freshnessText: String? {
         guard let lastCheck else { return nil }
-        return freshness.needsExplicitTimestamp
+        return freshness == .stale
             ? trf("Znaleziono %@", lastCheck.formatted(date: .abbreviated, time: .shortened))
             : trf("Sprawdzono %@", lastCheck.formatted(date: .omitted, time: .shortened))
     }

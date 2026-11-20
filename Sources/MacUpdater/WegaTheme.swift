@@ -270,7 +270,7 @@ extension Color {
     /// C2 band button radial fill, centre to rim (`#FFE9C4`, `#F0C487`, and caramel's dark `#C88549`).
     static let wegaBandButtonHighlight = Color(red: 1, green: 0.914, blue: 0.769)
     static let wegaBandButtonCore      = Color(red: 0.941, green: 0.769, blue: 0.529)
-    static let wegaBandButtonRim       = Color(red: 0.784, green: 0.522, blue: 0.286)
+    static let wegaBandButtonRim       = Color(nsColor: WegaPalette.caramel.dark.nsColor)
 
     /// The hairline that used to be written as `Color.white.opacity(0.06)` — invisible on a
     /// light desktop, because it assumed the window behind it was dark.
@@ -455,5 +455,5 @@ enum WegaLayout {
     static let bandButtonLedge: CGFloat        = 4
     static let bandCompactBreakpoint: CGFloat  = 820
     static let bandNarrowBreakpoint: CGFloat   = 480
-    static let bandSummaryWidth: CGFloat       = 170
+    static let bandSummaryWidth: CGFloat       = 190
 }

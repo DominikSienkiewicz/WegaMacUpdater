@@ -202,15 +202,15 @@ struct UpdateView: View {
     // MARK: Results
     private var resultsView: some View {
         VStack(spacing: 0) {
-            // The band reports the scan and carries the update button; with no results the
-            // plain heading does. The list header carries select-all next to the categories.
-            if hasResults {
+            // The band reports the scan and carries the update button; with nothing to update
+            // the plain heading does. The list header carries select-all next to the categories.
+            if hasUpdates {
                 resultsBand
                     .padding(.horizontal, WegaLayout.listGutter)
                     .padding(.top, WegaLayout.sectionSpacing)
             }
             VStack(alignment: .leading, spacing: 12) {
-                if !hasResults {
+                if !hasUpdates {
                     resultsHeading
                 }
                 listHeader
@@ -260,16 +260,17 @@ struct UpdateView: View {
     /// The dusk band: what the scan found, the queue, and the round update button. It is the
     /// whole path to an update — the button takes today's gate, help text and confirmation.
     private var resultsBand: some View {
-        UpdateBand(
-            presentation: bandPresentation,
+        let presentation = bandPresentation
+        return UpdateBand(
+            presentation: presentation,
             refreshProgress: scan.isRefreshing ? scan.progress : nil,
             planLinkEnabled: ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating),
             onShowPlan: { scan.showPlanPreview = true },
             action: { layout in
                 UpdateBandButton(
-                    title: bandPresentation.buttonTitle,
-                    count: bandPresentation.buttonCount,
-                    accessibilityLabel: bandPresentation.buttonAccessibilityLabel,
+                    title: presentation.buttonTitle,
+                    count: presentation.buttonCount,
+                    accessibilityLabel: presentation.buttonAccessibilityLabel,
                     diameter: layout.buttonDiameter,
                     action: requestUpdate
                 )
@@ -415,10 +416,16 @@ struct UpdateView: View {
 
     // MARK: Action bar
 
-    /// Whether the scan left anything to show — the one answer `resultsView` (band or plain
-    /// heading) and `listColumn` (rows or an empty state) both read.
+    /// Whether the scan left anything to show, restarts included — what `listColumn` (rows or
+    /// an empty state) reads.
     private var hasResults: Bool {
         !(allItems.isEmpty && visibleManual.isEmpty && scan.restartCandidates.isEmpty)
+    }
+
+    /// Whether the scan found anything to update — what `resultsView` (band or plain heading)
+    /// reads. Apps that only wait for a restart keep today's "Wszystko aktualne" heading.
+    private var hasUpdates: Bool {
+        !(allItems.isEmpty && visibleManual.isEmpty)
     }
 
     /// Whether the list shows rows rather than one of its empty states — the one answer

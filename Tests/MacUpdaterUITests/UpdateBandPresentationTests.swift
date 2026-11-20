@@ -35,8 +35,8 @@ extension TrpLocalizationTests {
 
         @Test func headlinePluralises() {
             withLanguage(.pl) {
-                let expected = [1: "1 aktualizacja", 2: "2 aktualizacje", 5: "5 aktualizacji",
-                                12: "12 aktualizacji", 22: "22 aktualizacje"]
+                let expected = [0: "0 aktualizacji", 1: "1 aktualizacja", 2: "2 aktualizacje",
+                                5: "5 aktualizacji", 12: "12 aktualizacji", 22: "22 aktualizacje"]
                 for (total, text) in expected {
                     #expect(presentation(total: total).headline == text)
                 }
@@ -68,6 +68,18 @@ extension TrpLocalizationTests {
             }
         }
 
+        /// Hours-old results keep today's heading wording, "Sprawdzono" and a time; only a stale
+        /// snapshot names its date. They are still drawn in the accent colour.
+        @Test func recentResultsSayCheckedInTheAccentColour() {
+            withLanguage(.pl) {
+                let date = Date(timeIntervalSince1970: 1_700_000_000)
+                let recent = presentation(lastCheck: date, freshness: .recent)
+                #expect(recent.freshnessIsExplicit)
+                #expect(recent.freshnessText
+                    == trf("Sprawdzono %@", date.formatted(date: .omitted, time: .shortened)))
+            }
+        }
+
         @Test func anEmptyQueueSaysSo() {
             withLanguage(.pl) {
                 let empty = presentation(queue: 0)
@@ -80,6 +92,9 @@ extension TrpLocalizationTests {
                 #expect(queued.buttonCount == 3)
                 #expect(queued.showsPlanLink)
                 #expect(queued.buttonAccessibilityLabel == trf("Zaktualizuj wybrane (%@)", "3"))
+                #expect(queued.buttonTitle == "Aktualizuj")
+                #expect(empty.buttonTitle == "Kolejka pusta")
+                #expect(queued.queueSummary == "3 w kolejce")
             }
         }
 
@@ -115,6 +130,8 @@ extension TrpLocalizationTests {
                 #expect(presentation(total: 5, urgent: 2).headline.hasSuffix("2 urgent"))
                 #expect(presentation(queue: 0).queueSummary == "0 queued")
                 #expect(presentation(queue: 0).buttonTitle == "Queue empty")
+                #expect(presentation(queue: 3).buttonTitle == "Update")
+                #expect(presentation(queue: 3).queueSummary == "3 queued")
             }
         }
     }

@@ -33,6 +33,7 @@ struct UpdateBand<Action: View>: View {
     let action: (UpdateBandLayout) -> Action
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var contrast
 
     init(
         presentation: UpdateBandPresentation,
@@ -222,8 +223,10 @@ struct UpdateBand<Action: View>: View {
                 colors: [.wegaBandStart, .wegaBandMid, .wegaBandEnd],
                 startPoint: UnitPoint(x: 0.1, y: 0), endPoint: UnitPoint(x: 0.9, y: 1)
             )
-            glow(Color(nsColor: WegaPalette.lavender.dark.nsColor), center: UnitPoint(x: 0.1, y: 0.9))
-            glow(Color(nsColor: WegaPalette.honey.dark.nsColor), center: UnitPoint(x: 0.96, y: 1.1))
+            if contrast != .increased {
+                glow(Color(nsColor: WegaPalette.lavender.dark.nsColor), center: UnitPoint(x: 0.1, y: 0.9))
+                glow(Color(nsColor: WegaPalette.honey.dark.nsColor), center: UnitPoint(x: 0.96, y: 1.1))
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: WegaLayout.bandRadius, style: .continuous))
         .accessibilityHidden(true)
@@ -231,7 +234,7 @@ struct UpdateBand<Action: View>: View {
 
     private func glow(_ color: Color, center: UnitPoint) -> some View {
         RadialGradient(
-            colors: [color.opacity(0.6), color.opacity(0)],
+            colors: [color.opacity(0.45), color.opacity(0)],
             center: center, startRadius: 0, endRadius: 130
         )
     }
