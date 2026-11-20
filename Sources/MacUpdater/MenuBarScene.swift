@@ -55,7 +55,7 @@ struct MenuBarContent: View {
         .disabled(agent.isChecking)
 
         Button(tr("Otwórz Wega")) {
-            openWindow(id: "main")
+            NotificationRouter.shared.showMainWindow(opening: { openWindow(id: "main") })
             NSApplication.shared.activate(ignoringOtherApps: true)
         }
 

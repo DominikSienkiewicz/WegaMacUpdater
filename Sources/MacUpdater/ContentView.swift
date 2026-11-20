@@ -56,6 +56,7 @@ struct ContentView: View {
     /// Drives the toolbar's globe menu. Injected at the scene root (`MacUpdaterApp.swift`),
     /// which also re-keys this tree on change — so the switch takes effect everywhere at once.
     @EnvironmentObject private var localization: LocalizationManager
+    @Environment(\.openWindow) private var openWindow
 
     @State private var wegaState:         WegaState       = .forTab(.update)
     @State private var updateBadge:       Int             = 0
@@ -171,6 +172,9 @@ struct ContentView: View {
         .frame(minWidth: WegaLayout.windowMinWidth, minHeight: WegaLayout.windowMinHeight)
         .onChange(of: selection) { _, new in wegaState = .forTab(new.tab) }
         .task { migrateLegacyTab() }
+        // I1 — a second registration beside `MenuBarLabel`'s, so a notification click can
+        // reopen a closed window even if the menu-bar label never appeared.
+        .onAppear { NotificationRouter.shared.openMainWindow = { openWindow(id: "main") } }
     }
 
     /// One-shot migration off `wega.activeTab`, which stored only the tab and never the Updates
