@@ -220,6 +220,47 @@ final class CleanupDuplicateFindingsTests: XCTestCase {
         }
     }
 
+    /// B4 only for links that really dangle: Wega re-resolves the link and offers `unlink` when its
+    /// target is missing or it loops. A link Wega merely could not follow (a protected location, an
+    /// I/O error) or one that resolves again may be a working copy, so it gets nothing to paste.
+    func testUnlinkIsOfferedOnlyForADanglingLink() async throws {
+        let dangling = try tmp.symlink("bin2/tool", to: tmp.url("gone/tool").path)
+        let loop = try tmp.symlink("bin3/tool", to: tmp.url("bin3/tool").path)
+        let hidden = try tmp.file("Documents/tool", size: 16, executable: true)
+        let intoProtected = try tmp.symlink("bin4/tool", to: hidden.path)
+        let real = try tmp.file("bin5/real", size: 16, executable: true)
+        let resolvesAgain = try tmp.symlink("bin5/tool", to: real.path)
+        let besideHome = URL(filePath: tmp.home.path + "2/bin/tool", directoryHint: .notDirectory)
+        let cases: [(path: URL, action: CleanupAction)] = [
+            (dangling, .command("unlink \(dangling.path)")),
+            (loop, .command("unlink \(loop.path)")),
+            (intoProtected, .none),
+            (resolvesAgain, .none),
+            (besideHome, .command("sudo unlink \(besideHome.path)")),
+        ]
+        for (path, expected) in cases {
+            let broken = CleanupCopy(
+                path: path, realpath: nil, pathIndex: 1, source: .standalone, version: nil,
+                identity: CleanupFileIdentity(device: 1, inode: 9), role: .brokenLink
+            )
+            let active = copy(tmp.url(".local/bin/tool"), source: .standalone, role: .active, index: 0)
+            let result = await builder().build(scan("tool", [active, broken]))
+
+            let finding = try XCTUnwrap(result.findings.first { $0.status == .brokenLink })
+            XCTAssertEqual(finding.action, expected, path.path)
+        }
+    }
+
+    func testActiveFormulaWhoseDependentsQueryFailedHasNoRemoval() async throws {
+        let result = await builder(ScriptedBrew(error: BrewFailure())).build(try ollamaScan())
+
+        let active = try XCTUnwrap(result.findings.first { $0.path == tmp.url("opt/homebrew/bin/ollama") })
+        XCTAssertEqual(active.status, .active)
+        XCTAssertEqual(active.candidate?.removal, CleanupAction.none)
+        XCTAssertNil(active.candidate?.removalSize)
+        XCTAssertEqual(result.notes, [CleanupDetectorNote(detector: .homebrew, kind: .failed)])
+    }
+
     func testActiveFormulaIsCheckedForDependents() async throws {
         let brew = ScriptedBrew()
         _ = await builder(brew).build(try ollamaScan())

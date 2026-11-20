@@ -389,7 +389,9 @@ final class CleanupScannerTests: XCTestCase {
         let report = try await scan(context(path: path)).get()
 
         XCTAssertEqual(report.skippedProtected, [downloads, tmp.url("Documents").path])
-        XCTAssertEqual(try finding(.pathDuplicates, tmp.url(".local/bin/z").path, in: report).status, .brokenLink)
+        let protectedLink = try finding(.pathDuplicates, tmp.url(".local/bin/z").path, in: report)
+        XCTAssertEqual(protectedLink.status, .brokenLink)
+        XCTAssertEqual(protectedLink.action, .none, "a working link into a protected location never gets an unlink command")
         XCTAssertTrue(recording.touched.contains(tmp.url(".local/bin").path), "the recording file system was never reached")
         let roots = ProtectedLocationGuard.protectedRoots(home: tmp.home).map(CleanupPathText.components(of:))
         let offenders = recording.touched.filter { touched in

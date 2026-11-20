@@ -271,9 +271,12 @@ public struct CleanupRemover: Sendable {
     /// otherwise) still resolves to an executable file, that file is not the one being removed and,
     /// for `brew uninstall`, it lies outside the package the command removes. A persisted report
     /// keeps its buttons, and once the kept copy is gone this one may be the only working copy left.
-    /// Any failure to resolve it counts as gone.
+    /// Any failure to resolve it counts as gone. A candidate copy fails closed: without a kept
+    /// path in its reason, or with a candidate record naming another kept copy, nothing goes.
     private func isKeptCopyStillWorking(_ finding: CleanupFinding, locations: [Location]) -> Bool {
-        guard finding.detector == .pathDuplicates, let path = Self.keptPath(of: finding.reason) else { return true }
+        guard finding.detector == .pathDuplicates else { return true }
+        guard let path = Self.keptPath(of: finding.reason) else { return finding.candidate == nil }
+        if let candidate = finding.candidate, candidate.keep != .notKept(keptPath: path) { return false }
         guard CleanupPathText.isAbsolute(path), !CleanupPathText.containsNUL(path),
               let kept = try? fileSystem.realpath(URL(filePath: path, directoryHint: .notDirectory)),
               let entry = try? fileSystem.entry(at: kept), entry.kind == .file, entry.isExecutable

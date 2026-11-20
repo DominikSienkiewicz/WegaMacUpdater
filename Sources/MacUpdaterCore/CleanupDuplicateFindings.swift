@@ -162,12 +162,28 @@ public struct CleanupDuplicateFindings: Sendable {
     }
 
     /// `unlink` removes one directory entry and cannot recurse; outside the home the link is
-    /// usually root-owned, so the command carries `sudo`. Wega never runs it.
+    /// usually root-owned, so the command carries `sudo`. Wega never runs it, and offers it only
+    /// for a link that really dangles.
     private func unlinkAction(for link: URL) -> CleanupAction {
         let path = link.path
-        guard Self.isSafeCommandPath(path) else { return .none }
+        guard Self.isSafeCommandPath(path), isDangling(link) else { return .none }
         let isInHome = CleanupPathText.components(of: path).starts(with: CleanupPathText.components(of: home.path))
         return .command(isInHome ? "unlink \(path)" : "sudo unlink \(path)")
+    }
+
+    /// The detector reports every link it could not follow as broken, a working link into a
+    /// protected location included. Resolved again through the guarded file system, only a
+    /// missing target or a loop counts; anything else (refused, unreadable, resolving again)
+    /// may be a working copy.
+    private func isDangling(_ link: URL) -> Bool {
+        do {
+            _ = try fileSystem.realpath(link)
+            return false
+        } catch CleanupFileSystemError.notFound, CleanupFileSystemError.symlinkLoop {
+            return true
+        } catch {
+            return false
+        }
     }
 
     /// The removal that fits the tool that installed the copy, whichever copy is kept instead.
