@@ -221,7 +221,8 @@ final class MenuBarAgent: ObservableObject {
         }
 
         guard !Task.isCancelled else { return }
-        current.installationChecks = InstallationCheck.retainingLastSuccess(current.installationChecks, previous: lastResult?.installationChecks ?? [])
+        let previous = lastResult
+        current.installationChecks = InstallationCheck.retainingLastSuccess(current.installationChecks, previous: previous?.installationChecks ?? [])
         lastResult = current
         updateCount = current.total
         lastCheckFailed = current.total == 0 && current.failedChecks > 0
@@ -235,7 +236,8 @@ final class MenuBarAgent: ObservableObject {
         let fingerprint = UpdateFingerprint.of(result: current, policies: policies)
         if current.total > 0 && fingerprint != lastNotifiedFingerprint {
             rememberNotified(fingerprint)
-            postNotification(count: current.total)
+            postNotification(count: current.total,
+                             names: current.outdatedDisplayNames(policies: policies, newSince: previous))
         } else if current.total == 0 {
             rememberNotified("")
         }
@@ -296,11 +298,13 @@ final class MenuBarAgent: ObservableObject {
 
     /// M3(d) — a background check never raises the macOS permission dialog. It either posts
     /// (already authorised), raises Wega's own explanation card, or stays quiet.
-    private func postNotification(count: Int) {
+    ///
+    /// `names` lists the apps that are new since the previous round first (M4): the body spells
+    /// out only the first two.
+    private func postNotification(count: Int, names: [String]) {
         // UNUserNotificationCenter requires a bundled app; skip under `swift run`.
         guard Bundle.main.bundleIdentifier != nil, inAppAnswer != .declined else { return }
         let title = tr("Dostępne aktualizacje")
-        let names = outdatedNames
         let body = names.isEmpty
             ? trp("%@ aktualizacji dostępnych", count)
             : NotificationCopy.newUpdatesBody(names: names)

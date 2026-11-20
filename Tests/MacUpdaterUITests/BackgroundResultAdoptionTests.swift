@@ -76,9 +76,18 @@ struct BackgroundResultAdoptionTests {
 
     @Test func aSwitchedOffNotificationChoiceIsHonouredWhenPosting() throws {
         let source = try String(contentsOfFile: Self.path("Sources/MacUpdater/MenuBarAgent.swift"), encoding: .utf8)
-        let post = try #require(source.range(of: "private func postNotification(count: Int)"))
+        let post = try #require(source.range(of: "private func postNotification(count: Int"))
         let guardLine = try #require(source.range(of: "inAppAnswer != .declined"))
         #expect(post.lowerBound < guardLine.lowerBound)
+    }
+
+    /// M4 — the notification names the apps that are new since the previous round first.
+    @Test func theNotificationNamesTheNewAppsFirst() throws {
+        let source = try String(contentsOfFile: Self.path("Sources/MacUpdater/MenuBarAgent.swift"), encoding: .utf8)
+        let previous = try #require(source.range(of: "let previous = lastResult"))
+        let replaced = try #require(source.range(of: "lastResult = current"))
+        #expect(previous.lowerBound < replaced.lowerBound, "the earlier round is kept before it is replaced")
+        #expect(source.contains("names: current.outdatedDisplayNames(policies: policies, newSince: previous)"))
     }
 
     private static func path(_ relative: String, file: String = #filePath) -> String {
