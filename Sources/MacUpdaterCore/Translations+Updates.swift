@@ -4,6 +4,8 @@ extension Translations {
     /// UX-14 — the Updates screen's action bar and plan sheet.
     static let updatesActionBar: [String: String] = [
         "W kolejce: %@": "In queue: %@",
+        "%@ w kolejce": "%@ queued",
+        "Kolejka pusta": "Queue empty",
         "%@ z automatycznym cofnięciem":
             "%@ with automatic rollback",
         "Plan aktualizacji":

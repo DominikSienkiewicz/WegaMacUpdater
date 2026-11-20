@@ -39,6 +39,9 @@ struct UpdateView: View {
     var onUndoableCount:  ((Int) -> Void)? = nil
     /// UX-16 — the scope bar picks a category; the selection that carries it is the window's.
     var onScopeChange:    ((UpdateFilter) -> Void)? = nil
+    /// Wega's current line — a quip or her state's line — which the band above the list
+    /// speaks.
+    let wegaLine: String
 
     @EnvironmentObject private var model: AppViewModel
     @EnvironmentObject private var policies: UpdatePolicyStore
@@ -75,10 +78,11 @@ struct UpdateView: View {
             hasTargets:   !updateTargets.isEmpty
         )
     }
-    /// A disabled control has to say which of its two reasons is the live one — the tooltip
-    /// used to blame an empty selection even when the real answer was "a scan is running".
+    /// A disabled control has to say which of its reasons is the live one — the tooltip used
+    /// to blame an empty selection even when the real answer was "a scan is running".
     private var updateButtonHelp: String {
-        scan.isRefreshing
+        if scan.updating { return tr("Aktualizuję wybrane pakiety") }
+        return scan.isRefreshing
             ? tr("Najpierw skończę skanowanie — lista zaraz się zmieni.")
             : tr("Zaznacz przynajmniej jedną pozycję — Wega nie aktualizuje niczego, czego sam nie wskażesz.")
     }
@@ -198,10 +202,17 @@ struct UpdateView: View {
     // MARK: Results
     private var resultsView: some View {
         VStack(spacing: 0) {
-            // UX-14 — the header reports the scan and carries select-all next to the
-            // categories; updating happens in the action bar under the list.
+            // The band reports the scan and carries the update button; with nothing to update
+            // the plain heading does. The list header carries select-all next to the categories.
+            if hasUpdates {
+                resultsBand
+                    .padding(.horizontal, WegaLayout.listGutter)
+                    .padding(.top, WegaLayout.sectionSpacing)
+            }
             VStack(alignment: .leading, spacing: 12) {
-                resultsHeading
+                if !hasUpdates {
+                    resultsHeading
+                }
                 listHeader
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -244,6 +255,49 @@ struct UpdateView: View {
             Spacer(minLength: 0)
             groupingMenu
         }
+    }
+
+    /// The dusk band: what the scan found, the queue, and the round update button. It is the
+    /// whole path to an update — the button takes today's gate, help text and confirmation.
+    private var resultsBand: some View {
+        let presentation = bandPresentation
+        return UpdateBand(
+            presentation: presentation,
+            refreshProgress: scan.isRefreshing ? scan.progress : nil,
+            planLinkEnabled: ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating),
+            onShowPlan: { scan.showPlanPreview = true },
+            action: { layout in
+                UpdateBandButton(
+                    title: presentation.buttonTitle,
+                    count: presentation.buttonCount,
+                    accessibilityLabel: presentation.buttonAccessibilityLabel,
+                    diameter: layout.buttonDiameter,
+                    action: requestUpdate
+                )
+                .disabled(!allowsUpdateRun)
+                .help(updateButtonHelp)
+            }
+        )
+    }
+
+    private var bandPresentation: UpdateBandPresentation {
+        let counts = scan.scopeCounts
+        let summary = UpdateActionBarSummary(
+            selectedCount: selectedVisibleCount,
+            visibleCount:  visibleItems.count,
+            targets:       updateTargets,
+            protection:    scan.caskProtection
+        )
+        return UpdateBandPresentation(
+            totalCount:     counts.all,
+            urgentCount:    counts.security,
+            queueCount:     updateTargets.count,
+            protectionText: summary.protectionText,
+            lastCheck:      scan.lastCheck,
+            freshness:      scan.freshness() ?? .fresh,
+            sources:        UpdateBandPresentation.SourceChip.chips(from: scan.sourceReports),
+            wegaLine:       wegaLine
+        )
     }
 
     private var resultsHeading: some View {
@@ -360,87 +414,29 @@ struct UpdateView: View {
         }
     }
 
-    // MARK: Action bar
+    // MARK: Band
 
-    /// UX-14 — one bar under the list carries the whole path from selection to update: what
-    /// is ticked, how much of it the rollback net covers, the plan and the update itself. It
-    /// replaced the update button in the header and the plan disclosure between them — one flow
-    /// in three places.
-    ///
-    /// It lives inside `listColumn`, so a refresh or a running update stands it down together
-    /// with the rows it acts on.
-    @ViewBuilder
-    private var actionBar: some View {
-        if !visibleItems.isEmpty {
-            let summary = UpdateActionBarSummary(
-                selectedCount: selectedVisibleCount,
-                visibleCount:  visibleItems.count,
-                targets:       updateTargets,
-                protection:    scan.caskProtection
-            )
-            ViewThatFits(in: .horizontal) {
-                actionBarContent(summary, showsProtection: true, compactPlan: false)
-                actionBarContent(summary, showsProtection: false, compactPlan: false)
-                actionBarContent(summary, showsProtection: false, compactPlan: true)
-            }
-            .wegaBottomBar()
-        }
+    /// Whether the scan left anything to show, restarts included — what `listColumn` (rows or
+    /// an empty state) reads.
+    private var hasResults: Bool {
+        !(allItems.isEmpty && visibleManual.isEmpty && scan.restartCandidates.isEmpty)
     }
 
-    /// The bar's contents at one level of detail. `ViewThatFits` drops the rollback summary
-    /// first and the plan button's text second, so the update button never truncates.
-    private func actionBarContent(
-        _ summary: UpdateActionBarSummary,
-        showsProtection: Bool,
-        compactPlan: Bool
-    ) -> some View {
-        HStack(spacing: 10) {
-            Text(summary.selectionText)
-                .font(.wega(.callout, weight: summary.selectedCount == 0 ? .regular : .semibold))
-                .foregroundStyle(summary.selectedCount == 0 ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
-                .lineLimit(1)
-            if showsProtection, let protection = summary.protectionText {
-                Label(protection, systemImage: "shield.lefthalf.filled")
-                    .font(.wega(.subheadline))
-                    .foregroundStyle(Color.wegaSuccess)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            if !updateTargets.isEmpty {
-                Button { scan.showPlanPreview = true } label: {
-                    if compactPlan {
-                        Image(systemName: "list.bullet.rectangle")
-                    } else {
-                        Text(tr("Pokaż, co dokładnie zrobię"))
-                    }
-                }
-                .buttonStyle(.glass)
-                .controlSize(.large)
-                .help(tr("Pokaż, co dokładnie zrobię"))
-                .accessibilityLabel(tr("Pokaż, co dokładnie zrobię"))
-            }
-            Button(action: requestUpdate) {
-                Label(trf("Zaktualizuj wybrane (%@)", "\(updateTargets.count)"), systemImage: "arrow.down.circle.fill")
-            }
-            .buttonStyle(.glassProminent)
-            .controlSize(.large)
-            .tint(Color.wegaHoneyFill)
-            .foregroundStyle(Color.wegaInk)
-            .disabled(!allowsUpdateRun)
-            .help(updateButtonHelp)
-        }
+    /// Whether the scan found anything to update — what `resultsView` (band or plain heading)
+    /// reads. Apps that only wait for a restart keep today's "Wszystko aktualne" heading.
+    private var hasUpdates: Bool {
+        !(allItems.isEmpty && visibleManual.isEmpty)
     }
 
     /// Whether the list shows rows rather than one of its empty states — the one answer
     /// `listColumn` and the scan overlay over it both read.
     private var showsRows: Bool {
-        let hasAnything = !(allItems.isEmpty && visibleManual.isEmpty && scan.restartCandidates.isEmpty)
-        return hasAnything && (filterHasContent(updateFilter) || !scan.restartCandidates.isEmpty)
+        hasResults && (filterHasContent(updateFilter) || !scan.restartCandidates.isEmpty)
     }
 
     @ViewBuilder
     private var listColumn: some View {
-        if allItems.isEmpty && visibleManual.isEmpty && scan.restartCandidates.isEmpty {
+        if !hasResults {
             // REL-09 — an empty list only means "up to date" when the scan behind it heard
             // from every source. After a restart with the network down it used to mean
             // nothing at all, and said the most reassuring thing on the screen anyway.
@@ -475,7 +471,6 @@ struct UpdateView: View {
                 .padding(WegaLayout.listGutter)
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
-            .safeAreaInset(edge: .bottom, spacing: 0) { actionBar }
         } else {
             EmptyHero(
                 pose: .idle,
@@ -494,7 +489,7 @@ struct UpdateView: View {
     /// it, whether the cask *may* ask for an admin password, and how big the download is —
     /// with **unknown** shown as itself, never as a guess.
     ///
-    /// UX-14 — opened from the action bar as a sheet, so reading the plan no longer pushes
+    /// UX-14 — opened from the band as a sheet, so reading the plan no longer pushes
     /// the list down; it probes download sizes each time it opens, as the disclosure did.
     private var planSheet: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -730,7 +725,8 @@ private struct PlanPreviewCaskRow: View {
     }
 }
 
-/// UX-14 — what the action bar under the Updates list says about the selection.
+/// UX-14 — what the selection says: its text, and how much of it the rollback net covers
+/// (the band reads `protectionText`).
 struct UpdateActionBarSummary: Equatable {
     let selectedCount: Int
     let visibleCount: Int
@@ -754,7 +750,7 @@ struct UpdateActionBarSummary: Equatable {
             : trf("%@ z %@ zaznaczonych", "\(selectedCount)", "\(visibleCount)")
     }
 
-    /// Only casks the rollback net covers count; the bar says nothing rather than zero.
+    /// Only casks the rollback net covers count; the band says nothing rather than zero.
     var protectionText: String? {
         protectedCount == 0 ? nil : trf("%@ z automatycznym cofnięciem", "\(protectedCount)")
     }
@@ -972,8 +968,8 @@ extension UpdateView {
 
 // MARK: - Bottom bar chrome (UX-20)
 
-/// The chrome of the bar at the bottom of the Updates list: the action bar, and the running
-/// update that takes its place (`UpdateRunOverlay`), so the two read as one bar changing state.
+/// The chrome of the bar at the bottom of the Updates list. Until stage 3 only the running
+/// update (`UpdateRunOverlay`) uses it; the action bar it was shared with became the band.
 ///
 /// Its content is padded from the column edge by `selectionColumnInset`, so the bar lines up
 /// with the column every group header and package row uses, while the glass behind it is

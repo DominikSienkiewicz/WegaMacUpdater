@@ -77,6 +77,17 @@ public enum Plurals {
             one:  "i jeszcze %@ aplikacja",
             few:  "i jeszcze %@ aplikacje",
             many: "i jeszcze %@ aplikacji"
+        ),
+        // C2 band headline.
+        "%@ aktualizacji": PluralForms(
+            one:  "%@ aktualizacja",
+            few:  "%@ aktualizacje",
+            many: "%@ aktualizacji"
+        ),
+        "%@ pilnych": PluralForms(
+            one:  "%@ pilna",
+            few:  "%@ pilne",
+            many: "%@ pilnych"
         )
     ]
 
@@ -90,6 +101,16 @@ public enum Plurals {
             one:  "and %@ more app",
             few:  "and %@ more apps",
             many: "and %@ more apps"
+        ),
+        "%@ aktualizacji": PluralForms(
+            one:  "%@ update",
+            few:  "%@ updates",
+            many: "%@ updates"
+        ),
+        "%@ pilnych": PluralForms(
+            one:  "%@ urgent",
+            few:  "%@ urgent",
+            many: "%@ urgent"
         )
     ]
 }

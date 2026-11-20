@@ -171,6 +171,60 @@ enum WegaPalette {
         lightIncreasedContrast: 0x241A33, darkIncreasedContrast: 0x7A4A20
     )
 
+    /// C2 band gradient, first stop: dark in both appearances.
+    static let bandStart = WegaAdaptiveColor(
+        light: 0x2D1A4C, dark: 0x32205A,
+        lightIncreasedContrast: 0x2D1A4C, darkIncreasedContrast: 0x32205A
+    )
+
+    /// C2 band gradient, middle stop.
+    static let bandMid = WegaAdaptiveColor(
+        light: 0x3D2366, dark: 0x44287A,
+        lightIncreasedContrast: 0x3D2366, darkIncreasedContrast: 0x44287A
+    )
+
+    /// C2 band gradient, last stop.
+    static let bandEnd = WegaAdaptiveColor(
+        light: 0x2A1646, dark: 0x2C1950,
+        lightIncreasedContrast: 0x2A1646, darkIncreasedContrast: 0x2C1950
+    )
+
+    /// C2 band border: ink in light, soft lavender in dark.
+    static let bandBorder = WegaAdaptiveColor(
+        light: 0x241A33, dark: 0x8A7BC0,
+        lightIncreasedContrast: 0x241A33, darkIncreasedContrast: 0xB8A9E6
+    )
+
+    /// C2 band primary text: drawn on the band's gradient, never on the window.
+    static let bandText = WegaAdaptiveColor(
+        light: 0xFFFFFF, dark: 0xFFFFFF,
+        lightIncreasedContrast: 0xFFFFFF, darkIncreasedContrast: 0xFFFFFF
+    )
+
+    /// C2 band secondary text.
+    static let bandSecondaryText = WegaAdaptiveColor(
+        light: 0xD8CCEC, dark: 0xD8CCEC,
+        lightIncreasedContrast: 0xEDE6F7, darkIncreasedContrast: 0xEDE6F7
+    )
+
+    /// C2 band accent text: the stale date and the plan link.
+    static let bandAccentText = WegaAdaptiveColor(
+        light: 0xFFD9A3, dark: 0xFFD9A3,
+        lightIncreasedContrast: 0xFFE6C2, darkIncreasedContrast: 0xFFE6C2
+    )
+
+    /// C2 band button outline.
+    static let bandButtonOutline = WegaAdaptiveColor(
+        light: 0x241A33, dark: 0xFFE2B0,
+        lightIncreasedContrast: 0x241A33, darkIncreasedContrast: 0xFFE2B0
+    )
+
+    /// C2 band button ledge: the offset shadow under the outline.
+    static let bandButtonLedge = WegaAdaptiveColor(
+        light: 0x241A33, dark: 0x7A4A20,
+        lightIncreasedContrast: 0x241A33, darkIncreasedContrast: 0x7A4A20
+    )
+
     /// Every colour that is used as a foreground on the window background, named — the input
     /// to the contrast regression test.
     static let foregroundRoles: [(name: String, value: WegaAdaptiveColor)] = [
@@ -204,6 +258,19 @@ extension Color {
     static let wegaSelectionLedge   = WegaPalette.selectionLedge.color
     static let wegaActionOutline    = WegaPalette.actionOutline.color
     static let wegaActionLedge      = WegaPalette.actionLedge.color
+    static let wegaBandStart        = WegaPalette.bandStart.color
+    static let wegaBandMid          = WegaPalette.bandMid.color
+    static let wegaBandEnd          = WegaPalette.bandEnd.color
+    static let wegaBandBorder       = WegaPalette.bandBorder.color
+    static let wegaBandText         = WegaPalette.bandText.color
+    static let wegaBandSecondaryText = WegaPalette.bandSecondaryText.color
+    static let wegaBandAccentText   = WegaPalette.bandAccentText.color
+    static let wegaBandButtonOutline = WegaPalette.bandButtonOutline.color
+    static let wegaBandButtonLedge  = WegaPalette.bandButtonLedge.color
+    /// C2 band button radial fill, centre to rim (`#FFE9C4`, `#F0C487`, and caramel's dark `#C88549`).
+    static let wegaBandButtonHighlight = Color(red: 1, green: 0.914, blue: 0.769)
+    static let wegaBandButtonCore      = Color(red: 0.941, green: 0.769, blue: 0.529)
+    static let wegaBandButtonRim       = Color(nsColor: WegaPalette.caramel.dark.nsColor)
 
     /// The hairline that used to be written as `Color.white.opacity(0.06)` — invisible on a
     /// light desktop, because it assumed the window behind it was dark.
@@ -371,4 +438,22 @@ enum WegaLayout {
     static let queueRowRadius: CGFloat     = 12
     static let queueRowOutline: CGFloat    = 1.5
     static let queueRowLedge: CGFloat      = 3
+    /// C2 band: fixed height and corner radius, mascot and button sizes, and the band widths
+    /// (what its `GeometryReader` sees) under which it switches to its compact and narrow
+    /// layouts. The compact breakpoint is 820 because the regular layout needs about 340 pt of
+    /// text column for the headline; the usual inspector-closed window would leave it about
+    /// 224 pt. Below 480 (a 980 pt window with the inspector open gives the band about 368 pt)
+    /// the compact layout's fixed parts leave the headline too little, so the narrow one drops
+    /// Wega and shrinks the button.
+    static let bandHeight: CGFloat             = 188
+    static let bandRadius: CGFloat             = 20
+    static let bandWegaSize: CGFloat           = 120
+    static let bandWegaCompactSize: CGFloat    = 96
+    static let bandButtonSize: CGFloat         = 126
+    static let bandButtonCompactSize: CGFloat  = 96
+    static let bandButtonNarrowSize: CGFloat   = 80
+    static let bandButtonLedge: CGFloat        = 4
+    static let bandCompactBreakpoint: CGFloat  = 820
+    static let bandNarrowBreakpoint: CGFloat   = 480
+    static let bandSummaryWidth: CGFloat       = 190
 }

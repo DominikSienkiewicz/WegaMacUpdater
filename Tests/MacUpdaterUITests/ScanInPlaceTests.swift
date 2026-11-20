@@ -93,6 +93,8 @@ final class ScanInPlaceTests: XCTestCase {
         let overlayView = try XCTUnwrap(overlay.range(of: "struct ScanBusyOverlay: View").map { overlay[$0.lowerBound...] })
 
         XCTAssertTrue(view.contains("ScanPhaseStrip(progress: scan.progress)"))
+        XCTAssertTrue(view.contains("refreshProgress: scan.isRefreshing ? scan.progress : nil"),
+                      "the band carries the phases while a scan runs in place")
         XCTAssertFalse(view.contains("refreshingStamp"), "the phases replace the one-line stamp")
         XCTAssertFalse(overlayView.contains("ScanProgressScene("), "no second scanning scene over the list")
         XCTAssertTrue(overlayView.contains(".background(.regularMaterial)"), "the list stays, stood down")

@@ -10,7 +10,7 @@ import MacUpdaterCore
 /// until it lands: the content below is disabled, a material stands it down, and a note says
 /// why.
 ///
-/// UX-20 — the run itself takes the action bar's place and shape at the bottom (the shared
+/// UX-20 — the run itself takes a bar at the bottom of the list (the shared
 /// `wegaBottomBar()` chrome) instead of a card in the middle of the screen: progress, the log
 /// and the one action that still makes sense, stopping. It stays inside this overlay, the one
 /// live layer above the disabled screen, so the stop button is never greyed out with what it
@@ -55,7 +55,7 @@ struct UpdateRunOverlay<Progress: View>: View {
         .accessibilityLabel(tr("Trwa aktualizacja"))
     }
 
-    /// The action bar's place, now carrying the run.
+    /// The bar at the bottom of the list, carrying the run.
     private var runBar: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {

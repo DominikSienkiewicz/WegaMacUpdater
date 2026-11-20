@@ -45,31 +45,54 @@ struct UpdateActionBarTests {
         #expect(summary.protectionText == trf("%@ z automatycznym cofnięciem", "1"))
     }
 
-    @Test func theUpdateButtonLivesInTheBarNotInTheHeader() throws {
+    @Test func theUpdateButtonLivesInTheBand() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
-        let results = try slice(view, from: "private var resultsView: some View", to: "private var updateRunOverlay")
-        let bar = try slice(view, from: "private var actionBar: some View", to: "private var listColumn: some View")
+        let results = try slice(view, from: "private var resultsHeading: some View", to: "private var updateRunOverlay")
+        let band = try slice(view, from: "private var resultsBand: some View", to: "private var resultsHeading: some View")
 
-        #expect(!results.contains("requestUpdate"), "the header reports the scan; it no longer acts")
-        #expect(bar.contains("Button(action: requestUpdate)"))
-        #expect(bar.contains(".disabled(!allowsUpdateRun)"))
-        #expect(!bar.contains("SelectionCheckbox("), "the list-wide queue circle sits in the list header (C2)")
-        let header = try slice(view, from: "private var listHeader: some View", to: "private var resultsHeading: some View")
+        #expect(!results.contains("requestUpdate"), "the heading reports the scan; it no longer acts")
+        let screen = try slice(view, from: "private var resultsView: some View", to: "private var listHeader: some View")
+        let listHeader = try slice(view, from: "private var listHeader: some View", to: "private var resultsBand: some View")
+        for (name, part) in [("resultsView", screen), ("listHeader", listHeader), ("resultsHeading", results)] {
+            #expect(!part.contains("requestUpdate"), "only the band starts an update, not \(name)")
+        }
+        #expect(band.contains("UpdateBandButton("))
+        #expect(band.contains("action: requestUpdate"))
+        #expect(!(try source("Sources/MacUpdater/UpdateBand.swift")).contains("SelectionCheckbox("),
+                "the band carries the update, not the selection")
+        #expect(band.contains(".disabled(!allowsUpdateRun)"))
+        #expect(band.contains(".help(updateButtonHelp)"))
+        let bandBody = try slice(view, from: "private var resultsBand: some View", to: "private var bandPresentation:")
+        #expect(bandBody.contains("let presentation = bandPresentation"))
+        #expect(bandBody.components(separatedBy: "bandPresentation").count == 2, "the band reads one presentation")
+        #expect(!view.contains("private var actionBar"), "the bar under the list is gone")
+        #expect(!view.contains(".safeAreaInset(edge: .bottom, spacing: 0) { actionBar }"))
+        let header = try slice(view, from: "private var listHeader: some View", to: "private var resultsBand: some View")
         #expect(header.contains("SelectionCheckbox("), "the list header carries the list-wide queue circle")
         #expect(header.contains("QueueColumnPlaceholder()"),
                 "with nothing to select the header keeps the column so the scope bar stays put")
-        #expect(view.contains(".safeAreaInset(edge: .bottom, spacing: 0) { actionBar }"),
-                "the bar stays under the list instead of scrolling away with it")
     }
 
-    @Test func thePlanOpensFromTheBarAsASheet() throws {
+    @Test func thePlanOpensFromTheBandAsASheet() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
-        let bar = try slice(view, from: "private var actionBar: some View", to: "private var listColumn: some View")
+        let band = try slice(view, from: "private var resultsBand: some View", to: "private var resultsHeading: some View")
 
-        #expect(bar.contains("scan.showPlanPreview = true"))
+        #expect(band.contains("scan.showPlanPreview = true"))
         #expect(view.contains(".sheet(isPresented: $scan.showPlanPreview)"))
         #expect(!view.contains("WegaDisclosure(isExpanded: $scan.showPlanPreview)"),
                 "the plan no longer pushes the list down from inside the screen")
+        #expect(band.contains("planLinkEnabled: ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating)"),
+                "a running update owns the screen, the plan preview included")
+    }
+
+    /// During a run the button is disabled because the run owns the screen, not because the
+    /// selection is empty, so the tooltip names the run first.
+    @Test func theTooltipNamesARunningUpdateFirst() throws {
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        let help = try slice(view, from: "private var updateButtonHelp: String", to: "var body: some View")
+        let updating = try #require(help.range(of: "if scan.updating { return tr(\"Aktualizuję wybrane pakiety\") }"))
+        let refreshing = try #require(help.range(of: "scan.isRefreshing"))
+        #expect(updating.lowerBound < refreshing.lowerBound)
     }
 
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {
