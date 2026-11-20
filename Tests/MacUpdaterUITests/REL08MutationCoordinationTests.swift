@@ -21,6 +21,17 @@ struct REL08MutationCoordinationTests {
         try String(contentsOf: packageRoot().appendingPathComponent(relativePath), encoding: .utf8)
     }
 
+    /// G2 — the store's lock is injected so a test's store does not contend with the rest of
+    /// the process, but the app's store must use the process-wide one: that is what keeps a
+    /// window run, the background round, a migration and the quit guard mutually exclusive.
+    @Test func theAppsStoreTakesTheProcessWideUpgradeMutex() {
+        #expect(ScanStoreDependencies.live.upgradeMutex === UpgradeMutex.shared)
+        let harness = makeScanStoreRuntimeHarness(runner: ScanStoreRuntimeProcessRunner { _ in
+            ProcessResult(exitCode: 0, stdout: "", stderr: "") })
+        #expect(harness.store.dependencies.upgradeMutex !== UpgradeMutex.shared,
+                "a test's store has a lock of its own")
+    }
+
     /// AC6 — the launch path must consult `SingleInstanceGuard`, enumerating other copies by
     /// bundle identifier, and stand down (`terminate`) *before* it registers mutation sources
     /// or starts the background loop. The wiring lives behind AppKit's launch sequence, so it

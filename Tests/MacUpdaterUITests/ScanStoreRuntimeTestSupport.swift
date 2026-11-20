@@ -137,7 +137,10 @@ func makeScanStoreRuntimeHarness(
         },
         recordUpdateRun: { _ in },
         settleAppManagementPermission: { _ in },
-        undoableUpdates: undoableUpdates
+        undoableUpdates: undoableUpdates,
+        // Its own lock: the shared one would make every harness store contend with every
+        // other test in the process that starts a run (G2).
+        upgradeMutex: UpgradeMutex()
     )
     let store = ScanStore(
         resultStore: ScanResultStore(io: snapshots),

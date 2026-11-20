@@ -46,13 +46,13 @@ extension ScanStore {
             UpdateDiagnostics.record("adoption.skipped", fields: ["token": token, "reason": "unavailableOrBusy"])
             return
         }
-        guard UpgradeMutex.shared.acquire() else {
+        guard dependencies.upgradeMutex.acquire() else {
             UpdateDiagnostics.record("adoption.skipped", fields: ["token": token, "reason": "upgradeMutexBusy"])
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja w toku"),
                                   message: tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.")))
             return
         }
-        defer { UpgradeMutex.shared.release() }
+        defer { dependencies.upgradeMutex.release() }
         manualBusy = token
         defer { manualBusy = nil }
         let ticket = MutationGuard.shared.begin(trf("instalacja %@", "\(token)"))

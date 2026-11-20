@@ -57,7 +57,8 @@ struct HonestCoreCopyTests {
             await harness.store.runUpdate(targetKeys: [UpdatePlanner.key(name: token, kind: .cask)])
         }
 
-        let line = try #require(harness.store.brewLog.first { $0.hasPrefix("⏸") }, "sanity: the run was postponed")
+        let line = try #require(harness.store.brewLog.first { $0.hasPrefix("⏸") },
+                                "sanity: the run was postponed — banner: \(harness.store.banner?.title ?? "none"), log: \(harness.store.brewLog)")
         #expect(!line.contains(".."), "M2: \(line)")
         #expect(line.hasSuffix("."))
     }

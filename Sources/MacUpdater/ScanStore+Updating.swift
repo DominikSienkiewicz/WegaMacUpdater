@@ -43,13 +43,13 @@ extension ScanStore {
         }
         // F3 — never overlap with a background upgrade: both take snapshots and both call
         // `brew upgrade --cask`. The window is the one the user is waiting on.
-        guard UpgradeMutex.shared.acquire() else {
+        guard dependencies.upgradeMutex.acquire() else {
             UpdateDiagnostics.record("update.skipped", fields: ["reason": "upgradeMutexBusy"])
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja w toku"),
                                   message: tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.")))
             return
         }
-        defer { UpgradeMutex.shared.release() }
+        defer { dependencies.upgradeMutex.release() }
         updating = true
         emitActivitySignal(.updating)
         brewLog = []

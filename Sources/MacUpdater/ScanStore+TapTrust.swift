@@ -39,12 +39,12 @@ extension ScanStore {
 
     private func runTapTrustRemedyCoordinated(_ remedy: TapTrustRemedy) async {
         guard let model else { return }
-        guard UpgradeMutex.shared.acquire() else {
+        guard dependencies.upgradeMutex.acquire() else {
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja w toku"),
                                   message: tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.")))
             return
         }
-        defer { UpgradeMutex.shared.release() }
+        defer { dependencies.upgradeMutex.release() }
         let ticket = MutationGuard.shared.begin(tr("zmiana tapów Homebrew"))
         defer { MutationGuard.shared.end(ticket) }
 

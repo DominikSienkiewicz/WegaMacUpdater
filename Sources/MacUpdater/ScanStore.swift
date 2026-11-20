@@ -57,6 +57,10 @@ struct ScanStoreDependencies {
     var teamIDLedger: TeamIDLedger = .shared
     var rollbackLedger: CaskRollbackLedger = .shared
     var confirmPublisherChange: @MainActor (ScanStore.PublisherChangePrompt) -> Bool = { PublisherChangeAlert.confirm($0) }
+    /// F3 — the lock a window run, a manual install and a tap change take. The process-wide
+    /// `UpgradeMutex.shared` in the app, so the background round and a migration are excluded;
+    /// injectable like the background updater's, so a test's store has one of its own.
+    var upgradeMutex: UpgradeMutex = .shared
 
     static let live = ScanStoreDependencies(
         operations: .shared,
