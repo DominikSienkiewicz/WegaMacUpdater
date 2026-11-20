@@ -864,15 +864,3 @@ struct UpdateRowColumns<Identity: View, Version: View>: View {
         }
     }
 }
-
-/// UX-14 — holds a selection checkbox's column open in a row that has nothing to select, so
-/// its icon lines up with the selectable rows' icons. It draws the checkbox's own glyph,
-/// hidden, so the two stay the same width at every system text size.
-struct SelectionColumnSpacer: View {
-    var body: some View {
-        Image(systemName: "square")
-            .font(WegaCheckboxToggleStyle().glyphFont)
-            .hidden()
-            .accessibilityHidden(true)
-    }
-}

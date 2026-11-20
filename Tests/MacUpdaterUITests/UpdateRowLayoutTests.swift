@@ -12,19 +12,6 @@ import Testing
 @Suite("Update row layout")
 @MainActor
 struct UpdateRowLayoutTests {
-    /// A row with nothing to select keeps the checkbox's width empty, so icons, names and
-    /// versions form one column across every card on the screen.
-    @Test func theSelectionSpacerIsExactlyAsWideAsTheCheckbox() {
-        let checkbox = NSHostingView(
-            rootView: Toggle(isOn: .constant(true)) { EmptyView() }
-                .toggleStyle(WegaCheckboxToggleStyle())
-        )
-        let spacer = NSHostingView(rootView: SelectionColumnSpacer())
-
-        #expect(spacer.fittingSize.width > 0)
-        #expect(spacer.fittingSize.width == checkbox.fittingSize.width)
-    }
-
     @Test func bothRowKindsShareTheColumns() throws {
         let packageRow = try slice(
             try source("Sources/MacUpdater/SharedViews.swift"),
@@ -39,8 +26,20 @@ struct UpdateRowLayoutTests {
             #expect(row.contains("UpdateRowColumns {"), "both rows place name and version through one layout")
             #expect(row.contains("} version: {"))
         }
-        #expect(manualRows.contains("SelectionColumnSpacer()"),
-                "a row without a checkbox still reserves its column")
+        #expect(manualRows.contains("QueueHandoffMark()"),
+                "a row Wega does not batch shows the hand-off mark in the queue column")
+        #expect(!manualRows.contains("SelectionColumnSpacer()"))
+    }
+
+    @Test func vendorCardsWithoutAPathShowTheHandoffMark() throws {
+        for (file, anchor) in [
+            ("Sources/MacUpdater/DockerDesktopUpdateActions.swift", "struct UnresolvedDockerUpdateRow: View"),
+            ("Sources/MacUpdater/ServiceVendorUpdateControls.swift", "struct UnresolvedServiceUpdateRow: View"),
+        ] {
+            let text = try source(file)
+            let start = try #require(text.range(of: anchor)?.lowerBound, "missing anchor: \(anchor)")
+            #expect(text[start...].contains("QueueHandoffMark()"), "\(anchor) shows the hand-off mark")
+        }
     }
 
     @Test func releaseNotesLiveOnlyInTheInspector() throws {

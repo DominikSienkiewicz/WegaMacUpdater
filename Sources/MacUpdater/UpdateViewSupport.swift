@@ -473,11 +473,12 @@ struct ManualUpdateSection: View {
             ForEach(items, id: \.path) { item in
                 let isInspected = "m:" + item.path.path == inspectedKey
                 VStack(spacing: 0) {
-                // UX-14 — the same columns as a package row: an empty checkbox slot, so this
-                // icon lines up with every selectable row's, and the version in the version
-                // column rather than under the name. F1's release notes are in the inspector.
+                // UX-14 — the same columns as a package row: the hand-off mark holds the
+                // queue column, so this icon lines up with every selectable row's, and the
+                // version in the version column rather than under the name. F1's release notes
+                // are in the inspector.
                 HStack(spacing: WegaLayout.checkboxSpacing) {
-                    SelectionColumnSpacer()
+                    QueueHandoffMark()
                     AppIcon(path: item.path, size: WegaLayout.updateIconSize)
                     let isSecurity = item.releaseNotes.map { ReleaseNotesTriage.heuristic($0.plainText).isLikelySecurityFix } ?? false
                     UpdateRowColumns {
