@@ -38,7 +38,9 @@ struct PasswordPromptCallout: View {
     @State private var probe: PasswordPromptNotice.Probe? = PasswordPromptProbeCache.value
 
     var body: some View {
-        Group { banner }
+        // A stack, not a `Group`: modifiers on a `Group` are applied to its children, and at
+        // launch the banner has none — so the probe that would give it one never started.
+        VStack(spacing: 0) { banner }
             .task(id: queuedNeedingPassword) {
                 let fresh = await Task.detached {
                     PasswordPromptNotice.Probe(installed: PasswordPromptAvailability.isInstalled(),
