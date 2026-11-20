@@ -155,7 +155,7 @@ private struct SidebarRowIcon: View {
             autoreverses: false,
             reduceMotion: reduceMotion
         )
-        if (activity == .scanning || activity == .updating) && !reduceMotion, let spinAnimation {
+        if activity.spinsContinuously && !reduceMotion, let spinAnimation {
             withAnimation(spinAnimation) { rotation = 360 }
         } else {
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) { rotation = 0 }

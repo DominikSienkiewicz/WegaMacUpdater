@@ -35,6 +35,9 @@ enum SidebarTab: String, Identifiable {
 /// scan/upgrade runs, turns green when it finishes cleanly, red when a source failed.
 enum UpdateActivity: Equatable {
     case idle, scanning, updating, success, error
+
+    /// The two states that keep working in the background and so spin the sidebar icon.
+    var spinsContinuously: Bool { self == .scanning || self == .updating }
 }
 
 // MARK: - Root view

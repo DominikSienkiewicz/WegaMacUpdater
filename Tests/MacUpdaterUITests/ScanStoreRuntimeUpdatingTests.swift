@@ -75,7 +75,7 @@ final class ScanStoreRuntimeUpdatingTests: XCTestCase {
         XCTAssertTrue(harness.store.allItems.isEmpty)
         XCTAssertEqual(harness.store.banner?.variant, .success)
         XCTAssertEqual(harness.store.confirmedSourceKinds, [.formula, .cask, .appStore, .npm])
-        XCTAssertEqual(activities, [.scanning, .success])
+        XCTAssertEqual(activities, [.updating, .success])
         XCTAssertTrue(harness.store.brewLog.contains { $0.contains("Upgrading \(formula)") })
         XCTAssertTrue(harness.store.brewLog.contains { $0.contains("Updated Example App") })
         XCTAssertTrue(harness.store.brewLog.contains { $0.contains("npm notice installed") })
