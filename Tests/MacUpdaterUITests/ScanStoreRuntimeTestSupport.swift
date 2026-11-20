@@ -94,6 +94,14 @@ final class ScanStoreRuntimeReportRecorder {
     }
 }
 
+/// Records what would have been spoken instead of posting it, so no test talks through
+/// VoiceOver. The harness's default.
+@MainActor
+final class RecordingAnnouncer: AccessibilityAnnouncing {
+    var texts: [String] = []
+    func announce(_ text: String) { texts.append(text) }
+}
+
 struct ScanStoreRuntimeHarness {
     let store: ScanStore
     let snapshots: ScanStoreRuntimeSnapshotIO
@@ -107,7 +115,7 @@ func makeScanStoreRuntimeHarness(
     applications: [RunningApplicationTarget] = [],
     bundleExists: @escaping (URL) -> Bool = { _ in true },
     undoableUpdates: @escaping () -> [UndoableUpdate] = { [] },
-    announcer: any AccessibilityAnnouncing = LiveAccessibilityAnnouncer()
+    announcer: any AccessibilityAnnouncing = RecordingAnnouncer()
 ) -> ScanStoreRuntimeHarness {
     let toolURL = URL(fileURLWithPath: "/bin/echo")
     let locator = BinaryLocator(brewCandidates: [toolURL], masCandidates: [toolURL])

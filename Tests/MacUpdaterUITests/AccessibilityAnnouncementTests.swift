@@ -3,12 +3,6 @@ import Testing
 import MacUpdaterCore
 @testable import WegaMacUpdater
 
-@MainActor
-final class RecordingAnnouncer: AccessibilityAnnouncing {
-    var texts: [String] = []
-    func announce(_ text: String) { texts.append(text) }
-}
-
 @Suite("Accessibility announcements") @MainActor
 struct AccessibilityAnnouncementTests {
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {
@@ -82,6 +76,14 @@ struct AccessibilityAnnouncementTests {
                     == "Update finished: 4 of 5. Slack needs attention.")
             #expect(AnnouncementCopy.scanFinished(updates: 1, complete: true) == "Scan finished: 1 update.")
         }
+    }
+
+    /// M8a — the harness used to default to `LiveAccessibilityAnnouncer`, so every test that
+    /// finished a scan or a run through it posted a real VoiceOver announcement.
+    @Test func theHarnessNeverSpeaksThroughVoiceOver() {
+        let harness = makeScanStoreRuntimeHarness(runner: ScanStoreRuntimeProcessRunner { _ in
+            ProcessResult(exitCode: 0, stdout: "", stderr: "") })
+        #expect(harness.store.announcer is RecordingAnnouncer)
     }
 
     @Test func theListStaysReadableDuringARun() throws {
