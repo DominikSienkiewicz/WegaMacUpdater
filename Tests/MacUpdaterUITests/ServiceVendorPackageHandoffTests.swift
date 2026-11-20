@@ -25,6 +25,25 @@ struct ServiceVendorPackageHandoffTests {
         #expect(store.updateCount == UnifiedUpdateCount(installable: 0, manual: 0))
     }
 
+    @Test func aHomebrewRecordOfAVendorAppThatIsNotInstalledIsNotListed() {
+        let store = preparedStore()
+        store.installationChecks = []
+        #expect(store.serviceManagedUpdates.isEmpty)
+        #expect(store.unresolvedServiceItems.isEmpty)
+        #expect(store.updateCount == UnifiedUpdateCount(installable: 0, manual: 0))
+    }
+
+    @Test func aTokenAPendingHandoffAlreadyCoversIsNotListedASecondTime() throws {
+        let store = preparedStore()
+        let handoff = try #require(store.visibleManual.first)
+        var elsewhere = InstallationCheck(app: installed, sources: [], checkedAt: Date())
+        elsewhere.caskToken = nil
+        store.installationChecks = [elsewhere]
+        store.vendorHandoffs = [handoff]
+        #expect(store.serviceManagedUpdates.isEmpty, "the cask no longer resolves to an installation")
+        #expect(store.unresolvedServiceItems.isEmpty)
+    }
+
     private func preparedStore() -> ScanStore {
         let runner = ScanStoreRuntimeProcessRunner { _ in
             Issue.record("A package vendor handoff must not run Homebrew or alter a service")

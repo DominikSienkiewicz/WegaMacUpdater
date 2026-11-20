@@ -25,6 +25,15 @@ public enum ServiceVendorUpdateProfile: Equatable, Sendable {
         }
     }
 
+    /// The bundle identifier of the app this profile describes.
+    public var bundleIdentifier: String {
+        switch self {
+        case .cloudflareWarp: "com.cloudflare.1dot1dot1dot1.macos"
+        case .bitdefender: BitdefenderSupport.bundleIdentifier
+        case .logiOptionsPlus: "com.logi.optionsplus"
+        }
+    }
+
     public var updateActionKind: UpdateActionKind { .launchApp }
 
     public var name: String {
@@ -61,6 +70,14 @@ public enum ServiceVendorUpdateProfile: Equatable, Sendable {
 public enum ServiceVendorUpdatePolicy {
     public static func requiresVendor(token: String) -> Bool {
         ServiceVendorUpdateProfile.profile(caskToken: token) != nil
+    }
+
+    /// Whether a complete scan found no installation of the vendor app behind `token`, so a
+    /// Homebrew record for it is a leftover rather than an update. An incomplete scan, or a
+    /// token no profile describes, never counts as "not installed".
+    public static func isNotInstalled(token: String, installationChecks: [InstallationCheck], scanComplete: Bool) -> Bool {
+        guard scanComplete, let profile = ServiceVendorUpdateProfile.profile(caskToken: token) else { return false }
+        return !installationChecks.contains { $0.bundleIdentifier == profile.bundleIdentifier }
     }
 
     public static func profile(for item: ManualOutdatedApp) -> ServiceVendorUpdateProfile? {

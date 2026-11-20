@@ -492,8 +492,14 @@ final class ScanStore: ObservableObject {
     }
 
     var unresolvedServiceItems: [OutdatedItem] {
-        let resolved = Set(serviceManagedUpdates.compactMap(\.caskPolicyToken))
-        return allItems.filter { $0.kind == .cask && ServiceVendorUpdatePolicy.requiresVendor(token: $0.name) && !resolved.contains($0.name) }
+        let covered = Set((serviceManagedUpdates + vendorHandoffs).compactMap(\.caskPolicyToken))
+        return allItems.filter { item in
+            item.kind == .cask && ServiceVendorUpdatePolicy.requiresVendor(token: item.name)
+                && !covered.contains(item.name)
+                && !ServiceVendorUpdatePolicy.isNotInstalled(
+                    token: item.name, installationChecks: installationChecks, scanComplete: lastScanComplete
+                )
+        }
     }
 
     /// Manual updates with ignore/pin rules applied.
