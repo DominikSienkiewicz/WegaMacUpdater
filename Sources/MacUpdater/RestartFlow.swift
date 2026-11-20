@@ -17,6 +17,10 @@ struct RestartFlow: Sendable {
     var pause: @Sendable (Duration) async -> Void
 
     func run(_ info: RestartInfo) async -> Outcome {
+        guard await isRunning(info.processName) else {
+            await launch(info.appName)
+            return .relaunched
+        }
         guard await requestQuit(info) else { return .needsForce }
         for _ in 0..<Self.maximumPolls {
             if !(await isRunning(info.processName)) {

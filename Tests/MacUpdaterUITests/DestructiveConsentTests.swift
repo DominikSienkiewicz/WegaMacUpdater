@@ -88,7 +88,7 @@ struct DestructiveConsentTests {
         let outcome = await flow(calls, accepts: true).run(info)
         #expect(outcome == .needsForce)
         #expect(calls.log == ["quit"])
-        #expect(calls.polls == 20)
+        #expect(calls.polls == 21)
     }
 
     @Test func anAppThatQuitsInTimeIsRelaunched() async {
@@ -103,6 +103,22 @@ struct DestructiveConsentTests {
         let calls = Calls()
         let outcome = await flow(calls, accepts: false).run(info)
         #expect(outcome == .needsForce)
-        #expect(calls.polls == 0)
+        #expect(calls.polls == 1)
+    }
+
+    @Test func anAppThatIsAlreadyClosedIsRelaunchedWithoutAskingToQuit() async {
+        let calls = Calls()
+        calls.running = false
+        let outcome = await flow(calls, accepts: false).run(info)
+        #expect(outcome == .relaunched)
+        #expect(calls.log == ["launch TextEdit"])
+    }
+
+    @Test func theRestartAlertDefaultsToLeavingTheAppOpen() throws {
+        let view = try source("Sources/MacUpdater/UpdateViewSupport.swift")
+        let keep = try #require(view.range(of: "Button(tr(\"Zostaw otwartą\")"))
+        let force = try #require(view.range(of: "role: .destructive"))
+        #expect(keep.lowerBound < force.lowerBound)
+        #expect(!view.contains("if !shown, let info = pendingForce { onKeepOpen(info) }"))
     }
 }

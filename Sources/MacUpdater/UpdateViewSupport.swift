@@ -45,13 +45,11 @@ struct RestartSection: View {
         }
         .alert(
             trf("%@ nie chce się zamknąć.", pendingForce?.appName ?? ""),
-            isPresented: Binding(get: { pendingForce != nil }, set: { shown in
-                if !shown, let info = pendingForce { onKeepOpen(info) }
-            }),
+            isPresented: Binding(get: { pendingForce != nil }, set: { _ in }),
             presenting: pendingForce
         ) { info in
-            Button(tr("Wymuś zamknięcie"), role: .destructive) { onForce(info) }
             Button(tr("Zostaw otwartą"), role: .cancel) { onKeepOpen(info) }
+            Button(tr("Wymuś zamknięcie"), role: .destructive) { onForce(info) }
         } message: { _ in
             Text(tr("Wymuszenie może stracić niezapisaną pracę."))
         }
