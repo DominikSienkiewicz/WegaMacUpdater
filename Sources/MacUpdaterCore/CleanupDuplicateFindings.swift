@@ -36,20 +36,17 @@ public struct CleanupDetectorNote: Codable, Equatable, Sendable {
     }
 }
 
-/// Turns the D1 groups into findings. Each shadowed copy gets the removal that matches the tool that
-/// installed it; a Homebrew formula another installed formula depends on, and a Homebrew package
-/// that also provides the active copy, are never offered for removal.
+/// Turns the D1 groups into findings. In a tool group with at least two candidate copies (the
+/// `PATH`-active one and the shadowed ones) every candidate carries the removal that matches the tool
+/// that installed it, the installed formulae that depend on it and the processes using it;
+/// `CleanupKeepChoice` then decides which copy stays and what the others offer. A copy whose only
+/// companions are system copies or broken links offers no choice, and a broken link gets a
+/// copyable `unlink`.
 public struct CleanupDuplicateFindings: Sendable {
     private struct Context {
         let processes: [CleanupProcess]
         let dependents: [String: [String]]
         let uncheckedFormulas: Set<String>
-    }
-
-    private struct Verdict {
-        let status: CleanupStatus
-        let reason: CleanupReason
-        let action: CleanupAction
     }
 
     private let brew: CleanupBrewQuerying
@@ -71,14 +68,16 @@ public struct CleanupDuplicateFindings: Sendable {
         self.pathIsApproximate = pathIsApproximate
     }
 
+    /// The findings come out resolved with no remembered choice: the `PATH`-active copy is kept,
+    /// or no copy at all while `PATH` is approximate.
     public func build(_ scan: CleanupPathScan) async -> (findings: [CleanupFinding], notes: [CleanupDetectorNote]) {
         let lookup = await dependentsByFormula(in: scan)
-        let notes = lookup.notes
         let context = Context(processes: inspector.userProcesses(), dependents: lookup.dependents, uncheckedFormulas: lookup.unchecked)
         let findings = scan.groups.flatMap { group in
-            group.copies.map { finding(for: $0, in: group, context: context) }
+            let offersChoice = Self.candidates(in: group).count >= 2
+            return group.copies.map { finding(for: $0, in: group, offersChoice: offersChoice, context: context) }
         }
-        return (findings, notes)
+        return (CleanupKeepChoice.resolve(findings, choices: [:], pathIsApproximate: pathIsApproximate), lookup.notes)
     }
 
     private struct Lookup {
@@ -87,12 +86,21 @@ public struct CleanupDuplicateFindings: Sendable {
         var notes: [CleanupDetectorNote] = []
     }
 
-    /// One query per distinct shadowed formula. After the first failure the remaining formulas stay
-    /// unchecked, while what was already learned is kept.
+    private static func candidates(in group: CleanupToolGroup) -> [CleanupCopy] {
+        group.copies.filter { $0.role == .active || $0.role == .shadowed }
+    }
+
+    /// One query per distinct formula among the candidates of the groups that offer a choice, the
+    /// active copy included. After the first failure the remaining formulas stay unchecked, while
+    /// what was already learned is kept.
     private func dependentsByFormula(in scan: CleanupPathScan) async -> Lookup {
         var names: [String] = []
-        for copy in scan.groups.flatMap(\.copies) where copy.role == .shadowed {
-            if case .homebrewFormula(let name) = copy.source, !names.contains(name) { names.append(name) }
+        for group in scan.groups {
+            let candidates = Self.candidates(in: group)
+            guard candidates.count >= 2 else { continue }
+            for copy in candidates {
+                if case .homebrewFormula(let name) = copy.source, !names.contains(name) { names.append(name) }
+            }
         }
         var lookup = Lookup()
         for (offset, name) in names.enumerated() {
@@ -110,76 +118,77 @@ public struct CleanupDuplicateFindings: Sendable {
         return lookup
     }
 
-    private func finding(for copy: CleanupCopy, in group: CleanupToolGroup, context: Context) -> CleanupFinding {
-        let active = group.copies.first { $0.role == .active }
-        let verdict = classify(copy, active: active, context: context)
-        let (status, reason, action) = (verdict.status, verdict.reason, verdict.action)
-        let relation = copy.role == .shadowed ? relation(of: copy, to: active) : .notApplicable
-        let risk: CleanupRisk
-        if case .inUse = status { risk = .high } else { risk = .low }
-        return CleanupFinding(
-            detector: .pathDuplicates, tool: group.name, path: copy.path, realpath: copy.realpath,
-            source: copy.source, version: copy.version, size: size(of: copy, action: action),
-            status: status, reason: reason, action: action, risk: risk,
-            bucket: bucket(status: status, source: copy.source, relation: relation, action: action),
-            identity: copy.identity
+    private func finding(
+        for copy: CleanupCopy, in group: CleanupToolGroup, offersChoice: Bool, context: Context
+    ) -> CleanupFinding {
+        func make(_ status: CleanupStatus, _ reason: CleanupReason, _ action: CleanupAction, candidate: CleanupCandidate? = nil) -> CleanupFinding {
+            let risk: CleanupRisk
+            if case .inUse = status { risk = .high } else { risk = .low }
+            return CleanupFinding(
+                detector: .pathDuplicates, tool: group.name, path: copy.path, realpath: copy.realpath,
+                source: copy.source, version: copy.version, size: nil, status: status, reason: reason,
+                action: action, risk: risk, bucket: .excluded, identity: copy.identity, candidate: candidate
+            )
+        }
+        switch copy.role {
+        case .expected: return make(.expected, .systemCopy, .none)
+        case .brokenLink: return make(.brokenLink, .brokenLink, unlinkAction(for: copy.path))
+        case .active where !offersChoice: return make(.active, .currentVersion, .none)
+        case .active, .shadowed: break
+        }
+        let candidate = candidate(for: copy, context: context)
+        return make(status(of: copy, candidate), .noCopyKept, .none, candidate: candidate)
+    }
+
+    private func candidate(for copy: CleanupCopy, context: Context) -> CleanupCandidate {
+        var dependents: [String] = []
+        if case .homebrewFormula(let name) = copy.source { dependents = context.dependents[name] ?? [] }
+        let processes = copy.realpath.map {
+            CleanupInUseMatcher.processes(using: $0, isDirectory: false, among: context.processes)
+        } ?? []
+        let removal = removalAction(for: copy, context: context)
+        return CleanupCandidate(
+            pathRole: copy.role, removal: removal, removalSize: size(of: copy, action: removal),
+            dependents: dependents, processes: processes
         )
     }
 
-    /// A copy Wega cannot remove never counts towards the safe total, and neither does any copy
-    /// while `PATH` is approximated: its order (`/etc/paths` first) may make a different copy
-    /// active than the user's shell does.
-    private func bucket(
-        status: CleanupStatus, source: CleanupSource, relation: CleanupVersionRelation, action: CleanupAction
-    ) -> CleanupBucket {
-        let bucket = CleanupBucketPolicy.bucket(status: status, source: source, relation: relation, recognisedLayout: true)
-        return bucket == .safe && (action == .none || pathIsApproximate) ? .needsDecision : bucket
+    /// Statuses are `PATH` facts (B5): the active copy stays `active` whatever blocks its removal.
+    private func status(of copy: CleanupCopy, _ candidate: CleanupCandidate) -> CleanupStatus {
+        if copy.role == .active { return .active }
+        if !candidate.dependents.isEmpty { return .dependency(candidate.dependents) }
+        if !candidate.processes.isEmpty { return .inUse(candidate.processes) }
+        return .shadowed
     }
 
-    private func classify(
-        _ copy: CleanupCopy, active: CleanupCopy?, context: Context
-    ) -> Verdict {
-        switch copy.role {
-        case .active: return Verdict(status: .active, reason: .currentVersion, action: .none)
-        case .expected: return Verdict(status: .expected, reason: .systemCopy, action: .none)
-        case .brokenLink: return Verdict(status: .brokenLink, reason: .brokenLink, action: .none)
-        case .shadowed: break
-        }
-        let reason = CleanupReason.shadowedBy(path: (active?.path ?? copy.path).path)
-        if case .homebrewFormula(let name) = copy.source, let dependents = context.dependents[name] {
-            return Verdict(status: .dependency(dependents), reason: .requiredBy(dependents), action: .none)
-        }
-        let action = removalAction(for: copy, active: active, context: context)
-        if let real = copy.realpath {
-            let using = CleanupInUseMatcher.processes(using: real, isDirectory: false, among: context.processes)
-            if !using.isEmpty { return Verdict(status: .inUse(using), reason: reason, action: action) }
-        }
-        return Verdict(status: .shadowed, reason: reason, action: action)
+    /// `unlink` removes one directory entry and cannot recurse; outside the home the link is
+    /// usually root-owned, so the command carries `sudo`. Wega never runs it.
+    private func unlinkAction(for link: URL) -> CleanupAction {
+        let path = link.path
+        guard Self.isSafeCommandPath(path) else { return .none }
+        let isInHome = CleanupPathText.components(of: path).starts(with: CleanupPathText.components(of: home.path))
+        return .command(isInHome ? "unlink \(path)" : "sudo unlink \(path)")
     }
 
-    private func relation(of copy: CleanupCopy, to active: CleanupCopy?) -> CleanupVersionRelation {
-        guard let version = copy.version, let current = active?.version else { return .unknown }
-        switch compareVersions(version, current, scheme: .semver) {
-        case .orderedAscending, .orderedSame: return .olderOrSame
-        case .orderedDescending: return .newer
-        case .unknown: return .unknown
-        }
-    }
-
-    /// `brew uninstall` removes the whole formula or cask, so a copy from the package that also
-    /// provides the active copy gets no action.
-    private func removalAction(for copy: CleanupCopy, active: CleanupCopy?, context: Context) -> CleanupAction {
-        let sharesActivePackage = active?.source == copy.source
+    /// The removal that fits the tool that installed the copy, whichever copy is kept instead.
+    private func removalAction(for copy: CleanupCopy, context: Context) -> CleanupAction {
         switch copy.source {
         case .homebrewFormula(let name):
-            return context.uncheckedFormulas.contains(name) || sharesActivePackage ? .none : .brew(.uninstallFormula(name))
-        case .homebrewCask(let token): return sharesActivePackage ? .none : .brew(.uninstallCask(token))
-        case .appBundle: return .instruction(.removeAppLinkWithAdminRights(link: copy.path.path))
+            return context.uncheckedFormulas.contains(name) ? .none : .brew(.uninstallFormula(name))
+        case .homebrewCask(let token): return .brew(.uninstallCask(token))
+        case .appBundle(let name): return appRemoval(for: copy, named: name)
         case .appManaged, .system, .nativeVersionDirectory: return .none
         case .standalone: return standaloneAction(for: copy)
         case .versionManager(let manager): return versionManagerAction(manager, copy: copy)
         case .packageManager(let manager): return packageManagerAction(manager, copy: copy)
         }
+    }
+
+    private func appRemoval(for copy: CleanupCopy, named name: String) -> CleanupAction {
+        guard let real = copy.realpath, let bundle = CleanupKeepChoice.enclosingAppBundle(of: real) else {
+            return .instruction(.removeAppLinkWithAdminRights(link: copy.path.path))
+        }
+        return .uninstallApp(name: name, bundle: bundle)
     }
 
     private func standaloneAction(for copy: CleanupCopy) -> CleanupAction {

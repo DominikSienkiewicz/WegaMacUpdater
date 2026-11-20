@@ -322,7 +322,10 @@ final class CleanupScannerTests: XCTestCase {
         XCTAssertEqual(try finding(.pathDuplicates, home(".local/bin/gh"), in: report).status, .active)
         let appLink = try finding(.pathDuplicates, home("usr/local/bin/ollama"), in: report)
         XCTAssertEqual(appLink.status, .shadowed, "case 6")
-        XCTAssertEqual(appLink.action, .instruction(.removeAppLinkWithAdminRights(link: home("usr/local/bin/ollama"))))
+        XCTAssertEqual(
+            appLink.action,
+            .uninstallApp(name: "Ollama", bundle: tmp.home.appending(path: "Applications/Ollama.app", directoryHint: .isDirectory))
+        )
         XCTAssertEqual(try finding(.pathDuplicates, home("opt/homebrew/bin/ollama"), in: report).status, .active)
         XCTAssertEqual(try finding(.pathDuplicates, ReferenceFileSystem.systemTool, in: report).status, .expected, "case 8")
         XCTAssertEqual(try finding(.pathDuplicates, home("opt/homebrew/bin/git"), in: report).status, .active)
@@ -342,7 +345,7 @@ final class CleanupScannerTests: XCTestCase {
         XCTAssertEqual(report.path.entries, path)
         XCTAssertEqual(report.notes, [])
         XCTAssertEqual(report.skippedProtected, [])
-        XCTAssertEqual(brew.calls, ["gh"])
+        XCTAssertEqual(brew.calls, ["gh", "ollama"], "every Homebrew formula with a rival copy, the active one included")
 
         XCTAssertEqual(trash.urls, [], "the scan never moves anything to the Trash")
         XCTAssertEqual(reference.mutations, [], "the scan never creates or moves anything")
@@ -350,7 +353,8 @@ final class CleanupScannerTests: XCTestCase {
     }
 
     /// The approximate `PATH` puts `/etc/paths` first, so its active copy may not be the one a
-    /// Terminal runs: no D1 copy counts as safe then, while its action stays as it is.
+    /// Terminal runs: Wega keeps no copy on its own then, so no D1 copy is removable or counted
+    /// until the user picks the one to keep.
     func testApproximatePathNeverMakesADuplicateSafe() async throws {
         let path = try buildReferenceTree()
 
@@ -360,12 +364,14 @@ final class CleanupScannerTests: XCTestCase {
         let cask = tmp.url("opt/homebrew/bin/claude").path
         XCTAssertEqual(try finding(.pathDuplicates, cask, in: captured).bucket, .safe, "precondition")
         let approximated = try finding(.pathDuplicates, cask, in: approximate)
-        XCTAssertEqual(approximated.bucket, .needsDecision)
-        XCTAssertEqual(approximated.action, .brew(.uninstallCask("claude-code")))
+        XCTAssertEqual(approximated.bucket, .excluded)
+        XCTAssertEqual(approximated.action, .none)
+        XCTAssertEqual(approximated.candidate?.keep, .undecided)
+        XCTAssertEqual(approximated.candidate?.removal, .brew(.uninstallCask("claude-code")))
         XCTAssertFalse(approximate.findings.contains { $0.detector == .pathDuplicates && $0.bucket == .safe })
         let older = try finding(.versionDirectories, tmp.url(".local/share/claude/versions/2.1.322").path, in: approximate)
         XCTAssertEqual(older.bucket, .safe, "a version directory does not depend on the PATH order")
-        XCTAssertEqual(approximate.totals, CleanupTotals(safe: 20 + 2 * 7_000_000, needsDecision: 1 + 300 + 600_000))
+        XCTAssertEqual(approximate.totals, CleanupTotals(safe: 20 + 2 * 7_000_000, needsDecision: 1))
     }
 
     func testScanNeverTouchesProtectedLocations() async throws {
