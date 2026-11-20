@@ -1,12 +1,23 @@
 import SwiftUI
 import MacUpdaterCore
 
-/// How the band lays itself out, decided from the list column's width, not the window's.
+/// How the band lays itself out, decided from the band's own width (what its `GeometryReader`
+/// sees), not the window's.
 enum UpdateBandLayout {
-    case regular, compact
+    case regular, compact, narrow
 
     static func style(forWidth width: CGFloat) -> UpdateBandLayout {
-        width < WegaLayout.bandCompactBreakpoint ? .compact : .regular
+        if width < WegaLayout.bandNarrowBreakpoint { return .narrow }
+        return width < WegaLayout.bandCompactBreakpoint ? .compact : .regular
+    }
+
+    /// The round button's diameter in this layout.
+    var buttonDiameter: CGFloat {
+        switch self {
+        case .regular: WegaLayout.bandButtonSize
+        case .compact: WegaLayout.bandButtonCompactSize
+        case .narrow:  WegaLayout.bandButtonNarrowSize
+        }
     }
 }
 
@@ -38,7 +49,7 @@ struct UpdateBand<Action: View>: View {
         GeometryReader { proxy in
             let layout = UpdateBandLayout.style(forWidth: proxy.size.width)
             content(layout)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, layout == .narrow ? 16 : 20)
                 .frame(width: proxy.size.width, height: WegaLayout.bandHeight)
                 .foregroundStyle(Color.wegaBandText)
                 .background { backdrop }
@@ -72,22 +83,27 @@ struct UpdateBand<Action: View>: View {
                 textColumn(layout)
                 action(layout)
             }
+        case .narrow:
+            HStack(spacing: 12) {
+                textColumn(layout)
+                action(layout)
+            }
         }
     }
 
     private func textColumn(_ layout: UpdateBandLayout) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            eyebrow
+            eyebrow(layout)
             Text(presentation.headline)
-                .font(.wega(.title, weight: .semibold))
+                .font(.wega(layout == .narrow ? .title2 : .title, weight: .semibold))
                 .foregroundStyle(Color.wegaBandText)
-                .lineLimit(1)
+                .lineLimit(layout == .narrow ? 2 : 1)
                 .accessibilityAddTraits(.isHeader)
             Text(presentation.line)
                 .font(.wega(.callout))
                 .foregroundStyle(Color.wegaBandSecondaryText)
                 .lineLimit(layout == .regular ? 2 : 1)
-            if layout == .compact {
+            if layout != .regular {
                 compactSummary
             }
         }
@@ -95,11 +111,13 @@ struct UpdateBand<Action: View>: View {
     }
 
     @ViewBuilder
-    private var eyebrow: some View {
+    private func eyebrow(_ layout: UpdateBandLayout) -> some View {
         if refreshProgress != nil {
             ScanPhaseStrip(progress: refreshProgress)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .clipped()
+        } else if layout == .narrow {
+            freshnessLabel
         } else {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 8) {

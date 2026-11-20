@@ -19,7 +19,7 @@ final class UpdateBandViewTests: XCTestCase {
     }
 
     func testTheButtonIsExactlyItsDiameter() {
-        for diameter in [WegaLayout.bandButtonSize, WegaLayout.bandButtonCompactSize] {
+        for diameter in [WegaLayout.bandButtonSize, WegaLayout.bandButtonCompactSize, WegaLayout.bandButtonNarrowSize] {
             for disabled in [false, true] {
                 XCTAssertEqual(
                     fittingSize(ofButtonWith: diameter, disabled: disabled),
@@ -57,15 +57,47 @@ final class UpdateBandViewTests: XCTestCase {
     }
 
     func testTheLayoutRuleSwitchesAtTheBreakpoint() {
+        XCTAssertEqual(UpdateBandLayout.style(forWidth: 479), .narrow)
+        XCTAssertEqual(UpdateBandLayout.style(forWidth: 480), .compact)
         XCTAssertEqual(UpdateBandLayout.style(forWidth: 819), .compact)
         XCTAssertEqual(UpdateBandLayout.style(forWidth: 820), .regular)
         XCTAssertEqual(UpdateBandLayout.style(forWidth: 740), .compact)
-        XCTAssertEqual(UpdateBandLayout.style(forWidth: 380), .compact)
+        XCTAssertEqual(UpdateBandLayout.style(forWidth: 380), .narrow)
+    }
+
+    func testEachLayoutPicksItsButtonDiameter() throws {
+        XCTAssertEqual(UpdateBandLayout.regular.buttonDiameter, WegaLayout.bandButtonSize)
+        XCTAssertEqual(UpdateBandLayout.compact.buttonDiameter, WegaLayout.bandButtonCompactSize)
+        XCTAssertEqual(UpdateBandLayout.narrow.buttonDiameter, WegaLayout.bandButtonNarrowSize)
+        XCTAssertEqual(WegaLayout.bandButtonNarrowSize, 80)
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        XCTAssertTrue(view.contains("diameter: layout.buttonDiameter"))
+    }
+
+    /// A 980 pt window with the inspector open leaves the band about 368 pt; the narrow layout
+    /// gives Wega's width to the text instead of overflowing the border.
+    func testTheNarrowBandFitsTheInspectorOpenWindow() throws {
+        for progress in [nil, ScanProgress.running(.npm)] {
+            let band = UpdateBand(
+                presentation: fullPresentation, refreshProgress: progress, onShowPlan: {},
+                action: { _ in Color.clear.frame(width: WegaLayout.bandButtonNarrowSize, height: WegaLayout.bandButtonNarrowSize) }
+            )
+            .frame(width: 368)
+            let size = NSHostingView(rootView: band).fittingSize
+            XCTAssertLessThanOrEqual(size.width, 368, "refreshing \(progress != nil)")
+            XCTAssertEqual(size.height, WegaLayout.bandHeight, "refreshing \(progress != nil)")
+        }
+        let text = try source("Sources/MacUpdater/UpdateBand.swift")
+        let lower = try XCTUnwrap(text.range(of: "private func content(")).upperBound
+        let upper = try XCTUnwrap(text.range(of: "private func textColumn(")).lowerBound
+        let content = text[lower..<upper]
+        let narrow = try XCTUnwrap(content.range(of: "case .narrow:"), "the narrow branch")
+        XCTAssertFalse(content[narrow.upperBound...].contains("WegaHead("), "the narrow band draws no Wega")
     }
 
     func testTheBandNeverChangesHeight() {
         for progress in [nil, ScanProgress.running(.npm)] {
-            for width in [380, 520, 700, 819, 820, 1100] as [CGFloat] {
+            for width in [240, 368, 380, 520, 700, 819, 820, 1100] as [CGFloat] {
                 let band = UpdateBand(
                     presentation: fullPresentation, refreshProgress: progress, onShowPlan: {},
                     action: { _ in Color.clear.frame(width: 96, height: 96) }

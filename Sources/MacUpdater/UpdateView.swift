@@ -268,7 +268,7 @@ struct UpdateView: View {
                     title: bandPresentation.buttonTitle,
                     count: bandPresentation.buttonCount,
                     accessibilityLabel: bandPresentation.buttonAccessibilityLabel,
-                    diameter: layout == .compact ? WegaLayout.bandButtonCompactSize : WegaLayout.bandButtonSize,
+                    diameter: layout.buttonDiameter,
                     action: requestUpdate
                 )
                 .disabled(!allowsUpdateRun)
