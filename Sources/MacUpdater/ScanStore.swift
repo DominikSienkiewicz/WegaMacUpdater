@@ -155,7 +155,7 @@ final class ScanStore: ObservableObject {
     /// How far the running upgrade has got, in whole packages. `nil` when nothing is
     /// installing, which is also what hides the bar.
     @Published var upgradeProgress: UpgradeProgress? {
-        didSet { MenuBarAgent.shared.windowRun = upgradeProgress }
+        didSet { publishWindowRun() }
     }
     /// The counter behind `upgradeProgress`. One per run, created by the upgrade and read
     /// by the brew streaming loop — a stored property, so it cannot live in the extension
@@ -219,7 +219,9 @@ final class ScanStore: ObservableObject {
     var scanTask: Task<Void, Never>?
     /// REL-12 — whether the running upgrade has been asked to stop, and what stopping it
     /// cost. Written only through the three operations below.
-    @Published private(set) var updateInterruption = UpdateInterruption()
+    @Published private(set) var updateInterruption = UpdateInterruption() {
+        didSet { publishWindowRun() }
+    }
 
     let announcer: any AccessibilityAnnouncing
 
@@ -253,6 +255,19 @@ final class ScanStore: ObservableObject {
         guard updating, !updateInterruption.isRequested else { return }
         updateInterruption.request()
         WegaLog.info(.homebrew, "Anulowanie aktualizacji — zatrzymam po bieżącym pakiecie")
+    }
+
+    /// UXP-09 — hands the menu bar what it shows of the run: done/total and whether a stop was
+    /// asked for, whichever path asked (⌘., the run bar, the menu itself). The brew loop sets
+    /// `upgradeProgress` on every output chunk, and every assignment to the agent's
+    /// `@Published` property re-evaluates the `App` body, so only a change is assigned.
+    private func publishWindowRun() {
+        let run = upgradeProgress.map {
+            WindowRunStatus(completedUnits: $0.completedUnits, totalUnits: $0.totalUnits,
+                            isStopping: updateInterruption.isRequested)
+        }
+        guard MenuBarAgent.shared.windowRun != run else { return }
+        MenuBarAgent.shared.windowRun = run
     }
 
     /// Called by the upgrade at every package boundary. `remaining` is everything the run

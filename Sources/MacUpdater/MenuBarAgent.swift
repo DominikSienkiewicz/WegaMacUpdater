@@ -38,7 +38,7 @@ final class MenuBarAgent: ObservableObject {
 
     /// UXP-09 — how far the update run started in the window has got, so the menu-bar menu can
     /// show it and stop it while the window is closed. `nil` when no such run is going.
-    @Published var windowRun: UpgradeProgress?
+    @Published var windowRun: WindowRunStatus?
     /// Stops the window's run the way its own button does: the packages already installing
     /// finish, nothing new starts. Registered by the `ScanStore` that owns the run.
     var stopWindowRun: (@MainActor () -> Void)?

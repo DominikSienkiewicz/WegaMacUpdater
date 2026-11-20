@@ -43,8 +43,9 @@ struct MenuBarContent: View {
     var body: some View {
         statusSection
 
-        if agent.windowRun != nil {
-            Button(UpdateRunCopy.stopLabel(isStopping: false)) { agent.stopWindowRun?() }
+        if let run = agent.windowRun {
+            Button(run.stopLabel) { agent.stopWindowRun?() }
+                .disabled(!run.canStop)
         }
 
         Divider()

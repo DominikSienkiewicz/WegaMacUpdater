@@ -11,7 +11,7 @@ struct MenuBarStatusPresentation: Equatable {
     let failed: Bool
     let incomplete: Bool
     let lastCheck: Date?
-    var run: UpgradeProgress?
+    var run: WindowRunStatus?
 
     var statusText: String {
         if let run { return trf("Aktualizuję %@ z %@…", "\(run.completedUnits)", "\(run.totalUnits)") }
@@ -26,4 +26,17 @@ struct MenuBarStatusPresentation: Equatable {
     }
 
     var accessibilityLabel: String { statusText }
+}
+
+/// UXP-09 — what the menu bar shows of an update run started in the window: how far it has got,
+/// and whether a stop has been asked for. Nothing else — a stage change inside one package
+/// changes nothing the menu draws, so it is not part of the value.
+struct WindowRunStatus: Equatable {
+    let completedUnits: Int
+    let totalUnits: Int
+    let isStopping: Bool
+
+    /// The menu's stop item says what the window's says, before and after the click.
+    var stopLabel: String { UpdateRunCopy.stopLabel(isStopping: isStopping) }
+    var canStop: Bool { !isStopping }
 }
