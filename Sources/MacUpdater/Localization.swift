@@ -10,13 +10,35 @@ enum LocalizedStrings {
     // odczyt/zapis z dowolnego kontekstu (uncontended NSLock ~ns, bez wpływu na tr()).
     private final class Storage: @unchecked Sendable {
         let lock = NSLock()
-        var current: AppLanguage = .pl
+        var current: AppLanguage
+        init(_ language: AppLanguage) { current = language }
     }
-    private static let storage = Storage()
+    private static let storage = Storage(.pl)
+
+    /// Bound only inside `withScopedLanguage`; the app never binds it, so it always uses `storage`.
+    @TaskLocal private static var scopedStorage: Storage?
+
+    private static var activeStorage: Storage { scopedStorage ?? storage }
 
     static var current: AppLanguage {
-        get { storage.lock.withLock { storage.current } }
-        set { storage.lock.withLock { storage.current = newValue } }
+        get { let active = activeStorage; return active.lock.withLock { active.current } }
+        set { let active = activeStorage; active.lock.withLock { active.current = newValue } }
+    }
+
+    /// Runs `body` with `language` active for the calling task and the child tasks it creates.
+    /// Reads and writes of `current` inside go to a private store, so a test that forces a
+    /// language cannot switch it under tests running in parallel in the same process.
+    static func withScopedLanguage<T>(_ language: AppLanguage, _ body: () throws -> T) rethrows -> T {
+        try $scopedStorage.withValue(Storage(language), operation: body)
+    }
+
+    /// The `async` form of `withScopedLanguage(_:_:)`.
+    static func withScopedLanguage<T>(
+        _ language: AppLanguage,
+        isolation: isolated (any Actor)? = #isolation,
+        _ body: () async throws -> T
+    ) async rethrows -> T {
+        try await $scopedStorage.withValue(Storage(language), operation: body, isolation: isolation)
     }
 
     static func translate(_ base: String) -> String {
