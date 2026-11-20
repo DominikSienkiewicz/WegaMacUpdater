@@ -169,7 +169,7 @@ public struct CleanupRemover: Sendable {
             return !entries.isEmpty && entries.allSatisfy { isDirectlyInside($0, parent) }
         case .brew(let brewAction):
             return CleanupHomebrewNames.isValid(packageName(of: brewAction))
-        case .command, .instruction, .none:
+        case .command, .instruction, .uninstallApp, .none:
             return false
         }
     }
@@ -215,7 +215,7 @@ public struct CleanupRemover: Sendable {
         case .brew:
             guard let entry = try fileSystem.entry(at: finding.path), entry.identity == scanned else { return nil }
             return [entry]
-        case .command, .instruction, .none:
+        case .command, .instruction, .uninstallApp, .none:
             return nil
         }
     }
@@ -421,7 +421,7 @@ public struct CleanupRemover: Sendable {
             try await brewRemoval.uninstallCask(token: token)
         case .brew(.cleanup(let name)):
             try await brewRemoval.cleanupPackage(name: name)
-        case .command, .instruction, .none:
+        case .command, .instruction, .uninstallApp, .none:
             break
         }
     }

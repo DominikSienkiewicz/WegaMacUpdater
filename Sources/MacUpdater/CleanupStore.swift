@@ -200,6 +200,7 @@ final class CleanupStore: ObservableObject {
         case .brew(.cleanup): "brew cleanup"
         case .command: "command"
         case .instruction: "instruction"
+        case .uninstallApp: "uninstall app"
         case .none: "none"
         }
     }

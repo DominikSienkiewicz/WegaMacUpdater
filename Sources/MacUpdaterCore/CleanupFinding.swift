@@ -106,6 +106,8 @@ public enum CleanupAction: Codable, Equatable, Sendable {
     case brew(CleanupBrewAction)
     case command(String)
     case instruction(CleanupInstruction)
+    /// Uninstalling an app is the user's to do; Wega only names the bundle.
+    case uninstallApp(name: String, bundle: URL)
     case none
 }
 
@@ -142,6 +144,9 @@ public enum CleanupReason: Codable, Equatable, Sendable {
     case olderCopyWins(version: String, newer: String, newerVersion: String)
     case tccEntry(grants: [CleanupTCCGrant], link: CleanupTCCLink?)
     case tccEntryFileGone(grants: [CleanupTCCGrant])
+    case keptInstead(path: String)
+    case keptByChoice
+    case noCopyKept
 }
 
 public enum CleanupVersionRelation: Codable, Equatable, Sendable {
@@ -166,6 +171,52 @@ public struct CleanupFileIdentity: Codable, Hashable, Sendable {
     }
 }
 
+/// Whether the user keeps this copy of a duplicated tool.
+public enum CleanupKeep: Codable, Equatable, Sendable {
+    case kept
+    case notKept(keptPath: String)
+    case undecided
+}
+
+/// What choosing a copy to keep needs to know about it, whatever copy is kept instead.
+public struct CleanupCandidate: Codable, Equatable, Sendable {
+    public let pathRole: CleanupCopyRole
+    public let removal: CleanupAction
+    public let removalSize: Int64?
+    public let dependents: [String]
+    public let processes: [CleanupProcess]
+    public var keep: CleanupKeep
+    public var takesOver: String?
+
+    public init(
+        pathRole: CleanupCopyRole,
+        removal: CleanupAction,
+        removalSize: Int64?,
+        dependents: [String],
+        processes: [CleanupProcess],
+        keep: CleanupKeep = .undecided,
+        takesOver: String? = nil
+    ) {
+        self.pathRole = pathRole
+        self.removal = removal
+        self.removalSize = removalSize
+        self.dependents = dependents
+        self.processes = processes
+        self.keep = keep
+        self.takesOver = takesOver
+    }
+}
+
+public struct CleanupKeptCopy: Codable, Equatable, Sendable {
+    public let path: String
+    public let source: CleanupSource
+
+    public init(path: String, source: CleanupSource) {
+        self.path = path
+        self.source = source
+    }
+}
+
 public struct CleanupFinding: Codable, Equatable, Identifiable, Sendable {
     public let id: String
     public let detector: CleanupDetectorID
@@ -181,6 +232,7 @@ public struct CleanupFinding: Codable, Equatable, Identifiable, Sendable {
     public let risk: CleanupRisk
     public let bucket: CleanupBucket
     public let identity: CleanupFileIdentity?
+    public let candidate: CleanupCandidate?
 
     public init(
         detector: CleanupDetectorID,
@@ -195,7 +247,8 @@ public struct CleanupFinding: Codable, Equatable, Identifiable, Sendable {
         action: CleanupAction,
         risk: CleanupRisk,
         bucket: CleanupBucket,
-        identity: CleanupFileIdentity?
+        identity: CleanupFileIdentity?,
+        candidate: CleanupCandidate? = nil
     ) {
         let base = "\(detector.rawValue):\(Self.statusKey(status)):\(path.path)"
         self.id = detector == .tccMap ? "\(base):\(tool)" : base
@@ -212,6 +265,7 @@ public struct CleanupFinding: Codable, Equatable, Identifiable, Sendable {
         self.risk = risk
         self.bucket = bucket
         self.identity = identity
+        self.candidate = candidate
     }
 
     /// The status's case name. It is part of the id because D8 reports a directory's stale and

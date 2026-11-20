@@ -53,6 +53,10 @@ extension Translations {
 
         // Rows
         "tylko informacja": "information only",
+        "zostawiasz %@": "you keep %@",
+        "tę kopię zostawiasz": "you keep this copy",
+        "nie wybrano kopii do zostawienia": "no copy chosen to keep",
+        "Odinstaluj aplikację %@ (%@)": "Uninstall the app %@ (%@)",
         "wersja nieznana": "version unknown",
         "używa: %@": "in use by: %@",
         "Do Kosza…": "Move to Trash…",

@@ -337,7 +337,7 @@ final class CleanupScannerTests: XCTestCase {
             report.findings.map(\.detector).reduce(into: [CleanupDetectorID]()) { if $0.last != $1 { $0.append($1) } },
             [.pathDuplicates, .versionDirectories, .shellState]
         )
-        XCTAssertEqual(report.schemaVersion, 1)
+        XCTAssertEqual(report.schemaVersion, 2)
         XCTAssertEqual(report.createdAt, Self.scanDate)
         XCTAssertEqual(report.path.entries, path)
         XCTAssertEqual(report.notes, [])

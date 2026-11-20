@@ -59,6 +59,7 @@ final class CleanupHygieneTextTests: XCTestCase {
             .olderCopyWins(version: "1.0.0", newer: "~/n", newerVersion: "2.0.0"),
             .tccEntry(grants: [CleanupTCCGrant(service: .documents, allowed: true)], link: nil),
             .tccEntryFileGone(grants: [CleanupTCCGrant(service: .downloads, allowed: false)]),
+            .keptInstead(path: "~/bin/x"), .keptByChoice, .noCopyKept,
         ]
         for reason in reasons {
             let polish = withLanguage(.pl) { CleanupPresentation.reasonText(reason) }
@@ -77,6 +78,7 @@ private enum ReasonKind: CaseIterable {
     case homebrewKeptVersions, installedOnlyAsDependency, recentlyUpgraded, notRequiredByProjects, requiredByProjects
     case unusedGradleDistribution, unreferencedJDK, systemJDK, ideVersionNotInstalled, ideNotFound, newerThanInstalledIDE
     case missingPathEntry, repeatedPathEntry, samePlaceAs, nestedIn, olderCopyWins, tccEntry, tccEntryFileGone
+    case keptInstead, keptByChoice, noCopyKept
 
     var sample: CleanupReason {
         switch self {
@@ -111,6 +113,9 @@ private enum ReasonKind: CaseIterable {
         case .olderCopyWins: .olderCopyWins(version: "1.0.0", newer: "~/n", newerVersion: "2.0.0")
         case .tccEntry: .tccEntry(grants: [CleanupTCCGrant(service: .documents, allowed: true)], link: nil)
         case .tccEntryFileGone: .tccEntryFileGone(grants: [CleanupTCCGrant(service: .downloads, allowed: false)])
+        case .keptInstead: .keptInstead(path: "~/bin/x")
+        case .keptByChoice: .keptByChoice
+        case .noCopyKept: .noCopyKept
         }
     }
 }
@@ -149,6 +154,9 @@ private extension CleanupReason {
         case .olderCopyWins: .olderCopyWins
         case .tccEntry: .tccEntry
         case .tccEntryFileGone: .tccEntryFileGone
+        case .keptInstead: .keptInstead
+        case .keptByChoice: .keptByChoice
+        case .noCopyKept: .noCopyKept
         }
     }
 }

@@ -237,7 +237,7 @@ enum CleanupPresentation {
         case .brew: return (.brew, nil)
         case .command(let command): return (.copyCommand(command), command)
         case .instruction(let instruction): return (nil, instructionNote(for: finding, instruction, home: home))
-        case .none: return (nil, tr("tylko informacja"))
+        case .uninstallApp, .none: return (nil, tr("tylko informacja"))
         }
     }
 
@@ -249,7 +249,7 @@ enum CleanupPresentation {
         switch finding.action {
         case .instruction(let instruction): return (nil, instructionNote(for: finding, instruction, home: home))
         case .command(let command): return (.copyCommand(command), command)
-        case .trash, .trashBatch, .brew, .none: return informationOnly
+        case .trash, .trashBatch, .brew, .uninstallApp, .none: return informationOnly
         }
     }
 
@@ -395,12 +395,13 @@ enum CleanupPresentation {
         case .ideNotFound: tr("nie znaleziono zainstalowanego IDE tego produktu")
         case .newerThanInstalledIDE(let installed):
             trf("nowsza niż zainstalowane IDE (%@)", installed.joined(separator: ", "))
-        case .missingPathEntry, .repeatedPathEntry, .samePlaceAs, .nestedIn, .olderCopyWins, .tccEntry, .tccEntryFileGone:
+        case .missingPathEntry, .repeatedPathEntry, .samePlaceAs, .nestedIn, .olderCopyWins, .tccEntry, .tccEntryFileGone,
+             .keptInstead, .keptByChoice, .noCopyKept:
             hygieneReasonText(reason, requiredBy: paths)
         }
     }
 
-    /// The `PATH` hygiene and Files and Folders reasons. The other reasons are listed rather than
+    /// The `PATH` hygiene, Files and Folders and keep-choice reasons. The other reasons are listed rather than
     /// defaulted, so a reason added later fails to compile here until it has a text.
     private static func hygieneReasonText(_ reason: CleanupReason, requiredBy paths: [String]) -> String {
         switch reason {
@@ -414,6 +415,9 @@ enum CleanupPresentation {
             tccEntryText(grants: grants, link: link)
         case .tccEntryFileGone(let grants):
             trf("wpis w „Pliki i foldery” (%@) wskazuje plik, którego już nie ma", grantsText(grants))
+        case .keptInstead(let path): trf("zostawiasz %@", path)
+        case .keptByChoice: tr("tę kopię zostawiasz")
+        case .noCopyKept: tr("nie wybrano kopii do zostawienia")
         case .olderVersion, .newerVersion, .shadowedBy, .systemCopy, .managedByApp, .staleSinceBoot, .keptSinceBoot,
              .unknownVersionDirectory, .currentVersion, .protectedLocation, .brokenLink, .requiredBy, .homebrewLeftovers,
              .homebrewKeptVersions, .installedOnlyAsDependency, .recentlyUpgraded, .notRequiredByProjects, .requiredByProjects,
@@ -620,6 +624,8 @@ enum CleanupPresentation {
             CleanupActionText.command(for: brew)
         case .command(let command):
             command
+        case .uninstallApp(let name, let bundle):
+            trf("Odinstaluj aplikację %@ (%@)", name, tilde(bundle.path, home))
         case .instruction(let instruction):
             instructionText(displayed(instruction, home: home))
         case .none:
@@ -686,6 +692,7 @@ enum CleanupPresentation {
         case .nestedIn(let parent): .nestedIn(parent: tilde(parent, home))
         case .olderCopyWins(let version, let newer, let newerVersion):
             .olderCopyWins(version: version, newer: tilde(newer, home), newerVersion: newerVersion)
+        case .keptInstead(let path): .keptInstead(path: tilde(path, home))
         default: reason
         }
     }
