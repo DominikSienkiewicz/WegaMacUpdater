@@ -96,7 +96,7 @@ extension ScanStore {
             variant: .success,
             title: trf("Cofnięto aktualizację: %@", "\(undoable.token)"),
             message: restoredVersion.map {
-                trf("Przywróciłam %@ do wersji %@. Nie będę proponować nowszych, dopóki tego nie zmienisz w Ustawieniach → Wstrzymane aktualizacje.",
+                trf("Przywróciłam %@ do wersji %@. Nie będę proponować nowszych, dopóki tego nie zmienisz w Ustawieniach → Ignorowane i przypięte.",
                     "\(undoable.token)", "\($0)")
             } ?? tr("Przywrócono poprzednią wersję."),
             autoDismiss: false
