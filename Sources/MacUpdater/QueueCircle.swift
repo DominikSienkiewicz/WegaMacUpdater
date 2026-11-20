@@ -66,6 +66,13 @@ struct QueueCircle: View {
     }
 }
 
+/// Holds the queue column where no control is shown, so the controls beside it do not move.
+struct QueueColumnPlaceholder: View {
+    var body: some View {
+        QueueCircle(state: .notQueued).hidden().accessibilityHidden(true)
+    }
+}
+
 /// A `QueueCircle` that shows a keyboard focus ring while its control has focus. The ring
 /// is an overlay, so focus never changes the layout size.
 struct QueueCircleControlLabel: View {

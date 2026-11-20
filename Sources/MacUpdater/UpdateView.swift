@@ -237,6 +237,8 @@ struct UpdateView: View {
                     toggle: { scan.toggleAll(filter: updateFilter) }
                 )
                 .disabled(!ScanSelectionGate.allowsListSelection(isRefreshing: scan.isRefreshing, isUpdating: scan.updating))
+            } else {
+                QueueColumnPlaceholder()
             }
             scopeBar
             Spacer(minLength: 0)

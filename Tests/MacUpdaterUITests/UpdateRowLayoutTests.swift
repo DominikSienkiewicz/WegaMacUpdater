@@ -31,6 +31,11 @@ struct UpdateRowLayoutTests {
         #expect(!manualRows.contains("SelectionColumnSpacer()"))
     }
 
+    @Test func theQueueColumnPlaceholderIsExactlyAsWideAsTheQueueCircle() {
+        let width = NSHostingView(rootView: QueueColumnPlaceholder()).fittingSize.width
+        #expect(width == WegaLayout.queueCircleSize)
+    }
+
     @Test func vendorCardsWithoutAPathShowTheHandoffMark() throws {
         for (file, anchor) in [
             ("Sources/MacUpdater/DockerDesktopUpdateActions.swift", "struct UnresolvedDockerUpdateRow: View"),

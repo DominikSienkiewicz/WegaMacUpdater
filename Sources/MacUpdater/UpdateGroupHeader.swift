@@ -36,6 +36,8 @@ struct UpdateGroupHeader: View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
             if let selection {
                 selection.padding(.trailing, WegaLayout.checkboxSpacing)
+            } else {
+                QueueColumnPlaceholder().padding(.trailing, WegaLayout.checkboxSpacing)
             }
             VStack(alignment: .leading, spacing: 4) {
                 headerRow

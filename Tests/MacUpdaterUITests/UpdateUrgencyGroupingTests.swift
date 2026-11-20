@@ -120,6 +120,8 @@ struct UpdateUrgencyGroupingTests {
         #expect(header.contains(".textCase(.uppercase)"))
         #expect(header.contains("monospaced: true"))
         #expect(header.contains(".accessibilityAddTraits(.isHeader)"))
+        #expect(header.contains("QueueColumnPlaceholder()"),
+                "a header without select-all keeps its dot and number in the batch headers' column")
 
         let slices = [
             ("struct UpdateSection: View", "private struct UpdatePolicyMenu: View"),

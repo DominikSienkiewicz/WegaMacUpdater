@@ -56,6 +56,8 @@ struct UpdateActionBarTests {
         #expect(!bar.contains("SelectionCheckbox("), "the list-wide queue circle sits in the list header (C2)")
         let header = try slice(view, from: "private var listHeader: some View", to: "private var resultsHeading: some View")
         #expect(header.contains("SelectionCheckbox("), "the list header carries the list-wide queue circle")
+        #expect(header.contains("QueueColumnPlaceholder()"),
+                "with nothing to select the header keeps the column so the scope bar stays put")
         #expect(view.contains(".safeAreaInset(edge: .bottom, spacing: 0) { actionBar }"),
                 "the bar stays under the list instead of scrolling away with it")
     }
