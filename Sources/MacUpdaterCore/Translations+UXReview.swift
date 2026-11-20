@@ -21,7 +21,6 @@ extension Translations {
         "Później": "Later",
         "Wszystko jasne": "Got it",
         "Co robi pomocnik?": "What does the helper do?",
-        "Powiadamiać o nowych aktualizacjach?": "Notify you about new updates?",
         "Pomocnik Wegi działa jako root i umie tylko cztery rzeczy: zainstalować zweryfikowany pakiet Wegi, włączyć Touch ID dla sudo, przywrócić kopię aplikacji sprzed aktualizacji, przenieść do Kosza aplikację należącą do roota. Przy każdym połączeniu sprawdza podpis Wegi. Jest opcjonalny.":
             "The Wega helper runs as root and can do only four things: install a verified Wega package, turn on Touch ID for sudo, restore an app's pre-update copy, and move a root-owned app to the Trash. It checks Wega's signature on every connection. It is optional.",
         "Nie włączaj powiadomień": "Keep Notifications Off",
