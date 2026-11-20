@@ -14,18 +14,15 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 ## [Unreleased]
 
 ### Changed
-- **Updates: the band.** Once a scan has results, a band above the list shows when Wega last
-  checked, how many updates and urgent items there are, her comment, what is queued and how
-  much of it can be undone automatically, and one round **Update** button. The bar under the
-  list is gone; **Show exactly what I'll do** opens the plan from the band.
+- **Updates: the band.** Once a scan has found updates, a band above the list holds when Wega
+  last checked and which sources answered, how many updates and urgent items there are, her
+  comment, what is queued and how much of it can be undone automatically, the dry-run plan
+  (**Show exactly what I will do**, now a sheet) and a round **Update N** button. **Check now**
+  is no longer styled as the primary action.
 - **Updates: the queue.** Items Wega will update wear a honey circle with a tick instead of a
   checkbox. Items the vendor or you finish show a ↗ circle. **Select all** sits next to the
   categories above the list. Group headers are numbered in urgency grouping. The row open in
   the inspector is filled lavender and outlined.
-- **Updates: one place for the action.** The selection count, how many ticked casks automatic
-  rollback covers, the dry-run plan (now a sheet) and **Update selected** sit together in the
-  band above the list. The header only reports the scan, and **Check now** is no longer styled
-  as the primary action.
 - **Updates: one row layout.** Manually updated apps line up with Homebrew rows: same icon
   column, version in the version column. Release notes open in the inspector instead of
   unfolding inside the list; notes a feed only links to are still fetched in the app.
@@ -49,8 +46,8 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   source's progress (Homebrew, App Store, npm, vendors). Only the very first scan shows the
   full scanning scene.
 - **Updates: a running update lives in the bottom bar.** Progress, the log and **Stop after
-  this one** take the action bar's place instead of a card in the middle of the screen; the
-  list stays stood down behind a note until the run lands.
+  this one** sit in a bar at the bottom of the list instead of a card in the middle of the
+  screen; the list stays stood down behind a note until the run lands.
 
 ### Added
 - **Wega chases her ball.** Now and then a ball rolls past her card in the sidebar; she
