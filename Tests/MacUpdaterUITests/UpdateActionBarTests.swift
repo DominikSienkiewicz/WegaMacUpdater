@@ -51,8 +51,15 @@ struct UpdateActionBarTests {
         let band = try slice(view, from: "private var resultsBand: some View", to: "private var resultsHeading: some View")
 
         #expect(!results.contains("requestUpdate"), "the heading reports the scan; it no longer acts")
+        let screen = try slice(view, from: "private var resultsView: some View", to: "private var listHeader: some View")
+        let listHeader = try slice(view, from: "private var listHeader: some View", to: "private var resultsBand: some View")
+        for (name, part) in [("resultsView", screen), ("listHeader", listHeader), ("resultsHeading", results)] {
+            #expect(!part.contains("requestUpdate"), "only the band starts an update, not \(name)")
+        }
         #expect(band.contains("UpdateBandButton("))
         #expect(band.contains("action: requestUpdate"))
+        #expect(!(try source("Sources/MacUpdater/UpdateBand.swift")).contains("SelectionCheckbox("),
+                "the band carries the update, not the selection")
         #expect(band.contains(".disabled(!allowsUpdateRun)"))
         #expect(band.contains(".help(updateButtonHelp)"))
         let bandBody = try slice(view, from: "private var resultsBand: some View", to: "private var bandPresentation:")

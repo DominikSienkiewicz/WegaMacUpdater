@@ -39,8 +39,8 @@ struct UpdateView: View {
     var onUndoableCount:  ((Int) -> Void)? = nil
     /// UX-16 — the scope bar picks a category; the selection that carries it is the window's.
     var onScopeChange:    ((UpdateFilter) -> Void)? = nil
-    /// Wega's current line — a quip or her state's line — which the band under the results
-    /// header speaks.
+    /// Wega's current line — a quip or her state's line — which the band above the list
+    /// speaks.
     let wegaLine: String
 
     @EnvironmentObject private var model: AppViewModel
@@ -414,7 +414,7 @@ struct UpdateView: View {
         }
     }
 
-    // MARK: Action bar
+    // MARK: Band
 
     /// Whether the scan left anything to show, restarts included — what `listColumn` (rows or
     /// an empty state) reads.
@@ -489,7 +489,7 @@ struct UpdateView: View {
     /// it, whether the cask *may* ask for an admin password, and how big the download is —
     /// with **unknown** shown as itself, never as a guess.
     ///
-    /// UX-14 — opened from the action bar as a sheet, so reading the plan no longer pushes
+    /// UX-14 — opened from the band as a sheet, so reading the plan no longer pushes
     /// the list down; it probes download sizes each time it opens, as the disclosure did.
     private var planSheet: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -750,7 +750,7 @@ struct UpdateActionBarSummary: Equatable {
             : trf("%@ z %@ zaznaczonych", "\(selectedCount)", "\(visibleCount)")
     }
 
-    /// Only casks the rollback net covers count; the bar says nothing rather than zero.
+    /// Only casks the rollback net covers count; the band says nothing rather than zero.
     var protectionText: String? {
         protectedCount == 0 ? nil : trf("%@ z automatycznym cofnięciem", "\(protectedCount)")
     }
