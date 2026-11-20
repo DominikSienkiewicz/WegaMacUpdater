@@ -14,14 +14,18 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 ## [Unreleased]
 
 ### Changed
+- **Updates: the band.** Once a scan has results, a band above the list shows when Wega last
+  checked, how many updates and urgent items there are, her comment, what is queued and how
+  much of it can be undone automatically, and one round **Update** button. The bar under the
+  list is gone; **Show exactly what I'll do** opens the plan from the band.
 - **Updates: the queue.** Items Wega will update wear a honey circle with a tick instead of a
   checkbox. Items the vendor or you finish show a ↗ circle. **Select all** sits next to the
   categories above the list. Group headers are numbered in urgency grouping. The row open in
   the inspector is filled lavender and outlined.
-- **Updates: one action bar under the list.** The selection count, how many
-  ticked casks automatic rollback covers, the dry-run plan (now a sheet) and
-  **Update selected** sit together in a bar pinned under the list. The header only reports
-  the scan, and **Check now** is no longer styled as the primary action.
+- **Updates: one place for the action.** The selection count, how many ticked casks automatic
+  rollback covers, the dry-run plan (now a sheet) and **Update selected** sit together in the
+  band above the list. The header only reports the scan, and **Check now** is no longer styled
+  as the primary action.
 - **Updates: one row layout.** Manually updated apps line up with Homebrew rows: same icon
   column, version in the version column. Release notes open in the inspector instead of
   unfolding inside the list; notes a feed only links to are still fetched in the app.
