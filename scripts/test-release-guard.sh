@@ -364,6 +364,12 @@ for mode in --continue --abort; do
         record_fail "$mode exited $RC"
     fi
 done
+run_release "$repo" 0.2.0 --notes "" --dry-run
+if [ "$RC" -eq 2 ]; then
+    record_pass "--notes with an empty value exits 2"
+else
+    record_fail "--notes with an empty value exited $RC"
+fi
 
 # --- 14 -----------------------------------------------------------------------
 printf 'no trailing newline\n'

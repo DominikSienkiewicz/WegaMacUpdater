@@ -58,7 +58,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1; shift ;;
     --notes)
-      [ $# -ge 2 ] || { echo "--notes needs a file" >&2; usage; exit 2; }
+      [ $# -ge 2 ] && [ -n "$2" ] || { echo "--notes needs a file" >&2; usage; exit 2; }
       NOTES_FILE="$2"; shift 2 ;;
     -h|--help) awk 'NR==1{next} /^#/{sub(/^# ?/,"");print;next} {exit}' "$0"; exit 0 ;;
     -*) echo "unknown option: $1" >&2; usage; exit 2 ;;
