@@ -58,6 +58,13 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   call, the Touch ID setup script and the relaunch after a self-update now start in `/`.
   Started from a folder that was later deleted, every source used to fail ("$PWD must be
   set", `uv_cwd ENOENT`). A launch from Finder or the Dock already started in `/`.
+- **Long versions stay on one line.** A version like `6.6395.1,8fc566f7b97e…` or
+  `26.1111.71704 (29030)` no longer wraps a row into several lines: the list shows the
+  readable part, and the full version is in the tooltip and the inspector.
+- **A Homebrew record of a vendor app you no longer have is not an update.** Logi Options+,
+  Cloudflare WARP or Bitdefender left in Homebrew after the app is gone no longer show up
+  as an update, nor twice. A vendor hand-off now closes on its own once a scan finds the app
+  at the target version, or finds it gone.
 
 ## [0.7.1] — 2026-11-17
 
