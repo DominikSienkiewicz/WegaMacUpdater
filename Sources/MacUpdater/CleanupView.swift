@@ -40,6 +40,7 @@ struct CleanupView: View {
         .sheet(item: $confirming) { finding in
             CleanupConfirmationSheet(store: store, finding: finding) { confirming = nil }
         }
+        .wegaAttention(confirming != nil || showsPathWarning)
         .onChange(of: store.phase) { old, new in announce(from: old, to: new) }
         .onAppear { store.applyTCCMapSetting() }
     }
@@ -149,11 +150,10 @@ struct CleanupView: View {
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
         } else if store.phase == .scanning {
-            EmptyHero(
-                pose: .sniff, title: tr("Skanuję…"),
-                message: tr("Przeglądam katalogi z PATH, katalogi wersji i stan powłok. Niczego nie zmieniam."),
-                compact: true
-            )
+            // UXP-27 — Wega sniffs during every scan, this one too.
+            SniffingScene(caption: tr("Przeglądam katalogi z PATH i wersje narzędzi. Niczego nie zmieniam."))
+                .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             EmptyHero(
                 pose: .idle, title: tr("Porządki"),

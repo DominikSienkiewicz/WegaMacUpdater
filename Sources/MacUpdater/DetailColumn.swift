@@ -61,6 +61,8 @@ struct DetailColumn: View {
     @Binding var lastCheck:         Date?
     /// UX-15 — written here, where the scan is observed, and shown by the sidebar's card.
     @Binding var quip:              String?
+    /// UXP-27 — whether the sidebar card's ball waits; see `holdsBall`.
+    @Binding var wegaAttentionHeld: Bool
     @Binding var securityBadge:     Int
     @Binding var appsBadge:         Int
     @Binding var cliBadge:          Int
@@ -75,6 +77,12 @@ struct DetailColumn: View {
     /// that finishes while the previous comment is still showing cannot clear it early or
     /// leave it stuck once the new sleep completes.
     @State private var quipTask: Task<Void, Never>?
+    /// A confirmation or an error open on one of the screens below, reported through `WegaAttentionKey`.
+    @State private var dialogOpen = false
+
+    private var holdsBall: Bool {
+        WegaAttention.holdsBall(bannerVariant: scan.banner?.variant, isUpdating: scan.updating, dialogOpen: dialogOpen)
+    }
 
     /// `.inspector` is attached unconditionally so the detail column is not rebuilt on every
     /// destination change, but it only presents on Updates: `InspectorPane`'s empty state
@@ -94,6 +102,8 @@ struct DetailColumn: View {
         // the content, safe-area insets, and toolbar update inside it.
         GeometryReader { _ in
             tabBody
+                // UXP-27 — read on the always-drawn tab body: the screens that report it come and go.
+                .onPreferenceChange(WegaAttentionKey.self) { dialogOpen = $0 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .safeAreaInset(edge: .top, spacing: 0) { banners }
         }
@@ -132,6 +142,7 @@ struct DetailColumn: View {
                     quip = nil
                 }
             }
+            .onChange(of: holdsBall, initial: true) { _, held in wegaAttentionHeld = held }
     }
 
     /// F4 — Homebrew's absence is an invitation, not a wall. The card sits above the working UI

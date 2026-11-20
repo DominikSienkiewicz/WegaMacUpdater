@@ -29,5 +29,9 @@ extension Translations {
             "I'll back up the current app, and Homebrew will install the latest version in its place. If the new version fails the signature check, I'll restore the backup. Quit %@ before continuing.",
         "Przenieś": "Move",
         "Wszystko w porządku. Wega nie znalazła uciekinierów.": "All good. Wega found no runaways.",
+        "Nie udało mi się zainstalować %@": "I couldn't install %@",
+        "Nie udało mi się zainstalować %@. Spróbuj jeszcze raz.": "I couldn't install %@. Try again.",
+        "Przeglądam katalogi z PATH i wersje narzędzi. Niczego nie zmieniam.":
+            "Looking through PATH folders and tool versions. I'm not changing anything.",
     ]
 }

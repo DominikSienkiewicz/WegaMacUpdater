@@ -287,6 +287,7 @@ struct UninstallView: View {
             onDismiss: { answerForceQuit(.cancel) },
             content: { UninstallForceQuitSheet(apps: forceQuitApps, onChoice: answerForceQuit) }
         )
+        .wegaAttention(showDialog || showForceQuit || scanError != nil)
         .onChange(of: search) { _, _ in
             selected.formIntersection(filtered.map(\.id))
         }

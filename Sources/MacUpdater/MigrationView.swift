@@ -309,6 +309,10 @@ struct MigrationView: View {
                 Task { await migrate(app) }
             }
         }
+        .wegaAttention(
+            confirmingApp != nil || migration.duplicateConfirmation != nil || migration.pendingForceTermination != nil
+                || errorMessage != nil || banner?.variant == .danger
+        )
         .alert(item: binding(\.duplicateConfirmation)) { removal in
             Alert(
                 title: Text(tr("Usunąć duplikat?")),

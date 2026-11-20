@@ -30,6 +30,8 @@ struct SidebarList: View {
     let wegaState:      WegaState
     let lastCheck:      Date?
     let quip:           String?
+    /// UXP-27 — worked out by `DetailColumn`; while it holds, the card's ball waits.
+    var wegaAttentionHeld: Bool = false
 
     /// `List` must be able to express "no selection"; the window never can. Writes of `nil`
     /// (a deselect click) are dropped so a destination always stays chosen. UX-16 — every
@@ -69,7 +71,7 @@ struct SidebarList: View {
         // UX-15 — Wega's card. Its height is fixed (see `WegaCompanionCardContent`), so this
         // inset is the same before, during and after a scan.
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            WegaCompanionCard(state: wegaState, lastCheck: lastCheck, quip: quip)
+            WegaCompanionCard(state: wegaState, lastCheck: lastCheck, quip: quip, attentionHeld: wegaAttentionHeld)
             .padding(.horizontal, 10)
             .padding(.bottom, 10)
         }

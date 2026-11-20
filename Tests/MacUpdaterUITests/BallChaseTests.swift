@@ -41,7 +41,9 @@ struct BallChaseTests {
             encoding: .utf8
         )
 
-        #expect(card.contains("playsWithBall: true"), "the live card plays")
+        // UXP-27 — the live card plays unless an error, a run or a dialog holds the user's attention.
+        #expect(card.contains("playsWithBall: !attentionHeld"), "the live card plays")
+        #expect(card.contains("var attentionHeld = false"), "and nothing holds it unless told so")
         #expect(card.contains("guard playsWithBall, !asksForNotifications"))
         #expect(card.contains("ContinuousMotion.loopsIdleAnimations(reduceMotion: reduceMotion)"),
                 "Reduce Motion keeps her still, like every idle animation")

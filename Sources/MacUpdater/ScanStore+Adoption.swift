@@ -201,19 +201,19 @@ extension ScanStore {
         if let installError {
             // UX-07 — the raw, English error text goes to the log below; the banner shows
             // a short, translated line and points there via "Zobacz w logach".
-            showBanner(BannerData(variant: .danger, title: tr("Błąd instalacji"),
+            showBanner(BannerData(variant: .danger, title: trf("Nie udało mi się zainstalować %@", "\(token)"),
                                   message: tr("Nie udało się dokończyć instalacji — szczegóły w logu."),
                                   action: .openLogs))
             emitActivitySignal(.error)
-            emitWegaState(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
+            emitWegaState(WegaState(pose: .idle, line: trf("Nie udało mi się zainstalować %@. Spróbuj jeszcze raz.", "\(token)")))
             WegaLog.error(.homebrew, "Instalacja \(token): \(installError.localizedDescription)")
         } else if exitCode == 0 {
             reportManualInstallSuccess(token: token, appURL: installedAppURL ?? target.path)
         } else {
-            showBanner(BannerData(variant: .danger, title: trf("Błąd instalacji %@", "\(token)"),
+            showBanner(BannerData(variant: .danger, title: trf("Nie udało mi się zainstalować %@", "\(token)"),
                                   message: tr("Sprawdź logi poniżej.")))
             emitActivitySignal(.error)
-            emitWegaState(WegaState(pose: .idle, line: trf("Coś poszło nie tak z %@.", "\(token)")))
+            emitWegaState(WegaState(pose: .idle, line: trf("Nie udało mi się zainstalować %@. Spróbuj jeszcze raz.", "\(token)")))
             let reason = ScanLog.brewErrorReason(from: brewLog).map { ": \($0)" } ?? ""
             WegaLog.error(.homebrew, "Instalacja \(token) nieudana (kod \(exitCode))\(reason)")
         }
@@ -273,7 +273,7 @@ extension ScanStore {
         brewLog.append("⚠️ " + message)
         showBanner(BannerData(variant: .danger, title: title, message: message, action: action))
         emitActivitySignal(.error)
-        emitWegaState(WegaState(pose: .alert, line: trf("Coś poszło nie tak z %@.", "\(token)")))
+        emitWegaState(WegaState(pose: .alert, line: title))
         WegaLog.error(.homebrew, message)
         return false
     }

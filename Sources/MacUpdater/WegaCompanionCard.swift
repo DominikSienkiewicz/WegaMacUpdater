@@ -168,6 +168,8 @@ struct WegaCompanionCard: View {
     let state: WegaState
     let lastCheck: Date?
     let quip: String?
+    /// UXP-27 — an error, a run or an open confirmation has the user's attention; the ball waits.
+    var attentionHeld = false
 
     @ObservedObject private var agent = MenuBarAgent.shared
 
@@ -177,7 +179,7 @@ struct WegaCompanionCard: View {
             asksForNotifications: agent.needsNotificationExplanation,
             onDecline: { agent.declineNotifications() },
             onAgree: { Task { await agent.agreeToNotifications() } },
-            playsWithBall: true
+            playsWithBall: !attentionHeld
         )
         .animation(.easeInOut(duration: 0.2), value: quip)
     }

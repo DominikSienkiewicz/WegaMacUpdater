@@ -569,7 +569,7 @@ final class MigrationStore: ObservableObject {
             )
             onWegaState?(WegaState(
                 pose: .sad,
-                line: trf("Ups. Brew zgłosił problem z %@.", "\(app.name)")
+                line: trf("Nie udało mi się zainstalować %@. Spróbuj jeszcze raz.", "\(app.name)")
             ))
         }
     }
