@@ -27,11 +27,15 @@ struct MenuBarDriftedCaskTests {
         #expect(result.backgroundCaskCandidates == ["zed"])
     }
 
-    @Test func unreadableCaskMetadataHidesNothing() async {
+    /// Without cask metadata the drift filter hides nothing: `proton-mail` stays although its app
+    /// is current on disk. `logi-options+` still leaves, through the vendor-service rule
+    /// (`ServiceVendorUpdatePolicy.staleVendorTokens`), which judges the scan's own copy at the
+    /// cask's target and needs no cask metadata.
+    @Test func unreadableCaskMetadataLeavesOnlyTheVendorRuleToHideACask() async {
         struct BrewInfoFailed: Error {}
         let result = await checker(infos: .failure(BrewInfoFailed())).availableUpdateCount()
-        #expect(result.brew?.casks.count == 3)
-        #expect(result.total == 3)
+        #expect(result.brew?.casks.map(\.name) == ["proton-mail", "zed"])
+        #expect(result.total == 2)
     }
 
     private func checker(infos: Result<[BrewCaskInstallationInfo], Error>) -> MenuBarUpdateChecker {
