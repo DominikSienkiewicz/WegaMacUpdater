@@ -18,13 +18,11 @@ self-update verification only trust binaries signed by that team, so release sig
 
 ### Cutting a release
 
-`scripts/build-pkg.sh` builds a universal, ad-hoc-or-signed `.pkg` **and** a drag-to-Applications `.dmg`. Pushing a version tag drives the rest, and `scripts/release.sh` is what creates that tag — in two phases, with a review gate in between:
+`scripts/build-pkg.sh` builds a universal, ad-hoc-or-signed `.pkg` **and** a drag-to-Applications `.dmg`. Pushing a version tag drives the rest, and `scripts/release.sh` is what creates that tag, in a single phase. The easiest way is to ask Claude Code for a release in a session opened in the repository root (the `release` skill): it proposes the version and the notes, and pushes only after your explicit approval. The manual equivalent:
 
 ```bash
-./scripts/release.sh patch      # prepare: bump AppMetadata.version, draft notes, stage
-# review CHANGELOG.md, edit until the notes read well
-./scripts/release.sh --continue # finalise: commit + annotated tag
-git push origin main --follow-tags
+./scripts/release.sh minor [--notes FILE]   # bump AppMetadata.version, publish the notes, commit + annotated tag
+git push --atomic origin main vX.Y.Z
 ```
 
 Never edit `AppMetadata.version` or move the `[Unreleased]` entries by hand — the script owns

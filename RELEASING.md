@@ -4,21 +4,29 @@ A release is a pushed `v*` tag. Everything else — building, signing, notarizin
 and publishing — is done by [`.github/workflows/release.yml`](.github/workflows/release.yml)
 in reaction to that tag.
 
+**Primary path.** Ask Claude Code for a release in a session opened in the repository root
+(the `release` skill). It proposes the version and the release notes; on your explicit OK it
+cuts the release with `scripts/release.sh`, pushes the commit and the tag together and watches
+`release.yml`. It pushes only after that approval. A session in a linked worktree is told to
+ask from the repository root instead.
+
+**Manual path.** Write the notes under `[Unreleased]` in `CHANGELOG.md`, or in a file, then:
+
 ```bash
-./scripts/release.sh patch      # prepare: bump, draft notes, stage
-# review CHANGELOG.md, edit until the notes read well
-./scripts/release.sh --continue # finalise: commit + annotated tag
-git push origin main --follow-tags
+./scripts/release.sh minor --dry-run               # every check, both diffs, nothing changed
+./scripts/release.sh minor [--notes FILE]          # bump, write notes, commit, annotated tag
+git push --atomic origin main vX.Y.Z               # the irreversible step
 ```
 
-Nothing is published until that last line.
+`release.sh` never pushes. Nothing is published until that last line.
 
 ---
 
 ## 1. Before you start
 
-- Be on `main`, with a clean working tree, in sync with `origin/main`. The script refuses
-  otherwise, and says how to fix it.
+- Be on `main`, with a clean working tree, not behind `origin/main`. The script refuses
+  otherwise, and says how to fix it. Being ahead of `origin/main` is fine: the atomic push
+  sends those commits together with the tag, and `release.yml` gates that exact commit.
 - The version lives in exactly one place: `AppMetadata.version` in
   [`Sources/WegaHelperKit/AppMetadata.swift`](Sources/WegaHelperKit/AppMetadata.swift).
   Never edit it by hand — the script owns it, and the workflow refuses any tag that
@@ -28,7 +36,24 @@ Nothing is published until that last line.
   [Republishing the app catalog](#10-republishing-the-app-catalog). It is a separate key and
   a separate artifact from the release signing, and nothing in the pipeline reminds you.
 
-## 2. Phase 1 — prepare
+## 2. Write the notes
+
+The release notes are written and approved **before** the script runs. The script copies them
+verbatim; it never derives, merges, reorders or rewrites text, and it does not read commits.
+The section becomes the GitHub Release description as it stands, so write it as a user would
+read it.
+
+Put the notes in one of two places:
+
+- the `## [Unreleased]` section of `CHANGELOG.md`, or
+- a file passed with `--notes FILE` — the section body only.
+
+A summary paragraph above the first `### ` heading is allowed. Any `### ` headings are kept
+as written (`### Added`, `### Known issues`, …). A line starting with `## ` is refused, because
+it would split the section. Leading and trailing blank lines are trimmed; everything else is
+copied byte for byte. Empty notes are refused.
+
+## 3. Cut
 
 ```bash
 ./scripts/release.sh patch      # 0.1.5 -> 0.1.6
@@ -37,79 +62,47 @@ Nothing is published until that last line.
 ./scripts/release.sh 0.2.0      # explicit version
 ```
 
-Add `--dry-run` to see the exact diff without touching anything.
+Add `--notes FILE` to publish a file instead of `[Unreleased]`, and `--dry-run` to run every
+check and print both diffs without touching anything.
 
-The script bumps the version, then rewrites `CHANGELOG.md`: the hand-written `[Unreleased]`
-entries move under a new `## [X.Y.Z] — YYYY-MM-DD` heading, and entries derived from the
-commits since the last release are appended beneath them, each carrying its short SHA.
+In one step the script bumps `AppMetadata.version`, writes `## [X.Y.Z] — YYYY-MM-DD` into
+`CHANGELOG.md` with the notes beneath it, commits `chore(release): vX.Y.Z` containing exactly
+those two files, and creates the annotated tag `vX.Y.Z`. With `--notes`, `[Unreleased]` is
+emptied and the number of lines it held is reported.
 
-Sections are matched by their `### ` heading. The Keep a Changelog set — Added, Changed,
-Deprecated, Removed, Fixed, Security — comes first, in that order, with the derived entries
-merged in under the matching heading. Any other heading you write (`### Known issues`) is
-kept exactly as written, after the canonical ones, in the order you wrote it. Every entry
-must sit under some `### ` heading: text above the first one has no section to be assembled
-into, so the script refuses rather than dropping it.
+It refuses to run when:
 
-Commits are read as [Conventional Commits](https://www.conventionalcommits.org/):
+- the branch is not `main`, or tracked files are modified;
+- the version is not greater than `AppMetadata.version`;
+- the tag already exists, locally or on `origin`;
+- `main` is behind `origin/main`;
+- `CHANGELOG.md` has no `## [Unreleased]` heading;
+- the notes are empty, contain a line starting with `## `, or the notes file is unreadable.
 
-| Prefix | Lands under |
-|---|---|
-| `feat` | Added |
-| `fix` | Fixed |
-| `refactor`, `perf` | Changed |
-| `docs`, `test`, `chore`, `style`, `ci`, `build` | skipped |
+`--notes` without a value is a usage error, and the old second-phase and abort options are gone.
 
-Merge commits, previous release commits and subjects that are not Conventional Commits are
-skipped as well. Nothing disappears quietly — the summary line reports how many were skipped
-and why:
+## 4. Review
 
-```
->> collected 14 commits since v0.1.5 (9 kept, 5 skipped: chore/docs/unconventional)
-```
-
-Both files end up **staged but not committed**.
-
-## 3. Review
-
-This is the point of the two phases. The changelog section you are looking at becomes the
-GitHub Release description verbatim, so read it as a user would:
+Nothing has left your machine yet. Read what was cut:
 
 ```bash
-$EDITOR CHANGELOG.md
-git diff --staged CHANGELOG.md
+git show vX.Y.Z
 ```
 
-The generated lines are a completeness net, not finished prose. Rewrite them, merge
-duplicates, delete noise, drop the SHAs where they add nothing. Hand-written entries were
-already reviewed at PR time and usually need no work.
-
-Take as long as you like — the state lives in git, so you can close the terminal.
-
-## 4. Phase 2 — finalise
+Changed your mind? Undo both the commit and the tag:
 
 ```bash
-./scripts/release.sh --continue
-```
-
-Your edits are re-staged and checked: still on `main`, still in sync with `origin/main`, no
-unrelated file modified, the version parses, the tag does not exist yet, and the changelog
-section is present and non-empty. Then it commits `chore(release): vX.Y.Z` and creates the
-annotated tag.
-
-Changed your mind at any point before this?
-
-```bash
-./scripts/release.sh --abort    # restores both files, leaves nothing behind
+git tag -d vX.Y.Z && git reset --hard HEAD~1
 ```
 
 ## 5. Publish
 
 ```bash
-git push origin main --follow-tags
+git push --atomic origin main vX.Y.Z
 ```
 
-This is the irreversible step. Up to here you could still undo everything with
-`git tag -d vX.Y.Z && git reset --hard HEAD~1`.
+`--atomic` sends the commit and the tag together, so neither can arrive without the other.
+This is the irreversible step; pushing the tag starts the release.
 
 ## 6. What happens next
 
@@ -202,22 +195,16 @@ git tag -d v0.1.6 && git push origin :refs/tags/v0.1.6
 Same cause. The release notes are read from that section, so the workflow refuses to publish
 a version the changelog does not describe.
 
-**`a release is already prepared`**
-Phase 1 ran and was never finished. Continue it, or throw it away:
+**`main` is behind `origin/main`**
+Someone pushed to `origin/main` since you last synced. Bring your local `main` up to date,
+then run the script again. Being *ahead* of `origin/main` is not an error.
 
-```bash
-./scripts/release.sh --continue
-./scripts/release.sh --abort
-```
+**`CHANGELOG.md has no '## [Unreleased]' heading` / the notes are empty**
+The notes come from `--notes FILE` or from `[Unreleased]`, and the script refuses to publish
+an empty section. Write the notes first (see section 2).
 
-**`nothing to release`**
-`[Unreleased]` is empty and no commit since the last release qualifies — typically a run of
-`docs:`/`chore:` work only. Add entries under `[Unreleased]`, or release nothing.
-
-**`[Unreleased] has text above its first '### ' heading`**
-A paragraph or a list item was written directly under `## [Unreleased]`. The notes are
-assembled section by section, so there is nowhere to put it. Move it under a `### ` heading
-— an existing one, or one of your own.
+**A notes line starting with `## `**
+It would split the release section in two. Demote it to `### ` or reword it.
 
 **The release job sits on `→ Tworzę PKG...` and is cancelled hours later**
 A signing step waiting for a keychain authorization prompt, which no runner can answer. It does
@@ -263,20 +250,10 @@ git tag -d v0.1.6
 
 ## 9. Cutting the first release
 
-The project has no tags yet: `0.1.0` shipped untagged, and without a `chore(release):` commit
-either. So there is no previous release to measure commits from, and the script says so:
-
-```
->> no previous release found (no v* tag, no chore(release): commit)
-   release notes will come from [Unreleased] only — the full history is not release notes
-```
-
-This is deliberate. Replaying every commit ever made would produce 185 entries, which is not
-a release note. `CHANGELOG.md` already describes the shipped work by hand, so the first
-release is cut from `[Unreleased]` alone; commit-derived entries start appearing from the
-second release onward, measured against the tag this one creates.
-
-The baseline is always printed, so it is never a guess.
+The project has no tags yet: `0.1.0` shipped untagged. The script reads no commits, so there
+is nothing special to do: the first release is cut from `[Unreleased]` (or `--notes FILE`)
+like any other. `CHANGELOG.md` already describes the shipped work by hand; replaying every
+commit ever made would not be a release note.
 
 Three consequences worth knowing before you run it:
 
