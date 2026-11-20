@@ -25,6 +25,103 @@ struct ServiceVendorPackageHandoffTests {
         #expect(store.updateCount == UnifiedUpdateCount(installable: 0, manual: 0))
     }
 
+    @Test func aHomebrewRecordOfAVendorAppThatIsNotInstalledIsNotListed() {
+        let store = preparedStore()
+        store.installationChecks = []
+        #expect(store.serviceManagedUpdates.isEmpty)
+        #expect(store.unresolvedServiceItems.isEmpty)
+        #expect(store.updateCount == UnifiedUpdateCount(installable: 0, manual: 0))
+    }
+
+    @Test func aTokenAPendingHandoffAlreadyCoversIsNotListedASecondTime() throws {
+        let store = preparedStore()
+        let handoff = try #require(store.visibleManual.first)
+        // The app is still scanned, but the check carries no cask token, so the cask cannot
+        // resolve to it and only the pending hand-off covers the token.
+        let unattributed = InstallationCheck(app: installed, sources: [], checkedAt: Date())
+        store.installationChecks = [unattributed]
+        store.vendorHandoffs = [handoff]
+        #expect(store.serviceManagedUpdates.isEmpty, "the cask no longer resolves to an installation")
+        #expect(store.unresolvedServiceItems.isEmpty)
+    }
+
+    @Test func aScanDropsAVendorCaskWhoseAppIsNotInstalledEntirely() async {
+        let store = scannedStore(installations: [], failedChecks: 0)
+        await store.runCheck()
+        #expect(store.lastScanComplete)
+        #expect(store.allItems.isEmpty)
+        #expect(store.visibleManual.isEmpty)
+        #expect(store.unresolvedServiceItems.isEmpty)
+        #expect(store.updateCount == UnifiedUpdateCount(installable: 0, manual: 0))
+    }
+
+    @Test func aScanDropsAVendorCaskWhoseInstalledAppAlreadyHasTheTarget() async {
+        let store = scannedStore(
+            installations: [InstallationCheck(app: application(version: "2"), sources: [], checkedAt: Date())],
+            failedChecks: 0
+        )
+        await store.runCheck()
+        #expect(store.allItems.isEmpty)
+        #expect(store.unresolvedServiceItems.isEmpty)
+        #expect(store.updateCount == UnifiedUpdateCount(installable: 0, manual: 0))
+    }
+
+    @Test func anIncompleteScanKeepsTheVendorCardItCannotJudge() async {
+        let store = scannedStore(installations: [], failedChecks: 1)
+        await store.runCheck()
+        #expect(!store.lastScanComplete)
+        #expect(store.allItems.map(\.name) == ["logi-options+"])
+        #expect(store.unresolvedServiceItems.map(\.name) == ["logi-options+"])
+        #expect(store.updateCount == UnifiedUpdateCount(installable: 0, manual: 1))
+    }
+
+    @Test func anIncompleteScanStillDropsACaskWhoseInstalledAppHasTheTarget() async {
+        let store = scannedStore(
+            installations: [InstallationCheck(app: application(version: "2"), sources: [], checkedAt: Date())],
+            failedChecks: 1
+        )
+        await store.runCheck()
+        #expect(!store.lastScanComplete)
+        #expect(store.allItems.isEmpty)
+        #expect(store.updateCount == UnifiedUpdateCount(installable: 0, manual: 0))
+    }
+
+    @Test func anInstalledAppBelowTheTargetStaysAsARow() async {
+        var below = InstallationCheck(app: application(version: "1"), sources: [], checkedAt: Date())
+        below.caskToken = "logi-options+"
+        let store = scannedStore(installations: [below], failedChecks: 0)
+        await store.runCheck()
+        #expect(store.allItems.map(\.name) == ["logi-options+"])
+        #expect(store.visibleManual.map(\.caskPolicyToken) == ["logi-options+"], "the cask resolves to a row")
+        #expect(store.unresolvedServiceItems.isEmpty)
+        #expect(store.updateCount.manual == 1)
+    }
+
+    private func scannedStore(installations: [InstallationCheck], failedChecks: Int) -> ScanStore {
+        let runner = ScanStoreRuntimeProcessRunner { request in
+            switch request.arguments {
+            case ["update"], ["list", "--cask", "-1"]:
+                return ProcessResult(exitCode: 0, stdout: "", stderr: "")
+            case ["outdated", "--json=v2", "--greedy", "--greedy-latest", "--greedy-auto-updates"]:
+                let json = #"{"formulae":[],"casks":[{"name":"logi-options+","installed_versions":["1"],"current_version":"2"}]}"#
+                return ProcessResult(exitCode: 0, stdout: json, stderr: "")
+            case ["outdated"]:
+                return ProcessResult(exitCode: 0, stdout: "", stderr: "")
+            case ["outdated", "-g", "--json"]:
+                return ProcessResult(exitCode: 0, stdout: "{}", stderr: "")
+            default:
+                return ProcessResult(exitCode: 1, stdout: "", stderr: "")
+            }
+        }
+        let harness = makeScanStoreRuntimeHarness(runner: runner)
+        var dependencies = harness.store.dependencies
+        let report = ManualScanReport(apps: [], failedChecks: failedChecks, installations: installations)
+        dependencies.detailedManualScan = { _, _ in report }
+        let store = ScanStore(resultStore: ScanResultStore(io: harness.snapshots), dependencies: dependencies)
+        if let model = harness.store.model { store.attach(model: model) }
+        return store
+    }
+
     private func preparedStore() -> ScanStore {
         let runner = ScanStoreRuntimeProcessRunner { _ in
             Issue.record("A package vendor handoff must not run Homebrew or alter a service")
@@ -33,7 +130,8 @@ struct ServiceVendorPackageHandoffTests {
         let harness = makeScanStoreRuntimeHarness(runner: runner)
         var dependencies = harness.store.dependencies
         let installed = installed
-        dependencies.checkVendorUpdate = { _ in .init(app: installed, outcome: .confirmed) }
+        let updated = application(version: "2")
+        dependencies.checkVendorUpdate = { _ in .init(app: updated, outcome: .confirmed) }
         let store = ScanStore(resultStore: ScanResultStore(io: harness.snapshots), dependencies: dependencies)
         store.status = .results
         store.brewOutdated = .init(formulae: [], casks: [.init(name: "logi-options+", installedVersions: ["1"], currentVersion: "2")])
@@ -43,9 +141,12 @@ struct ServiceVendorPackageHandoffTests {
         return store
     }
 
-    private var installed: ApplicationInfo {
+    /// On disk below the cask's target "2", so Homebrew's record is a real pending update.
+    private var installed: ApplicationInfo { application(version: "1") }
+
+    private func application(version: String) -> ApplicationInfo {
         ApplicationInfo(path: URL(fileURLWithPath: "/Applications/logioptionsplus.app"), name: "Logi Options+",
-                        bundleIdentifier: "com.logi.optionsplus", version: "2", installDate: nil, updateDate: nil,
+                        bundleIdentifier: "com.logi.optionsplus", version: version, installDate: nil, updateDate: nil,
                         isManagedByBrew: true, caskToken: "logi-options+")
     }
 }

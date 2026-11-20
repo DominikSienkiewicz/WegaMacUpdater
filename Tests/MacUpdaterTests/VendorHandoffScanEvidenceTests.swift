@@ -63,6 +63,82 @@ struct VendorHandoffScanEvidenceTests {
         #expect(VendorHandoffScanEvidence.retired([handoff(), gitHubObsidian, gitHubRectangle]) == [gitHubObsidian])
     }
 
+    @Test func scanSeeingTheAppAtTheTargetVersionClosesAHandoffWithoutACurrentAnswer() {
+        let closed = VendorHandoffScanEvidence.confirmedCurrent(
+            [logiHandoff()], installationChecks: [logiCheck(version: "2.9.1013853")], stillOutdated: []
+        )
+        #expect(closed == [logiHandoff()])
+    }
+
+    @Test func scanSeeingTheAppBelowTheTargetKeepsTheHandoff() {
+        let closed = VendorHandoffScanEvidence.confirmedCurrent(
+            [logiHandoff()], installationChecks: [logiCheck(version: "2.9.994631")], stillOutdated: []
+        )
+        #expect(closed.isEmpty)
+    }
+
+    @Test func aReachedVersionOfAnotherBundleKeepsTheHandoff() {
+        var foreign = logiCheck(version: "2.9.1013853")
+        foreign = InstallationCheck(
+            app: ApplicationInfo(path: foreign.path, name: "Logi", bundleIdentifier: "com.other", version: "2.9.1013853",
+                                 installDate: nil, updateDate: nil, isManagedByBrew: false),
+            sources: [], checkedAt: now
+        )
+        #expect(VendorHandoffScanEvidence.confirmedCurrent([logiHandoff()], installationChecks: [foreign], stillOutdated: []).isEmpty)
+    }
+
+    @Test func aSharedPackageRequirementNeverClosesOnTheBundleVersionAlone() {
+        var shared = logiHandoff()
+        shared.completionRequirement = .init(version: "2.9.1013853", field: .sharedPackage, scheme: .buildNumbered)
+        #expect(VendorHandoffScanEvidence.confirmedCurrent(
+            [shared], installationChecks: [logiCheck(version: "2.9.1013853")], stillOutdated: []
+        ).isEmpty)
+    }
+
+    @Test func handoffOfAnAppAbsentFromACompleteScanAndFromDiskVanished() {
+        let gone = VendorHandoffScanEvidence.vanished(
+            [logiHandoff()], installationChecks: [], scanComplete: true, fileExists: { $0.path == "/Applications" }
+        )
+        #expect(gone == [logiHandoff()])
+    }
+
+    @Test func handoffIsNotVanishedWhenTheScanWasIncompleteTheBundleExistsOrACheckExists() {
+        #expect(VendorHandoffScanEvidence.vanished(
+            [logiHandoff()], installationChecks: [], scanComplete: false, fileExists: { $0.path == "/Applications" }
+        ).isEmpty)
+        #expect(VendorHandoffScanEvidence.vanished(
+            [logiHandoff()], installationChecks: [], scanComplete: true, fileExists: { _ in true }
+        ).isEmpty)
+        #expect(VendorHandoffScanEvidence.vanished(
+            [logiHandoff()], installationChecks: [logiCheck(version: "2.9.994631")], scanComplete: true, fileExists: { $0.path == "/Applications" }
+        ).isEmpty)
+    }
+
+    @Test func handoffOnAnUnreachableVolumeIsNotVanished() {
+        var external = logiHandoff()
+        external.path = URL(fileURLWithPath: "/Volumes/Ext/Logi.app")
+        #expect(VendorHandoffScanEvidence.vanished(
+            [external], installationChecks: [], scanComplete: true, fileExists: { _ in false }
+        ).isEmpty, "a missing parent directory means the volume is unmounted, not that the app is gone")
+    }
+
+    private func logiHandoff() -> ManualOutdatedApp {
+        ManualOutdatedApp(name: "Logi Options+", path: URL(fileURLWithPath: "/Applications/logioptionsplus.app"),
+                          installedVersion: "2.9.1013853", availableVersion: "2.9.1013853",
+                          source: .cask(token: "logi-options+"), origin: .brew, bundleIdentifier: "com.logi.optionsplus",
+                          completionRequirement: .init(version: "2.9.1013853", field: .shortVersion, scheme: .buildNumbered),
+                          caskPolicyToken: "logi-options+")
+    }
+
+    private func logiCheck(version: String) -> InstallationCheck {
+        InstallationCheck(
+            app: ApplicationInfo(path: URL(fileURLWithPath: "/Applications/logioptionsplus.app"), name: "Logi Options+",
+                                 bundleIdentifier: "com.logi.optionsplus", version: version,
+                                 installDate: nil, updateDate: nil, isManagedByBrew: false),
+            sources: [.init(source: "Homebrew", outcome: .notChecked)], checkedAt: now
+        )
+    }
+
     private var now: Date { Date(timeIntervalSince1970: 2_000) }
 
     private func gitHubHandoff(_ bundleIdentifier: String, repo: String) -> ManualOutdatedApp {

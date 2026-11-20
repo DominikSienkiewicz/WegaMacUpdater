@@ -36,6 +36,35 @@ struct UpdateRowLayoutTests {
         #expect(width == WegaLayout.queueCircleSize)
     }
 
+    @Test func aLongCaskVersionStaysOnOneLine() throws {
+        let column = WegaLayout.versionColumnWidth
+        let shortPair = height(VersionArrow(from: "1.0", to: "1.1").frame(width: column))
+        let unshortenable = String(repeating: "1.", count: 30) + "0"
+        for (from, to) in [
+            ("6.6395.1,8fc566f7b97e371bae421fc79c260de86c6a4106", "6.28899.2,155ca43c0ad5a4bd5734795688543b65b464cf47"),
+            (unshortenable, unshortenable + "1"),
+        ] {
+            #expect(height(VersionArrow(from: from, to: to).frame(width: column)) == shortPair,
+                    "\(from) must not wrap inside the version column")
+        }
+
+        let arrow = try slice(
+            try source("Sources/MacUpdater/SharedViews.swift"),
+            from: "struct VersionArrow: View", to: "// MARK: - PackageRow"
+        )
+        #expect(arrow.contains(".help("), "the full versions stay reachable as a tooltip")
+        #expect(arrow.contains(".truncationMode(.middle)"))
+    }
+
+    @Test func theInspectorKeepsTheFullVersions() throws {
+        let inspector = try source("Sources/MacUpdater/InspectorPane.swift")
+        #expect(inspector.contains("VersionArrow(from: info.from, to: info.to, emphasis: info.emphasis, style: .full)"))
+    }
+
+    private func height<Content: View>(_ view: Content) -> CGFloat {
+        NSHostingView(rootView: view).fittingSize.height
+    }
+
     @Test func vendorCardsWithoutAPathShowTheHandoffMark() throws {
         for (file, anchor) in [
             ("Sources/MacUpdater/DockerDesktopUpdateActions.swift", "struct UnresolvedDockerUpdateRow: View"),

@@ -16,7 +16,14 @@ public struct VendorUpdateRequirement: Codable, Equatable, Sendable {
     }
 
     func isReached(in app: ApplicationInfo) -> Bool {
-        let installed = field == .buildVersion ? app.buildVersion : app.version
+        isReached(version: app.version, buildVersion: app.buildVersion)
+    }
+
+    /// Whether an installed version/build meets the target. A shared package is not part of
+    /// the bundle's own version, so it never counts as reached here.
+    func isReached(version installedVersion: String?, buildVersion: String?) -> Bool {
+        guard field != .sharedPackage else { return false }
+        let installed = field == .buildVersion ? buildVersion : installedVersion
         guard let installed, !installed.isEmpty, !version.isEmpty else { return false }
         let order = compareVersions(installed, version, scheme: scheme)
         return order == .orderedSame || order == .orderedDescending
@@ -42,7 +49,8 @@ public struct VendorUpdateCompletionResult: Equatable, Sendable {
 /// Decides which vendor handoffs a completed full scan has positively confirmed.
 public enum VendorHandoffScanEvidence {
     /// Handoffs whose exact installation and bundle the scan checked with the handoff's own
-    /// source answering `.current`, and which the scan does not list as outdated.
+    /// source answering `.current`, or found on disk at a version that reaches the handoff's
+    /// own completion requirement, and which the scan does not list as outdated.
     /// Failed, unchecked, missing or foreign evidence never closes a handoff.
     public static func confirmedCurrent(
         _ handoffs: [ManualOutdatedApp], installationChecks: [InstallationCheck], stillOutdated: [ManualOutdatedApp]
@@ -53,9 +61,28 @@ public enum VendorHandoffScanEvidence {
             guard !outdated.contains(installation), let bundleIdentifier = item.bundleIdentifier,
                   let check = installationChecks.last(where: { InstallationIdentity(path: $0.path) == installation })
             else { return false }
-            return check.bundleIdentifier == bundleIdentifier && check.sources.contains {
+            guard check.bundleIdentifier == bundleIdentifier else { return false }
+            let sourceSaysCurrent = check.sources.contains {
                 $0.source == item.source.completionSourceLabel && $0.outcome == .current
             }
+            let diskReachesTarget = item.completionRequirement?
+                .isReached(version: check.version, buildVersion: check.buildVersion) ?? false
+            return sourceSaysCurrent || diskReachesTarget
+        }
+    }
+
+    /// Handoffs a complete scan can no longer verify because the app is gone: no installation
+    /// check for the exact path and no bundle on disk, while its parent folder is reachable. Dropping one confirms nothing.
+    public static func vanished(
+        _ handoffs: [ManualOutdatedApp], installationChecks: [InstallationCheck],
+        scanComplete: Bool, fileExists: (URL) -> Bool
+    ) -> [ManualOutdatedApp] {
+        guard scanComplete else { return [] }
+        let checked = Set(installationChecks.map { InstallationIdentity(path: $0.path) })
+        // A missing parent directory means an unmounted volume, not an uninstalled app.
+        return handoffs.filter {
+            !checked.contains(InstallationIdentity(path: $0.path)) && !fileExists($0.path)
+                && fileExists($0.path.deletingLastPathComponent())
         }
     }
 

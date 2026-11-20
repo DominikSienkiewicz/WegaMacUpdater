@@ -274,9 +274,22 @@ extension ScanStore {
                 WegaLog.info(.scanner, line)
             }
 
+            // A vendor cask whose app is gone, or already at Homebrew's target, is no update.
+            // Only a scan that heard from every source can say an app is gone.
+            let staleVendor = ServiceVendorUpdatePolicy.staleVendorTokens(
+                outdated: casks, installationChecks: scan.installations, scanComplete: reports.isComplete
+            )
+            if !staleVendor.isEmpty, var updated = brewOutdated {
+                updated.casks.removeAll { staleVendor.contains($0.name) }
+                brewOutdated = updated
+            }
+            if let line = ScanLog.staleVendorLine(tokens: staleVendor, installationChecks: scan.installations) {
+                WegaLog.info(.scanner, line)
+            }
+
             caskIconPaths = dependencies.caskAppPathResolver.appPaths(
                 from: infos,
-                excluding: drifted
+                excluding: drifted.union(staleVendor)
             )
         }
 
@@ -297,12 +310,13 @@ extension ScanStore {
             previous: installationChecks
         )
         lastCheck = Date()
+        // REL-09 — the per-source picture is part of the result from here on: it decides
+        // what gets persisted, and whether an empty list may call itself "up to date".
+        // Published first, because closing hand-offs trusts this scan's completeness.
+        applyScanSourceReports(reports)
         closeVendorHandoffsConfirmedByScan()
         status    = .results
         progress  = .finished
-        // REL-09 — the per-source picture is part of the result from here on: it decides
-        // what gets persisted, and whether an empty list may call itself "up to date".
-        applyScanSourceReports(reports)
 
         finishScan(emitActivity: emitActivity, silentSources: silentSources, failedSources: failed,
                    manualFailureMessage: manualFailureMessage)

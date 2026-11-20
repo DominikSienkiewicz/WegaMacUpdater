@@ -25,6 +25,15 @@ public enum ServiceVendorUpdateProfile: Equatable, Sendable {
         }
     }
 
+    /// The bundle identifier of the app this profile describes.
+    public var bundleIdentifier: String {
+        switch self {
+        case .cloudflareWarp: "com.cloudflare.1dot1dot1dot1.macos"
+        case .bitdefender: BitdefenderSupport.bundleIdentifier
+        case .logiOptionsPlus: "com.logi.optionsplus"
+        }
+    }
+
     public var updateActionKind: UpdateActionKind { .launchApp }
 
     public var name: String {
@@ -63,6 +72,37 @@ public enum ServiceVendorUpdatePolicy {
         ServiceVendorUpdateProfile.profile(caskToken: token) != nil
     }
 
+    /// Whether a complete scan found no installation of the vendor app behind `token`, so a
+    /// Homebrew record for it is a leftover rather than an update. An incomplete scan, or a
+    /// token no profile describes, never counts as "not installed".
+    public static func isNotInstalled(token: String, installationChecks: [InstallationCheck], scanComplete: Bool) -> Bool {
+        guard scanComplete, let profile = ServiceVendorUpdateProfile.profile(caskToken: token) else { return false }
+        return !installationChecks.contains { $0.bundleIdentifier == profile.bundleIdentifier }
+    }
+
+    /// Tokens of Homebrew's outdated vendor-service casks that are no update to show: no app
+    /// carries the profile's bundle identifier (a leftover Caskroom record), or every such
+    /// app is already at or above the cask's target (Homebrew's record is stale). Only the first
+    /// needs a complete scan: an installed copy at the target is positive evidence on its own.
+    public static func staleVendorTokens(
+        outdated casks: [BrewOutdatedItem], installationChecks: [InstallationCheck], scanComplete: Bool
+    ) -> Set<String> {
+        Set(casks.compactMap { cask -> String? in
+            guard let profile = ServiceVendorUpdateProfile.profile(caskToken: cask.name) else { return nil }
+            let installed = installationChecks.filter { $0.bundleIdentifier == profile.bundleIdentifier }
+            if isNotInstalled(token: cask.name, installationChecks: installationChecks, scanComplete: scanComplete) {
+                return cask.name
+            }
+            if installed.isEmpty { return nil }
+            guard let target = cask.currentVersion, !target.isEmpty else { return nil }
+            let requirement = VendorUpdateRequirement(version: target)
+            let allCurrent = installed.allSatisfy {
+                requirement.isReached(version: $0.version, buildVersion: $0.buildVersion)
+            }
+            return allCurrent ? cask.name : nil
+        })
+    }
+
     public static func profile(for item: ManualOutdatedApp) -> ServiceVendorUpdateProfile? {
         ServiceVendorUpdateProfile.profile(bundleIdentifier: item.bundleIdentifier)
     }
@@ -86,12 +126,14 @@ public enum ServiceVendorUpdatePolicy {
                   check.path.isFileURL,
                   ServiceVendorUpdateProfile.profile(bundleIdentifier: check.bundleIdentifier) == profile
             else { return nil }
+            let requirement = item.to.flatMap { $0.isEmpty ? nil : VendorUpdateRequirement(version: $0) }
+            // Homebrew still records the old version of an app that updated itself.
+            if requirement?.isReached(version: check.version, buildVersion: check.buildVersion) == true { return nil }
             return ManualOutdatedApp(
                 name: profile.name, path: check.path, installedVersion: check.version ?? item.from,
                 availableVersion: item.to, source: .cask(token: item.name), origin: .brew,
                 releaseNotes: item.releaseNotes, bundleIdentifier: check.bundleIdentifier,
-                completionRequirement: item.to.flatMap { $0.isEmpty ? nil : VendorUpdateRequirement(version: $0) },
-                caskPolicyToken: item.name
+                completionRequirement: requirement, caskPolicyToken: item.name
             )
         }
     }

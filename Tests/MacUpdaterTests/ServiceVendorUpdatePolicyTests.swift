@@ -67,6 +67,22 @@ struct ServiceVendorUpdatePolicyTests {
         #expect(ServiceVendorUpdatePolicy.managedUpdates(items: [item], appPaths: [item.name: app.path], installationChecks: []).isEmpty)
     }
 
+    @Test func aStaleHomebrewRecordOfAnAppAlreadyAtTheTargetIsNoRow() {
+        let item = OutdatedItem(key: "c:logi-options+", name: "logi-options+", from: "1", to: "2", kind: .cask)
+        for version in ["2", "3"] {
+            let app = application(bundleID: "com.logi.optionsplus", token: "logi-options+", version: version)
+            let check = InstallationCheck(app: app, sources: [], checkedAt: Date())
+            #expect(ServiceVendorUpdatePolicy.managedUpdates(
+                items: [item], appPaths: [item.name: app.path], installationChecks: [check]
+            ).isEmpty, "version \(version) on disk already meets the target 2")
+        }
+        let below = application(bundleID: "com.logi.optionsplus", token: "logi-options+", version: "1")
+        #expect(ServiceVendorUpdatePolicy.managedUpdates(
+            items: [item], appPaths: [item.name: below.path],
+            installationChecks: [InstallationCheck(app: below, sources: [], checkedAt: Date())]
+        ).count == 1)
+    }
+
     @Test func serviceCompletionRequiresLocalVersionEvidenceWithoutQueryingAnUnrelatedSource() async throws {
         let app = application(bundleID: "com.logi.optionsplus", token: "logi-options+")
         let pending = ManualOutdatedApp(name: app.name, path: app.path, installedVersion: "0", availableVersion: "1",
@@ -85,9 +101,9 @@ struct ServiceVendorUpdatePolicyTests {
         #expect(try await checker.check(newer).outcome == .unconfirmed(.targetNotReached))
     }
 
-    private func application(bundleID: String, token: String?) -> ApplicationInfo {
+    private func application(bundleID: String, token: String?, version: String = "1") -> ApplicationInfo {
         ApplicationInfo(path: URL(fileURLWithPath: "/Applications/Service.app"), name: "Cloudflare WARP",
-                        bundleIdentifier: bundleID, version: "1", installDate: nil, updateDate: nil,
+                        bundleIdentifier: bundleID, version: version, installDate: nil, updateDate: nil,
                         isManagedByBrew: false, caskToken: token)
     }
 }

@@ -89,6 +89,18 @@ public enum ScanLog {
 
     // MARK: 5. Homebrew metadata drift
 
+    /// REL-09 — the trace for vendor casks dropped from the list, with the reason for each.
+    public static func staleVendorLine(tokens: Set<String>, installationChecks: [InstallationCheck]) -> String? {
+        guard !tokens.isEmpty else { return nil }
+        let described = tokens.sorted().map { token -> String in
+            let gone = ServiceVendorUpdatePolicy.isNotInstalled(
+                token: token, installationChecks: installationChecks, scanComplete: true
+            )
+            return "\(token) (\(gone ? "nie zainstalowana" : "już na docelowej wersji"))"
+        }
+        return "Pominięto zapisy Homebrew aplikacji usługowych: " + described.joined(separator: ", ")
+    }
+
     /// One line naming the casks that `BrewCaskDriftFilter` dropped from the outdated list
     /// because the real bundle already matched `current_version` — a self-updater rewrote the
     /// app behind Homebrew's back, leaving `installed_versions` stale.

@@ -59,15 +59,19 @@ extension ScanStore {
     }
 
     /// Closes the handoffs the freshly applied scan result proves current, recording them as
-    /// done outside Wega, and drops the retired ones without a record.
+    /// done outside Wega, and drops the retired ones and those whose app is gone without a record.
     /// No banner: this also runs on quiet and restored results.
     func closeVendorHandoffsConfirmedByScan() {
         let retired = VendorHandoffScanEvidence.retired(vendorHandoffs)
         let confirmed = VendorHandoffScanEvidence.confirmedCurrent(
             vendorHandoffs, installationChecks: installationChecks, stillOutdated: manualOutdated
         )
-        guard !retired.isEmpty || !confirmed.isEmpty else { return }
-        let closed = Set((retired + confirmed).map(\.path))
+        let vanished = VendorHandoffScanEvidence.vanished(
+            vendorHandoffs, installationChecks: installationChecks, scanComplete: lastScanComplete,
+            fileExists: dependencies.bundleExists
+        )
+        guard !retired.isEmpty || !confirmed.isEmpty || !vanished.isEmpty else { return }
+        let closed = Set((retired + vanished + confirmed).map(\.path))
         vendorHandoffs.removeAll { closed.contains($0.path) }
         for path in closed { vendorMessages[path.path] = nil }
         if !confirmed.isEmpty {

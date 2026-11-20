@@ -373,18 +373,35 @@ extension VersionEmphasisKind {
 }
 
 struct VersionArrow: View {
+    /// `.row` keeps the pair to one readable line; `.full` shows the exact strings and may wrap.
+    enum Style { case row, full }
+
     let from: String
     let to: String
     var emphasis: VersionEmphasisKind = .normal
+    var style: Style = .row
 
     var body: some View {
+        switch style {
+        case .row:
+            let shown = VersionDisplay.pair(from: from, to: to)
+            arrow(from: shown.from, to: shown.to)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help("\(from) → \(to)")
+        case .full:
+            arrow(from: from, to: to)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func arrow(from: String, to: String) -> some View {
         HStack(spacing: 5) {
             Text(from).foregroundStyle(.secondary)
             Image(systemName: "arrow.right").foregroundStyle(.tertiary).font(.caption2)
             Text(to).foregroundStyle(emphasis.versionColor).fontWeight(.medium)
         }
         .font(.wega(.callout, monospaced: true))
-        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -847,7 +864,7 @@ struct UpdateRowColumns<Identity: View, Version: View>: View {
                 identity.fixedSize(horizontal: true, vertical: false)
                 Spacer(minLength: 8)
                 version
-                    .frame(idealWidth: WegaLayout.versionColumnWidth, alignment: .trailing)
+                    .frame(minWidth: WegaLayout.versionColumnWidth, maxWidth: WegaLayout.versionColumnMaxWidth, alignment: .trailing)
                     .fixedSize(horizontal: true, vertical: false)
             }
             VStack(alignment: .leading, spacing: 8) {

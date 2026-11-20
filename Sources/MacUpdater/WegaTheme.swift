@@ -410,6 +410,8 @@ enum WegaLayout {
     static let updateRowPadding: CGFloat = 13
     static let sectionSpacing: CGFloat  = 20
     static let versionColumnWidth: CGFloat = 148
+    /// The widest the version column grows for a long pair before the versions truncate.
+    static let versionColumnMaxWidth: CGFloat = 260
     /// UX-14 — the widest a row's secondary line (a manual app's path) may ask to be, so a
     /// deep path truncates in the middle instead of pushing the version under the name.
     static let rowDetailMaxWidth: CGFloat = 260
