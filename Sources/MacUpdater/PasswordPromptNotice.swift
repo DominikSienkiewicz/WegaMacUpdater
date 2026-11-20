@@ -11,6 +11,18 @@ enum PasswordPromptNotice {
         !installed && touchID != .enabled && !queuedNeedingPassword.isEmpty
     }
 
+    /// What the one-time probe learned. Until it exists the notice stays silent: an unprobed
+    /// Touch ID state is not a disabled one.
+    struct Probe: Equatable {
+        let installed: Bool
+        let touchID: TouchIDSudoConfigurator.State
+    }
+
+    static func shouldWarn(probe: Probe?, queuedNeedingPassword: [String]) -> Bool {
+        guard let probe else { return false }
+        return shouldWarn(installed: probe.installed, touchID: probe.touchID, queuedNeedingPassword: queuedNeedingPassword)
+    }
+
     static func message(firstApp: String) -> String {
         trf("Ta kopia Wegi nie umie poprosić o hasło administratora, więc %@ się nie zaktualizuje. Zainstaluj Wegę z pliku .pkg albo włącz Touch ID.", firstApp)
     }
@@ -23,25 +35,29 @@ struct PasswordPromptCallout: View {
 
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openURL) private var openURL
-    @State private var touchID: TouchIDSudoConfigurator.State = .notSupported
+    @State private var probe: PasswordPromptNotice.Probe? = PasswordPromptProbeCache.value
 
     var body: some View {
-        banner.task(id: queuedNeedingPassword) {
-            touchID = await Task.detached { TouchIDSudoConfigurator.currentState() }.value
-        }
+        Group { banner }
+            .task(id: queuedNeedingPassword) {
+                let fresh = await Task.detached {
+                    PasswordPromptNotice.Probe(installed: PasswordPromptAvailability.isInstalled(),
+                                               touchID: TouchIDSudoConfigurator.currentState())
+                }.value
+                PasswordPromptProbeCache.value = fresh
+                probe = fresh
+            }
     }
 
     @ViewBuilder
     private var banner: some View {
-        if let firstApp = queuedNeedingPassword.first,
-           PasswordPromptNotice.shouldWarn(installed: PasswordPromptAvailability.isInstalled(),
-                                           touchID: touchID,
-                                           queuedNeedingPassword: queuedNeedingPassword) {
+        if let firstApp = queuedNeedingPassword.first, let probe,
+           PasswordPromptNotice.shouldWarn(probe: probe, queuedNeedingPassword: queuedNeedingPassword) {
             WegaCallout(.warning, title: PasswordPromptNotice.message(firstApp: firstApp)) {
                 if let url = PasswordPromptNotice.releasesURL {
                     Button(tr("Pobierz .pkg")) { openURL(url) }
                 }
-                if touchID == .available {
+                if probe.touchID == .available {
                     Button(tr("Włącz Touch ID")) { openSettings() }
                 }
             }
@@ -49,4 +65,10 @@ struct PasswordPromptCallout: View {
             .padding(.bottom, 8)
         }
     }
+}
+
+/// Last probe result for the app's lifetime, so a recreated view does not start blank.
+@MainActor
+enum PasswordPromptProbeCache {
+    static var value: PasswordPromptNotice.Probe?
 }

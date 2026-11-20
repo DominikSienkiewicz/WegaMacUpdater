@@ -15,4 +15,10 @@ struct PasswordPromptNoticeTests {
         #expect(PasswordPromptNotice.message(firstApp: "zoom")
                 == trf("Ta kopia Wegi nie umie poprosić o hasło administratora, więc %@ się nie zaktualizuje. Zainstaluj Wegę z pliku .pkg albo włącz Touch ID.", "zoom"))
     }
+
+    @Test func anUnprobedStateShowsNoBanner() {
+        #expect(!PasswordPromptNotice.shouldWarn(probe: nil, queuedNeedingPassword: ["zoom"]))
+        #expect(PasswordPromptNotice.shouldWarn(probe: PasswordPromptNotice.Probe(installed: false, touchID: .available), queuedNeedingPassword: ["zoom"]))
+        #expect(!PasswordPromptNotice.shouldWarn(probe: PasswordPromptNotice.Probe(installed: false, touchID: .enabled), queuedNeedingPassword: ["zoom"]))
+    }
 }
