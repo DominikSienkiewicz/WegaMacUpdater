@@ -235,7 +235,6 @@ struct UpdateView: View {
             // stays live.
             screenBody
                 .disabled(!ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating))
-                .accessibilityHidden(scan.updating)
                 .overlay {
                     if scan.updating {
                         updateRunOverlay

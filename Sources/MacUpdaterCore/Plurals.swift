@@ -67,6 +67,21 @@ public enum Plurals {
     }
 
     static let pl: [String: PluralForms] = [
+        "Skan zakończony: %@ aktualizacji.": PluralForms(
+            one:  "Skan zakończony: %@ aktualizacja.",
+            few:  "Skan zakończony: %@ aktualizacje.",
+            many: "Skan zakończony: %@ aktualizacji."
+        ),
+        "Odinstalowano %@ aplikacji": PluralForms(
+            one:  "Odinstalowano %@ aplikację",
+            few:  "Odinstalowano %@ aplikacje",
+            many: "Odinstalowano %@ aplikacji"
+        ),
+        "Odinstalowano %@ aplikacji.": PluralForms(
+            one:  "Odinstalowano %@ aplikację.",
+            few:  "Odinstalowano %@ aplikacje.",
+            many: "Odinstalowano %@ aplikacji."
+        ),
         "%@ aktualizacji dostępnych": PluralForms(
             one:  "%@ aktualizacja dostępna",
             few:  "%@ aktualizacje dostępne",
@@ -118,6 +133,21 @@ public enum Plurals {
     ]
 
     static let en: [String: PluralForms] = [
+        "Skan zakończony: %@ aktualizacji.": PluralForms(
+            one:  "Scan finished: %@ update.",
+            few:  "Scan finished: %@ updates.",
+            many: "Scan finished: %@ updates."
+        ),
+        "Odinstalowano %@ aplikacji": PluralForms(
+            one:  "Uninstalled %@ app",
+            few:  "Uninstalled %@ apps",
+            many: "Uninstalled %@ apps"
+        ),
+        "Odinstalowano %@ aplikacji.": PluralForms(
+            one:  "Uninstalled %@ app.",
+            few:  "Uninstalled %@ apps.",
+            many: "Uninstalled %@ apps."
+        ),
         "%@ aktualizacji dostępnych": PluralForms(
             one:  "%@ update available",
             few:  "%@ updates available",

@@ -221,11 +221,15 @@ final class ScanStore: ObservableObject {
     /// cost. Written only through the three operations below.
     @Published private(set) var updateInterruption = UpdateInterruption()
 
+    let announcer: any AccessibilityAnnouncing
+
     init(
         resultStore: ScanResultStore = ScanResultStore(),
         runningApplicationInspector: any RunningApplicationInspecting = WorkspaceRunningApplicationInspector(),
-        dependencies: ScanStoreDependencies = .live
+        dependencies: ScanStoreDependencies = .live,
+        announcer: any AccessibilityAnnouncing = LiveAccessibilityAnnouncer()
     ) {
+        self.announcer = announcer
         self.resultStore = resultStore
         self.runningApplicationInspector = runningApplicationInspector
         self.dependencies = dependencies

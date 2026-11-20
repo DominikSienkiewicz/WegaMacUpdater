@@ -67,5 +67,8 @@ extension Translations {
         "Zostaw otwartą": "Leave It Open",
         "Nie udało się zamknąć aplikacji": "Couldn't quit the app",
         "Nie mogę zamknąć %@. Zamknij ją ręcznie.": "I can't quit %@. Quit it yourself.",
+        "Sprawdzanie niepełne.": "Check incomplete.",
+        "Aktualizacja zakończona: %@ z %@.": "Update finished: %@ of %@.",
+        "%@ wymaga uwagi.": "%@ needs attention.",
     ]
 }

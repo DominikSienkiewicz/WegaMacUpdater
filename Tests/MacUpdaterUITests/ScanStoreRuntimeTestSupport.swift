@@ -106,7 +106,8 @@ func makeScanStoreRuntimeHarness(
     manualScan: @escaping ScanStoreDependencies.ManualScan = { _, _ in ([], 0) },
     applications: [RunningApplicationTarget] = [],
     bundleExists: @escaping (URL) -> Bool = { _ in true },
-    undoableUpdates: @escaping () -> [UndoableUpdate] = { [] }
+    undoableUpdates: @escaping () -> [UndoableUpdate] = { [] },
+    announcer: any AccessibilityAnnouncing = LiveAccessibilityAnnouncer()
 ) -> ScanStoreRuntimeHarness {
     let toolURL = URL(fileURLWithPath: "/bin/echo")
     let locator = BinaryLocator(brewCandidates: [toolURL], masCandidates: [toolURL])
@@ -133,7 +134,8 @@ func makeScanStoreRuntimeHarness(
     let store = ScanStore(
         resultStore: ScanResultStore(io: snapshots),
         runningApplicationInspector: ScanStoreRuntimeApplicationInspector(applications: applications),
-        dependencies: dependencies
+        dependencies: dependencies,
+        announcer: announcer
     )
     store.attach(model: AppViewModel(
         brewService: BrewService(locator: locator, runner: runner),

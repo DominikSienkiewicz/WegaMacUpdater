@@ -24,8 +24,8 @@ struct UpdateRunOverlayTests {
 
         #expect(view.contains(".disabled(!ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating))"),
                 "rows, banner, plan preview, stale-cask card and manual installs must be inert during a run")
-        #expect(view.contains(".accessibilityHidden(scan.updating)"),
-                "VoiceOver must not reach the controls the overlay covers")
+        #expect(!view.contains(".accessibilityHidden(scan.updating)"),
+                "UXP-10: the list stays readable to VoiceOver during a run, only disabled")
     }
 
     @Test func theRunIsDrawnOverTheScreenWithItsStopButton() throws {

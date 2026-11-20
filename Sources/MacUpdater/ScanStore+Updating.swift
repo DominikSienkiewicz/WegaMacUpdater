@@ -316,7 +316,15 @@ extension ScanStore {
 
         // REL-12 — a run the user stopped is never announced as a finished one.
         let interrupted = updateInterruption.didSkipWork
-        if interrupted { reportInterruptedRun(upgraded: summary.upgraded.count) }
+        if interrupted {
+            reportInterruptedRun(upgraded: summary.upgraded.count)
+        } else {
+            announcer.announce(AnnouncementCopy.runFinished(
+                updated: summary.upgraded.count,
+                total: summary.attempted,
+                needsAttention: summary.notUpgraded.map(\.name)
+            ))
+        }
         if summary.allItemsUpgraded {
             guard !interrupted else { return }
             UserDefaults.standard.set(true, forKey: ReadinessPresentation.dismissedKey)

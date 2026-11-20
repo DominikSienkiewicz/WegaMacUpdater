@@ -14,6 +14,7 @@ struct UninstallView: View {
     @State private var selected:       Set<String>       = []
     @State private var search:         String            = ""
     @StateObject private var operations = UninstallCoordinator()
+    private let announcer: any AccessibilityAnnouncing = LiveAccessibilityAnnouncer()
     @State private var showDialog:     Bool              = false
     /// UX-01: the exact visible installations named by the confirmation. Execution
     /// consumes this frozen collection instead of resolving selection through a filter
@@ -501,6 +502,7 @@ struct UninstallView: View {
             onWegaState?(WegaState(pose: .happy, line: trf("Załatwione — %@ mniej na dysku.", "\(succeeded.count)")))
         }
         show(report)
+        announcer.announce(AnnouncementCopy.uninstallFinished(removed: succeeded.count))
     }
 
     /// The success banner names what was removed; everything else stays together in `result`.
