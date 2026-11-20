@@ -87,10 +87,10 @@ struct UninstallResultPresentationTests {
         #expect(banner.variant == .success)
         #expect(banner.message.contains("Trashed do Kosza"))
         #expect(banner.message.contains("Cask przez brew"))
-        #expect(banner.message.contains("2 resztek do Kosza"))
+        #expect(banner.message.contains("2 resztki do Kosza"))
         #expect(report.rows.map(\.id) == [broken.id])
         let summary = try #require(report.summary)
-        #expect(summary.contains("Nie udało się przenieść 1 resztek do Kosza."), "failed leftover count is reported")
+        #expect(summary.contains("Nie udało się przenieść 1 resztkę do Kosza."), "failed leftover count is reported")
     }
 
     /// Spec 4.5: an app Wega's helper removed is named in its own category, apart from a plain

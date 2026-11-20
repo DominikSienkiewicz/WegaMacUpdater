@@ -148,7 +148,7 @@ struct MigrationView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(tr("Kandydaci do migracji"))
                             .font(.wega(.title2, weight: .semibold))
-                        Text(trf("Zeskanowano /Applications · znalazłam %@ aplikacji poza zarządzaniem", "\(matchable.count + migrated.count + masCandidates.count + unmatched.count)"))
+                        Text(trp("Zeskanowano /Applications · znalazłam %@ aplikacji poza zarządzaniem", matchable.count + migrated.count + masCandidates.count + unmatched.count))
                             .font(.wega(.subheadline))
                             .foregroundStyle(.tertiary)
                     }

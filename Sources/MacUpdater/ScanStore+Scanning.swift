@@ -412,7 +412,7 @@ extension ScanStore {
             if let msg = errorMessage {
                 showBanner(BannerData(variant: .danger, title: tr("Błąd Homebrew"), message: msg, action: .openLogs))
             }
-            emitWegaState(WegaState(pose: .alert, line: trf("Znalazłam %@ rzeczy do uporządkowania.", "\(n)")))
+            emitWegaState(WegaState(pose: .alert, line: trp("Znalazłam %@ rzeczy do uporządkowania.", n)))
         case .checkFailed:
             showBanner(BannerData(variant: .danger,
                                   title: tr("Nie udało się sprawdzić aktualizacji"),
@@ -423,7 +423,9 @@ extension ScanStore {
         case .partialFailure(let updates, let failed):
             showBanner(BannerData(variant: .danger,
                                   title: tr("Lista może być niepełna"),
-                                  message: trf("Znalazłam %@ aktualizacji, ale %@ źródeł nie odpowiedziało — sprawdź połączenie i odśwież.", "\(updates)", "\(failed)"),
+                                  message: trf("%@, ale %@ — sprawdź połączenie i odśwież.",
+                                            trp("Znalazłam %@ aktualizacji", updates),
+                                            trp("%@ źródeł nie odpowiedziało", failed)),
                                   action: .openLogs))
             emitWegaState(WegaState(pose: .alert, line: trf("Znalazłam %@, ale część źródeł milczy.", "\(updates)")))
         }

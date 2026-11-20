@@ -22,6 +22,7 @@ public enum Translations {
         .merging(MicrosoftAutoUpdateTranslations.english) { first, _ in first }
         .merging(uninstallTexts) { first, _ in first }
         .merging(updatesActionBar.merging(uxReview) { first, _ in first }) { first, _ in first }
+        .merging(uxReviewNext) { first, _ in first }
 }
 
 extension Translations {
@@ -264,10 +265,7 @@ extension Translations {
         "Info.plist… mhm": "Info.plist… mhm",
         "Ten cask wymaga odświeżenia": "This cask needs refreshing",
         "Wszystko aktualne": "Everything up to date",
-        "%@ aktualizacji do zainstalowania": "%@ updates to install",
         // M4 — nagłówek nazywa obie połowy licznika; przycisk obiecuje tylko instalowalne.
-        "%@ do zainstalowania + %@ ręcznych": "%@ to install + %@ manual",
-        "%@ do ręcznej aktualizacji": "%@ to update manually",
         "Sprawdzono %@": "Checked %@",
         // M2 — stara lista mówi wprost, kiedy powstała.
         "Znaleziono %@": "Found %@",
@@ -285,7 +283,6 @@ extension Translations {
         "Zaznacz przynajmniej jedną pozycję — Wega nie aktualizuje niczego, czego sam nie wskażesz.":
             "Select at least one item — Wega updates nothing you have not pointed at.",
         "Zaznacz całą grupę: %@": "Select the whole group: %@",
-        "Zaktualizować %@ pozycji?": "Update %@ items?",
         "Wega się zdrzemnie. Zajrzymy znowu za jakiś czas.": "Wega will take a nap. We'll check again in a while.",
         "Nic w tej kategorii": "Nothing in this category",
         "Zaznacz wszystko": "Select all",
@@ -310,7 +307,6 @@ extension Translations {
         "Węszę po Homebrew…": "Sniffing around Homebrew…",
         "Błąd Homebrew": "Homebrew error",
         "Wszystko aktualne. Idę się zdrzemnąć.": "Everything up to date. I'm going to take a nap.",
-        "Znalazłam %@ rzeczy do uporządkowania.": "I found %@ things to tidy up.",
         "Nie udało się sprawdzić aktualizacji": "Couldn't check for updates",
         "Część źródeł nie odpowiedziała — sprawdź połączenie z internetem i spróbuj ponownie.": "Some sources didn't respond — check your internet connection and try again.",
         "Nie dowęszyłam się — chyba nie ma internetu.": "I couldn't sniff anything out — looks like there's no internet.",
@@ -318,7 +314,6 @@ extension Translations {
         "Ostatni skan nie dostał odpowiedzi od wszystkich źródeł — odśwież, żeby poznać pełną listę.": "The last scan didn't hear back from every source — refresh to see the full list.",
         "Nie wiem, czy wszystko aktualne": "I can't tell whether everything is up to date",
         "Ostatni skan nie dostał odpowiedzi od wszystkich źródeł — pusta lista nic tu nie znaczy. Odśwież, gdy wróci połączenie.": "The last scan didn't hear back from every source — an empty list means nothing here. Refresh once you're back online.",
-        "Znalazłam %@ aktualizacji, ale %@ źródeł nie odpowiedziało — sprawdź połączenie i odśwież.": "I found %@ updates, but %@ sources didn't respond — check your connection and refresh.",
         "Znalazłam %@, ale część źródeł milczy.": "I found %@, but some sources are silent.",
         "Instaluję %@ przez Brew…": "Installing %@ via Brew…",
         "Zaktualizowano %@": "Updated %@",
@@ -344,9 +339,7 @@ extension Translations {
         "odmowa": "denied",
         "nieustalone": "undetermined",
         "Część pakietów się nie zaktualizowała.": "Some packages didn't update.",
-        "Zaktualizowano %@ pakietów": "Updated %@ packages",
         "Wszystko gotowe.": "All done.",
-        "Gotowe! %@ pakietów odświeżonych.": "Done! %@ packages refreshed.",
         "Ręcznie zainstalowane": "Manually installed",
         "Otwórz aplikację": "Open the application",
         "Aktualizuj przez Brew": "Update via Brew",
@@ -409,7 +402,6 @@ extension Translations {
         "Może by tak pod brew?": "How about moving it under brew?",
         "Łapię zapach Sparkle": "I catch the scent of Sparkle",
         "Kandydaci do migracji": "Migration candidates",
-        "Zeskanowano /Applications · znalazłam %@ aplikacji poza zarządzaniem": "Scanned /Applications · found %@ apps outside management",
         "Skanuj ponownie": "Scan again",
         "Można przepiąć pod Homebrew": "Can be moved under Homebrew",
         "Wszystko już przygarnięte. Dobra robota.": "Everything is already taken in. Good job.",
@@ -445,7 +437,6 @@ extension Translations {
         "Dodaj wykluczenie…": "Add exclusion…",
         "Wyklucz ze skanowania": "Exclude from scan",
         "Brak wykluczeń.": "No exclusions.",
-        "Zwęszyłam %@ aplikacji do przepięcia.": "I sniffed out %@ apps to migrate.",
         "Wszystko porządku. Wega nie znalazła uciekinierów.": "All good. Wega found no runaways.",
         "Instaluję %@ przez Homebrew…": "Installing %@ via Homebrew…",
         "⚠ %@ jest uruchomiony — zamykam przed instalacją…": "⚠ %@ is running — closing it before installation…",
@@ -498,8 +489,6 @@ extension Translations {
         "Odinstaluj": "Uninstall",
         "Odinstaluj (%@)": "Uninstall (%@)",
         "Dokładne cele": "Exact targets",
-        "%@ aplikacji": "%@ apps",
-        "%@ zaznaczonych z %@": "%@ selected of %@",
         "NAZWA · WERSJA · ŹRÓDŁO": "NAME · VERSION · SOURCE",
         "Skanowanie aplikacji…": "Scanning apps…",
         "Co tu można wynieść?": "What can be hauled off here?",
@@ -540,9 +529,6 @@ extension Translations {
         "Odinstalowanie niepełne — nie usunięto: %@": "Uninstall incomplete — not removed: %@",
         "Nie uruchomiono --force; wybrane usunięcie wraz z resztkami nie zostało po cichu zmienione.":
             "--force was not run; the selected app-and-leftovers removal was not silently changed.",
-        "Odinstalować %@ %@?": "Uninstall %@ %@?",
-        "aplikację": "app",
-        "aplikacji": "apps",
         "%@ przez brew · %@ do Kosza": "%@ via brew · %@ to Trash",
         "Aplikacje trafią do Kosza": "Apps will go to the Trash",
         // REL-16 — cask usuwany po tokenie, nie po ścieżce: przy dwóch kopiach tej samej
@@ -557,9 +543,6 @@ extension Translations {
         "Zabiera też pliki w ~/Library/Preferences, Caches i Application Support.": "Also takes files in ~/Library/Preferences, Caches and Application Support.",
         "Zabiera też pliki w ~/Library/Preferences, Caches i Application Support. Tego nie da się cofnąć.":
             "Also takes files in ~/Library/Preferences, Caches and Application Support. This cannot be undone.",
-        "%@ %@ przez brew — trafi do Kosza.": "%@ %@ by brew — will go to the Trash.",
-        "aplikacja nie jest zarządzana": "app is not managed",
-        "aplikacji nie jest zarządzanych": "apps are not managed",
         "Usuń razem z resztkami": "Remove along with leftovers",
         "Usuń tylko aplikację": "Remove app only",
         "Przenieś do Kosza": "Move to Trash",
@@ -568,8 +551,6 @@ extension Translations {
         "Zaznaczone pliki trafią do Kosza — możesz je stamtąd przywrócić.":
             "Checked files will go to the Trash — you can restore them from there.",
         "Odznacz wszystko": "Deselect all",
-        "%@ resztek do Kosza": "%@ leftovers to Trash",
-        "Nie udało się przenieść %@ resztek do Kosza.": "Could not move %@ leftovers to the Trash.",
         "zalecane": "recommended",
         "cask + formula": "cask + formula",
         "ze sklepu": "from the store",
@@ -600,7 +581,6 @@ extension Translations {
         "Globalne npm pachną odwiecznością": "Global npm smells of ages past",
         "Mhm, jeszcze ten folder": "Mhm, this folder too",
         "Przeczesuję /Applications…": "Combing through /Applications…",
-        "Obchód skończony — %@ aplikacji pod opieką.": "Patrol complete — %@ apps under watch.",
         "instalacje przez `npm i -g`": "installed via `npm i -g`",
         "dzisiaj": "today",
         "wczoraj": "yesterday",
@@ -680,7 +660,6 @@ extension Translations {
         "Nie teraz": "Not now",
         "Powiadamiaj": "Notify me",
         // M3(b) — „sprawdzenie” nie odinstalowuje niczego po cichu; użytkownik decyduje.
-        "%@ casków bez aplikacji": "%@ casks with no app",
         "Homebrew wciąż śledzi: %@. Aplikacji nie ma na dysku — możesz je wyrejestrować.":
             "Homebrew still tracks: %@. The apps are gone from disk — you can deregister them.",
         "Wyrejestruj": "Deregister",
@@ -760,7 +739,6 @@ extension Translations {
             "Wega works without it — it checks the Mac App Store, Sparkle, vendor feeds and npm. Homebrew adds formulae and casks.",
         "Kopiuj polecenie": "Copy command",
         "Skopiowano": "Copied",
-        "Usunięto %@ nieaktualnych casków": "Removed %@ stale casks",
         "Homebrew nie śledzi już aplikacji, których nie ma na dysku.":
             "Homebrew no longer tracks apps that are gone from disk.",
         // REL-13 — czyszczenie stale-casków rozgałęzia komunikat na sukces/częściowy/porażkę.
@@ -768,8 +746,6 @@ extension Translations {
         "Reszty nie udało się wyrejestrować — szczegóły są w logach.":
             "The rest could not be deregistered — see the log for details.",
         "Nie udało się usunąć nieaktualnych casków": "Could not remove the stale casks",
-        "Homebrew nadal śledzi %@ casków bez aplikacji — szczegóły są w logach.":
-            "Homebrew still tracks %@ casks with no app — see the log for details.",
         "Narzędzia": "Tools",
         // Sidebar taxonomy — update-category filter sections.
         "Do aktualizacji": "To update",
@@ -952,7 +928,6 @@ extension Translations {
         "czyszczenie Homebrew": "Homebrew cleanup",
         "migracja %@": "migrating %@",
         "usuwanie duplikatu %@": "removing duplicate %@",
-        "dezinstalacja %@ aplikacji": "uninstalling %@ app(s)",
         // LT-01 — trwały journal operacji: recovery, ręczne cofanie, uczciwość źródeł bez rollbacku.
         "Wega naprawiła przerwaną aktualizację": "Wega repaired an interrupted update",
         "Przerwana aktualizacja: %@ nie udało się naprawić — sprawdź te aplikacje. %@ przywrócono z kopii.":
@@ -1012,7 +987,6 @@ extension Translations {
         "Zgłoś na GitHubie": "Report on GitHub",
         "Kopiuj treść": "Copy contents",
         "Kopiuj %@": "Copy %@",
-        "Pominięto %d najstarszych wpisów": "%d oldest entries omitted",
         "Nie znaleziono klienta poczty": "No mail client found",
         "Ta maszyna nie ma skonfigurowanego klienta poczty. Skopiuj poniższe dane i wyślij zgłoszenie ręcznie.":
             "This machine has no mail client configured. Copy the details below and send the report manually.",

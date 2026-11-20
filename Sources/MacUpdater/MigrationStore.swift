@@ -367,7 +367,7 @@ final class MigrationStore: ObservableObject {
         onWegaState?(WegaState(
             pose: total > 0 ? .alert : .happy,
             line: total > 0
-                ? trf("Zwęszyłam %@ aplikacji do przepięcia.", "\(total)")
+                ? trp("Zwęszyłam %@ aplikacji do przepięcia.", total)
                 : tr("Wszystko porządku. Wega nie znalazła uciekinierów.")
         ))
     }

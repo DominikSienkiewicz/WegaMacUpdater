@@ -44,4 +44,28 @@ struct PluralRulesTests {
     @Test func unregisteredBaseHasNoPluralForms() {
         #expect(pluralize("Brak wariantów %@", count: 1, language: .pl) == nil)
     }
+
+    @Test(arguments: zip([1, 2, 5, 12, 22], ["Zaktualizować 1 pozycję?", "Zaktualizować 2 pozycje?",
+          "Zaktualizować 5 pozycji?", "Zaktualizować 12 pozycji?", "Zaktualizować 22 pozycje?"]))
+    func theConfirmationCountsItsItems(count: Int, expected: String) {
+        #expect(pluralize("Zaktualizować %@ pozycji?", count: count, language: .pl) == expected)
+    }
+
+    @Test func everyRoundTwoNounAgrees() {
+        #expect(pluralize("%@ resztek do Kosza", count: 1, language: .pl) == "1 resztka do Kosza")
+        #expect(pluralize("Nie udało się przenieść %@ resztek do Kosza.", count: 1, language: .pl)
+                == "Nie udało się przenieść 1 resztkę do Kosza.")
+        #expect(pluralize("Zaktualizowano %@ pakietów", count: 22, language: .pl) == "Zaktualizowano 22 pakiety")
+        #expect(pluralize("Zaktualizowano %@ pakietów", count: 12, language: .pl) == "Zaktualizowano 12 pakietów")
+        #expect(pluralize("Odinstalować %@ aplikacji?", count: 3, language: .pl) == "Odinstalować 3 aplikacje?")
+        #expect(pluralize("%@ aplikacji nie jest zarządzanych przez Homebrew — trafią do Kosza.", count: 1, language: .pl)
+                == "1 aplikacja nie jest zarządzana przez Homebrew — trafi do Kosza.")
+        #expect(pluralize("Znalazłam %@ rzeczy do uporządkowania.", count: 1, language: .pl)
+                == "Znalazłam 1 rzecz do uporządkowania.")
+        #expect(pluralize("%@ źródeł nie odpowiedziało", count: 2, language: .pl) == "2 źródła nie odpowiedziały")
+        #expect(pluralize("Zaktualizować %@ pozycji?", count: 1, language: .en) == "Update 1 item?")
+        #expect(pluralize("Zaktualizowano %@ pakietów", count: 1, language: .en) == "Updated 1 package")
+        #expect(pluralize("%@ źródeł nie odpowiedziało", count: 1, language: .en) == "1 source didn't respond")
+        #expect(pluralize("Odinstalować %@ aplikacji?", count: 22, language: .en) == "Uninstall 22 apps?")
+    }
 }

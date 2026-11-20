@@ -33,6 +33,52 @@ struct LocalizationCompletenessTests {
         #expect(repeated.isEmpty, "M9: Translations+UXReview.swift repeats \(repeated)")
     }
 
+    /// UXP-25 — bases this round moved from `trf` to `trp`.
+    static let pluralised: Set<String> = [
+        "Zaktualizować %@ pozycji?", "Zaktualizowano %@ pakietów", "Gotowe! %@ pakietów odświeżonych.",
+        "%@ casków bez aplikacji", "Usunięto %@ nieaktualnych casków",
+        "Homebrew nadal śledzi %@ casków bez aplikacji — szczegóły są w logach.",
+        "%@ resztek do Kosza", "Pominięto %@ aplikacji — powody poniżej.",
+        "Nie udało się przenieść %@ resztek do Kosza.", "%@ aplikacji", "odinstalowanie %@ aplikacji",
+        "Odinstalować %@ aplikacji?", "%@ aplikacji nie jest zarządzanych przez Homebrew — trafią do Kosza.",
+        "Obchód skończony — %@ aplikacji pod opieką.", "Zwęszyłam %@ aplikacji do przepięcia.",
+        "Zeskanowano /Applications · znalazłam %@ aplikacji poza zarządzaniem",
+        "Znalazłam %@ rzeczy do uporządkowania.", "Znalazłam %@ aktualizacji", "%@ źródeł nie odpowiedziało",
+        "Pominięto %@ najstarszych wpisów",
+    ]
+
+    @Test func everyTrpKeyHasPolishAndEnglishForms() throws {
+        let keys = try usedKeys(functions: ["trp"])
+        let missing = keys.filter { Plurals.forms($0, language: .pl) == nil || Plurals.forms($0, language: .en) == nil }
+        #expect(missing.isEmpty, "trp keys without both languages: \(missing.sorted())")
+        #expect(keys.isSuperset(of: Self.pluralised))
+    }
+
+    @Test func noCountedNounGoesThroughTrf() throws {
+        let trf = try usedKeys(functions: ["trf"])
+        #expect(trf.isDisjoint(with: Self.pluralised))
+        for glued in ["Odinstalować %@ %@?", "%@ %@ przez brew — trafi do Kosza.", "Pominięto %d najstarszych wpisów",
+                      "%@ zaznaczonych z %@", "%@ do zainstalowania + %@ ręcznych", "dezinstalacja %@ aplikacji"] {
+            #expect(!trf.contains(glued), "\(glued)")
+        }
+    }
+
+    private static let sectionsBeforeUXReview: [[String: String]] = [
+        Translations.base, Translations.operations, Translations.vendorCompletion, Translations.rollbackScope,
+        DockerRestartTranslations.english, Translations.dockerShutdown, Translations.dockerDesktop,
+        Translations.unconfirmedCaskAssociation, Translations.serviceVendors, Translations.cleanup,
+        Translations.cleanupHygiene, MicrosoftAutoUpdateTranslations.english, Translations.uninstallTexts,
+        Translations.updatesActionBar,
+    ]
+
+    /// M9 — the next round's section repeats no key of any other section, `uxReview` included.
+    @Test func theNextUXReviewSectionRepeatsNoKeyOfAnotherSection() {
+        let others = Self.sectionsBeforeUXReview + [Translations.uxReview]
+        let elsewhere = others.reduce(into: Set<String>()) { $0.formUnion($1.keys) }
+        let repeated = Set(Translations.uxReviewNext.keys).intersection(elsewhere).sorted()
+        #expect(repeated.isEmpty, "M9: Translations+UXReviewNext.swift repeats \(repeated)")
+    }
+
     private func packageRoot(file: String = #filePath) -> URL {
         // <root>/Tests/MacUpdaterTests/<thisFile>.swift → up 3 = <root>
         URL(fileURLWithPath: file)
@@ -70,7 +116,7 @@ struct LocalizationCompletenessTests {
         return out
     }
 
-    private func usedKeys() throws -> Set<String> {
+    private func usedKeys(functions: [String] = ["tr", "trf"]) throws -> Set<String> {
         let appSources = packageRoot().appendingPathComponent("Sources/MacUpdater")
         let files = try FileManager.default
             .contentsOfDirectory(at: appSources, includingPropertiesForKeys: nil)
@@ -79,7 +125,8 @@ struct LocalizationCompletenessTests {
         // `tr(` or `trf(`, optional whitespace, then a single-line "double-quoted" literal
         // whose body may contain escaped characters. Newlines are excluded from the body so
         // the match can't run across statements into the next string literal.
-        let regex = try NSRegularExpression(pattern: #"\b(?:tr|trf)\(\s*"((?:\\.|[^"\\\n])*)""#)
+        let alternatives = functions.joined(separator: "|")
+        let regex = try NSRegularExpression(pattern: #"\b(?:"# + alternatives + #")\(\s*"((?:\\.|[^"\\\n])*)""#)
 
         var keys = Set<String>()
         for file in files {

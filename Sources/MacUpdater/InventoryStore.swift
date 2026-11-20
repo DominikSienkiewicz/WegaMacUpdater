@@ -187,7 +187,7 @@ final class InventoryStore: ObservableObject {
             errorMessage = snapshot.failures.scanErrorMessage
             onWegaState?(WegaState(
                 pose: .happy,
-                line: trf("Obchód skończony — %@ aplikacji pod opieką.", "\(apps.count)")
+                line: trp("Obchód skończony — %@ aplikacji pod opieką.", apps.count)
             ))
         } catch is CancellationError {
             return

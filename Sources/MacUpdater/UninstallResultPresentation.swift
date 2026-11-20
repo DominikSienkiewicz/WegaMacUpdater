@@ -148,7 +148,7 @@ enum UninstallResultPresentation {
             }
         }
         // UX-13: report the leftovers that reached the Trash alongside the app removals.
-        if leftoversTrashed > 0 { parts.append(trf("%@ resztek do Kosza", "\(leftoversTrashed)")) }
+        if leftoversTrashed > 0 { parts.append(trp("%@ resztek do Kosza", leftoversTrashed)) }
         return BannerData(
             variant: .success,
             title: trp("Odinstalowano %@ aplikacji", removed.count),
@@ -170,11 +170,11 @@ enum UninstallResultPresentation {
         if let failure { parts.append(failure.note) }
         let skippedCount = rows.count - (failure?.count ?? 0)
         if skippedCount > 0 {
-            parts.append(trf("Pominięto %@ aplikacji — powody poniżej.", "\(skippedCount)"))
+            parts.append(trp("Pominięto %@ aplikacji — powody poniżej.", skippedCount))
         }
         // UX-13: leftovers that could not be moved are surfaced, not swallowed.
         if leftoversFailed > 0 {
-            parts.append(trf("Nie udało się przenieść %@ resztek do Kosza.", "\(leftoversFailed)"))
+            parts.append(trp("Nie udało się przenieść %@ resztek do Kosza.", leftoversFailed))
         }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }

@@ -95,7 +95,7 @@ struct UpdateView: View {
             }
             .sheet(isPresented: $scan.showPlanPreview) { planSheet }
             .confirmationDialog(
-                trf("Zaktualizować %@ pozycji?", "\(pendingUpdateTargets.count)"),
+                trp("Zaktualizować %@ pozycji?", pendingUpdateTargets.count),
                 isPresented: $showUpdateConfirmation,
                 titleVisibility: .visible
             ) {
@@ -312,7 +312,7 @@ struct UpdateView: View {
 
     private var resultsHeading: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(headline)
+            Text(tr("Wszystko aktualne"))
                 .font(.wega(.largeTitle, weight: .semibold))
                 .fixedSize(horizontal: false, vertical: true)
             if let date = scan.lastCheck {
@@ -541,7 +541,7 @@ struct UpdateView: View {
             // in the detail, unclipped, because they are what the button acts on.
             WegaCallout(
                 .info,
-                title: trf("%@ casków bez aplikacji", "\(scan.staleCasks.count)"),
+                title: trp("%@ casków bez aplikacji", scan.staleCasks.count),
                 symbol: "trash.fill"
             ) {
                 Text(trf("Homebrew wciąż śledzi: %@. Aplikacji nie ma na dysku — możesz je wyrejestrować.", "\(scan.staleCasks.joined(separator: ", "))"))
@@ -556,20 +556,6 @@ struct UpdateView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
         }
-    }
-
-    /// M4 — the header names both halves of the count, because they behave differently:
-    /// the installable ones are what the button below will actually upgrade.
-    private var headline: String {
-        let count = scan.updateCount
-        if count.isEmpty { return tr("Wszystko aktualne") }
-        if count.manual == 0 {
-            return trf("%@ aktualizacji do zainstalowania", "\(count.installable)")
-        }
-        if count.installable == 0 {
-            return trf("%@ do ręcznej aktualizacji", "\(count.manual)")
-        }
-        return trf("%@ do zainstalowania + %@ ręcznych", "\(count.installable)", "\(count.manual)")
     }
 
     /// UX-06 — the monospaced stamp naming the sources behind the result on screen, built

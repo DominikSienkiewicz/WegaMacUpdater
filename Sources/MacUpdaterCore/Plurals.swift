@@ -129,6 +129,106 @@ public enum Plurals {
             one:  "W tle zaktualizowałam %@ aplikację.",
             few:  "W tle zaktualizowałam %@ aplikacje.",
             many: "W tle zaktualizowałam %@ aplikacji."
+        ),
+        "Zaktualizować %@ pozycji?": PluralForms(
+            one:  "Zaktualizować %@ pozycję?",
+            few:  "Zaktualizować %@ pozycje?",
+            many: "Zaktualizować %@ pozycji?"
+        ),
+        "Zaktualizowano %@ pakietów": PluralForms(
+            one:  "Zaktualizowano %@ pakiet",
+            few:  "Zaktualizowano %@ pakiety",
+            many: "Zaktualizowano %@ pakietów"
+        ),
+        "Gotowe! %@ pakietów odświeżonych.": PluralForms(
+            one:  "Gotowe! %@ pakiet odświeżony.",
+            few:  "Gotowe! %@ pakiety odświeżone.",
+            many: "Gotowe! %@ pakietów odświeżonych."
+        ),
+        "%@ casków bez aplikacji": PluralForms(
+            one:  "%@ cask bez aplikacji",
+            few:  "%@ caski bez aplikacji",
+            many: "%@ casków bez aplikacji"
+        ),
+        "Usunięto %@ nieaktualnych casków": PluralForms(
+            one:  "Usunięto %@ nieaktualny cask",
+            few:  "Usunięto %@ nieaktualne caski",
+            many: "Usunięto %@ nieaktualnych casków"
+        ),
+        "Homebrew nadal śledzi %@ casków bez aplikacji — szczegóły są w logach.": PluralForms(
+            one:  "Homebrew nadal śledzi %@ cask bez aplikacji — szczegóły są w logach.",
+            few:  "Homebrew nadal śledzi %@ caski bez aplikacji — szczegóły są w logach.",
+            many: "Homebrew nadal śledzi %@ casków bez aplikacji — szczegóły są w logach."
+        ),
+        "%@ resztek do Kosza": PluralForms(
+            one:  "%@ resztka do Kosza",
+            few:  "%@ resztki do Kosza",
+            many: "%@ resztek do Kosza"
+        ),
+        "Pominięto %@ aplikacji — powody poniżej.": PluralForms(
+            one:  "Pominięto %@ aplikację — powody poniżej.",
+            few:  "Pominięto %@ aplikacje — powody poniżej.",
+            many: "Pominięto %@ aplikacji — powody poniżej."
+        ),
+        "Nie udało się przenieść %@ resztek do Kosza.": PluralForms(
+            one:  "Nie udało się przenieść %@ resztkę do Kosza.",
+            few:  "Nie udało się przenieść %@ resztki do Kosza.",
+            many: "Nie udało się przenieść %@ resztek do Kosza."
+        ),
+        "%@ aplikacji": PluralForms(
+            one:  "%@ aplikacja",
+            few:  "%@ aplikacje",
+            many: "%@ aplikacji"
+        ),
+        "odinstalowanie %@ aplikacji": PluralForms(
+            one:  "odinstalowanie %@ aplikacji",
+            few:  "odinstalowanie %@ aplikacji",
+            many: "odinstalowanie %@ aplikacji"
+        ),
+        "Odinstalować %@ aplikacji?": PluralForms(
+            one:  "Odinstalować %@ aplikację?",
+            few:  "Odinstalować %@ aplikacje?",
+            many: "Odinstalować %@ aplikacji?"
+        ),
+        "%@ aplikacji nie jest zarządzanych przez Homebrew — trafią do Kosza.": PluralForms(
+            one:  "%@ aplikacja nie jest zarządzana przez Homebrew — trafi do Kosza.",
+            few:  "%@ aplikacje nie są zarządzane przez Homebrew — trafią do Kosza.",
+            many: "%@ aplikacji nie jest zarządzanych przez Homebrew — trafią do Kosza."
+        ),
+        "Obchód skończony — %@ aplikacji pod opieką.": PluralForms(
+            one:  "Obchód skończony — %@ aplikacja pod opieką.",
+            few:  "Obchód skończony — %@ aplikacje pod opieką.",
+            many: "Obchód skończony — %@ aplikacji pod opieką."
+        ),
+        "Zwęszyłam %@ aplikacji do przepięcia.": PluralForms(
+            one:  "Zwęszyłam %@ aplikację do przepięcia.",
+            few:  "Zwęszyłam %@ aplikacje do przepięcia.",
+            many: "Zwęszyłam %@ aplikacji do przepięcia."
+        ),
+        "Zeskanowano /Applications · znalazłam %@ aplikacji poza zarządzaniem": PluralForms(
+            one:  "Zeskanowano /Applications · znalazłam %@ aplikację poza zarządzaniem",
+            few:  "Zeskanowano /Applications · znalazłam %@ aplikacje poza zarządzaniem",
+            many: "Zeskanowano /Applications · znalazłam %@ aplikacji poza zarządzaniem"
+        ),
+        "Znalazłam %@ rzeczy do uporządkowania.": PluralForms(
+            one:  "Znalazłam %@ rzecz do uporządkowania.",
+            few:  "Znalazłam %@ rzeczy do uporządkowania.",
+            many: "Znalazłam %@ rzeczy do uporządkowania."
+        ),
+        "Znalazłam %@ aktualizacji": PluralForms(
+            one:  "Znalazłam %@ aktualizację",
+            few:  "Znalazłam %@ aktualizacje",
+            many: "Znalazłam %@ aktualizacji"
+        ),
+        "%@ źródeł nie odpowiedziało": PluralForms(
+            one:  "%@ źródło nie odpowiedziało",
+            few:  "%@ źródła nie odpowiedziały",
+            many: "%@ źródeł nie odpowiedziało"
+        ),
+        "Pominięto %@ najstarszych wpisów": PluralForms(
+            one:  "Pominięto %@ najstarszy wpis",
+            few:  "Pominięto %@ najstarsze wpisy",
+            many: "Pominięto %@ najstarszych wpisów"
         )
     ]
 
@@ -192,6 +292,106 @@ public enum Plurals {
             one:  "I updated %@ app in the background.",
             few:  "I updated %@ apps in the background.",
             many: "I updated %@ apps in the background."
+        ),
+        "Zaktualizować %@ pozycji?": PluralForms(
+            one:  "Update %@ item?",
+            few:  "Update %@ items?",
+            many: "Update %@ items?"
+        ),
+        "Zaktualizowano %@ pakietów": PluralForms(
+            one:  "Updated %@ package",
+            few:  "Updated %@ packages",
+            many: "Updated %@ packages"
+        ),
+        "Gotowe! %@ pakietów odświeżonych.": PluralForms(
+            one:  "Done! %@ package refreshed.",
+            few:  "Done! %@ packages refreshed.",
+            many: "Done! %@ packages refreshed."
+        ),
+        "%@ casków bez aplikacji": PluralForms(
+            one:  "%@ cask with no app",
+            few:  "%@ casks with no app",
+            many: "%@ casks with no app"
+        ),
+        "Usunięto %@ nieaktualnych casków": PluralForms(
+            one:  "Removed %@ stale cask",
+            few:  "Removed %@ stale casks",
+            many: "Removed %@ stale casks"
+        ),
+        "Homebrew nadal śledzi %@ casków bez aplikacji — szczegóły są w logach.": PluralForms(
+            one:  "Homebrew still tracks %@ cask with no app — see the log for details.",
+            few:  "Homebrew still tracks %@ casks with no app — see the log for details.",
+            many: "Homebrew still tracks %@ casks with no app — see the log for details."
+        ),
+        "%@ resztek do Kosza": PluralForms(
+            one:  "%@ leftover to Trash",
+            few:  "%@ leftovers to Trash",
+            many: "%@ leftovers to Trash"
+        ),
+        "Pominięto %@ aplikacji — powody poniżej.": PluralForms(
+            one:  "Skipped %@ app — reasons below.",
+            few:  "Skipped %@ apps — reasons below.",
+            many: "Skipped %@ apps — reasons below."
+        ),
+        "Nie udało się przenieść %@ resztek do Kosza.": PluralForms(
+            one:  "Could not move %@ leftover to the Trash.",
+            few:  "Could not move %@ leftovers to the Trash.",
+            many: "Could not move %@ leftovers to the Trash."
+        ),
+        "%@ aplikacji": PluralForms(
+            one:  "%@ app",
+            few:  "%@ apps",
+            many: "%@ apps"
+        ),
+        "odinstalowanie %@ aplikacji": PluralForms(
+            one:  "uninstalling %@ app",
+            few:  "uninstalling %@ apps",
+            many: "uninstalling %@ apps"
+        ),
+        "Odinstalować %@ aplikacji?": PluralForms(
+            one:  "Uninstall %@ app?",
+            few:  "Uninstall %@ apps?",
+            many: "Uninstall %@ apps?"
+        ),
+        "%@ aplikacji nie jest zarządzanych przez Homebrew — trafią do Kosza.": PluralForms(
+            one:  "%@ app isn't managed by Homebrew — it will go to the Trash.",
+            few:  "%@ apps aren't managed by Homebrew — they will go to the Trash.",
+            many: "%@ apps aren't managed by Homebrew — they will go to the Trash."
+        ),
+        "Obchód skończony — %@ aplikacji pod opieką.": PluralForms(
+            one:  "Patrol complete — %@ app under watch.",
+            few:  "Patrol complete — %@ apps under watch.",
+            many: "Patrol complete — %@ apps under watch."
+        ),
+        "Zwęszyłam %@ aplikacji do przepięcia.": PluralForms(
+            one:  "I sniffed out %@ app to migrate.",
+            few:  "I sniffed out %@ apps to migrate.",
+            many: "I sniffed out %@ apps to migrate."
+        ),
+        "Zeskanowano /Applications · znalazłam %@ aplikacji poza zarządzaniem": PluralForms(
+            one:  "Scanned /Applications · found %@ app outside management",
+            few:  "Scanned /Applications · found %@ apps outside management",
+            many: "Scanned /Applications · found %@ apps outside management"
+        ),
+        "Znalazłam %@ rzeczy do uporządkowania.": PluralForms(
+            one:  "I found %@ thing to tidy up.",
+            few:  "I found %@ things to tidy up.",
+            many: "I found %@ things to tidy up."
+        ),
+        "Znalazłam %@ aktualizacji": PluralForms(
+            one:  "I found %@ update",
+            few:  "I found %@ updates",
+            many: "I found %@ updates"
+        ),
+        "%@ źródeł nie odpowiedziało": PluralForms(
+            one:  "%@ source didn't respond",
+            few:  "%@ sources didn't respond",
+            many: "%@ sources didn't respond"
+        ),
+        "Pominięto %@ najstarszych wpisów": PluralForms(
+            one:  "%@ oldest entry omitted",
+            few:  "%@ oldest entries omitted",
+            many: "%@ oldest entries omitted"
         )
     ]
 }

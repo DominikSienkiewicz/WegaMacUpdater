@@ -92,7 +92,7 @@ struct BugReportSheet: View {
             Spacer()
             if preview.omittedEntryCount > 0 {
                 Label(
-                    trf("Pominięto %d najstarszych wpisów", preview.omittedEntryCount),
+                    trp("Pominięto %@ najstarszych wpisów", preview.omittedEntryCount),
                     systemImage: "scissors"
                 )
                 .font(.wega(.footnote)).foregroundStyle(Color.wegaToffee)
