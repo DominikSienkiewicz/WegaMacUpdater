@@ -124,6 +124,7 @@ final class ScanStore: ObservableObject {
     var restartDiagnosticOperationIDs: [String: UUID] = [:]
     var restartDockerBundleURLs: [String: URL] = [:]
     @Published var restartBusy:       String?
+    @Published var pendingForceRestart: RestartInfo?
     @Published var caskIconPaths:     [String: URL]       = [:]
     @Published var caskDownloads:     [String: CaskDownloadInfo] = [:]   // FEAT-03
     @Published var inspectedKey:      String?

@@ -88,6 +88,16 @@ public enum Plurals {
             one:  "%@ pilna",
             few:  "%@ pilne",
             many: "%@ pilnych"
+        ),
+        "Usuń %@ aplikacji": PluralForms(
+            one:  "Usuń %@ aplikację",
+            few:  "Usuń %@ aplikacje",
+            many: "Usuń %@ aplikacji"
+        ),
+        "i %@ wybranych resztek": PluralForms(
+            one:  "i %@ wybraną resztkę",
+            few:  "i %@ wybrane resztki",
+            many: "i %@ wybranych resztek"
         )
     ]
 
@@ -111,6 +121,16 @@ public enum Plurals {
             one:  "%@ urgent",
             few:  "%@ urgent",
             many: "%@ urgent"
+        ),
+        "Usuń %@ aplikacji": PluralForms(
+            one:  "Remove %@ app",
+            few:  "Remove %@ apps",
+            many: "Remove %@ apps"
+        ),
+        "i %@ wybranych resztek": PluralForms(
+            one:  "and %@ selected leftover",
+            few:  "and %@ selected leftovers",
+            many: "and %@ selected leftovers"
         )
     ]
 }

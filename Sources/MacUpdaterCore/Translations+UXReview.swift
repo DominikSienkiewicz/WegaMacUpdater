@@ -31,5 +31,15 @@ extension Translations {
             "Not enough space: about %@ is needed. Free up space and try again.",
         "suma zostanie sprawdzona": "checksum will be checked",
         "źródło nie podaje sumy do sprawdzenia": "the source provides no checksum to verify",
+        "Do Kosza: %@": "To Trash: %@",
+        "Homebrew: %@": "Homebrew: %@",
+        "(resztki z zap nie trafiają do Kosza)": "(zap leftovers don't go to the Trash)",
+        "Do Kosza: %@ · Homebrew: %@ (resztki z zap nie trafiają do Kosza)":
+            "To Trash: %@ · Homebrew: %@ (zap leftovers don't go to the Trash)",
+        "%@ nie chce się zamknąć.": "%@ won't quit.",
+        "Wymuszenie może stracić niezapisaną pracę.": "Forcing it may lose unsaved work.",
+        "Zostaw otwartą": "Leave It Open",
+        "Nie udało się zamknąć aplikacji": "Couldn't quit the app",
+        "Nie mogę zamknąć %@. Zamknij ją ręcznie.": "I can't quit %@. Quit it yourself.",
     ]
 }

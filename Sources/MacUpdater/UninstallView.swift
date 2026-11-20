@@ -730,6 +730,19 @@ struct UninstallDialog: View {
                         .padding(.horizontal, 22)
                     }
 
+                    if !counts.removesNothing {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(UninstallScopeSummary.headline(counts: counts, leftovers: selectedLeftovers.count))
+                            Text(UninstallScopeSummary.text(
+                                counts: counts, leftovers: selectedLeftovers.count, zapMode: zapMode))
+                        }
+                        .font(.wega(.footnote))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 22)
+                        .padding(.top, 10)
+                    }
+
                     if !ambiguities.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(ambiguities) { item in
@@ -828,7 +841,7 @@ struct UninstallDialog: View {
                         .disabled(isRefreshing)
                 } else {
                     Button(confirmLabel, role: .destructive) { confirm() }
-                        .keyboardShortcut(.defaultAction)
+                        .keyboardShortcut(.delete, modifiers: .command)
                         .buttonStyle(.borderedProminent)
                         .tint(Color.wegaDanger)
                         .disabled(isRefreshing)

@@ -401,16 +401,51 @@ extension ScanStore {
         UpdateDiagnostics.record("restart.requested", fields: fields)
         if await handleDockerRestart(info, fields: fields) { return }
         restartBusy = info.processName
-        await processes.kill(info.processName)
-        UpdateDiagnostics.record("restart.terminationReturned", fields: fields.merging(
-            ["result": "notExposedByService"], uniquingKeysWith: { _, new in new }))
-        try? await Task.sleep(for: .milliseconds(800))
-        await processes.launch(appName: info.appName)
-        UpdateDiagnostics.record("restart.launchReturned", fields: fields.merging(
-            ["result": "notExposedByService"], uniquingKeysWith: { _, new in new }))
+        let outcome = await gracefulRestartFlow().run(info)
+        UpdateDiagnostics.record("restart.gracefulOutcome", fields: fields.merging(
+            ["result": outcome == .relaunched ? "relaunched" : "needsForceConsent"],
+            uniquingKeysWith: { _, new in new }))
+        guard outcome == .relaunched else {
+            pendingForceRestart = info
+            restartBusy = nil
+            return
+        }
         restartCandidates.removeAll { $0.processName == info.processName }
         restartBusy = nil
         restartDiagnosticOperationIDs.removeValue(forKey: info.processName)
         UpdateDiagnostics.record("restart.flowCompleted", fields: fields)
+    }
+
+    private func gracefulRestartFlow() -> RestartFlow {
+        let processes = processes
+        return RestartFlow(
+            requestQuit: { await processes.requestGracefulTermination(appName: $0.appName, processName: $0.processName) },
+            isRunning: { await processes.isRunning($0) },
+            launch: { await processes.launch(appName: $0) },
+            pause: { try? await Task.sleep(for: $0) }
+        )
+    }
+
+    func confirmForceRestart(_ info: RestartInfo) async {
+        pendingForceRestart = nil
+        restartBusy = info.processName
+        defer { restartBusy = nil }
+        guard await processes.forceKill(info.processName) else {
+            showBanner(BannerData(
+                variant: .danger,
+                title: tr("Nie udało się zamknąć aplikacji"),
+                message: trf("Nie mogę zamknąć %@. Zamknij ją ręcznie.", info.appName)))
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(800))
+        await processes.launch(appName: info.appName)
+        restartCandidates.removeAll { $0.processName == info.processName }
+        restartDiagnosticOperationIDs.removeValue(forKey: info.processName)
+        UpdateDiagnostics.record("restart.flowCompleted", fields: ["processName": info.processName, "forced": "true"])
+    }
+
+    func keepAppOpen(_ info: RestartInfo) {
+        pendingForceRestart = nil
+        UpdateDiagnostics.record("restart.forceDeclined", fields: ["processName": info.processName])
     }
 }

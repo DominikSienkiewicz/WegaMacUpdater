@@ -9,6 +9,9 @@ struct RestartSection: View {
     let candidates:   [RestartInfo]
     let busyProcess:  String?
     let onRestart:    (RestartInfo) -> Void
+    let pendingForce: RestartInfo?
+    let onForce:      (RestartInfo) -> Void
+    let onKeepOpen:   (RestartInfo) -> Void
 
     var body: some View {
         WegaCard {
@@ -39,6 +42,18 @@ struct RestartSection: View {
                     }
                 }
             }
+        }
+        .alert(
+            trf("%@ nie chce się zamknąć.", pendingForce?.appName ?? ""),
+            isPresented: Binding(get: { pendingForce != nil }, set: { shown in
+                if !shown, let info = pendingForce { onKeepOpen(info) }
+            }),
+            presenting: pendingForce
+        ) { info in
+            Button(tr("Wymuś zamknięcie"), role: .destructive) { onForce(info) }
+            Button(tr("Zostaw otwartą"), role: .cancel) { onKeepOpen(info) }
+        } message: { _ in
+            Text(tr("Wymuszenie może stracić niezapisaną pracę."))
         }
     }
 }
