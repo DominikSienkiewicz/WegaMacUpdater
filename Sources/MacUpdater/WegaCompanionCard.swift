@@ -82,7 +82,8 @@ struct WegaCompanionCardContent: View {
                 Spacer(minLength: 0)
                 if asksForNotifications {
                     HStack(spacing: 6) {
-                        Button(tr("Nie teraz"), action: onDecline)
+                        Button(tr("Nie włączaj powiadomień"), action: onDecline)
+                            .help(tr("Możesz je włączyć później w Ustawieniach Wegi."))
                         Button(tr("Powiadamiaj"), action: onAgree)
                             .buttonStyle(.borderedProminent)
                             .tint(Color.wegaHoneyFill)

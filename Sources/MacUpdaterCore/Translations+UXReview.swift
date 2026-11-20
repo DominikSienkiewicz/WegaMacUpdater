@@ -3,6 +3,12 @@ import Foundation
 extension Translations {
     /// UX review of 2026-11-20 — every new Polish-to-English pair of that pass.
     static let uxReview: [String: String] = [
+        "Nowe aktualizacje:": "New updates:",
+        "Nie włączaj powiadomień": "Keep Notifications Off",
+        "Możesz je włączyć później w Ustawieniach Wegi.": "You can turn them on later in Wega Settings.",
+        "Powiadomienia": "Notifications",
+        "Powiadamiaj o nowych aktualizacjach": "Notify me about new updates",
+        "Otwórz ustawienia powiadomień": "Open Notification Settings",
         "sprawdzanie niepełne": "check incomplete",
         "sprawdzenie niepełne": "check incomplete",
         "Część źródeł milczy — nie wiem, czy to wszystko.":

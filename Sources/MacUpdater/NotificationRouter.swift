@@ -29,6 +29,11 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unc
     @MainActor
     var activateApp: @MainActor () -> Void = { NSApp?.activate() }
 
+    /// Opens the main window. Registered by `MenuBarLabel`, which is always alive, so a click
+    /// can bring the window back even after the user closed it.
+    @MainActor
+    var openMainWindow: @MainActor () -> Void = {}
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -75,6 +80,7 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unc
     @MainActor
     func route(to destination: SidebarSelection?) {
         activateApp()
+        openMainWindow()
         guard let destination else { return }
         defaults.set(destination.rawValue, forKey: SidebarSelection.storageKey)
     }

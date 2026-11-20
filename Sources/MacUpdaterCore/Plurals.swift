@@ -98,6 +98,17 @@ public enum Plurals {
             one:  "i %@ wybraną resztkę",
             few:  "i %@ wybrane resztki",
             many: "i %@ wybranych resztek"
+        ),
+        // UXP-05 — notification body: the apps beyond the two that are named.
+        "i %@ innych": PluralForms(
+            one:  "i %@ inna",
+            few:  "i %@ inne",
+            many: "i %@ innych"
+        ),
+        "W tle zaktualizowałam %@ aplikacji.": PluralForms(
+            one:  "W tle zaktualizowałam %@ aplikację.",
+            few:  "W tle zaktualizowałam %@ aplikacje.",
+            many: "W tle zaktualizowałam %@ aplikacji."
         )
     ]
 
@@ -131,6 +142,16 @@ public enum Plurals {
             one:  "and %@ selected leftover",
             few:  "and %@ selected leftovers",
             many: "and %@ selected leftovers"
+        ),
+        "i %@ innych": PluralForms(
+            one:  "and %@ more",
+            few:  "and %@ more",
+            many: "and %@ more"
+        ),
+        "W tle zaktualizowałam %@ aplikacji.": PluralForms(
+            one:  "I updated %@ app in the background.",
+            few:  "I updated %@ apps in the background.",
+            many: "I updated %@ apps in the background."
         )
     ]
 }

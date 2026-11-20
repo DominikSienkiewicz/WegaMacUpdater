@@ -147,6 +147,11 @@ struct UpdateView: View {
                 // `startLaunchRefresh()`. One-shot, so a tab switch does not re-trigger it.
                 scan.startLaunchRefresh()
             }
+            // UXP-05 — a later background round replaces the list too. `dropFirst` skips the
+            // value that is already there: `restoreLastScan` weighs that one against the snapshot.
+            .onReceive(MenuBarAgent.shared.$lastResult.dropFirst().compactMap { $0 }) { result in
+                scan.adoptBackgroundResultIfNewer(result)
+            }
             // UX-10 — expose the scan and the "Zaktualizuj…" action to the menu bar (⌘R, ⌘⏎).
             // `UpdateView` stays mounted for the whole session, so these are the window's
             // scan hooks regardless of which destination is on screen; the menu itself gates

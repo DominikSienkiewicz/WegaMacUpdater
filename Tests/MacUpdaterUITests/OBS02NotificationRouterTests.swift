@@ -49,6 +49,18 @@ struct OBS02NotificationRouterTests {
         #expect(activated, "OBS-02: an unroutable notification still brings Wega forward, as it always did")
     }
 
+    /// UXP-05 — a click used to only activate the app; with the window closed nothing opened.
+    @Test func routingOpensTheMainWindow() {
+        let (defaults, teardown) = TestDefaults.isolated("obs02-notification-router-window")
+        defer { teardown() }
+        let router = NotificationRouter(defaults: defaults)
+        var opened = 0
+        router.activateApp = {}
+        router.openMainWindow = { opened += 1 }
+        router.route(to: .updates(.all))
+        #expect(opened == 1)
+    }
+
     // MARK: Every notification carries one
 
     /// All three posting sites attach a payload, and startup installs the delegate. Asserted at

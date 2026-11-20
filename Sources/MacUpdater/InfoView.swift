@@ -50,6 +50,7 @@ extension InfoView {
                 ResourceGateSettingsCard()
                 LaunchSmokeTestSettingsCard()
                 LaunchAtLoginSettingsCard()
+                NotificationsSettingsCard()
                 BackgroundUpdateConsentSettingsCard()
                 CrashReportingSettingsCard()
                 policiesCard

@@ -609,7 +609,7 @@ final class BackgroundUpdater {
         let publisherChanged = summary.publisherChanges.map(\.name)
         let failed = summary.names { $0 == .executionFailed || $0 == .stillOutdated || $0 == .notVerified }
 
-        var clauses: [String] = [trf("Zaktualizowano %@ w tle.", "\(summary.upgraded.count)")]
+        var clauses: [String] = [NotificationCopy.backgroundUpdatedClause(count: summary.upgraded.count)]
         if !rolledBack.isEmpty {
             clauses.append(trf("%@ cofnięto po nieudanym teście.", "\(rolledBack.count)"))
         }

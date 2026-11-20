@@ -660,7 +660,6 @@ extension Translations {
         "Co 6 godzin": "Every 6 hours",
         "Codziennie": "Daily",
         "Dostępne aktualizacje": "Updates available",
-        "Wega znalazła %@ aktualizacji do zainstalowania.": "Wega found %@ updates to install.",
         "Sprawdzimy, co się zestarzało?": "Shall we check what's gotten old?",
         "Aport! Zaznacz, co mam zabrać.": "Fetch! Mark what I should take.",
         "Pójdę zwęszyć /Applications.": "I'll go sniff out /Applications.",
@@ -737,7 +736,6 @@ extension Translations {
         "Aktualizacje w tle": "Background updates",
         // REL-02 — powiadomienie w tle mówi o każdym wyniku rundy, nie tylko o sukcesie.
         "Aktualizacje w tle — wymagają uwagi": "Background updates — need your attention",
-        "Zaktualizowano %@ w tle.": "Updated %@ in the background.",
         "%@ cofnięto po nieudanym teście.": "%@ rolled back after a failed check.",
         "%@ nie przeszło testu i nie udało się przywrócić — sprawdź je.": "%@ failed its check and could not be restored — check it.",
         "%@ zmieniło wydawcę (Team ID) — zweryfikuj.": "%@ changed publisher (Team ID) — verify.",

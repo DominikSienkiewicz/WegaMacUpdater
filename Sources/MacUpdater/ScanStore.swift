@@ -299,16 +299,7 @@ final class ScanStore: ObservableObject {
         }
 
         if useBackground, let background {
-            brewOutdated   = background.brew
-            masOutdated    = background.mas
-            npmOutdated    = background.npm
-            manualOutdated = background.manualApps
-            installationChecks = InstallationCheck.retainingLastSuccess(background.installationChecks, previous: snapshot?.installationChecks ?? [])
-            lastCheck      = background.scannedAt
-            failedSources  = background.failedChecks
-            // Background checks carry the same evidence as the window scan.
-            sourceReports     = background.sources
-            lastScanComplete  = background.failedChecks == 0
+            applyBackgroundResult(background, previousChecks: snapshot?.installationChecks ?? [])
         } else if let snapshot {
             brewOutdated   = snapshot.brew
             masOutdated    = snapshot.mas
@@ -336,6 +327,35 @@ final class ScanStore: ObservableObject {
         // Deliberately no `emitActivitySignal`: nothing is running. The tab icon must not
         // spin, and the scan-finished sound of `finishScan` would be a lie.
         emitCounts()
+    }
+
+    /// UXP-05 — take a menu-bar result the window has not seen. `restoreLastScan` adopts one
+    /// once per process; this is the same step for every later background round, so a click on
+    /// "new updates" lands on a list that has them. Never while an update or a scan runs, and
+    /// never for a result that is not newer than what the window already shows.
+    @discardableResult
+    func adoptBackgroundResultIfNewer(_ result: MenuBarScanResult) -> Bool {
+        guard !updating, status != .checking else { return false }
+        if let lastCheck, result.scannedAt <= lastCheck { return false }
+        applyBackgroundResult(result, previousChecks: installationChecks)
+        closeVendorHandoffsConfirmedByScan()
+        status = .results
+        if !lastScanComplete { warnAboutIncompleteScan() }
+        emitCounts()
+        return true
+    }
+
+    private func applyBackgroundResult(_ background: MenuBarScanResult, previousChecks: [InstallationCheck]) {
+        brewOutdated   = background.brew
+        masOutdated    = background.mas
+        npmOutdated    = background.npm
+        manualOutdated = background.manualApps
+        installationChecks = InstallationCheck.retainingLastSuccess(background.installationChecks, previous: previousChecks)
+        lastCheck      = background.scannedAt
+        failedSources  = background.failedChecks
+        // Background checks carry the same evidence as the window scan.
+        sourceReports     = background.sources
+        lastScanComplete  = background.failedChecks == 0
     }
 
     /// Whether a token → bundle pair belongs to a cask the current result reports as outdated.

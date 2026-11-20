@@ -9,6 +9,7 @@ import MacUpdaterCore
 /// for light, dark and the inverted state it takes on while the menu is open.
 struct MenuBarLabel: View {
     let status: MenuBarStatusPresentation
+    @Environment(\.openWindow) private var openWindow
 
     private var count: Int { status.count }
 
@@ -21,6 +22,11 @@ struct MenuBarLabel: View {
             }
         }
         .accessibilityLabel(status.accessibilityLabel)
+        .onAppear {
+            // The label is the one view that always exists, so a notification clicked while the
+            // window is closed can still open it.
+            NotificationRouter.shared.openMainWindow = { openWindow(id: "main") }
+        }
     }
 }
 
