@@ -36,6 +36,41 @@ struct HonestCoreCopyTests {
         }
     }
 
+    /// M2 — every reason already ends in a full stop, and the log frame added a second
+    /// ("…spróbuj ponownie..").
+    @Test(arguments: [AppLanguage.pl, .en])
+    func aPostponedRunLogsASingleFullStop(language: AppLanguage) async throws {
+        let token = "oversized-cask-\(UUID().uuidString)"
+        let runner = ScanStoreRuntimeProcessRunner { request in
+            guard request.arguments == ["info", "--cask", "--json=v2", token] else {
+                return ProcessResult(exitCode: 1, stdout: "", stderr: "unexpected")
+            }
+            return ProcessResult(exitCode: 0, stdout: #"{"casks":[]}"#, stderr: "")
+        }
+        let harness = makeScanStoreRuntimeHarness(runner: runner)
+        harness.store.brewOutdated = BrewOutdated(
+            formulae: [], casks: [BrewOutdatedItem(name: token, installedVersions: ["1"], currentVersion: "2")]
+        )
+        harness.store.caskSizes[token] = .known(bytes: Int64.max)
+
+        await withLanguage(language) {
+            await harness.store.runUpdate(targetKeys: [UpdatePlanner.key(name: token, kind: .cask)])
+        }
+
+        let line = try #require(harness.store.brewLog.first { $0.hasPrefix("⏸") }, "sanity: the run was postponed")
+        #expect(!line.contains(".."), "M2: \(line)")
+        #expect(line.hasSuffix("."))
+    }
+
+    @Test func noPostponeLogFrameAddsASecondFullStop() throws {
+        for path in ["Sources/MacUpdater/ScanStore+Adoption.swift", "Sources/MacUpdater/ScanStore+Rollback.swift",
+                     "Sources/MacUpdater/MigrationStore.swift", "Sources/MacUpdater/BackgroundUpdater.swift"] {
+            let text = try source(path)
+            #expect(!text.contains("localizedMessage).\""), "M2: \(path) ends a reason with a second full stop")
+            #expect(!text.contains("odroczona: %@.\""), "M2: \(path) still uses the format with its own full stop")
+        }
+    }
+
     @Test func thePlanSpeaksInTheFutureAboutChecksums() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         #expect(view.contains("tr(\"suma zostanie sprawdzona\")"))

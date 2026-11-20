@@ -20,4 +20,10 @@ extension PostponeReason {
             return trf("Za mało miejsca: potrzeba około %@. Zwolnij miejsce i spróbuj ponownie.", size)
         }
     }
+
+    /// The line a postponed run writes to its log. The reason already ends in a full stop, so
+    /// the frame around it adds none.
+    var logLine: String {
+        "⏸ " + trf("Aktualizacja odroczona: %@", localizedMessage)
+    }
 }

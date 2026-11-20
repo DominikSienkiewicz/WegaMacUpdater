@@ -43,7 +43,7 @@ extension Translations {
         "Dla aktualizacji aplikacji z Homebrew, które to obsługują, Wega trzyma kopię poprzedniej aplikacji przez 7 dni. Kopia nie obejmuje danych aplikacji. Teraz żadna kopia nie czeka.":
             "For supported Homebrew app updates, Wega keeps the previous app for 7 days. The copy does not include app data. No copy is waiting right now.",
         "Odkładam pobieranie": "Postponing the download",
-        "Aktualizacja odroczona: %@.": "Update postponed: %@.",
+        "Aktualizacja odroczona: %@": "Update postponed: %@",
         "To połączenie ma ograniczony transfer. Użyj innej sieci albo zmień Warunki aktualizacji.":
             "This connection has limited data. Use another network or change Update conditions.",
         "Włączony jest tryb oszczędzania danych. Wyłącz go albo użyj innej sieci.":

@@ -240,7 +240,7 @@ final class BackgroundUpdater {
             guard case .allow = resourceDecision else {
                 UpdateDiagnostics.record("background.deferred", fields: ["reason": "resources", "decision": String(describing: resourceDecision)])
                 if case .postpone(let reason) = resourceDecision {
-                    WegaLog.info(.homebrew, "Aktualizacja w tle odroczona — \(reason.localizedMessage).")
+                    WegaLog.info(.homebrew, "Aktualizacja w tle odroczona — \(reason.localizedMessage)")
                 }
                 return []
             }

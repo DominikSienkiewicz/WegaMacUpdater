@@ -461,7 +461,7 @@ final class MigrationStore: ObservableObject {
         case .ready(let ready):
             preparation = ready
         case .resourcePostponed(let reason):
-            logLines.append("⏸ " + trf("Aktualizacja odroczona: %@.", reason.localizedMessage))
+            logLines.append(reason.logLine)
             errorMessage = reason.localizedMessage
             onWegaState?(WegaState(
                 pose: .alert,

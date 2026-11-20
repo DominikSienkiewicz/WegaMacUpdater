@@ -34,8 +34,8 @@ extension ScanStore {
             guard case .postpone(let reason) = resourceDecision else {
                 return .blocked(publisherVetoes: [:])
             }
-            brewLog.append("⏸ " + trf("Aktualizacja odroczona: %@.", reason.localizedMessage))
-            WegaLog.info(.homebrew, "Aktualizacja z okna odroczona — \(reason.localizedMessage).")
+            brewLog.append(reason.logLine)
+            WegaLog.info(.homebrew, "Aktualizacja z okna odroczona — \(reason.localizedMessage)")
             showBanner(BannerData(variant: .danger, title: tr("Odkładam pobieranie"),
                                   message: reason.localizedMessage))
             emitActivitySignal(.error)
