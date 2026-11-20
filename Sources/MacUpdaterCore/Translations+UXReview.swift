@@ -4,6 +4,9 @@ extension Translations {
     /// UX review of 2026-11-20 — every new Polish-to-English pair of that pass.
     static let uxReview: [String: String] = [
         "Nowe aktualizacje:": "New updates:",
+        "Ta kopia Wegi nie umie poprosić o hasło administratora, więc %@ się nie zaktualizuje. Zainstaluj Wegę z pliku .pkg albo włącz Touch ID.":
+            "This copy of Wega can't ask for your administrator password, so %@ won't update. Install Wega from the .pkg or turn on Touch ID.",
+        "Pobierz .pkg": "Download .pkg",
         "Zanim zaktualizuję pierwszą aplikację": "Before I update your first app",
         "Sprawdzanie działa bez żadnych uprawnień.": "Checking works without any permissions.",
         "Podmiana aplikacji w /Applications — macOS musi na to pozwolić.":

@@ -362,6 +362,10 @@ struct UpdateView: View {
 
             staleCaskCard
 
+            PasswordPromptCallout(queuedNeedingPassword: updateTargets.filter {
+                $0.kind == .cask && scan.caskProfiles[$0.name]?.mayRequireAdminPassword == true
+            }.map(\.name))
+
             // The rows on screen are the ones the scan is in the middle of replacing, so for
             // its duration they are a report, not a menu: inert, and with the scan drawn over
             // them behind a material that stands them down. Without this the only sign of a

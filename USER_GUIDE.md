@@ -34,15 +34,16 @@ or App Store passwords.
 
 ### Install the app
 
-1. Download the latest **`.dmg`** (or **`.pkg`**) from the
-   [Releases page](https://github.com/DominikSienkiewicz/WegaMacUpdater/releases).
-2. **`.dmg`** — open it and drag **Wega Mac Updater** into your **Applications** folder.
-   **`.pkg`** — double-click it and follow the installer.
+1. Download **WegaMacUpdater.pkg** (recommended — it can ask for your administrator password when
+   an update needs it) from the
+   [Releases page](https://github.com/DominikSienkiewicz/WegaMacUpdater/releases). The `.dmg`
+   can't ask for your administrator password, so some updates will fail unless Touch ID is on.
+2. **`.pkg`** — double-click it and follow the installer. The PKG also installs the components
+   that ask for your password. The Wega helper is a separate, optional setup.
+   **`.dmg`** — open it and drag **Wega Mac Updater** into your **Applications** folder.
 3. Launch Wega from Applications or Spotlight.
 
-> **First-launch security prompt.** Depending on how the release was signed, macOS
-> Gatekeeper may warn that the app is from an unidentified developer. If so, right-click
-> the app → **Open**, then confirm — you only need to do this once.
+Stable releases are notarized, so macOS opens them without a warning.
 
 Once installed, Wega can keep **itself** up to date: the **Settings** window checks for a
 newer release and offers a one-click **Download and install**.
