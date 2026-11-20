@@ -19,7 +19,8 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   give it the red warning label.
 - **The list stays readable while Wega checks again.** During **Check now** or **⌘R** the
   rows used to vanish behind a frosted layer, so the screen looked empty and frozen. They
-  now stay visible, dimmed, and a spinner over the list names the step the check is on.
+  now stay visible, dimmed, and Wega is back over the top of the list, sniffing through the
+  check as she did before 0.8.0.
 
 ## [0.8.0] — 2026-11-20
 

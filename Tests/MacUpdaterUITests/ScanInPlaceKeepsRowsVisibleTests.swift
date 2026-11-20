@@ -10,7 +10,12 @@ import Testing
 /// whole scan.
 ///
 /// Against the 0.8.0 overlay both tests fail on their expectations: it draws a material, its
-/// veil is the stub's fully opaque 1.0, and its note has no live indicator.
+/// veil is the stub's fully opaque 1.0, and nothing in it moves.
+///
+/// What moves is Wega: before UX-19 she sniffed over the list during every scan, and the owner
+/// asked for her back. The overlay draws the same `ScanProgressScene` as the first scan, at the
+/// same size, on a thicker veil of its own, so Wega and the binary stream are not drawn over
+/// row text; below the scene the rows show through.
 @Suite("A scan in place keeps the rows visible")
 struct ScanInPlaceKeepsRowsVisibleTests {
     @Test func theRowsAreDimmedNotBlurredAway() throws {
@@ -24,13 +29,15 @@ struct ScanInPlaceKeepsRowsVisibleTests {
         #expect(ScanBusyOverlay.scrimOpacity >= 0.3, "and still reads as stood down")
     }
 
-    @Test func theListShowsThatTheScanIsRunning() throws {
+    @Test func wegaSniffsOverTheStoodDownRows() throws {
         let overlay = try overlayViewSource()
 
-        #expect(overlay.contains("ProgressView()"),
-                "something over the list moves for as long as the scan runs")
-        #expect(overlay.contains("presentation.phaseLabel"),
-                "and the note names the command the scan is running now")
+        #expect(overlay.contains("ScanProgressScene(progress: progress)"),
+                "the first scan's animated Wega, at the same size, sniffs over the list")
+        #expect(overlay.contains("Color(nsColor: .windowBackgroundColor).opacity(Self.sceneScrimOpacity)"),
+                "the scene stands on a veil of its own")
+        #expect(ScanBusyOverlay.sceneScrimOpacity > ScanBusyOverlay.scrimOpacity,
+                "thicker than over the rows, so Wega is not drawn over row text")
     }
 
     /// `ScanBusyOverlay`'s own declaration, comments left out, so a doc comment that explains

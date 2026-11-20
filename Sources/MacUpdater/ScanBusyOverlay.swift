@@ -131,12 +131,12 @@ struct ScanProgressScene: View {
 
 /// The list a scan is replacing, stood down while the scan runs in place (UX-19).
 ///
-/// The scan itself reports in the header (`ScanPhaseStrip`), so this no longer draws a second
-/// scanning scene over the rows: it covers them with a veil of the window's own background,
-/// which is what stands them down — one mechanism, not a separate dimming of the list — and
-/// says why they cannot be selected, with a spinner and the command the scan is running now.
-/// The veil is deliberately translucent: the whole point of scanning in place is that the
-/// previous result never leaves the window.
+/// The header reports the scan's phases (`ScanPhaseStrip`); over the list Wega sniffs through
+/// it in the very scene the first scan draws, at the same size. A veil of the window's own
+/// background stands the rows down — one mechanism, not a separate dimming of the list — and
+/// a note says why they cannot be selected. Behind the scene the veil thickens so Wega is not
+/// drawn over row text; below it the veil is translucent, because the whole point of scanning
+/// in place is that the previous result never leaves the window.
 struct ScanBusyOverlay: View {
     let progress: ScanProgress?
 
@@ -145,29 +145,32 @@ struct ScanBusyOverlay: View {
     /// into an empty column, so a scan in place looked like a blank, frozen list.
     static let scrimOpacity: Double = 0.5
 
+    /// The veil behind the scene, laid over `scrimOpacity`. It fades out at the scene's bottom
+    /// edge, so the rows below show through without a seam.
+    static let sceneScrimOpacity: Double = 0.85
+
     private var presentation: ScanBusyPresentation { ScanBusyPresentation(progress: progress) }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                ProgressView()
-                    .controlSize(.small)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(tr("Zaznaczanie wróci, gdy skan się skończy."))
-                        .font(.wega(.subheadline))
-                        .foregroundStyle(.secondary)
-                    if let phaseLabel = presentation.phaseLabel {
-                        Text(phaseLabel)
-                            .font(.wega(.caption, monospaced: true))
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 4) {
+                ScanProgressScene(progress: progress)
+                Text(tr("Zaznaczanie wróci, gdy skan się skończy."))
+                    .font(.wega(.subheadline))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.bottom, 32)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .glassEffect(.regular, in: Capsule())
-            .padding(24)
+            .background {
+                LinearGradient(
+                    stops: [
+                        .init(color: Color(nsColor: .windowBackgroundColor).opacity(Self.sceneScrimOpacity), location: 0),
+                        .init(color: Color(nsColor: .windowBackgroundColor).opacity(Self.sceneScrimOpacity), location: 0.8),
+                        .init(color: Color(nsColor: .windowBackgroundColor).opacity(0), location: 1),
+                    ],
+                    startPoint: .top, endPoint: .bottom
+                )
+            }
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
