@@ -16,11 +16,14 @@ struct ReadinessPresentation: Equatable {
     let isVisible: Bool
     let rows: [Row]
 
+    /// `passwordPromptInstalled` is `PasswordPromptAvailability.isInstalled()`, passed in so the
+    /// presentation stays pure. The privileged helper does not count: it cannot answer brew's
+    /// `sudo`, so the card must not tick a row the callout above the list still warns about.
     init(dismissed: Bool, hasUpdates: Bool, appManagement: AppManagementPermission,
-         touchID: TouchIDSudoConfigurator.State, helper: PrivilegedHelperClient.Status,
+         touchID: TouchIDSudoConfigurator.State, passwordPromptInstalled: Bool,
          notificationsUnanswered: Bool) {
         isVisible = !dismissed && hasUpdates
-        let passwordReady = touchID == .enabled || helper == .enabled
+        let passwordReady = PasswordPromptNotice.canAskForPassword(installed: passwordPromptInstalled, touchID: touchID)
         var rows: [Row] = [.checking, .replaceApps(appManagement), .password(ready: passwordReady)]
         if notificationsUnanswered { rows.append(.notifications) }
         self.rows = rows
@@ -50,12 +53,12 @@ struct ReadinessCard: View {
     @State private var appManagement: AppManagementPermission = .unknown
     @State private var probing = false
     @State private var touchID: TouchIDSudoConfigurator.State = .notSupported
-    @State private var helper: PrivilegedHelperClient.Status = .notRegistered
+    @State private var passwordPromptInstalled = false
     @ScaledMetric(relativeTo: .body) private var cardHeight: CGFloat = ReadinessCard.baseHeight
 
     private var presentation: ReadinessPresentation {
         ReadinessPresentation(dismissed: dismissed, hasUpdates: hasUpdates, appManagement: appManagement,
-                              touchID: touchID, helper: helper,
+                              touchID: touchID, passwordPromptInstalled: passwordPromptInstalled,
                               notificationsUnanswered: agent.notificationsUnanswered)
     }
 
@@ -65,8 +68,12 @@ struct ReadinessCard: View {
                 .padding(.horizontal, WegaLayout.listGutter)
                 .padding(.top, 8)
                 .task {
-                    touchID = await Task.detached { TouchIDSudoConfigurator.currentState() }.value
-                    helper = PrivilegedHelperClient.shared.status
+                    let probe = await Task.detached {
+                        PasswordPromptNotice.Probe(installed: PasswordPromptAvailability.isInstalled(),
+                                                   touchID: TouchIDSudoConfigurator.currentState())
+                    }.value
+                    touchID = probe.touchID
+                    passwordPromptInstalled = probe.installed
                     await agent.refreshNotificationAuthorization()
                 }
         }

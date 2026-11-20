@@ -7,8 +7,16 @@ import MacUpdaterCore
 enum PasswordPromptNotice {
     static let releasesURL = AppEndpoints.shared.githubReleasesPageURL(repo: "DominikSienkiewicz/WegaMacUpdater")
 
+    /// Whether anything here can satisfy the `sudo` a cask's installer runs: Touch ID wired into
+    /// `sudo_local`, or the askpass the `.pkg` installs (`HomebrewEnvironment` attaches one or
+    /// the other). The privileged helper is not one of them — it has no operation that runs or
+    /// answers brew. The readiness card's password row asks this same question.
+    static func canAskForPassword(installed: Bool, touchID: TouchIDSudoConfigurator.State) -> Bool {
+        installed || touchID == .enabled
+    }
+
     static func shouldWarn(installed: Bool, touchID: TouchIDSudoConfigurator.State, queuedNeedingPassword: [String]) -> Bool {
-        !installed && touchID != .enabled && !queuedNeedingPassword.isEmpty
+        !canAskForPassword(installed: installed, touchID: touchID) && !queuedNeedingPassword.isEmpty
     }
 
     /// What the one-time probe learned. Until it exists the notice stays silent: an unprobed
