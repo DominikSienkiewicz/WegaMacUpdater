@@ -516,12 +516,7 @@ struct ManualUpdateSection: View {
                 .padding(.horizontal, WegaLayout.cardPadding)
                 .padding(.vertical, WegaLayout.updateRowPadding)
                 }
-                .background(isInspected ? Color.wegaHoney.opacity(0.08) : Color.clear)
-                .overlay(alignment: .leading) {
-                    if isInspected {
-                        Rectangle().fill(Color.wegaHoney).frame(width: 2)
-                    }
-                }
+                .queueRowSelection(isInspected)
                 .contentShape(Rectangle())
                 .gesture(TapGesture().onEnded { onInspect?(item) })
                 .focusable(onInspect != nil)

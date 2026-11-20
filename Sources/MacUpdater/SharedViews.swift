@@ -467,13 +467,7 @@ struct PackageRow: View {
         }
         .padding(.horizontal, WegaLayout.cardPadding)
         .padding(.vertical, WegaLayout.updateRowPadding)
-        .background(isSelected ? Color.wegaHoney.opacity(0.05) : Color.clear)
-        .background(isInspected ? Color.wegaHoney.opacity(0.08) : Color.clear)
-        .overlay(alignment: .leading) {
-            if isInspected {
-                Rectangle().fill(Color.wegaHoney).frame(width: 2)
-            }
-        }
+        .queueRowSelection(isInspected)
         .contentShape(Rectangle())
         .onTapGesture { onSelect?() }
         .focusable(onSelect != nil)

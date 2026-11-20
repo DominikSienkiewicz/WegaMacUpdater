@@ -103,6 +103,27 @@ struct UpdateRowLayoutTests {
         #expect(QueueCircleState.handoff.symbolName == "arrow.up.right")
     }
 
+    @Test func theInspectedRowHasAnInkOutlineAndQueuedRowsStayUntinted() throws {
+        let packageRow = try slice(
+            try source("Sources/MacUpdater/SharedViews.swift"),
+            from: "struct PackageRow: View", to: "// MARK: - Rollback badge"
+        )
+        let manualRows = try slice(
+            try source("Sources/MacUpdater/UpdateViewSupport.swift"),
+            from: "struct ManualUpdateSection: View", to: "struct ManualUpdateActionView: View"
+        )
+        for row in [packageRow, manualRows] {
+            #expect(row.contains(".queueRowSelection(isInspected)"))
+            #expect(!row.contains("Color.wegaHoney.opacity(0.05)"), "queued rows lose the honey tint")
+            #expect(!row.contains("Color.wegaHoney.opacity(0.08)"), "the inspected row is lavender, not honey")
+            #expect(!row.contains("Rectangle().fill(Color.wegaHoney).frame(width: 2)"))
+        }
+        let surface = try source("Sources/MacUpdater/QueueRowSurface.swift")
+        for role in ["Color.wegaSelectionFill", "Color.wegaSelectionOutline", "Color.wegaSelectionLedge"] {
+            #expect(surface.contains(role), "the surface draws with \(role)")
+        }
+    }
+
     private func slice(_ source: String, from start: String, to end: String) throws -> Substring {
         let lower = try #require(source.range(of: start)?.lowerBound, "missing anchor: \(start)")
         let upper = try #require(
