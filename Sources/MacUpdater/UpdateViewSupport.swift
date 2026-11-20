@@ -59,10 +59,9 @@ struct RestartSection: View {
             isPresented: forcePromptPresented,
             presenting: pendingForce
         ) { info in
-            // Return lands here, never on the force. Checked on macOS 27: SwiftUI gives this
-            // button Return and the destructive one no key; Escape then no longer closes it.
+            // No shortcut on either button: the cancel role gives this one Escape and the
+            // destructive one gets no key, so Return never forces (checked on macOS 27).
             Button(tr("Zostaw otwartą"), role: .cancel) { onKeepOpen(info) }
-                .keyboardShortcut(.defaultAction)
             Button(tr("Wymuś zamknięcie"), role: .destructive) { onForce(info) }
         } message: { _ in
             Text(tr("Wymuszenie może stracić niezapisaną pracę."))

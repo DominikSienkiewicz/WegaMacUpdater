@@ -29,8 +29,8 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 - **Uninstall and restart are safer.** The destructive button in Uninstall is no longer the
   one Return presses, and its footer counts the apps and the leftovers you selected and says
   where each goes. **Restart** after an update first asks the app to quit and offers **Force
-  quit** only when it refuses, warning that unsaved work may be lost; Return leaves the app
-  open.
+  quit** only when it refuses, warning that unsaved work may be lost; Return never forces it,
+  and Escape leaves the app open.
 - **Notifications can be changed again.** Answering **Keep Notifications Off** is no longer
   final: **Settings → Notifications** switches them on or off. Clicking a notification opens
   the window with the new updates already listed, even if it was closed, and brings an open

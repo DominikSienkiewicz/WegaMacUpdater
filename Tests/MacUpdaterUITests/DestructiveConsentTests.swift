@@ -128,16 +128,19 @@ struct DestructiveConsentTests {
         #expect(!view.contains("if !shown, let info = pendingForce { onKeepOpen(info) }"))
     }
 
-    /// I6 — Return never forces: „Zostaw otwartą” is the alert's default button. A scratch
-    /// probe on macOS 27 confirmed SwiftUI honours `.defaultAction` on a cancel-role alert
-    /// button (it gets Return; the destructive one gets no key at all).
-    @Test func returnLeavesTheAppOpen() throws {
+    /// F4 — Return can never force-quit, and Escape still leaves the app open: no button in the
+    /// restart alert carries a keyboard shortcut. Checked on macOS 27 with a scratch probe:
+    /// without one, „Wymuś zamknięcie” gets no key, „Zostaw otwartą” (cancel role) gets Escape,
+    /// and Return does nothing. `.defaultAction` on „Zostaw otwartą” gave it Return but took
+    /// Escape away, so the owner chose to keep Escape.
+    @Test func noRestartAlertButtonCarriesAShortcut() throws {
         let view = try source("Sources/MacUpdater/UpdateViewSupport.swift")
-        let keep = try #require(view.range(of: "Button(tr(\"Zostaw otwartą\"), role: .cancel)"))
-        #expect(view[keep.upperBound...].prefix(120).contains(".keyboardShortcut(.defaultAction)"),
-                "I6: Return must land on „Zostaw otwartą”")
-        let force = try #require(view.range(of: "Button(tr(\"Wymuś zamknięcie\"), role: .destructive)"))
-        #expect(!view[force.upperBound...].prefix(120).contains(".keyboardShortcut("))
+        let alert = try #require(view.range(of: "trf(\"%@ nie chce się zamknąć.\""))
+        let message = try #require(view.range(of: "} message:", range: alert.upperBound..<view.endIndex))
+        let buttons = view[alert.upperBound..<message.lowerBound]
+        #expect(buttons.contains("Button(tr(\"Wymuś zamknięcie\"), role: .destructive)"), "sanity: the slice holds the buttons")
+        #expect(buttons.contains("Button(tr(\"Zostaw otwartą\"), role: .cancel)"))
+        #expect(!buttons.contains(".keyboardShortcut("), "F4: no alert button may carry a shortcut")
     }
 
     /// I6 — an alert dismissed without either button leaves the app open and clears the prompt,
