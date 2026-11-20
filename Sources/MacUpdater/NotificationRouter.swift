@@ -80,16 +80,12 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unc
         }
     }
 
-    /// The half worth naming separately: what a delivered destination does to the window.
-    ///
-    /// A notification with no destination — one posted by an older build and still sitting in
-    /// Notification Center — brings Wega forward and changes nothing. Moving the user somewhere
-    /// they did not ask to go is worse than the default behaviour this replaces.
     /// Brings the main window forward: the one already open — on screen or in the Dock — when
     /// there is one, a new one only when there is none. `openWindow` on an open `WindowGroup`
     /// makes a second window, whose appearance re-binds the store's sinks and leaves the first
     /// window's badges and Wega frozen. `open` overrides the registered opener for callers that
-    /// hold their own, such as the menu's „Otwórz Wega”.
+    /// hold their own, such as the menu's „Otwórz Wega”. Call it after activating the app: while
+    /// the app is hidden its window is neither visible nor miniaturised, so it would be missed.
     @MainActor
     func showMainWindow(opening open: (@MainActor () -> Void)? = nil) {
         if let window = findMainWindow() {
@@ -99,6 +95,11 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unc
         }
     }
 
+    /// The half worth naming separately: what a delivered destination does to the window.
+    ///
+    /// A notification with no destination — one posted by an older build and still sitting in
+    /// Notification Center — brings Wega forward and changes nothing. Moving the user somewhere
+    /// they did not ask to go is worse than the default behaviour this replaces.
     @MainActor
     func route(to destination: SidebarSelection?) {
         activateApp()
