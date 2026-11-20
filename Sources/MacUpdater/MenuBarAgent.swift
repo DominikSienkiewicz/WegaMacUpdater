@@ -108,6 +108,11 @@ final class MenuBarAgent: ObservableObject {
         objectWillChange.send()
     }
 
+    /// Nobody has answered the in-app question and macOS has not already granted the permission.
+    var notificationsUnanswered: Bool {
+        inAppAnswer == .unanswered && systemNotificationAuthorization != .authorized
+    }
+
     /// What the Settings switch shows: the user said yes in Wega, or never said anything and
     /// macOS already lets Wega notify. A decline always wins.
     var notificationsEnabledByUser: Bool {

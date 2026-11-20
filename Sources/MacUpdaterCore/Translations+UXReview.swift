@@ -4,6 +4,18 @@ extension Translations {
     /// UX review of 2026-11-20 — every new Polish-to-English pair of that pass.
     static let uxReview: [String: String] = [
         "Nowe aktualizacje:": "New updates:",
+        "Zanim zaktualizuję pierwszą aplikację": "Before I update your first app",
+        "Sprawdzanie działa bez żadnych uprawnień.": "Checking works without any permissions.",
+        "Podmiana aplikacji w /Applications — macOS musi na to pozwolić.":
+            "Replacing apps in /Applications — macOS has to allow it.",
+        "Część aplikacji prosi przy aktualizacji o hasło administratora.":
+            "Some apps ask for your administrator password when they update.",
+        "Później": "Later",
+        "Wszystko jasne": "Got it",
+        "Co robi pomocnik?": "What does the helper do?",
+        "Powiadamiać o nowych aktualizacjach?": "Notify you about new updates?",
+        "Pomocnik Wegi działa jako root i umie tylko cztery rzeczy: zainstalować zweryfikowany pakiet Wegi, włączyć Touch ID dla sudo, przywrócić kopię aplikacji sprzed aktualizacji, przenieść do Kosza aplikację należącą do roota. Przy każdym połączeniu sprawdza podpis Wegi. Jest opcjonalny.":
+            "The Wega helper runs as root and can do only four things: install a verified Wega package, turn on Touch ID for sudo, restore an app's pre-update copy, and move a root-owned app to the Trash. It checks Wega's signature on every connection. It is optional.",
         "Nie włączaj powiadomień": "Keep Notifications Off",
         "Możesz je włączyć później w Ustawieniach Wegi.": "You can turn them on later in Wega Settings.",
         "Powiadomienia": "Notifications",

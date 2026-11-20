@@ -319,6 +319,7 @@ extension ScanStore {
         if interrupted { reportInterruptedRun(upgraded: summary.upgraded.count) }
         if summary.allItemsUpgraded {
             guard !interrupted else { return }
+            UserDefaults.standard.set(true, forKey: ReadinessPresentation.dismissedKey)
             let count = summary.upgraded.count
             showBanner(BannerData(variant: .success,
                                   title: trf("Zaktualizowano %@ pakietów", "\(count)"),

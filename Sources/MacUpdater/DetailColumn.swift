@@ -130,6 +130,9 @@ struct DetailColumn: View {
             if !brewInstalled {
                 BrewInviteCard { brewInstalled = BinaryLocator().locateBrew() != nil }
             }
+            if selection.tab == .update, scan.status == .results {
+                ReadinessCard(hasUpdates: scan.updateCount.badgeCount > 0)
+            }
         }
     }
 
