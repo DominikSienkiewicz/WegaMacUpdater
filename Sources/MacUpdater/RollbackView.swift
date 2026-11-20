@@ -21,8 +21,13 @@ struct RollbackView: View {
     @State private var undoTarget: UndoableUpdate? = nil
     @State private var showUndoConfirmation = false
 
+    var onNavigate: ((SidebarTab) -> Void)?
+
     var body: some View {
-        content
+        VStack(spacing: 0) {
+            ScanBannerHost(onNavigate: onNavigate)
+            content
+        }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .confirmationDialog(
                 undoTarget.map { trf("Cofnąć aktualizację: %@?", "\($0.token)") } ?? tr("Cofnąć aktualizację?"),
@@ -63,7 +68,7 @@ struct RollbackView: View {
             EmptyHero(
                 pose: .sleep,
                 title: tr("Nic do cofnięcia"),
-                message: tr("Po każdej aktualizacji Wega trzyma kopię poprzedniej wersji przez 7 dni — przez ten czas znajdziesz ją tutaj. Teraz żadna kopia nie czeka."),
+                message: tr("Dla aktualizacji aplikacji z Homebrew, które to obsługują, Wega trzyma kopię poprzedniej aplikacji przez 7 dni. Kopia nie obejmuje danych aplikacji. Teraz żadna kopia nie czeka."),
                 compact: true
             )
         } else {

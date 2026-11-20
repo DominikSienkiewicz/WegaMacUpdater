@@ -179,7 +179,7 @@ struct DetailColumn: View {
                 case .inventory:
                     InventoryView(onWegaState: { wegaState = $0 })
                 case .rollback:
-                    RollbackView()
+                    RollbackView(onNavigate: { tab in onNavigate(SidebarSelection.forTab(tab)) })
                 case .logs:
                     LogsView(onWegaState: { wegaState = $0 }, initialFilter: logsInitialFilter)
                         .id(logsInitialFilter)

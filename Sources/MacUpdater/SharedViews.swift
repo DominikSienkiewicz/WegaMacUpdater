@@ -679,6 +679,7 @@ struct BannerData: Equatable {
     let title: String
     let message: String
     var action: BannerAction? = nil
+    var autoDismiss: Bool = true
 }
 
 /// When a banner may take itself off the screen.
@@ -697,7 +698,7 @@ enum BannerDismissal {
     static let delay: Duration = .seconds(3)
 
     static func isSelfDismissing(_ data: BannerData) -> Bool {
-        data.variant == .success && data.action == nil
+        data.autoDismiss && data.variant == .success && data.action == nil
     }
 
     /// Leaving is animated; arriving is not. A confirmation should be on screen the instant

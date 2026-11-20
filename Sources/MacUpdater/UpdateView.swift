@@ -48,7 +48,6 @@ struct UpdateView: View {
     /// Scan results and the tasks that produce them live above the language re-key,
     /// so switching language mid-scan neither loses the list nor orphans the task.
     @EnvironmentObject private var scan: ScanStore
-    @Environment(\.openSettings) private var openSettings
 
     /// Purely transient: a modal that no background task writes to, so it may die
     /// with the view tree.
@@ -348,29 +347,7 @@ struct UpdateView: View {
     @ViewBuilder
     private var screenBody: some View {
         VStack(spacing: 0) {
-            if let b = scan.banner {
-                BannerView(
-                    data: b,
-                    onAction: { action in
-                        switch action {
-                        case .openLogs: onNavigate?(.logs)
-                        case .openSettings:
-                            openSettings()
-                        case .openAppManagementSettings:
-                            // REL-05 — straight to the pane that grants the permission,
-                            // not to Wega's own settings, which cannot grant anything.
-                            NSWorkspace.shared.open(AppManagementSettings.paneURL)
-                        case .reinstallCask(let token):
-                            Task { await scan.reinstallManual(token: token) }
-                        case .trustPublisher(let token, let teamID):
-                            Task { await scan.trustNewPublisher(token: token, reportedTeamID: teamID) }
-                        }
-                    },
-                    onClose: { scan.dismissBanner() }
-                )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
-            }
+            ScanBannerHost(onNavigate: onNavigate)
 
             staleCaskCard
 

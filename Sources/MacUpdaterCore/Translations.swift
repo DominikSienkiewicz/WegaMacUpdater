@@ -974,8 +974,6 @@ extension Translations {
         "Co da się cofnąć": "What can be undone",
         "Coś poszło nie tak? Przyniosę starą.": "Something broke? I'll fetch the old one.",
         "Nic do cofnięcia": "Nothing to undo",
-        "Po każdej aktualizacji Wega trzyma kopię poprzedniej wersji przez 7 dni — przez ten czas znajdziesz ją tutaj. Teraz żadna kopia nie czeka.":
-            "After every update Wega keeps a copy of the previous version for 7 days — for that long you will find it here. Right now no copy is waiting.",
         "Kopie sprzed aktualizacji są trzymane przez 7 dni — w tym czasie możesz wrócić do poprzedniej wersji. Wega przypnie przywróconą wersję, żeby nie proponować jej od razu ponownie.":
             "Pre-update copies are kept for 7 days — during that time you can go back to the previous version. Wega pins the restored version so it is not offered again right away.",
         "Cofnij": "Undo",
@@ -994,8 +992,6 @@ extension Translations {
         "%@: nie udało się przywrócić poprzedniej wersji — szczegóły w logu.":
             "%@: could not restore the previous version — details in the log.",
         "Cofnięto aktualizację: %@": "Update undone: %@",
-        "Przywrócono wersję %@ i przypięto ją — Wega nie zaproponuje nowszej, dopóki nie odepniesz.":
-            "Restored version %@ and pinned it — Wega will not offer a newer one until you unpin.",
         "Przywrócono poprzednią wersję.": "Restored the previous version.",
         "Cofnęłam %@ do wersji %@.": "Undid %@ back to version %@.",
         "Bez automatycznego cofnięcia — Homebrew nie zachowuje poprzednich wersji formuł.":

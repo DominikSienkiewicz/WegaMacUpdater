@@ -171,7 +171,7 @@ final class ScanStoreRuntimeStateGapTests: XCTestCase {
         await harness.store.undoUpdate(missingFiles.undoable)
 
         XCTAssertNil(harness.store.undoBusy)
-        XCTAssertNil(harness.store.banner)
+        XCTAssertEqual(harness.store.banner?.variant, .danger)
         XCTAssertTrue(runner.requests.isEmpty)
     }
 
