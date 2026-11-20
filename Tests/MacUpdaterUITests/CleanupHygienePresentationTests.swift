@@ -411,13 +411,6 @@ final class CleanupHygienePresentationTests: XCTestCase {
     private func section(_ kind: Section.Kind, in sections: [Section]) throws -> Section {
         try XCTUnwrap(sections.first { $0.kind == kind }, "\(kind)")
     }
-
-    private func withLanguage<T>(_ language: AppLanguage, _ body: () throws -> T) rethrows -> T {
-        let previous = LocalizedStrings.current
-        LocalizedStrings.current = language
-        defer { LocalizedStrings.current = previous }
-        return try body()
-    }
 }
 
 private enum CleanupHygienePresentationFixtures {

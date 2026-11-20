@@ -4,13 +4,6 @@ import MacUpdaterCore
 
 @MainActor
 final class CleanupHygieneTextTests: XCTestCase {
-    private func withLanguage<T>(_ language: AppLanguage, _ body: () throws -> T) rethrows -> T {
-        let previous = LocalizedStrings.current
-        LocalizedStrings.current = language
-        defer { LocalizedStrings.current = previous }
-        return try body()
-    }
-
     func testDeadEntryStatusIsTranslated() {
         withLanguage(.pl) { XCTAssertEqual(CleanupPresentation.statusText(.deadEntry), "martwy wpis") }
         XCTAssertEqual(Translations.en["martwy wpis"], "dead entry")

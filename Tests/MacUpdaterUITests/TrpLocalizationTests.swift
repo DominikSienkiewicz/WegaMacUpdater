@@ -3,20 +3,11 @@ import MacUpdaterCore
 @testable import WegaMacUpdater
 
 /// UX-08 — `trp(base, count)` renders the menu-bar update counter with the plural form
-/// that matches both the count and the active language. Serialized because it toggles
-/// the process-wide `LocalizedStrings.current`; the previous language is restored after
-/// each case so the switch never leaks into other suites.
-@Suite("TrpLocalization", .serialized)
+/// that matches both the count and the active language.
+@Suite("TrpLocalization")
 struct TrpLocalizationTests {
 
     private let updatesAvailable = "%@ aktualizacji dostępnych"
-
-    private func withLanguage(_ language: AppLanguage, _ body: () -> Void) {
-        let previous = LocalizedStrings.current
-        LocalizedStrings.current = language
-        defer { LocalizedStrings.current = previous }
-        body()
-    }
 
     @Test func polishMenuBarCounterMatchesTheCount() {
         withLanguage(.pl) {
