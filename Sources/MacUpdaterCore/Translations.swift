@@ -169,8 +169,6 @@ extension Translations {
         "Mnożnik rozpakowania": "Unpacking multiplier",
         "Margines dysku": "Disk safety margin",
         "Aktualizacja odroczona": "Update postponed",
-        "Aktualizacja odroczona: %@.": "Update postponed: %@.",
-        "Bramka zasobów: %@.": "Resource gate: %@.",
         "Warunki nie pozwalają teraz bezpiecznie pobrać aktualizacji.": "Current conditions do not allow the update to be downloaded safely.",
         "Nie udało się utworzyć snapshotu dla: %@.": "Could not create a snapshot for: %@.",
         "Nie udało się utworzyć wymaganego snapshotu.": "Could not create the required snapshot.",
@@ -754,8 +752,6 @@ extension Translations {
         "Sprawdzam rozmiary pobrań…": "Checking download sizes…",
         "rozmiar nieznany": "size unknown",
         "nieznany host": "unknown host",
-        "suma sprawdzana": "checksum verified",
-        "bez weryfikacji sumy": "checksum not verified",
         "Może poprosić o hasło administratora.": "May ask for an admin password.",
         "Nie udało się ustalić rozmiaru pobrania — zakładam duży plik.":
             "Could not determine the download size — assuming a large file.",

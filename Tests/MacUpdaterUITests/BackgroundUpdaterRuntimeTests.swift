@@ -263,7 +263,7 @@ struct BackgroundUpdaterRuntimeTests {
         defer { recorder.cleanUp() }
         let updater = BackgroundUpdater(dependencies: dependencies(
             recorder: recorder,
-            resourceDecision: .postpone(reason: "metered")
+            resourceDecision: .postpone(reason: .meteredNetwork)
         ))
 
         #expect(await updater.runIfEligible(candidates: [Self.token], policies: [:]).isEmpty)

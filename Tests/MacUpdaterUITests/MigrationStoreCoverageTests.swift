@@ -187,13 +187,13 @@ struct MigrationStoreCoverageTests {
         let candidate = app("Figma", token: "figma", provenance: .token)
 
         var resourceDependencies = inertDependencies()
-        resourceDependencies.prepareReplacement = { _, _, _ in .resourcePostponed("low disk") }
+        resourceDependencies.prepareReplacement = { _, _, _ in .resourcePostponed(.diskSpaceUnknown) }
         let resource = MigrationStore(
             publisherCorrelator: unknownPublisherCorrelator(),
             dependencies: resourceDependencies
         )
         await resource.migrate(candidate, model: model(), onWegaState: nil)
-        #expect(resource.errorMessage?.contains("low disk") == true)
+        #expect(resource.errorMessage == PostponeReason.diskSpaceUnknown.localizedMessage)
         #expect(resource.logLines.first?.hasPrefix("⏸") == true)
 
         var publisherDependencies = inertDependencies()

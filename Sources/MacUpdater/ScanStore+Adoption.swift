@@ -111,9 +111,9 @@ extension ScanStore {
             UpdateStageDiagnostics.recordOperation(ready.operation)
         case .resourcePostponed(let reason):
             UpdateDiagnostics.record("adoption.deferred", fields: ["token": token, "reason": "resources", "detail": String(describing: reason)])
-            brewLog.append("⏸ " + trf("Aktualizacja odroczona: %@.", "\(reason)"))
-            showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
-                                  message: trf("Bramka zasobów: %@.", "\(reason)")))
+            brewLog.append("⏸ " + trf("Aktualizacja odroczona: %@.", reason.localizedMessage))
+            showBanner(BannerData(variant: .danger, title: tr("Odkładam pobieranie"),
+                                  message: reason.localizedMessage))
             emitActivitySignal(.error)
             return
         case .publisherRejected(let old, let new):

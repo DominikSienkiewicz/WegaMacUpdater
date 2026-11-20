@@ -43,7 +43,7 @@ struct DownloadResourceGateTests {
             Issue.record("expected metered-network veto")
             return
         }
-        #expect(reason.contains("taryfowe"))
+        #expect(reason == .meteredNetwork)
     }
 
     @Test func hardGateDoesNotBypassMeteredNetworkForSmallDownloads() {
@@ -66,7 +66,7 @@ struct DownloadResourceGateTests {
             Issue.record("expected low-battery veto")
             return
         }
-        #expect(reason.contains("baterii"))
+        #expect(reason == .lowBattery)
     }
 
     @Test func thermalThrottlingVetoesTheDownload() {
@@ -76,7 +76,7 @@ struct DownloadResourceGateTests {
             Issue.record("expected thermal veto")
             return
         }
-        #expect(reason.contains("termiczny"))
+        #expect(reason == .thermal)
     }
 
     @Test func insufficientDiskVetoesBeforeOtherConditions() {
@@ -89,7 +89,25 @@ struct DownloadResourceGateTests {
             Issue.record("expected disk veto")
             return
         }
-        #expect(reason.contains("miejsce"))
+        #expect(reason == .insufficientDisk(required: 390, available: 389))
+    }
+
+    @Test func unknownFreeDiskVetoesTheDownload() {
+        let result = DownloadGate.decide(
+            resources: .init(downloadBytes: 100, snapshotBytes: 40),
+            availableDiskBytes: nil,
+            network: .unrestricted,
+            power: .plugged,
+            configuration: configuration
+        )
+
+        #expect(result == .postpone(reason: .diskSpaceUnknown))
+    }
+
+    @Test func lowDataModeVetoesTheDownload() {
+        let result = decision(network: .init(isExpensive: false, isConstrained: true))
+
+        #expect(result == .postpone(reason: .lowDataMode))
     }
 
     @Test func preferencesLoadConfiguredThresholdsInsteadOfHardCodedValues() throws {

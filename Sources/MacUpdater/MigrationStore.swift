@@ -461,8 +461,8 @@ final class MigrationStore: ObservableObject {
         case .ready(let ready):
             preparation = ready
         case .resourcePostponed(let reason):
-            logLines.append("⏸ " + trf("Aktualizacja odroczona: %@.", "\(reason)"))
-            errorMessage = trf("Bramka zasobów: %@.", "\(reason)")
+            logLines.append("⏸ " + trf("Aktualizacja odroczona: %@.", reason.localizedMessage))
+            errorMessage = reason.localizedMessage
             onWegaState?(WegaState(
                 pose: .alert,
                 line: tr("Warunki nie pozwalają teraz bezpiecznie pobrać aktualizacji.")

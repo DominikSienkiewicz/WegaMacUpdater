@@ -668,15 +668,15 @@ private struct PlanPreviewCaskRow: View {
                     .lineLimit(1)
                 Spacer(minLength: 6)
                 if download?.hasChecksum == true {
-                    Label(tr("suma sprawdzana"), systemImage: "checkmark.seal")
+                    Label(tr("suma zostanie sprawdzona"), systemImage: "checkmark.seal")
                         .labelStyle(.iconOnly)
-                        .foregroundStyle(Color.wegaSuccess)
-                        .help(tr("suma sprawdzana"))
+                        .foregroundStyle(.secondary)
+                        .help(tr("suma zostanie sprawdzona"))
                 } else {
-                    Label(tr("bez weryfikacji sumy"), systemImage: "exclamationmark.shield")
+                    Label(tr("źródło nie podaje sumy do sprawdzenia"), systemImage: "exclamationmark.shield")
                         .labelStyle(.iconOnly)
                         .foregroundStyle(Color.wegaDanger)
-                        .help(tr("bez weryfikacji sumy"))
+                        .help(tr("źródło nie podaje sumy do sprawdzenia"))
                 }
                 if protection == .protected {
                     Image(systemName: "shield.lefthalf.filled").foregroundStyle(Color.wegaSuccess)
