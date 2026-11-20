@@ -45,28 +45,29 @@ struct UpdateActionBarTests {
         #expect(summary.protectionText == trf("%@ z automatycznym cofnięciem", "1"))
     }
 
-    @Test func theUpdateButtonLivesInTheBarNotInTheHeader() throws {
+    @Test func theUpdateButtonLivesInTheBand() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
-        let results = try slice(view, from: "private var resultsView: some View", to: "private var updateRunOverlay")
-        let bar = try slice(view, from: "private var actionBar: some View", to: "private var listColumn: some View")
+        let results = try slice(view, from: "private var resultsHeading: some View", to: "private var updateRunOverlay")
+        let band = try slice(view, from: "private var resultsBand: some View", to: "private var resultsHeading: some View")
 
-        #expect(!results.contains("requestUpdate"), "the header reports the scan; it no longer acts")
-        #expect(bar.contains("Button(action: requestUpdate)"))
-        #expect(bar.contains(".disabled(!allowsUpdateRun)"))
-        #expect(!bar.contains("SelectionCheckbox("), "the list-wide queue circle sits in the list header (C2)")
-        let header = try slice(view, from: "private var listHeader: some View", to: "private var resultsHeading: some View")
+        #expect(!results.contains("requestUpdate"), "the heading reports the scan; it no longer acts")
+        #expect(band.contains("UpdateBandButton("))
+        #expect(band.contains("action: requestUpdate"))
+        #expect(band.contains(".disabled(!allowsUpdateRun)"))
+        #expect(band.contains(".help(updateButtonHelp)"))
+        #expect(!view.contains("private var actionBar"), "the bar under the list is gone")
+        #expect(!view.contains(".safeAreaInset(edge: .bottom, spacing: 0) { actionBar }"))
+        let header = try slice(view, from: "private var listHeader: some View", to: "private var resultsBand: some View")
         #expect(header.contains("SelectionCheckbox("), "the list header carries the list-wide queue circle")
         #expect(header.contains("QueueColumnPlaceholder()"),
                 "with nothing to select the header keeps the column so the scope bar stays put")
-        #expect(view.contains(".safeAreaInset(edge: .bottom, spacing: 0) { actionBar }"),
-                "the bar stays under the list instead of scrolling away with it")
     }
 
-    @Test func thePlanOpensFromTheBarAsASheet() throws {
+    @Test func thePlanOpensFromTheBandAsASheet() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
-        let bar = try slice(view, from: "private var actionBar: some View", to: "private var listColumn: some View")
+        let band = try slice(view, from: "private var resultsBand: some View", to: "private var resultsHeading: some View")
 
-        #expect(bar.contains("scan.showPlanPreview = true"))
+        #expect(band.contains("scan.showPlanPreview = true"))
         #expect(view.contains(".sheet(isPresented: $scan.showPlanPreview)"))
         #expect(!view.contains("WegaDisclosure(isExpanded: $scan.showPlanPreview)"),
                 "the plan no longer pushes the list down from inside the screen")

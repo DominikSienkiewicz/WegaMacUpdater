@@ -112,6 +112,20 @@ final class UpdateBandViewTests: XCTestCase {
         }
     }
 
+    func testTheBandShowsOnlyWithResults() throws {
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        let lower = try XCTUnwrap(view.range(of: "private var resultsView: some View")).lowerBound
+        let upper = try XCTUnwrap(view.range(of: "private var listHeader: some View")).lowerBound
+        let results = view[lower..<upper]
+        XCTAssertTrue(results.contains("if hasResults"))
+        XCTAssertTrue(results.contains("resultsBand"))
+        XCTAssertTrue(results.contains("resultsHeading"), "no results keep today's heading")
+        let column = try XCTUnwrap(view.range(of: "private var listColumn: some View")).lowerBound
+        XCTAssertTrue(view[column...].prefix(200).contains("if !hasResults"))
+        let detail = try source("Sources/MacUpdater/DetailColumn.swift")
+        XCTAssertTrue(detail.contains("wegaLine: quip ?? wegaState.line"))
+    }
+
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {
         let root = URL(fileURLWithPath: file)
             .deletingLastPathComponent()

@@ -22,15 +22,13 @@ struct UpdateRunBarTests {
                 == tr("Przerywam po bieżącym pakiecie — kolejne nie wystartują."))
     }
 
-    @Test func theRunTakesTheActionBarsPlaceAndShape() throws {
+    @Test func theRunBarKeepsTheSharedBottomChrome() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         let overlay = try source("Sources/MacUpdater/UpdateRunOverlay.swift")
-        let lower = try #require(view.range(of: "private var actionBar: some View")?.lowerBound)
-        let upper = try #require(view.range(of: "private var listColumn: some View")?.lowerBound)
-        let actionBar = view[lower..<upper]
 
-        #expect(actionBar.contains(".wegaBottomBar()"), "the action bar draws through the shared chrome")
-        #expect(overlay.contains(".wegaBottomBar()"), "and so does the run that replaces it")
+        #expect(overlay.contains(".wegaBottomBar()"), "the run bar draws through the shared chrome")
+        #expect(view.contains("struct WegaBottomBar: ViewModifier"))
+        #expect(!view.contains("private var actionBar"), "the action bar it once matched is gone")
         #expect(!overlay.contains(".frame(maxWidth: 560)"), "no dialog card in the middle of the screen")
     }
 

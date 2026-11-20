@@ -158,7 +158,8 @@ struct DetailColumn: View {
                 updateFilter:  selection.filter ?? .all,
                 onCategoryCounts: { appsBadge = $0; cliBadge = $1 },
                 onUndoableCount:  { rollbackBadge = $0 },
-                onScopeChange:    { onNavigate(.updates($0)) }
+                onScopeChange:    { onNavigate(.updates($0)) },
+                wegaLine: quip ?? wegaState.line
             )
             .opacity(selection.tab == .update ? 1 : 0)
             .allowsHitTesting(selection.tab == .update)
