@@ -35,4 +35,23 @@ struct LanguageScopeTests {
             #expect(seenByAParallelTest == close)
         }
     }
+
+    /// Each suite used to carry its own helper that wrote the process-wide language; one such
+    /// helper is enough to bring the race back, wherever it lives.
+    @Test func noTestWritesTheProcessWideLanguage() throws {
+        let tests = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let files = (FileManager.default.enumerator(at: tests, includingPropertiesForKeys: nil)?
+            .allObjects as? [URL] ?? []).filter { $0.pathExtension == "swift" }
+        #expect(files.count > 100, "positive control: the walk must reach both test targets")
+
+        let writers = try files.filter { file in
+            let text = try String(contentsOf: file, encoding: .utf8)
+            guard text.contains("LocalizedStrings.current") else { return false }
+            return text.split(separator: "\n").contains { line in
+                !line.trimmingCharacters(in: .whitespaces).hasPrefix("//")
+                    && line.contains(/LocalizedStrings\.current\s*=(?!=)/)
+            }
+        }
+        #expect(writers.map(\.lastPathComponent).sorted() == [], "force a language with withLanguage(_:_:)")
+    }
 }

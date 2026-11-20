@@ -106,6 +106,24 @@ find "$HOME/Library/Preferences" -maxdepth 1 -type f -name 'wega.tests.*.plist' 
 `ArchitectureReviewRegressionTests` fails the build if any test under `Tests/` builds a
 suite by hand.
 
+### Forcing a UI language
+
+A test that needs Polish or English text wraps the code under test in `withLanguage(_:_:)`
+(`Tests/MacUpdaterUITests/WithLanguage.swift`) and never assigns `LocalizedStrings.current`:
+
+```swift
+withLanguage(.en) {
+    #expect(presentation(total: 2).headline == "2 updates")
+}
+```
+
+Swift Testing runs suites in parallel in one process. The helper binds the language to the
+test's own task and the child tasks it starts, so a test comparing translated strings in
+another suite keeps seeing the default, Polish. Writes made inside the block, such as
+`LocalizationManager`'s, stay inside it too. Code that leaves the task (`Task.detached`, a GCD
+callback) sees the process-wide language instead. `LanguageScopeTests` fails if any test under
+`Tests/` assigns `LocalizedStrings.current` directly.
+
 ## Making a change
 
 - **Branch** from the latest `main` and keep the change focused.

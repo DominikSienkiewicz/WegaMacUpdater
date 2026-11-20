@@ -520,13 +520,6 @@ final class CleanupPresentationTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func withLanguage<T>(_ language: AppLanguage, _ body: () throws -> T) rethrows -> T {
-        let previous = LocalizedStrings.current
-        LocalizedStrings.current = language
-        defer { LocalizedStrings.current = previous }
-        return try body()
-    }
-
     private func assertTranslated<Value>(
         _ values: [Value], _ text: (Value) -> String, file: StaticString = #filePath, line: UInt = #line
     ) {

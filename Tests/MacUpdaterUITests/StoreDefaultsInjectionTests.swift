@@ -36,17 +36,16 @@ struct StoreDefaultsInjectionTests {
         let (defaults, teardown) = TestDefaults.isolated("qa01-localization-manager")
         defer { teardown() }
 
-        // `language`'s didSet mutates the global `LocalizedStrings.current`; restore it so this
-        // test cannot bleed into `tr()`-based assertions elsewhere in the suite.
-        let previousLanguage = LocalizedStrings.current
-        defer { LocalizedStrings.current = previousLanguage }
+        // The manager writes `LocalizedStrings.current` from its init and from `language`'s didSet;
+        // inside `withLanguage` those writes stay with this test instead of every parallel one.
+        withLanguage(.pl) {
+            let manager = LocalizationManager(defaults: defaults)
+            manager.language = .en
+            #expect(defaults.string(forKey: "wega.language") == AppLanguage.en.rawValue)
 
-        let manager = LocalizationManager(defaults: defaults)
-        manager.language = .en
-        #expect(defaults.string(forKey: "wega.language") == AppLanguage.en.rawValue)
-
-        let reloaded = LocalizationManager(defaults: defaults)
-        #expect(reloaded.language == .en)
+            let reloaded = LocalizationManager(defaults: defaults)
+            #expect(reloaded.language == .en)
+        }
     }
 
     @Test func menuBarAgentReadsAndWritesInjectedDefaults() {
