@@ -257,29 +257,19 @@ git push origin :refs/tags/v0.1.6
 git tag -d v0.1.6
 ```
 
-## 9. Cutting the first release
+## 9. The first release
 
-The project has no tags yet: `0.1.0` shipped untagged. The script reads no commits, so there
-is nothing special to do: the first release is cut from `[Unreleased]` (or `--notes FILE`)
-like any other. `CHANGELOG.md` already describes the shipped work by hand; replaying every
-commit ever made would not be a release note.
+`v0.2.0` is the first tag; `0.1.0` shipped untagged. Two traces of that remain in
+`CHANGELOG.md`:
 
-Three consequences worth knowing before you run it:
-
-- **The first tag will be higher than `0.1.0`.** An explicit version has to be *greater* than
-  `AppMetadata.version`, which already reads `0.1.0`, so `./scripts/release.sh 0.1.0` is
-  refused.
-- **`[Unreleased]` describes the application, not a delta.** A first release is the first thing
-  anyone installs, so *Fixed*, *Changed* and *Removed* would be measured against a version no
-  user ever ran — and the section becomes the GitHub Release description verbatim. It is
-  therefore written as one `### Added` describing what Wega does, with `#### ` subsections
-  inside it. From the second release onward the section goes back to being an ordinary Keep a
-  Changelog delta. The earlier `## [0.1.0] — 2026-06-05` section was removed for the same
-  reason: it dated an untagged state of the tree that was never published.
-- **No link reference is generated for a version that has no tag** (QA-06). `previous_version()`
-  accepts only a version with a real tag, so the first release's reference points at its own
-  release page instead of a `compare/…` range that would 404. `release.sh` copies every older
-  reference forward verbatim, so a dead link written once would never repair itself.
+- **The `0.2.0` section describes the application, not a delta.** It was the first thing
+  anyone installed, so *Fixed*, *Changed* and *Removed* would have been measured against a
+  version no user ever ran. It is one `### Added` describing what Wega does, with `#### `
+  subsections inside it. Every later section is an ordinary Keep a Changelog delta.
+- **The `[0.2.0]` link reference points at its release page** (QA-06). `previous_version()`
+  accepts only a version with a real tag, so no `compare/…` range from the untagged `0.1.0`
+  (which would 404) was generated. `release.sh` copies every older reference forward verbatim,
+  so a dead link written once would never repair itself.
 
 ## 10. Republishing the app catalog
 

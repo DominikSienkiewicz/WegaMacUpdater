@@ -26,10 +26,8 @@ git push --atomic origin main vX.Y.Z
 ```
 
 Never edit `AppMetadata.version` or move the `[Unreleased]` entries by hand — the script owns
-both, and the workflow refuses any tag that disagrees with the version. The full procedure,
-the signing secrets and the first-release case (**the project has no tags yet**, so the first
-release is cut from `[Unreleased]` alone and its version must be higher than `0.1.0`) are in
-**[RELEASING.md](../RELEASING.md)**.
+both, and the workflow refuses any tag that disagrees with the version. The full procedure
+and the signing secrets are in **[RELEASING.md](../RELEASING.md)**.
 
 `.github/workflows/release.yml` (on `push: tags: v*`) first runs the **same reusable quality workflow CI runs** — build, test, lint, catalog verification, packaging and the bundle gate, on the same pinned `macos-26`/Xcode 26 toolchain. The publishing job `needs:` it, so a release can never be built on a different toolchain than CI proved green, nor published ahead of the quality gates. It then verifies tag == `AppMetadata.version`, builds the artifacts, notarizes and staples them, and runs `scripts/verify-bundle.sh` over the result — bundle layout, helper signature, notarization, stapling and required resources — as a final gate before it publishes a GitHub Release with the `.pkg` + `.dmg`. **Signing and notarization are optional and activate automatically once the secrets exist** — until then the job still publishes *unsigned* artifacts so the pipeline is verifiable end-to-end without an Apple Developer account (the **Preflight** step in each run prints which signing/notary secrets are configured).
 

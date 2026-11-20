@@ -169,6 +169,10 @@ awk '/^## \[0\.8\.0\]/{p=1;next} p&&/^## \[/{exit} p' CHANGELOG.md
   it fixed.
 - The body of one section only: no `## [X.Y.Z]` heading, and no line starting with `## `
   (`release.sh` refuses it, because it would split the section).
+- Links inline only, as `[text](https://…)`. Never a reference-definition line such as
+  `[label]: https://…`: `release.sh` takes the first such line below `[Unreleased]` as the start
+  of the link block at the bottom of the file, so at the next release everything from that line
+  on would be moved there.
 
 **Notes file.** `NOTES` is `release-notes-X.Y.Z.md` in the session's scratchpad directory when
 the system prompt names one, otherwise `/tmp/wega-release-notes-X.Y.Z.md`; never inside the
@@ -183,7 +187,11 @@ repository. Write it with the Write tool.
 - Exit 0: the output shows `>> release <current> -> X.Y.Z`, `>> dry run — nothing was written`
   and both diffs; the `CHANGELOG.md` diff puts the notes under `## [X.Y.Z] — <today>` and leaves
   `## [Unreleased]` empty. `--notes supersedes N line(s) of [Unreleased]` is expected when
-  `[Unreleased]` had entries.
+  `[Unreleased]` had entries. Then read the `CHANGELOG.md` diff line by line. It may only
+  remove the old `[Unreleased]` body, add the `## [X.Y.Z]` section with the notes, and replace
+  the `[Unreleased]:` link reference and add the `[X.Y.Z]:` one at the bottom, with the blank
+  lines around them. If it changes anything else, such as an older section or another link
+  reference, stop: show the owner the unexpected hunk and propose nothing.
 - Exit 1 about the draft itself (`the release notes are empty`, `contain a line starting with
   '## '`, `cannot read the notes file`): fix the draft or the path and run the dry run again.
 - Exit 1 for any other reason is a refusal about the repository. Report its message and the
@@ -270,9 +278,14 @@ git fetch origin main && git rev-parse main origin/main && shasum -a 256 'NOTES'
 ./scripts/release.sh X.Y.Z --notes 'NOTES'
 ```
 
-**Exit 0** prints `>> tagged vX.Y.Z` and the publish line `git push --atomic origin main vX.Y.Z`
-for the approved version. Then push without asking again, since the approval covers it, as a
-Bash call of its own (the harness may also ask the owner to allow it):
+**Exit 0** prints `>> tagged vX.Y.Z` and the publish line `git push --atomic origin main vX.Y.Z`.
+Both must name the approved version. If either names another one, stop without pushing: report
+both lines, say that the commit and the tag exist only locally, and ask what to do.
+
+Otherwise push without asking again, since the approval covers it, as a Bash call of its own.
+The push passes the git-guard exception, and then Claude Code shows the owner one approval
+prompt (the `permissions.ask` rule for pushes in `~/.claude/settings.json`). That prompt is
+expected; a refused prompt is a push that did not go through (below).
 
 ```bash
 git push --atomic origin main vX.Y.Z
@@ -303,8 +316,9 @@ git status --short --untracked-files=no; git log -1 --format=%s; git tag --list 
   stop.
 - Anything else: report the exact state and stop. Change nothing.
 
-**The push did not go through**: the hook denied it, the owner declined the prompt, or the
-remote or the network refused it. Check what origin has:
+**The push did not go through**: the hook denied it, the owner declined the prompt, a permission
+rule in settings denies pushes (a `permissions.deny` entry), or the remote or the network
+refused it. Check what origin has:
 
 ```bash
 git rev-parse HEAD; git ls-remote origin refs/heads/main refs/tags/vX.Y.Z
