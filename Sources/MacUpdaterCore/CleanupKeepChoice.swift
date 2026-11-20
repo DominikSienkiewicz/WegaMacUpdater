@@ -56,7 +56,8 @@ public enum CleanupKeepChoice {
     }
 
     /// Rewrites reason, action, bucket, size, risk and the candidate's keep state of every D1 finding
-    /// that has a candidate; statuses and all other findings are returned unchanged.
+    /// that has a candidate, and the advice of every Files and Folders entry tied to one; statuses,
+    /// links and all other findings are returned unchanged.
     static func resolve(
         _ findings: [CleanupFinding], choices: [String: CleanupKeptCopy], pathIsApproximate: Bool
     ) -> [CleanupFinding] {
@@ -64,11 +65,33 @@ public enum CleanupKeepChoice {
         let context = Context(
             groups: groups, keptBundles: keptBundles(findings, groups), pathIsApproximate: pathIsApproximate
         )
-        return findings.map { finding in
+        let copies = findings.map { finding in
             guard finding.detector == .pathDuplicates, let candidate = finding.candidate,
                   let group = context.groups[finding.tool.lowercased()] else { return finding }
             return resolved(finding, candidate: candidate, group: group, context: context)
         }
+        var keeps: [String: CleanupKeep] = [:]
+        for copy in copies where copy.detector == .pathDuplicates {
+            if let keep = copy.candidate?.keep { keeps[copy.id] = keep }
+        }
+        return copies.map { followingKeep($0, keeps: keeps) }
+    }
+
+    /// A Files and Folders entry of a copy that stays needs no advice and one of a copy to remove
+    /// is switched off; while the copy waits for the choice, the scan's advice for its link stands.
+    private static func followingKeep(_ entry: CleanupFinding, keeps: [String: CleanupKeep]) -> CleanupFinding {
+        guard entry.detector == .tccMap, case .tccEntry(_, let link?) = entry.reason,
+              let keep = keeps[link.findingID] else { return entry }
+        let advice: CleanupAction = switch keep {
+        case .kept: .none
+        case .notKept: .instruction(.switchOffInFilesAndFolders)
+        case .undecided: CleanupTCCMapDetector.advice(for: link)
+        }
+        return CleanupFinding(
+            detector: entry.detector, tool: entry.tool, path: entry.path, realpath: entry.realpath, source: entry.source,
+            version: entry.version, size: entry.size, status: entry.status, reason: entry.reason, action: advice,
+            risk: entry.risk, bucket: entry.bucket, identity: entry.identity, candidate: entry.candidate
+        )
     }
 
     private static func matches(_ finding: CleanupFinding, _ choice: CleanupKeptCopy) -> Bool {

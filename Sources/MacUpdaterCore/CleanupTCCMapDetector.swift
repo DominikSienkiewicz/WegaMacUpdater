@@ -106,8 +106,12 @@ public struct CleanupTCCMapDetector: Sendable {
         }
         let realpath = try? fileSystem.realpath(url)
         let link = Self.link(for: url, realpath: realpath, in: findings)
-        let action: CleanupAction = link?.kind == .copyToRemove ? .instruction(.switchOffInFilesAndFolders) : .none
-        return makeFinding(.info, .tccEntry(grants: grants, link: link), action, realpath: realpath, identity: entry.identity)
+        return makeFinding(.info, .tccEntry(grants: grants, link: link), Self.advice(for: link), realpath: realpath, identity: entry.identity)
+    }
+
+    /// The scan's advice for a path entry tied to `link`: switch off the entry of a copy to remove.
+    static func advice(for link: CleanupTCCLink?) -> CleanupAction {
+        link?.kind == .copyToRemove ? .instruction(.switchOffInFilesAndFolders) : .none
     }
 
     /// The first D1 finding whose `path` or `realpath` is the client or the client's realpath, else the

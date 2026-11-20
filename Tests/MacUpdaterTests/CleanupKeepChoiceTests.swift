@@ -335,6 +335,47 @@ final class CleanupKeepChoiceTests: XCTestCase {
         XCTAssertEqual(CleanupKeepChoice.validChoices(exact, in: rep), exact)
     }
 
+    /// Entries the real D10 detector writes for both copies of a tool: the shadowed copy's entry
+    /// carries its scan-time advice, the active copy's none. The advice then follows the choice.
+    func testFilesAndFoldersAdviceFollowsTheKeptCopy() throws {
+        let tmp = try CleanupTempHome()
+        let shadowedFile = try tmp.file("opt/bin/tool", size: 4, executable: true)
+        let activeFile = try tmp.file("home/.local/bin/tool", size: 4, executable: true)
+        let active = candidate(
+            tool: "tool", path: activeFile.path, source: .standalone, role: .active, removal: .trash([activeFile])
+        )
+        let shadowed = candidate(
+            tool: "tool", path: shadowedFile.path, source: .homebrewFormula(name: "tool"), role: .shadowed,
+            removal: .brew(.uninstallFormula("tool"))
+        )
+        let rows = [activeFile, shadowedFile].map {
+            CleanupTCCRow(service: CleanupTCCService.documents.rawValue, client: $0.path, clientType: 1, authValue: 2)
+        }
+        let detector = CleanupTCCMapDetector(
+            database: FakeTCCDatabase(fileURL: tmp.url("TCC.db"), rows: rows),
+            fileSystem: LiveCleanupFileSystem(trash: { _ in })
+        )
+        let entries = try detector.scan(linkingTo: [active, shadowed]).findings
+        XCTAssertEqual(entries.map(\.action), [.none, .instruction(.switchOffInFilesAndFolders)])
+        let scanned = [active, shadowed] + entries
+        let keepShadowed = ["tool": CleanupKeptCopy(path: shadowedFile.path, source: .homebrewFormula(name: "tool"))]
+        let keepActive = ["tool": CleanupKeptCopy(path: activeFile.path, source: .standalone)]
+        let switchOff = CleanupAction.instruction(.switchOffInFilesAndFolders)
+
+        XCTAssertEqual(resolve(scanned, keepShadowed)[2...].map(\.action), [switchOff, .none])
+        XCTAssertEqual(resolve(scanned, keepActive)[2...].map(\.action), [.none, switchOff])
+        XCTAssertEqual(resolve(scanned)[2...].map(\.action), [.none, switchOff])
+        XCTAssertEqual(resolve(scanned, approximate: true)[2...].map(\.action), [.none, switchOff], "undecided: the scan's advice")
+        XCTAssertEqual(resolve(resolve(scanned, keepShadowed), keepActive), resolve(scanned, keepActive))
+        XCTAssertEqual(resolve(resolve(scanned, keepShadowed), approximate: true), resolve(scanned, approximate: true))
+        for resolved in [resolve(scanned, keepShadowed), resolve(scanned, approximate: true)] {
+            XCTAssertEqual(resolved[2...].map(\.reason), entries.map(\.reason), "the link never moves")
+            XCTAssertEqual(resolved[2...].map(\.id), entries.map(\.id))
+            XCTAssertEqual(resolved[2...].map(\.status), entries.map(\.status))
+            XCTAssertEqual(resolved[2...].map(\.bucket), [.excluded, .excluded])
+        }
+    }
+
     func testEnclosingAppBundle() {
         XCTAssertEqual(
             CleanupKeepChoice.enclosingAppBundle(of: URL(filePath: "\(ollamaApp)/Contents/Resources/ollama"))?.path, ollamaApp
