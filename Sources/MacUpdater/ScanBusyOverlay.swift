@@ -95,11 +95,9 @@ struct ScanProgressScene: View {
                 // upper bound — propagates up and pushes the detail column wide enough to
                 // shove the sidebar off-screen. Pin it elastic (0…∞) so it fills, not forces.
                 .frame(minWidth: 0, maxWidth: .infinity)
-            if let phaseLabel = presentation.phaseLabel {
-                Text(phaseLabel)
-                    .font(.wega(.subheadline, monospaced: true))
-                    .foregroundStyle(.tertiary)
-            }
+                // The command behind the phase is for the curious; VoiceOver still hears it
+                // through `ScanBusyPresentation.phaseLabel`.
+                .help(presentation.phaseLabel ?? "")
             SniffingScene(
                 caption: tr("Wega węszy po Homebrew…"),
                 thoughts: Self.scanThoughts
@@ -118,13 +116,13 @@ struct ScanProgressScene: View {
     static let scanThoughts: [String] = [
         tr("Czy ten cask jest świeży?"),
         tr("Coś tu pachnie aktualizacją"),
-        tr("Sniff sniff… brew outdated"),
-        tr("Hmm, znajomy zapach Sparkle"),
-        tr("SHA256 się zgadza?"),
+        tr("Porównuję wersje…"),
+        tr("Sprawdzam, czy aplikacje same się aktualizują…"),
+        tr("Hau, ta wersja pachnie świeżo!"),
         tr("Łapię trop wersji"),
         "0x4A 0x65 0x6C 0x6C 0x79",
         tr("Mhm… nowa wersja?"),
-        tr("Info.plist… mhm"),
+        tr("Zaglądam do środka aplikacji…"),
         tr("Ten cask wymaga odświeżenia")
     ]
 }

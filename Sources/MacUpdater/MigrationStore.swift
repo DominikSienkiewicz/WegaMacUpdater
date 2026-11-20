@@ -368,7 +368,7 @@ final class MigrationStore: ObservableObject {
             pose: total > 0 ? .alert : .happy,
             line: total > 0
                 ? trp("Zwęszyłam %@ aplikacji do przepięcia.", total)
-                : tr("Wszystko porządku. Wega nie znalazła uciekinierów.")
+                : tr("Wszystko w porządku. Wega nie znalazła uciekinierów.")
         ))
     }
 
