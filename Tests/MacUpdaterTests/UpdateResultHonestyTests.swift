@@ -114,7 +114,11 @@ struct UpdateResultHonestyTests {
                 "REL-02: the notification watermark must be an identity, not a count")
         #expect(text.contains("UpdateFingerprint.of(result: current, policies: policies)"),
                 "REL-02: dedupe on the fingerprint of the *current* result")
-        #expect(text.contains("postNotification(count: current.total)"),
+        // M4 added a second argument, so the call now continues on the next line; both the
+        // count and the names must still come from `current`.
+        #expect(text.contains("postNotification(count: current.total,"),
                 "REL-02: the notification must describe the same result as the badge")
+        #expect(text.contains("names: current.outdatedDisplayNames("),
+                "REL-02: the names it lists come from that same result")
     }
 }
