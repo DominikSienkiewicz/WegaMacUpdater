@@ -32,6 +32,43 @@ struct REL08MutationCoordinationTests {
                 "a test's store has a lock of its own")
     }
 
+    /// The app builds its store as `ScanStore()`; that default construction, not only `.live`,
+    /// must land on the process-wide lock.
+    @Test func theStoreTheAppBuildsTakesTheProcessWideUpgradeMutex() throws {
+        #expect(ScanStore().dependencies.upgradeMutex === UpgradeMutex.shared)
+        let app = try source("Sources/MacUpdater/MacUpdaterApp.swift")
+        #expect(app.contains("@StateObject private var scan = ScanStore()"),
+                "the app's store is built with the default dependencies")
+    }
+
+    /// `UpgradeMutex.init()` is visible so a test's store can have its own lock. In the app
+    /// only `shared` may exist: a second lock would let two upgrades overlap.
+    @Test func noSourceBuildsASecondUpgradeMutex() throws {
+        let constructions = #/UpgradeMutex(\.init)?\(\)|:\s*UpgradeMutex\s*=\s*\.init\(\)/#
+        var found: [String] = []
+        for url in try swiftSources() {
+            let code = try String(contentsOf: url, encoding: .utf8)
+                .components(separatedBy: .newlines)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            for line in code where line.contains(constructions) {
+                found.append("\(url.lastPathComponent): \(line.trimmingCharacters(in: .whitespaces))")
+            }
+        }
+        #expect(found == ["CaskRollbackGuard.swift: static let shared = UpgradeMutex()"])
+    }
+
+    private func swiftSources() throws -> [URL] {
+        let enumerator = FileManager.default.enumerator(
+            at: packageRoot().appendingPathComponent("Sources"),
+            includingPropertiesForKeys: nil
+        )
+        var urls: [URL] = []
+        while let url = enumerator?.nextObject() as? URL {
+            if url.pathExtension == "swift" { urls.append(url) }
+        }
+        return urls
+    }
+
     /// AC6 — the launch path must consult `SingleInstanceGuard`, enumerating other copies by
     /// bundle identifier, and stand down (`terminate`) *before* it registers mutation sources
     /// or starts the background loop. The wiring lives behind AppKit's launch sequence, so it
