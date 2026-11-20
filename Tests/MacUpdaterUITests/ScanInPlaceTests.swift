@@ -97,7 +97,8 @@ final class ScanInPlaceTests: XCTestCase {
                       "the band carries the phases while a scan runs in place")
         XCTAssertFalse(view.contains("refreshingStamp"), "the phases replace the one-line stamp")
         XCTAssertFalse(overlayView.contains("ScanProgressScene("), "no second scanning scene over the list")
-        XCTAssertTrue(overlayView.contains(".background(.regularMaterial)"), "the list stays, stood down")
+        XCTAssertTrue(overlayView.contains(".background(Color(nsColor: .windowBackgroundColor).opacity(Self.scrimOpacity))"),
+                      "the list stays, stood down")
     }
 
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {

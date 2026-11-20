@@ -132,29 +132,46 @@ struct ScanProgressScene: View {
 /// The list a scan is replacing, stood down while the scan runs in place (UX-19).
 ///
 /// The scan itself reports in the header (`ScanPhaseStrip`), so this no longer draws a second
-/// scanning scene over the rows: it covers them with a material, which is what stands them
-/// down — one mechanism, not a separate dimming of the list — and says why they cannot be
-/// selected. The material is deliberately not opaque: the whole point of scanning in place is
-/// that the previous result never leaves the window.
+/// scanning scene over the rows: it covers them with a veil of the window's own background,
+/// which is what stands them down — one mechanism, not a separate dimming of the list — and
+/// says why they cannot be selected, with a spinner and the command the scan is running now.
+/// The veil is deliberately translucent: the whole point of scanning in place is that the
+/// previous result never leaves the window.
 struct ScanBusyOverlay: View {
     let progress: ScanProgress?
+
+    /// How much of the window's background lies over the rows: enough to read as stood down,
+    /// little enough that every row stays legible. A material was tried and blurred the rows
+    /// into an empty column, so a scan in place looked like a blank, frozen list.
+    static let scrimOpacity: Double = 0.5
 
     private var presentation: ScanBusyPresentation { ScanBusyPresentation(progress: progress) }
 
     var body: some View {
         VStack(spacing: 0) {
-            Text(tr("Zaznaczanie wróci, gdy skan się skończy."))
-                .font(.wega(.subheadline))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .glassEffect(.regular, in: Capsule())
-                .padding(24)
+            HStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.small)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tr("Zaznaczanie wróci, gdy skan się skończy."))
+                        .font(.wega(.subheadline))
+                        .foregroundStyle(.secondary)
+                    if let phaseLabel = presentation.phaseLabel {
+                        Text(phaseLabel)
+                            .font(.wega(.caption, monospaced: true))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .glassEffect(.regular, in: Capsule())
+            .padding(24)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.regularMaterial)
+        .background(Color(nsColor: .windowBackgroundColor).opacity(Self.scrimOpacity))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(tr("Odświeżam listę…"))
         .accessibilityValue(presentation.accessibilityValue)

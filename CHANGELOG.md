@@ -17,6 +17,9 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 - **Fewer false alarms on release notes.** A flagged term now has to start a word, so
   ordinary words that merely contain one no longer put an update among the urgent ones or
   give it the red warning label.
+- **The list stays readable while Wega checks again.** During **Check now** or **⌘R** the
+  rows used to vanish behind a frosted layer, so the screen looked empty and frozen. They
+  now stay visible, dimmed, and a spinner over the list names the step the check is on.
 
 ## [0.8.0] — 2026-11-20
 

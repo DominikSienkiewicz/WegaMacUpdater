@@ -119,13 +119,13 @@ struct ScanBusySelectionGateTests {
                 "sizing and padding belong to the scene, not to whoever places it")
     }
 
-    /// The rows are stood down by the overlay's own material rather than by a second, separate
+    /// The rows are stood down by the overlay's own veil rather than by a second, separate
     /// dimming of the list: one mechanism, so the two cannot be tuned against each other.
     @Test func theOverlayStandsTheRowsDownWithoutASecondDimming() throws {
         let view = executableSource(try source("Sources/MacUpdater/UpdateView.swift"))
         let overlay = executableSource(try source("Sources/MacUpdater/ScanBusyOverlay.swift"))
 
-        #expect(overlay.contains(".background(.regularMaterial)"),
+        #expect(overlay.contains(".background(Color(nsColor: .windowBackgroundColor).opacity(Self.scrimOpacity))"),
                 "the overlay covers the list area itself")
         #expect(!view.contains("dimmedListOpacity"),
                 "and does so alone — the separate list dimming is gone")
