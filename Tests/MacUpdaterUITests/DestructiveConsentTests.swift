@@ -66,6 +66,7 @@ struct DestructiveConsentTests {
         var running = true
         var stopsAfterPolls: Int?
         var polls = 0
+        var killSucceeds = true
     }
 
     private nonisolated func flow(_ calls: Calls, accepts: Bool) -> RestartFlow {
@@ -77,7 +78,12 @@ struct DestructiveConsentTests {
                 return calls.running
             },
             launch: { name in calls.log.append("launch \(name)") },
-            pause: { _ in }
+            pause: { _ in },
+            forceKill: { _ in
+                calls.log.append("kill")
+                if calls.killSucceeds { calls.running = false }
+                return calls.killSucceeds
+            }
         )
     }
 
@@ -162,5 +168,28 @@ struct DestructiveConsentTests {
         #expect(store.pendingForceRestart == info, "a stale dismissal leaves a newer prompt alone")
         store.dismissForceRestartPrompt(info)
         #expect(store.pendingForceRestart == nil)
+    }
+
+    @Test func aForcedAppIsRelaunched() async {
+        let calls = Calls()
+        #expect(await flow(calls, accepts: true).force(info) == .relaunched)
+        #expect(calls.log == ["kill", "launch TextEdit"])
+    }
+
+    /// M1 — the app quit on its own while the alert was up, so `killall` found nothing and
+    /// failed. That is not a failure to close it: it is closed, and gets relaunched.
+    @Test func aForceThatFindsTheAppAlreadyGoneStillRelaunches() async {
+        let calls = Calls()
+        calls.killSucceeds = false
+        calls.running = false
+        #expect(await flow(calls, accepts: true).force(info) == .relaunched)
+        #expect(calls.log == ["kill", "launch TextEdit"])
+    }
+
+    @Test func aForceThatCannotCloseARunningAppSaysSo() async {
+        let calls = Calls()
+        calls.killSucceeds = false
+        #expect(await flow(calls, accepts: true).force(info) == .stillRunning)
+        #expect(calls.log == ["kill"], "an app that is still running is never launched a second time")
     }
 }

@@ -432,7 +432,8 @@ extension ScanStore {
             requestQuit: { await processes.requestGracefulTermination(appName: $0.appName, processName: $0.processName) },
             isRunning: { await processes.isRunning($0) },
             launch: { await processes.launch(appName: $0) },
-            pause: { try? await Task.sleep(for: $0) }
+            pause: { try? await Task.sleep(for: $0) },
+            forceKill: { await processes.forceKill($0) }
         )
     }
 
@@ -440,15 +441,13 @@ extension ScanStore {
         pendingForceRestart = nil
         restartBusy = info.processName
         defer { restartBusy = nil }
-        guard await processes.forceKill(info.processName) else {
+        guard await gracefulRestartFlow().force(info) == .relaunched else {
             showBanner(BannerData(
                 variant: .danger,
                 title: tr("Nie udało się zamknąć aplikacji"),
                 message: trf("Nie mogę zamknąć %@. Zamknij ją ręcznie.", info.appName)))
             return
         }
-        try? await Task.sleep(for: .milliseconds(800))
-        await processes.launch(appName: info.appName)
         restartCandidates.removeAll { $0.processName == info.processName }
         restartDiagnosticOperationIDs.removeValue(forKey: info.processName)
         UpdateDiagnostics.record("restart.flowCompleted", fields: ["processName": info.processName, "forced": "true"])
