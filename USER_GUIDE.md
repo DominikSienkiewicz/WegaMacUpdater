@@ -253,9 +253,11 @@ runs a quiet background check and notifies you when new updates appear. The chec
 only reads; it never runs `brew update` or changes anything. The agent installs an update on
 its own only for an app you opted in to background updates, and only when every safety
 condition holds.
-The dropdown names the apps that have updates. While an update runs, from this window or in
-the background, it shows how far the run has got ("Updating 2 of 5…") with a **Stop After
-Active Installs** button.
+The dropdown names the apps that have updates. While an update you started in the main
+window runs, it shows how far the run has got ("Updating 2 of 5…") with a **Stop After
+Active Installs** button, even with the window closed; once clicked, the button reads
+**Finishing active installs, not starting new ones**. Updates the agent installs in the
+background are not shown there.
 Closing the main window keeps this agent running; use **Quit** in its dropdown to stop it.
 
 > The first time the agent has something to announce, Wega asks in her card at the bottom
@@ -277,6 +279,23 @@ it always did.
 ---
 
 ## 3. Updating your apps
+
+### Before your first update
+
+Until your first update finishes with everything installed, a card above the list —
+**Before I update your first app** — says what that update may need:
+
+- **Checking works without any permissions.**
+- **Replacing apps in /Applications — macOS has to allow it.** **Check now** asks macOS; if it
+  refuses, **Open privacy settings** opens the pane that grants it.
+- **Some apps ask for your administrator password when they update.** This is ticked when
+  Touch ID for `sudo` is on or Wega was installed from the `.pkg`, which brings the
+  components that ask for the password. **Enable Touch ID** opens Settings when Touch ID can
+  be turned on; **What does the helper do?** explains the optional Wega helper, which does
+  not answer these password prompts.
+- **Notify you about new updates?** — only until you answer it.
+
+**Later** hides the card for now; **Got it** closes it for good.
 
 ### Choose what to update
 
