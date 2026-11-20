@@ -33,6 +33,13 @@ struct ReadinessPresentation: Equatable {
 /// password, notifications) instead of letting the user find out through a failure. Its
 /// height is fixed for every row state, so it never moves the list.
 struct ReadinessCard: View {
+    /// The card's fixed height at the default text size. Fixed rather than intrinsic: a card
+    /// whose height follows its rows re-enters AppKit's constraint loop under
+    /// `NavigationSplitView`. Sized for the worst row set (App Management denied, Touch ID
+    /// available, notifications unanswered), which needs 248 pt in a 360–420 pt detail column
+    /// in Polish, plus a margin; 210 pt cut off the buttons that close the card.
+    static let baseHeight: CGFloat = 260
+
     let hasUpdates: Bool
 
     @AppStorage(ReadinessPresentation.dismissedKey) private var dismissed = false
@@ -44,8 +51,7 @@ struct ReadinessCard: View {
     @State private var probing = false
     @State private var touchID: TouchIDSudoConfigurator.State = .notSupported
     @State private var helper: PrivilegedHelperClient.Status = .notRegistered
-    @State private var showsHelperExplanation = false
-    @ScaledMetric(relativeTo: .body) private var cardHeight: CGFloat = 210
+    @ScaledMetric(relativeTo: .body) private var cardHeight: CGFloat = ReadinessCard.baseHeight
 
     private var presentation: ReadinessPresentation {
         ReadinessPresentation(dismissed: dismissed, hasUpdates: hasUpdates, appManagement: appManagement,
@@ -67,22 +73,62 @@ struct ReadinessCard: View {
     }
 
     private var card: some View {
-        WegaCallout(.info, title: tr("Zanim zaktualizuję pierwszą aplikację"), symbol: "checklist",
-                    detail: { rows }, actions: { EmptyView() })
-            .frame(height: cardHeight, alignment: .top)
-            .clipped()
+        ReadinessCardContent(rows: presentation.rows, touchID: touchID, probing: probing, actions: .init(
+            postpone: { postponed = true },
+            dismiss: { dismissed = true },
+            probeAppManagement: probeAppManagement,
+            enableTouchID: { openSettings() },
+            declineNotifications: { agent.declineNotifications() },
+            agreeToNotifications: { Task { await agent.agreeToNotifications() } }
+        ))
+        .frame(height: cardHeight, alignment: .top)
+        .clipped()
     }
 
-    private var rows: some View {
+    /// The probe touches the disk, so it runs only on the click and off the main actor.
+    private func probeAppManagement() {
+        probing = true
+        Task {
+            appManagement = await Task.detached { AppManagementPermissionProbe.liveStatus() }.value
+            probing = false
+        }
+    }
+}
+
+/// What the card draws for one set of rows. Separate from `ReadinessCard`, which owns the
+/// state, so the worst-case row set can be measured against the card's fixed height.
+struct ReadinessCardContent: View {
+    struct Actions {
+        var postpone: @MainActor () -> Void = {}
+        var dismiss: @MainActor () -> Void = {}
+        var probeAppManagement: @MainActor () -> Void = {}
+        var enableTouchID: @MainActor () -> Void = {}
+        var declineNotifications: @MainActor () -> Void = {}
+        var agreeToNotifications: @MainActor () -> Void = {}
+    }
+
+    let rows: [ReadinessPresentation.Row]
+    let touchID: TouchIDSudoConfigurator.State
+    let probing: Bool
+    var actions = Actions()
+
+    @State private var showsHelperExplanation = false
+
+    var body: some View {
+        WegaCallout(.info, title: tr("Zanim zaktualizuję pierwszą aplikację"), symbol: "checklist",
+                    detail: { rowList }, actions: { EmptyView() })
+    }
+
+    private var rowList: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(presentation.rows.enumerated()), id: \.offset) { _, row in
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 rowView(row)
             }
             Spacer(minLength: 0)
             HStack {
                 Spacer()
-                Button(tr("Później")) { postponed = true }
-                Button(tr("Wszystko jasne")) { dismissed = true }
+                Button(tr("Później"), action: actions.postpone)
+                Button(tr("Wszystko jasne"), action: actions.dismiss)
                     .buttonStyle(.borderedProminent)
                     .tint(Color.wegaHoneyFill)
                     .foregroundStyle(Color.wegaInk)
@@ -100,7 +146,7 @@ struct ReadinessCard: View {
         case .replaceApps(let permission):
             line(done: permission == .granted,
                  text: tr("Podmiana aplikacji w /Applications — macOS musi na to pozwolić.")) {
-                Button(tr("Sprawdź teraz"), action: probeAppManagement).disabled(probing)
+                Button(tr("Sprawdź teraz"), action: actions.probeAppManagement).disabled(probing)
                 if permission == .denied {
                     Button(tr("Otwórz ustawienia prywatności")) {
                         NSWorkspace.shared.open(AppManagementSettings.paneURL)
@@ -110,7 +156,7 @@ struct ReadinessCard: View {
         case .password(let ready):
             line(done: ready, text: tr("Część aplikacji prosi przy aktualizacji o hasło administratora.")) {
                 if touchID == .available {
-                    Button(tr("Włącz Touch ID")) { openSettings() }
+                    Button(tr("Włącz Touch ID"), action: actions.enableTouchID)
                 }
                 Button(tr("Co robi pomocnik?")) { showsHelperExplanation = true }
                     .popover(isPresented: $showsHelperExplanation) {
@@ -122,14 +168,14 @@ struct ReadinessCard: View {
             }
         case .notifications:
             line(done: false, text: tr("Powiadamiać o nowych aktualizacjach?")) {
-                Button(tr("Nie włączaj powiadomień")) { agent.declineNotifications() }
-                Button(tr("Powiadamiaj")) { Task { await agent.agreeToNotifications() } }
+                Button(tr("Nie włączaj powiadomień"), action: actions.declineNotifications)
+                Button(tr("Powiadamiaj"), action: actions.agreeToNotifications)
             }
         }
     }
 
-    private func line<Actions: View>(done: Bool, text: String,
-                                     @ViewBuilder actions: () -> Actions) -> some View {
+    private func line<LineActions: View>(done: Bool, text: String,
+                                         @ViewBuilder actions: () -> LineActions) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Label(text, systemImage: done ? "checkmark.circle.fill" : "circle")
                 .font(.wega(.subheadline))
@@ -137,15 +183,6 @@ struct ReadinessCard: View {
             HStack(spacing: 6) { actions() }
                 .controlSize(.small)
                 .padding(.leading, 22)
-        }
-    }
-
-    /// The probe touches the disk, so it runs only on the click and off the main actor.
-    private func probeAppManagement() {
-        probing = true
-        Task {
-            appManagement = await Task.detached { AppManagementPermissionProbe.liveStatus() }.value
-            probing = false
         }
     }
 }
