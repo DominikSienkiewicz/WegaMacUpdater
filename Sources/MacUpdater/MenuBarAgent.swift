@@ -36,6 +36,13 @@ final class MenuBarAgent: ObservableObject {
     /// scratch. Now the window adopts them, which is the whole "instant value" of M2.
     @Published private(set) var lastResult: MenuBarScanResult?
 
+    /// UXP-09 — how far the update run started in the window has got, so the menu-bar menu can
+    /// show it and stop it while the window is closed. `nil` when no such run is going.
+    @Published var windowRun: UpgradeProgress?
+    /// Stops the window's run the way its own button does: the packages already installing
+    /// finish, nothing new starts. Registered by the `ScanStore` that owns the run.
+    var stopWindowRun: (@MainActor () -> Void)?
+
     /// UX-11g — the apps/packages the dropdown names as having updates, derived from the
     /// last check and filtered by the same ignore/pin rules that produced the badge count,
     /// so the names and the count agree. Empty until the first check completes.

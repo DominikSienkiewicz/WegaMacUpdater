@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import MacUpdaterCore
 
@@ -52,6 +53,7 @@ struct DetailColumn: View {
     @Binding var wegaState:         WegaState
     @Binding var updateBadge:       Int
     @Binding var updateActivity:    UpdateActivity
+    @Binding var updateProgress:    UpgradeProgress?
     @Binding var logsInitialFilter: LogLevelFilter
     @Binding var logsErrorBadge:    Int
     @Binding var lastCheck:         Date?
@@ -102,6 +104,15 @@ struct DetailColumn: View {
                 )
                 .inspectorColumnWidth(min: 280, ideal: 340, max: 460)
             }
+            // UXP-09 — the sidebar names the run's "done/total"; stage changes inside one package
+            // would re-render the root for nothing, so only a change of the pair gets through.
+            .onReceive(scan.$upgradeProgress.removeDuplicates {
+                $0?.completedUnits == $1?.completedUnits && $0?.totalUnits == $1?.totalUnits
+            }) { updateProgress = $0 }
+            .focusedSceneValue(\.stopUpdateAction, WegaMenuAction(
+                isEnabled: scan.updating && !scan.updateInterruption.isRequested,
+                run: { scan.cancelUpdate() }
+            ))
             .onReceive(scan.$inspectedKey) { key in
                 guard key != nil else { return }
                 showInspector = true

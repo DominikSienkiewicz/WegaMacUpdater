@@ -24,6 +24,8 @@ struct SidebarList: View {
     /// alarm, so it is badged in caramel like the update counts rather than in danger red.
     let rollbackBadge:  Int
     let updateActivity: UpdateActivity
+    /// UXP-09 — how far the running update has got, shown as "done/total" in the Updates badge.
+    var updateProgress: UpgradeProgress?
     /// UX-15 — what Wega's card at the bottom of the sidebar says and comments on.
     let wegaState:      WegaState
     let lastCheck:      Date?
@@ -87,7 +89,9 @@ struct SidebarList: View {
         spins: Bool = false
     ) -> some View {
         let activity: UpdateActivity = spins ? updateActivity : .idle
-        let status = ScanStatusAccessibilitySemantics(activity: activity, baseSymbol: item.systemImage)
+        let status = ScanStatusAccessibilitySemantics(
+            activity: activity, baseSymbol: item.systemImage, progress: spins ? updateProgress : nil
+        )
         Label {
             Text(item.label)
         } icon: {
@@ -97,10 +101,23 @@ struct SidebarList: View {
                 isActive:    selection == item
             )
         }
-        .badge(count > 0 ? Text(badgeText(count, isDanger: isDanger)) : Text?.none)
+        .badge(badge(count: count, isDanger: isDanger, activity: activity))
         .tag(item)
         .accessibilitySortPriority(SidebarFocusPolicy.accessibilityPriority(for: item))
         .accessibilityValue(status.accessibilityValue ?? "")
+    }
+
+    private func badge(count: Int, isDanger: Bool, activity: UpdateActivity) -> Text? {
+        if activity == .updating, let run = updateProgress {
+            return Text(runBadgeText(run))
+        }
+        return count > 0 ? Text(badgeText(count, isDanger: isDanger)) : nil
+    }
+
+    private func runBadgeText(_ run: UpgradeProgress) -> AttributedString {
+        var text = AttributedString("\(run.completedUnits)/\(run.totalUnits)")
+        text.foregroundColor = .wegaCaramel
+        return text
     }
 
     private func badgeText(_ count: Int, isDanger: Bool) -> AttributedString {
@@ -122,7 +139,7 @@ private struct SidebarRowIcon: View {
 
     private var iconColor: Color {
         switch activity {
-        case .scanning: return .wegaHoney
+        case .scanning, .updating: return .wegaHoney
         case .success:  return .wegaSuccess
         case .error:    return .wegaDanger
         case .idle:     return isActive ? .wegaHoney : .secondary
@@ -138,7 +155,7 @@ private struct SidebarRowIcon: View {
             autoreverses: false,
             reduceMotion: reduceMotion
         )
-        if activity == .scanning && !reduceMotion, let spinAnimation {
+        if (activity == .scanning || activity == .updating) && !reduceMotion, let spinAnimation {
             withAnimation(spinAnimation) { rotation = 360 }
         } else {
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) { rotation = 0 }

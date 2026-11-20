@@ -869,7 +869,6 @@ extension Translations {
         // M2(c) — anulowanie skanu ma swój komunikat; skan nie udaje, że się skończył.
         "Przerwałam skanowanie.": "I stopped scanning.",
         // REL-12 — anulowanie aktualizacji: zatrzymanie na granicy pakietu, nie w połowie instalacji.
-        "Przerywam…": "Stopping…",
         "Zatrzymam po bieżącym pakiecie — trwającej instalacji nie przerywam w połowie.":
             "I'll stop after the current package — an install already running is never cut in half.",
         "Aktualizacja przerwana": "Update stopped",

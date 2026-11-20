@@ -51,7 +51,7 @@ extension ScanStore {
         }
         defer { UpgradeMutex.shared.release() }
         updating = true
-        emitActivitySignal(.scanning)
+        emitActivitySignal(.updating)
         brewLog = []
         showLog = true
         emitWegaState(WegaState(pose: .sniff, line: tr("Aktualizuję, chwila…")))

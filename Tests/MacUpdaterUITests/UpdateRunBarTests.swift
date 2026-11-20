@@ -11,8 +11,8 @@ import Testing
 @MainActor
 struct UpdateRunBarTests {
     @Test func theStopButtonSaysWhenItStops() {
-        #expect(UpdateRunCopy.stopLabel(isStopping: false) == tr("Zatrzymaj po bieżącym"))
-        #expect(UpdateRunCopy.stopLabel(isStopping: true) == tr("Przerywam…"))
+        #expect(UpdateRunCopy.stopLabel(isStopping: false) == tr("Zatrzymaj po rozpoczętych instalacjach"))
+        #expect(UpdateRunCopy.stopLabel(isStopping: true) == tr("Kończę rozpoczęte instalacje, nowych nie zaczynam"))
     }
 
     @Test func theNoteExplainsTheLockAndThenTheStop() {

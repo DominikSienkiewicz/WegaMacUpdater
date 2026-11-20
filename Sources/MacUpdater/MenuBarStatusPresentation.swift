@@ -11,8 +11,10 @@ struct MenuBarStatusPresentation: Equatable {
     let failed: Bool
     let incomplete: Bool
     let lastCheck: Date?
+    var run: UpgradeProgress?
 
     var statusText: String {
+        if let run { return trf("Aktualizuję %@ z %@…", "\(run.completedUnits)", "\(run.totalUnits)") }
         if isChecking { return tr("Sprawdzam aktualizacje…") }
         if failed && count == 0 { return tr("Nie udało się sprawdzić") }
         if incomplete && count > 0 {

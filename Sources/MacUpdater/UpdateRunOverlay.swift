@@ -81,7 +81,9 @@ struct UpdateRunOverlay<Progress: View>: View {
 /// UX-20 — what the run says about stopping, before and after the stop is requested.
 enum UpdateRunCopy {
     static func stopLabel(isStopping: Bool) -> String {
-        isStopping ? tr("Przerywam…") : tr("Zatrzymaj po bieżącym")
+        isStopping
+            ? tr("Kończę rozpoczęte instalacje, nowych nie zaczynam")
+            : tr("Zatrzymaj po rozpoczętych instalacjach")
     }
 
     static func note(isStopping: Bool) -> String {

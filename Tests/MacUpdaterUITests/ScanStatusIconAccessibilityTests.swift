@@ -1,3 +1,4 @@
+import MacUpdaterCore
 import XCTest
 
 @testable import WegaMacUpdater
@@ -43,5 +44,11 @@ final class ScanStatusIconAccessibilityTests: XCTestCase {
     func testIdleKeepsTheBaseSymbolAndAnnouncesNoScanStatus() {
         XCTAssertEqual(semantics(.idle).symbolName, base)
         XCTAssertNil(semantics(.idle).accessibilityValue)
+    }
+
+    func testARunningUpdateIsNotCalledAScan() {
+        let progress = UpgradeProgress(completedUnits: 2, totalUnits: 5, stage: .installing(token: nil))
+        let s = ScanStatusAccessibilitySemantics(activity: .updating, baseSymbol: base, progress: progress)
+        XCTAssertEqual(s.accessibilityValue, trf("Aktualizacja w toku, %@ z %@", "2", "5"))
     }
 }

@@ -34,7 +34,7 @@ enum SidebarTab: String, Identifiable {
 /// Live state of the Updates tab, surfaced on its sidebar icon: the icon spins while a
 /// scan/upgrade runs, turns green when it finishes cleanly, red when a source failed.
 enum UpdateActivity: Equatable {
-    case idle, scanning, success, error
+    case idle, scanning, updating, success, error
 }
 
 // MARK: - Root view
@@ -59,6 +59,7 @@ struct ContentView: View {
     @State private var logsInitialFilter: LogLevelFilter  = .all
     @State private var logsErrorBadge:    Int             = 0
     @State private var updateActivity:    UpdateActivity  = .idle
+    @State private var updateProgress:    UpgradeProgress?
     /// F4 — informational, not a gate: drives the "install Homebrew" invitation card.
     @State private var brewInstalled: Bool
     @State private var lastCheck:     Date? = nil
@@ -97,6 +98,7 @@ struct ContentView: View {
                 logsErrorBadge: logsErrorBadge,
                 rollbackBadge:  rollbackBadge,
                 updateActivity: updateActivity,
+                updateProgress: updateProgress,
                 wegaState:      wegaState,
                 lastCheck:      lastCheck,
                 quip:           quip
@@ -112,6 +114,7 @@ struct ContentView: View {
                 wegaState:         $wegaState,
                 updateBadge:       $updateBadge,
                 updateActivity:    $updateActivity,
+                updateProgress:    $updateProgress,
                 logsInitialFilter: $logsInitialFilter,
                 logsErrorBadge:    $logsErrorBadge,
                 lastCheck:         $lastCheck,

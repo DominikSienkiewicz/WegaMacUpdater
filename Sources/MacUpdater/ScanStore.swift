@@ -154,7 +154,9 @@ final class ScanStore: ObservableObject {
     @Published private(set) var isRefreshing = false
     /// How far the running upgrade has got, in whole packages. `nil` when nothing is
     /// installing, which is also what hides the bar.
-    @Published var upgradeProgress: UpgradeProgress?
+    @Published var upgradeProgress: UpgradeProgress? {
+        didSet { MenuBarAgent.shared.windowRun = upgradeProgress }
+    }
     /// The counter behind `upgradeProgress`. One per run, created by the upgrade and read
     /// by the brew streaming loop — a stored property, so it cannot live in the extension
     /// that uses it.
@@ -232,6 +234,7 @@ final class ScanStore: ObservableObject {
     /// Services are owned by the app-level `AppViewModel`; hand them over on first appearance.
     func attach(model: AppViewModel) {
         self.model = model
+        MenuBarAgent.shared.stopWindowRun = { [weak self] in self?.cancelUpdate() }
     }
 
     // MARK: - REL-12: stopping a running update

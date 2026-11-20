@@ -3,6 +3,10 @@ import Foundation
 extension Translations {
     /// UX review of 2026-11-20 — every new Polish-to-English pair of that pass.
     static let uxReview: [String: String] = [
+        "Zatrzymaj po rozpoczętych instalacjach": "Stop After Active Installs",
+        "Kończę rozpoczęte instalacje, nowych nie zaczynam": "Finishing active installs, not starting new ones",
+        "Aktualizacja w toku, %@ z %@": "Update in progress, %@ of %@",
+        "Aktualizuję %@ z %@…": "Updating %@ of %@…",
         "Nowe aktualizacje:": "New updates:",
         "Wega znalazła w notatkach: %@": "Found in the release notes: %@",
         "Ta kopia Wegi nie umie poprosić o hasło administratora, więc %@ się nie zaktualizuje. Zainstaluj Wegę z pliku .pkg albo włącz Touch ID.":

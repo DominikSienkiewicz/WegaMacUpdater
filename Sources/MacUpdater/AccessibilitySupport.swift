@@ -47,7 +47,7 @@ struct ScanStatusAccessibilitySemantics: Equatable {
     /// to report yet.
     let accessibilityValue: String?
 
-    init(activity: UpdateActivity, baseSymbol: String) {
+    init(activity: UpdateActivity, baseSymbol: String, progress: UpgradeProgress? = nil) {
         switch activity {
         case .idle:
             symbolName = baseSymbol
@@ -55,6 +55,10 @@ struct ScanStatusAccessibilitySemantics: Equatable {
         case .scanning:
             symbolName = baseSymbol
             accessibilityValue = tr("Sprawdzanie w toku")
+        case .updating:
+            symbolName = baseSymbol
+            accessibilityValue = progress.map { trf("Aktualizacja w toku, %@ z %@", "\($0.completedUnits)", "\($0.totalUnits)") }
+                ?? tr("Aktualizacja w toku")
         case .success:
             symbolName = baseSymbol
             accessibilityValue = tr("Sprawdzono bez błędów")

@@ -43,6 +43,10 @@ struct MenuBarContent: View {
     var body: some View {
         statusSection
 
+        if agent.windowRun != nil {
+            Button(UpdateRunCopy.stopLabel(isStopping: false)) { agent.stopWindowRun?() }
+        }
+
         Divider()
 
         Button(agent.isChecking ? tr("Sprawdzam…") : tr("Sprawdź teraz")) {
@@ -114,7 +118,7 @@ struct MenuBarContent: View {
     private var statusText: String {
         MenuBarStatusPresentation(
             count: agent.updateCount, isChecking: agent.isChecking, failed: agent.lastCheckFailed,
-            incomplete: agent.lastCheckIncomplete, lastCheck: agent.lastCheck
+            incomplete: agent.lastCheckIncomplete, lastCheck: agent.lastCheck, run: agent.windowRun
         ).statusText
     }
 
