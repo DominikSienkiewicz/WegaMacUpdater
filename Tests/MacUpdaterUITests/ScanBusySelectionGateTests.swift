@@ -90,7 +90,8 @@ struct ScanBusySelectionGateTests {
     /// The scan wears one face, at one size. The full-screen scan and the overlay over the
     /// list used to report the identical thing; drawing the overlay's copy smaller, in a card,
     /// made them read as two different screens — Wega shrank and the binary stream was clipped
-    /// mid-character by the card holding it. Since UX-19 the overlay draws no scene at all.
+    /// mid-character by the card holding it. UX-19 took the scene out of the overlay; the owner
+    /// asked for Wega back, so the overlay draws it again, the same scene at the same size.
     ///
     /// So `ScanProgressScene` owns its sizing and its padding, and offers no knob for either.
     /// A caller that cannot pass a size cannot give one screen a different one.
@@ -100,11 +101,10 @@ struct ScanBusySelectionGateTests {
 
         #expect(view.contains("ScanProgressScene(progress: scan.progress)"),
                 "the full-screen scan must draw the shared scene")
-        // UX-19 — a scan over a result runs in place and reports its phases in the header
-        // (`ScanPhaseStrip`), so the overlay over the list no longer draws a second scene:
-        // the full-screen scan is the scene's only place, which leaves nothing to diverge.
-        #expect(!overlay.contains("ScanProgressScene(progress: progress)"),
-                "the overlay stands the list down; it no longer draws its own scan")
+        // A scan over a result runs in place: the header reports its phases (`ScanPhaseStrip`)
+        // and Wega sniffs over the stood-down list, in the very scene the first scan draws.
+        #expect(overlay.contains("ScanProgressScene(progress: progress)"),
+                "the overlay draws the shared scene, not a copy of its own")
         #expect(!overlay.contains("enum Size"),
                 "no size knob: that is what let the two screens diverge")
         #expect(!view.contains("SniffingScene("),

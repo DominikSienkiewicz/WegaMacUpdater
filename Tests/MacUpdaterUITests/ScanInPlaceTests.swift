@@ -87,7 +87,7 @@ final class ScanInPlaceTests: XCTestCase {
         )
     }
 
-    func testTheHeaderCarriesThePhasesAndTheOverlayOnlyStandsTheListDown() throws {
+    func testTheHeaderCarriesThePhasesAndWegaSniffsOverTheStoodDownList() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         let overlay = try source("Sources/MacUpdater/ScanBusyOverlay.swift")
         let overlayView = try XCTUnwrap(overlay.range(of: "struct ScanBusyOverlay: View").map { overlay[$0.lowerBound...] })
@@ -96,7 +96,8 @@ final class ScanInPlaceTests: XCTestCase {
         XCTAssertTrue(view.contains("refreshProgress: scan.isRefreshing ? scan.progress : nil"),
                       "the band carries the phases while a scan runs in place")
         XCTAssertFalse(view.contains("refreshingStamp"), "the phases replace the one-line stamp")
-        XCTAssertFalse(overlayView.contains("ScanProgressScene("), "no second scanning scene over the list")
+        XCTAssertTrue(overlayView.contains("ScanProgressScene(progress: progress)"),
+                      "the first scan's animated Wega sniffs over the list too")
         XCTAssertTrue(overlayView.contains(".background(Color(nsColor: .windowBackgroundColor).opacity(Self.scrimOpacity))"),
                       "the list stays, stood down")
     }
