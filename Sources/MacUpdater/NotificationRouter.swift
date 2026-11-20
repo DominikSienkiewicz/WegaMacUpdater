@@ -18,8 +18,10 @@ import UserNotifications
 /// decoded destination — a `Sendable` value — crosses onto the main actor. `[AnyHashable: Any]`
 /// could not cross it, and copying it out would be a race dressed as a conversion.
 ///
-/// The stored state is one `let`, and `UserDefaults` is documented as thread-safe, so the
-/// `@unchecked Sendable` conformance describes what is actually true here.
+/// The stored state is the `defaults` `let`, which `UserDefaults` documents as thread-safe, and
+/// the AppKit seams (`activateApp`, `openMainWindow`, `findMainWindow`), which are isolated to
+/// the main actor. Nothing mutable is reachable off it, so the `@unchecked Sendable` conformance
+/// describes what is actually true here.
 final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
     static let shared = NotificationRouter()
 
