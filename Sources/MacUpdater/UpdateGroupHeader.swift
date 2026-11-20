@@ -62,6 +62,7 @@ struct UpdateGroupHeader: View {
                 .font(.wega(.subheadline, weight: .semibold, monospaced: true))
                 .tracking(0.8)
                 .textCase(.uppercase)
+                // The number is visual ordering only; VoiceOver reads the plain title.
                 .accessibilityLabel(title)
                 .accessibilityAddTraits(.isHeader)
             Text("\(count)")

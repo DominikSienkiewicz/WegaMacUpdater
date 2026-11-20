@@ -220,7 +220,7 @@ struct CheckingBar: View {
 struct UpdateSection: View {
     let title:     String
     var subtitle:  String? = nil
-    var tint:      Color = .wegaHoney
+    var tint:      Color
     /// UX-18 — the group's number, set only in urgency grouping.
     var ordinal:   Int? = nil
     let items:     [OutdatedItem]

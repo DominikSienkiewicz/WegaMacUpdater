@@ -3,7 +3,7 @@ import Foundation
 extension Translations {
     /// UX-14 — the Updates screen's action bar and plan sheet.
     static let updatesActionBar: [String: String] = [
-        "W kolejce: %@": "Queued: %@",
+        "W kolejce: %@": "In queue: %@",
         "%@ z automatycznym cofnięciem":
             "%@ with automatic rollback",
         "Plan aktualizacji":

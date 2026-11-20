@@ -198,8 +198,8 @@ struct UpdateView: View {
     // MARK: Results
     private var resultsView: some View {
         VStack(spacing: 0) {
-            // UX-14 — the header reports the scan and nothing else; acting on the result
-            // happens in the action bar under the list.
+            // UX-14 — the header reports the scan and carries select-all next to the
+            // categories; updating happens in the action bar under the list.
             VStack(alignment: .leading, spacing: 12) {
                 resultsHeading
                 listHeader
@@ -363,9 +363,9 @@ struct UpdateView: View {
     // MARK: Action bar
 
     /// UX-14 — one bar under the list carries the whole path from selection to update: what
-    /// is ticked, how much of it the rollback net covers, the plan
-    /// and the update itself. It replaced a select-all row above the list, the update button
-    /// in the header and the plan disclosure between them — one flow in three places.
+    /// is ticked, how much of it the rollback net covers, the plan and the update itself. It
+    /// replaced the update button in the header and the plan disclosure between them — one flow
+    /// in three places.
     ///
     /// It lives inside `listColumn`, so a refresh or a running update stands it down together
     /// with the rows it acts on.

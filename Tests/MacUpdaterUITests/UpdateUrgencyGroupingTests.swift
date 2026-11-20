@@ -102,6 +102,18 @@ struct UpdateUrgencyGroupingTests {
         #expect(groups.ordinal(of: .needsYou) == nil)
     }
 
+    @Test func aSecurityManualAppShiftsEveryNumberAfterIt() {
+        let risky = manual("Risky")
+        let calm = manual("Calm")
+        let groups = UrgencyGroups.make(
+            items: [firefox, wget], manual: [risky, calm], filter: .all, isSecurity: { $0.name == "Risky" }
+        )
+        #expect(groups.ordinal(of: .security) == 1)
+        #expect(groups.ordinal(of: .apps) == 2)
+        #expect(groups.ordinal(of: .cli) == 3)
+        #expect(groups.ordinal(of: .needsYou) == 4)
+    }
+
     @Test func groupHeaderLabelPadsItsNumber() {
         #expect(UpdateGroupHeader.label(ordinal: 1, title: "Aplikacje") == "01 · Aplikacje")
         #expect(UpdateGroupHeader.label(ordinal: nil, title: "Homebrew Casks") == "Homebrew Casks")
