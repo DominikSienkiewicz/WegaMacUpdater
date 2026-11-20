@@ -25,7 +25,7 @@ struct WegaCompanionPresentation: Equatable {
     /// would otherwise round the count down to a false "all clear". An incomplete scan never claims
     /// one either: a source that stayed quiet may be hiding more.
     static func finishedQuip(updateCount: Int, securityCount: Int, scanComplete: Bool) -> String {
-        if securityCount > 0 { return tr("Znalazłam coś pilnego.") }
+        if securityCount > 0 { return trp("Notatki %@ wydań wspominają o bezpieczeństwie.", securityCount) }
         if !scanComplete { return tr("Część źródeł milczy — nie wiem, czy to wszystko.") }
         if updateCount == 0 { return tr("Wszystko pod kontrolą!") }
         return tr("Hau! Nowe paczki?")

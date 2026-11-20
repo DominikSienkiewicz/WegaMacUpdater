@@ -32,7 +32,7 @@ struct UpdateBandPresentation: Equatable {
 
     var headline: String {
         var parts = [trp("%@ aktualizacji", totalCount)]
-        if urgentCount > 0 { parts.append(trp("%@ pilnych", urgentCount)) }
+        if urgentCount > 0 { parts.append(trp("%@ z możliwą poprawką bezp.", urgentCount)) }
         if let incompleteNote { parts.append(incompleteNote) }
         return parts.joined(separator: " · ")
     }

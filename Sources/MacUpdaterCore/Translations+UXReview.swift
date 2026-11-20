@@ -4,6 +4,7 @@ extension Translations {
     /// UX review of 2026-11-20 — every new Polish-to-English pair of that pass.
     static let uxReview: [String: String] = [
         "Nowe aktualizacje:": "New updates:",
+        "Wega znalazła w notatkach: %@": "Found in the release notes: %@",
         "Ta kopia Wegi nie umie poprosić o hasło administratora, więc %@ się nie zaktualizuje. Zainstaluj Wegę z pliku .pkg albo włącz Touch ID.":
             "This copy of Wega can't ask for your administrator password, so %@ won't update. Install Wega from the .pkg or turn on Touch ID.",
         "Pobierz .pkg": "Download .pkg",

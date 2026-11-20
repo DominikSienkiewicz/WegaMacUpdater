@@ -784,7 +784,6 @@ extension Translations {
         "Otwórz brew.sh": "Open brew.sh",
         "· %@": "· %@",
         "Wszystko pod kontrolą!": "Everything under control!",
-        "Znalazłam coś pilnego.": "I found something urgent.",
         "Kiedy ostatnio robiłeś backup?": "When did you last make a backup?",
         "Brew to mój najlepszy przyjaciel.": "Brew is my best friend.",
         "Wącham coś ciekawego…": "I smell something interesting…",

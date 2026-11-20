@@ -269,10 +269,17 @@ struct InspectorPane: View {
         // through to the "no notes" line exactly as the list's disclosure does.
         if let notes, notes.hasRenderableNotes {
             VStack(alignment: .leading, spacing: 6) {
-                if ReleaseNotesTriage.heuristic(notes.plainText).isLikelySecurityFix {
+                let triage = ReleaseNotesTriage.heuristic(notes.plainText)
+                if triage.isLikelySecurityFix {
                     Label(tr("możliwa poprawka bezpieczeństwa"), systemImage: "shield.lefthalf.filled")
                         .font(.wega(.footnote, weight: .medium))
                         .foregroundStyle(Color.wegaDanger)
+                    if let reason = ReleaseTriageReason.text(signals: triage.matchedSignals) {
+                        Text(reason)
+                            .font(.wega(.footnote))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
                 }
                 ForEach(notes.history.notes) { note in
                     ReleaseNoteView(note: note, bodyFont: .wega(.callout))

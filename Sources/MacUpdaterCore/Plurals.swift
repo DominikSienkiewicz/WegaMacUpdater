@@ -84,10 +84,15 @@ public enum Plurals {
             few:  "%@ aktualizacje",
             many: "%@ aktualizacji"
         ),
-        "%@ pilnych": PluralForms(
-            one:  "%@ pilna",
-            few:  "%@ pilne",
-            many: "%@ pilnych"
+        "%@ z możliwą poprawką bezp.": PluralForms(
+            one:  "%@ z możliwą poprawką bezp.",
+            few:  "%@ z możliwą poprawką bezp.",
+            many: "%@ z możliwą poprawką bezp."
+        ),
+        "Notatki %@ wydań wspominają o bezpieczeństwie.": PluralForms(
+            one:  "Notatki jednego wydania wspominają o bezpieczeństwie.",
+            few:  "Notatki %@ wydań wspominają o bezpieczeństwie.",
+            many: "Notatki %@ wydań wspominają o bezpieczeństwie."
         ),
         "Usuń %@ aplikacji": PluralForms(
             one:  "Usuń %@ aplikację",
@@ -128,10 +133,15 @@ public enum Plurals {
             few:  "%@ updates",
             many: "%@ updates"
         ),
-        "%@ pilnych": PluralForms(
-            one:  "%@ urgent",
-            few:  "%@ urgent",
-            many: "%@ urgent"
+        "%@ z możliwą poprawką bezp.": PluralForms(
+            one:  "%@ may fix a security issue",
+            few:  "%@ may fix security issues",
+            many: "%@ may fix security issues"
+        ),
+        "Notatki %@ wydań wspominają o bezpieczeństwie.": PluralForms(
+            one:  "One release note mentions security.",
+            few:  "%@ release notes mention security.",
+            many: "%@ release notes mention security."
         ),
         "Usuń %@ aplikacji": PluralForms(
             one:  "Remove %@ app",
