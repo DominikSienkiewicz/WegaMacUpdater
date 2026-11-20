@@ -119,7 +119,7 @@ struct InspectorPane: View {
             Text(info.name)
                 .font(.wega(.title2, weight: .semibold))
                 .fixedSize(horizontal: false, vertical: true)
-            VersionArrow(from: info.from, to: info.to, emphasis: info.emphasis)
+            VersionArrow(from: info.from, to: info.to, emphasis: info.emphasis, style: .full)
             info.sourceBadge
         }
         .padding(.bottom, 16)

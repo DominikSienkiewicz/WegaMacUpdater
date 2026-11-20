@@ -36,6 +36,22 @@ struct UpdateRowLayoutTests {
         #expect(width == WegaLayout.queueCircleSize)
     }
 
+    @Test func aLongCaskVersionStaysOnOneLine() throws {
+        let short = NSHostingView(rootView: VersionArrow(from: "1.0", to: "1.1")).fittingSize.height
+        let long = NSHostingView(rootView: VersionArrow(
+            from: "6.6395.1,8fc566f7b97e371bae421fc79c260de86c6a4106",
+            to: "6.28899.2,155ca43c0ad5a4bd5734795688543b65b464cf47"
+        )).fittingSize.height
+        #expect(long == short, "a long Homebrew version does not wrap the row")
+
+        let arrow = try slice(
+            try source("Sources/MacUpdater/SharedViews.swift"),
+            from: "struct VersionArrow: View", to: "// MARK: - PackageRow"
+        )
+        #expect(arrow.contains(".help("), "the full versions stay reachable as a tooltip")
+        #expect(arrow.contains(".truncationMode(.middle)"))
+    }
+
     @Test func vendorCardsWithoutAPathShowTheHandoffMark() throws {
         for (file, anchor) in [
             ("Sources/MacUpdater/DockerDesktopUpdateActions.swift", "struct UnresolvedDockerUpdateRow: View"),
