@@ -24,6 +24,15 @@ struct VersionDisplayTests {
         #expect(pair.to == "1.2.0 (155ca43)")
     }
 
+    @Test func buildsThatShareTheirFirstSevenCharactersStayDistinguishable() {
+        let counters = VersionDisplay.pair(from: "4.0.1,1700000001", to: "4.0.1,1700000002")
+        #expect(counters.from == "4.0.1 (1700000001)")
+        #expect(counters.to == "4.0.1 (1700000002)")
+        let dates = VersionDisplay.pair(from: "x,20250604.14", to: "x,20250605.11")
+        #expect(dates.from == "x (20250604)")
+        #expect(dates.to == "x (20250605)")
+    }
+
     @Test func plainVersionsAndPlaceholdersPassThrough() {
         let plain = VersionDisplay.pair(from: "1.2", to: "1.3")
         #expect(plain.from == "1.2")

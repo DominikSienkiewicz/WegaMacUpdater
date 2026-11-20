@@ -36,9 +36,10 @@ struct ServiceVendorPackageHandoffTests {
     @Test func aTokenAPendingHandoffAlreadyCoversIsNotListedASecondTime() throws {
         let store = preparedStore()
         let handoff = try #require(store.visibleManual.first)
-        var elsewhere = InstallationCheck(app: installed, sources: [], checkedAt: Date())
-        elsewhere.caskToken = nil
-        store.installationChecks = [elsewhere]
+        // The app is still scanned, but the check carries no cask token, so the cask cannot
+        // resolve to it and only the pending hand-off covers the token.
+        let unattributed = InstallationCheck(app: installed, sources: [], checkedAt: Date())
+        store.installationChecks = [unattributed]
         store.vendorHandoffs = [handoff]
         #expect(store.serviceManagedUpdates.isEmpty, "the cask no longer resolves to an installation")
         #expect(store.unresolvedServiceItems.isEmpty)

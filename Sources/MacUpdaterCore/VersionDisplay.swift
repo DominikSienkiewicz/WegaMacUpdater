@@ -12,7 +12,16 @@ public enum VersionDisplay {
         let lhs = split(from)
         let rhs = split(to)
         guard lhs.main == rhs.main, from != to else { return (lhs.main, rhs.main) }
-        return (withTag(lhs), withTag(rhs))
+        let length = tagLength(lhs.tag, rhs.tag)
+        return (withTag(lhs, length: length), withTag(rhs, length: length))
+    }
+
+    /// Seven characters, or just past the first one the two tags differ at, so builds that
+    /// share a long prefix (counters, dates) still read as different.
+    private static func tagLength(_ lhs: String?, _ rhs: String?) -> Int {
+        guard let lhs, let rhs else { return shortTagLength }
+        let differing = zip(lhs, rhs).enumerated().first { $0.element.0 != $0.element.1 }?.offset
+        return max(shortTagLength, (differing ?? min(lhs.count, rhs.count)) + 1)
     }
 
     private static func split(_ version: String) -> (main: String, tag: String?) {
@@ -26,8 +35,8 @@ public enum VersionDisplay {
         return (version, nil)
     }
 
-    private static func withTag(_ parts: (main: String, tag: String?)) -> String {
+    private static func withTag(_ parts: (main: String, tag: String?), length: Int) -> String {
         guard let tag = parts.tag, !tag.isEmpty else { return parts.main }
-        return "\(parts.main) (\(tag.prefix(shortTagLength)))"
+        return "\(parts.main) (\(tag.prefix(length)))"
     }
 }
