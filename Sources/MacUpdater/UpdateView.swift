@@ -306,7 +306,8 @@ struct UpdateView: View {
             freshness:      scan.freshness() ?? .fresh,
             sources:        UpdateBandPresentation.SourceChip.chips(from: scan.sourceReports),
             wegaLine:       wegaLine,
-            incompleteNote: scan.lastScanComplete ? nil : tr("sprawdzenie niepełne")
+            incompleteNote: scan.lastScanComplete ? nil : tr("sprawdzenie niepełne"),
+            handOffCount:   scan.updateCount.manual
         )
     }
 
@@ -704,37 +705,6 @@ private struct PlanPreviewCaskRow: View {
                 RollbackScopeNotice(scope: RollbackProtection.scope(token: token))
             }
         }
-    }
-}
-
-/// UX-14 — what the selection says: its text, and how much of it the rollback net covers
-/// (the band reads `protectionText`).
-struct UpdateActionBarSummary: Equatable {
-    let selectedCount: Int
-    let visibleCount: Int
-    let protectedCount: Int
-
-    init(
-        selectedCount: Int,
-        visibleCount: Int,
-        targets: [OutdatedItem],
-        protection: [String: RollbackProtection.Verdict]
-    ) {
-        self.selectedCount = selectedCount
-        self.visibleCount = visibleCount
-        self.protectedCount = targets.filter { $0.kind == .cask && protection[$0.name] == .protected }.count
-    }
-
-    /// An empty selection says what is missing instead of offering a dead button silently.
-    var selectionText: String {
-        selectedCount == 0
-            ? tr("Zaznacz, co mam zaktualizować")
-            : trf("%@ z %@ zaznaczonych", "\(selectedCount)", "\(visibleCount)")
-    }
-
-    /// Only casks the rollback net covers count; the band says nothing rather than zero.
-    var protectionText: String? {
-        protectedCount == 0 ? nil : trf("%@ z automatycznym cofnięciem", "\(protectedCount)")
     }
 }
 

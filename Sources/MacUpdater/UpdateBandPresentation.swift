@@ -14,6 +14,8 @@ struct UpdateBandPresentation: Equatable {
     let wegaLine: String
     /// Set when a source stayed quiet, so the headline never reads as the whole story.
     var incompleteNote: String? = nil
+    /// Queued manual apps: the band hands them to their developer instead of installing them.
+    var handOffCount: Int = 0
 
     /// Today's results-heading rule: only a stale snapshot names its date ("Znaleziono"); the
     /// rest say "Sprawdzono" and a time. `freshnessIsExplicit` still colours anything older
@@ -42,15 +44,23 @@ struct UpdateBandPresentation: Equatable {
 
     var line: String { wegaLine }
 
-    var queueSummary: String { trf("%@ w kolejce", "\(queueCount)") }
+    /// The queue, and when manual apps are in it, how many of them the developer finishes.
+    var queueSummary: String {
+        handOffCount == 0
+            ? trf("%@ w kolejce", "\(queueCount)")
+            : trf("%@ w kolejce · %@ dokończysz u producenta", "\(queueCount)", "\(handOffCount)")
+    }
 
     var showsPlanLink: Bool { queueCount > 0 }
 
-    var buttonTitle: String { queueCount == 0 ? tr("Kolejka pusta") : tr("Aktualizuj") }
+    var buttonTitle: String { queueCount == 0 ? tr("Nic nie zaznaczono") : tr("Aktualizuj") }
 
     var buttonCount: Int? { queueCount == 0 ? nil : queueCount }
 
-    var buttonAccessibilityLabel: String { trf("Zaktualizuj wybrane (%@)", "\(queueCount)") }
+    /// An empty button reads as it is drawn; a button with a queue says what it will update.
+    var buttonAccessibilityLabel: String {
+        queueCount == 0 ? buttonTitle : trf("Zaktualizuj wybrane (%@)", "\(queueCount)")
+    }
 
     /// One source in the eyebrow: its stamp token, and whether it answered the scan.
     struct SourceChip: Equatable {
@@ -82,5 +92,45 @@ struct UpdateBandPresentation: Equatable {
             case .manual:   reports.manual
             }
         }
+    }
+}
+
+/// UX-14 — what the selection says: its text, and how much of the queue the rollback net
+/// covers (the band reads `protectionText`).
+struct UpdateActionBarSummary: Equatable {
+    let selectedCount: Int
+    let visibleCount: Int
+    let protectedCount: Int
+    let queuedCount: Int
+    /// Casks in the queue whose rollback verdict has not arrived yet.
+    let unverifiedCount: Int
+
+    init(
+        selectedCount: Int,
+        visibleCount: Int,
+        targets: [OutdatedItem],
+        protection: [String: RollbackProtection.Verdict]
+    ) {
+        let casks = targets.filter { $0.kind == .cask }
+        self.selectedCount = selectedCount
+        self.visibleCount = visibleCount
+        self.queuedCount = targets.count
+        self.protectedCount = casks.filter { protection[$0.name] == .protected }.count
+        self.unverifiedCount = casks.filter { protection[$0.name] == nil }.count
+    }
+
+    /// An empty selection says what is missing instead of offering a dead button silently.
+    var selectionText: String {
+        selectedCount == 0
+            ? tr("Zaznacz, co mam zaktualizować")
+            : trf("%@ z %@ zaznaczonych", "\(selectedCount)", "\(visibleCount)")
+    }
+
+    /// Undo coverage against the whole queue, formulae included. A cask without a verdict is
+    /// never counted as protected: the band says it is still checking.
+    var protectionText: String? {
+        guard queuedCount > 0 else { return nil }
+        if unverifiedCount > 0 { return tr("Sprawdzam możliwość cofnięcia") }
+        return trf("Cofnięcie: %@ z %@", "\(protectedCount)", "\(queuedCount)")
     }
 }

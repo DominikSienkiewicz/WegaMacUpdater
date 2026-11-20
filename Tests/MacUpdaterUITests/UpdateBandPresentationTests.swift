@@ -11,6 +11,7 @@ struct UpdateBandPresentationTests {
         total: Int = 3,
         urgent: Int = 0,
         queue: Int = 3,
+        handOff: Int = 0,
         lastCheck: Date? = nil,
         freshness: ScanFreshness = .fresh,
         sources: [UpdateBandPresentation.SourceChip] = []
@@ -18,7 +19,7 @@ struct UpdateBandPresentationTests {
         UpdateBandPresentation(
             totalCount: total, urgentCount: urgent, queueCount: queue,
             protectionText: nil, lastCheck: lastCheck, freshness: freshness,
-            sources: sources, wegaLine: "Wega"
+            sources: sources, wegaLine: "Wega", handOffCount: handOff
         )
     }
 
@@ -78,10 +79,30 @@ struct UpdateBandPresentationTests {
         }
     }
 
+    @Test func theQueueSummaryNamesWhatTheDeveloperFinishes() {
+        withLanguage(.pl) {
+            #expect(presentation(queue: 4, handOff: 2).queueSummary == "4 w kolejce · 2 dokończysz u producenta")
+            #expect(presentation(queue: 4).queueSummary == "4 w kolejce")
+        }
+        withLanguage(.en) {
+            #expect(presentation(queue: 4, handOff: 2).queueSummary == "4 queued · 2 to finish with the developer")
+        }
+    }
+
+    @Test func anEmptyButtonSaysNothingIsSelectedAndVoiceOverReadsTheSame() {
+        withLanguage(.pl) {
+            let empty = presentation(queue: 0)
+            #expect(empty.buttonTitle == "Nic nie zaznaczono")
+            #expect(empty.buttonAccessibilityLabel == empty.buttonTitle)
+            #expect(presentation(queue: 3).buttonAccessibilityLabel == trf("Zaktualizuj wybrane (%@)", "3"))
+        }
+        withLanguage(.en) { #expect(presentation(queue: 0).buttonTitle == "Nothing selected") }
+    }
+
     @Test func anEmptyQueueSaysSo() {
         withLanguage(.pl) {
             let empty = presentation(queue: 0)
-            #expect(empty.buttonTitle == tr("Kolejka pusta"))
+            #expect(empty.buttonTitle == tr("Nic nie zaznaczono"))
             #expect(empty.buttonCount == nil)
             #expect(!empty.showsPlanLink)
             #expect(empty.queueSummary == trf("%@ w kolejce", "0"))
@@ -91,7 +112,7 @@ struct UpdateBandPresentationTests {
             #expect(queued.showsPlanLink)
             #expect(queued.buttonAccessibilityLabel == trf("Zaktualizuj wybrane (%@)", "3"))
             #expect(queued.buttonTitle == "Aktualizuj")
-            #expect(empty.buttonTitle == "Kolejka pusta")
+            #expect(empty.buttonTitle == "Nic nie zaznaczono")
             #expect(queued.queueSummary == "3 w kolejce")
         }
     }
@@ -127,7 +148,7 @@ struct UpdateBandPresentationTests {
             #expect(presentation(total: 2).headline == "2 updates")
             #expect(presentation(total: 5, urgent: 2).headline.hasSuffix("2 may fix security issues"))
             #expect(presentation(queue: 0).queueSummary == "0 queued")
-            #expect(presentation(queue: 0).buttonTitle == "Queue empty")
+            #expect(presentation(queue: 0).buttonTitle == "Nothing selected")
             #expect(presentation(queue: 3).buttonTitle == "Update")
             #expect(presentation(queue: 3).queueSummary == "3 queued")
         }

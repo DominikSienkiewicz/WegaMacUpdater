@@ -181,10 +181,7 @@ struct UpdateBand<Action: View>: View {
 
     private var summaryColumn: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(presentation.queueSummary)
-                .font(.wega(.callout, weight: .semibold))
-                .foregroundStyle(Color.wegaBandText)
-                .lineLimit(1)
+            queueSummaryText
             protection
             planLink
         }
@@ -192,14 +189,11 @@ struct UpdateBand<Action: View>: View {
 
     private var compactSummary: some View {
         VStack(alignment: .leading, spacing: 2) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) {
-                    queueSummaryText
-                    protection
-                }
-                queueSummaryText
+            queueSummaryText
+            HStack(spacing: 8) {
+                protection.layoutPriority(1)
+                planLink
             }
-            planLink
         }
     }
 
@@ -207,7 +201,7 @@ struct UpdateBand<Action: View>: View {
         Text(presentation.queueSummary)
             .font(.wega(.callout, weight: .semibold))
             .foregroundStyle(Color.wegaBandText)
-            .lineLimit(1)
+            .lineLimit(2)
     }
 
     @ViewBuilder

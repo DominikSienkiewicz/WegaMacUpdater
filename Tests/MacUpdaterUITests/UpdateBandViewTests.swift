@@ -46,7 +46,7 @@ final class UpdateBandViewTests: XCTestCase {
     private var fullPresentation: UpdateBandPresentation {
         UpdateBandPresentation(
             totalCount: 22, urgentCount: 4, queueCount: 12,
-            protectionText: "12 z automatycznym cofnięciem",
+            protectionText: "Sprawdzam możliwość cofnięcia",
             lastCheck: Date(timeIntervalSince1970: 1_800_000_000), freshness: .stale,
             sources: [
                 .init(token: "brew", isVerified: true), .init(token: "mas", isVerified: true),
@@ -239,9 +239,9 @@ final class UpdateBandViewTests: XCTestCase {
     private func presentation(count: Int, note: String) -> UpdateBandPresentation {
         let base = fullPresentation
         return UpdateBandPresentation(
-            totalCount: count, urgentCount: count, queueCount: base.queueCount,
-            protectionText: base.protectionText, lastCheck: base.lastCheck, freshness: base.freshness,
-            sources: base.sources, wegaLine: base.wegaLine, incompleteNote: note
+            totalCount: count, urgentCount: count, queueCount: 12,
+            protectionText: tr("Sprawdzam możliwość cofnięcia"), lastCheck: base.lastCheck, freshness: base.freshness,
+            sources: base.sources, wegaLine: base.wegaLine, incompleteNote: note, handOffCount: 10
         )
     }
 
@@ -311,6 +311,26 @@ final class UpdateBandViewTests: XCTestCase {
                         height, WegaLayout.bandHeight,
                         "F1: \(language), band \(bandWidth) pt (\(layout)), refreshing \(progress != nil): content is \(height) pt"
                     )
+                }
+            }
+        }
+    }
+
+    func testTheUndoLineIsNeverTheOneThatGetsDropped() throws {
+        let text = try source("Sources/MacUpdater/UpdateBand.swift")
+        let start = try XCTUnwrap(text.range(of: "private var compactSummary: some View")).upperBound
+        let compact = text[start...].prefix(500)
+        XCTAssertFalse(compact.contains("ViewThatFits"))
+        XCTAssertTrue(compact.contains("protection.layoutPriority(1)"))
+        for bandWidth in Self.narrowestBandWidths {
+            let column = UpdateBandLayout.style(forWidth: bandWidth) == .regular
+                ? WegaLayout.bandSummaryWidth : headlineColumnWidth(bandWidth: bandWidth)
+            for language in [AppLanguage.pl, .en] {
+                for key in ["Sprawdzam możliwość cofnięcia", "Cofnięcie: %@ z %@"] {
+                    let label = withLanguage(language) { key.contains("%@") ? trf(key, "22", "22") : tr(key) }
+                    let width = NSHostingView(rootView: Label(label, systemImage: "shield.lefthalf.filled")
+                        .font(.wega(.caption)).fixedSize()).fittingSize.width
+                    XCTAssertLessThanOrEqual(width, column, "\(language) \(bandWidth) pt: \(label)")
                 }
             }
         }

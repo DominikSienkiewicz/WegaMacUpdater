@@ -42,7 +42,25 @@ struct UpdateActionBarTests {
         )
 
         #expect(summary.protectedCount == 1)
-        #expect(summary.protectionText == trf("%@ z automatycznym cofnięciem", "1"))
+        #expect(summary.protectionText == trf("Cofnięcie: %@ z %@", "1", "3"))
+    }
+
+    private var firefox: OutdatedItem { OutdatedItem(key: "c:firefox", name: "firefox", from: "1", to: "2", kind: .cask) }
+    private var raycast: OutdatedItem { OutdatedItem(key: "c:raycast", name: "raycast", from: "1", to: "2", kind: .cask) }
+    private var slack: OutdatedItem { OutdatedItem(key: "c:slack", name: "slack", from: "1", to: "2", kind: .cask) }
+    private var wget: OutdatedItem { OutdatedItem(key: "f:wget", name: "wget", from: "1", to: "2", kind: .formula) }
+
+    @Test func undoCoverageIsCountedAgainstTheWholeQueue() {
+        let s = UpdateActionBarSummary(selectedCount: 3, visibleCount: 3, targets: [firefox, raycast, wget],
+                                       protection: ["firefox": .protected, "raycast": .unprotected(.noAppBundle), "wget": .protected])
+        #expect(s.protectionText == trf("Cofnięcie: %@ z %@", "1", "3"))
+        withLanguage(.en) { #expect(s.protectionText == "Undo: 1 of 3") }
+    }
+
+    @Test func aCaskWithoutAVerdictIsNeverShownAsProtected() {
+        let s = UpdateActionBarSummary(selectedCount: 2, visibleCount: 2, targets: [firefox, slack],
+                                       protection: ["firefox": .protected])
+        #expect(s.protectionText == tr("Sprawdzam możliwość cofnięcia"))
     }
 
     @Test func theUpdateButtonLivesInTheBand() throws {
