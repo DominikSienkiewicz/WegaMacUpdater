@@ -13,6 +13,35 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-11-20
+
+### Added
+- **Wega chases her ball.** Now and then a ball rolls past her card in the sidebar; she
+  glances after it, runs off and comes back carrying it. On the "everything up to date"
+  screen the full Wega does the same chase as her first trick. Off under Reduce motion.
+- **updates:** The band replaces the results header and the action bar. (5edaf36)
+- **updates:** The dusk band view with a compact layout. (6bc53f3)
+- **updates:** The band's round update button. (0e8c885)
+- **updates:** Band copy and presentation. (f32eeca)
+- **updates:** Add the band colour roles and geometry. (8f59003)
+- **updates:** Lavender outlined inspected row. (6f66402)
+- **updates:** C2 group headers with a coloured dot. (bccde6b)
+- **updates:** Move select-all into the list header. (17b913c)
+- **updates:** Mark hand-off rows with the ↗ circle. (d8a4e98)
+- **updates:** Draw row and group selection as queue circles. (d89d04b)
+- **updates:** Add the C2 queue circle and hand-off mark. (2cd6210)
+- **updates:** Add the C2 selection and action colour roles. (307ba2b)
+- **updates:** Show a running update in the action bar's place. (1c0485b)
+- **updates:** Run scans in place, with each source's phase in the header. (62a3bb7)
+- **updates:** Group the list by urgency, with grouping by source one choice away. (7759436)
+- **ui:** Let Wega chase a ball that rolls past. (df9463f)
+- **updates:** Move the category filters into a scope bar. (ed7972e)
+- **ui:** Give Wega a card at the bottom of the sidebar. (05164fb)
+- **ui:** Draw every notice through one WegaCallout. (1864a36)
+- **updates:** Give package and manual rows one layout. (6631f3d)
+- **updates:** Move selection, plan and update into one action bar. (67b0bfe)
+- Refresh Updates and align Wega branding with approved portrait. (6751628)
+
 ### Changed
 - **Updates: the band.** Once a scan has found updates, a band above the list holds when Wega
   last checked and which sources answered, how many updates and urgent items there are, her
@@ -49,11 +78,6 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   this one** sit in a bar at the bottom of the list instead of a card in the middle of the
   screen; the list stays stood down behind a note until the run lands.
 
-### Added
-- **Wega chases her ball.** Now and then a ball rolls past her card in the sidebar; she
-  glances after it, runs off and comes back carrying it. On the "everything up to date"
-  screen the full Wega does the same chase as her first trick. Off under Reduce motion.
-
 ### Fixed
 - **Scans no longer depend on where Wega was started from.** Every `brew`, `npm` and `mas`
   call, the Touch ID setup script and the relaunch after a self-update now start in `/`.
@@ -66,6 +90,23 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   Cloudflare WARP left in Homebrew after the app is gone no longer shows up as an update,
   nor twice. A vendor hand-off now closes on its own once a scan finds the app at the
   target version, or finds it gone.
+- **updates:** Band text and edges. (cbefe04)
+- **updates:** Band behaviour during a run. (ef50ebc)
+- **updates:** A narrow band for the inspector-open window. (4691065)
+- **updates:** The band checks only sources that answered. (0ff67dc)
+- **updates:** Tidy the vendor-cask filter before merge. (0a676ad)
+- **updates:** Keep shortened versions distinguishable; changelog accuracy. (a05c5b9)
+- **updates:** Vendor casks already current or not installed leave the list entirely. (288518d)
+- **updates:** Judge vanished hand-offs through the bundle-exists seam. (98e6d41)
+- **updates:** Compact band below 820 pt and a bounded eyebrow. (ec41b65)
+- **updates:** No vendor row when the disk already has the target. (9593c6c)
+- **updates:** Close vendor hand-offs a scan proves done or gone. (fc2d898)
+- **updates:** Hide Homebrew records of vendor apps that are not installed. (1a9004e)
+- **updates:** Show long versions on one line in a readable form. (89da8a0)
+- **updates:** Keep the queue column when no circle is shown. (b158e05)
+- **updates:** Make the whole queue circle clickable. (d382c3a)
+- **process:** Start every child process in /. (2998551)
+- **updates:** Keep the scan overlay off the empty states. (b53f9b5)
 
 ## [0.7.1] — 2026-11-17
 
@@ -483,7 +524,8 @@ their terms are still theirs.
   what changed in it, because there is no published predecessor to have changed from.
 -->
 
-[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.6.0...v0.7.1
 [0.6.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.5...v0.6.0
 [0.5.5]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.4...v0.5.5
