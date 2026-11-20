@@ -20,98 +20,67 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [0.8.0] — 2026-11-20
 
+A new Updates screen. A band at the top says when Wega last looked, how much she found and
+what she will update, and one round button starts it. The list is grouped by how urgent each
+update is, checks and update runs no longer take the list away, and Wega moves into a card of
+her own at the bottom of the sidebar, where now and then she chases a ball.
+
 ### Added
 - **Wega chases her ball.** Now and then a ball rolls past her card in the sidebar; she
   glances after it, runs off and comes back carrying it. On the "everything up to date"
   screen the full Wega does the same chase as her first trick. Off under Reduce motion.
-- **updates:** The band replaces the results header and the action bar. (5edaf36)
-- **updates:** The dusk band view with a compact layout. (6bc53f3)
-- **updates:** The band's round update button. (0e8c885)
-- **updates:** Band copy and presentation. (f32eeca)
-- **updates:** Add the band colour roles and geometry. (8f59003)
-- **updates:** Lavender outlined inspected row. (6f66402)
-- **updates:** C2 group headers with a coloured dot. (bccde6b)
-- **updates:** Move select-all into the list header. (17b913c)
-- **updates:** Mark hand-off rows with the ↗ circle. (d8a4e98)
-- **updates:** Draw row and group selection as queue circles. (d89d04b)
-- **updates:** Add the C2 queue circle and hand-off mark. (2cd6210)
-- **updates:** Add the C2 selection and action colour roles. (307ba2b)
-- **updates:** Show a running update in the action bar's place. (1c0485b)
-- **updates:** Run scans in place, with each source's phase in the header. (62a3bb7)
-- **updates:** Group the list by urgency, with grouping by source one choice away. (7759436)
-- **ui:** Let Wega chase a ball that rolls past. (df9463f)
-- **updates:** Move the category filters into a scope bar. (ed7972e)
-- **ui:** Give Wega a card at the bottom of the sidebar. (05164fb)
-- **ui:** Draw every notice through one WegaCallout. (1864a36)
-- **updates:** Give package and manual rows one layout. (6631f3d)
-- **updates:** Move selection, plan and update into one action bar. (67b0bfe)
-- Refresh Updates and align Wega branding with approved portrait. (6751628)
 
 ### Changed
-- **Updates: the band.** Once a scan has found updates, a band above the list holds when Wega
-  last checked and which sources answered, how many updates and urgent items there are, her
-  comment, what is queued and how much of it can be undone automatically, the dry-run plan
-  (**Show exactly what I will do**, now a sheet) and a round **Update N** button. **Check now**
-  is no longer styled as the primary action.
-- **Updates: the queue.** Items Wega will update wear a honey circle with a tick instead of a
-  checkbox. Items the vendor or you finish show a ↗ circle. **Select all** sits next to the
-  categories above the list. Group headers are numbered in urgency grouping. The row open in
-  the inspector is filled lavender and outlined.
-- **Updates: one row layout.** Manually updated apps line up with Homebrew rows: same icon
-  column, version in the version column. Release notes open in the inspector instead of
-  unfolding inside the list; notes a feed only links to are still fetched in the app.
-- **One style for notices.** The Homebrew invitation, result and error banners, the
+- **A band at the top of Updates.** Once a scan has found updates, the band says when Wega
+  last checked and which of Homebrew, the App Store, npm and the vendors answered, how many
+  updates and urgent items there are, and what she makes of them. It also shows what is
+  queued and how much of it can be undone automatically. **Show exactly what I will do**
+  opens the dry-run plan as a sheet, and a round **Update N** button starts the run.
+  **Check now** is no longer styled as the main action.
+- **Grouped by urgency.** Updates Wega flags from their release notes come first, then the
+  apps and CLI tools she updates in one batch, then the ones the vendor or you finish. Group
+  headers are numbered, every row says where its update comes from, and a row shows when
+  automatic rollback cannot cover it. The grouping the Inventory window uses is one choice
+  away under **Group**, and Wega remembers it.
+- **A queue you can see.** Updates Wega will install wear a honey circle with a tick instead
+  of a checkbox; updates the vendor or you finish wear a ↗ circle. **Select all** sits next
+  to the categories above the list, and the row open in the inspector is filled lavender and
+  outlined.
+- **Categories in a scope bar.** The sidebar keeps a single Updates row, whose badge turns
+  red while a flagged update waits. All, Apps, CLI tools and the updates Wega flags are a
+  scope bar above the list, with counts. The toolbar loses its Settings gear (use ⌘, or the
+  app menu), and the inspector toggle shows only on Updates.
+- **Scans run in place.** **Check now** and **⌘R** keep the list on screen, stood down,
+  while the band shows how far the check has got: Homebrew, the App Store, npm, then the
+  vendors. Only the very first scan shows the full scanning scene.
+- **A running update lives in the bottom bar.** Progress, the log and **Stop after this
+  one** sit in a bar at the bottom of the list instead of a card in the middle of the
+  screen; the list stays stood down behind a note until the run lands.
+- **One row layout.** Manually updated apps line up with Homebrew rows: same icon column,
+  version in the version column. Release notes open in the inspector instead of unfolding
+  inside the list; notes a feed only links to are still fetched in the app.
+- **Wega has a card at the bottom of the sidebar.** It shows her line for the current
+  screen, her comment on a finished scan, when she last checked, and the one-time
+  notification question. The status footer and the speech bubble over the list are gone.
+- **One look for every notice.** The Homebrew invitation, result and error banners, the
   stale-cask offer and the missing-checksum warning share one shape; only their level
   (information, success, warning, urgent) changes the colour and symbol.
-- **Wega has a card at the bottom of the sidebar.** It shows her line for the current screen,
-  her comment on a finished scan, when she last checked, and the one-time notification
-  question. The status footer and the speech bubble over the list are gone.
-- **Updates: categories moved into a scope bar.** The sidebar has one Updates row (its badge
-  turns red while a security fix waits); all, apps, CLI tools and security fixes are a
-  scope bar above the list, with counts. The toolbar no longer has a Settings gear (use ⌘,
-  or the app menu), and the inspector toggle disappears outside Updates.
-
-- **Updates: grouped by urgency.** Possible security fixes come first, then apps and CLI tools
-  Wega updates in a batch, then what the vendor or you finish. Each row names its source and
-  shows when automatic rollback cannot cover it. **Group › by source** brings back the
-  grouping the Inventory window uses; the choice is remembered.
-- **Updates: scans run in place.** **Check now** and **⌘R** no longer take the screen away
-  when there is a list to keep: the list stays, stood down, and the header shows each
-  source's progress (Homebrew, App Store, npm, vendors). Only the very first scan shows the
-  full scanning scene.
-- **Updates: a running update lives in the bottom bar.** Progress, the log and **Stop after
-  this one** sit in a bar at the bottom of the list instead of a card in the middle of the
-  screen; the list stays stood down behind a note until the run lands.
+- **A new app icon.** The icon is Wega's new portrait; her animated portrait in the window
+  and her silhouette in the menu bar match it.
 
 ### Fixed
-- **Scans no longer depend on where Wega was started from.** Every `brew`, `npm` and `mas`
-  call, the Touch ID setup script and the relaunch after a self-update now start in `/`.
-  Started from a folder that was later deleted, every source used to fail ("$PWD must be
-  set", `uv_cwd ENOENT`). A launch from Finder or the Dock already started in `/`.
+- **Scans work wherever Wega was started from.** Every `brew`, `npm` and `mas` call, the
+  Touch ID setup script and the relaunch after a self-update now start in `/`. Started from
+  a folder that was later deleted, every check used to fail ("$PWD must be set",
+  `uv_cwd ENOENT`). A launch from Finder or the Dock already started in `/`.
 - **Long versions stay on one line.** A version like `6.6395.1,8fc566f7b97e…` or
   `26.1111.71704 (29030)` no longer wraps a row into several lines: the list shows the
   readable part, and the full version is in the tooltip and the inspector.
-- **A Homebrew record of a vendor app you no longer have is not an update.** Logi Options+ or
-  Cloudflare WARP left in Homebrew after the app is gone no longer shows up as an update,
-  nor twice. A vendor hand-off now closes on its own once a scan finds the app at the
+- **A Homebrew record of a vendor app that is gone or already up to date is not an update.**
+  Logi Options+ or Cloudflare WARP left in Homebrew after the app is gone, or already at the
+  version Homebrew offers, no longer shows up as an update, in the window or in the menu-bar
+  count, nor twice. A vendor hand-off now closes on its own once a scan finds the app at the
   target version, or finds it gone.
-- **updates:** Band text and edges. (cbefe04)
-- **updates:** Band behaviour during a run. (ef50ebc)
-- **updates:** A narrow band for the inspector-open window. (4691065)
-- **updates:** The band checks only sources that answered. (0ff67dc)
-- **updates:** Tidy the vendor-cask filter before merge. (0a676ad)
-- **updates:** Keep shortened versions distinguishable; changelog accuracy. (a05c5b9)
-- **updates:** Vendor casks already current or not installed leave the list entirely. (288518d)
-- **updates:** Judge vanished hand-offs through the bundle-exists seam. (98e6d41)
-- **updates:** Compact band below 820 pt and a bounded eyebrow. (ec41b65)
-- **updates:** No vendor row when the disk already has the target. (9593c6c)
-- **updates:** Close vendor hand-offs a scan proves done or gone. (fc2d898)
-- **updates:** Hide Homebrew records of vendor apps that are not installed. (1a9004e)
-- **updates:** Show long versions on one line in a readable form. (89da8a0)
-- **updates:** Keep the queue column when no circle is shown. (b158e05)
-- **updates:** Make the whole queue circle clickable. (d382c3a)
-- **process:** Start every child process in /. (2998551)
-- **updates:** Keep the scan overlay off the empty states. (b53f9b5)
 
 ## [0.7.1] — 2026-11-17
 
