@@ -195,7 +195,17 @@ final class CleanupStore: ObservableObject {
     /// Carries out one confirmed removal; the remover re-validates it under a write lease. Only a
     /// `.removed` outcome is logged and followed by a rescan; any other outcome is left for the
     /// view to explain through `lastOutcome`.
+    ///
+    /// Another window shares this store, so the report can change under an open sheet. A
+    /// confirmation the report no longer backs (the finding is gone, or its keep state, reason or
+    /// action moved) starts nothing and reads `.changedSinceScan`: the disk rechecks cannot see a
+    /// copy the user has since chosen to keep.
     func remove(_ intent: CleanupRemovalIntent) {
+        guard phase == .idle else { return }
+        guard reportStillBacks(intent.finding) else {
+            lastOutcome = .changedSinceScan
+            return
+        }
         start(.removing(findingID: intent.finding.id)) {
             self.lastOutcome = nil
             let outcome = await self.dependencies.remove(intent)
@@ -205,6 +215,13 @@ final class CleanupStore: ObservableObject {
             self.phase = .scanning
             await self.performScan()
         }
+    }
+
+    private func reportStillBacks(_ confirmed: CleanupFinding) -> Bool {
+        guard let current = report?.findings.first(where: { $0.id == confirmed.id }) else { return false }
+        return current.candidate?.keep == confirmed.candidate?.keep
+            && current.reason == confirmed.reason
+            && current.action == confirmed.action
     }
 
     /// The finding's path with `~` for the home and the kind of action taken. Never the processes

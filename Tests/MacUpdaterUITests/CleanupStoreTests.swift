@@ -216,6 +216,7 @@ final class CleanupStoreTests: XCTestCase {
         let boundary = FakeCleanupBoundary()
         let gate = FakeGate()
         boundary.removalGate = gate
+        boundary.persistedReport = CleanupStoreFixtures.report(tool: "claude")
         let store = CleanupStore(dependencies: boundary.dependencies)
         let intent = CleanupStoreFixtures.intent()
 
@@ -559,6 +560,33 @@ extension CleanupStoreTests {
         XCTAssertTrue(boundary.savedKeptCopies.isEmpty)
         XCTAssertEqual(reportWhileRunning, Keep.report())
         XCTAssertEqual(store.report, boundary.scanResult)
+    }
+
+    /// A second window shares the store: a sheet opened for a copy to remove must not remove it
+    /// once the user keeps that copy elsewhere, also from the in-use acknowledgement step.
+    func testAStaleConfirmationNeverRemovesTheCopyNowKept() async throws {
+        let boundary = FakeCleanupBoundary()
+        boundary.persistedReport = Keep.report()
+        boundary.removalOutcome = .notRemovable
+        let store = CleanupStore(dependencies: boundary.dependencies)
+        store.keep(Keep.appLink.id)
+        let shown = try XCTUnwrap(store.report.flatMap { Keep.finding(Keep.formula.id, in: $0) })
+        XCTAssertEqual(shown.action, .brew(.uninstallFormula("ollama")))
+
+        store.keep(Keep.formula.id)
+        store.remove(CleanupRemovalIntent(finding: shown, inUseAcknowledged: false))
+        await store.task?.value
+        store.remove(CleanupRemovalIntent(finding: shown, inUseAcknowledged: true))
+        await store.task?.value
+
+        XCTAssertTrue(boundary.removedIntents.isEmpty, "the copy now kept never reaches the remover")
+        XCTAssertEqual(store.lastOutcome, .changedSinceScan)
+        XCTAssertEqual(store.phase, .idle)
+
+        store.keep(Keep.appLink.id)
+        store.remove(CleanupRemovalIntent(finding: shown, inUseAcknowledged: false))
+        await store.task?.value
+        XCTAssertEqual(boundary.removedIntents.map(\.finding), [shown], "a confirmation that matches the report still goes")
     }
 }
 
