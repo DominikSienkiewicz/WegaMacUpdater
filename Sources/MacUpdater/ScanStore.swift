@@ -495,10 +495,9 @@ final class ScanStore: ObservableObject {
     /// cask that a complete scan shows not installed or already current is no card.
     var unresolvedServiceItems: [OutdatedItem] {
         let covered = Set((serviceManagedUpdates + vendorHandoffs).compactMap(\.caskPolicyToken))
-        let stale = lastScanComplete
-            ? ServiceVendorUpdatePolicy.staleVendorTokens(
-                outdated: brewOutdated?.casks ?? [], installationChecks: installationChecks)
-            : []
+        let stale = ServiceVendorUpdatePolicy.staleVendorTokens(
+            outdated: brewOutdated?.casks ?? [], installationChecks: installationChecks, scanComplete: lastScanComplete
+        )
         return allItems.filter { item in
             item.kind == .cask && ServiceVendorUpdatePolicy.requiresVendor(token: item.name)
                 && !covered.contains(item.name) && !stale.contains(item.name)

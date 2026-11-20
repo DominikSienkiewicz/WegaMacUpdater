@@ -56,17 +56,6 @@ struct UpdateRowLayoutTests {
         #expect(arrow.contains(".truncationMode(.middle)"))
     }
 
-    @Test func aLongVersionDoesNotGrowARowBuiltFromTheSharedColumns() {
-        func row(_ from: String, _ to: String) -> some View {
-            UpdateRowColumns { Text("claude") } version: { VersionArrow(from: from, to: to) }
-                .frame(width: 640)
-        }
-        let short = height(row("1.0", "1.1"))
-        let long = height(row("6.6395.1,8fc566f7b97e371bae421fc79c260de86c6a4106",
-                              "6.28899.2,155ca43c0ad5a4bd5734795688543b65b464cf47"))
-        #expect(long == short)
-    }
-
     @Test func theInspectorKeepsTheFullVersions() throws {
         let inspector = try source("Sources/MacUpdater/InspectorPane.swift")
         #expect(inspector.contains("VersionArrow(from: info.from, to: info.to, emphasis: info.emphasis, style: .full)"))

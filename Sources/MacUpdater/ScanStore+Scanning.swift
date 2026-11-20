@@ -276,12 +276,15 @@ extension ScanStore {
 
             // A vendor cask whose app is gone, or already at Homebrew's target, is no update.
             // Only a scan that heard from every source can say an app is gone.
-            let staleVendor = reports.isComplete
-                ? ServiceVendorUpdatePolicy.staleVendorTokens(outdated: casks, installationChecks: scan.installations)
-                : []
+            let staleVendor = ServiceVendorUpdatePolicy.staleVendorTokens(
+                outdated: casks, installationChecks: scan.installations, scanComplete: reports.isComplete
+            )
             if !staleVendor.isEmpty, var updated = brewOutdated {
                 updated.casks.removeAll { staleVendor.contains($0.name) }
                 brewOutdated = updated
+            }
+            if let line = ScanLog.staleVendorLine(tokens: staleVendor, installationChecks: scan.installations) {
+                WegaLog.info(.scanner, line)
             }
 
             caskIconPaths = dependencies.caskAppPathResolver.appPaths(

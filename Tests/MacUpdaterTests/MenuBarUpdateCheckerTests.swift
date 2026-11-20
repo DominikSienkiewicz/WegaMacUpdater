@@ -21,8 +21,12 @@ private struct FakeNpm: NpmOutdatedProviding {
 private struct FakeScanner: ManualScanning {
     var apps: [ManualOutdatedApp] = []
     var failedChecks: Int = 0
+    var installations: [InstallationCheck] = []
     func scan(brewOutdatedCasks: Set<String>) async -> (apps: [ManualOutdatedApp], failedChecks: Int) {
         (apps, failedChecks)
+    }
+    func scanReport(brewOutdatedCasks: Set<String>) async -> ManualScanReport {
+        ManualScanReport(apps: apps, failedChecks: failedChecks, installations: installations)
     }
 }
 
@@ -93,6 +97,19 @@ final class MenuBarUpdateCheckerTests: XCTestCase {
         )
         let result = await checker(brew: .success(brew), scanner: FakeScanner(failedChecks: 1)).availableUpdateCount()
         XCTAssertEqual(result.total, 1)
+    }
+
+    func testAnInstalledVendorAppAlreadyAtTheTargetIsNotCountedEvenWhenTheScanWasIncomplete() async {
+        let brew = BrewOutdated(
+            formulae: [],
+            casks: [BrewOutdatedItem(name: "logi-options+", installedVersions: ["1"], currentVersion: "2")]
+        )
+        let app = ApplicationInfo(path: URL(fileURLWithPath: "/Applications/logioptionsplus.app"), name: "Logi Options+",
+                                  bundleIdentifier: "com.logi.optionsplus", version: "2",
+                                  installDate: nil, updateDate: nil, isManagedByBrew: true)
+        let scanner = FakeScanner(failedChecks: 1, installations: [InstallationCheck(app: app, sources: [], checkedAt: Date())])
+        let result = await checker(brew: .success(brew), scanner: scanner).availableUpdateCount()
+        XCTAssertEqual(result.total, 0)
     }
 
     /// The badge total must equal the package items plus the visible manual updates.

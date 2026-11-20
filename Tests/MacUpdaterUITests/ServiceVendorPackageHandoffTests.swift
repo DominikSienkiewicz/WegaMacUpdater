@@ -75,13 +75,25 @@ struct ServiceVendorPackageHandoffTests {
         #expect(store.updateCount == UnifiedUpdateCount(installable: 0, manual: 1))
     }
 
-    @Test func anInstalledAppBelowTheTargetStaysAsARow() async {
+    @Test func anIncompleteScanStillDropsACaskWhoseInstalledAppHasTheTarget() async {
         let store = scannedStore(
-            installations: [InstallationCheck(app: application(version: "1"), sources: [], checkedAt: Date())],
-            failedChecks: 0
+            installations: [InstallationCheck(app: application(version: "2"), sources: [], checkedAt: Date())],
+            failedChecks: 1
         )
         await store.runCheck()
+        #expect(!store.lastScanComplete)
+        #expect(store.allItems.isEmpty)
+        #expect(store.updateCount == UnifiedUpdateCount(installable: 0, manual: 0))
+    }
+
+    @Test func anInstalledAppBelowTheTargetStaysAsARow() async {
+        var below = InstallationCheck(app: application(version: "1"), sources: [], checkedAt: Date())
+        below.caskToken = "logi-options+"
+        let store = scannedStore(installations: [below], failedChecks: 0)
+        await store.runCheck()
         #expect(store.allItems.map(\.name) == ["logi-options+"])
+        #expect(store.visibleManual.map(\.caskPolicyToken) == ["logi-options+"], "the cask resolves to a row")
+        #expect(store.unresolvedServiceItems.isEmpty)
         #expect(store.updateCount.manual == 1)
     }
 

@@ -62,9 +62,9 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   `26.1111.71704 (29030)` no longer wraps a row into several lines: the list shows the
   readable part, and the full version is in the tooltip and the inspector.
 - **A Homebrew record of a vendor app you no longer have is not an update.** Logi Options+ or
-  Cloudflare WARP left in Homebrew after the app is gone no longer show up
-  as an update, nor twice. A vendor hand-off now closes on its own once a scan finds the app
-  at the target version, or finds it gone.
+  Cloudflare WARP left in Homebrew after the app is gone no longer shows up as an update,
+  nor twice. A vendor hand-off now closes on its own once a scan finds the app at the
+  target version, or finds it gone.
 
 ## [0.7.1] — 2026-11-17
 

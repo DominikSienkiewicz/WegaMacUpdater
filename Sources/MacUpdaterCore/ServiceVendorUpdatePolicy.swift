@@ -82,15 +82,18 @@ public enum ServiceVendorUpdatePolicy {
 
     /// Tokens of Homebrew's outdated vendor-service casks that are no update to show: no app
     /// carries the profile's bundle identifier (a leftover Caskroom record), or every such
-    /// app is already at or above the cask's target (Homebrew's record is stale). Callers apply
-    /// it only when the scan that produced `installationChecks` was complete.
+    /// app is already at or above the cask's target (Homebrew's record is stale). Only the first
+    /// needs a complete scan: an installed copy at the target is positive evidence on its own.
     public static func staleVendorTokens(
-        outdated casks: [BrewOutdatedItem], installationChecks: [InstallationCheck]
+        outdated casks: [BrewOutdatedItem], installationChecks: [InstallationCheck], scanComplete: Bool
     ) -> Set<String> {
         Set(casks.compactMap { cask -> String? in
             guard let profile = ServiceVendorUpdateProfile.profile(caskToken: cask.name) else { return nil }
             let installed = installationChecks.filter { $0.bundleIdentifier == profile.bundleIdentifier }
-            if isNotInstalled(token: cask.name, installationChecks: installationChecks, scanComplete: true) { return cask.name }
+            if isNotInstalled(token: cask.name, installationChecks: installationChecks, scanComplete: scanComplete) {
+                return cask.name
+            }
+            if installed.isEmpty { return nil }
             guard let target = cask.currentVersion, !target.isEmpty else { return nil }
             let requirement = VendorUpdateRequirement(version: target)
             let allCurrent = installed.allSatisfy {
