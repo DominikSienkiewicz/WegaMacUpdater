@@ -67,7 +67,8 @@ struct ServiceVendorPackageHandoffTests {
         let harness = makeScanStoreRuntimeHarness(runner: runner)
         var dependencies = harness.store.dependencies
         let installed = installed
-        dependencies.checkVendorUpdate = { _ in .init(app: installed, outcome: .confirmed) }
+        let updated = application(version: "2")
+        dependencies.checkVendorUpdate = { _ in .init(app: updated, outcome: .confirmed) }
         let store = ScanStore(resultStore: ScanResultStore(io: harness.snapshots), dependencies: dependencies)
         store.status = .results
         store.brewOutdated = .init(formulae: [], casks: [.init(name: "logi-options+", installedVersions: ["1"], currentVersion: "2")])
@@ -77,9 +78,12 @@ struct ServiceVendorPackageHandoffTests {
         return store
     }
 
-    private var installed: ApplicationInfo {
+    /// On disk below the cask's target "2", so Homebrew's record is a real pending update.
+    private var installed: ApplicationInfo { application(version: "1") }
+
+    private func application(version: String) -> ApplicationInfo {
         ApplicationInfo(path: URL(fileURLWithPath: "/Applications/logioptionsplus.app"), name: "Logi Options+",
-                        bundleIdentifier: "com.logi.optionsplus", version: "2", installDate: nil, updateDate: nil,
+                        bundleIdentifier: "com.logi.optionsplus", version: version, installDate: nil, updateDate: nil,
                         isManagedByBrew: true, caskToken: "logi-options+")
     }
 }

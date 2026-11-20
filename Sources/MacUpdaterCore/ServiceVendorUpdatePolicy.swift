@@ -103,12 +103,14 @@ public enum ServiceVendorUpdatePolicy {
                   check.path.isFileURL,
                   ServiceVendorUpdateProfile.profile(bundleIdentifier: check.bundleIdentifier) == profile
             else { return nil }
+            let requirement = item.to.flatMap { $0.isEmpty ? nil : VendorUpdateRequirement(version: $0) }
+            // Homebrew still records the old version of an app that updated itself.
+            if requirement?.isReached(version: check.version, buildVersion: check.buildVersion) == true { return nil }
             return ManualOutdatedApp(
                 name: profile.name, path: check.path, installedVersion: check.version ?? item.from,
                 availableVersion: item.to, source: .cask(token: item.name), origin: .brew,
                 releaseNotes: item.releaseNotes, bundleIdentifier: check.bundleIdentifier,
-                completionRequirement: item.to.flatMap { $0.isEmpty ? nil : VendorUpdateRequirement(version: $0) },
-                caskPolicyToken: item.name
+                completionRequirement: requirement, caskPolicyToken: item.name
             )
         }
     }
