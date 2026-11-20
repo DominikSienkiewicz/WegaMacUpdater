@@ -84,6 +84,26 @@ struct UpdateRowLayoutTests {
         return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
     }
 
+    @Test func theHandoffMarkIsExactlyAsWideAsTheQueueCircle() {
+        let circle = NSHostingView(
+            rootView: Toggle(isOn: .constant(true)) { EmptyView() }.toggleStyle(WegaQueueToggleStyle())
+        )
+        let mark = NSHostingView(rootView: QueueHandoffMark())
+
+        #expect(circle.fittingSize.width == WegaLayout.queueCircleSize)
+        #expect(mark.fittingSize.width == circle.fittingSize.width)
+    }
+
+    @Test func everyQueueStateHasItsOwnGlyph() {
+        #expect(QueueCircleState(SelectAllState.none) == .notQueued)
+        #expect(QueueCircleState(SelectAllState.all) == .queued)
+        #expect(QueueCircleState(SelectAllState.partial) == .partial)
+        let states: [QueueCircleState] = [.notQueued, .queued, .partial, .handoff]
+        #expect(Set(states.map(\.symbolName)).count == states.count)
+        #expect(QueueCircleState.queued.symbolName == "checkmark")
+        #expect(QueueCircleState.handoff.symbolName == "arrow.up.right")
+    }
+
     private func slice(_ source: String, from start: String, to end: String) throws -> Substring {
         let lower = try #require(source.range(of: start)?.lowerBound, "missing anchor: \(start)")
         let upper = try #require(

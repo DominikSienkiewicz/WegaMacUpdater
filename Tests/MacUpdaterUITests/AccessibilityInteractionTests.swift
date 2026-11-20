@@ -259,6 +259,35 @@ final class AccessibilityInteractionTests: XCTestCase {
         )
     }
 
+    func testQueueCircleIsACheckboxAndTheHandoffMarkIsNot() throws {
+        let queueCircle = try source("Sources/MacUpdater/QueueCircle.swift")
+
+        let style = try section(
+            in: queueCircle,
+            startingAt: "struct WegaQueueToggleStyle: ToggleStyle",
+            endingAt: "struct QueueHandoffMark: View"
+        )
+        XCTAssertTrue(style.contains("configuration.isOn.toggle()"))
+        XCTAssertTrue(style.contains(
+            ".accessibilityAddTraits(configuration.isOn ? [.isToggle, .isSelected] : .isToggle)"
+        ))
+        XCTAssertTrue(style.contains(".accessibilityValue(selectionAccessibilityValue(configuration.isOn))"))
+
+        let label = try section(
+            in: queueCircle,
+            startingAt: "struct QueueCircleControlLabel: View",
+            endingAt: "struct WegaQueueToggleStyle: ToggleStyle"
+        )
+        XCTAssertTrue(label.contains("@Environment(\\.isFocused)"))
+
+        let markStart = try XCTUnwrap(queueCircle.range(of: "struct QueueHandoffMark: View")?.lowerBound)
+        let mark = queueCircle[markStart...]
+        XCTAssertTrue(mark.contains(".accessibilityHidden(true)"))
+        for forbidden in ["Button", "Toggle(", ".focusable"] {
+            XCTAssertFalse(mark.contains(forbidden), "the hand-off mark must not contain \(forbidden)")
+        }
+    }
+
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {
         let root = URL(fileURLWithPath: file)
             .deletingLastPathComponent()
