@@ -202,11 +202,7 @@ struct UpdateView: View {
             // happens in the action bar under the list.
             VStack(alignment: .leading, spacing: 12) {
                 resultsHeading
-                HStack(spacing: 12) {
-                    scopeBar
-                    Spacer(minLength: 0)
-                    groupingMenu
-                }
+                listHeader
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, WegaLayout.selectionColumnInset)
@@ -225,6 +221,26 @@ struct UpdateView: View {
                     }
                 }
                 .animation(.easeInOut(duration: 0.2), value: scan.updating)
+        }
+    }
+
+    /// The list's header row: the list-wide queue circle, the scope bar and the grouping menu.
+    private var listHeader: some View {
+        HStack(spacing: WegaLayout.checkboxSpacing) {
+            // Select-all row. It sits outside `listColumn` and `screenBody`, so it inherits
+            // neither of their disabled regions and carries both gates itself.
+            if !visibleItems.isEmpty {
+                SelectionCheckbox(
+                    state: selectAllState,
+                    accessibilityLabel: tr("Zaznacz wszystko"),
+                    accessibilityValue: selectionSummary,
+                    toggle: { scan.toggleAll(filter: updateFilter) }
+                )
+                .disabled(!ScanSelectionGate.allowsListSelection(isRefreshing: scan.isRefreshing, isUpdating: scan.updating))
+            }
+            scopeBar
+            Spacer(minLength: 0)
+            groupingMenu
         }
     }
 
@@ -344,8 +360,8 @@ struct UpdateView: View {
 
     // MARK: Action bar
 
-    /// UX-14 — one bar under the list carries the whole path from selection to update: the
-    /// list-wide checkbox, what is ticked, how much of it the rollback net covers, the plan
+    /// UX-14 — one bar under the list carries the whole path from selection to update: what
+    /// is ticked, how much of it the rollback net covers, the plan
     /// and the update itself. It replaced a select-all row above the list, the update button
     /// in the header and the plan disclosure between them — one flow in three places.
     ///
@@ -360,22 +376,10 @@ struct UpdateView: View {
                 targets:       updateTargets,
                 protection:    scan.caskProtection
             )
-            HStack(spacing: WegaLayout.checkboxSpacing) {
-                // Select-all row. The bar's glass is inset by the list gutter, but its content
-                // is padded from the column edge by `selectionColumnInset`, so this checkbox
-                // lands in the column every group header and package row uses: a stray offset
-                // made the widest of the three read as an unrelated control.
-                SelectionCheckbox(
-                    state: selectAllState,
-                    accessibilityLabel: tr("Zaznacz wszystko"),
-                    accessibilityValue: selectionSummary,
-                    toggle: { scan.toggleAll(filter: updateFilter) }
-                )
-                ViewThatFits(in: .horizontal) {
-                    actionBarContent(summary, showsProtection: true, compactPlan: false)
-                    actionBarContent(summary, showsProtection: false, compactPlan: false)
-                    actionBarContent(summary, showsProtection: false, compactPlan: true)
-                }
+            ViewThatFits(in: .horizontal) {
+                actionBarContent(summary, showsProtection: true, compactPlan: false)
+                actionBarContent(summary, showsProtection: false, compactPlan: false)
+                actionBarContent(summary, showsProtection: false, compactPlan: true)
             }
             .wegaBottomBar()
         }
@@ -968,9 +972,9 @@ extension UpdateView {
 /// The chrome of the bar at the bottom of the Updates list: the action bar, and the running
 /// update that takes its place (`UpdateRunOverlay`), so the two read as one bar changing state.
 ///
-/// Its content is padded from the column edge by `selectionColumnInset`, so the action bar's
-/// list-wide checkbox lands in the column every group header and package row uses, while the
-/// glass behind it is inset by the list gutter.
+/// Its content is padded from the column edge by `selectionColumnInset`, so the bar lines up
+/// with the column every group header and package row uses, while the glass behind it is
+/// inset by the list gutter.
 struct WegaBottomBar: ViewModifier {
     func body(content: Content) -> some View {
         content

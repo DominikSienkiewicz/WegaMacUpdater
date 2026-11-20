@@ -86,8 +86,8 @@ struct SelectionRequiredBeforeUpdateTests {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         let support = try source("Sources/MacUpdater/UpdateViewSupport.swift")
 
-        #expect(view.contains(".padding(.leading, WegaLayout.selectionColumnInset)"),
-                "the list-wide select-all control must reproduce the card inset, not float free")
+        #expect(view.contains(".padding(.horizontal, WegaLayout.selectionColumnInset)"),
+                "the header that carries select-all reproduces the card inset")
         #expect(!view.contains(".padding(.horizontal, 20)"),
                 "a hand-picked inset puts the select-all checkbox in a column of its own")
         #expect(support.contains("selection: SelectionCheckbox("),
