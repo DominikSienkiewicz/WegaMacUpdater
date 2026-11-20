@@ -353,11 +353,12 @@ final class ScanStore: ObservableObject {
 
     /// UXP-05 — take a menu-bar result the window has not seen. `restoreLastScan` adopts one
     /// once per process; this is the same step for every later background round, so a click on
-    /// "new updates" lands on a list that has them. Never while an update or a scan runs, and
+    /// "new updates" lands on a list that has them. Never while an update or a scan runs — a
+    /// launch refresh included, which scans under a list whose `status` stays `.results` — and
     /// never for a result that is not newer than what the window already shows.
     @discardableResult
     func adoptBackgroundResultIfNewer(_ result: MenuBarScanResult) -> Bool {
-        guard !updating, status != .checking else { return false }
+        guard !updating, status != .checking, !isRefreshing else { return false }
         if let lastCheck, result.scannedAt <= lastCheck { return false }
         applyBackgroundResult(result, previousChecks: installationChecks)
         closeVendorHandoffsConfirmedByScan()

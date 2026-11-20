@@ -53,6 +53,18 @@ struct BackgroundResultAdoptionTests {
         #expect(store.brewOutdated == nil)
     }
 
+    /// M11a — a launch refresh keeps `status` at `.results` while it scans underneath the list,
+    /// so the status guard alone let a background result replace what the scan is about to.
+    @Test func nothingIsAdoptedWhileARefreshScansUnderTheList() {
+        let store = makeStore()
+        store.lastCheck = Date.now.addingTimeInterval(-3600)
+        store.status = .results
+        store.setRefreshing(true)
+        defer { store.setRefreshing(false) }
+        #expect(!store.adoptBackgroundResultIfNewer(result(at: .now)))
+        #expect(store.brewOutdated == nil)
+    }
+
     /// The window was closed, a background round arrived, the window reopens: the one-shot
     /// restore has already run, so only the adopt call can bring the new list in.
     @Test func aResultThatArrivedAfterTheRestoreStillReachesTheList() {
