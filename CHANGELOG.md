@@ -13,6 +13,11 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 
 ## [Unreleased]
 
+### Fixed
+- **Fewer false alarms on release notes.** A flagged term now has to start a word, so
+  ordinary words that merely contain one no longer put an update among the urgent ones or
+  give it the red warning label.
+
 ## [0.8.0] — 2026-11-20
 
 ### Added

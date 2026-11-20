@@ -53,6 +53,28 @@ struct ReleaseNotesTriageTests {
         #expect(ReleaseNotesTriage.heuristic("Performance improvements").matchedSignals.isEmpty)
     }
 
+    // MARK: A signal counts where a word starts, not inside another word
+
+    /// "rce" sits inside "source", "resource" and "force", and "0-day" inside "30-day". Matched as
+    /// plain substrings they flagged ordinary notes, Wega's own among them, as possible security
+    /// fixes and sorted those updates into the urgent group.
+    @Test func signalsInsideOtherWordsDoNotFlag() {
+        for notes in ["Updated the source list", "Fixed a resource leak in the sidebar",
+                      "Force quit now asks first", "Start a 30-day trial from the welcome screen"] {
+            let result = ReleaseNotesTriage.heuristic(notes)
+            #expect(!result.isLikelySecurityFix, "should not flag: \(notes), matched \(result.matchedSignals)")
+        }
+    }
+
+    /// The stems still run on, and punctuation before a signal still starts a word.
+    @Test func signalsStillFlagAtTheStartOfAWord() {
+        for notes in ["Fixes an RCE in the parser", "Fixed remote code execution via crafted files",
+                      "Patched a 0-day in the updater", "Two vulnerabilities fixed", "No longer exploitable",
+                      "Blocks spoofing of the sender", "(CVE-2026-1234) fixed", "Security update"] {
+            #expect(ReleaseNotesTriage.heuristic(notes).isLikelySecurityFix, "should flag: \(notes)")
+        }
+    }
+
     // MARK: LT-04 — the dead on-device tier must not come back unnoticed
 
     @Test func triageDoesNotDependOnFoundationModels() throws {
