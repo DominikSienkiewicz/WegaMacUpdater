@@ -26,7 +26,7 @@ Wega's docs are split by audience. **Start with the one that matches what you wa
 
 | You want to | Read |
 |---|---|
-| Keep your Mac up to date | **[User Guide](USER_GUIDE.md)** — installation → first scan → update → diagnostics |
+| Keep your Mac up to date | **[User Guide](USER_GUIDE.md)** — installation (the `.pkg` is recommended) → first scan → update → diagnostics |
 | Know what the app actually does | [Features](docs/features.md) — every screen and every guard, in the order you meet them |
 | Understand the pipeline | [How it works](docs/how-it-works.md) — scan → classify → check → compare → act |
 | Read the module layout | [Architecture](docs/architecture.md) — module tree and the sudo/helper boundary |

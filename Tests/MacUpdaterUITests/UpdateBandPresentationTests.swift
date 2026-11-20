@@ -22,6 +22,15 @@ struct UpdateBandPresentationTests {
         )
     }
 
+    @Test func anIncompleteScanSaysSoInTheHeadline() {
+        withLanguage(.pl) {
+            var p = presentation(total: 3, urgent: 1)
+            p.incompleteNote = tr("sprawdzenie niepełne")
+            // M3 — the note follows the count, so truncation never takes it first.
+            #expect(p.headline == "3 aktualizacje · sprawdzenie niepełne · 1 z możliwą poprawką bezp.")
+        }
+    }
+
     @Test func headlinePluralises() {
         withLanguage(.pl) {
             let expected = [0: "0 aktualizacji", 1: "1 aktualizacja", 2: "2 aktualizacje",
@@ -29,14 +38,14 @@ struct UpdateBandPresentationTests {
             for (total, text) in expected {
                 #expect(presentation(total: total).headline == text)
             }
-            #expect(presentation(total: 4, urgent: 2).headline == "4 aktualizacje · 2 pilne")
+            #expect(presentation(total: 4, urgent: 2).headline == "4 aktualizacje · 2 z możliwą poprawką bezp.")
             #expect(!presentation(total: 4, urgent: 0).headline.contains(" · "))
         }
     }
 
     @Test func urgentPluralises() {
         withLanguage(.pl) {
-            for (urgent, text) in [1: "1 pilna", 3: "3 pilne", 5: "5 pilnych"] {
+            for (urgent, text) in [1: "1 z możliwą poprawką bezp.", 3: "3 z możliwą poprawką bezp.", 5: "5 z możliwą poprawką bezp."] {
                 #expect(presentation(total: 9, urgent: urgent).headline.hasSuffix(" · " + text))
             }
         }
@@ -116,7 +125,7 @@ struct UpdateBandPresentationTests {
         withLanguage(.en) {
             #expect(presentation(total: 1).headline == "1 update")
             #expect(presentation(total: 2).headline == "2 updates")
-            #expect(presentation(total: 5, urgent: 2).headline.hasSuffix("2 urgent"))
+            #expect(presentation(total: 5, urgent: 2).headline.hasSuffix("2 may fix security issues"))
             #expect(presentation(queue: 0).queueSummary == "0 queued")
             #expect(presentation(queue: 0).buttonTitle == "Queue empty")
             #expect(presentation(queue: 3).buttonTitle == "Update")

@@ -31,7 +31,9 @@ struct SidePathReplacementSafetyTests {
             to: "private func reportManualReplacementVerification("
         )
 
-        let mutex = try #require(body.range(of: "UpgradeMutex.shared.acquire()"))
+        // G2 — the store's lock is injected (`UpgradeMutex.shared` in the app, which
+        // REL08MutationCoordinationTests pins); the order below is what this test protects.
+        let mutex = try #require(body.range(of: "dependencies.upgradeMutex.acquire()"))
         let preparation = try #require(body.range(of: "CaskReplacementSafety.prepare("))
         let mutation = try #require(body.range(of: "model.brewService.events(arguments: installArgs)"))
         let verification = try #require(body.range(of: "CaskReplacementSafety.verify("))

@@ -263,7 +263,7 @@ struct BackgroundUpdaterRuntimeTests {
         defer { recorder.cleanUp() }
         let updater = BackgroundUpdater(dependencies: dependencies(
             recorder: recorder,
-            resourceDecision: .postpone(reason: "metered")
+            resourceDecision: .postpone(reason: .meteredNetwork)
         ))
 
         #expect(await updater.runIfEligible(candidates: [Self.token], policies: [:]).isEmpty)
@@ -397,7 +397,7 @@ struct BackgroundUpdaterRuntimeTests {
 
         let body = BackgroundUpdater.notificationBody(for: summary)
 
-        #expect(body.contains("Zaktualizowano 2"))
+        #expect(body.contains("W tle zaktualizowałam 2 aplikacje"))
         #expect(body.contains("1 cofnięto"))
         #expect(body.contains("broken"))
         #expect(body.contains("publisher"))

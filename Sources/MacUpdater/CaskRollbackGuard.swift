@@ -716,7 +716,10 @@ final class UpgradeMutex {
 
     private(set) var isBusy: Bool
 
-    private init() {
+    /// The app uses `shared` everywhere, so the window, the background round, a migration and
+    /// the quit guard all see one lock. A separate instance exists only for a test's store,
+    /// which must not contend with every other test in the process for the shared one.
+    init() {
         isBusy = false
     }
 

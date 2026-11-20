@@ -8,8 +8,10 @@ import MacUpdaterCore
 /// `WegaHeadGlyph` draws the same head as the app icon, as a template image, so the bar tints it
 /// for light, dark and the inverted state it takes on while the menu is open.
 struct MenuBarLabel: View {
-    let count: Int
-    let isChecking: Bool
+    let status: MenuBarStatusPresentation
+    @Environment(\.openWindow) private var openWindow
+
+    private var count: Int { status.count }
 
     var body: some View {
         Group {
@@ -19,9 +21,12 @@ struct MenuBarLabel: View {
                 Image(nsImage: WegaHeadGlyph.menuBarImage)
             }
         }
-        .accessibilityLabel(count > 0
-            ? trp("%@ aktualizacji dostępnych", count)
-            : tr("Wszystko aktualne"))
+        .accessibilityLabel(status.accessibilityLabel)
+        .onAppear {
+            // The label is the one view that always exists, so a notification clicked while the
+            // window is closed can still open it.
+            NotificationRouter.shared.openMainWindow = { openWindow(id: "main") }
+        }
     }
 }
 
@@ -38,6 +43,11 @@ struct MenuBarContent: View {
     var body: some View {
         statusSection
 
+        if let run = agent.windowRun {
+            Button(run.stopLabel) { agent.stopWindowRun?() }
+                .disabled(!run.canStop)
+        }
+
         Divider()
 
         Button(agent.isChecking ? tr("Sprawdzam…") : tr("Sprawdź teraz")) {
@@ -46,8 +56,9 @@ struct MenuBarContent: View {
         .disabled(agent.isChecking)
 
         Button(tr("Otwórz Wega")) {
-            openWindow(id: "main")
+            // Activate first: while the app is hidden its window counts as closed.
             NSApplication.shared.activate(ignoringOtherApps: true)
+            NotificationRouter.shared.showMainWindow(opening: { openWindow(id: "main") })
         }
 
         Divider()
@@ -107,11 +118,10 @@ struct MenuBarContent: View {
     }
 
     private var statusText: String {
-        if agent.isChecking { return tr("Sprawdzam aktualizacje…") }
-        if agent.updateCount > 0 { return trp("%@ aktualizacji dostępnych", agent.updateCount) }
-        if agent.lastCheckFailed { return tr("Nie udało się sprawdzić") }
-        if agent.lastCheck == nil { return tr("Jeszcze nie sprawdzano") }
-        return tr("Wszystko aktualne")
+        MenuBarStatusPresentation(
+            count: agent.updateCount, isChecking: agent.isChecking, failed: agent.lastCheckFailed,
+            incomplete: agent.lastCheckIncomplete, lastCheck: agent.lastCheck, run: agent.windowRun
+        ).statusText
     }
 
     private func intervalLabel(_ interval: CheckInterval) -> String {

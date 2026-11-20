@@ -17,6 +17,7 @@ struct UninstallView: View {
     @State private var selected:       Set<String>       = []
     @State private var search:         String            = ""
     @StateObject private var operations = UninstallCoordinator()
+    private let announcer: any AccessibilityAnnouncing = LiveAccessibilityAnnouncer()
     @State private var showDialog:     Bool              = false
     /// UX-01: the exact visible installations named by the confirmation. Execution
     /// consumes this frozen collection instead of resolving selection through a filter
@@ -474,6 +475,7 @@ struct UninstallView: View {
             show(UninstallResultPresentation.report(
                 results: skipped, apps: reportedApps, leftoversTrashed: 0, leftoversFailed: 0, requestedZap: zap
             ))
+            announcer.announce(AnnouncementCopy.uninstallNothingRemoved())
             return
         }
         // REL-06 — `brew uninstall --cask` (with `--zap` it also deletes preferences and
@@ -508,6 +510,9 @@ struct UninstallView: View {
             onWegaState?(WegaState(pose: .happy, line: trf("Załatwione — %@ mniej na dysku.", "\(succeeded.count)")))
         }
         show(report)
+        announcer.announce(succeeded.isEmpty
+            ? AnnouncementCopy.uninstallNothingRemoved()
+            : AnnouncementCopy.uninstallFinished(removed: succeeded.count))
     }
 
     /// The success banner names what was removed; everything else stays together in `result`.
@@ -737,6 +742,19 @@ struct UninstallDialog: View {
                         .padding(.horizontal, 22)
                     }
 
+                    if !counts.removesNothing {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(UninstallScopeSummary.headline(counts: counts, leftovers: selectedLeftovers.count))
+                            Text(UninstallScopeSummary.text(
+                                counts: counts, leftovers: selectedLeftovers.count, zapMode: zapMode))
+                        }
+                        .font(.wega(.footnote))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 22)
+                        .padding(.top, 10)
+                    }
+
                     if !ambiguities.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(ambiguities) { item in
@@ -835,7 +853,7 @@ struct UninstallDialog: View {
                         .disabled(isRefreshing)
                 } else {
                     Button(confirmLabel, role: .destructive) { confirm() }
-                        .keyboardShortcut(.defaultAction)
+                        .keyboardShortcut(.delete, modifiers: .command)
                         .buttonStyle(.borderedProminent)
                         .tint(Color.wegaDanger)
                         .disabled(isRefreshing)

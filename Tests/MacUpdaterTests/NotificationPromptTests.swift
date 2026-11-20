@@ -37,6 +37,15 @@ final class NotificationPromptTests: XCTestCase {
         )
     }
 
+    /// UXP-05 — the Settings card takes a decline back by recording `.agreed`; the policy then
+    /// asks the system, exactly as after the in-app card.
+    func testADeclineCanBeTakenBack() {
+        XCTAssertEqual(
+            NotificationPrompt.decide(system: .notDetermined, inApp: .declined), .stayQuiet)
+        XCTAssertEqual(
+            NotificationPrompt.decide(system: .notDetermined, inApp: .agreed), .askSystem)
+    }
+
     /// "No" means no. Never re-ask, never nag, and never show the card again.
     func testDeniedUserIsLeftAlone() {
         XCTAssertEqual(

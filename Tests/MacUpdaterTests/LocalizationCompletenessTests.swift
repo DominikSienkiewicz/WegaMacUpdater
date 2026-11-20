@@ -17,6 +17,22 @@ struct LocalizationCompletenessTests {
     /// whose raw values are these Polish strings. Keep in sync with that enum.
     private static let dynamicKeys: Set<String> = ["Wszystkie", "Brew", "App Store", "Ręcznie"]
 
+    /// M9 — `Translations.en` is composed from sections whose keys "never overlap", and a
+    /// repeated key silently keeps the first section's English. The UX-review section must
+    /// add only keys no other section already has.
+    @Test func theUXReviewSectionRepeatsNoKeyOfAnotherSection() {
+        let others: [[String: String]] = [
+            Translations.base, Translations.operations, Translations.vendorCompletion, Translations.rollbackScope,
+            DockerRestartTranslations.english, Translations.dockerShutdown, Translations.dockerDesktop,
+            Translations.unconfirmedCaskAssociation, Translations.serviceVendors, Translations.cleanup,
+            Translations.cleanupHygiene, MicrosoftAutoUpdateTranslations.english, Translations.uninstallTexts,
+            Translations.updatesActionBar,
+        ]
+        let elsewhere = others.reduce(into: Set<String>()) { $0.formUnion($1.keys) }
+        let repeated = Set(Translations.uxReview.keys).intersection(elsewhere).sorted()
+        #expect(repeated.isEmpty, "M9: Translations+UXReview.swift repeats \(repeated)")
+    }
+
     private func packageRoot(file: String = #filePath) -> URL {
         // <root>/Tests/MacUpdaterTests/<thisFile>.swift → up 3 = <root>
         URL(fileURLWithPath: file)

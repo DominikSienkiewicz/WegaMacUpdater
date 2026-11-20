@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import MacUpdaterCore
 import Testing
@@ -47,6 +48,110 @@ struct OBS02NotificationRouterTests {
         #expect(defaults.string(forKey: SidebarSelection.storageKey) == SidebarSelection.migration.rawValue,
                 "OBS-02: no destination means no navigation — never a fallback screen")
         #expect(activated, "OBS-02: an unroutable notification still brings Wega forward, as it always did")
+    }
+
+    /// UXP-05 — a click used to only activate the app; with the window closed nothing opened.
+    @Test func routingOpensTheMainWindow() {
+        let (defaults, teardown) = TestDefaults.isolated("obs02-notification-router-window")
+        defer { teardown() }
+        let router = NotificationRouter(defaults: defaults)
+        var opened = 0
+        router.activateApp = {}
+        router.findMainWindow = { nil }
+        router.openMainWindow = { opened += 1 }
+        router.route(to: .updates(.all))
+        #expect(opened == 1)
+    }
+
+    /// I1 — opening unconditionally gave an open window a twin (`main-AppWindow-2`), whose
+    /// appearance re-bound the store's sinks and left the first window's badges frozen. An
+    /// open window — visible or in the Dock — is brought forward instead.
+    @Test func routingBringsAnOpenWindowForwardInsteadOfOpeningASecond() {
+        let (defaults, teardown) = TestDefaults.isolated("obs02-notification-router-window")
+        defer { teardown() }
+        let router = NotificationRouter(defaults: defaults)
+        let window = FakeMainWindow()
+        var opened = 0
+        var activated = false
+        router.activateApp = { activated = true }
+        router.findMainWindow = { window }
+        router.openMainWindow = { opened += 1 }
+
+        router.route(to: .updates(.all))
+
+        #expect(opened == 0, "I1: an open window must not get a second one")
+        #expect(window.broughtToFront == 1)
+        #expect(activated)
+    }
+
+    /// The menu's „Otwórz Wega” had the same unconditional `openWindow`.
+    @Test func theOpenCommandUsesTheSameLookup() throws {
+        let router = NotificationRouter(defaults: TestDefaults.isolated("obs02-notification-router-window").0)
+        let window = FakeMainWindow()
+        var opened = 0
+        router.findMainWindow = { window }
+        router.showMainWindow(opening: { opened += 1 })
+        #expect(opened == 0 && window.broughtToFront == 1)
+
+        router.findMainWindow = { nil }
+        router.showMainWindow(opening: { opened += 1 })
+        #expect(opened == 1)
+
+        let menuBar = try read("Sources/MacUpdater/MenuBarScene.swift")
+        let command = try #require(menuBar.range(of: "Button(tr(\"Otwórz Wega\"))"))
+        #expect(menuBar[command.upperBound...].prefix(250).contains("NotificationRouter.shared.showMainWindow("),
+                "I1: „Otwórz Wega” goes through the router's lookup")
+        #expect(!menuBar.contains("openWindow(id: \"main\")\n            NSApplication"),
+                "I1: the menu no longer opens a window unconditionally")
+    }
+
+    /// F2 — a hidden app (⌘H) reports its window as neither visible nor miniaturised, so a
+    /// lookup made before activation misses it and opens a twin. Both entry points activate
+    /// first, then look.
+    @Test func bothEntryPointsActivateBeforeLookingForTheWindow() throws {
+        let router = NotificationRouter(defaults: TestDefaults.isolated("obs02-notification-router-order").0)
+        var events: [String] = []
+        router.activateApp = { events.append("activate") }
+        router.findMainWindow = { events.append("find"); return nil }
+        router.openMainWindow = { events.append("open") }
+        router.route(to: nil)
+        #expect(events == ["activate", "find", "open"])
+
+        let menuBar = try read("Sources/MacUpdater/MenuBarScene.swift")
+        let command = try #require(menuBar.range(of: "Button(tr(\"Otwórz Wega\"))"))
+        let body = menuBar[command.upperBound...].prefix(250)
+        let activate = try #require(body.range(of: "NSApplication.shared.activate("))
+        let show = try #require(body.range(of: "NotificationRouter.shared.showMainWindow("))
+        #expect(activate.lowerBound < show.lowerBound, "F2: „Otwórz Wega” activates before it looks for the window")
+    }
+
+    /// Only the windows of the main group count, and only while they are on screen or in the
+    /// Dock — a closed window is left to `openWindow`.
+    @Test func onlyAnOnScreenWindowOfTheMainGroupCounts() {
+        #expect(MainWindowLookup.isMainWindow(identifier: "main-AppWindow-1"))
+        #expect(MainWindowLookup.isMainWindow(identifier: "main-AppWindow-2"))
+        #expect(MainWindowLookup.isMainWindow(identifier: "main"))
+        #expect(!MainWindowLookup.isMainWindow(identifier: "com_apple_SwiftUI_Settings_window"))
+        #expect(!MainWindowLookup.isMainWindow(identifier: "mainframe"))
+        #expect(!MainWindowLookup.isMainWindow(identifier: nil))
+
+        let window = NSWindow(contentRect: NSRect(x: -20_000, y: -20_000, width: 10, height: 10),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.identifier = NSUserInterfaceItemIdentifier("main-AppWindow-1")
+        defer { window.close() }
+        #expect(MainWindowLookup.existing(in: [window]) == nil, "a closed window is not brought back")
+        window.orderFrontRegardless()
+        #expect(MainWindowLookup.existing(in: [window]) === window)
+    }
+
+    /// The registration that makes a click work while the window is closed must not depend on
+    /// the menu-bar label alone: the main window's root registers it too.
+    @Test func theMainWindowAlsoRegistersTheOpener() throws {
+        let content = try read("Sources/MacUpdater/ContentView.swift")
+        #expect(content.contains("NotificationRouter.shared.openMainWindow = { openWindow(id: \"main\") }"))
+        let menuBar = try read("Sources/MacUpdater/MenuBarScene.swift")
+        #expect(menuBar.contains("NotificationRouter.shared.openMainWindow = { openWindow(id: \"main\") }"))
     }
 
     // MARK: Every notification carries one
@@ -137,4 +242,10 @@ struct OBS02NotificationRouterTests {
             .deletingLastPathComponent()
         return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
     }
+}
+
+@MainActor
+private final class FakeMainWindow: MainWindowPresenting {
+    private(set) var broughtToFront = 0
+    func bringToFront() { broughtToFront += 1 }
 }

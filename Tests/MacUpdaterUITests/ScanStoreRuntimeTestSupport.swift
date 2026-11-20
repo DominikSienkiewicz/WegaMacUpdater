@@ -94,6 +94,14 @@ final class ScanStoreRuntimeReportRecorder {
     }
 }
 
+/// Records what would have been spoken instead of posting it, so no test talks through
+/// VoiceOver. The harness's default.
+@MainActor
+final class RecordingAnnouncer: AccessibilityAnnouncing {
+    var texts: [String] = []
+    func announce(_ text: String) { texts.append(text) }
+}
+
 struct ScanStoreRuntimeHarness {
     let store: ScanStore
     let snapshots: ScanStoreRuntimeSnapshotIO
@@ -106,7 +114,8 @@ func makeScanStoreRuntimeHarness(
     manualScan: @escaping ScanStoreDependencies.ManualScan = { _, _ in ([], 0) },
     applications: [RunningApplicationTarget] = [],
     bundleExists: @escaping (URL) -> Bool = { _ in true },
-    undoableUpdates: @escaping () -> [UndoableUpdate] = { [] }
+    undoableUpdates: @escaping () -> [UndoableUpdate] = { [] },
+    announcer: any AccessibilityAnnouncing = RecordingAnnouncer()
 ) -> ScanStoreRuntimeHarness {
     let toolURL = URL(fileURLWithPath: "/bin/echo")
     let locator = BinaryLocator(brewCandidates: [toolURL], masCandidates: [toolURL])
@@ -128,12 +137,16 @@ func makeScanStoreRuntimeHarness(
         },
         recordUpdateRun: { _ in },
         settleAppManagementPermission: { _ in },
-        undoableUpdates: undoableUpdates
+        undoableUpdates: undoableUpdates,
+        // Its own lock: the shared one would make every harness store contend with every
+        // other test in the process that starts a run (G2).
+        upgradeMutex: UpgradeMutex()
     )
     let store = ScanStore(
         resultStore: ScanResultStore(io: snapshots),
         runningApplicationInspector: ScanStoreRuntimeApplicationInspector(applications: applications),
-        dependencies: dependencies
+        dependencies: dependencies,
+        announcer: announcer
     )
     store.attach(model: AppViewModel(
         brewService: BrewService(locator: locator, runner: runner),

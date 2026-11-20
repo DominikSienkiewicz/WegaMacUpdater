@@ -22,9 +22,11 @@ struct WegaCompanionPresentation: Equatable {
 
     /// Wega comments on the result, not on the clock. Security wins over the update count: a
     /// pending security fix still gets flagged even when it happens to be the only item, which
-    /// would otherwise round the count down to a false "all clear".
-    static func finishedQuip(updateCount: Int, securityCount: Int) -> String {
-        if securityCount > 0 { return tr("Znalazłam coś pilnego.") }
+    /// would otherwise round the count down to a false "all clear". An incomplete scan never claims
+    /// one either: a source that stayed quiet may be hiding more.
+    static func finishedQuip(updateCount: Int, securityCount: Int, scanComplete: Bool) -> String {
+        if securityCount > 0 { return trp("Notatki %@ wydań wspominają o bezpieczeństwie.", securityCount) }
+        if !scanComplete { return tr("Część źródeł milczy — nie wiem, czy to wszystko.") }
         if updateCount == 0 { return tr("Wszystko pod kontrolą!") }
         return tr("Hau! Nowe paczki?")
     }
@@ -80,7 +82,8 @@ struct WegaCompanionCardContent: View {
                 Spacer(minLength: 0)
                 if asksForNotifications {
                     HStack(spacing: 6) {
-                        Button(tr("Nie teraz"), action: onDecline)
+                        Button(tr("Nie włączaj powiadomień"), action: onDecline)
+                            .help(tr("Możesz je włączyć później w Ustawieniach Wegi."))
                         Button(tr("Powiadamiaj"), action: onAgree)
                             .buttonStyle(.borderedProminent)
                             .tint(Color.wegaHoneyFill)

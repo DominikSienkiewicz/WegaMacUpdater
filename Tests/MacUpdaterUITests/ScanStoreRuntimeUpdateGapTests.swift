@@ -134,16 +134,17 @@ final class ScanStoreRuntimeUpdateGapTests: XCTestCase {
         }
         let harness = makeScanStoreRuntimeHarness(runner: runner)
 
-        XCTAssertTrue(UpgradeMutex.shared.acquire())
+        let mutex = harness.store.dependencies.upgradeMutex
+        XCTAssertTrue(mutex.acquire())
         defer {
-            if UpgradeMutex.shared.isBusy {
-                UpgradeMutex.shared.release()
+            if mutex.isBusy {
+                mutex.release()
             }
         }
         await harness.store.installManual(token: token)
         XCTAssertEqual(harness.store.banner?.variant, .danger)
         XCTAssertTrue(runner.requests.isEmpty)
-        UpgradeMutex.shared.release()
+        mutex.release()
 
         let missingApp = FileManager.default.temporaryDirectory
             .appendingPathComponent("missing-\(UUID().uuidString).app")
@@ -194,11 +195,12 @@ final class ScanStoreRuntimeUpdateGapTests: XCTestCase {
         )
         let key = UpdatePlanner.key(name: token, kind: .formula)
 
-        XCTAssertTrue(UpgradeMutex.shared.acquire())
+        let mutex = harness.store.dependencies.upgradeMutex
+        XCTAssertTrue(mutex.acquire())
         await harness.store.runUpdate(targetKeys: [key])
         XCTAssertEqual(harness.store.banner?.variant, .danger)
         XCTAssertTrue(runner.requests.isEmpty)
-        UpgradeMutex.shared.release()
+        mutex.release()
 
         await harness.store.runUpdate(targetKeys: [key])
 

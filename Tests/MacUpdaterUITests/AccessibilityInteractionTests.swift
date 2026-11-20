@@ -166,7 +166,9 @@ final class AccessibilityInteractionTests: XCTestCase {
 
         let sidebar = try source("Sources/MacUpdater/SidebarList.swift")
         XCTAssertTrue(sidebar.contains("@Environment(\\.accessibilityReduceMotion)"))
-        XCTAssertTrue(sidebar.contains("activity == .scanning && !reduceMotion"))
+        XCTAssertTrue(sidebar.contains("activity.spinsContinuously && !reduceMotion"))
+        let activity = try source("Sources/MacUpdater/ContentView.swift")
+        XCTAssertTrue(activity.contains("var spinsContinuously: Bool { self == .scanning || self == .updating }"))
     }
 
     @MainActor

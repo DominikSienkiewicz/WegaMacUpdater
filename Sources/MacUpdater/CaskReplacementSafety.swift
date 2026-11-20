@@ -21,7 +21,7 @@ enum CaskReplacementSafety {
 
     enum PreparationResult {
         case ready(Preparation)
-        case resourcePostponed(String)
+        case resourcePostponed(PostponeReason)
         case publisherRejected(old: String, new: String?)
         case snapshotFailed
         case journalUnavailable(String)
@@ -99,7 +99,7 @@ enum CaskReplacementSafety {
         )
         guard case .allow = resourceDecision else {
             guard case .postpone(let reason) = resourceDecision else {
-                return .resourcePostponed("nieznany powód")
+                return .resourcePostponed(.diskSpaceUnknown)
             }
             return .resourcePostponed(reason)
         }

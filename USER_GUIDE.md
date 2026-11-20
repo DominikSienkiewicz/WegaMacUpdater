@@ -34,15 +34,16 @@ or App Store passwords.
 
 ### Install the app
 
-1. Download the latest **`.dmg`** (or **`.pkg`**) from the
-   [Releases page](https://github.com/DominikSienkiewicz/WegaMacUpdater/releases).
-2. **`.dmg`** — open it and drag **Wega Mac Updater** into your **Applications** folder.
-   **`.pkg`** — double-click it and follow the installer.
+1. Download **WegaMacUpdater.pkg** (recommended — it can ask for your administrator password when
+   an update needs it) from the
+   [Releases page](https://github.com/DominikSienkiewicz/WegaMacUpdater/releases). The `.dmg`
+   can't ask for your administrator password, so some updates will fail unless Touch ID is on.
+2. **`.pkg`** — double-click it and follow the installer. The PKG also installs the components
+   that ask for your password. The Wega helper is a separate, optional setup.
+   **`.dmg`** — open it and drag **Wega Mac Updater** into your **Applications** folder.
 3. Launch Wega from Applications or Spotlight.
 
-> **First-launch security prompt.** Depending on how the release was signed, macOS
-> Gatekeeper may warn that the app is from an unidentified developer. If so, right-click
-> the app → **Open**, then confirm — you only need to do this once.
+Stable releases are notarized, so macOS opens them without a warning.
 
 Once installed, Wega can keep **itself** up to date: the **Settings** window checks for a
 newer release and offers a one-click **Download and install**.
@@ -248,15 +249,27 @@ Wega's head lives in your menu bar, **badged with the number of available update
 drawn as a template image, so it follows the bar — dark on a light bar, light on a dark one,
 and inverted while its menu is open.
 On a schedule you choose (off / hourly / every 6 hours / daily — default every 6 hours) it
-runs a quiet, **read-only** background check and notifies you when new updates appear.
+runs a quiet background check and notifies you when new updates appear. The check itself
+only reads; it never runs `brew update` or changes anything. The agent installs an update on
+its own only for an app you opted in to background updates, and only when every safety
+condition holds.
+The dropdown names the apps that have updates. While an update you started in the main
+window runs, it shows how far the run has got ("Updating 2 of 5…") with a **Stop After
+Active Installs** button, even with the window closed; once clicked, the button reads
+**Finishing active installs, not starting new ones**. Updates the agent installs in the
+background are not shown there.
 Closing the main window keeps this agent running; use **Quit** in its dropdown to stop it.
 
 > The first time the agent has something to announce, Wega asks in her card at the bottom
 > of the sidebar before she ever raises the macOS notification prompt — so a background
-> check never surprises you with a system dialog.
+> check never surprises you with a system dialog. If you answer **Keep Notifications Off**,
+> she does not ask again, and you can change your mind any time under
+> **Settings → Notifications**, where **Notify me about new updates** switches them on or off
+> (and **Open Notification Settings** appears if macOS itself has turned them off).
 
 **Clicking a notification takes you to what it is about**, not just to whatever screen Wega
-last showed. "Updates available" opens the updates list; the summary of an unattended round
+last showed. If the window is closed, it opens again, and the list already shows the result of
+the check that sent the notification. "Updates available" opens the updates list; the summary of an unattended round
 opens that list too, unless something in the round needs attention — a rollback that failed, a
 publisher that changed — in which case it opens the **Logs** view, because that is where the
 reason is written. A report that Wega repaired an interrupted update always opens the log, for
@@ -266,6 +279,23 @@ it always did.
 ---
 
 ## 3. Updating your apps
+
+### Before your first update
+
+Until your first update finishes with everything installed, a card above the list —
+**Before I update your first app** — says what that update may need:
+
+- **Checking works without any permissions.**
+- **Replacing apps in /Applications — macOS has to allow it.** **Check now** asks macOS; if it
+  refuses, **Open privacy settings** opens the pane that grants it.
+- **Some apps ask for your administrator password when they update.** This is ticked when
+  Touch ID for `sudo` is on or Wega was installed from the `.pkg`, which brings the
+  components that ask for the password. **Enable Touch ID** opens Settings when Touch ID can
+  be turned on; **What does the helper do?** explains the optional Wega helper, which does
+  not answer these password prompts.
+- **Notify you about new updates?** — only until you answer it.
+
+**Later** hides the card for now; **Got it** closes it for good.
 
 ### Choose what to update
 
@@ -310,9 +340,10 @@ npm uses, so a log you paste into a bug report stays searchable by it.
 While an update runs, the Updates screen belongs to it: the list, its checkboxes, banner
 actions and manual installs stay visible but greyed out, with a note saying why, and the
 bar at the bottom shows the progress, the package being installed, **Show log** and **Stop
-after this one**. Nothing can be selected or started until the run lands. Stopping is the one
+After Active Installs**. The sidebar and the menu-bar dropdown show the run too, so you can
+leave this screen and still see how far it has got. Nothing can be selected or started until the run lands. Stopping is the one
 control the run keeps. Wega stops at the **next package boundary** — the installs already running are
-allowed to finish, because a package manager killed halfway through a download or an app
+allowed to finish (up to three at a time), because a package manager killed halfway through a download or an app
 replacement is exactly how a broken app happens. Nothing new is started and everything still
 queued is skipped, and the summary says how many packages were updated and how many were
 left untouched, so a stopped run is never reported as a finished one. An update still
@@ -356,7 +387,9 @@ launch test** if one of your apps takes badly to being started and closed unatte
 ### Undo update
 
 For **7 days** after an upgrade, Wega keeps the pre-upgrade copy of each updated app
-(casks only — the sources listed above without a shield have nothing to restore). The
+(only Homebrew cask updates that replace an `.app`, as in the rollback shield above; the other
+sources have nothing to restore, and the copy never includes an app's data). The Undo screen
+shows the result of every undo, including when it could not be done. The
 **„Cofnij aktualizacje" (Undo updates)** section of the sidebar lists **one entry per app** —
 the step back from the version you are running now — naming the version it would bring back
 and the date the copy expires; the badge next to it counts the apps, not the copies. An app

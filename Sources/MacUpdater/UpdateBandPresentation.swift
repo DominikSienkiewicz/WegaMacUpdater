@@ -12,6 +12,8 @@ struct UpdateBandPresentation: Equatable {
     let freshness: ScanFreshness
     let sources: [SourceChip]
     let wegaLine: String
+    /// Set when a source stayed quiet, so the headline never reads as the whole story.
+    var incompleteNote: String? = nil
 
     /// Today's results-heading rule: only a stale snapshot names its date ("Znaleziono"); the
     /// rest say "Sprawdzono" and a time. `freshnessIsExplicit` still colours anything older
@@ -28,10 +30,14 @@ struct UpdateBandPresentation: Equatable {
     /// The eyebrow's source chips, in scan order.
     var sourceChips: [SourceChip] { sources }
 
+    /// The count, then the incomplete-check note, then the security nuance. The note comes
+    /// before the nuance because the headline truncates at its tail, and losing "the check was
+    /// incomplete" turns a partial answer into a complete-looking one.
     var headline: String {
-        let total = trp("%@ aktualizacji", totalCount)
-        guard urgentCount > 0 else { return total }
-        return total + " · " + trp("%@ pilnych", urgentCount)
+        var parts = [trp("%@ aktualizacji", totalCount)]
+        if let incompleteNote { parts.append(incompleteNote) }
+        if urgentCount > 0 { parts.append(trp("%@ z możliwą poprawką bezp.", urgentCount)) }
+        return parts.joined(separator: " · ")
     }
 
     var line: String { wegaLine }

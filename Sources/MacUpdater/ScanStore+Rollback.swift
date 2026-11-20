@@ -34,10 +34,10 @@ extension ScanStore {
             guard case .postpone(let reason) = resourceDecision else {
                 return .blocked(publisherVetoes: [:])
             }
-            brewLog.append("⏸ " + trf("Aktualizacja odroczona: %@.", "\(reason)"))
-            WegaLog.info(.homebrew, "Aktualizacja z okna odroczona — \(reason).")
-            showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
-                                  message: trf("Bramka zasobów: %@.", "\(reason)")))
+            brewLog.append(reason.logLine)
+            WegaLog.info(.homebrew, "Aktualizacja z okna odroczona — \(reason.localizedMessage)")
+            showBanner(BannerData(variant: .danger, title: tr("Odkładam pobieranie"),
+                                  message: reason.localizedMessage))
             emitActivitySignal(.error)
             emitWegaState(WegaState(pose: .alert, line: tr("Warunki nie pozwalają teraz bezpiecznie pobrać aktualizacji.")))
             return .blocked(publisherVetoes: [:])

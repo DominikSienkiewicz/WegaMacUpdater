@@ -322,6 +322,19 @@ extension ScanStore {
                    manualFailureMessage: manualFailureMessage)
     }
 
+    private func announceScan(_ state: ScanState) {
+        switch state {
+        case .upToDate:
+            announcer.announce(AnnouncementCopy.scanFinished(updates: 0, complete: true))
+        case .outdated(let updates):
+            announcer.announce(AnnouncementCopy.scanFinished(updates: updates, complete: true))
+        case .partialFailure(let updates, _):
+            announcer.announce(AnnouncementCopy.scanFinished(updates: updates, complete: false))
+        case .checkFailed:
+            announcer.announce(AnnouncementCopy.scanFailed())
+        }
+    }
+
     private func scanMasInstallations(
         _ installations: [InstallationCheck], report: ScanSourceReport?
     ) async -> (evidence: [MasInstallationEvidence], report: ScanSourceReport?) {
@@ -388,6 +401,7 @@ extension ScanStore {
             case .checkFailed, .partialFailure: emitActivitySignal(.error)
             }
         }
+        if emitActivity { announceScan(scanState) }
         switch scanState {
         case .upToDate:
             if let msg = errorMessage {

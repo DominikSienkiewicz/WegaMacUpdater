@@ -25,6 +25,17 @@ public struct PowerCondition: Equatable, Sendable {
     public static let plugged = PowerCondition(onBattery: false, batteryFraction: nil, thermalSerious: false)
 }
 
+/// Why a download is held back. Core names the reason; the app renders it in the user's
+/// language because only the app target can localize.
+public enum PostponeReason: Equatable, Sendable {
+    case meteredNetwork
+    case lowDataMode
+    case thermal
+    case lowBattery
+    case diskSpaceUnknown
+    case insufficientDisk(required: Int64, available: Int64)
+}
+
 /// Decides whether a *large* download proceeds now or is deferred (**FEAT-07 / I-4**).
 /// FinOps at the endpoint: don't burn metered data, don't drain a low battery, don't
 /// pull gigabytes while thermally throttled. Pure policy → unit-tested; live probing
@@ -130,7 +141,7 @@ public enum DownloadGate {
 
     public enum Decision: Equatable, Sendable {
         case allow
-        case postpone(reason: String)
+        case postpone(reason: PostponeReason)
 
         public var isAllowed: Bool { self == .allow }
     }
@@ -143,11 +154,11 @@ public enum DownloadGate {
         lowBatteryThreshold: Double = 0.20
     ) -> Decision {
         guard sizeBytes >= largeThresholdBytes else { return .allow }
-        if network.isExpensive { return .postpone(reason: "połączenie taryfowe (hotspot/komórka)") }
-        if network.isConstrained { return .postpone(reason: "tryb oszczędzania danych") }
-        if power.thermalSerious { return .postpone(reason: "throttling termiczny") }
+        if network.isExpensive { return .postpone(reason: .meteredNetwork) }
+        if network.isConstrained { return .postpone(reason: .lowDataMode) }
+        if power.thermalSerious { return .postpone(reason: .thermal) }
         if power.onBattery, let fraction = power.batteryFraction, fraction < lowBatteryThreshold {
-            return .postpone(reason: "niski poziom baterii")
+            return .postpone(reason: .lowBattery)
         }
         return .allow
     }
@@ -164,20 +175,18 @@ public enum DownloadGate {
     ) -> Decision {
         let required = resources.requiredDiskBytes(configuration: configuration)
         guard let availableDiskBytes else {
-            return .postpone(reason: "nie udało się ustalić wolnego miejsca")
+            return .postpone(reason: .diskSpaceUnknown)
         }
         guard availableDiskBytes >= required else {
-            return .postpone(
-                reason: "niewystarczające miejsce na dysku (wymagane \(required) B, dostępne \(availableDiskBytes) B)"
-            )
+            return .postpone(reason: .insufficientDisk(required: required, available: availableDiskBytes))
         }
-        if network.isExpensive { return .postpone(reason: "połączenie taryfowe (hotspot/komórka)") }
-        if network.isConstrained { return .postpone(reason: "tryb oszczędzania danych") }
-        if power.thermalSerious { return .postpone(reason: "throttling termiczny") }
+        if network.isExpensive { return .postpone(reason: .meteredNetwork) }
+        if network.isConstrained { return .postpone(reason: .lowDataMode) }
+        if power.thermalSerious { return .postpone(reason: .thermal) }
         if power.onBattery,
            let fraction = power.batteryFraction,
            fraction < configuration.lowBatteryThreshold {
-            return .postpone(reason: "niski poziom baterii")
+            return .postpone(reason: .lowBattery)
         }
         return .allow
     }

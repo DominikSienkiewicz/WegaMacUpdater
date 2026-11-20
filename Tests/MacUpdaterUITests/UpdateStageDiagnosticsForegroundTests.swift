@@ -3,8 +3,9 @@ import MacUpdaterCore
 import XCTest
 @testable import WegaMacUpdater
 
-/// The foreground flow takes `UpgradeMutex.shared`, so it runs with the sequential XCTest
-/// orchestration tests, separately from Swift Testing suites that exercise migration.
+/// Kept with the sequential XCTest orchestration tests. The foreground flow used to take
+/// `UpgradeMutex.shared` here; its harness store now has a lock of its own (G2), so it no
+/// longer contends with the Swift Testing suites that exercise migration.
 @MainActor
 final class UpdateStageDiagnosticsForegroundTests: XCTestCase {
     func testForegroundRecordsPlanRescanAndVerdictWithoutAddingCommands() async {

@@ -57,6 +57,10 @@ struct ScanStoreDependencies {
     var teamIDLedger: TeamIDLedger = .shared
     var rollbackLedger: CaskRollbackLedger = .shared
     var confirmPublisherChange: @MainActor (ScanStore.PublisherChangePrompt) -> Bool = { PublisherChangeAlert.confirm($0) }
+    /// F3 — the lock a window run, a manual install and a tap change take. The process-wide
+    /// `UpgradeMutex.shared` in the app, so the background round and a migration are excluded;
+    /// injectable like the background updater's, so a test's store has one of its own.
+    var upgradeMutex: UpgradeMutex = .shared
 
     static let live = ScanStoreDependencies(
         operations: .shared,
@@ -124,6 +128,7 @@ final class ScanStore: ObservableObject {
     var restartDiagnosticOperationIDs: [String: UUID] = [:]
     var restartDockerBundleURLs: [String: URL] = [:]
     @Published var restartBusy:       String?
+    @Published var pendingForceRestart: RestartInfo?
     @Published var caskIconPaths:     [String: URL]       = [:]
     @Published var caskDownloads:     [String: CaskDownloadInfo] = [:]   // FEAT-03
     @Published var inspectedKey:      String?
@@ -153,7 +158,9 @@ final class ScanStore: ObservableObject {
     @Published private(set) var isRefreshing = false
     /// How far the running upgrade has got, in whole packages. `nil` when nothing is
     /// installing, which is also what hides the bar.
-    @Published var upgradeProgress: UpgradeProgress?
+    @Published var upgradeProgress: UpgradeProgress? {
+        didSet { publishWindowRun() }
+    }
     /// The counter behind `upgradeProgress`. One per run, created by the upgrade and read
     /// by the brew streaming loop — a stored property, so it cannot live in the extension
     /// that uses it.
@@ -216,13 +223,19 @@ final class ScanStore: ObservableObject {
     var scanTask: Task<Void, Never>?
     /// REL-12 — whether the running upgrade has been asked to stop, and what stopping it
     /// cost. Written only through the three operations below.
-    @Published private(set) var updateInterruption = UpdateInterruption()
+    @Published private(set) var updateInterruption = UpdateInterruption() {
+        didSet { publishWindowRun() }
+    }
+
+    let announcer: any AccessibilityAnnouncing
 
     init(
         resultStore: ScanResultStore = ScanResultStore(),
         runningApplicationInspector: any RunningApplicationInspecting = WorkspaceRunningApplicationInspector(),
-        dependencies: ScanStoreDependencies = .live
+        dependencies: ScanStoreDependencies = .live,
+        announcer: any AccessibilityAnnouncing = LiveAccessibilityAnnouncer()
     ) {
+        self.announcer = announcer
         self.resultStore = resultStore
         self.runningApplicationInspector = runningApplicationInspector
         self.dependencies = dependencies
@@ -231,6 +244,7 @@ final class ScanStore: ObservableObject {
     /// Services are owned by the app-level `AppViewModel`; hand them over on first appearance.
     func attach(model: AppViewModel) {
         self.model = model
+        MenuBarAgent.shared.stopWindowRun = { [weak self] in self?.cancelUpdate() }
     }
 
     // MARK: - REL-12: stopping a running update
@@ -245,6 +259,19 @@ final class ScanStore: ObservableObject {
         guard updating, !updateInterruption.isRequested else { return }
         updateInterruption.request()
         WegaLog.info(.homebrew, "Anulowanie aktualizacji — zatrzymam po bieżącym pakiecie")
+    }
+
+    /// UXP-09 — hands the menu bar what it shows of the run: done/total and whether a stop was
+    /// asked for, whichever path asked (⌘., the run bar, the menu itself). The brew loop sets
+    /// `upgradeProgress` on every output chunk, and every assignment to the agent's
+    /// `@Published` property re-evaluates the `App` body, so only a change is assigned.
+    private func publishWindowRun() {
+        let run = upgradeProgress.map {
+            WindowRunStatus(completedUnits: $0.completedUnits, totalUnits: $0.totalUnits,
+                            isStopping: updateInterruption.isRequested)
+        }
+        guard MenuBarAgent.shared.windowRun != run else { return }
+        MenuBarAgent.shared.windowRun = run
     }
 
     /// Called by the upgrade at every package boundary. `remaining` is everything the run
@@ -298,16 +325,7 @@ final class ScanStore: ObservableObject {
         }
 
         if useBackground, let background {
-            brewOutdated   = background.brew
-            masOutdated    = background.mas
-            npmOutdated    = background.npm
-            manualOutdated = background.manualApps
-            installationChecks = InstallationCheck.retainingLastSuccess(background.installationChecks, previous: snapshot?.installationChecks ?? [])
-            lastCheck      = background.scannedAt
-            failedSources  = background.failedChecks
-            // Background checks carry the same evidence as the window scan.
-            sourceReports     = background.sources
-            lastScanComplete  = background.failedChecks == 0
+            applyBackgroundResult(background, previousChecks: snapshot?.installationChecks ?? [])
         } else if let snapshot {
             brewOutdated   = snapshot.brew
             masOutdated    = snapshot.mas
@@ -335,6 +353,36 @@ final class ScanStore: ObservableObject {
         // Deliberately no `emitActivitySignal`: nothing is running. The tab icon must not
         // spin, and the scan-finished sound of `finishScan` would be a lie.
         emitCounts()
+    }
+
+    /// UXP-05 — take a menu-bar result the window has not seen. `restoreLastScan` adopts one
+    /// once per process; this is the same step for every later background round, so a click on
+    /// "new updates" lands on a list that has them. Never while an update or a scan runs — a
+    /// launch refresh included, which scans under a list whose `status` stays `.results` — and
+    /// never for a result that is not newer than what the window already shows.
+    @discardableResult
+    func adoptBackgroundResultIfNewer(_ result: MenuBarScanResult) -> Bool {
+        guard !updating, status != .checking, !isRefreshing else { return false }
+        if let lastCheck, result.scannedAt <= lastCheck { return false }
+        applyBackgroundResult(result, previousChecks: installationChecks)
+        closeVendorHandoffsConfirmedByScan()
+        status = .results
+        if !lastScanComplete { warnAboutIncompleteScan() }
+        emitCounts()
+        return true
+    }
+
+    private func applyBackgroundResult(_ background: MenuBarScanResult, previousChecks: [InstallationCheck]) {
+        brewOutdated   = background.brew
+        masOutdated    = background.mas
+        npmOutdated    = background.npm
+        manualOutdated = background.manualApps
+        installationChecks = InstallationCheck.retainingLastSuccess(background.installationChecks, previous: previousChecks)
+        lastCheck      = background.scannedAt
+        failedSources  = background.failedChecks
+        // Background checks carry the same evidence as the window scan.
+        sourceReports     = background.sources
+        lastScanComplete  = background.failedChecks == 0
     }
 
     /// Whether a token → bundle pair belongs to a cask the current result reports as outdated.

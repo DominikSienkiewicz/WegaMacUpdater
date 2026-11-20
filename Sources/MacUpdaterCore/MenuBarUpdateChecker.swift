@@ -69,12 +69,31 @@ public struct MenuBarScanResult: Equatable, Sendable {
     /// checker produced this list therefore has exactly `total` entries, so the names can
     /// never disagree with the count shown beside them.
     public func outdatedDisplayNames(policies: [String: UpdatePolicy] = [:]) -> [String] {
+        outdatedEntries(policies: policies).map(\.name)
+    }
+
+    /// M4 — the same names, with the ones `previous` did not list first, so a notification
+    /// that spells out only the first few names the apps that are actually news. An update is
+    /// new by identity — its source-tagged key, or a manual app's path, as `UpdateFingerprint`
+    /// counts them — not by name. With no earlier round everything is new and the order stands.
+    public func outdatedDisplayNames(
+        policies: [String: UpdatePolicy] = [:], newSince previous: MenuBarScanResult?
+    ) -> [String] {
+        let entries = outdatedEntries(policies: policies)
+        guard let previous else { return entries.map(\.name) }
+        let known = Set(previous.outdatedEntries(policies: policies).map(\.identity))
+        let fresh = entries.filter { !known.contains($0.identity) }
+        let seen = entries.filter { known.contains($0.identity) }
+        return (fresh + seen).map(\.name)
+    }
+
+    private func outdatedEntries(policies: [String: UpdatePolicy]) -> [(identity: String, name: String)] {
         let reconciled = UpdatePlanner.reconciledUpdates(
             items: UpdatePlanner.outdatedItems(brew: brew, mas: mas, npm: npm), manual: manualApps
         )
         let items = UpdatePlanner.applyPolicies(reconciled.items, policies: policies)
         let manual = UpdatePlanner.applyPolicies(reconciled.manual, policies: policies)
-        return items.map(\.name) + manual.map(\.name)
+        return items.map { ($0.key, $0.name) } + manual.map { ("m:" + $0.path.path, $0.name) }
     }
 
     /// ARCH-08c: the same result with the casks a background round upgraded taken out, and the

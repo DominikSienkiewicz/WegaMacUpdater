@@ -11,6 +11,15 @@ enum UpdateBandLayout {
         return width < WegaLayout.bandCompactBreakpoint ? .compact : .regular
     }
 
+    /// The headline's text style in this layout.
+    var headlineStyle: WegaTextStyle { self == .narrow ? .title2 : .title }
+
+    /// How many lines the headline may take before it truncates. Two in every layout: one
+    /// `.title` line cut "N aktualizacji · sprawdzenie niepełne" at the compact and regular
+    /// layouts' narrowest widths. Two still fit the band's fixed height (at most 167 of 188 pt,
+    /// compact and refreshing); three would not (193 pt).
+    var headlineLineLimit: Int { 2 }
+
     /// The round button's diameter in this layout.
     var buttonDiameter: CGFloat {
         switch self {
@@ -51,10 +60,8 @@ struct UpdateBand<Action: View>: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let layout = UpdateBandLayout.style(forWidth: proxy.size.width)
-            content(layout)
-                .padding(.horizontal, layout == .narrow ? 16 : 20)
-                .frame(width: proxy.size.width, height: WegaLayout.bandHeight)
+            naturalContent(width: proxy.size.width)
+                .frame(height: WegaLayout.bandHeight)
                 .foregroundStyle(Color.wegaBandText)
                 .background { backdrop }
                 .overlay {
@@ -64,6 +71,16 @@ struct UpdateBand<Action: View>: View {
         }
         .frame(height: WegaLayout.bandHeight)
         .accessibilityElement(children: .contain)
+    }
+
+    /// The band's content at its own height for a band `width` wide: what the fixed
+    /// `WegaLayout.bandHeight` frame has to hold. The body draws exactly this inside that frame,
+    /// and the layout tests measure it, because the frame alone always reports the fixed height.
+    func naturalContent(width: CGFloat) -> some View {
+        let layout = UpdateBandLayout.style(forWidth: width)
+        return content(layout)
+            .padding(.horizontal, layout == .narrow ? 16 : 20)
+            .frame(width: width)
     }
 
     // MARK: Layout
@@ -99,9 +116,9 @@ struct UpdateBand<Action: View>: View {
         VStack(alignment: .leading, spacing: 4) {
             eyebrow(layout)
             Text(presentation.headline)
-                .font(.wega(layout == .narrow ? .title2 : .title, weight: .semibold))
+                .font(.wega(layout.headlineStyle, weight: .semibold))
                 .foregroundStyle(Color.wegaBandText)
-                .lineLimit(layout == .narrow ? 2 : 1)
+                .lineLimit(layout.headlineLineLimit)
                 .accessibilityAddTraits(.isHeader)
             Text(presentation.line)
                 .font(.wega(.callout))

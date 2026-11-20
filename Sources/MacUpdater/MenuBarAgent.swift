@@ -24,13 +24,24 @@ final class MenuBarAgent: ObservableObject {
     @Published private(set) var lastCheck: Date?
     /// True when the most recent check found nothing but at least one source failed.
     @Published private(set) var lastCheckFailed = false
+    /// True when at least one source failed, whatever the update count: the count is then a floor.
+    @Published private(set) var lastCheckIncomplete = false
     /// M3(d) — set when the agent had something to announce but has never been allowed to
     /// ask for permission. The window renders an explanation card; the system dialog waits.
     @Published private(set) var needsNotificationExplanation = false
+    /// What macOS currently allows; `nil` until first read (and always, outside a bundled app).
+    @Published private(set) var systemNotificationAuthorization: NotificationPrompt.SystemStatus?
     /// M2(a) — the lists the last background check produced. The agent used to build these,
     /// keep the count and throw the rest away, so the window opened empty and rescanned from
     /// scratch. Now the window adopts them, which is the whole "instant value" of M2.
     @Published private(set) var lastResult: MenuBarScanResult?
+
+    /// UXP-09 — how far the update run started in the window has got, so the menu-bar menu can
+    /// show it and stop it while the window is closed. `nil` when no such run is going.
+    @Published var windowRun: WindowRunStatus?
+    /// Stops the window's run the way its own button does: the packages already installing
+    /// finish, nothing new starts. Registered by the `ScanStore` that owns the run.
+    var stopWindowRun: (@MainActor () -> Void)?
 
     /// UX-11g — the apps/packages the dropdown names as having updates, derived from the
     /// last check and filtered by the same ignore/pin rules that produced the badge count,
@@ -90,15 +101,50 @@ final class MenuBarAgent: ObservableObject {
     func agreeToNotifications() async {
         inAppAnswer = .agreed
         needsNotificationExplanation = false
+        objectWillChange.send()
         guard Bundle.main.bundleIdentifier != nil else { return }
         _ = try? await UNUserNotificationCenter.current()
             .requestAuthorization(options: [.alert, .badge, .sound])
     }
 
-    /// The user declined the card. Don't nag: no system dialog, and no card ever again.
+    /// The user declined. Don't nag: no system dialog and no card by itself. The choice is
+    /// not final — the Settings card can take it back with `setNotificationsEnabled(true)`.
     func declineNotifications() {
         inAppAnswer = .declined
         needsNotificationExplanation = false
+        objectWillChange.send()
+    }
+
+    /// Nobody has answered the in-app question and macOS has not already granted the permission.
+    var notificationsUnanswered: Bool {
+        inAppAnswer == .unanswered && systemNotificationAuthorization != .authorized
+    }
+
+    /// What the Settings switch shows: the user said yes in Wega, or never said anything and
+    /// macOS already lets Wega notify. A decline always wins.
+    var notificationsEnabledByUser: Bool {
+        switch inAppAnswer {
+        case .agreed:     return true
+        case .declined:   return false
+        case .unanswered: return systemNotificationAuthorization == .authorized
+        }
+    }
+
+    /// The Settings switch. Turning it on spends the one-shot macOS dialog on a user gesture;
+    /// turning it off is a decision Wega honours even when macOS would still allow banners.
+    func setNotificationsEnabled(_ on: Bool) async {
+        if on {
+            await agreeToNotifications()
+        } else {
+            declineNotifications()
+        }
+        await refreshNotificationAuthorization()
+    }
+
+    /// Re-reads what macOS allows, so the Settings card can offer the way out when it said no.
+    func refreshNotificationAuthorization() async {
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        systemNotificationAuthorization = await systemNotificationStatus()
     }
 
     private func systemNotificationStatus() async -> NotificationPrompt.SystemStatus {
@@ -175,10 +221,12 @@ final class MenuBarAgent: ObservableObject {
         }
 
         guard !Task.isCancelled else { return }
-        current.installationChecks = InstallationCheck.retainingLastSuccess(current.installationChecks, previous: lastResult?.installationChecks ?? [])
+        let previous = lastResult
+        current.installationChecks = InstallationCheck.retainingLastSuccess(current.installationChecks, previous: previous?.installationChecks ?? [])
         lastResult = current
         updateCount = current.total
         lastCheckFailed = current.total == 0 && current.failedChecks > 0
+        lastCheckIncomplete = current.failedChecks > 0
         lastCheck = Date()
         persist()
         updateDockBadge()
@@ -188,7 +236,8 @@ final class MenuBarAgent: ObservableObject {
         let fingerprint = UpdateFingerprint.of(result: current, policies: policies)
         if current.total > 0 && fingerprint != lastNotifiedFingerprint {
             rememberNotified(fingerprint)
-            postNotification(count: current.total)
+            postNotification(count: current.total,
+                             names: current.outdatedDisplayNames(policies: policies, newSince: previous))
         } else if current.total == 0 {
             rememberNotified("")
         }
@@ -201,6 +250,7 @@ final class MenuBarAgent: ObservableObject {
     func reportWindowScan(count: Int, failedChecks: Int, fingerprint: String) {
         updateCount = count
         lastCheckFailed = count == 0 && failedChecks > 0
+        lastCheckIncomplete = failedChecks > 0
         lastCheck = Date()
         rememberNotified(fingerprint)
         persist()
@@ -221,6 +271,7 @@ final class MenuBarAgent: ObservableObject {
             result.total = count
             lastResult = result
             lastCheckFailed = count == 0 && result.failedChecks > 0
+            lastCheckIncomplete = result.failedChecks > 0
         }
         updateCount = count
         rememberNotified(fingerprint)
@@ -247,11 +298,16 @@ final class MenuBarAgent: ObservableObject {
 
     /// M3(d) — a background check never raises the macOS permission dialog. It either posts
     /// (already authorised), raises Wega's own explanation card, or stays quiet.
-    private func postNotification(count: Int) {
+    ///
+    /// `names` lists the apps that are new since the previous round first (M4): the body spells
+    /// out only the first two.
+    private func postNotification(count: Int, names: [String]) {
         // UNUserNotificationCenter requires a bundled app; skip under `swift run`.
-        guard Bundle.main.bundleIdentifier != nil else { return }
+        guard Bundle.main.bundleIdentifier != nil, inAppAnswer != .declined else { return }
         let title = tr("Dostępne aktualizacje")
-        let body = trf("Wega znalazła %@ aktualizacji do zainstalowania.", "\(count)")
+        let body = names.isEmpty
+            ? trp("%@ aktualizacji dostępnych", count)
+            : NotificationCopy.newUpdatesBody(names: names)
         // Task inherits this @MainActor context, so the non-Sendable center never
         // crosses an actor boundary.
         Task {

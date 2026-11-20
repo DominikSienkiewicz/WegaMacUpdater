@@ -204,7 +204,7 @@ While a run is in progress the rest of the screen is disabled and stood down by 
 translucent veil a scan in place uses, so the rows stay readable underneath, with a note
 explaining why. The run takes the action bar's place and shape at the bottom —
 both draw through one chrome (`wegaBottomBar()`) — with the progress, the live log toggle and
-**Stop after this one**. That bar is part of the run overlay, the one layer above the
+**Stop After Active Installs**. That bar is part of the run overlay, the one layer above the
 disabled screen, so the stop button is never disabled along with what it covers.
 
 - **Selected updates run side by side.** A run no longer walks its selection one package at a
@@ -623,7 +623,7 @@ save panel. It does not collect private vendor or Docker daemon logs and does no
 the internal cause of a vendor updater failure.
 
 ### Menu-bar agent
-A Wega silhouette lives in the menu bar, **badged with the number of available updates**. On a configurable schedule (off / hourly / every 6 hours / daily, default every 6 hours) it runs a **read-only** background check — never `brew update`, never a mutation — and posts a notification when new updates appear. **A background check never raises the macOS permission dialog**: the first time the agent has something to announce, Wega asks in her card at the bottom of the sidebar, and only a user who accepts there spends the one-shot system prompt (`NotificationPrompt` in Core decides this; declining is remembered, so the question never returns).
+A Wega silhouette lives in the menu bar, **badged with the number of available updates**. On a configurable schedule (off / hourly / every 6 hours / daily, default every 6 hours) it runs a **read-only** background check — never `brew update`, never a mutation — and posts a notification when new updates appear. **A background check never raises the macOS permission dialog**: the first time the agent has something to announce, Wega asks in her card at the bottom of the sidebar, and only a user who accepts there spends the one-shot system prompt (`NotificationPrompt` in Core decides this; declining is remembered, so the question does not return on its own; **Settings → Notifications** switches notifications on or off at any time).
 
 **Docker Desktop is always excluded from unattended upgrades**, even with saved opt-in
 consent; Settings shows the reason.

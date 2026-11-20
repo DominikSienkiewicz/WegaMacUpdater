@@ -46,13 +46,19 @@ extension ScanStore {
             operationID: undoable.operationID, token: undoable.token
         ), item.phase == .committed, let snapshotName = item.snapshotName else {
             WegaLog.error(.homebrew, "\(undoable.token): cofanie pominięte — operacja nie jest już do cofnięcia.")
+            showUndoFailure(.snapshotMissing, token: undoable.token)
             return
         }
         let snapshotURL = store.snapshotURL(operationID: operation.id, name: snapshotName)
         let appURL = URL(fileURLWithPath: item.appPath)
-        guard FileManager.default.fileExists(atPath: snapshotURL.path),
-              FileManager.default.fileExists(atPath: appURL.path) else {
-            WegaLog.error(.homebrew, "\(undoable.token): cofanie pominięte — brak snapshotu albo aplikacji.")
+        guard FileManager.default.fileExists(atPath: snapshotURL.path) else {
+            WegaLog.error(.homebrew, "\(undoable.token): cofanie pominięte — brak snapshotu.")
+            showUndoFailure(.snapshotMissing, token: undoable.token)
+            return
+        }
+        guard FileManager.default.fileExists(atPath: appURL.path) else {
+            WegaLog.error(.homebrew, "\(undoable.token): cofanie pominięte — brak aplikacji.")
+            showUndoFailure(.appMissing, token: undoable.token)
             return
         }
         // The restore must land on the same app the snapshot was taken from — a bundle-ID
@@ -90,10 +96,28 @@ extension ScanStore {
             variant: .success,
             title: trf("Cofnięto aktualizację: %@", "\(undoable.token)"),
             message: restoredVersion.map {
-                trf("Przywrócono wersję %@ i przypięto ją — Wega nie zaproponuje nowszej, dopóki nie odepniesz.", "\($0)")
-            } ?? tr("Przywrócono poprzednią wersję.")
+                trf("Przywróciłam %@ do wersji %@. Nie będę proponować nowszych, dopóki tego nie zmienisz w Ustawieniach → Ignorowane i przypięte.",
+                    "\(undoable.token)", "\($0)")
+            } ?? tr("Przywrócono poprzednią wersję."),
+            autoDismiss: false
         ))
         emitWegaState(WegaState(pose: .happy, line: trf("Cofnęłam %@ do wersji %@.", "\(undoable.token)", "\(restoredVersion ?? "—")")))
         await runCheck(emitActivity: false, lightweight: true, operationLease: operationLease)
+    }
+
+    private enum UndoFailure { case snapshotMissing, appMissing }
+
+    /// The undo screen is the only place the user is looking when they press „Przywróć”, so a
+    /// refusal has to be said there and not only written to the log.
+    private func showUndoFailure(_ failure: UndoFailure, token: String) {
+        let message: String
+        switch failure {
+        case .snapshotMissing:
+            message = trf("Nie mogę cofnąć %@: kopia sprzed aktualizacji już nie istnieje.", token)
+        case .appMissing:
+            message = trf("Nie mogę cofnąć %@: aplikacji nie ma już w tym miejscu.", token)
+        }
+        showBanner(BannerData(variant: .danger, title: tr("Nie mogę cofnąć aktualizacji"),
+                              message: message, action: .openLogs))
     }
 }

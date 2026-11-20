@@ -43,15 +43,15 @@ extension ScanStore {
         }
         // F3 — never overlap with a background upgrade: both take snapshots and both call
         // `brew upgrade --cask`. The window is the one the user is waiting on.
-        guard UpgradeMutex.shared.acquire() else {
+        guard dependencies.upgradeMutex.acquire() else {
             UpdateDiagnostics.record("update.skipped", fields: ["reason": "upgradeMutexBusy"])
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja w toku"),
                                   message: tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.")))
             return
         }
-        defer { UpgradeMutex.shared.release() }
+        defer { dependencies.upgradeMutex.release() }
         updating = true
-        emitActivitySignal(.scanning)
+        emitActivitySignal(.updating)
         brewLog = []
         showLog = true
         emitWegaState(WegaState(pose: .sniff, line: tr("Aktualizuję, chwila…")))
@@ -316,9 +316,19 @@ extension ScanStore {
 
         // REL-12 — a run the user stopped is never announced as a finished one.
         let interrupted = updateInterruption.didSkipWork
-        if interrupted { reportInterruptedRun(upgraded: summary.upgraded.count) }
+        if interrupted {
+            reportInterruptedRun(upgraded: summary.upgraded.count)
+            announcer.announce(AnnouncementCopy.runStopped(updated: summary.upgraded.count, total: summary.attempted))
+        } else {
+            announcer.announce(AnnouncementCopy.runFinished(
+                updated: summary.upgraded.count,
+                total: summary.attempted,
+                needsAttention: summary.notUpgraded.map(\.name)
+            ))
+        }
         if summary.allItemsUpgraded {
             guard !interrupted else { return }
+            UserDefaults.standard.set(true, forKey: ReadinessPresentation.dismissedKey)
             let count = summary.upgraded.count
             showBanner(BannerData(variant: .success,
                                   title: trf("Zaktualizowano %@ pakietów", "\(count)"),
@@ -401,16 +411,58 @@ extension ScanStore {
         UpdateDiagnostics.record("restart.requested", fields: fields)
         if await handleDockerRestart(info, fields: fields) { return }
         restartBusy = info.processName
-        await processes.kill(info.processName)
-        UpdateDiagnostics.record("restart.terminationReturned", fields: fields.merging(
-            ["result": "notExposedByService"], uniquingKeysWith: { _, new in new }))
-        try? await Task.sleep(for: .milliseconds(800))
-        await processes.launch(appName: info.appName)
-        UpdateDiagnostics.record("restart.launchReturned", fields: fields.merging(
-            ["result": "notExposedByService"], uniquingKeysWith: { _, new in new }))
+        let outcome = await gracefulRestartFlow().run(info)
+        UpdateDiagnostics.record("restart.gracefulOutcome", fields: fields.merging(
+            ["result": outcome == .relaunched ? "relaunched" : "needsForceConsent"],
+            uniquingKeysWith: { _, new in new }))
+        guard outcome == .relaunched else {
+            pendingForceRestart = info
+            restartBusy = nil
+            return
+        }
         restartCandidates.removeAll { $0.processName == info.processName }
         restartBusy = nil
         restartDiagnosticOperationIDs.removeValue(forKey: info.processName)
         UpdateDiagnostics.record("restart.flowCompleted", fields: fields)
+    }
+
+    private func gracefulRestartFlow() -> RestartFlow {
+        let processes = processes
+        return RestartFlow(
+            requestQuit: { await processes.requestGracefulTermination(appName: $0.appName, processName: $0.processName) },
+            isRunning: { await processes.isRunning($0) },
+            launch: { await processes.launch(appName: $0) },
+            pause: { try? await Task.sleep(for: $0) },
+            forceKill: { await processes.forceKill($0) }
+        )
+    }
+
+    func confirmForceRestart(_ info: RestartInfo) async {
+        pendingForceRestart = nil
+        restartBusy = info.processName
+        defer { restartBusy = nil }
+        guard await gracefulRestartFlow().force(info) == .relaunched else {
+            showBanner(BannerData(
+                variant: .danger,
+                title: tr("Nie udało się zamknąć aplikacji"),
+                message: trf("Nie mogę zamknąć %@. Zamknij ją ręcznie.", info.appName)))
+            return
+        }
+        restartCandidates.removeAll { $0.processName == info.processName }
+        restartDiagnosticOperationIDs.removeValue(forKey: info.processName)
+        UpdateDiagnostics.record("restart.flowCompleted", fields: ["processName": info.processName, "forced": "true"])
+    }
+
+    /// The force alert closed without an answer. The app stays open, as „Zostaw otwartą” leaves
+    /// it, but no refusal is recorded — the user gave none. A dismissal for another app (a stale
+    /// one) leaves the current prompt alone.
+    func dismissForceRestartPrompt(_ info: RestartInfo) {
+        guard pendingForceRestart?.processName == info.processName else { return }
+        pendingForceRestart = nil
+    }
+
+    func keepAppOpen(_ info: RestartInfo) {
+        pendingForceRestart = nil
+        UpdateDiagnostics.record("restart.forceDeclined", fields: ["processName": info.processName])
     }
 }

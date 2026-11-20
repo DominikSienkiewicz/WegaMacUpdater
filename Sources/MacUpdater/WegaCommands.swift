@@ -23,6 +23,7 @@ struct WegaMenuAction {
 
 private struct StartCheckActionKey: FocusedValueKey { typealias Value = WegaMenuAction }
 private struct RunUpdateActionKey: FocusedValueKey { typealias Value = WegaMenuAction }
+private struct StopUpdateActionKey: FocusedValueKey { typealias Value = WegaMenuAction }
 
 extension FocusedValues {
     /// ⌘R — the window's "Sprawdź teraz". Published by `UpdateView`, which owns the scan store.
@@ -36,6 +37,13 @@ extension FocusedValues {
     var runUpdateAction: WegaMenuAction? {
         get { self[RunUpdateActionKey.self] }
         set { self[RunUpdateActionKey.self] = newValue }
+    }
+
+    /// ⌘. — stops the running update after the installs already started. Published by
+    /// `DetailColumn` only while a run is going and has not been asked to stop.
+    var stopUpdateAction: WegaMenuAction? {
+        get { self[StopUpdateActionKey.self] }
+        set { self[StopUpdateActionKey.self] = newValue }
     }
 }
 
@@ -93,6 +101,7 @@ struct WegaCommands: Commands {
     @AppStorage("wega.sidebarSelection") private var selection: SidebarSelection = .initial
     @FocusedValue(\.startCheckAction) private var startCheck
     @FocusedValue(\.runUpdateAction) private var runUpdate
+    @FocusedValue(\.stopUpdateAction) private var stopUpdate
     @Environment(\.openSettings) private var openSettings
 
     // Explicit initializer: the synthesized memberwise one inherits the `private` of the
@@ -118,6 +127,10 @@ struct WegaCommands: Commands {
                 // Only on the Updates destination, and only when there is something to install —
                 // the same conditions under which the "Zaktualizuj…" button is offered.
                 .disabled(!(selection.tab == .update && runUpdate?.isEnabled == true))
+
+            Button(UpdateRunCopy.stopLabel(isStopping: false)) { stopUpdate?.run() }
+                .keyboardShortcut(".", modifiers: .command)
+                .disabled(stopUpdate?.isEnabled != true)
 
             Divider()
 

@@ -21,7 +21,7 @@ public enum Translations {
         .merging(cleanup.merging(cleanupHygiene) { first, _ in first }) { first, _ in first }
         .merging(MicrosoftAutoUpdateTranslations.english) { first, _ in first }
         .merging(uninstallTexts) { first, _ in first }
-        .merging(updatesActionBar) { first, _ in first }
+        .merging(updatesActionBar.merging(uxReview) { first, _ in first }) { first, _ in first }
 }
 
 extension Translations {
@@ -169,8 +169,6 @@ extension Translations {
         "Mnożnik rozpakowania": "Unpacking multiplier",
         "Margines dysku": "Disk safety margin",
         "Aktualizacja odroczona": "Update postponed",
-        "Aktualizacja odroczona: %@.": "Update postponed: %@.",
-        "Bramka zasobów: %@.": "Resource gate: %@.",
         "Warunki nie pozwalają teraz bezpiecznie pobrać aktualizacji.": "Current conditions do not allow the update to be downloaded safely.",
         "Nie udało się utworzyć snapshotu dla: %@.": "Could not create a snapshot for: %@.",
         "Nie udało się utworzyć wymaganego snapshotu.": "Could not create the required snapshot.",
@@ -662,7 +660,6 @@ extension Translations {
         "Co 6 godzin": "Every 6 hours",
         "Codziennie": "Daily",
         "Dostępne aktualizacje": "Updates available",
-        "Wega znalazła %@ aktualizacji do zainstalowania.": "Wega found %@ updates to install.",
         "Sprawdzimy, co się zestarzało?": "Shall we check what's gotten old?",
         "Aport! Zaznacz, co mam zabrać.": "Fetch! Mark what I should take.",
         "Pójdę zwęszyć /Applications.": "I'll go sniff out /Applications.",
@@ -739,7 +736,6 @@ extension Translations {
         "Aktualizacje w tle": "Background updates",
         // REL-02 — powiadomienie w tle mówi o każdym wyniku rundy, nie tylko o sukcesie.
         "Aktualizacje w tle — wymagają uwagi": "Background updates — need your attention",
-        "Zaktualizowano %@ w tle.": "Updated %@ in the background.",
         "%@ cofnięto po nieudanym teście.": "%@ rolled back after a failed check.",
         "%@ nie przeszło testu i nie udało się przywrócić — sprawdź je.": "%@ failed its check and could not be restored — check it.",
         "%@ zmieniło wydawcę (Team ID) — zweryfikuj.": "%@ changed publisher (Team ID) — verify.",
@@ -754,8 +750,6 @@ extension Translations {
         "Sprawdzam rozmiary pobrań…": "Checking download sizes…",
         "rozmiar nieznany": "size unknown",
         "nieznany host": "unknown host",
-        "suma sprawdzana": "checksum verified",
-        "bez weryfikacji sumy": "checksum not verified",
         "Może poprosić o hasło administratora.": "May ask for an admin password.",
         "Nie udało się ustalić rozmiaru pobrania — zakładam duży plik.":
             "Could not determine the download size — assuming a large file.",
@@ -790,7 +784,6 @@ extension Translations {
         "Otwórz brew.sh": "Open brew.sh",
         "· %@": "· %@",
         "Wszystko pod kontrolą!": "Everything under control!",
-        "Znalazłam coś pilnego.": "I found something urgent.",
         "Kiedy ostatnio robiłeś backup?": "When did you last make a backup?",
         "Brew to mój najlepszy przyjaciel.": "Brew is my best friend.",
         "Wącham coś ciekawego…": "I smell something interesting…",
@@ -876,7 +869,6 @@ extension Translations {
         // M2(c) — anulowanie skanu ma swój komunikat; skan nie udaje, że się skończył.
         "Przerwałam skanowanie.": "I stopped scanning.",
         // REL-12 — anulowanie aktualizacji: zatrzymanie na granicy pakietu, nie w połowie instalacji.
-        "Przerywam…": "Stopping…",
         "Zatrzymam po bieżącym pakiecie — trwającej instalacji nie przerywam w połowie.":
             "I'll stop after the current package — an install already running is never cut in half.",
         "Aktualizacja przerwana": "Update stopped",
@@ -974,8 +966,6 @@ extension Translations {
         "Co da się cofnąć": "What can be undone",
         "Coś poszło nie tak? Przyniosę starą.": "Something broke? I'll fetch the old one.",
         "Nic do cofnięcia": "Nothing to undo",
-        "Po każdej aktualizacji Wega trzyma kopię poprzedniej wersji przez 7 dni — przez ten czas znajdziesz ją tutaj. Teraz żadna kopia nie czeka.":
-            "After every update Wega keeps a copy of the previous version for 7 days — for that long you will find it here. Right now no copy is waiting.",
         "Kopie sprzed aktualizacji są trzymane przez 7 dni — w tym czasie możesz wrócić do poprzedniej wersji. Wega przypnie przywróconą wersję, żeby nie proponować jej od razu ponownie.":
             "Pre-update copies are kept for 7 days — during that time you can go back to the previous version. Wega pins the restored version so it is not offered again right away.",
         "Cofnij": "Undo",
@@ -994,8 +984,6 @@ extension Translations {
         "%@: nie udało się przywrócić poprzedniej wersji — szczegóły w logu.":
             "%@: could not restore the previous version — details in the log.",
         "Cofnięto aktualizację: %@": "Update undone: %@",
-        "Przywrócono wersję %@ i przypięto ją — Wega nie zaproponuje nowszej, dopóki nie odepniesz.":
-            "Restored version %@ and pinned it — Wega will not offer a newer one until you unpin.",
         "Przywrócono poprzednią wersję.": "Restored the previous version.",
         "Cofnęłam %@ do wersji %@.": "Undid %@ back to version %@.",
         "Bez automatycznego cofnięcia — Homebrew nie zachowuje poprzednich wersji formuł.":

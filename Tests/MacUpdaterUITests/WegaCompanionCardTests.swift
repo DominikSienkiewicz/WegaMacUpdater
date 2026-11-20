@@ -30,12 +30,19 @@ struct WegaCompanionCardTests {
 
     /// The quip comments on the result, and a pending security fix wins over the count.
     @Test func theQuipFollowsWhatTheScanFound() {
-        #expect(WegaCompanionPresentation.finishedQuip(updateCount: 3, securityCount: 1)
-                == tr("Znalazłam coś pilnego."))
-        #expect(WegaCompanionPresentation.finishedQuip(updateCount: 0, securityCount: 0)
+        #expect(WegaCompanionPresentation.finishedQuip(updateCount: 3, securityCount: 1, scanComplete: true)
+                == trp("Notatki %@ wydań wspominają o bezpieczeństwie.", 1))
+        #expect(WegaCompanionPresentation.finishedQuip(updateCount: 0, securityCount: 0, scanComplete: true)
                 == tr("Wszystko pod kontrolą!"))
-        #expect(WegaCompanionPresentation.finishedQuip(updateCount: 4, securityCount: 0)
+        #expect(WegaCompanionPresentation.finishedQuip(updateCount: 4, securityCount: 0, scanComplete: true)
                 == tr("Hau! Nowe paczki?"))
+    }
+
+    @Test func anIncompleteScanNeverSaysAllClear() {
+        #expect(WegaCompanionPresentation.finishedQuip(updateCount: 0, securityCount: 0, scanComplete: false)
+                == tr("Część źródeł milczy — nie wiem, czy to wszystko."))
+        #expect(WegaCompanionPresentation.finishedQuip(updateCount: 4, securityCount: 0, scanComplete: false)
+                == tr("Część źródeł milczy — nie wiem, czy to wszystko."))
     }
 
     /// The card sits in the sidebar's safe area, and a sidebar whose geometry moved during a

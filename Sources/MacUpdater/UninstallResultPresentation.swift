@@ -151,7 +151,7 @@ enum UninstallResultPresentation {
         if leftoversTrashed > 0 { parts.append(trf("%@ resztek do Kosza", "\(leftoversTrashed)")) }
         return BannerData(
             variant: .success,
-            title: trf("Odinstalowano %@ aplikacji", "\(removed.count)"),
+            title: trp("Odinstalowano %@ aplikacji", removed.count),
             message: parts.joined(separator: ", ")
         )
     }

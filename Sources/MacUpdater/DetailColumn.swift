@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import MacUpdaterCore
 
@@ -52,6 +53,7 @@ struct DetailColumn: View {
     @Binding var wegaState:         WegaState
     @Binding var updateBadge:       Int
     @Binding var updateActivity:    UpdateActivity
+    @Binding var updateProgress:    UpgradeProgress?
     @Binding var logsInitialFilter: LogLevelFilter
     @Binding var logsErrorBadge:    Int
     /// The app bundle a Cleanup row hands to "Odinstaluj aplikacje"; cleared once that tab used it.
@@ -104,6 +106,15 @@ struct DetailColumn: View {
                 )
                 .inspectorColumnWidth(min: 280, ideal: 340, max: 460)
             }
+            // UXP-09 — the sidebar names the run's "done/total"; stage changes inside one package
+            // would re-render the root for nothing, so only a change of the pair gets through.
+            .onReceive(scan.$upgradeProgress.removeDuplicates {
+                $0?.completedUnits == $1?.completedUnits && $0?.totalUnits == $1?.totalUnits
+            }) { updateProgress = $0 }
+            .focusedSceneValue(\.stopUpdateAction, WegaMenuAction(
+                isEnabled: scan.updating && !scan.updateInterruption.isRequested,
+                run: { scan.cancelUpdate() }
+            ))
             .onReceive(scan.$inspectedKey) { key in
                 guard key != nil else { return }
                 showInspector = true
@@ -113,7 +124,8 @@ struct DetailColumn: View {
                 // status transition alone is not enough — only a finished scan earns a comment.
                 guard old == .checking, new == .results, scan.progress == .finished else { return }
                 quipTask?.cancel()
-                quip = WegaCompanionPresentation.finishedQuip(updateCount: updateBadge, securityCount: securityBadge)
+                quip = WegaCompanionPresentation.finishedQuip(updateCount: updateBadge, securityCount: securityBadge,
+                                                                  scanComplete: scan.lastScanComplete)
                 quipTask = Task {
                     try? await Task.sleep(for: .seconds(6))
                     guard !Task.isCancelled else { return }
@@ -131,7 +143,18 @@ struct DetailColumn: View {
             if !brewInstalled {
                 BrewInviteCard { brewInstalled = BinaryLocator().locateBrew() != nil }
             }
+            if selection.tab == .update, scan.status == .results {
+                ReadinessCard(hasUpdates: scan.updateCount.badgeCount > 0)
+            }
         }
+    }
+
+    /// Where a banner's action takes the window, whichever screen raised the banner. „Zobacz w
+    /// logach” opens Logs on errors only and clears their badge, because that is what the
+    /// banner is pointing at.
+    private func navigate(fromBanner tab: SidebarTab) {
+        if tab == .logs { logsInitialFilter = .errorsOnly; logsErrorBadge = 0 }
+        onNavigate(SidebarSelection.forTab(tab))
     }
 
     // UpdateView stays mounted for the whole session (just hidden when another destination is
@@ -150,10 +173,7 @@ struct DetailColumn: View {
             UpdateView(
                 onWegaState:   { wegaState = $0 },
                 onBadgeChange: { updateBadge = $0 },
-                onNavigate:    { tab in
-                    if tab == .logs { logsInitialFilter = .errorsOnly; logsErrorBadge = 0 }
-                    onNavigate(SidebarSelection.forTab(tab))
-                },
+                onNavigate:    navigate(fromBanner:),
                 onErrorCount:  { logsErrorBadge = $0 },
                 onActivity:    { updateActivity = $0 },
                 onFooterInfo:  { lastCheck = $0; securityBadge = $1 },
@@ -190,7 +210,7 @@ struct DetailColumn: View {
                 case .inventory:
                     InventoryView(onWegaState: { wegaState = $0 })
                 case .rollback:
-                    RollbackView()
+                    RollbackView(onNavigate: navigate(fromBanner:))
                 case .logs:
                     LogsView(onWegaState: { wegaState = $0 }, initialFilter: logsInitialFilter)
                         .id(logsInitialFilter)

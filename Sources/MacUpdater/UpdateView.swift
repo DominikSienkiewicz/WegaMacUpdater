@@ -48,7 +48,6 @@ struct UpdateView: View {
     /// Scan results and the tasks that produce them live above the language re-key,
     /// so switching language mid-scan neither loses the list nor orphans the task.
     @EnvironmentObject private var scan: ScanStore
-    @Environment(\.openSettings) private var openSettings
 
     /// Purely transient: a modal that no background task writes to, so it may die
     /// with the view tree.
@@ -137,6 +136,12 @@ struct UpdateView: View {
                 // M2 — put the previous result on screen before doing anything else. It is
                 // a no-op after the first appearance and whenever a scan has already run.
                 scan.restoreLastScan()
+                // UXP-05 — the store outlives the window and `restoreLastScan` is one-shot, so a
+                // window reopened by a notification click adopts the round that arrived while it
+                // was closed here, not through the subscription below (which skips the current value).
+                if let background = MenuBarAgent.shared.lastResult {
+                    scan.adoptBackgroundResultIfNewer(background)
+                }
                 scan.replayLastScan()
                 // LT-01 — count what can still be undone (incl. whatever launch-time
                 // recovery just settled) for the „Cofnij aktualizacje” badge. The list
@@ -147,6 +152,11 @@ struct UpdateView: View {
                 // the current one. Correct it without taking the window away from it — see
                 // `startLaunchRefresh()`. One-shot, so a tab switch does not re-trigger it.
                 scan.startLaunchRefresh()
+            }
+            // UXP-05 — a later background round replaces the list too. `dropFirst` skips the
+            // value that is already there: `restoreLastScan` weighs that one against the snapshot.
+            .onReceive(MenuBarAgent.shared.$lastResult.dropFirst().compactMap { $0 }) { result in
+                scan.adoptBackgroundResultIfNewer(result)
             }
             // UX-10 — expose the scan and the "Zaktualizuj…" action to the menu bar (⌘R, ⌘⏎).
             // `UpdateView` stays mounted for the whole session, so these are the window's
@@ -225,7 +235,6 @@ struct UpdateView: View {
             // stays live.
             screenBody
                 .disabled(!ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating))
-                .accessibilityHidden(scan.updating)
                 .overlay {
                     if scan.updating {
                         updateRunOverlay
@@ -296,7 +305,8 @@ struct UpdateView: View {
             lastCheck:      scan.lastCheck,
             freshness:      scan.freshness() ?? .fresh,
             sources:        UpdateBandPresentation.SourceChip.chips(from: scan.sourceReports),
-            wegaLine:       wegaLine
+            wegaLine:       wegaLine,
+            incompleteNote: scan.lastScanComplete ? nil : tr("sprawdzenie niepełne")
         )
     }
 
@@ -347,31 +357,13 @@ struct UpdateView: View {
     @ViewBuilder
     private var screenBody: some View {
         VStack(spacing: 0) {
-            if let b = scan.banner {
-                BannerView(
-                    data: b,
-                    onAction: { action in
-                        switch action {
-                        case .openLogs: onNavigate?(.logs)
-                        case .openSettings:
-                            openSettings()
-                        case .openAppManagementSettings:
-                            // REL-05 — straight to the pane that grants the permission,
-                            // not to Wega's own settings, which cannot grant anything.
-                            NSWorkspace.shared.open(AppManagementSettings.paneURL)
-                        case .reinstallCask(let token):
-                            Task { await scan.reinstallManual(token: token) }
-                        case .trustPublisher(let token, let teamID):
-                            Task { await scan.trustNewPublisher(token: token, reportedTeamID: teamID) }
-                        }
-                    },
-                    onClose: { scan.dismissBanner() }
-                )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
-            }
+            ScanBannerHost(onNavigate: onNavigate)
 
             staleCaskCard
+
+            PasswordPromptCallout(queuedNeedingPassword: updateTargets.filter {
+                $0.kind == .cask && scan.caskProfiles[$0.name]?.mayRequireAdminPassword == true
+            }.map(\.name))
 
             // The rows on screen are the ones the scan is in the middle of replacing, so for
             // its duration they are a report, not a menu: inert, and with the scan drawn over
@@ -459,7 +451,11 @@ struct UpdateView: View {
                         RestartSection(
                             candidates: scan.restartCandidates,
                             busyProcess: scan.restartBusy,
-                            onRestart: { info in Task { await scan.restartApp(info) } }
+                            onRestart: { info in Task { await scan.restartApp(info) } },
+                            pendingForce: scan.pendingForceRestart,
+                            onForce: { info in Task { await scan.confirmForceRestart(info) } },
+                            onKeepOpen: { info in scan.keepAppOpen(info) },
+                            onDismissForcePrompt: { info in scan.dismissForceRestartPrompt(info) }
                         )
                     }
                     // During a run the log lives in `UpdateRunOverlay`; a second copy
@@ -690,15 +686,15 @@ private struct PlanPreviewCaskRow: View {
                     .lineLimit(1)
                 Spacer(minLength: 6)
                 if download?.hasChecksum == true {
-                    Label(tr("suma sprawdzana"), systemImage: "checkmark.seal")
+                    Label(tr("suma zostanie sprawdzona"), systemImage: "checkmark.seal")
                         .labelStyle(.iconOnly)
-                        .foregroundStyle(Color.wegaSuccess)
-                        .help(tr("suma sprawdzana"))
+                        .foregroundStyle(.secondary)
+                        .help(tr("suma zostanie sprawdzona"))
                 } else {
-                    Label(tr("bez weryfikacji sumy"), systemImage: "exclamationmark.shield")
+                    Label(tr("źródło nie podaje sumy do sprawdzenia"), systemImage: "exclamationmark.shield")
                         .labelStyle(.iconOnly)
                         .foregroundStyle(Color.wegaDanger)
-                        .help(tr("bez weryfikacji sumy"))
+                        .help(tr("źródło nie podaje sumy do sprawdzenia"))
                 }
                 if protection == .protected {
                     Image(systemName: "shield.lefthalf.filled").foregroundStyle(Color.wegaSuccess)

@@ -67,6 +67,21 @@ public enum Plurals {
     }
 
     static let pl: [String: PluralForms] = [
+        "Skan zakończony: %@ aktualizacji.": PluralForms(
+            one:  "Skan zakończony: %@ aktualizacja.",
+            few:  "Skan zakończony: %@ aktualizacje.",
+            many: "Skan zakończony: %@ aktualizacji."
+        ),
+        "Odinstalowano %@ aplikacji": PluralForms(
+            one:  "Odinstalowano %@ aplikację",
+            few:  "Odinstalowano %@ aplikacje",
+            many: "Odinstalowano %@ aplikacji"
+        ),
+        "Odinstalowano %@ aplikacji.": PluralForms(
+            one:  "Odinstalowano %@ aplikację.",
+            few:  "Odinstalowano %@ aplikacje.",
+            many: "Odinstalowano %@ aplikacji."
+        ),
         "%@ aktualizacji dostępnych": PluralForms(
             one:  "%@ aktualizacja dostępna",
             few:  "%@ aktualizacje dostępne",
@@ -84,14 +99,55 @@ public enum Plurals {
             few:  "%@ aktualizacje",
             many: "%@ aktualizacji"
         ),
-        "%@ pilnych": PluralForms(
-            one:  "%@ pilna",
-            few:  "%@ pilne",
-            many: "%@ pilnych"
+        "%@ z możliwą poprawką bezp.": PluralForms(
+            one:  "%@ z możliwą poprawką bezp.",
+            few:  "%@ z możliwą poprawką bezp.",
+            many: "%@ z możliwą poprawką bezp."
+        ),
+        "Notatki %@ wydań wspominają o bezpieczeństwie.": PluralForms(
+            one:  "Notatki jednego wydania wspominają o bezpieczeństwie.",
+            few:  "Notatki %@ wydań wspominają o bezpieczeństwie.",
+            many: "Notatki %@ wydań wspominają o bezpieczeństwie."
+        ),
+        "Usuń %@ aplikacji": PluralForms(
+            one:  "Usuń %@ aplikację",
+            few:  "Usuń %@ aplikacje",
+            many: "Usuń %@ aplikacji"
+        ),
+        "i %@ wybranych resztek": PluralForms(
+            one:  "i %@ wybraną resztkę",
+            few:  "i %@ wybrane resztki",
+            many: "i %@ wybranych resztek"
+        ),
+        // UXP-05 — notification body: the apps beyond the two that are named.
+        "i %@ innych": PluralForms(
+            one:  "i %@ inna",
+            few:  "i %@ inne",
+            many: "i %@ innych"
+        ),
+        "W tle zaktualizowałam %@ aplikacji.": PluralForms(
+            one:  "W tle zaktualizowałam %@ aplikację.",
+            few:  "W tle zaktualizowałam %@ aplikacje.",
+            many: "W tle zaktualizowałam %@ aplikacji."
         )
     ]
 
     static let en: [String: PluralForms] = [
+        "Skan zakończony: %@ aktualizacji.": PluralForms(
+            one:  "Scan finished: %@ update.",
+            few:  "Scan finished: %@ updates.",
+            many: "Scan finished: %@ updates."
+        ),
+        "Odinstalowano %@ aplikacji": PluralForms(
+            one:  "Uninstalled %@ app",
+            few:  "Uninstalled %@ apps",
+            many: "Uninstalled %@ apps"
+        ),
+        "Odinstalowano %@ aplikacji.": PluralForms(
+            one:  "Uninstalled %@ app.",
+            few:  "Uninstalled %@ apps.",
+            many: "Uninstalled %@ apps."
+        ),
         "%@ aktualizacji dostępnych": PluralForms(
             one:  "%@ update available",
             few:  "%@ updates available",
@@ -107,10 +163,35 @@ public enum Plurals {
             few:  "%@ updates",
             many: "%@ updates"
         ),
-        "%@ pilnych": PluralForms(
-            one:  "%@ urgent",
-            few:  "%@ urgent",
-            many: "%@ urgent"
+        "%@ z możliwą poprawką bezp.": PluralForms(
+            one:  "%@ may fix a security issue",
+            few:  "%@ may fix security issues",
+            many: "%@ may fix security issues"
+        ),
+        "Notatki %@ wydań wspominają o bezpieczeństwie.": PluralForms(
+            one:  "One release note mentions security.",
+            few:  "%@ release notes mention security.",
+            many: "%@ release notes mention security."
+        ),
+        "Usuń %@ aplikacji": PluralForms(
+            one:  "Remove %@ app",
+            few:  "Remove %@ apps",
+            many: "Remove %@ apps"
+        ),
+        "i %@ wybranych resztek": PluralForms(
+            one:  "and %@ selected leftover",
+            few:  "and %@ selected leftovers",
+            many: "and %@ selected leftovers"
+        ),
+        "i %@ innych": PluralForms(
+            one:  "and %@ more",
+            few:  "and %@ more",
+            many: "and %@ more"
+        ),
+        "W tle zaktualizowałam %@ aplikacji.": PluralForms(
+            one:  "I updated %@ app in the background.",
+            few:  "I updated %@ apps in the background.",
+            many: "I updated %@ apps in the background."
         )
     ]
 }

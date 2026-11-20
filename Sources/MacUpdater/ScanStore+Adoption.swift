@@ -46,13 +46,13 @@ extension ScanStore {
             UpdateDiagnostics.record("adoption.skipped", fields: ["token": token, "reason": "unavailableOrBusy"])
             return
         }
-        guard UpgradeMutex.shared.acquire() else {
+        guard dependencies.upgradeMutex.acquire() else {
             UpdateDiagnostics.record("adoption.skipped", fields: ["token": token, "reason": "upgradeMutexBusy"])
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja w toku"),
                                   message: tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.")))
             return
         }
-        defer { UpgradeMutex.shared.release() }
+        defer { dependencies.upgradeMutex.release() }
         manualBusy = token
         defer { manualBusy = nil }
         let ticket = MutationGuard.shared.begin(trf("instalacja %@", "\(token)"))
@@ -111,9 +111,9 @@ extension ScanStore {
             UpdateStageDiagnostics.recordOperation(ready.operation)
         case .resourcePostponed(let reason):
             UpdateDiagnostics.record("adoption.deferred", fields: ["token": token, "reason": "resources", "detail": String(describing: reason)])
-            brewLog.append("⏸ " + trf("Aktualizacja odroczona: %@.", "\(reason)"))
-            showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
-                                  message: trf("Bramka zasobów: %@.", "\(reason)")))
+            brewLog.append(reason.logLine)
+            showBanner(BannerData(variant: .danger, title: tr("Odkładam pobieranie"),
+                                  message: reason.localizedMessage))
             emitActivitySignal(.error)
             return
         case .publisherRejected(let old, let new):

@@ -63,6 +63,39 @@ struct MenuBarScanResultNamesTests {
         #expect(names.count == result.total)
     }
 
+    private func result(casks: [String], manual names: [String] = []) -> MenuBarScanResult {
+        let brew = BrewOutdated(formulae: [], casks: casks.map {
+            BrewOutdatedItem(name: $0, installedVersions: ["1.0"], currentVersion: "2.0")
+        })
+        return MenuBarScanResult(brew: brew, mas: [], npm: [], manualApps: names.map(manual),
+                                 failedChecks: 0, scannedAt: Date(), total: casks.count + names.count)
+    }
+
+    /// M4 — the notification spells out the first two names, and those were simply the first
+    /// two outdated apps: a round that added one app at the end announced two old ones.
+    @Test func theAppsThatAreNewComeFirst() {
+        let previous = result(casks: ["figma", "zoom", "slack"])
+        let current = result(casks: ["figma", "zoom", "slack", "arc"])
+
+        #expect(current.outdatedDisplayNames(newSince: previous) == ["arc", "figma", "zoom", "slack"])
+    }
+
+    /// Identity is the source-tagged key, not the name: a manual app is new when its path is.
+    @Test func aManualAppIsNewByItsPath() {
+        let previous = result(casks: ["figma", "zoom"], manual: ["Zed"])
+        let current = result(casks: ["figma", "zoom"], manual: ["Zed", "Arc"])
+
+        #expect(current.outdatedDisplayNames(newSince: previous) == ["Arc", "figma", "zoom", "Zed"])
+    }
+
+    /// Without an earlier round everything is new, and the badge order stands.
+    @Test func withoutAnEarlierRoundTheOrderStands() {
+        let current = result(casks: ["figma", "zoom", "arc"])
+
+        #expect(current.outdatedDisplayNames(newSince: nil) == ["figma", "zoom", "arc"])
+        #expect(current.outdatedDisplayNames(newSince: current) == ["figma", "zoom", "arc"])
+    }
+
     /// Nothing outdated → nothing to name.
     @Test func nothingOutdatedYieldsNoNames() {
         let empty = MenuBarScanResult(brew: nil, mas: [], npm: [], manualApps: [],

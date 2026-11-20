@@ -34,7 +34,10 @@ enum SidebarTab: String, Identifiable {
 /// Live state of the Updates tab, surfaced on its sidebar icon: the icon spins while a
 /// scan/upgrade runs, turns green when it finishes cleanly, red when a source failed.
 enum UpdateActivity: Equatable {
-    case idle, scanning, success, error
+    case idle, scanning, updating, success, error
+
+    /// The two states that keep working in the background and so spin the sidebar icon.
+    var spinsContinuously: Bool { self == .scanning || self == .updating }
 }
 
 // MARK: - Root view
@@ -53,6 +56,7 @@ struct ContentView: View {
     /// Drives the toolbar's globe menu. Injected at the scene root (`MacUpdaterApp.swift`),
     /// which also re-keys this tree on change — so the switch takes effect everywhere at once.
     @EnvironmentObject private var localization: LocalizationManager
+    @Environment(\.openWindow) private var openWindow
 
     @State private var wegaState:         WegaState       = .forTab(.update)
     @State private var updateBadge:       Int             = 0
@@ -60,6 +64,7 @@ struct ContentView: View {
     @State private var logsErrorBadge:    Int             = 0
     @State private var uninstallPreselection: URL?        = nil
     @State private var updateActivity:    UpdateActivity  = .idle
+    @State private var updateProgress:    UpgradeProgress?
     /// F4 — informational, not a gate: drives the "install Homebrew" invitation card.
     @State private var brewInstalled: Bool
     @State private var lastCheck:     Date? = nil
@@ -98,6 +103,7 @@ struct ContentView: View {
                 logsErrorBadge: logsErrorBadge,
                 rollbackBadge:  rollbackBadge,
                 updateActivity: updateActivity,
+                updateProgress: updateProgress,
                 wegaState:      wegaState,
                 lastCheck:      lastCheck,
                 quip:           quip
@@ -113,6 +119,7 @@ struct ContentView: View {
                 wegaState:         $wegaState,
                 updateBadge:       $updateBadge,
                 updateActivity:    $updateActivity,
+                updateProgress:    $updateProgress,
                 logsInitialFilter: $logsInitialFilter,
                 logsErrorBadge:    $logsErrorBadge,
                 uninstallPreselection: $uninstallPreselection,
@@ -167,6 +174,9 @@ struct ContentView: View {
         .frame(minWidth: WegaLayout.windowMinWidth, minHeight: WegaLayout.windowMinHeight)
         .onChange(of: selection) { _, new in wegaState = .forTab(new.tab) }
         .task { migrateLegacyTab() }
+        // I1 — a second registration beside `MenuBarLabel`'s, so a notification click can
+        // reopen a closed window even if the menu-bar label never appeared.
+        .onAppear { NotificationRouter.shared.openMainWindow = { openWindow(id: "main") } }
     }
 
     /// One-shot migration off `wega.activeTab`, which stored only the tab and never the Updates
