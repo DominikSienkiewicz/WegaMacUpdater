@@ -10,7 +10,7 @@ cuts the release with `scripts/release.sh`, pushes the commit and the tag togeth
 `release.yml`. It pushes only after that approval. A session in a linked worktree is told to
 ask from the repository root instead.
 
-**Manual path.** Write the notes under `[Unreleased]` in `CHANGELOG.md`, or in a file, then:
+**Manual path.** Write the notes under `[Unreleased]` in `CHANGELOG.md` and commit them (the script refuses a tree with tracked modifications), or put them in a file outside the tree, then:
 
 ```bash
 ./scripts/release.sh minor --dry-run               # every check, both diffs, nothing changed
@@ -45,7 +45,7 @@ read it.
 
 Put the notes in one of two places:
 
-- the `## [Unreleased]` section of `CHANGELOG.md`, or
+- the `## [Unreleased]` section of `CHANGELOG.md`, already committed on `main` — uncommitted edits to a tracked file make the script refuse; or
 - a file passed with `--notes FILE` — the section body only.
 
 A summary paragraph above the first `### ` heading is allowed. Any `### ` headings are kept
