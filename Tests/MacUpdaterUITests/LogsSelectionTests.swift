@@ -24,10 +24,12 @@ struct LogsSelectionTests {
         #expect(LogSelection.pruned([], toVisible: [entry("a")]).isEmpty)
     }
 
-    @Test func theReportButtonIsGatedOnANonEmptySelection() throws {
+    @Test func theReportButtonWorksWithoutASelection() throws {
         let source = try Self.source("Sources/MacUpdater/LogsView.swift")
-        #expect(source.contains(".disabled(selection.isEmpty)"))
+        #expect(!source.contains(".disabled(selection.isEmpty)"))
         #expect(source.contains("tr(\"Zgłoś błąd…\")"))
+        let range = try #require(source.range(of: "private func startReport()"))
+        #expect(!source[range.upperBound...].prefix(300).contains("guard !selected.isEmpty"))
     }
 
     @Test func theListCarriesASelectionBinding() throws {

@@ -15,6 +15,7 @@ struct InfoView: View {
     @StateObject var diagnosticsExport = DiagnosticsExportController()
     // SEC-08: opcjonalny token GitHub (Keychain).
     @State private var githubTokenInput: String = ""
+    @State private var reportController: BugReportController?
 
     private var diagnostics: DiagnosticsResult? { operations.diagnostics }
     private var catalogRefreshing: Bool { operations.catalogRefreshing }
@@ -79,6 +80,9 @@ extension InfoView {
             }
             touchIDController.refresh()
             operations.refreshPersistentState()
+        }
+        .sheet(item: $reportController) { controller in
+            BugReportSheet(controller: controller) { reportController = nil }
         }
     }
 
@@ -638,7 +642,8 @@ extension InfoView {
                 HStack(spacing: 16) {
                     Link("GitHub", destination: AppEndpoints.shared.projectRepositoryURL)
                         .font(.wega(.body))
-                    Link(tr("Zgłoś błąd"), destination: AppEndpoints.shared.projectIssuesURL)
+                    Button(tr("Zgłoś błąd")) { reportController = BugReportController(entries: []) }
+                        .buttonStyle(.link)
                         .font(.wega(.body))
                 }
                 .padding(.horizontal, 14)
@@ -707,11 +712,6 @@ extension InfoView {
                     ProgressView().controlSize(.small)
                 }
                 Spacer()
-                if diagnosticsExport.lastExportURL != nil {
-                    Button(tr("Pokaż w Finderze")) { diagnosticsExport.revealLastExport() }
-                        .buttonStyle(.link)
-                        .font(.wega(.subheadline))
-                }
             }
 
             Text(tr("Zapisuje paczkę zip z oboma plikami logów, wersjami, wykrytymi menedżerami, statusem harmonogramu i historią aktualizacji. Ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami; nic nie jest nigdzie wysyłane."))
@@ -719,12 +719,7 @@ extension InfoView {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if let error = diagnosticsExport.lastError {
-                Text(error)
-                    .font(.wega(.subheadline))
-                    .foregroundStyle(Color.wegaDanger)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            DiagnosticsExportStatusRow(controller: diagnosticsExport)
         }
         .padding(14)
     }

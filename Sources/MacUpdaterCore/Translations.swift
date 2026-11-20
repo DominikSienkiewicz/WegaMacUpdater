@@ -796,10 +796,6 @@ extension Translations {
             + "Ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami; nic nie jest nigdzie wysyłane.":
             "Saves a zip with both log files, versions, detected managers, schedule status and update history. "
             + "Paths, tokens and account names are replaced with placeholders; nothing is sent anywhere.",
-        "Zapisuje redagowaną paczkę zip z oboma plikami logów i pełnym kontekstem środowiska.":
-            "Saves a redacted zip with both log files and the full environment context.",
-        "Paczka jest redagowana — ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami.":
-            "The bundle is redacted — paths, tokens and account names are replaced with placeholders.",
         "Katalog aplikacji": "Application catalog",
         "Wega pobiera mapowania aplikacji (repozytoria GitHub, kody IDE JetBrains, feedy Sparkle) z sieci, "
             + "więc nowe aplikacje są obsługiwane bez aktualizacji Wegi. Zmiany zastosują się po ponownym uruchomieniu.":
@@ -979,8 +975,6 @@ extension Translations {
         // Zgłaszanie błędów z zakładki Logi.
         "Zgłoś błąd…": "Report a problem…",
         "Opisz, co się stało": "Describe what happened",
-        "Co robiłeś, zanim to się wydarzyło? (opcjonalne)":
-            "What were you doing when it happened? (optional)",
         "Podgląd zgłoszenia": "Report preview",
         "Zbieram informacje o środowisku…": "Gathering environment information…",
         "Wyślij e-mailem": "Send by e-mail",
@@ -993,13 +987,9 @@ extension Translations {
         "Adres": "Address",
         "Temat": "Subject",
         "Treść": "Contents",
-        "Zgłoszenie jest redagowane — ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami.":
-            "The report is redacted: paths, tokens and account names are replaced with placeholders.",
-        "Zaznacz wpisy w logu, żeby zgłosić błąd": "Select log entries to report a problem",
         // Fix round 1 — channel picker replaces two send buttons, and the no-handler
         // fallback becomes channel-aware.
         "Kanał": "Channel",
-        "Wyślij zgłoszenie": "Send report",
         "Nie udało się otworzyć zgłoszenia na GitHubie": "Could not open the GitHub issue page",
         "Ta maszyna nie może otworzyć strony zgłoszenia. Skopiuj poniższe dane i utwórz je ręcznie pod tym adresem.":
             "This machine cannot open the issue page. Copy the details below and create it manually at this address.",
