@@ -37,12 +37,16 @@ struct UpdateRowLayoutTests {
     }
 
     @Test func aLongCaskVersionStaysOnOneLine() throws {
-        let short = NSHostingView(rootView: VersionArrow(from: "1.0", to: "1.1")).fittingSize.height
-        let long = NSHostingView(rootView: VersionArrow(
-            from: "6.6395.1,8fc566f7b97e371bae421fc79c260de86c6a4106",
-            to: "6.28899.2,155ca43c0ad5a4bd5734795688543b65b464cf47"
-        )).fittingSize.height
-        #expect(long == short, "a long Homebrew version does not wrap the row")
+        let column = WegaLayout.versionColumnWidth
+        let shortPair = height(VersionArrow(from: "1.0", to: "1.1").frame(width: column))
+        let unshortenable = String(repeating: "1.", count: 30) + "0"
+        for (from, to) in [
+            ("6.6395.1,8fc566f7b97e371bae421fc79c260de86c6a4106", "6.28899.2,155ca43c0ad5a4bd5734795688543b65b464cf47"),
+            (unshortenable, unshortenable + "1"),
+        ] {
+            #expect(height(VersionArrow(from: from, to: to).frame(width: column)) == shortPair,
+                    "\(from) must not wrap inside the version column")
+        }
 
         let arrow = try slice(
             try source("Sources/MacUpdater/SharedViews.swift"),
@@ -50,6 +54,26 @@ struct UpdateRowLayoutTests {
         )
         #expect(arrow.contains(".help("), "the full versions stay reachable as a tooltip")
         #expect(arrow.contains(".truncationMode(.middle)"))
+    }
+
+    @Test func aLongVersionDoesNotGrowARowBuiltFromTheSharedColumns() {
+        func row(_ from: String, _ to: String) -> some View {
+            UpdateRowColumns { Text("claude") } version: { VersionArrow(from: from, to: to) }
+                .frame(width: 640)
+        }
+        let short = height(row("1.0", "1.1"))
+        let long = height(row("6.6395.1,8fc566f7b97e371bae421fc79c260de86c6a4106",
+                              "6.28899.2,155ca43c0ad5a4bd5734795688543b65b464cf47"))
+        #expect(long == short)
+    }
+
+    @Test func theInspectorKeepsTheFullVersions() throws {
+        let inspector = try source("Sources/MacUpdater/InspectorPane.swift")
+        #expect(inspector.contains("VersionArrow(from: info.from, to: info.to, emphasis: info.emphasis, style: .full)"))
+    }
+
+    private func height<Content: View>(_ view: Content) -> CGFloat {
+        NSHostingView(rootView: view).fittingSize.height
     }
 
     @Test func vendorCardsWithoutAPathShowTheHandoffMark() throws {

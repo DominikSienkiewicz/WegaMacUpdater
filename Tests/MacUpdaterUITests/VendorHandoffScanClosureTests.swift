@@ -99,6 +99,42 @@ final class VendorHandoffScanClosureTests: XCTestCase {
         XCTAssertTrue(store.vendorHandoffs.isEmpty)
     }
 
+    /// The live scan decides whether an absent app is gone from its own completeness, not the
+    /// previous scan's (a store starts out "complete").
+    func testIncompleteScanKeepsAHandoffWhoseAppItCannotSee() async throws {
+        let store = try storeScanningForAbsentApp(failedChecks: 1)
+        await store.runCheck()
+        XCTAssertFalse(store.lastScanComplete)
+        XCTAssertEqual(store.vendorHandoffs.map(\.name), ["Logi Options+"])
+    }
+
+    func testCompleteScanDropsAHandoffWhoseAppIsGone() async throws {
+        let store = try storeScanningForAbsentApp(failedChecks: 0)
+        await store.runCheck()
+        XCTAssertTrue(store.lastScanComplete)
+        XCTAssertTrue(store.vendorHandoffs.isEmpty)
+    }
+
+    private func storeScanningForAbsentApp(failedChecks: Int) throws -> ScanStore {
+        let gone = ManualOutdatedApp(
+            name: "Logi Options+", path: URL(fileURLWithPath: "/Applications/logioptionsplus.app"),
+            installedVersion: "2.9.1013853", availableVersion: "2.9.1013853", source: .cask(token: "logi-options+"),
+            origin: .brew, bundleIdentifier: "com.logi.optionsplus",
+            completionRequirement: .init(version: "2.9.1013853"), caskPolicyToken: "logi-options+"
+        )
+        let harness = makeScanStoreRuntimeHarness(runner: runner(), bundleExists: { $0.path == "/Applications" })
+        var dependencies = harness.store.dependencies
+        let report = ManualScanReport(apps: [], failedChecks: failedChecks, installations: [])
+        dependencies.detailedManualScan = { _, _ in report }
+        dependencies.recordUpdateRun = { _ in XCTFail("A vanished app is not a finished update") }
+        let store = ScanStore(resultStore: ScanResultStore(io: harness.snapshots), dependencies: dependencies)
+        store.attach(model: try XCTUnwrap(harness.store.model))
+        store.lastCheck = Date(timeIntervalSince1970: 1_000)
+        store.status = .results
+        store.vendorHandoffs = [gone]
+        return store
+    }
+
     private func storeScanning(
         sourceOutcome: InstallationSourceCheck.Outcome,
         record: @escaping (UpdateJournalEntry) -> Void
