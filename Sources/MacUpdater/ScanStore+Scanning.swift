@@ -401,7 +401,7 @@ extension ScanStore {
             case .checkFailed, .partialFailure: emitActivitySignal(.error)
             }
         }
-        announceScan(scanState)
+        if emitActivity { announceScan(scanState) }
         switch scanState {
         case .upToDate:
             if let msg = errorMessage {

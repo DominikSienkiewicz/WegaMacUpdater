@@ -31,7 +31,19 @@ enum AnnouncementCopy {
     static func runFinished(updated: Int, total: Int, needsAttention: [String]) -> String {
         let sentence = trf("Aktualizacja zakończona: %@ z %@.", "\(updated)", "\(total)")
         guard !needsAttention.isEmpty else { return sentence }
-        return sentence + " " + trf("%@ wymaga uwagi.", needsAttention.joined(separator: ", "))
+        let names = needsAttention.joined(separator: ", ")
+        let attention = needsAttention.count == 1
+            ? trf("%@ wymaga uwagi.", names)
+            : trf("%@ wymagają uwagi.", names)
+        return sentence + " " + attention
+    }
+
+    static func runStopped(updated: Int, total: Int) -> String {
+        trf("Aktualizacja zatrzymana: zaktualizowano %@ z %@.", "\(updated)", "\(total)")
+    }
+
+    static func uninstallNothingRemoved() -> String {
+        tr("Nic nie odinstalowano. Szczegóły są na liście wyników.")
     }
 
     static func uninstallFinished(removed: Int) -> String {

@@ -36,7 +36,35 @@ struct AccessibilityAnnouncementTests {
         let harness = makeScanStoreRuntimeHarness(runner: runner, announcer: announcer)
         await LocalizedStrings.withScopedLanguage(.pl) {
             await harness.store.runCheck()
+            #expect(announcer.texts.count == 1)
             #expect(announcer.texts.last?.hasPrefix("Skan zakończony") == true)
+        }
+    }
+
+    @Test func aLightweightRescanIsNotAnnounced() async {
+        let announcer = RecordingAnnouncer()
+        let harness = makeScanStoreRuntimeHarness(runner: ScanStoreRuntimeProcessRunner { request in
+            ProcessResult(exitCode: 0, stdout: request.arguments.contains("--json=v2")
+                          ? "{\"formulae\":[],\"casks\":[]}" : "", stderr: "")
+        }, announcer: announcer)
+        await harness.store.runCheck(emitActivity: false, lightweight: true)
+        #expect(announcer.texts.isEmpty)
+    }
+
+    @Test func stoppedRunAndNothingRemovedHaveTheirOwnCopy() {
+        LocalizedStrings.withScopedLanguage(.pl) {
+            #expect(AnnouncementCopy.runStopped(updated: 2, total: 5) == "Aktualizacja zatrzymana: zaktualizowano 2 z 5.")
+            #expect(AnnouncementCopy.uninstallNothingRemoved() == "Nic nie odinstalowano. Szczegóły są na liście wyników.")
+            #expect(AnnouncementCopy.runFinished(updated: 3, total: 5, needsAttention: ["Slack"])
+                    == "Aktualizacja zakończona: 3 z 5. Slack wymaga uwagi.")
+            #expect(AnnouncementCopy.runFinished(updated: 3, total: 5, needsAttention: ["Slack", "Zoom"])
+                    == "Aktualizacja zakończona: 3 z 5. Slack, Zoom wymagają uwagi.")
+        }
+        LocalizedStrings.withScopedLanguage(.en) {
+            #expect(AnnouncementCopy.runStopped(updated: 2, total: 5) == "Update stopped: 2 of 5 updated.")
+            #expect(AnnouncementCopy.uninstallNothingRemoved() == "Nothing was uninstalled. Details are in the results list.")
+            #expect(AnnouncementCopy.runFinished(updated: 3, total: 5, needsAttention: ["Slack", "Zoom"])
+                    == "Update finished: 3 of 5. Slack, Zoom need attention.")
         }
     }
 

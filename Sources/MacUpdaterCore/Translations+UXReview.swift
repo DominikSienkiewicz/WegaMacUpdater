@@ -70,5 +70,9 @@ extension Translations {
         "Sprawdzanie niepełne.": "Check incomplete.",
         "Aktualizacja zakończona: %@ z %@.": "Update finished: %@ of %@.",
         "%@ wymaga uwagi.": "%@ needs attention.",
+        "%@ wymagają uwagi.": "%@ need attention.",
+        "Aktualizacja zatrzymana: zaktualizowano %@ z %@.": "Update stopped: %@ of %@ updated.",
+        "Nic nie odinstalowano. Szczegóły są na liście wyników.":
+            "Nothing was uninstalled. Details are in the results list.",
     ]
 }

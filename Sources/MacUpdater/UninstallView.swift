@@ -468,6 +468,7 @@ struct UninstallView: View {
             show(UninstallResultPresentation.report(
                 results: skipped, apps: reportedApps, leftoversTrashed: 0, leftoversFailed: 0, requestedZap: zap
             ))
+            announcer.announce(AnnouncementCopy.uninstallNothingRemoved())
             return
         }
         // REL-06 — `brew uninstall --cask` (with `--zap` it also deletes preferences and
@@ -502,7 +503,9 @@ struct UninstallView: View {
             onWegaState?(WegaState(pose: .happy, line: trf("Załatwione — %@ mniej na dysku.", "\(succeeded.count)")))
         }
         show(report)
-        announcer.announce(AnnouncementCopy.uninstallFinished(removed: succeeded.count))
+        announcer.announce(succeeded.isEmpty
+            ? AnnouncementCopy.uninstallNothingRemoved()
+            : AnnouncementCopy.uninstallFinished(removed: succeeded.count))
     }
 
     /// The success banner names what was removed; everything else stays together in `result`.

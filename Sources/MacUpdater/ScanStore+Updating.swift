@@ -318,6 +318,7 @@ extension ScanStore {
         let interrupted = updateInterruption.didSkipWork
         if interrupted {
             reportInterruptedRun(upgraded: summary.upgraded.count)
+            announcer.announce(AnnouncementCopy.runStopped(updated: summary.upgraded.count, total: summary.attempted))
         } else {
             announcer.announce(AnnouncementCopy.runFinished(
                 updated: summary.upgraded.count,
