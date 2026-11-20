@@ -56,7 +56,7 @@ public enum CleanupRemovalOutcome: Equatable, Sendable {
 
 /// The only Cleanup code that changes anything. Under one write lease, so no scan or update runs in
 /// between, it re-checks that the item is still the one the scan identified, is not what its tool's
-/// link now points to, is still shadowed by a working copy of its own when D1 found it shadowed, is
+/// link now points to, for a D1 copy the user did not keep still leaves the kept copy working, is
 /// not used by a process the user has not acknowledged, for D6 and D7 still not referenced by a
 /// project or an installed IDE, for a formula still has no dependents and, for `brew cleanup`,
 /// still has leftovers and no recent upgrade; only then does it act. Files only ever go to the
@@ -119,7 +119,7 @@ public struct CleanupRemover: Sendable {
         guard let entries = try unchangedEntries(of: finding) else { return .changedSinceScan }
         let targets = try targets(of: entries, action: finding.action)
         if try isPointedToByCurrentLink(finding, locations: targets.locations) { return .changedSinceScan }
-        guard isStillShadowed(finding, locations: targets.locations) else { return .changedSinceScan }
+        guard isKeptCopyStillWorking(finding, locations: targets.locations) else { return .changedSinceScan }
         if case .brew(.cleanup(let name)) = finding.action {
             return try await cleanUp(name, scanned: targets.locations, inUseAcknowledged: intent.inUseAcknowledged)
         }
@@ -266,22 +266,30 @@ public struct CleanupRemover: Sendable {
         return false
     }
 
-    /// A copy D1 found shadowed may go only while the copy that shadowed it still works on its
-    /// own: that path still resolves to an executable file, that file is not the one being
-    /// removed and, for `brew uninstall`, it lies outside the package the command removes. A
-    /// persisted report keeps its buttons, and once the active copy is gone the shadowed one may be
-    /// the only working copy left. Any failure to resolve it counts as gone.
-    private func isStillShadowed(_ finding: CleanupFinding, locations: [Location]) -> Bool {
-        guard finding.detector == .pathDuplicates, case .shadowedBy(let path) = finding.reason else { return true }
+    /// A D1 copy the user did not keep may go only while the kept copy still works on its own:
+    /// the kept path (`shadowedBy` when the kept copy is the `PATH`-active one, `keptInstead`
+    /// otherwise) still resolves to an executable file, that file is not the one being removed and,
+    /// for `brew uninstall`, it lies outside the package the command removes. A persisted report
+    /// keeps its buttons, and once the kept copy is gone this one may be the only working copy left.
+    /// Any failure to resolve it counts as gone.
+    private func isKeptCopyStillWorking(_ finding: CleanupFinding, locations: [Location]) -> Bool {
+        guard finding.detector == .pathDuplicates, let path = Self.keptPath(of: finding.reason) else { return true }
         guard CleanupPathText.isAbsolute(path), !CleanupPathText.containsNUL(path),
-              let active = try? fileSystem.realpath(URL(filePath: path, directoryHint: .notDirectory)),
-              let entry = try? fileSystem.entry(at: active), entry.kind == .file, entry.isExecutable
+              let kept = try? fileSystem.realpath(URL(filePath: path, directoryHint: .notDirectory)),
+              let entry = try? fileSystem.entry(at: kept), entry.kind == .file, entry.isExecutable
         else { return false }
-        let activeComponents = CleanupPathText.components(of: active.path)
-        if locations.contains(where: { CleanupPathText.components(of: $0.url.path) == activeComponents }) { return false }
+        let keptComponents = CleanupPathText.components(of: kept.path)
+        if locations.contains(where: { CleanupPathText.components(of: $0.url.path) == keptComponents }) { return false }
         guard case .brew(let action) = finding.action else { return true }
         guard let package = Self.package(of: action, holding: locations) else { return false }
-        return !activeComponents.starts(with: package)
+        return !keptComponents.starts(with: package)
+    }
+
+    private static func keptPath(of reason: CleanupReason) -> String? {
+        switch reason {
+        case .shadowedBy(let path), .keptInstead(let path): path
+        default: nil
+        }
     }
 
     /// `<prefix>/Cellar/<name>` or `<prefix>/Caskroom/<token>` as components: what `brew uninstall`
