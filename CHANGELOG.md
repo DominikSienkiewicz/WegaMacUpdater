@@ -21,6 +21,8 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   rows used to vanish behind a frosted layer, so the screen looked empty and frozen. They
   now stay visible, dimmed, and Wega is back over the top of the list, sniffing through the
   check as she did before 0.8.0.
+- **The list stays readable while updates install.** During an update run the rows used to
+  vanish behind the same frosted layer. They now stay visible, dimmed, behind the note.
 
 ## [0.8.0] — 2026-11-20
 

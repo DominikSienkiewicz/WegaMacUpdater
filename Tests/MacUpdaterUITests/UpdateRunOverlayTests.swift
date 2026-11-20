@@ -36,10 +36,23 @@ struct UpdateRunOverlayTests {
                 "the overlay appears exactly while an update runs")
         #expect(view.contains("onCancel:   { scan.cancelUpdate() }"),
                 "and its stop button is wired to the run's cooperative cancel")
-        #expect(overlay.contains(".background(.regularMaterial)"),
+        #expect(overlay.contains(".background(Color(nsColor: .windowBackgroundColor).opacity(ScanBusyOverlay.scrimOpacity))"),
                 "the overlay covers the screen it stands down")
         #expect(overlay.contains(".disabled(isStopping)"),
                 "a stop already requested cannot be requested twice")
+    }
+
+    /// 0.8.0 promised that the list stays stood down behind a note until the run lands, but the
+    /// overlay drew `.regularMaterial`, which on the dark window blurs the rows into an empty
+    /// column — the same defect a scan in place had. The run now stands the rows down with the
+    /// scan's own veil, so the two cannot drift apart, and the rows stay readable underneath.
+    @Test func theRowsStayReadableUnderTheRun() throws {
+        let overlay = executableSource(try source("Sources/MacUpdater/UpdateRunOverlay.swift"))
+
+        #expect(!overlay.contains("Material"),
+                "a material of any thickness blurs the rows into an empty column")
+        #expect(overlay.contains("opacity(ScanBusyOverlay.scrimOpacity)"),
+                "the same veil as a scan in place, not a second tuning of it")
     }
 
     /// The overlay is applied after `.disabled`, so it is not itself disabled. Were the order

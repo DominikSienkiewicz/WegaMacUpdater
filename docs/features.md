@@ -200,8 +200,9 @@ the button's tooltip names the running scan instead of blaming an empty selectio
 
 #### Running the update
 
-While a run is in progress the rest of the screen is disabled and stood down by a material,
-with a note explaining why. The run takes the action bar's place and shape at the bottom —
+While a run is in progress the rest of the screen is disabled and stood down by the same
+translucent veil a scan in place uses, so the rows stay readable underneath, with a note
+explaining why. The run takes the action bar's place and shape at the bottom —
 both draw through one chrome (`wegaBottomBar()`) — with the progress, the live log toggle and
 **Stop after this one**. That bar is part of the run overlay, the one layer above the
 disabled screen, so the stop button is never disabled along with what it covers.
