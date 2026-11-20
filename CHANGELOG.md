@@ -14,6 +14,35 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
 ## [Unreleased]
 
 ### Fixed
+- **An incomplete check no longer says everything is up to date.** If some sources did not
+  answer, the menu-bar icon, its menu, Wega's card and VoiceOver now say the check was
+  incomplete instead of "all up to date", and Wega's cheerful line appears only after a
+  complete check.
+- **Undo results are visible.** The Undo screen now shows whether an undo worked or why it
+  could not be done, and keeps saying that the version is pinned. Its empty state no longer
+  promises a copy after every update: only supported Homebrew app updates keep one, for 7
+  days, and never the app's data.
+- **The plan and error messages say only what has happened, in your language.** The plan no
+  longer claims a checksum was verified before anything is downloaded, and the password
+  prompt, postponed-update reasons and helper errors no longer appear in Polish on an
+  English interface.
+- **Uninstall and restart are safer.** The destructive button in Uninstall is no longer the
+  one Return presses, and its footer counts the apps and the leftovers you selected and says
+  where each goes. **Restart** after an update first asks the app to quit and offers **Force
+  Quit** only when it refuses, warning that unsaved work may be lost.
+- **Notifications can be changed again.** Answering **Keep Notifications Off** is no longer
+  final: **Settings → Notifications** switches them on or off. Clicking a notification opens
+  the window with the new updates already listed, even if it was closed, and the texts use
+  the right plural forms.
+- **Installing from the .dmg no longer fails silently on password prompts.** Wega says when
+  this copy cannot ask for an administrator password and which update will not install, and
+  recommends the .pkg.
+- **Updates that run now show everywhere.** The sidebar, VoiceOver and the menu-bar dropdown
+  show "Updating 2 of 5" instead of "Checking", and the dropdown has a stop button even
+  with the window closed. The button now reads **Stop After Active Installs**, which is what
+  it does: installs already running finish, nothing new starts.
+- **VoiceOver announces when work ends.** Finished scans, finished or stopped update runs and
+  uninstalls that removed nothing are announced, and the list stays readable during a run.
 - **Fewer false alarms on release notes.** A flagged term now has to start a word, so
   ordinary words that merely contain one no longer put an update among the urgent ones or
   give it the red warning label.
@@ -23,6 +52,16 @@ release, so that step is never done by hand — see [RELEASING.md](RELEASING.md)
   check as she did before 0.8.0.
 - **The list stays readable while updates install.** During an update run the rows used to
   vanish behind the same frosted layer. They now stay visible, dimmed, behind the note.
+
+### Changed
+- **"Possible security fix" instead of "urgent".** The band, Wega's card and the sidebar
+  badge say that release notes mention security, and the inspector shows which words
+  were found, because the match is a guess from the notes' wording.
+- **A readiness card before the first update.** After the first result, a card says which
+  permissions the first update may need (replacing apps in /Applications, an administrator
+  password), lets you check them or turn on Touch ID, and asks once about notifications.
+- **The .pkg is the recommended download.** The user guide and the release notes explain
+  that the .dmg cannot ask for an administrator password.
 
 ## [0.8.0] — 2026-11-20
 
