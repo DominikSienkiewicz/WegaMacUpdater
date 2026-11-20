@@ -44,6 +44,21 @@ struct ServiceVendorPackageHandoffTests {
         #expect(store.unresolvedServiceItems.isEmpty)
     }
 
+    /// The scan decides whether a vanished hand-off may be dropped from `lastScanComplete`, so
+    /// the live scan must publish its own completeness before closing hand-offs, not the
+    /// previous scan's.
+    @Test func aLiveScanPublishesItsCompletenessBeforeItClosesHandoffs() throws {
+        let scanning = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Sources/MacUpdater/ScanStore+Scanning.swift"),
+            encoding: .utf8
+        )
+        let publish = try #require(scanning.range(of: "applyScanSourceReports(reports)")?.lowerBound)
+        let close = try #require(scanning.range(of: "closeVendorHandoffsConfirmedByScan()")?.lowerBound)
+        #expect(publish < close)
+    }
+
     private func preparedStore() -> ScanStore {
         let runner = ScanStoreRuntimeProcessRunner { _ in
             Issue.record("A package vendor handoff must not run Homebrew or alter a service")

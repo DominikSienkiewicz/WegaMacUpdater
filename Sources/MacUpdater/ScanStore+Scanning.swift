@@ -297,12 +297,13 @@ extension ScanStore {
             previous: installationChecks
         )
         lastCheck = Date()
+        // REL-09 — the per-source picture is part of the result from here on: it decides
+        // what gets persisted, and whether an empty list may call itself "up to date".
+        // Published first, because closing hand-offs trusts this scan's completeness.
+        applyScanSourceReports(reports)
         closeVendorHandoffsConfirmedByScan()
         status    = .results
         progress  = .finished
-        // REL-09 — the per-source picture is part of the result from here on: it decides
-        // what gets persisted, and whether an empty list may call itself "up to date".
-        applyScanSourceReports(reports)
 
         finishScan(emitActivity: emitActivity, silentSources: silentSources, failedSources: failed,
                    manualFailureMessage: manualFailureMessage)
