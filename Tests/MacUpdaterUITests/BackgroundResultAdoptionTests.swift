@@ -52,4 +52,37 @@ struct BackgroundResultAdoptionTests {
         #expect(!store.adoptBackgroundResultIfNewer(result(at: .now)))
         #expect(store.brewOutdated == nil)
     }
+
+    /// The window was closed, a background round arrived, the window reopens: the one-shot
+    /// restore has already run, so only the adopt call can bring the new list in.
+    @Test func aResultThatArrivedAfterTheRestoreStillReachesTheList() {
+        let store = makeStore()
+        store.restoreLastScan()
+        store.lastCheck = Date.now.addingTimeInterval(-3600)
+        store.status = .results
+        let fresh = result(at: .now)
+        #expect(store.adoptBackgroundResultIfNewer(fresh))
+        #expect(store.brewOutdated?.casks.map(\.name) == ["adopt-cask"])
+    }
+
+    @Test func reopeningTheWindowAdoptsTheCurrentResultAfterTheRestore() throws {
+        let source = try String(contentsOfFile: Self.path("Sources/MacUpdater/UpdateView.swift"), encoding: .utf8)
+        let restore = try #require(source.range(of: "scan.restoreLastScan()"))
+        let adopt = try #require(source.range(of: "scan.adoptBackgroundResultIfNewer(background)"),
+                                 "UXP-05: a reopened window never adopts the result that arrived while it was closed")
+        #expect(restore.lowerBound < adopt.lowerBound)
+        #expect(source.contains("MenuBarAgent.shared.lastResult"))
+    }
+
+    @Test func aSwitchedOffNotificationChoiceIsHonouredWhenPosting() throws {
+        let source = try String(contentsOfFile: Self.path("Sources/MacUpdater/MenuBarAgent.swift"), encoding: .utf8)
+        let post = try #require(source.range(of: "private func postNotification(count: Int)"))
+        let guardLine = try #require(source.range(of: "inAppAnswer != .declined"))
+        #expect(post.lowerBound < guardLine.lowerBound)
+    }
+
+    private static func path(_ relative: String, file: String = #filePath) -> String {
+        URL(fileURLWithPath: file).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent(relative).path
+    }
 }

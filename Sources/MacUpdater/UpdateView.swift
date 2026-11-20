@@ -136,6 +136,12 @@ struct UpdateView: View {
                 // M2 — put the previous result on screen before doing anything else. It is
                 // a no-op after the first appearance and whenever a scan has already run.
                 scan.restoreLastScan()
+                // UXP-05 — the store outlives the window and `restoreLastScan` is one-shot, so a
+                // window reopened by a notification click adopts the round that arrived while it
+                // was closed here, not through the subscription below (which skips the current value).
+                if let background = MenuBarAgent.shared.lastResult {
+                    scan.adoptBackgroundResultIfNewer(background)
+                }
                 scan.replayLastScan()
                 // LT-01 — count what can still be undone (incl. whatever launch-time
                 // recovery just settled) for the „Cofnij aktualizacje” badge. The list
