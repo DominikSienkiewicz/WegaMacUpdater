@@ -286,6 +286,93 @@ struct TouchIDSetupControllerCoverageTests {
         #expect(logged.entries.count == 2)
     }
 
+    // MARK: - An unsafe policy the helper saw (RC2-7)
+
+    private func stickyController(
+        state: TouchIDStateBox, preflight: TouchIDDisablePreflight = .clear,
+        enable: TouchIDReplyQueue<TouchIDSudoEnableResult> = TouchIDReplyQueue([]),
+        disable: TouchIDReplyQueue<TouchIDSudoDisableResult> = TouchIDReplyQueue([])
+    ) -> TouchIDSetupController {
+        TouchIDSetupController(dependencies: .init(
+            currentState: { state.value }, helperIsEnabled: { true },
+            enableWithHelper: { try enable.next() },
+            authorizeFallback: { .permissionDenied }, openInTerminal: { _ in },
+            disableWithHelper: { try disable.next() },
+            preflight: { preflight },
+            logHelperCode: { _, _ in }
+        ))
+    }
+
+    /// Root may see an ACL the user cannot: after the helper reports −5, a later transport error
+    /// must not bring back the `sudo` command, until a helper call succeeds.
+    @Test func aHelperReportedUnsafePolicyStaysUntilAHelperCallSucceeds() async {
+        let state = TouchIDStateBox(.available)
+        let replies = TouchIDReplyQueue<TouchIDSudoEnableResult>([
+            .success(.refused(.unsafeOwnership)), .failure(PrivilegedHelperClient.HelperError.connectionFailed),
+            .success(.refused(.callerNotAdministrator)), .success(.enabled),
+        ])
+        let controller = stickyController(state: state, enable: replies)
+
+        await controller.enable { _ in }
+        #expect(controller.helperObservedUnsafePolicy && controller.unsafePolicy == .unsafeOwnership)
+        #expect(!controller.offersEnableButton)
+
+        await controller.enable { _ in }
+        #expect(controller.wasPermissionDenied && !controller.showsEnableCommand, "no sudo command after a helper −5")
+        controller.refresh()
+        #expect(controller.helperObservedUnsafePolicy, "reading the file again does not clear what root saw")
+
+        await controller.enable { _ in }
+        #expect(controller.helperObservedUnsafePolicy, "a refusal is not a success")
+
+        state.value = .enabled
+        await controller.enable { _ in }
+        #expect(!controller.helperObservedUnsafePolicy && controller.unsafePolicy == nil)
+    }
+
+    @Test func aMinus4FromTheHelperIsRememberedAndAnyEnableSuccessClearsIt() async {
+        let replies = TouchIDReplyQueue<TouchIDSudoEnableResult>([.success(.refused(.notRegularFile)), .success(.alreadyEnabled)])
+        let controller = stickyController(state: TouchIDStateBox(.available), enable: replies)
+        await controller.enable { _ in }
+        #expect(controller.unsafePolicy == .notRegularFile)
+        await controller.enable { _ in }
+        #expect(!controller.helperObservedUnsafePolicy, "the helper's success clears it, whatever the file says")
+    }
+
+    @Test func anUnsafePolicyReportedWhileTurningOffIsRememberedToo() async {
+        let replies = TouchIDReplyQueue<TouchIDSudoDisableResult>([
+            .success(.refused(.notRegularFile)), .success(.nothingToRemove), .success(.refused(.unsafeOwnership)),
+            .success(.refused(.otherDirectivesPresent)), .success(.removed(lines: 1)),
+        ])
+        let controller = stickyController(state: TouchIDStateBox(.enabled), disable: replies)
+        await controller.disable { _ in }
+        #expect(controller.unsafePolicy == .notRegularFile)
+        await controller.disable { _ in }
+        #expect(!controller.helperObservedUnsafePolicy)
+        await controller.disable { _ in }
+        #expect(controller.unsafePolicy == .unsafeOwnership)
+        await controller.disable { _ in }
+        #expect(controller.helperObservedUnsafePolicy, "another refusal is not a success")
+        await controller.disable { _ in }
+        #expect(!controller.helperObservedUnsafePolicy)
+    }
+
+    /// Review focus 5: a symlinked or group-writable `sudo_local`, seen by the app or reported by the
+    /// helper, leaves neither the helper's enable button nor the Terminal command.
+    @Test func anUnsafePolicyHidesEveryCommandAndButton() async {
+        for refusal in [TouchIDSudoDisableRefusal.unsafeOwnership, .notRegularFile] {
+            let preflight = TouchIDDisablePreflight(refusal: refusal, unsafeLocalDirectory: nil, fallbackPath: nil)
+            let replies = TouchIDReplyQueue<TouchIDSudoEnableResult>([.failure(PrivilegedHelperClient.HelperError.connectionFailed)])
+            let controller = stickyController(state: TouchIDStateBox(.available), preflight: preflight, enable: replies)
+            #expect(controller.unsafePolicy == refusal && !controller.offersEnableButton, "\(refusal)")
+            await controller.enable { _ in }
+            #expect(controller.wasPermissionDenied && !controller.showsEnableCommand, "\(refusal)")
+        }
+        let clear = stickyController(state: TouchIDStateBox(.available))
+        #expect(clear.unsafePolicy == nil && clear.offersEnableButton)
+        #expect(!stickyController(state: TouchIDStateBox(.enabled)).offersEnableButton, "Touch ID is already on")
+    }
+
     // MARK: - Turning Touch ID off
 
     private func disablingController(
@@ -527,6 +614,18 @@ private final class TouchIDStateBox: @unchecked Sendable {
     var value: TouchIDSudoConfigurator.State {
         get { lock.withLock { stored } }
         set { lock.withLock { stored = newValue } }
+    }
+}
+
+/// The helper's replies, in order, one per call.
+private final class TouchIDReplyQueue<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var replies: [Result<Value, any Error>]
+
+    init(_ replies: [Result<Value, any Error>]) { self.replies = replies }
+
+    func next() throws -> Value {
+        try lock.withLock { replies.removeFirst() }.get()
     }
 }
 
