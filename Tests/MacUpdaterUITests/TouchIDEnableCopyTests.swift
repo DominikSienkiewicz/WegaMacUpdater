@@ -31,7 +31,8 @@ struct TouchIDEnableCopyTests {
             #expect(TouchIDEnableCopy.line(for: .rollbackFailed(backupPath: backup), isEnabled: false)
                     == "Zapis i przywrócenie się nie udały. Poprzedni plik odłożyłam pod \(backup). Przywróć go według przewodnika.")
             #expect(TouchIDEnableCopy.line(for: .rollbackFailed(backupPath: nil), isEnabled: false)
-                    == "Zapis się nie udał i nie wiem, w jakim stanie jest plik /etc/pam.d/sudo_local. Sprawdź go według przewodnika.")
+                    == "Nie wiem, w jakim stanie jest teraz plik /etc/pam.d/sudo_local: zapis albo jego sprawdzenie się nie udało. Sprawdź go według przewodnika.",
+                    "I1: true after a writer that could not undo and after a readback that failed")
             #expect(TouchIDEnableCopy.outdatedHelper
                     == "Pomocnik Wegi jest nieaktualny albo nie odpowiada, więc nie włączy Touch ID dla sudo. Użyj polecenia niżej albo w Ustawieniach usuń pomocnika i zainstaluj go ponownie (albo uruchom Maca ponownie).")
         }
@@ -107,7 +108,7 @@ struct TouchIDEnableCopyTests {
             #expect(TouchIDEnableCopy.line(for: .refused(.unreadable), isEnabled: false)
                     == "/etc/pam.d/sudo_local doesn't look the way I expect, so I didn't change it. Turn on Touch ID by hand with the user guide.")
             #expect(TouchIDEnableCopy.line(for: .rollbackFailed(backupPath: nil), isEnabled: false)
-                    == "The write failed, and I don't know what state /etc/pam.d/sudo_local is in. Check it with the user guide.")
+                    == "I don't know what state /etc/pam.d/sudo_local is in now: writing it or checking the write failed. Check it with the user guide.")
             #expect(TouchIDEnableCopy.recoveryOnly
                     == "Don't type your password into sudo until you fix this — not even when Wega asks for it during an update: sudo reads these settings. Fix them from macOS Recovery with the user guide.")
             #expect(TouchIDEnableCopy.unsafePolicyNote(.notRegularFile)

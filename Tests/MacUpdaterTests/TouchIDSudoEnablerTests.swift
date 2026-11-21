@@ -246,15 +246,17 @@ struct TouchIDSudoEnablerTests {
             ("acl", { fake, data in fake.entries["sudo_local"] = Entry(identity: fake.newIdentity(), data: data, accessControl: .present) }),
             ("link", { fake, data in fake.entries["sudo_local"] = Entry(kind: .symlink, identity: fake.newIdentity(), data: data) }),
         ]
+        // I1: the write happened and the writer has removed its backup, so "nothing changed" would be
+        // false; the state is unknown, and that is what −21 without a path says.
+        let unknown = TouchIDSudoEnableReport(result: .rollbackFailed(backupPath: nil), failedStep: .verify)
         for (name, place) in wrong {
             let writer = Writer()
             writer.place = place
-            #expect(run(withTemplate(template, sudoLocal: "# a\n"), writer: writer)
-                    == TouchIDSudoEnableReport(result: .refused(.changedDuringOperation), failedStep: .verify), "\(name)")
+            #expect(run(withTemplate(template, sudoLocal: "# a\n"), writer: writer) == unknown, "\(name)")
         }
         let failing = withTemplate(template, sudoLocal: "# a\n")
         failing.fail("read sudo_local", occurrence: 2, with: .EIO)
-        #expect(run(failing) == TouchIDSudoEnableReport(result: .refused(.changedDuringOperation), failedStep: .verify))
+        #expect(run(failing) == unknown, "a failed read is no proof either")
     }
 
     /// The writer reported success, yet no file is there: its state is not known, and there is no backup.

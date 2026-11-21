@@ -30,7 +30,8 @@ enum TouchIDEnableCopy {
         case .rollbackFailed(let backupPath?):
             return TouchIDDisableCopy.line(for: .rollbackFailed(backupPath: backupPath), stillEnabled: false)
         case .rollbackFailed(nil):
-            return tr("Zapis się nie udał i nie wiem, w jakim stanie jest plik /etc/pam.d/sudo_local. Sprawdź go według przewodnika.")
+            // I1: also after a readback that failed, when the write had happened and no copy is left.
+            return tr("Nie wiem, w jakim stanie jest teraz plik /etc/pam.d/sudo_local: zapis albo jego sprawdzenie się nie udało. Sprawdź go według przewodnika.")
         }
     }
 

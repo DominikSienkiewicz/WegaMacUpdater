@@ -111,7 +111,9 @@ public enum TouchIDSudoEnabler {
     }
 
     /// Z7: the writer works by path, so what it left is read back through the descriptor the gate
-    /// verified: a regular file only root can change, with no ACL, holding exactly the plan.
+    /// verified: a regular file only root can change, with no ACL, holding exactly the plan. Anything
+    /// else, a failed read included, is −21 without a path: the file was written and the writer has
+    /// already removed its backup, so its state is not known.
     private static func verifyPlaced(
         _ contents: Data, in directory: any PAMPolicyDirectoryAccess, requiredOwnerUID: UInt32
     ) throws(Outcome) {
@@ -121,11 +123,10 @@ public enum TouchIDSudoEnabler {
                 named: TouchIDSudoDisabler.policyFileName, in: directory, requiredOwnerUID: requiredOwnerUID
             )
         } catch {
-            throw .refused(.changedDuringOperation, at: .verify)
+            placed = nil
         }
-        guard let placed else {
+        guard let placed, placed.bytes == contents else {
             throw Outcome(report: TouchIDSudoEnableReport(result: .rollbackFailed(backupPath: nil), failedStep: .verify))
         }
-        guard placed.bytes == contents else { throw .refused(.changedDuringOperation, at: .verify) }
     }
 }

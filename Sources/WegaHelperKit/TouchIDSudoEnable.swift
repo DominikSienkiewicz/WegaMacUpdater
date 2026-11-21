@@ -1,7 +1,6 @@
 import Foundation
 
-/// Why the root helper would not turn Touch ID for `sudo` on. Nothing was written for any of them,
-/// except −10, which also follows a write when the file read back is not the one planned.
+/// Why the root helper would not turn Touch ID for `sudo` on. Nothing was written for any of them.
 ///
 /// The raw values are the codes `WegaPrivilegedOps.enableTouchIDForSudoChecked` replies with: the
 /// same as for turning it off, for the same conditions. −8, −9 and −11 describe removing the
@@ -32,8 +31,9 @@ public enum TouchIDSudoEnableResult: Equatable, Sendable {
     case refused(TouchIDSudoEnableRefusal)
     /// The write failed and the previous state is back.
     case restoredAfterFailure
-    /// The write failed and could not be undone. `backupPath` is the copy of the previous file, or
-    /// `nil` when there was none and the new file could not be removed.
+    /// The write failed and could not be undone, or the file read back after it is not the one planned
+    /// (Z7). `backupPath` is the copy of the previous file the writer kept; `nil` when it kept none:
+    /// there was no previous file, or the readback came after the writer had removed its copy.
     case rollbackFailed(backupPath: String?)
 
     static let enabledCode = 1

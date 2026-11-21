@@ -23,10 +23,9 @@ import Foundation
     /// Apple's template with it when there is no `sudo_local`; only for the administrator at the console, and only
     /// when `/etc/pam.d`, `sudo_local` and the template are root's alone. Takes no arguments: the paths are fixed in
     /// the helper. `code` 1: written and read back. 0: `sudo_local` already holds an active `pam_tid` line; nothing
-    /// was written. −1…−7 and −10: a `TouchIDSudoEnableRefusal`; nothing was written, except that −10 also follows a
-    /// write whose file, read back, is not the one planned. −20: the write failed and the previous state is back.
-    /// −21: the write failed and could not be undone; `detail` is the backup of the previous file, or nil when there
-    /// was none. Protocol 8; the reply of `enableTouchIDForSudo(withReply:)` (v6/v7, `(Bool, String?)`) had another
+    /// was written. −1…−7 and −10: a `TouchIDSudoEnableRefusal`; nothing was written. −20: the write failed and the
+    /// previous state is back. −21: the write failed and could not be undone, or the file read back after it is not
+    /// the one planned; `detail` is the backup of the previous file, or nil when none is left. Protocol 8; the reply of `enableTouchIDForSudo(withReply:)` (v6/v7, `(Bool, String?)`) had another
     /// shape, so this is a new selector and the old one is gone.
     func enableTouchIDForSudoChecked(withReply reply: @escaping @Sendable (Int, String?) -> Void)
 
