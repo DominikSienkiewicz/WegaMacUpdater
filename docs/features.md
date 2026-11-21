@@ -512,9 +512,13 @@ pakietów"* appears only when every item cleared all of them.
 
 #### Per-row control
 
-**Use the ⋯ menu on any row** — or right-click it — to **ignore** an update ("don't update
-Zoom") or **pin a version** ("pin Parallels to 18" — only updates up to that ceiling are
-shown); rules are managed from the Settings window (⌘,) and persist across launches.
+**Use the ⋯ menu on a Homebrew, App Store or npm row** — or right-click any row, which is
+the only way on rows the developer finishes — to choose **Don't update** ("don't update Zoom"),
+**Skip this version** (hide just that version; the next one is shown) or **Pin version…** ("pin
+Parallels to 18" — only updates up to that ceiling are shown). The row disappears at once and an
+**Undo** toast offers the change back for 8 seconds. Afterwards the line **"Hidden by your rules:
+N · Show"** under the list opens the rules, where **Restore** removes one. Rules are also managed
+from the Settings window (⌘,) and persist across launches.
 
 Two colour codings carry meaning:
 

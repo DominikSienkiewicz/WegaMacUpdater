@@ -324,9 +324,11 @@ Until your first update finishes with everything installed, a card above the lis
 ### Choose what to update
 
 - Tick individual apps, a whole group with its header checkbox, or everything with the
-  select-all checkbox above the list. Add the items you want to the queue. Open **Show
-  exactly what I will do** in the band above the list, then choose **Update**. The button
-  takes only what you queued; with nothing queued it reads **Nothing selected**.
+  select-all checkbox above the list. Each ticked row joins the queue, which the band above
+  the list counts (for example **4 queued**).
+- **Show exactly what I will do**, in the band, previews the exact commands. Then choose
+  **Update** to run them. The button takes only what you queued; with nothing queued it
+  reads **Nothing selected**.
 - **Show exactly what I will do** opens the **dry-run panel**:
   the literal commands Wega will run (`brew upgrade --cask …`, `npm install -g x@latest`,
   …) — read from the *same* code that performs the upgrade, so the preview can't drift from
