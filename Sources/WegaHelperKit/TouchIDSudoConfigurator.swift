@@ -195,6 +195,50 @@ public enum TouchIDSudoConfigurator {
         #"if ! /usr/bin/cmp -s "$target" "$check"; then rollback; exit 1; fi;"#,
         #"/bin/rm -f "$backup" "$check"'"#
     ].joined(separator: " ")
+
+    /// The command the Touch ID card offers to turn Touch ID for `sudo` off when the helper cannot
+    /// (Aneks E.6, E.9): the reviewed script, one line, through `/usr/bin/sudo` so no `sudo` earlier
+    /// on the user's `PATH` sees the password (Z2).
+    public static let manualDisableTerminalCommand = "/usr/bin/sudo /bin/sh -c '" + disableShellScript(
+        target: SystemPaths.sudoLocal, stagingDirectory: SystemPaths.pamPolicyDisplayDirectory,
+        fallbackPaths: TouchIDSudoDisabler.fallbackPolicyPaths,
+        localDirectories: ["/usr/local", "/usr/local/etc", "/usr/local/etc/pam.d"], ownership: "root:wheel"
+    ) + "'"
+
+    /// The script behind `manualDisableTerminalCommand`. It applies the helper's content rules again
+    /// when it runs, in the C locale so `[[:space:]]` is the helper's set of blanks (RC2-5): a regular
+    /// file, at most `TouchIDSudoDisabler.maximumSize` bytes, no NUL, UTF-8, at least one line that is
+    /// exactly the directive, no backslash, and nothing else active. It also refuses a link in the
+    /// `/usr/local` chain (Z3) and any later policy file that exists. Only then does it write the file
+    /// without the directive beside the original and rename it into place; a trap removes that new
+    /// file on any failure.
+    ///
+    /// The paths are inserted as they are, so they must be plain words with no space or quote. Tests
+    /// pass temporary ones and `ownership: nil`, which leaves `chown` out.
+    static func disableShellScript(
+        target: String, stagingDirectory: String, fallbackPaths: [String], localDirectories: [String], ownership: String?
+    ) -> String {
+        let staged = stagingDirectory + "/" + TouchIDSudoDisabler.swapNamePrefix + "new.XXXXXX"
+        let chown = ownership.map { #"/usr/sbin/chown \#($0) "$staged"; "# } ?? ""
+        return [
+            #"set -eu; export LC_ALL=C; target=\#(target); line="\#(pamDirective)"; staged="";"#,
+            #"trap "/bin/rm -f \"\$staged\"" EXIT;"#,
+            #"if [ ! -f "$target" ] || [ -L "$target" ]; then echo "Wega: sudo_local is not a regular file; nothing changed." >&2; exit 1; fi;"#,
+            #"if [ "$(/usr/bin/stat -f %z "$target")" -gt \#(TouchIDSudoDisabler.maximumSize) ]; then echo "Wega: sudo_local is too large; nothing changed." >&2; exit 1; fi;"#,
+            #"if ! /usr/bin/tr -d "\000" < "$target" | /usr/bin/cmp -s - "$target"; then echo "Wega: sudo_local contains a NUL byte; nothing changed." >&2; exit 1; fi;"#,
+            #"if ! /usr/bin/iconv -f UTF-8 -t UTF-8 "$target" > /dev/null 2>&1; then echo "Wega: sudo_local is not UTF-8; nothing changed." >&2; exit 1; fi;"#,
+            #"if ! /usr/bin/grep -q -x -F "$line" "$target"; then echo "Wega: no exact pam_tid line; nothing changed."; exit 0; fi;"#,
+            #"if /usr/bin/grep -q -F "\\" "$target"; then echo "Wega: sudo_local contains a backslash; nothing changed." >&2; exit 1; fi;"#,
+            #"if /usr/bin/grep -v -x -F "$line" "$target" | /usr/bin/grep -q -v -E "^[[:space:]]*(#|$)"; then echo "Wega: sudo_local has other settings; nothing changed." >&2; exit 1; fi;"#,
+            #"for d in \#(localDirectories.joined(separator: " ")); do if [ -L "$d" ]; then echo "Wega: $d is a link; nothing changed." >&2; exit 1; fi; done;"#,
+            #"for p in \#(fallbackPaths.joined(separator: " ")); do"#,
+            #"if [ -e "$p" ] || [ -L "$p" ]; then echo "Wega: $p exists; nothing changed." >&2; exit 1; fi; done;"#,
+            #"staged=$(/usr/bin/mktemp \#(staged));"#,
+            #"/usr/bin/grep -v -x -F "$line" "$target" > "$staged" || [ $? -eq 1 ];"#,
+            chown + #"/bin/chmod 0644 "$staged";"#,
+            #"/bin/mv -f "$staged" "$target"; echo "Wega: Touch ID for sudo is off. Check: sudo -k; sudo true""#,
+        ].joined(separator: " ")
+    }
 }
 
 /// Classified result of attempting to enable Touch ID for sudo via the
