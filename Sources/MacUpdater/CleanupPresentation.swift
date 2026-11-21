@@ -35,11 +35,22 @@ enum CleanupPresentation {
         let note: String?
         /// The "keep this copy" radio of a copy that offers the choice; nil for every other row.
         var keep: KeepControl? = nil
+        /// True when the row offers a button, advice to follow, or a "zostaw" choice still to make.
+        var isActionable = false
+        /// Where a copy on `PATH` comes from; nil outside the duplicates section.
+        var origin: Origin? = nil
+
+        /// The source and directory of a copy, which tools installed in one place share.
+        struct Origin: Equatable {
+            let source: String
+            let directory: String
+        }
 
         func appendingDetail(_ text: String) -> Row {
             Row(
                 findingID: findingID, groupHeader: groupHeader, bucket: bucket, status: status, title: title,
-                detail: detail + " · " + text, sizeText: sizeText, button: button, note: note, keep: keep
+                detail: detail + " · " + text, sizeText: sizeText, button: button, note: note, keep: keep,
+                isActionable: isActionable, origin: origin
             )
         }
     }
@@ -235,45 +246,70 @@ enum CleanupPresentation {
         linkKeeps: [String: CleanupKeep] = [:]
     ) -> Row {
         let control = control(for: finding, home: home)
+        let keep = keepControl(of: finding)
+        let title = isMapBundleEntry(finding) ? finding.tool : tilde(finding.path.path, home)
         return Row(
             findingID: finding.id, groupHeader: groupHeader, bucket: finding.bucket, status: statusText(finding.status),
-            title: isMapBundleEntry(finding) ? finding.tool : tilde(finding.path.path, home),
+            title: title,
             detail: detail(of: finding, home: home, namesTool: namesTool, linkKeeps: linkKeeps),
             sizeText: finding.size.map(sizeText), button: control.button, note: control.note,
-            keep: keepControl(of: finding)
+            keep: keep,
+            isActionable: control.isActionable || keep == .undecided,
+            origin: origin(of: finding, title: title)
         )
+    }
+
+    private static func origin(of finding: CleanupFinding, title: String) -> Row.Origin? {
+        guard finding.detector == .pathDuplicates, let source = finding.source else { return nil }
+        return Row.Origin(source: sourceText(source), directory: (title as NSString).deletingLastPathComponent)
+    }
+
+    /// What a row offers: its button, its note, and whether either asks the user to act.
+    private struct Control {
+        let button: ButtonKind?
+        let note: String?
+        let isActionable: Bool
+
+        init(_ button: ButtonKind?, _ note: String?, _ isActionable: Bool) {
+            self.button = button
+            self.note = note
+            self.isActionable = isActionable
+        }
     }
 
     /// The button comes from the finding's action alone; an excluded finding never offers one to
     /// remove. A JetBrains folder of a version an installed IDE replaced also names the IDE's own
     /// cleanup, which knows its folders best; it does not clear a folder no installed IDE explains.
-    private static func control(for finding: CleanupFinding, home: URL) -> (button: ButtonKind?, note: String?) {
-        if let note = keepNote(for: finding) { return (nil, note) }
+    private static func control(for finding: CleanupFinding, home: URL) -> Control {
+        if let note = keepNote(for: finding) { return Control(nil, note, false) }
         guard finding.bucket != .excluded else { return excludedControl(for: finding, home: home) }
         switch finding.action {
         case .trash, .trashBatch:
-            guard finding.detector == .jetBrains, case .ideVersionNotInstalled = finding.reason else { return (.trash, nil) }
-            return (.trash, tr("Zalecane: w IDE wybierz Help → Delete Leftover IDE Directories. Wega może też przenieść ten katalog do Kosza."))
-        case .brew(.cleanup): return (.brewCleanup, nil)
-        case .brew: return (.brew, nil)
-        case .command(let command): return (.copyCommand(command), command)
-        case .instruction(let instruction): return (nil, instructionNote(for: finding, instruction, home: home))
-        case .uninstallApp(let name, let bundle): return (.uninstallApp(name: name, bundle: bundle), nil)
-        case .none: return (nil, tr("tylko informacja"))
+            guard finding.detector == .jetBrains, case .ideVersionNotInstalled = finding.reason else {
+                return Control(.trash, nil, true)
+            }
+            let advice = tr("Zalecane: w IDE wybierz Help → Delete Leftover IDE Directories. Wega może też przenieść ten katalog do Kosza.")
+            return Control(.trash, advice, true)
+        case .brew(.cleanup): return Control(.brewCleanup, nil, true)
+        case .brew: return Control(.brew, nil, true)
+        case .command(let command): return Control(.copyCommand(command), command, true)
+        case .instruction(let instruction): return Control(nil, instructionNote(for: finding, instruction, home: home), true)
+        case .uninstallApp(let name, let bundle): return Control(.uninstallApp(name: name, bundle: bundle), nil, true)
+        case .none: return Control(nil, tr("tylko informacja"), false)
         }
     }
 
     /// `PATH` hygiene, the Files and Folders map and a broken link on `PATH` are advice only, so
     /// their excluded rows still show the instruction to follow or the command to copy; Wega runs
     /// neither.
-    private static func excludedControl(for finding: CleanupFinding, home: URL) -> (button: ButtonKind?, note: String?) {
-        let informationOnly: (button: ButtonKind?, note: String?) = (nil, tr("tylko informacja"))
+    private static func excludedControl(for finding: CleanupFinding, home: URL) -> Control {
+        let informationOnly = Control(nil, tr("tylko informacja"), false)
         guard finding.detector == .pathHygiene || finding.detector == .tccMap || isBrokenLinkOnPath(finding) else {
             return informationOnly
         }
         switch finding.action {
-        case .instruction(let instruction): return (nil, instructionNote(for: finding, instruction, home: home))
-        case .command(let command): return (.copyCommand(command), command)
+        case .instruction(let instruction): return Control(nil, instructionNote(for: finding, instruction, home: home), true)
+        case .command(let command): return Control(.copyCommand(command), command, true)
         case .trash, .trashBatch, .brew, .uninstallApp, .none: return informationOnly
         }
     }
