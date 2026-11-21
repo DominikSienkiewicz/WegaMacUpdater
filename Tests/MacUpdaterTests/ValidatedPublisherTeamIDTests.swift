@@ -35,6 +35,34 @@ struct ValidatedPublisherTeamIDTests {
         #expect(!CodeSignatureVerifier.isWellFormedTeamID(""))
     }
 
+    /// Any member of a team can make an Apple Development certificate in Xcode, and it carries the
+    /// team's OU under an Apple anchor; only the account holder can make a Developer ID. So the
+    /// requirement also demands the Developer ID intermediate (…6.2.6) and leaf (…6.1.13) markers,
+    /// as the app and the helper already demand of each other.
+    @Test func theRequirementDemandsADeveloperIDChainForTheClaimedTeam() throws {
+        let requirement = CodeSignatureVerifier.developerIDRequirement(teamID: "ABCDE12345")
+
+        #expect(requirement == "anchor apple generic "
+            + "and certificate 1[field.1.2.840.113635.100.6.2.6] "
+            + "and certificate leaf[field.1.2.840.113635.100.6.1.13] "
+            + "and certificate leaf[subject.OU] = \"ABCDE12345\"")
+        var compiled: SecRequirement?
+        #expect(SecRequirementCreateWithString(requirement as CFString, [], &compiled) == errSecSuccess)
+    }
+
+    @Test func theValidatedReadChecksTheClaimAgainstTheDeveloperIDRequirement() throws {
+        let source = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Sources/WegaHelperKit/CodeSignatureVerifier.swift"),
+            encoding: .utf8
+        )
+        let read = try #require(source.range(of: "public static func validatedTeamID(ofAppAt url: URL) -> String? {"))
+        let body = source[read.upperBound...].prefix(400)
+
+        #expect(body.contains("requirement: developerIDRequirement(teamID: claimed)"))
+    }
+
     /// Measured on copies of real apps: the default check misses a flipped byte in the slice this
     /// Mac does not run, an edited script executable and a patched nested helper (Sparkle's
     /// `Autoupdate`). These three flags catch each of them, as `codesign --verify --deep --strict` does.

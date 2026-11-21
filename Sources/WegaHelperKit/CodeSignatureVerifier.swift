@@ -78,6 +78,17 @@ public enum CodeSignatureVerifier {
         return parts.joined(separator: " and ")
     }
 
+    /// `teamIDRequirement` plus the Developer ID intermediate CA marker (…6.2.6, G1 and G2) and
+    /// the Developer ID Application leaf marker (…6.1.13), the clauses `WegaHelper` pins Wega's
+    /// own signature with. The same team's Apple Development or Apple Distribution certificate,
+    /// which any team member can make, has the OU and an Apple anchor but not these markers.
+    public static func developerIDRequirement(teamID: String) -> String {
+        "anchor apple generic "
+            + "and certificate 1[field.1.2.840.113635.100.6.2.6] "
+            + "and certificate leaf[field.1.2.840.113635.100.6.1.13] "
+            + "and certificate leaf[subject.OU] = \"\(teamID)\""
+    }
+
     enum Artifact: Equatable { case app, pkg, dmg, other(String) }
 
     /// Classify by path extension (case-insensitive). Pure → testable.
@@ -136,20 +147,19 @@ public enum CodeSignatureVerifier {
     // MARK: - SecStaticCode (apps)
 
     /// Validate a bundle/executable against an `anchor apple generic` + Team ID requirement.
-    ///
-    /// - Parameter flags: `SecStaticCodeCheckValidity` flags; the default checks only the
-    ///   architecture this Mac runs and no nested code.
-    public static func verifyStaticCode(
-        at url: URL,
-        expectedTeamID: String,
-        bundleID: String? = nil,
-        flags: SecCSFlags = []
-    ) throws {
+    public static func verifyStaticCode(at url: URL, expectedTeamID: String, bundleID: String? = nil) throws {
+        try checkValidity(
+            at: url,
+            requirement: teamIDRequirement(teamID: expectedTeamID, bundleID: bundleID),
+            flags: []
+        )
+    }
+
+    private static func checkValidity(at url: URL, requirement reqString: String, flags: SecCSFlags) throws {
         var code: SecStaticCode?
         let createStatus = SecStaticCodeCreateWithPath(url as CFURL, [], &code)
         guard createStatus == errSecSuccess, let code else { throw VerifyError.unreadable(createStatus) }
 
-        let reqString = teamIDRequirement(teamID: expectedTeamID, bundleID: bundleID)
         var requirement: SecRequirement?
         guard SecRequirementCreateWithString(reqString as CFString, [], &requirement) == errSecSuccess,
               let requirement else { throw VerifyError.badRequirement }
@@ -176,17 +186,22 @@ public enum CodeSignatureVerifier {
         rawValue: kSecCSCheckAllArchitectures | kSecCSCheckNestedCode | kSecCSStrictValidate
     )
 
-    /// The Team ID a publisher check may trust: the one `teamID(ofAppAt:)` reads, only when an
-    /// Apple-issued certificate carries it and the whole bundle validates against it.
+    /// The Team ID a publisher check may trust: the one `teamID(ofAppAt:)` reads, only when a
+    /// Developer ID certificate carries it and the whole bundle validates against it.
     ///
     /// `teamID(ofAppAt:)` returns what the signature *claims*. An ad-hoc signature can claim any
     /// Team ID (`codesign -s - --team-identifier …`), and a bundle edited after signing still
-    /// reports its publisher's; neither is that publisher, and both read `nil` here. So does a Mac
-    /// App Store build, whose leaf certificate is Apple's rather than the developer's. Use this
-    /// where a Team ID becomes trust, and `teamID(ofAppAt:)` where it only identifies an app.
+    /// reports its publisher's; neither is that publisher, and both read `nil` here. So do a Mac
+    /// App Store build, whose leaf certificate is Apple's rather than the developer's, and a
+    /// development build. Use this where a Team ID becomes trust, and `teamID(ofAppAt:)` where it
+    /// only identifies an app.
     public static func validatedTeamID(ofAppAt url: URL) -> String? {
         guard let claimed = teamID(ofAppAt: url), isWellFormedTeamID(claimed) else { return nil }
-        let validates = (try? verifyStaticCode(at: url, expectedTeamID: claimed, flags: publisherValidationFlags)) != nil
+        let validates = (try? checkValidity(
+            at: url,
+            requirement: developerIDRequirement(teamID: claimed),
+            flags: publisherValidationFlags
+        )) != nil
         return validates ? claimed : nil
     }
 
