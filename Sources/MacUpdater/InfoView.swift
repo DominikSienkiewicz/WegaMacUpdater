@@ -36,7 +36,6 @@ struct InfoView: View {
     private var enablingTouchID: Bool { touchIDController.isEnabling }
     private var disablingTouchID: Bool { touchIDController.isDisabling }
     private var touchIDError: String? { touchIDController.errorMessage }
-    private var touchIDPermissionDenied: Bool { touchIDController.wasPermissionDenied }
 }
 
 // Body, cards and actions live in an extension so the `InfoView` type body stays
@@ -222,9 +221,16 @@ extension InfoView {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
 
-                        if touchIDPermissionDenied {
+                        // RC2-6/RC2-7: `sudo` reads these settings, so an unsafe policy leaves no
+                        // command and no button, only recoveryOS advice.
+                        if touchIDState != .enabled, let unsafe = touchIDController.unsafePolicy {
+                            touchIDNote(TouchIDEnableCopy.unsafePolicyNote(unsafe), isWarning: true)
+                        } else if touchIDController.showsEnableCommand {
+                            if touchIDController.enableHelperOutdated {
+                                touchIDNote(TouchIDEnableCopy.outdatedHelper)
+                            }
                             manualEnableFallback
-                        } else if touchIDState == .available {
+                        } else if touchIDController.offersEnableButton {
                             Button {
                                 Task { await enableTouchID() }
                             } label: {
@@ -264,10 +270,6 @@ extension InfoView {
                             }
                             Link(tr("Jak wyłączyć Touch ID dla sudo"), destination: AppEndpoints.shared.touchIDGuideURL)
                                 .font(.wega(.subheadline))
-                        }
-
-                        if touchIDState != .enabled, touchIDController.disableOffer == .blocked(.unsafeOwnership) {
-                            touchIDNote(TouchIDDisableCopy.line(for: .refused(.unsafeOwnership), stillEnabled: false), isWarning: true)
                         }
 
                         SettingsCardHint(text: cardHints[.touchID])

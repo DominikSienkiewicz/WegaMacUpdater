@@ -65,6 +65,38 @@ struct TouchIDEnableCopyTests {
         }
     }
 
+    // MARK: - Source pins
+
+    /// Review focus 5 (card half): with −4/−5 seen by the app or the helper, the card has only the
+    /// recoveryOS note; the Terminal command appears only through `showsEnableCommand`, under the
+    /// outdated-helper note when that was the reason; the button only through `offersEnableButton`.
+    @Test func theCardOffersSudoOnlyWithoutAnUnsafePolicy() throws {
+        let info = try String(contentsOf: root().appending(path: "Sources/MacUpdater/InfoView.swift", directoryHint: .notDirectory), encoding: .utf8)
+        let start = try #require(info.range(of: "private var touchIDCard: some View")).upperBound
+        let end = try #require(info[start...].range(of: "// MARK: - GitHub token")).lowerBound
+        let card = String(info[start..<end])
+        let unsafe = try #require(card.range(of: "if touchIDState != .enabled, let unsafe = touchIDController.unsafePolicy {"))
+        let note = try #require(card.range(of: "touchIDNote(TouchIDEnableCopy.unsafePolicyNote(unsafe), isWarning: true)"))
+        let command = try #require(card.range(of: "} else if touchIDController.showsEnableCommand {"))
+        let outdated = try #require(card.range(of: "if touchIDController.enableHelperOutdated {"))
+        let outdatedNote = try #require(card.range(of: "touchIDNote(TouchIDEnableCopy.outdatedHelper)"))
+        let fallback = try #require(card.range(of: "manualEnableFallback"))
+        let button = try #require(card.range(of: "} else if touchIDController.offersEnableButton {"))
+        let label = try #require(card.range(of: "Label(tr(\"Używaj Touch ID zamiast hasła administratora\"), systemImage: \"touchid\")"))
+        #expect(unsafe.upperBound < note.lowerBound && note.upperBound < command.lowerBound)
+        #expect(command.upperBound < outdated.lowerBound && outdated.upperBound < outdatedNote.lowerBound
+                && outdatedNote.upperBound < fallback.lowerBound && fallback.upperBound < button.lowerBound)
+        #expect(button.upperBound < label.lowerBound)
+        #expect(card.components(separatedBy: "manualEnableFallback").count - 1 == 1, "the command has one way onto the card")
+        #expect(!card.contains("if touchIDPermissionDenied {"), "the permission-denied state alone no longer shows the command")
+        #expect(!card.contains("disableOffer == .blocked(.unsafeOwnership)"), "the unsafe note above replaces the old one")
+    }
+
+    private func root(file: String = #filePath) -> URL {
+        URL(filePath: file, directoryHint: .notDirectory)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    }
+
     @Test func everyLineHasNaturalEnglish() {
         withLanguage(.en) {
             #expect(TouchIDEnableCopy.line(for: .enabled, isEnabled: true) == "Touch ID is now wired up to sudo.")
