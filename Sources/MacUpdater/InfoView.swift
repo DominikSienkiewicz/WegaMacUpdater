@@ -454,7 +454,7 @@ extension InfoView {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text(TouchIDSudoConfigurator.manualEnableTerminalCommand)
+            Text(TouchIDManualCommand.enable.text)
                 .font(.wega(.subheadline, monospaced: true))
                 .textSelection(.enabled)
                 .padding(8)
@@ -464,17 +464,14 @@ extension InfoView {
             HStack(spacing: 8) {
                 Button {
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(
-                        TouchIDSudoConfigurator.manualEnableTerminalCommand,
-                        forType: .string
-                    )
+                    NSPasteboard.general.setString(TouchIDManualCommand.enable.text, forType: .string)
                 } label: {
                     Label(tr("Skopiuj komendę"), systemImage: "doc.on.doc")
                 }
                 .controlSize(.small)
 
                 Button {
-                    openInTerminal(TouchIDSudoConfigurator.manualEnableTerminalCommand)
+                    openInTerminal(.enable)
                 } label: {
                     Label(tr("Otwórz w Terminalu"), systemImage: "terminal")
                 }
@@ -491,8 +488,8 @@ extension InfoView {
         }
     }
 
-    private func openInTerminal(_: String) {
-        touchIDController.openManualFallback()
+    private func openInTerminal(_ command: TouchIDManualCommand) {
+        touchIDController.openInTerminal(command)
     }
 
     // MARK: - Self-update (Wega dogfooding its own GitHub releases)

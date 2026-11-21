@@ -115,8 +115,9 @@ struct TouchIDSetupControllerCoverageTests {
             openInTerminal: { command.value = $0 }
         ))
 
-        controller.openManualFallback()
-        #expect(command.value == TouchIDSudoConfigurator.manualEnableTerminalCommand)
+        controller.openInTerminal(.enable)
+        #expect(command.value == .enable)
+        #expect(command.value?.text == TouchIDSudoConfigurator.manualEnableTerminalCommand)
 
         state.value = .enabled
         controller.refresh()
@@ -647,9 +648,9 @@ private final class TouchIDLogBox: @unchecked Sendable {
 
 private final class TouchIDCommandBox: @unchecked Sendable {
     private let lock = NSLock()
-    private var stored: String?
+    private var stored: TouchIDManualCommand?
 
-    var value: String? {
+    var value: TouchIDManualCommand? {
         get { lock.withLock { stored } }
         set { lock.withLock { stored = newValue } }
     }

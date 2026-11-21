@@ -138,6 +138,21 @@ struct TouchIDSetupControllerGateTests {
         #expect(shown.showsEnableCommand && shownLines == [tr("macOS zablokował zapis — wklej komendę do Terminala.")])
     }
 
+    /// RC2-8: "Otwórz w Terminalu" opens the command it is handed, never a fixed one. Together with
+    /// the card pins (`TouchIDCardPinTests`), the disable card's button opens the disable command.
+    @Test func theTerminalOpensTheCommandItIsHanded() {
+        let opened = GateBox<[TouchIDManualCommand]>([])
+        let controller = TouchIDSetupController(dependencies: .init(
+            currentState: { .enabled }, helperIsEnabled: { false }, enableWithHelper: { .enabled },
+            authorizeFallback: { .permissionDenied }, openInTerminal: { command in opened.value.append(command) }
+        ))
+        controller.openInTerminal(.disable)
+        controller.openInTerminal(.enable)
+        #expect(opened.value == [.disable, .enable])
+        #expect(TouchIDManualCommand.disable.text == TouchIDSudoConfigurator.manualDisableTerminalCommand)
+        #expect(TouchIDManualCommand.enable.text == TouchIDSudoConfigurator.manualEnableTerminalCommand)
+    }
+
     /// What was seen comes before what is missing, so the card names the real problem.
     @Test func theReasonNamesWhatWasSeenFirst() {
         var preflight = TouchIDDisablePreflight(refusal: .notRegularFile, unsafeLocalDirectory: nil, fallbackPath: nil)

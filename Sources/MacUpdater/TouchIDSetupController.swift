@@ -33,7 +33,7 @@ final class TouchIDSetupController: ObservableObject {
     var helperIsEnabled: @MainActor @Sendable () -> Bool
     var enableWithHelper: @MainActor @Sendable () async throws -> TouchIDSudoEnableResult
     var authorizeFallback: @Sendable () async -> AuthorizationOutcome
-    var openInTerminal: @Sendable (String) -> Void
+    var openInTerminal: @Sendable (TouchIDManualCommand) -> Void
     var disableWithHelper: @MainActor @Sendable () async throws -> TouchIDSudoDisableResult = { .nothingToRemove }
     var disableAvailability: @MainActor @Sendable () async -> HelperVerbAvailability = { .enabled }
     var preflight: @Sendable () -> TouchIDDisablePreflight = { .clear }
@@ -51,7 +51,7 @@ final class TouchIDSetupController: ObservableObject {
       authorizeFallback: { .permissionDenied },
       openInTerminal: { command in
         let escaped =
-          command
+          command.text
           .replacingOccurrences(of: "\\", with: "\\\\")
           .replacingOccurrences(of: "\"", with: "\\\"")
         let script =
@@ -165,8 +165,9 @@ final class TouchIDSetupController: ObservableObject {
     enableHelperOutdated = false
   }
 
-  func openManualFallback() {
-    dependencies.openInTerminal(TouchIDSudoConfigurator.manualEnableTerminalCommand)
+  /// RC2-8: Terminal runs the command the card shows, which the card passes as the enum.
+  func openInTerminal(_ command: TouchIDManualCommand) {
+    dependencies.openInTerminal(command)
   }
 
   func enable(onWegaState: @MainActor (WegaState) -> Void) async {
