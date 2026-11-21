@@ -70,6 +70,7 @@ extension ScanStore {
         guard let model else { return }
         vendorCheckGeneration += 1
         vendorCheckTask?.cancel()
+        beginScanProgress()
         if quiet {
             setRefreshing(true)
         } else {
@@ -77,8 +78,11 @@ extension ScanStore {
         }
         // Covers every way out of this function, including the early returns the cancellation
         // checks take: a flag left standing would leave the toolbar offering to cancel a scan
-        // that has already stopped.
-        defer { setRefreshing(false) }
+        // that has already stopped, and a band clock would keep counting.
+        defer {
+            setRefreshing(false)
+            endScanProgress()
+        }
         errorMessage = nil
         // Nothing is confirmed until each source has answered in this scan — a scan that
         // gets cancelled half-way must not leave last time's confirmations standing.
@@ -93,7 +97,9 @@ extension ScanStore {
             // Refresh brew metadata before asking what is outdated — otherwise a
             // newly-released cask/formula version that hasn't landed locally yet
             // would be missed even though `brew info` against the API shows it.
+            setRefreshingCatalog(true)
             metadata = await refreshBrewMetadata()
+            setRefreshingCatalog(false)
             if await bailIfCancelled(at: .brew, emitActivity: emitActivity) { return }
         }
 
@@ -443,6 +449,12 @@ extension ScanStore {
 
     private func scanManualUpdates(brewOutdatedCasks: Set<String> = []) async -> ManualScanReport {
         guard let model else { return ManualScanReport(apps: [], failedChecks: 0) }
+        if let scan = dependencies.manualScanWithProgress {
+            let generation = scanGeneration
+            return await scan(model.brewService, brewOutdatedCasks) { [weak self] progress in
+                await self?.acceptManualScanProgress(progress, generation: generation)
+            }
+        }
         if let scan = dependencies.detailedManualScan { return await scan(model.brewService, brewOutdatedCasks) }
         let legacy = await dependencies.manualScan(model.brewService, brewOutdatedCasks)
         return ManualScanReport(apps: legacy.apps, failedChecks: legacy.failedChecks)

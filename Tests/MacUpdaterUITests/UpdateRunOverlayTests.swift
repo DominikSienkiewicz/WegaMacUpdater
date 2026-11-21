@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import WegaMacUpdater
 
@@ -36,7 +37,7 @@ struct UpdateRunOverlayTests {
                 "the overlay appears exactly while an update runs")
         #expect(view.contains("onCancel:   { scan.cancelUpdate() }"),
                 "and its stop button is wired to the run's cooperative cancel")
-        #expect(overlay.contains(".background(Color(nsColor: .windowBackgroundColor).opacity(ScanBusyOverlay.scrimOpacity))"),
+        #expect(overlay.contains(".background(Color(nsColor: .windowBackgroundColor).opacity(Self.scrimOpacity))"),
                 "the overlay covers the screen it stands down")
         #expect(overlay.contains(".disabled(isStopping)"),
                 "a stop already requested cannot be requested twice")
@@ -44,15 +45,17 @@ struct UpdateRunOverlayTests {
 
     /// 0.8.0 promised that the list stays stood down behind a note until the run lands, but the
     /// overlay drew `.regularMaterial`, which on the dark window blurs the rows into an empty
-    /// column — the same defect a scan in place had. The run now stands the rows down with the
-    /// scan's own veil, so the two cannot drift apart, and the rows stay readable underneath.
+    /// column — the same defect a scan in place had. The run stands the rows down with a veil of
+    /// the window's own background instead, so the rows stay readable underneath. The veil was
+    /// the scan's; UXP-13 removed the scan's overlay, so the run owns the value now, unchanged.
     @Test func theRowsStayReadableUnderTheRun() throws {
         let overlay = executableSource(try source("Sources/MacUpdater/UpdateRunOverlay.swift"))
 
         #expect(!overlay.contains("Material"),
                 "a material of any thickness blurs the rows into an empty column")
-        #expect(overlay.contains("opacity(ScanBusyOverlay.scrimOpacity)"),
-                "the same veil as a scan in place, not a second tuning of it")
+        #expect(overlay.contains("opacity(Self.scrimOpacity)"),
+                "one veil, declared where it is used")
+        #expect(UpdateRunOverlay<EmptyView>.scrimOpacity == 0.5, "every row stays legible and still reads as stood down")
     }
 
     /// The overlay is applied after `.disabled`, so it is not itself disabled. Were the order

@@ -90,21 +90,21 @@ struct ScanBusySelectionGateTests {
     /// The scan wears one face, at one size. The full-screen scan and the overlay over the
     /// list used to report the identical thing; drawing the overlay's copy smaller, in a card,
     /// made them read as two different screens — Wega shrank and the binary stream was clipped
-    /// mid-character by the card holding it. UX-19 took the scene out of the overlay; the owner
-    /// asked for Wega back, so the overlay draws it again, the same scene at the same size.
+    /// mid-character by the card holding it. UXP-13 took the overlay away: a scan in place is
+    /// told by the band and the list header, so the scene is drawn only by the first scan.
     ///
-    /// So `ScanProgressScene` owns its sizing and its padding, and offers no knob for either.
-    /// A caller that cannot pass a size cannot give one screen a different one.
+    /// `ScanProgressScene` still owns its sizing and its padding, and offers no knob for either,
+    /// so the one screen that draws it cannot be given a different one.
     @Test func bothScanScreensDrawTheSameSceneAtTheSameSize() throws {
         let view = executableSource(try source("Sources/MacUpdater/UpdateView.swift"))
         let overlay = executableSource(try source("Sources/MacUpdater/ScanBusyOverlay.swift"))
 
-        #expect(view.contains("ScanProgressScene(progress: scan.progress)"),
+        #expect(view.contains("ScanProgressScene(progress: scan.progress, catalogRefreshing: scan.isRefreshingCatalog)"),
                 "the full-screen scan must draw the shared scene")
-        // A scan over a result runs in place: the header reports its phases (`ScanPhaseStrip`)
-        // and Wega sniffs over the stood-down list, in the very scene the first scan draws.
-        #expect(overlay.contains("ScanProgressScene(progress: progress)"),
-                "the overlay draws the shared scene, not a copy of its own")
+        #expect(view.components(separatedBy: "ScanProgressScene(").count == 2,
+                "only checkingView draws the scene; a scan in place draws none over the list")
+        #expect(!overlay.contains("ScanProgressScene(progress: progress)"),
+                "no overlay draws a copy of the scene over the list")
         #expect(!overlay.contains("enum Size"),
                 "no size knob: that is what let the two screens diverge")
         #expect(!view.contains("SniffingScene("),
@@ -119,18 +119,20 @@ struct ScanBusySelectionGateTests {
                 "sizing and padding belong to the scene, not to whoever places it")
     }
 
-    /// The rows are stood down by the overlay's own veil rather than by a second, separate
-    /// dimming of the list: one mechanism, so the two cannot be tuned against each other.
+    /// UXP-13 — the rows are stood down by `.disabled` alone: no veil, no scene and no second
+    /// dimming lie on them, so every row stays readable for the whole scan.
     @Test func theOverlayStandsTheRowsDownWithoutASecondDimming() throws {
         let view = executableSource(try source("Sources/MacUpdater/UpdateView.swift"))
         let overlay = executableSource(try source("Sources/MacUpdater/ScanBusyOverlay.swift"))
+        let screen = slice(view, from: "private var screenBody: some View", to: "private var scopeBar: some View")
 
-        #expect(overlay.contains(".background(Color(nsColor: .windowBackgroundColor).opacity(Self.scrimOpacity))"),
-                "the overlay covers the list area itself")
+        #expect(screen.contains("listColumn"), "sanity: the slice really found screenBody")
+        #expect(!screen.contains(".overlay"), "nothing is drawn over the rows during a scan")
+        #expect(screen.contains(".disabled(!ScanSelectionGate.allowsSelection(isRefreshing: scan.isRefreshing))"),
+                "the rows stay inert while the scan replaces them")
+        #expect(!overlay.contains("struct ScanBusyOverlay"), "the scan's veil over the list is gone")
         #expect(!view.contains("dimmedListOpacity"),
-                "and does so alone — the separate list dimming is gone")
-        #expect(overlay.contains(".frame(maxWidth: .infinity, maxHeight: .infinity)"),
-                "over the whole list, not inside a card the scene has to be shrunk for")
+                "and no separate list dimming took its place")
     }
 
     // MARK: - Helpers

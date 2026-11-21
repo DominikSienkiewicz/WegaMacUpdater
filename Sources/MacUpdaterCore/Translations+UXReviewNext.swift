@@ -43,5 +43,14 @@ extension Translations {
             "I couldn't update %@ — the previous version is still on disk.",
         "Aktualizator %@ podmienił wersję, którą zainstalowałam.": "%@'s own updater replaced the version I installed.",
         "Globalne pakiety npm: %@": "Global npm packages: %@",
+        "Producenci: %@ %@": "Vendors: %@ %@",
+        "Trwa obchód · %@": "Patrol in progress · %@",
+        "do tej pory": "so far",
+        "Odświeżam katalog Homebrew…": "Refreshing the Homebrew catalog…",
+        "Wega węszy w App Store…": "Wega is sniffing around the App Store…",
+        "Wega węszy w npm…": "Wega is sniffing around npm…",
+        "Wega węszy u producentów…": "Wega is sniffing around the developers' sites…",
+        "Postęp skanowania": "Scan progress",
+        "%@ z %@ źródeł": "%@ of %@ sources",
     ]
 }

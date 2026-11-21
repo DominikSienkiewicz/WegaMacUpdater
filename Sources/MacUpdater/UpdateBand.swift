@@ -34,9 +34,13 @@ enum UpdateBandLayout {
 /// update button. Always `WegaLayout.bandHeight` tall so the list below never moves; text
 /// truncates before the band grows. The caller builds the button, so its gate stays with the
 /// update path, and says whether the plan link may open (`planLinkEnabled`).
+///
+/// UXP-13 — while a scan runs in place the caller passes `scan`: the band then reports the scan
+/// (elapsed time and phase chips, the phase, the vendor count, what was found so far) and the
+/// ring stands where the button was, with Wega sniffing.
 struct UpdateBand<Action: View>: View {
     let presentation: UpdateBandPresentation
-    let refreshProgress: ScanProgress?
+    let scan: UpdateBandScanPresentation?
     let planLinkEnabled: Bool
     let onShowPlan: () -> Void
     let action: (UpdateBandLayout) -> Action
@@ -46,13 +50,13 @@ struct UpdateBand<Action: View>: View {
 
     init(
         presentation: UpdateBandPresentation,
-        refreshProgress: ScanProgress?,
+        scan: UpdateBandScanPresentation?,
         planLinkEnabled: Bool,
         onShowPlan: @escaping () -> Void,
         @ViewBuilder action: @escaping (UpdateBandLayout) -> Action
     ) {
         self.presentation = presentation
-        self.refreshProgress = refreshProgress
+        self.scan = scan
         self.planLinkEnabled = planLinkEnabled
         self.onShowPlan = onShowPlan
         self.action = action
@@ -90,42 +94,61 @@ struct UpdateBand<Action: View>: View {
         switch layout {
         case .regular:
             HStack(spacing: 20) {
-                WegaHead(pose: .idle, size: WegaLayout.bandWegaSize)
+                WegaHead(pose: wegaPose, size: WegaLayout.bandWegaSize)
+                    .sniffing(scan != nil)
                     .accessibilityHidden(true)
                 textColumn(layout)
-                summaryColumn
+                regularSummary
                     .frame(width: WegaLayout.bandSummaryWidth, alignment: .leading)
-                action(layout)
+                roundElement(layout)
             }
         case .compact:
             HStack(spacing: 14) {
-                WegaHead(pose: .idle, size: WegaLayout.bandWegaCompactSize)
+                WegaHead(pose: wegaPose, size: WegaLayout.bandWegaCompactSize)
+                    .sniffing(scan != nil)
                     .accessibilityHidden(true)
                 textColumn(layout)
-                action(layout)
+                roundElement(layout)
             }
         case .narrow:
             HStack(spacing: 12) {
                 textColumn(layout)
-                action(layout)
+                roundElement(layout)
             }
+        }
+    }
+
+    private var wegaPose: WegaPose { scan == nil ? .idle : .sniff }
+
+    /// The update button, or while a scan runs the ring that counts its sources. Last in every
+    /// layout, so VoiceOver reads it last.
+    @ViewBuilder
+    private func roundElement(_ layout: UpdateBandLayout) -> some View {
+        if let scan {
+            UpdateBandScanRing(completed: scan.completedSources, total: scan.totalSources, diameter: layout.buttonDiameter, showsWega: layout == .narrow)
+        } else {
+            action(layout)
         }
     }
 
     private func textColumn(_ layout: UpdateBandLayout) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             eyebrow(layout)
-            Text(presentation.headline)
+            Text(scan?.headline ?? presentation.headline)
                 .font(.wega(layout.headlineStyle, weight: .semibold))
                 .foregroundStyle(Color.wegaBandText)
                 .lineLimit(layout.headlineLineLimit)
                 .accessibilityAddTraits(.isHeader)
-            Text(presentation.line)
+            Text(scan?.line ?? presentation.line)
                 .font(.wega(.callout))
                 .foregroundStyle(Color.wegaBandSecondaryText)
                 .lineLimit(layout == .regular ? 2 : 1)
             if layout != .regular {
-                compactSummary
+                if let scan {
+                    scanSummary(scan)
+                } else {
+                    compactSummary
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -133,11 +156,8 @@ struct UpdateBand<Action: View>: View {
 
     @ViewBuilder
     private func eyebrow(_ layout: UpdateBandLayout) -> some View {
-        if refreshProgress != nil {
-            ScanPhaseStrip(progress: refreshProgress)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .clipped()
-                .environment(\.colorScheme, .dark)
+        if let scan {
+            scanEyebrow(scan)
         } else if layout == .narrow {
             freshnessLabel
         } else {
@@ -177,7 +197,45 @@ struct UpdateBand<Action: View>: View {
         }
     }
 
+    /// The patrol's elapsed time, ticking once a second, then the phase chips. The time keeps
+    /// its width; the chips are clipped to the column instead of widening it.
+    private func scanEyebrow(_ scan: UpdateBandScanPresentation) -> some View {
+        HStack(spacing: 8) {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                Text(scan.eyebrow(now: context.date))
+                    .font(.wega(.caption, weight: .semibold, monospaced: true))
+                    .tracking(0.8)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Color.wegaBandAccentText)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            UpdateBandPhaseChips(steps: scan.steps)
+                .fixedSize()
+                .environment(\.colorScheme, .dark)
+        }
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+        .clipped()
+    }
+
     // MARK: Summary
+
+    @ViewBuilder
+    private var regularSummary: some View {
+        if let scan {
+            scanSummary(scan)
+        } else {
+            summaryColumn
+        }
+    }
+
+    /// While a scan runs the summary says only what it has found so far.
+    private func scanSummary(_ scan: UpdateBandScanPresentation) -> some View {
+        Text(scan.summary)
+            .font(.wega(.callout, weight: .semibold))
+            .foregroundStyle(Color.wegaBandText)
+            .lineLimit(1)
+    }
 
     private var summaryColumn: some View {
         VStack(alignment: .leading, spacing: 6) {

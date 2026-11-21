@@ -38,6 +38,9 @@ struct ScanStoreDependencies {
     let settleAppManagementPermission: ((Bool) -> Void)?
     let undoableUpdates: () -> [UndoableUpdate]
     var detailedManualScan: ((BrewService, Set<String>) async -> ManualScanReport)? = nil
+    /// UXP-13 — the manual scan that also reports how many vendor apps have answered. Tried
+    /// first; the test stubs set `detailedManualScan` or `manualScan` and keep their path.
+    var manualScanWithProgress: ((BrewService, Set<String>, @escaping @Sendable (ManualScanProgress) async -> Void) async -> ManualScanReport)? = nil
     var checkVendorUpdate: @Sendable (ManualOutdatedApp) async throws -> VendorUpdateCompletionResult = {
         try await VendorUpdateCompletionChecker().check($0)
     }
@@ -82,8 +85,8 @@ struct ScanStoreDependencies {
         recordUpdateRun: { UpdateRunJournal().record($0) },
         settleAppManagementPermission: nil,
         undoableUpdates: { UpdateOperationStore.shared.undoableUpdates() },
-        detailedManualScan: { brew, outdated in
-            await ManualUpdateScanner(brewService: brew).scanReport(brewOutdatedCasks: outdated)
+        manualScanWithProgress: { brew, outdated, report in
+            await ManualUpdateScanner(brewService: brew).scanReport(brewOutdatedCasks: outdated, onProgress: report)
         },
         reportVendorCheck: { item, remaining, check, count, fingerprint in
             MenuBarAgent.shared.reportVendorCheck(item: item, remaining: remaining, check: check, count: count, fingerprint: fingerprint)
@@ -156,6 +159,18 @@ final class ScanStore: ObservableObject {
     /// numbers it was meant to correct. In this mode `status` stays `.results` and only the
     /// header and the toolbar say that something is running.
     @Published private(set) var isRefreshing = false
+    /// UXP-13 — true only while `brew update` refreshes Homebrew's catalog, the slow first step
+    /// of a full scan. A caption of its own rather than a fifth `ScanPhase`: the ring counts the
+    /// four sources, and the catalog is not one of them.
+    @Published private(set) var isRefreshingCatalog = false
+    /// UXP-13 — when the running scan started, for the band's elapsed time. `nil` between scans.
+    @Published private(set) var scanStartedAt: Date?
+    /// UXP-13 — how many vendor apps the running scan has heard back from. `nil` outside the
+    /// vendor phase of the current scan.
+    @Published private(set) var manualScanProgress: ManualScanProgress?
+    /// UXP-13 — one number per scan, so a vendor report that arrives after its scan has ended
+    /// cannot land in the next one.
+    private(set) var scanGeneration = 0
     /// How far the running upgrade has got, in whole packages. `nil` when nothing is
     /// installing, which is also what hides the bar.
     @Published var upgradeProgress: UpgradeProgress? {
@@ -421,6 +436,44 @@ final class ScanStore: ObservableObject {
     /// and a private setter is not reachable across files.
     func setRefreshing(_ refreshing: Bool) {
         isRefreshing = refreshing
+    }
+
+    /// UXP-13 — opens a scan's own state: a new generation, the start of its clock and no
+    /// vendor count yet. The three below are `private(set)` for the reason `isRefreshing` is.
+    func beginScanProgress() {
+        scanGeneration += 1
+        scanStartedAt = .now
+        manualScanProgress = nil
+    }
+
+    func setRefreshingCatalog(_ refreshing: Bool) {
+        isRefreshingCatalog = refreshing
+    }
+
+    /// Closes what only a running scan has, on every way out of it: the band goes back to the
+    /// results state instead of a clock and a count that no longer move.
+    func endScanProgress() {
+        isRefreshingCatalog = false
+        scanStartedAt = nil
+        manualScanProgress = nil
+    }
+
+    /// Stores a vendor report from the scan numbered `generation`, when the rule below allows.
+    func acceptManualScanProgress(_ progress: ManualScanProgress, generation: Int) {
+        guard Self.acceptsManualProgress(progress, current: manualScanProgress, generation: generation,
+                                         currentGeneration: scanGeneration, phase: self.progress) else { return }
+        manualScanProgress = progress
+    }
+
+    /// A vendor report counts only for the scan still running, only while it is in its vendor
+    /// phase, and never moves the count backwards.
+    nonisolated static func acceptsManualProgress(
+        _ progress: ManualScanProgress, current: ManualScanProgress?,
+        generation: Int, currentGeneration: Int, phase: ScanProgress?
+    ) -> Bool {
+        guard generation == currentGeneration, phase == .running(.manual) else { return false }
+        guard let current else { return true }
+        return progress.checkedApps > current.checkedApps
     }
 
     /// REL-09 — says out loud that the result on screen came from a scan that did not

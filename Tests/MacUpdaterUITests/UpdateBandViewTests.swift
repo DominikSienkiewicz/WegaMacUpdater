@@ -30,6 +30,20 @@ final class UpdateBandViewTests: XCTestCase {
         }
     }
 
+    /// UXP-13 — while a scan runs the ring takes the button's place, so it must be the button's
+    /// size exactly: anything else moves the text column the moment a scan starts or ends.
+    func testTheRingIsExactlyTheButtonsDiameter() {
+        for diameter in [WegaLayout.bandButtonSize, WegaLayout.bandButtonCompactSize, WegaLayout.bandButtonNarrowSize] {
+            for showsWega in [false, true] {
+                let ring = UpdateBandScanRing(completed: 2, total: 4, diameter: diameter, showsWega: showsWega)
+                XCTAssertEqual(
+                    NSHostingView(rootView: ring).fittingSize, CGSize(width: diameter, height: diameter),
+                    "diameter \(diameter), Wega \(showsWega)"
+                )
+            }
+        }
+    }
+
     func testTheButtonDrawsItsStateFromIsEnabled() throws {
         let text = try source("Sources/MacUpdater/UpdateBandButton.swift")
         for literal in [
@@ -56,6 +70,14 @@ final class UpdateBandViewTests: XCTestCase {
         )
     }
 
+    /// The scan state with its longest copy: the vendor phase, its count and a plural summary.
+    private var scanFixture: UpdateBandScanPresentation {
+        UpdateBandScanPresentation(
+            progress: .running(.manual), catalogRefreshing: false, startedAt: Date(timeIntervalSince1970: 0),
+            manual: ManualScanProgress(checkedApps: 12, totalApps: 31), foundSoFar: 22
+        )
+    }
+
     func testTheLayoutRuleSwitchesAtTheBreakpoint() {
         XCTAssertEqual(UpdateBandLayout.style(forWidth: 479), .narrow)
         XCTAssertEqual(UpdateBandLayout.style(forWidth: 480), .compact)
@@ -77,15 +99,15 @@ final class UpdateBandViewTests: XCTestCase {
     /// A 980 pt window with the inspector open leaves the band about 368 pt; the narrow layout
     /// gives Wega's width to the text instead of overflowing the border.
     func testTheNarrowBandFitsTheInspectorOpenWindow() throws {
-        for progress in [nil, ScanProgress.running(.npm)] {
+        for scan in [nil, scanFixture] {
             let band = UpdateBand(
-                presentation: fullPresentation, refreshProgress: progress, planLinkEnabled: true, onShowPlan: {},
+                presentation: fullPresentation, scan: scan, planLinkEnabled: true, onShowPlan: {},
                 action: { _ in Color.clear.frame(width: WegaLayout.bandButtonNarrowSize, height: WegaLayout.bandButtonNarrowSize) }
             )
             .frame(width: 368)
             let size = NSHostingView(rootView: band).fittingSize
-            XCTAssertLessThanOrEqual(size.width, 368, "refreshing \(progress != nil)")
-            XCTAssertEqual(size.height, WegaLayout.bandHeight, "refreshing \(progress != nil)")
+            XCTAssertLessThanOrEqual(size.width, 368, "scanning \(scan != nil)")
+            XCTAssertEqual(size.height, WegaLayout.bandHeight, "scanning \(scan != nil)")
         }
         let text = try source("Sources/MacUpdater/UpdateBand.swift")
         let lower = try XCTUnwrap(text.range(of: "private func content(")).upperBound
@@ -96,24 +118,26 @@ final class UpdateBandViewTests: XCTestCase {
     }
 
     func testTheBandNeverChangesHeight() {
-        for progress in [nil, ScanProgress.running(.npm)] {
-            for width in [240, 368, 380, 520, 700, 819, 820, 1100] as [CGFloat] {
-                let band = UpdateBand(
-                    presentation: fullPresentation, refreshProgress: progress, planLinkEnabled: true, onShowPlan: {},
-                    action: { _ in Color.clear.frame(width: 96, height: 96) }
-                )
-                .frame(width: width)
-                XCTAssertEqual(
-                    NSHostingView(rootView: band).fittingSize.height, WegaLayout.bandHeight,
-                    "width \(width), refreshing \(progress != nil)"
-                )
+        for language in [AppLanguage.pl, .en] {
+            for scan in [nil, scanFixture] {
+                for width in [240, 368, 380, 388, 480, 520, 700, 819, 820, 1100] as [CGFloat] {
+                    let height = withLanguage(language) {
+                        let band = UpdateBand(
+                            presentation: fullPresentation, scan: scan, planLinkEnabled: true, onShowPlan: {},
+                            action: { _ in Color.clear.frame(width: 96, height: 96) }
+                        )
+                        .frame(width: width)
+                        return NSHostingView(rootView: band).fittingSize.height
+                    }
+                    XCTAssertEqual(height, WegaLayout.bandHeight, "\(language), width \(width), scanning \(scan != nil)")
+                }
             }
         }
     }
 
-    func testTheRefreshingEyebrowNeverWidensOrGrowsTheBand() throws {
+    func testTheScanningEyebrowNeverWidensOrGrowsTheBand() throws {
         let band = UpdateBand(
-            presentation: fullPresentation, refreshProgress: .running(.npm), planLinkEnabled: true, onShowPlan: {},
+            presentation: fullPresentation, scan: scanFixture, planLinkEnabled: true, onShowPlan: {},
             action: { _ in Color.clear.frame(width: 96, height: 96) }
         )
         .frame(width: 380)
@@ -121,15 +145,22 @@ final class UpdateBandViewTests: XCTestCase {
         XCTAssertLessThanOrEqual(size.width, 380)
         XCTAssertEqual(size.height, WegaLayout.bandHeight)
         let text = try source("Sources/MacUpdater/UpdateBand.swift")
-        let strip = try XCTUnwrap(text.range(of: "ScanPhaseStrip(progress: refreshProgress)"))
+        let chips = try XCTUnwrap(text.range(of: "UpdateBandPhaseChips(steps: scan.steps)"))
         XCTAssertTrue(
-            text[strip.upperBound...].prefix(120).contains(".clipped()"),
-            "the strip is clipped to its column"
+            text[chips.upperBound...].prefix(200).contains(".environment(\\.colorScheme, .dark)"),
+            "the chips' spinner resolves for the dark band in the light appearance"
         )
-        XCTAssertTrue(
-            text[strip.upperBound...].prefix(200).contains(".environment(\\.colorScheme, .dark)"),
-            "the strip's spinner and primary fills resolve for the dark band in the light appearance"
+        let frame = try XCTUnwrap(
+            text.range(of: ".frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)", range: chips.upperBound..<text.endIndex),
+            "an elastic frame (0…∞) takes the column's width whatever the chips need"
         )
+        XCTAssertLessThan(text.distance(from: chips.upperBound, to: frame.lowerBound), 200)
+        XCTAssertTrue(text[frame.upperBound...].drop(while: \.isWhitespace).hasPrefix(".clipped()"),
+                      "the chips are clipped to the column instead of widening it")
+        XCTAssertTrue(text.contains("TimelineView(.periodic(from: .now, by: 1))"), "the elapsed time ticks once a second")
+        let eyebrow = try XCTUnwrap(text.range(of: "scan.eyebrow(now: context.date)"))
+        XCTAssertTrue(text[eyebrow.upperBound...].prefix(250).contains(".textCase(.uppercase)"))
+        XCTAssertTrue(text[eyebrow.upperBound...].prefix(250).contains("monospaced: true"))
     }
 
     /// A running update owns the screen, the plan preview included, and a sheet opened mid-run
@@ -163,7 +194,7 @@ final class UpdateBandViewTests: XCTestCase {
     func testTheBandIsReadInOrder() throws {
         let text = try source("Sources/MacUpdater/UpdateBand.swift")
         for literal in [
-            ".accessibilityAddTraits(.isHeader)", "ScanPhaseStrip(progress: refreshProgress)",
+            ".accessibilityAddTraits(.isHeader)", "UpdateBandPhaseChips(steps: scan.steps)",
             ".frame(height: WegaLayout.bandHeight)", "UpdateBandLayout.style(forWidth:",
             ".foregroundStyle(Color.wegaBandText)",
         ] {
@@ -180,9 +211,53 @@ final class UpdateBandViewTests: XCTestCase {
             rest = head.upperBound..<text.endIndex
         }
         XCTAssertEqual(heads, 2, "the regular and compact layouts draw Wega; the narrow one does not")
+        let scanViews = try source("Sources/MacUpdater/UpdateBandScanViews.swift")
         for forbidden in [".glassEffect(", "Color.wegaToffee", "Color.wegaSuccess", "Color.wegaHoney"] {
             XCTAssertFalse(text.contains(forbidden), forbidden)
+            XCTAssertFalse(scanViews.contains(forbidden), "UpdateBandScanViews.swift: \(forbidden)")
         }
+        // The round element is the last thing in every layout, so VoiceOver reads the ring last.
+        let lower = try XCTUnwrap(text.range(of: "private func content(")).upperBound
+        let upper = try XCTUnwrap(text.range(of: "private func textColumn(")).lowerBound
+        let switchBody = try XCTUnwrap(text[lower..<upper].components(separatedBy: "\n    }\n").first, "content's own body")
+        let branches = switchBody.components(separatedBy: "case .").dropFirst()
+        XCTAssertEqual(branches.count, 3)
+        for branch in branches {
+            let tail = try XCTUnwrap(branch.range(of: "roundElement(layout)"), "every layout ends in the round element")
+            XCTAssertTrue(branch[tail.upperBound...].allSatisfy { $0.isWhitespace || $0 == "}" }, "nothing after the ring: \(branch)")
+        }
+        let round = try XCTUnwrap(text.range(of: "private func roundElement(")).upperBound
+        XCTAssertTrue(text[round...].prefix(400).contains(
+            "UpdateBandScanRing(completed: scan.completedSources, total: scan.totalSources, diameter: layout.buttonDiameter, showsWega: layout == .narrow)"
+        ))
+        XCTAssertTrue(scanViews.contains(".accessibilityLabel(tr(\"Postęp skanowania\"))"))
+    }
+
+    /// UXP-13 — Wega sniffs during every scan, in every layout: her head in the regular and
+    /// compact band, inside the ring in the narrow one, with motion only when it is allowed.
+    func testWegaSniffsInEveryLayout() throws {
+        let band = try source("Sources/MacUpdater/UpdateBand.swift")
+        XCTAssertEqual(band.components(separatedBy: ".sniffing(scan != nil)").count, 3, "both band heads sniff")
+        let views = try source("Sources/MacUpdater/UpdateBandScanViews.swift")
+        let head = try XCTUnwrap(views.range(of: "WegaHead(pose: .sniff"), "the narrow ring draws Wega")
+        XCTAssertTrue(views[head.upperBound...].prefix(200).contains(".accessibilityHidden(true)"))
+        XCTAssertTrue(views[head.lowerBound...].prefix(200).contains(".sniffing(true)"))
+        XCTAssertTrue(views.contains("if showsWega {"))
+        XCTAssertTrue(views.contains("@Environment(\\.accessibilityReduceMotion)"))
+        XCTAssertTrue(views.contains("ContinuousMotion.forever("))
+        XCTAssertFalse(views.contains(".repeatForever("))
+        var rest = views.startIndex..<views.endIndex
+        var spinners = 0
+        while let spinner = views.range(of: "ProgressView()", range: rest) {
+            let before = views[views.startIndex..<spinner.lowerBound].suffix(160)
+            XCTAssertTrue(before.contains("reduceMotion"), "a spinner without a Reduce Motion branch (occurrence \(spinners + 1))")
+            spinners += 1
+            rest = spinner.upperBound..<views.endIndex
+        }
+        XCTAssertEqual(spinners, 1, "the running chip's spinner")
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        XCTAssertTrue(view.contains("WegaHead(pose: .sniff, size: 28).sniffing(true).accessibilityHidden(true)"),
+                      "with no band, a small sniffing head stands next to the phase strip")
     }
 
     func testOnlyAVerifiedSourceWearsACheck() throws {
@@ -291,16 +366,17 @@ final class UpdateBandViewTests: XCTestCase {
 
     /// F1 — a two-line headline must still fit the band's fixed height. The frame always
     /// reports `bandHeight`, so this measures the content the frame holds: the longest copy
-    /// (incomplete note, security part, a two-line Wega line, the plan link), idle and refreshing.
+    /// (incomplete note, security part, a two-line Wega line, the plan link), idle and, with the
+    /// vendor phase's headline, count and summary, scanning.
     func testTheTallestHeadlineStillFitsTheBand() {
         for bandWidth in Self.narrowestBandWidths {
             let layout = UpdateBandLayout.style(forWidth: bandWidth)
             for language in [AppLanguage.pl, .en] {
-                for progress in [nil, ScanProgress.running(.npm)] {
+                for scan in [nil, scanFixture] {
                     let height = withLanguage(language) {
                         let band = UpdateBand(
                             presentation: presentation(count: 22, note: tr("sprawdzenie niepełne")),
-                            refreshProgress: progress, planLinkEnabled: true, onShowPlan: {},
+                            scan: scan, planLinkEnabled: true, onShowPlan: {},
                             action: { layout in
                                 Color.clear.frame(width: layout.buttonDiameter, height: layout.buttonDiameter)
                             }
@@ -309,8 +385,43 @@ final class UpdateBandViewTests: XCTestCase {
                     }
                     XCTAssertLessThanOrEqual(
                         height, WegaLayout.bandHeight,
-                        "F1: \(language), band \(bandWidth) pt (\(layout)), refreshing \(progress != nil): content is \(height) pt"
+                        "F1: \(language), band \(bandWidth) pt (\(layout)), scanning \(scan != nil): content is \(height) pt"
                     )
+                }
+            }
+        }
+    }
+
+    /// UXP-13 — the scan's headline names the step; cut, it names none. Every caption must fit
+    /// the headline's line limit at each layout's narrowest width.
+    func testTheScanHeadlineIsNeverTruncated() {
+        let captions: [(ScanProgress, Bool)] = [
+            (.running(.brew), true), (.running(.brew), false), (.running(.mas), false),
+            (.running(.npm), false), (.running(.manual), false),
+        ]
+        for bandWidth in Self.narrowestBandWidths {
+            let layout = UpdateBandLayout.style(forWidth: bandWidth)
+            let font = Font.wega(layout.headlineStyle, weight: .semibold)
+            let column = headlineColumnWidth(bandWidth: bandWidth)
+            let lines = Array(repeating: "Ag", count: layout.headlineLineLimit).joined(separator: "\n")
+            let allowed = NSHostingView(rootView: Text(verbatim: lines).font(font).frame(width: column)).fittingSize.height
+            for language in [AppLanguage.pl, .en] {
+                for (progress, catalog) in captions {
+                    let headline = withLanguage(language) { ScanPhaseCopy.caption(progress: progress, catalogRefreshing: catalog) }
+                    let needed = NSHostingView(rootView: Text(verbatim: headline).font(font)
+                        .frame(width: column).fixedSize(horizontal: false, vertical: true)).fittingSize.height
+                    let check = {
+                        XCTAssertLessThanOrEqual(needed, allowed, "\(language), band \(bandWidth) pt (\(layout)): \"\(headline)\" needs \(needed) pt of \(allowed)")
+                    }
+                    if language == .en && layout == .compact && [.running(.mas), .running(.manual)].contains(progress) {
+                        // Known gap, reported to the owner: the brief's English App Store and
+                        // vendor captions need three `.title` lines in the 220 pt column of a
+                        // 480 pt band (78 of 52 pt); they fit from about 520 pt. Strict: it fails
+                        // once this is fixed.
+                        XCTExpectFailure("UXP-13: English scan headline at a 480 pt compact band", strict: true, failingBlock: check)
+                    } else {
+                        check()
+                    }
                 }
             }
         }

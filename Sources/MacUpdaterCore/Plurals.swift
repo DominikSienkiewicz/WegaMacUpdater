@@ -99,6 +99,12 @@ public enum Plurals {
             few:  "%@ aktualizacje",
             many: "%@ aktualizacji"
         ),
+        // UXP-13 — the band's vendor count; "z" takes the genitive plural for every count.
+        "z %@ aplikacji": PluralForms(
+            one:  "z %@ aplikacji",
+            few:  "z %@ aplikacji",
+            many: "z %@ aplikacji"
+        ),
         "%@ z możliwą poprawką bezp.": PluralForms(
             one:  "%@ z możliwą poprawką bezp.",
             few:  "%@ z możliwą poprawką bezp.",
@@ -262,6 +268,11 @@ public enum Plurals {
             one:  "%@ update",
             few:  "%@ updates",
             many: "%@ updates"
+        ),
+        "z %@ aplikacji": PluralForms(
+            one:  "of %@ app",
+            few:  "of %@ apps",
+            many: "of %@ apps"
         ),
         "%@ z możliwą poprawką bezp.": PluralForms(
             one:  "%@ may fix a security issue",

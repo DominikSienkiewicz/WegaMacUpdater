@@ -388,6 +388,7 @@ struct ContinuousMotionTests {
             "SniffingScene.swift",
             "SidebarList.swift",
             "BinaryStream.swift",
+            "UpdateBandScanViews.swift",
         ]
     )
     func animatedViewsObserveReduceMotion(fileName: String) throws {

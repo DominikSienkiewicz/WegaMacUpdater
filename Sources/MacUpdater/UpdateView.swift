@@ -203,11 +203,10 @@ struct UpdateView: View {
 
     // MARK: Checking
     //
-    // The same scene the quiet launch refresh draws over the list — see `ScanProgressScene`,
-    // which owns its own sizing and padding so this screen and that overlay cannot be given
-    // different ones.
+    // The first scan's scene — see `ScanProgressScene`, which owns its own sizing and padding.
+    // A scan over a result draws no scene: the band and the list header report it (UXP-13).
     private var checkingView: some View {
-        ScanProgressScene(progress: scan.progress)
+        ScanProgressScene(progress: scan.progress, catalogRefreshing: scan.isRefreshingCatalog)
     }
 
     // MARK: Results
@@ -263,7 +262,7 @@ struct UpdateView: View {
             }
             scopeBar
             Spacer(minLength: 0)
-            groupingMenu
+            groupingControl
         }
     }
 
@@ -273,7 +272,7 @@ struct UpdateView: View {
         let presentation = bandPresentation
         return UpdateBand(
             presentation: presentation,
-            refreshProgress: scan.isRefreshing ? scan.progress : nil,
+            scan: scan.isRefreshing ? scanPresentation : nil,
             planLinkEnabled: ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating),
             onShowPlan: { scan.showPlanPreview = true },
             action: { layout in
@@ -312,6 +311,17 @@ struct UpdateView: View {
         )
     }
 
+    /// UXP-13 — the band's scan state, from what the store knows about the scan running now.
+    private var scanPresentation: UpdateBandScanPresentation {
+        UpdateBandScanPresentation(
+            progress:          scan.progress,
+            catalogRefreshing: scan.isRefreshingCatalog,
+            startedAt:         scan.scanStartedAt,
+            manual:            scan.manualScanProgress,
+            foundSoFar:        scan.scopeCounts.all
+        )
+    }
+
     private var resultsHeading: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(tr("Wszystko aktualne"))
@@ -324,11 +334,18 @@ struct UpdateView: View {
                          ? trf("Znaleziono %@", "\(date.formatted(date: .abbreviated, time: .shortened))")
                          : trf("Sprawdzono %@", "\(date.formatted(date: .omitted, time: .shortened))"))
                     // UX-19 — while a scan runs in place, the header shows each source's
-                    // phase instead of the stamp naming the sources of the result below.
+                    // phase instead of the stamp naming the sources of the result below, and
+                    // with no band to carry her, Wega sniffs beside it (UXP-13). One height
+                    // for both, so the heading never jumps.
                     if scan.isRefreshing {
-                        ScanPhaseStrip(progress: scan.progress)
+                        HStack(spacing: 8) {
+                            WegaHead(pose: .sniff, size: 28).sniffing(true).accessibilityHidden(true)
+                            ScanPhaseStrip(progress: scan.progress)
+                        }
+                        .frame(minHeight: 28, alignment: .leading)
                     } else {
                         Text(sourceStamp)
+                            .frame(minHeight: 28, alignment: .leading)
                     }
                 }
                 .font(.wega(.subheadline))
@@ -368,19 +385,12 @@ struct UpdateView: View {
             }.map(\.name))
 
             // The rows on screen are the ones the scan is in the middle of replacing, so for
-            // its duration they are a report, not a menu: inert, and with the scan drawn over
-            // them behind a material that stands them down. Without this the only sign of a
-            // launch refresh was a line of small print in the header, over a list that looked
-            // exactly like a finished one.
+            // its duration they are a report, not a menu: inert. Nothing is drawn over them
+            // (UXP-13) — the band and the list header say a scan is running and why the rows
+            // cannot be selected, and every row stays readable.
             listColumn
                 .frame(maxWidth: .infinity)
                 .disabled(!ScanSelectionGate.allowsSelection(isRefreshing: scan.isRefreshing))
-                .overlay {
-                    if ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows) {
-                        ScanBusyOverlay(progress: scan.progress)
-                    }
-                }
-                .animation(.easeInOut(duration: 0.2), value: scan.isRefreshing)
         }
     }
 
@@ -391,6 +401,26 @@ struct UpdateView: View {
         let counts = scan.scopeCounts
         if counts.all > 0 || updateFilter != .all {
             UpdateScopeBar(filter: updateFilter, counts: counts) { onScopeChange?($0) }
+        }
+    }
+
+    /// UX-18's grouping menu, or while a scan runs in place over rows, the note that says why
+    /// they cannot be selected. The menu stays laid out underneath, so the header keeps its
+    /// height.
+    private var groupingControl: some View {
+        ZStack(alignment: .trailing) {
+            if ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows) {
+                groupingMenu
+                    .opacity(0)
+                    .disabled(true)
+                    .accessibilityHidden(true)
+                Text(tr("Zaznaczanie wróci, gdy skan się skończy."))
+                    .font(.wega(.subheadline))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            } else {
+                groupingMenu
+            }
         }
     }
 
@@ -423,7 +453,7 @@ struct UpdateView: View {
     }
 
     /// Whether the list shows rows rather than one of its empty states — the one answer
-    /// `listColumn` and the scan overlay over it both read.
+    /// `listColumn` and the list header's scan note both read.
     private var showsRows: Bool {
         hasResults && (filterHasContent(updateFilter) || !scan.restartCandidates.isEmpty)
     }

@@ -267,7 +267,6 @@ extension Translations {
         "Znaleziono %@": "Found %@",
         // Ciche odświeżenie po starcie: lista zostaje na ekranie, nagłówek mówi, że trwa skan.
         // Nakładka nad listą na czas cichego odświeżenia — lista jest wtedy raportem, nie menu.
-        "Odświeżam listę…": "Refreshing the list…",
         "Zaznaczanie wróci, gdy skan się skończy.": "Selecting comes back when the scan finishes.",
         "Trwa skanowanie": "Scan in progress",
         "Najpierw skończę skanowanie — lista zaraz się zmieni.":
