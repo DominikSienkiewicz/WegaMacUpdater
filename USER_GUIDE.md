@@ -764,6 +764,40 @@ of Console. It is **off until you turn it on**, and everything about it is local
   by design — Wega opens Toolbox, the Releases page or the App Store so their own flow
   finishes the update.
 
+### Uninstalling Wega
+
+Wega is a normal app, so removing it is a few manual steps. Nothing here is automatic, and
+Wega does not delete anything for you: you stay in control of every command.
+
+1. **Turn off Launch at login.** Settings → **General** → **Launch at login**.
+2. **Remove the helper**, if you installed it. Settings → **Permissions & Privacy** →
+   **Wega helper** → **Remove Helper**.
+3. **Turn off Touch ID for `sudo`** (optional). If Wega turned it on and you want it off, you
+   can do this at any time, even while Wega stays installed. Open `/etc/pam.d/sudo_local` in
+   Terminal with `sudo nano /etc/pam.d/sudo_local`, delete the line
+   `auth       sufficient     pam_tid.so`, and save. This setting applies to all of `sudo`
+   on your Mac, not only to Wega, so every `sudo` prompt asks for your password again
+   afterwards. If `sudo_local` has no other lines, you can remove the file instead with
+   `sudo rm /etc/pam.d/sudo_local`.
+4. **Quit Wega.** Use **Quit Wega** in the menu-bar menu. Closing the window does not quit the
+   app.
+5. **Move `WegaMacUpdater.app` to the Trash.**
+
+Steps 1 to 5 remove the app. What follows is optional, and each item is separate. Deleting
+the copies Wega keeps means **you can no longer undo an update she made**, so skip that
+one if you might still need it.
+
+- `~/Library/Application Support/WegaMacUpdater/` holds `update-operations/` (the copies of
+  apps made before each update, used by Undo update and the rollback shield) and
+  `last-scan.json` (the last scan result).
+- `~/Library/Logs/WegaMacUpdater/` holds the logs.
+- If you installed from the `.pkg`: `/Library/Application Support/WegaMacUpdater/Authorization`
+  is owned by root, so remove it with `sudo rm -r "/Library/Application Support/WegaMacUpdater/Authorization"`,
+  then run `sudo pkgutil --forget com.wega.WegaMacUpdater` so macOS forgets the package.
+- Settings: `defaults delete com.wega.WegaMacUpdater`.
+- A GitHub token, if you saved one, is in Keychain Access as the item with the service name
+  `com.wega.WegaMacUpdater.github`. Delete it there.
+
 ### Uninstalling apps
 
 The **Uninstall** screen removes any app regardless of origin (casks via `brew uninstall

@@ -210,5 +210,8 @@ extension Translations {
         "Zaznacz wszystkie widoczne": "Select All Visible",
         "Pokaż panel szczegółów": "Show Inspector",
         "Przewodnik po Wedze": "Wega User Guide",
+        "Jak usunąć Wegę i jej pomocnika": "How to remove Wega and its helper",
+        "Nie widzisz aplikacji? Brak na liście nie znaczy, że jest aktualna — sprawdź jej status w Spisie":
+            "Can't see an app? Missing from the list doesn't mean up to date — check its status in Inventory",
     ]
 }

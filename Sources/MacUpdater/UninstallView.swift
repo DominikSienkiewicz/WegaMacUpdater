@@ -254,6 +254,13 @@ struct UninstallView: View {
                                 // removal selection.
                                 .contextMenu { rowContextMenu(for: app, isSelected: isSelected, canToggle: protection == nil) }
 
+                                if protection == .wegaItself {
+                                    Link(tr("Jak usunąć Wegę i jej pomocnika"), destination: AppEndpoints.shared.uninstallGuideURL)
+                                        .font(.wega(.callout))
+                                        .padding(.leading, 54)
+                                        .padding(.bottom, 8)
+                                }
+
                                 Divider().opacity(0.4).padding(.leading, 54)
                             }
                         }

@@ -152,6 +152,13 @@ extension AppEndpoints {
     /// UXP-23 — the user guide the Help menu opens: `USER_GUIDE.md` on the repository's main
     /// branch, derived from `projectRepository` so an overlay that moves the repository moves it too.
     public var userGuideURL: URL { projectRepositoryURL.appending(path: "blob/main/USER_GUIDE.md") }
+
+    /// UXP-34 — the guide's "Uninstalling Wega" section: removing Wega, her helper and Touch ID for `sudo`.
+    public var uninstallGuideURL: URL {
+        var components = URLComponents(url: userGuideURL, resolvingAgainstBaseURL: false)
+        components?.fragment = "uninstalling-wega"
+        return components?.url ?? userGuideURL
+    }
 }
 
 /// Whether a user endpoints overlay is currently shaping these endpoints, and whether it was

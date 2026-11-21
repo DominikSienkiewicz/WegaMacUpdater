@@ -73,6 +73,10 @@ struct TrustSettingsCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(permission.title).font(.wega(.callout, weight: .semibold))
                     paragraph(permission.text)
+                    if permission.kind == .touchID {
+                        Link(tr("Jak usunąć Wegę i jej pomocnika"), destination: AppEndpoints.shared.uninstallGuideURL)
+                            .font(.wega(.subheadline))
+                    }
                     if permission.kind == .appManagement, appManagement == .denied {
                         Button(tr("Otwórz ustawienia prywatności")) {
                             NSWorkspace.shared.open(AppManagementSettings.paneURL)

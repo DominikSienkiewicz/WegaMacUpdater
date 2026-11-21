@@ -488,6 +488,9 @@ struct UpdateView: View {
                     HiddenByRulesRow(count: hiddenRuleCount) { showsHiddenRules = true }
                         .padding(.bottom, WegaLayout.listGutter)
                 }
+                MissingAppHint(onOpenInventory: { onNavigate?(.inventory) })
+                    .padding(.horizontal, WegaLayout.listGutter)
+                    .padding(.bottom, WegaLayout.listGutter)
             }
         } else if showsRows {
             ScrollView {
@@ -499,6 +502,7 @@ struct UpdateView: View {
                     if hiddenRuleCount > 0 {
                         HiddenByRulesRow(count: hiddenRuleCount) { showsHiddenRules = true }
                     }
+                    MissingAppHint(onOpenInventory: { onNavigate?(.inventory) })
                     if !scan.restartCandidates.isEmpty {
                         RestartSection(
                             candidates: scan.restartCandidates,
@@ -531,6 +535,9 @@ struct UpdateView: View {
                     HiddenByRulesRow(count: hiddenRuleCount) { showsHiddenRules = true }
                         .padding(.bottom, WegaLayout.listGutter)
                 }
+                MissingAppHint(onOpenInventory: { onNavigate?(.inventory) })
+                    .padding(.horizontal, WegaLayout.listGutter)
+                    .padding(.bottom, WegaLayout.listGutter)
             }
         }
     }
