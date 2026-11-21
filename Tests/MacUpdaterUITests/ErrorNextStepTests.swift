@@ -80,6 +80,7 @@ struct ErrorNextStepTests {
         #expect(store.components(separatedBy: "WegaLog.error(").count - 1 >= 2, "the Logs screen has something to show")
         let view = try source("Sources/MacUpdater/MigrationView.swift")
         #expect(view.contains("BannerView(data: b, onAction: { if case .openLogs = $0 { onNavigate?(.logs) } }, onClose: { banner = nil })"))
+        #expect(try source("Sources/MacUpdater/DetailColumn.swift").contains("MigrationView(onWegaState: { wegaState = $0 }, onNavigate: navigate(fromBanner:))"))
     }
 
     @Test func aFailedUpdateSaysWhatToDoNext() {

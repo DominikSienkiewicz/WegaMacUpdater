@@ -48,7 +48,9 @@ struct InventoryView: View {
             updateRuns: scanStore.completedRunCount,
             migrations: migration.completedCount,
             cleanupRemovals: cleanup.removalCount,
-            backgroundInstalls: menuBar.installedRoundCount
+            backgroundInstalls: menuBar.installedRoundCount,
+            manualInstalls: scanStore.completedManualInstallCount,
+            undos: scanStore.completedUndoCount
         )
     }
 

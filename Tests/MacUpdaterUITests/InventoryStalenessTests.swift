@@ -134,6 +134,11 @@ struct InventoryStalenessTests {
         #expect(restore.upperBound < counted.lowerBound && counted.upperBound < guarded.lowerBound)
     }
 
+    @Test func theInventoryStampTakesInTheInstallAndUndoCounts() throws {
+        let inventory = try source("Sources/MacUpdater/InventoryView.swift")
+        #expect(inventory.contains("manualInstalls: scanStore.completedManualInstallCount") && inventory.contains("undos: scanStore.completedUndoCount"))
+    }
+
     /// `brew upgrade` succeeds and every listing comes back empty, so the rescan confirms the run.
     static func idleBrewRunner() -> ScanStoreRuntimeProcessRunner { idleBrew() }
 

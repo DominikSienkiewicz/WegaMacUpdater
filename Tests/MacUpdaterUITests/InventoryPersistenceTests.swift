@@ -49,7 +49,9 @@ struct InventoryPersistenceTests {
                 updateRuns: scanStore.completedRunCount,
                 migrations: migration.completedCount,
                 cleanupRemovals: cleanup.removalCount,
-                backgroundInstalls: menuBar.installedRoundCount
+                backgroundInstalls: menuBar.installedRoundCount,
+                manualInstalls: scanStore.completedManualInstallCount,
+                undos: scanStore.completedUndoCount
             )
     """))
         for literal in ["inventory.isStale(given: changes)", "inventory.scan(model: model, changes: changes)"] {
