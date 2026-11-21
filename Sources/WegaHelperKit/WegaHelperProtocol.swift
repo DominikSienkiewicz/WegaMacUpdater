@@ -83,8 +83,9 @@ public enum WegaHelper {
     public static let sudoShimSigningID = "com.wega.WegaMacUpdater.sudo-shim"
     /// Main app bundle identifier.
     public static let appBundleID = AppMetadata.bundleIdentifier
-    /// Helper protocol version (bump on breaking interface changes).
-    public static let version = "6"
+    /// Helper protocol version. Bumped with every new verb and every change to a verb's
+    /// arguments, reply or semantics; see `minimumHelperVersion(for:)`.
+    public static let version = "7"
 
     /// The oldest helper protocol version whose behaviour for `verb` this app relies on.
     ///
@@ -94,8 +95,10 @@ public enum WegaHelper {
     public static func minimumHelperVersion(for verb: WegaHelperVerb) -> Int {
         switch verb {
         case .enableTouchIDForSudo, .beginPackageInstallation, .packageInstallationStatus, .replaceBundle,
-             .stageApplicationBundleForTrash, .disableTouchIDForSudo:
+             .stageApplicationBundleForTrash:
             return 6
+        case .disableTouchIDForSudo:
+            return 7
         }
     }
 

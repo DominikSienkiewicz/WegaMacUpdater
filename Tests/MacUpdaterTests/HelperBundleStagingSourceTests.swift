@@ -65,8 +65,8 @@ struct HelperBundleStagingSourceTests {
         #expect(!compact.contains("PrivilegedOps()"), "every connection's object must know its caller")
     }
 
-    @Test func helperVersionIsSix() {
-        #expect(WegaHelper.version == "6")
+    @Test func helperVersionIsSeven() {
+        #expect(WegaHelper.version == "7")
     }
 
     @Test func protocolDeclaresTheVerb() throws {

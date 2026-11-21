@@ -51,6 +51,10 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
     /// over slots at the same time.
     private static let stagingLock = NSLock()
 
+    /// Turning Touch ID for `sudo` on and off rewrite the same file; one never runs inside the other.
+    /// No other lock is taken under it.
+    private static let pamLock = NSLock()
+
     init(callerUID: uid_t, callerGID: gid_t) {
         self.callerUID = callerUID
         self.callerGID = callerGID
@@ -64,6 +68,8 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
 
     func enableTouchIDForSudo(withReply reply: @escaping @Sendable (Bool, String?) -> Void) {
         do {
+            Self.pamLock.lock()
+            defer { Self.pamLock.unlock() }
             try TouchIDSudoConfigurator.writeSudoLocalEnablingTouchID()
             HelperAuditLog.logger.info("enableTouchIDForSudo: sukces")
             reply(true, nil)
@@ -73,8 +79,44 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
         }
     }
 
+    /// The caller's console session and `admin` membership are read here, as root; every file the
+    /// operation touches is handled in `WegaHelperKit`. One reply, at the end.
     func disableTouchIDForSudo(withReply reply: @escaping @Sendable (Int, String?) -> Void) {
-        reply(0, nil)
+        Self.pamLock.lock()
+        defer { Self.pamLock.unlock() }
+        let report = TouchIDSudoDisabler.runLive(
+            caller: .init(
+                uid: callerUID,
+                consoleUserUID: Self.consoleUserUID(),
+                isAdministrator: AdministratorGroup.contains(uid: callerUID)
+            )
+        )
+        Self.logDisable(report)
+        reply(report.result.wireCode, report.result.wireDetail)
+    }
+
+    /// The result, the step and the helper's own paths; never a byte of the file, nor the caller.
+    private static func logDisable(_ report: TouchIDSudoDisableReport) {
+        let code = report.result.wireCode
+        if code >= 0 {
+            HelperAuditLog.logger.info("disableTouchIDForSudo: sukces, linie: \(code, privacy: .public)")
+        } else {
+            let step = report.failedStep?.rawValue ?? "-"
+            HelperAuditLog.logger.error("disableTouchIDForSudo: błąd \(code, privacy: .public) (etap: \(step, privacy: .public))")
+        }
+        if let backup = report.result.wireDetail {
+            HelperAuditLog.logger.error("disableTouchIDForSudo: poprzedni plik leży pod \(backup, privacy: .public)")
+        }
+        if let fallback = report.fallbackPolicyPath {
+            HelperAuditLog.logger.error("disableTouchIDForSudo: istnieje dalsza ścieżka polityki \(fallback, privacy: .public)")
+        }
+        if let links = report.linkCount {
+            HelperAuditLog.logger.info("disableTouchIDForSudo: sudo_local ma dowiązań: \(links, privacy: .public)")
+        }
+        if let leftBehind = report.leftBehindPath {
+            let what = code > 0 ? "poprzedni plik został" : "plik zamiany został"
+            HelperAuditLog.logger.error("disableTouchIDForSudo: \(what, privacy: .public) pod \(leftBehind, privacy: .public)")
+        }
     }
 
     func beginPackageInstallation(

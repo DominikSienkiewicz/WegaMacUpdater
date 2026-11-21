@@ -44,21 +44,62 @@ public enum TouchIDSudoDisableResult: Equatable, Sendable {
     /// right before the helper swapped it out.
     case rollbackFailed(backupPath: String)
 
+    static let restoredAfterFailureCode = -20
+    static let rollbackFailedCode = -21
+
     /// The code on the wire: the number of removed lines, 0, a refusal's raw value, −20 or −21.
     public var wireCode: Int {
-        0
+        switch self {
+        case .removed(let lines): return lines
+        case .nothingToRemove: return 0
+        case .refused(let refusal): return refusal.rawValue
+        case .restoredAfterFailure: return Self.restoredAfterFailureCode
+        case .rollbackFailed: return Self.rollbackFailedCode
+        }
     }
 
     /// The path that goes with −21, and nothing for any other result.
     public var wireDetail: String? {
-        nil
+        if case .rollbackFailed(let path) = self { return path }
+        return nil
     }
 
     /// Decodes a reply. `nil` for an unknown code, and for −21 whose path is not
     /// `/etc/pam.d/.sudo_local.wega-` followed by 1–64 of `[A-Za-z0-9-]`, so the app never shows a
     /// path outside the policy directory.
     public init?(wireCode: Int, detail: String?) {
-        nil
+        switch wireCode {
+        case 1...:
+            self = .removed(lines: wireCode)
+        case 0:
+            self = .nothingToRemove
+        case Self.restoredAfterFailureCode:
+            self = .restoredAfterFailure
+        case Self.rollbackFailedCode:
+            guard let detail, Self.isSwapFilePath(detail) else { return nil }
+            self = .rollbackFailed(backupPath: detail)
+        default:
+            guard let refusal = TouchIDSudoDisableRefusal(rawValue: wireCode) else { return nil }
+            self = .refused(refusal)
+        }
+    }
+
+    /// Compared as UTF-8 bytes, so no combining mark can make another path read as this one.
+    private static func isSwapFilePath(_ path: String) -> Bool {
+        let prefix = TouchIDSudoDisabler.reportedPath(of: TouchIDSudoDisabler.swapNamePrefix).utf8
+        guard path.utf8.starts(with: prefix) else { return false }
+        let name = path.utf8.dropFirst(prefix.count)
+        return (1...64).contains(name.count) && name.allSatisfy(isSwapNameByte)
+    }
+
+    private static func isSwapNameByte(_ byte: UInt8) -> Bool {
+        switch byte {
+        case UInt8(ascii: "A")...UInt8(ascii: "Z"), UInt8(ascii: "a")...UInt8(ascii: "z"),
+             UInt8(ascii: "0")...UInt8(ascii: "9"), UInt8(ascii: "-"):
+            return true
+        default:
+            return false
+        }
     }
 }
 
@@ -108,7 +149,66 @@ public struct TouchIDSudoDisableReport: Equatable, Sendable {
 extension TouchIDSudoConfigurator {
     /// Removes every line that is byte for byte the exact directive, and only when everything else
     /// in the file is a blank line or a full comment. Pure; the root helper and the tests call it.
+    ///
+    /// Decided on bytes, not `String`: `"\r\n"` is one `Character`, so a split on `"\n"` would not
+    /// see it, and `String` equality applies canonical equivalence. In order: too large, not UTF-8 or
+    /// a NUL, no exact directive, a backslash anywhere (OpenPAM joins a line ending in one to the
+    /// next, and with one anywhere it is not certain where a line ends), any other active line.
     public static func contentsDisablingTouchID(current: Data) -> TouchIDSudoDisablePlan {
-        .nothingToRemove
+        guard current.count <= TouchIDSudoDisabler.maximumSize else { return .refused(.tooLarge) }
+        let bytes = [UInt8](current)
+        guard !bytes.contains(0), String(validating: bytes, as: UTF8.self) != nil else { return .refused(.unreadable) }
+        let lines = PAMPolicyLines.physicalLines(bytes)
+        let kept = lines.filter { !PAMPolicyLines.isExactDirective($0) }
+        let removed = lines.count - kept.count
+        guard removed > 0 else { return .nothingToRemove }
+        guard !bytes.contains(PAMPolicyLines.backslash) else { return .refused(.lineContinuation) }
+        guard kept.allSatisfy({ PAMPolicyLines.isBlankOrComment(PAMPolicyLines.content(of: $0)) }) else {
+            return .refused(.otherDirectivesPresent)
+        }
+        return .remove(lines: removed, contents: Data(kept.joined()))
+    }
+}
+
+/// A PAM policy file read the way OpenPAM reads it: physical lines end at `0x0A` only.
+enum PAMPolicyLines {
+    static let newline = UInt8(ascii: "\n")
+    static let backslash = UInt8(ascii: "\\")
+    private static let commentMark = UInt8(ascii: "#")
+    /// SP, HT, VT, FF and CR, skipped before deciding whether a line is blank or a comment.
+    private static let leadingBlanks: Set<UInt8> = [0x20, 0x09, 0x0B, 0x0C, 0x0D]
+    private static let directive = Array(TouchIDSudoConfigurator.pamDirective.utf8)
+
+    /// Each line with its newline, if it has one; the empty tail after a final newline is no line.
+    static func physicalLines(_ bytes: [UInt8]) -> [ArraySlice<UInt8>] {
+        var lines: [ArraySlice<UInt8>] = []
+        var start = bytes.startIndex
+        while start < bytes.endIndex {
+            let end = bytes[start...].firstIndex(of: newline).map { $0 + 1 } ?? bytes.endIndex
+            lines.append(bytes[start..<end])
+            start = end
+        }
+        return lines
+    }
+
+    /// A plain split, kept apart from `physicalLines` so that a readback is checked by a second,
+    /// independent reading of the same bytes.
+    static func referenceLines(_ bytes: [UInt8]) -> [ArraySlice<UInt8>] {
+        var lines = bytes.split(separator: newline, omittingEmptySubsequences: false)
+        if lines.last?.isEmpty == true { lines.removeLast() }
+        return lines
+    }
+
+    static func content(of line: ArraySlice<UInt8>) -> ArraySlice<UInt8> {
+        line.last == newline ? line.dropLast() : line
+    }
+
+    static func isExactDirective(_ line: ArraySlice<UInt8>) -> Bool {
+        content(of: line).elementsEqual(directive)
+    }
+
+    static func isBlankOrComment(_ content: ArraySlice<UInt8>) -> Bool {
+        guard let first = content.first(where: { !leadingBlanks.contains($0) }) else { return true }
+        return first == commentMark
     }
 }

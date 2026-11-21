@@ -12,9 +12,11 @@ import WegaHelperKit
 /// per operation" win applies *after* that one-time approval.
 ///
 /// SEC-10 hardening: every XPC call is bounded by a **deadline** (an unresponsive
-/// or dead helper resolves to `HelperError.timedOut` instead of hanging the app),
-/// and every privileged mutation is gated by a **version handshake** so the app
-/// never drives a stale helper left behind by an update.
+/// or dead helper resolves to `HelperError.timedOut` instead of hanging the app).
+/// Every privileged call is gated by a per-verb version handshake: the app sends a
+/// verb only to a helper whose protocol version lies between that verb's minimum
+/// and the app's own version, so it never drives a helper that predates the verb or
+/// postdates the app.
 public final class PrivilegedHelperClient: @unchecked Sendable {
     public static let shared = PrivilegedHelperClient()
 
@@ -52,7 +54,7 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
     enum Deadline {
         static let handshake: Duration = .seconds(10)
         static let enableTouchID: Duration = .seconds(60)
-        static let disableTouchID: Duration = .seconds(1)
+        static let disableTouchID: Duration = .seconds(60)
         static let installationStatus: Duration = .seconds(10)
         static let replaceBundle: Duration = .seconds(600)
         /// The helper hands over every item of the bundle under one lock, so a large app takes
@@ -100,7 +102,7 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
     /// stale or dead helper is found before Wega quits anything.
     public func uninstallAvailabilityAfterHandshake() async -> UninstallHelperAvailability {
         do {
-            try await performHandshake()
+            try await performHandshake(for: .stageApplicationBundleForTrash)
             return .enabled
         } catch {
             return Self.uninstallAvailability(handshakeFailure: error)
@@ -124,57 +126,71 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
 
     // MARK: - Version handshake (SEC-10)
 
-    /// Pure decision: does the version the running helper reported match the one
-    /// this app build was compiled against? Kept side-effect-free so it is unit
-    /// tested directly (the version-comparison logic is the part worth pinning).
-    static func handshakeOutcome(reported: String, expected: String = WegaHelper.version) -> HandshakeOutcome {
-        reported == expected ? .compatible : .mismatch(reported: reported, expected: expected)
+    /// Pure decision: may `verb` be sent to a helper that reported `reported`? Only when it is
+    /// 1–4 ASCII digits naming a version between the verb's minimum and `current`, the app's own.
+    /// Digits only, because `Int("+7") == 7`. Side-effect-free so it is unit tested directly.
+    static func handshakeOutcome(
+        reported: String, for verb: WegaHelperVerb, current: String = WegaHelper.version
+    ) -> HandshakeOutcome {
+        let minimum = WegaHelper.minimumHelperVersion(for: verb)
+        let accepted = "\(minimum)…\(current)"
+        guard let version = protocolVersion(reported), let newest = protocolVersion(current),
+              minimum <= version, version <= newest else {
+            return .mismatch(reported: reported, expected: accepted)
+        }
+        return .compatible
     }
 
     enum HandshakeOutcome: Equatable, Sendable {
         case compatible
+        /// `expected` is the accepted range, such as `"6…7"`.
         case mismatch(reported: String, expected: String)
     }
 
-    static func handshakeOutcome(
-        reported: String, for verb: WegaHelperVerb, current: String = WegaHelper.version
-    ) -> HandshakeOutcome {
-        handshakeOutcome(reported: reported, expected: current)
+    private static func protocolVersion(_ text: String) -> Int? {
+        let digits = Array(text.utf8)
+        guard (1...4).contains(digits.count), digits.allSatisfy({ (UInt8(ascii: "0")...UInt8(ascii: "9")).contains($0) }) else {
+            return nil
+        }
+        return Int(text)
     }
 
+    /// The reported version when `verb` may be sent to it; `.versionMismatch` otherwise.
     static func acceptedVersion(
         reported: String, for verb: WegaHelperVerb, current: String = WegaHelper.version
     ) throws -> String {
-        reported
-    }
-
-    @discardableResult
-    public func performHandshake(for verb: WegaHelperVerb) async throws -> String {
-        try await performHandshake()
-    }
-
-    public func availabilityAfterHandshake(for verb: WegaHelperVerb) async -> HelperVerbAvailability {
-        .enabled
-    }
-
-    static func verbAvailability(handshakeFailure: Error) -> HelperVerbAvailability {
-        .enabled
-    }
-
-    /// Probes the running daemon's protocol version (bounded by the handshake
-    /// deadline) and verifies it matches the version this app expects. A stale
-    /// helper throws `.versionMismatch`; a dead one throws `.timedOut`. Exposed so
-    /// callers can validate the helper explicitly, and run before every privileged
-    /// mutation below.
-    @discardableResult
-    public func performHandshake() async throws -> String {
-        let reported = try await helperVersion()
-        switch Self.handshakeOutcome(reported: reported) {
+        switch handshakeOutcome(reported: reported, for: verb, current: current) {
         case .compatible:
             return reported
         case .mismatch(let reported, let expected):
             throw HelperError.versionMismatch(helper: reported, expected: expected)
         }
+    }
+
+    /// Probes the running daemon's protocol version (bounded by the handshake deadline) and
+    /// checks it against `verb`'s accepted range. A helper too old for the verb, or newer than the
+    /// app, throws `.versionMismatch`; a dead one throws `.timedOut`. Runs before every privileged
+    /// call below, each with its own verb.
+    @discardableResult
+    public func performHandshake(for verb: WegaHelperVerb) async throws -> String {
+        try Self.acceptedVersion(reported: try await helperVersion(), for: verb)
+    }
+
+    /// One bounded handshake for `verb`, so a screen can offer the verb only when the running
+    /// helper will take it.
+    public func availabilityAfterHandshake(for verb: WegaHelperVerb) async -> HelperVerbAvailability {
+        do {
+            try await performHandshake(for: verb)
+            return .enabled
+        } catch {
+            return Self.verbAvailability(handshakeFailure: error)
+        }
+    }
+
+    /// Not enabled reads as off; everything else (wrong version, no answer, a raw XPC error) as stale.
+    static func verbAvailability(handshakeFailure: Error) -> HelperVerbAvailability {
+        if case .notEnabled = handshakeFailure as? HelperError { return .off }
+        return .stale
     }
 
     // MARK: - Whitelisted operations (XPC)
@@ -186,7 +202,7 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
     }
 
     public func enableTouchIDForSudo() async throws {
-        try await performHandshake()
+        try await performHandshake(for: .enableTouchIDForSudo)
         _ = try await call(deadline: Deadline.enableTouchID) { (proxy, done: @escaping @Sendable (sending Result<Bool, Error>) -> Void) in
             proxy.enableTouchIDForSudo { ok, message in
                 done(ok ? .success(true) : .failure(HelperError.operationFailed(message ?? "enableTouchIDForSudo failed")))
@@ -194,12 +210,24 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         }
     }
 
+    /// Removes the exact Touch ID directive from `sudo_local` as root. A transport error or an
+    /// unknown reply means the outcome is not known, and the caller reads the file again.
     public func disableTouchIDForSudo() async throws -> TouchIDSudoDisableResult {
-        throw HelperError.operationFailed("disableTouchIDForSudo failed")
+        try await performHandshake(for: .disableTouchIDForSudo)
+        return try await call(deadline: Deadline.disableTouchID) { (proxy, done: @escaping @Sendable (sending Result<TouchIDSudoDisableResult, Error>) -> Void) in
+            proxy.disableTouchIDForSudo { code, detail in
+                done(Self.disableReply(code: code, detail: detail))
+            }
+        }
     }
 
+    /// An unknown code, or −21 with a path outside the policy directory, is an operation failure
+    /// that carries only the code: the path is never passed on.
     static func disableReply(code: Int, detail: String?) -> Result<TouchIDSudoDisableResult, Error> {
-        .failure(HelperError.operationFailed("disableTouchIDForSudo failed"))
+        guard let result = TouchIDSudoDisableResult(wireCode: code, detail: detail) else {
+            return .failure(HelperError.operationFailed("disableTouchIDForSudo failed (\(code))"))
+        }
+        return .success(result)
     }
 
     public func installVerifiedPackage(at path: String, version: String) async throws {
@@ -212,7 +240,7 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
 
     private var trackedInstaller: HelperPackageInstallation {
         HelperPackageInstallation(
-            handshake: { _ = try await self.performHandshake() },
+            handshake: { _ = try await self.performHandshake(for: .beginPackageInstallation) },
             begin: { id, path, version in
                 try await self.installationReply { proxy, reply in
                     proxy.beginPackageInstallation(atPath: path, operationID: id.uuidString, expectedVersion: version, withReply: reply)
@@ -246,7 +274,7 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
 
     /// FEAT-05: atomic bundle rollback as root (protected locations).
     public func replaceBundle(at targetPath: String, withSnapshotAt snapshotPath: String) async throws {
-        try await performHandshake()
+        try await performHandshake(for: .replaceBundle)
         _ = try await call(deadline: Deadline.replaceBundle) { (proxy, done: @escaping @Sendable (sending Result<Bool, Error>) -> Void) in
             proxy.replaceBundle(atPath: targetPath, withSnapshotAtPath: snapshotPath) { ok, message in
                 done(ok ? .success(true) : .failure(HelperError.operationFailed(message ?? "replaceBundle failed")))
@@ -265,7 +293,7 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
     ///   `.operationFailed` carries the helper's reason for refusing or moving nothing.
     public func stageApplicationBundleForTrash(at path: URL, expectedBundleID: String) async throws -> URL {
         do {
-            try await performHandshake()
+            try await performHandshake(for: .stageApplicationBundleForTrash)
         } catch {
             throw StagingFailure(underlying: error, requestSent: false)
         }

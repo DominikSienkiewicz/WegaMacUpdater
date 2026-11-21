@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import MacUpdaterCore
+@testable import WegaHelperKit
 
 /// SEC-10: the privileged client must never hang on a dead/unresponsive helper,
 /// and must refuse to drive a version-mismatched (stale) one. These pin the two
@@ -56,18 +57,138 @@ struct PrivilegedHelperDeadlineTests {
         }
     }
 
-    // MARK: - Version handshake
+    // MARK: - Version handshake (per verb, RC3)
+
+    private let oldVerbs: [WegaHelperVerb] = [
+        .enableTouchIDForSudo, .beginPackageInstallation, .packageInstallationStatus, .replaceBundle,
+        .stageApplicationBundleForTrash,
+    ]
 
     @Test func handshakeAcceptsMatchingVersion() {
-        #expect(PrivilegedHelperClient.handshakeOutcome(reported: WegaHelper.version) == .compatible)
+        for verb in WegaHelperVerb.allCases {
+            #expect(PrivilegedHelperClient.handshakeOutcome(reported: WegaHelper.version, for: verb) == .compatible, "\(verb)")
+        }
     }
 
     @Test func handshakeRejectsStaleHelper() {
         let stale = WegaHelper.version + "-old"
-        #expect(
-            PrivilegedHelperClient.handshakeOutcome(reported: stale, expected: WegaHelper.version)
-                == .mismatch(reported: stale, expected: WegaHelper.version)
-        )
+        for verb in WegaHelperVerb.allCases {
+            let accepted = "\(WegaHelper.minimumHelperVersion(for: verb))…\(WegaHelper.version)"
+            #expect(
+                PrivilegedHelperClient.handshakeOutcome(reported: stale, for: verb, current: WegaHelper.version)
+                    == .mismatch(reported: stale, expected: accepted), "\(verb)"
+            )
+        }
+    }
+
+    @Test func eachVerbHasItsOwnMinimumHelperVersion() {
+        #expect(WegaHelper.version == "7")
+        #expect(Dictionary(uniqueKeysWithValues: WegaHelperVerb.allCases.map { ($0, WegaHelper.minimumHelperVersion(for: $0)) }) == [
+            .enableTouchIDForSudo: 6, .beginPackageInstallation: 6, .packageInstallationStatus: 6, .replaceBundle: 6,
+            .stageApplicationBundleForTrash: 6, .disableTouchIDForSudo: 7,
+        ])
+    }
+
+    /// A v6 helper still running after the app updated keeps serving the five old verbs; only
+    /// turning Touch ID off needs v7, and is refused before anything is sent.
+    @Test func aVersionSixHelperServesTheOldVerbsButNotTheNewOne() throws {
+        for verb in oldVerbs {
+            #expect(PrivilegedHelperClient.handshakeOutcome(reported: "6", for: verb) == .compatible, "\(verb)")
+            #expect(try PrivilegedHelperClient.acceptedVersion(reported: "6", for: verb) == "6", "\(verb)")
+        }
+        #expect(PrivilegedHelperClient.handshakeOutcome(reported: "6", for: .disableTouchIDForSudo)
+                == .mismatch(reported: "6", expected: "7…7"))
+        do {
+            _ = try PrivilegedHelperClient.acceptedVersion(reported: "6", for: .disableTouchIDForSudo)
+            Issue.record("a v6 helper must not be sent the new verb")
+        } catch PrivilegedHelperClient.HelperError.versionMismatch(let helper, let expected) {
+            #expect(helper == "6" && expected == "7…7")
+        }
+        for verb in WegaHelperVerb.allCases {
+            #expect(PrivilegedHelperClient.handshakeOutcome(reported: "7", for: verb) == .compatible, "\(verb)")
+        }
+    }
+
+    /// Only 1–4 ASCII digits in the accepted range: `Int("+7")` is 7, and a newer helper than the
+    /// app is never driven.
+    @Test func anythingButADigitStringInRangeIsAMismatch() {
+        for reported in ["8", "x", "", "+7", " 7", "7 ", "-1", "7-old", "0x7", "00007", "٧", "5"] {
+            for verb in WegaHelperVerb.allCases {
+                guard case .mismatch(let echoed, _) = PrivilegedHelperClient.handshakeOutcome(reported: reported, for: verb) else {
+                    Issue.record("\(reported.debugDescription) must not be compatible for \(verb)")
+                    continue
+                }
+                #expect(echoed == reported)
+            }
+        }
+        #expect(PrivilegedHelperClient.handshakeOutcome(reported: "0007", for: .disableTouchIDForSudo) == .compatible)
+    }
+
+    /// Every privileged verb checks the helper's version for itself before its request is sent.
+    @Test func everyVerbHandshakesForItselfBeforeItsCall() throws {
+        let path = "Sources/MacUpdaterCore/PrivilegedHelper/PrivilegedHelperClient.swift"
+        let verbs: [(signature: String, verb: String)] = [
+            ("public func enableTouchIDForSudo(", "enableTouchIDForSudo"),
+            ("public func disableTouchIDForSudo(", "disableTouchIDForSudo"),
+            ("public func replaceBundle(", "replaceBundle"),
+            ("public func stageApplicationBundleForTrash(", "stageApplicationBundleForTrash"),
+        ]
+        for (signature, verb) in verbs {
+            let body = try functionBody(signature, in: path)
+            let handshake = try #require(body.range(of: "try await performHandshake(for: .\(verb))"), "\(verb)")
+            let request = try #require(body.range(of: "call(deadline:"), "\(verb)")
+            #expect(handshake.lowerBound < request.lowerBound, "\(verb)")
+        }
+        #expect(try functionBody("private var trackedInstaller:", in: path)
+                    .contains("try await self.performHandshake(for: .beginPackageInstallation)"))
+        #expect(try functionBody("public func uninstallAvailabilityAfterHandshake(", in: path)
+                    .contains("try await performHandshake(for: .stageApplicationBundleForTrash)"))
+        #expect(try functionBody("public func availabilityAfterHandshake(for verb:", in: path)
+                    .contains("try await performHandshake(for: verb)"))
+        let client = try String(contentsOf: packageRoot().appendingPathComponent(path), encoding: .utf8)
+        #expect(!client.contains("performHandshake()"), "no handshake without a verb is left")
+    }
+
+    @Test func aFailedHandshakeMapsToVerbAvailability() {
+        typealias HelperError = PrivilegedHelperClient.HelperError
+        let cases: [(error: any Error, expected: HelperVerbAvailability)] = [
+            (HelperError.notEnabled, .off),
+            (HelperError.versionMismatch(helper: "6", expected: "7…7"), .stale),
+            (HelperError.timedOut, .stale),
+            (HelperError.connectionFailed, .stale),
+            (NSError(domain: NSCocoaErrorDomain, code: NSXPCConnectionInterrupted), .stale),
+        ]
+        for item in cases {
+            #expect(PrivilegedHelperClient.verbAvailability(handshakeFailure: item.error) == item.expected, "\(item.error)")
+        }
+    }
+
+    // MARK: - Turning Touch ID for sudo off
+
+    @Test func disablingWaitsAsLongAsEnabling() {
+        #expect(PrivilegedHelperClient.Deadline.disableTouchID == .seconds(60))
+    }
+
+    @Test func theDisableReplyDecodesKnownCodesOnly() throws {
+        #expect(try PrivilegedHelperClient.disableReply(code: 1, detail: nil).get() == .removed(lines: 1))
+        #expect(try PrivilegedHelperClient.disableReply(code: 0, detail: nil).get() == .nothingToRemove)
+        #expect(try PrivilegedHelperClient.disableReply(code: -11, detail: nil).get() == .refused(.otherDirectivesPresent))
+        #expect(try PrivilegedHelperClient.disableReply(code: -20, detail: nil).get() == .restoredAfterFailure)
+        for (code, detail) in [(-99, nil), (-21, "/tmp/x"), (-21, nil), (-12, "/etc/pam.d/.sudo_local.wega-x")] as [(Int, String?)] {
+            guard case .failure(let error) = PrivilegedHelperClient.disableReply(code: code, detail: detail),
+                  case .operationFailed(let message) = error as? PrivilegedHelperClient.HelperError else {
+                Issue.record("\(code) \(String(describing: detail)) must be an operation failure")
+                continue
+            }
+            #expect(!message.contains("/tmp"), "a refused path is never passed on")
+        }
+    }
+
+    /// Security re-check: a −21 path made by the helper's own live name generator passes the app's
+    /// check, so a real failed rollback is shown with its path rather than as an unknown error.
+    @Test func aRollbackPathFromTheLiveSwapNameIsAccepted() throws {
+        let path = TouchIDSudoDisabler.reportedPath(of: TouchIDSudoDisabler.makeSwapName())
+        #expect(try PrivilegedHelperClient.disableReply(code: -21, detail: path).get() == .rollbackFailed(backupPath: path))
     }
 
     // MARK: - Staging a root-owned app for the Trash (Uninstall)
@@ -85,7 +206,9 @@ struct PrivilegedHelperDeadlineTests {
             "public func stageApplicationBundleForTrash(",
             in: "Sources/MacUpdaterCore/PrivilegedHelper/PrivilegedHelperClient.swift"
         )
-        let handshake = try #require(body.range(of: "try await performHandshake()"), "a stale helper must be refused first")
+        let handshake = try #require(
+            body.range(of: "try await performHandshake(for: .stageApplicationBundleForTrash)"), "a stale helper must be refused first"
+        )
         let request = try #require(body.range(of: "call(deadline: Deadline.stageForTrash)"))
         #expect(handshake.lowerBound < request.lowerBound)
     }
@@ -143,7 +266,7 @@ struct PrivilegedHelperDeadlineTests {
             "public func stageApplicationBundleForTrash(",
             in: "Sources/MacUpdaterCore/PrivilegedHelper/PrivilegedHelperClient.swift"
         )
-        let handshake = try #require(body.range(of: "try await performHandshake()"))
+        let handshake = try #require(body.range(of: "try await performHandshake(for: .stageApplicationBundleForTrash)"))
         let notSent = try #require(body.range(of: "StagingFailure(underlying: error, requestSent: false)"))
         let request = try #require(body.range(of: "call(deadline: Deadline.stageForTrash)"))
         let sent = try #require(body.range(of: "StagingFailure(underlying: error, requestSent: true)"))
