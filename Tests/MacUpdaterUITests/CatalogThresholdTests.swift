@@ -60,6 +60,43 @@ struct CatalogThresholdTests {
         #expect(store.catalogAgeMinutes == nil)
     }
 
+    /// Final review M3 — the rescan after an update run or an undo sets a new check time but
+    /// reads no catalog, so the launch catalog's age must not stand next to it.
+    @Test func aLightweightRescanDropsTheCatalogChip() async throws {
+        let f = try fixture(stampMinutesAgo: 12)
+        let store = f.store
+        store.startLaunchRefresh()
+        await store.scanTask?.value
+        #expect(store.catalogAgeMinutes == 12)
+        await store.runCheck(emitActivity: false, lightweight: true)
+        #expect(store.catalogAgeMinutes == nil)
+    }
+
+    @Test func aRestoredSnapshotMakesNoCatalogClaim() async throws {
+        let f = try fixture(stampMinutesAgo: 12)
+        let store = f.store
+        store.startLaunchRefresh()
+        await store.scanTask?.value
+        #expect(store.catalogAgeMinutes == 12)
+        // Nothing on screen, so the restore may put the saved result up.
+        store.status = .ready
+        store.restoreLastScan()
+        #expect(store.status == .results && store.catalogAgeMinutes == nil)
+    }
+
+    @Test func aCancelledScanKeepsTheChipOfTheResultStillOnScreen() async throws {
+        let f = try fixture(stampMinutesAgo: 12)
+        let store = f.store
+        store.startLaunchRefresh()
+        await store.scanTask?.value
+        #expect(store.catalogAgeMinutes == 12)
+        store.startCheck()
+        store.cancelScan()
+        await store.scanTask?.value
+        #expect(store.progress.map { if case .cancelled = $0 { true } else { false } } == true)
+        #expect(store.catalogAgeMinutes == 12, "the previous result stays on screen, and so does its catalog age")
+    }
+
     private struct Fixture {
         let store: ScanStore
         let runner: ScanStoreRuntimeProcessRunner

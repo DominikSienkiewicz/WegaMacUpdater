@@ -325,7 +325,8 @@ extension ScanStore {
             previous: installationChecks
         )
         lastCheck = Date()
-        if !lightweight { setCatalogAgeMinutes(catalogAge) }
+        // `nil` after a lightweight rescan too: it stamps a new check time over no catalog read.
+        setCatalogAgeMinutes(catalogAge)
         // REL-09 — the per-source picture is part of the result from here on: it decides
         // what gets persisted, and whether an empty list may call itself "up to date".
         // Published first, because closing hand-offs trusts this scan's completeness.
