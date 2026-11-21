@@ -186,7 +186,7 @@ final class TouchIDSetupController: ObservableObject {
         )
         if case .versionMismatch = error as? PrivilegedHelperClient.HelperError {
           enableHelperOutdated = true
-          state = .permissionDenied(touchIDState)
+          showManualEnableRoute()
           onWegaState(WegaState(pose: .idle, line: TouchIDEnableCopy.outdatedHelper))
           return
         }
@@ -207,7 +207,7 @@ final class TouchIDSetupController: ObservableObject {
     case .cancelledByUser:
       state = .idle(touchIDState)
     case .permissionDenied:
-      state = .permissionDenied(touchIDState)
+      showManualEnableRoute()
       // M3: the line points at the command only where the card shows one; otherwise the card's
       // recoveryOS note is the whole message.
       if showsEnableCommand {
@@ -216,6 +216,13 @@ final class TouchIDSetupController: ObservableObject {
     case .otherError(let message):
       state = .failed(touchIDState, message)
     }
+  }
+
+  /// The state in which the card may show the manual enable command. M6: the preflight is read again
+  /// first, so the command never rests on the card's last look.
+  private func showManualEnableRoute() {
+    preflight = dependencies.preflight()
+    state = .permissionDenied(touchIDState)
   }
 
   /// RC2-2: a success only when the file read again says so. A refusal or a failed write shows its

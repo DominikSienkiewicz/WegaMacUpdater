@@ -141,6 +141,35 @@ struct TouchIDSetupControllerGateTests {
         #expect(safe.showsEnableCommand, "Apple's root:wheel 0444 template")
     }
 
+    /// M6: the enable command rests on a preflight read when the helper could not do it, not on the
+    /// card's last look. The policy turns unproven between that look and the click, on the path
+    /// without a helper and on the outdated-helper path, and no command or Terminal line appears.
+    @Test func theEnableCommandRestsOnAFreshPreflight() async {
+        var unproven = TouchIDDisablePreflight.clear
+        unproven.commandsAreSafe = false
+        let paths: [(String, Bool, @MainActor @Sendable () async throws -> TouchIDSudoEnableResult)] = [
+            ("no helper", false, { .enabled }),
+            ("an outdated helper", true, { throw PrivilegedHelperClient.HelperError.versionMismatch(helper: "7", expected: "8…8") }),
+        ]
+        for (name, helperIsEnabled, enable) in paths {
+            let observed = GateBox(TouchIDDisablePreflight.clear)
+            let controller = TouchIDSetupController(dependencies: .init(
+                currentState: { .available }, helperIsEnabled: { helperIsEnabled }, enableWithHelper: enable,
+                authorizeFallback: { .permissionDenied }, openInTerminal: { _ in }, preflight: { observed.value },
+                logHelperCode: { _, _ in }
+            ))
+            #expect(controller.offersEnableButton, "\(name): the card's look was safe")
+            observed.value = unproven
+            var lines: [String] = []
+
+            await controller.enable { lines.append($0.line) }
+
+            #expect(controller.wasPermissionDenied, "\(name)")
+            #expect(!controller.showsEnableCommand && controller.recoveryOnlyReason == .noProofOfSafety, "\(name)")
+            #expect(!lines.contains(tr("macOS zablokował zapis — wklej komendę do Terminala.")), "\(name): \(lines)")
+        }
+    }
+
     /// M3: "wklej komendę do Terminala" only when the card shows the command. Here the policy turns
     /// unsafe while the helper does not answer, so no command is shown and no line points at one.
     @Test func theTerminalLinePointsAtACommandOnlyWhenOneIsShown() async {
