@@ -38,10 +38,11 @@ struct ValidatedPublisherTeamIDTests {
     /// Measured on copies of real apps: the default check misses a flipped byte in the slice this
     /// Mac does not run, an edited script executable and a patched nested helper (Sparkle's
     /// `Autoupdate`). These three flags catch each of them, as `codesign --verify --deep --strict` does.
+    /// Exactly these: a further one, such as `kSecCSConsiderExpiration`, would refuse genuine
+    /// builds, and every baselined cask would then roll back as a publisher change.
     @Test func theValidatedReadChecksEveryArchitectureNestedCodeAndStrictly() {
-        let flags = CodeSignatureVerifier.publisherValidationFlags
-        #expect(flags.contains(SecCSFlags(rawValue: kSecCSCheckAllArchitectures)))
-        #expect(flags.contains(SecCSFlags(rawValue: kSecCSCheckNestedCode)))
-        #expect(flags.contains(SecCSFlags(rawValue: kSecCSStrictValidate)))
+        #expect(CodeSignatureVerifier.publisherValidationFlags == SecCSFlags(
+            rawValue: kSecCSCheckAllArchitectures | kSecCSCheckNestedCode | kSecCSStrictValidate
+        ))
     }
 }

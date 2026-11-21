@@ -29,6 +29,23 @@ public struct ForgedSignatureBundle: Sendable {
     ) async throws -> ForgedSignatureBundle {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("wega-forged-signature-\(UUID().uuidString)", isDirectory: true)
+        do {
+            return try await build(in: root, claimingTeamID: teamID, bundleID: bundleID)
+        } catch {
+            try? FileManager.default.removeItem(at: root)
+            throw error
+        }
+    }
+
+    public func remove() {
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    private static func build(
+        in root: URL,
+        claimingTeamID teamID: String,
+        bundleID: String
+    ) async throws -> ForgedSignatureBundle {
         let app = root.appendingPathComponent("Forged.app", isDirectory: true)
         let contents = app.appendingPathComponent("Contents", isDirectory: true)
         let macOS = contents.appendingPathComponent("MacOS", isDirectory: true)
@@ -48,10 +65,6 @@ public struct ForgedSignatureBundle: Sendable {
         // `--force` replaces the platform signature `/usr/bin/true` arrives with.
         try await run("/usr/bin/codesign", ["--sign", "-", "--force", "--team-identifier", teamID, app.path])
         return ForgedSignatureBundle(url: app, root: root)
-    }
-
-    public func remove() {
-        try? FileManager.default.removeItem(at: root)
     }
 
     /// Waits for the child through its termination handler, so no thread of the cooperative

@@ -143,7 +143,7 @@ that share the update mutex. Source guards also check the protected reinstall ca
 the smoke-test opt-out before launch, generic restart detection, publisher-veto reporting
 before mutation, and token-aware manual rollback before journaling and version pinning.
 Signature tests sign a throwaway bundle ad hoc with a borrowed Team ID and check that the
-post-upgrade publisher check and **Trust the New Signature** refuse it.
+post-upgrade publisher read finds no Team ID in it and that **Trust the New Signature** refuses it.
 Standalone-source tests cover channel identity, Mozilla beta ordering, GitHub macOS assets,
 unknown/error evidence and updater completion.
 Scanner regression tests also cover already-listed casks, independent vendor results and

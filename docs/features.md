@@ -351,15 +351,17 @@ After a publisher mismatch, the original snapshot remains available even after a
 successful rollback. A bundle-identity mismatch preserves it in the same way.
 
 A Team ID read from a signature is only that signature's claim: an ad-hoc signature can claim
-any Team ID, and a bundle edited after signing still reports its publisher's. Where a Team ID
-becomes trust, Wega counts it only when an Apple-issued certificate carries it and the whole
-bundle validates against it, in every architecture, including nested code and under the
-strict rules (`CodeSignatureVerifier.validatedTeamID`). That covers the check after an upgrade
-and **Trust the New Signature**. A bundle that fails validation reads as having no Team ID:
-against a baseline the check after an upgrade rolls it back, and trust is refused. The check
-before an upgrade, the Trust panel, Uninstall's leftovers and migration still read the claim,
-so a Mac App Store build keeps its Team ID there (its leaf certificate is Apple's) and an
-installed app whose own signature broke does not block the update that replaces it.
+any Team ID, and a bundle edited after signing still reports its publisher's. The check after
+an upgrade and **Trust the New Signature** count a Team ID only when an Apple-issued
+certificate carries it and the whole bundle validates against it, in every architecture,
+including nested code and under the strict rules (`CodeSignatureVerifier.validatedTeamID`). A
+bundle that fails validation reads as having no Team ID there: against a baseline the check
+after an upgrade rolls it back, and trust is refused. Everything else still reads the claim:
+the check before an upgrade (which also records a first-seen baseline), adoption's pre-check,
+the helper's rollback gate, the Trust panel, Uninstall's leftovers, migration and diagnostics.
+So a Mac App Store build keeps its Team ID there (its leaf certificate is Apple's), an
+installed app whose own signature broke does not block the update that replaces it, and the
+helper can still roll back an upgrade whose signature fails.
 
 #### When the package manager installed nothing
 
