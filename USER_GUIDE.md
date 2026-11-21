@@ -393,8 +393,8 @@ package is the only one installing; once several are running at once the line re
 "Installing packages — 3 of 7" instead, because naming one of three would misdescribe the
 other two. A ring beside it shows **3/7**, and the band holds **Stop After Active Installs**;
 the log opens by itself under the list when the run starts, and **Show log** appears in the band
-only after you close it. It counts **whole packages**. When the last package is done, Wega re-checks
-the list and the scan's band takes over.
+only after you close it. It counts **whole packages**. When the last package is done, Wega checks the
+result in the band, with the list still on screen, and then shows the summary (see *Honest results*).
 
 The list stays readable but locked, and its header says **"The list stays locked until the
 update ends."** Casks and npm packages say what is happening to them on their own row:

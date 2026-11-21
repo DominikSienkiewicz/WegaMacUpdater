@@ -207,7 +207,7 @@ finishes."* — says why: in the band, and in the list header where it fits, yie
 bar at the narrowest width. Only a scan with nothing to keep on screen — the very first one —
 takes the whole window with the sniffing scene, with the same step caption. The check after an
 update run and the rescan after an undo started from the result summary run in the band as well,
-with the list in place (see *What the summary says* below).
+with the list in place (see *The check after a run and the summary* below).
 An empty state — *everything up to date*, or a list the last scan could not confirm — has no rows
 to hold still, and Wega stays clear of it. The band's **Update** and its **⌘⏎**
 shortcut are held back while the scan runs, because a batch approved against the restored rows
