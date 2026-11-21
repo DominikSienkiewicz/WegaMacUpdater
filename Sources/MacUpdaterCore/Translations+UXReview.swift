@@ -26,7 +26,6 @@ extension Translations {
         "Powiadomienia": "Notifications",
         "Powiadamiaj o nowych aktualizacjach": "Notify me about new updates",
         "Otwórz ustawienia powiadomień": "Open Notification Settings",
-        "sprawdzanie niepełne": "check incomplete",
         "Część źródeł milczy — nie wiem, czy to wszystko.":
             "Some sources stayed quiet — I can't tell if that's everything.",
         "Nie mogę cofnąć aktualizacji": "I can't undo the update",
@@ -61,7 +60,6 @@ extension Translations {
         "Zostaw otwartą": "Leave It Open",
         "Nie udało się zamknąć aplikacji": "Couldn't quit the app",
         "Nie mogę zamknąć %@. Zamknij ją ręcznie.": "I can't quit %@. Quit it yourself.",
-        "Sprawdzanie niepełne.": "Check incomplete.",
         "Aktualizacja zakończona: %@ z %@.": "Update finished: %@ of %@.",
         "%@ wymaga uwagi.": "%@ needs attention.",
         "%@ wymagają uwagi.": "%@ need attention.",

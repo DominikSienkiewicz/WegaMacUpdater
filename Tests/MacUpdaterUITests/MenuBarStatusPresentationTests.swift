@@ -14,7 +14,7 @@ struct MenuBarStatusPresentationTests {
 
     @Test func updatesFromAnIncompleteCheckSayItIsIncomplete() {
         let p = MenuBarStatusPresentation(count: 3, isChecking: false, failed: false, incomplete: true, lastCheck: .now)
-        #expect(p.statusText == trp("%@ aktualizacji dostępnych", 3) + " · " + tr("sprawdzanie niepełne"))
+        #expect(p.statusText == trp("%@ aktualizacji dostępnych", 3) + " · " + tr("skan niepełny"))
         #expect(p.accessibilityLabel == p.statusText)
     }
 

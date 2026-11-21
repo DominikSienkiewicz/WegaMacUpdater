@@ -21,7 +21,7 @@ final class LiveAccessibilityAnnouncer: AccessibilityAnnouncing {
 enum AnnouncementCopy {
     static func scanFinished(updates: Int, complete: Bool) -> String {
         let sentence = trp("Skan zakończony: %@ aktualizacji.", updates)
-        return complete ? sentence : sentence + " " + tr("Sprawdzanie niepełne.")
+        return complete ? sentence : sentence + " " + tr("Skan niepełny.")
     }
 
     static func scanFailed() -> String {

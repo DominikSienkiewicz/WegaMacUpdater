@@ -17,7 +17,7 @@ struct InventoryCheckPresentation {
 
     var title: String {
         if status == .updateAvailable, check?.sources.contains(where: { $0.outcome == .failed }) == true {
-            return tr("Aktualizacja; sprawdzenie niepełne")
+            return tr("Aktualizacja; skan niepełny")
         }
         if status == .notChecked, check?.unconfirmedCaskToken != nil {
             return tr("Powiązanie z Homebrew niepotwierdzone")
@@ -29,7 +29,7 @@ struct InventoryCheckPresentation {
         case .notChecked: return tr("Brak potwierdzenia")
         case .current: return tr("Sprawdzona — aktualna")
         case .updateAvailable: return tr("Dostępna aktualizacja")
-        case .failed: return tr("Sprawdzenie niepełne")
+        case .failed: return tr("Skan niepełny")
         case .noSource: return tr("Brak rozpoznanego źródła")
         case .excluded: return tr("Ukryte przez Twoją regułę")
         case .stale: return tr("Wynik nieaktualny")

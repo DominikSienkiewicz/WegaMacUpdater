@@ -82,7 +82,7 @@ struct MenuBarMenuTests {
             #expect(MenuBarStatusPresentation(count: 3, isChecking: false, failed: false, incomplete: false, lastCheck: now, securityCount: 1).statusText
                     == trp("%@ aktualizacji dostępnych", 3) + " · " + trp("%@ z możliwą poprawką bezp.", 1))
             #expect(MenuBarStatusPresentation(count: 3, isChecking: false, failed: false, incomplete: true, lastCheck: now, securityCount: 1).statusText
-                    == trp("%@ aktualizacji dostępnych", 3) + " · " + tr("sprawdzanie niepełne") + " · "
+                    == trp("%@ aktualizacji dostępnych", 3) + " · " + tr("skan niepełny") + " · "
                     + trp("%@ z możliwą poprawką bezp.", 1),
                     "the incomplete note comes before the nuance, as in the band")
         }

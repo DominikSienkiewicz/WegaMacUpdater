@@ -26,6 +26,7 @@ public enum Translations {
         .merging(uxReviewRest) { first, _ in first }
         .merging(uxNextBatch) { first, _ in first }
         .merging(touchIDDisable) { first, _ in first }
+        .merging(uxFollowup) { first, _ in first }
 }
 
 extension Translations {
@@ -79,10 +80,8 @@ extension Translations {
         "Brak potwierdzenia": "Not confirmed",
         "Sprawdzona — aktualna": "Checked — up to date",
         "Dostępna aktualizacja": "Update available",
-        "Sprawdzenie niepełne": "Check incomplete",
         "Brak rozpoznanego źródła": "No recognized source",
         "Wynik nieaktualny": "Stale result",
-        "Aktualizacja; sprawdzenie niepełne": "Update available; check incomplete",
         "Źródła i czas ostatniego sprawdzenia": "Sources and last check time",
         "Ostatnia próba: %@": "Last attempt: %@",
         "Ostatnie pełne sprawdzenie: %@": "Last complete check: %@",
