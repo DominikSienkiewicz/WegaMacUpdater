@@ -1,7 +1,11 @@
 import Foundation
 import WegaHelperKit
 
-public enum UninstallHelperAvailability: Equatable, Sendable { case notSupported, off, enabled, stale }
+public enum UninstallHelperAvailability: Equatable, Sendable {
+    case notSupported, off, enabled, stale
+    /// Z14: the bundle Wega runs from fails `HelperBundleGate`, so Wega does not use the helper.
+    case untrustedBundle
+}
 
 public struct UninstallBundleFacts: Equatable, Sendable {
     public var ownerUID: UInt32

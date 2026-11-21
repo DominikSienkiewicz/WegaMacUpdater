@@ -542,7 +542,7 @@ final class UninstallCoordinator: ObservableObject {
             return .blocked(.helperNeedsReinstall)
         case .operationFailed(let message):
             return .failed(message)
-        case .teamIDNotConfigured:
+        case .teamIDNotConfigured, .bundleNotTrusted:
             return .failed(error.localizedDescription)
         case .timedOut, .connectionFailed, nil:
             guard requestSent else { return .blocked(.helperNeedsReinstall) }
