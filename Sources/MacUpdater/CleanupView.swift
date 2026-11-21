@@ -40,7 +40,7 @@ struct CleanupView: View {
         .sheet(item: $confirming) { finding in
             CleanupConfirmationSheet(store: store, finding: finding) { confirming = nil }
         }
-        .wegaAttention(confirming != nil || showsPathWarning)
+        .wegaAttention(confirming != nil || showsPathWarning || !errorMessages.isEmpty)
         .onChange(of: store.phase) { old, new in announce(from: old, to: new) }
         .onAppear { store.applyTCCMapSetting() }
     }
@@ -114,17 +114,19 @@ struct CleanupView: View {
         .help(tr("Zapisz raport jako tekst lub JSON, ze ścieżkami w postaci ~"))
     }
 
+    /// What went wrong, top to bottom. One list for the banners and for Wega's ball (UXP-27),
+    /// so a new error cannot show without also holding it.
+    private var errorMessages: [String] {
+        [
+            store.lastScanFailed ? tr("Skan nie powiódł się. Poprzedni wynik, jeśli był, zostaje na ekranie.") : nil,
+            CleanupPresentation.pathReadMessage(store.pathReadResult),
+            exportError,
+        ].compactMap { $0 }
+    }
+
     private var messages: some View {
         VStack(spacing: 8) {
-            if store.lastScanFailed {
-                ErrorBanner(message: tr("Skan nie powiódł się. Poprzedni wynik, jeśli był, zostaje na ekranie."))
-            }
-            if let message = CleanupPresentation.pathReadMessage(store.pathReadResult) {
-                ErrorBanner(message: message)
-            }
-            if let exportError {
-                ErrorBanner(message: exportError)
-            }
+            ForEach(errorMessages, id: \.self) { ErrorBanner(message: $0) }
         }
         .padding(.horizontal, 16)
     }

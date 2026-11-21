@@ -273,8 +273,34 @@ extension ScanStore {
         brewLog.append("⚠️ " + message)
         showBanner(BannerData(variant: .danger, title: title, message: message, action: action))
         emitActivitySignal(.error)
-        emitWegaState(WegaState(pose: .alert, line: title))
+        if let line = ManualInstallWegaLine.text(for: verdict, token: token) {
+            emitWegaState(WegaState(pose: .alert, line: line))
+        }
         WegaLog.error(.homebrew, message)
         return false
+    }
+}
+
+/// UXP-27 — what Wega says when a manual install fails its check: calmly, in the first person,
+/// naming the cask. The banner carries the title and the details.
+enum ManualInstallWegaLine {
+    /// `nil` for a healthy install, which has nothing to report.
+    static func text(for verdict: CaskValidationVerdict, token: String) -> String? {
+        switch verdict {
+        case .healthy:
+            nil
+        case .rolledBack:
+            trf("Nowa wersja %@ nie przeszła kontroli, więc przywróciłam poprzednią.", "\(token)")
+        case .rollbackFailed:
+            trf("Nowa wersja %@ nie przeszła kontroli, a poprzedniej nie udało mi się przywrócić.", "\(token)")
+        case .publisherChanged:
+            trf("Zainstalowałam %@, ale zmienił się wydawca — sprawdź go.", "\(token)")
+        case .publisherChangedAndRolledBack:
+            trf("Zmienił się wydawca %@, więc przywróciłam poprzednią wersję.", "\(token)")
+        case .notUpgraded:
+            trf("Nie udało mi się zaktualizować %@ — na dysku została poprzednia wersja.", "\(token)")
+        case .replacedByAppUpdater:
+            trf("Aktualizator %@ podmienił wersję, którą zainstalowałam.", "\(token)")
+        }
     }
 }

@@ -33,5 +33,14 @@ extension Translations {
         "Nie udało mi się zainstalować %@. Spróbuj jeszcze raz.": "I couldn't install %@. Try again.",
         "Przeglądam katalogi z PATH i wersje narzędzi. Niczego nie zmieniam.":
             "Looking through PATH folders and tool versions. I'm not changing anything.",
+        "Nowa wersja %@ nie przeszła kontroli, więc przywróciłam poprzednią.":
+            "The new version of %@ failed its check, so I restored the previous one.",
+        "Nowa wersja %@ nie przeszła kontroli, a poprzedniej nie udało mi się przywrócić.":
+            "The new version of %@ failed its check, and I couldn't restore the previous one.",
+        "Zainstalowałam %@, ale zmienił się wydawca — sprawdź go.": "I installed %@, but the publisher changed — please check it.",
+        "Zmienił się wydawca %@, więc przywróciłam poprzednią wersję.": "The publisher of %@ changed, so I restored the previous version.",
+        "Nie udało mi się zaktualizować %@ — na dysku została poprzednia wersja.":
+            "I couldn't update %@ — the previous version is still on disk.",
+        "Aktualizator %@ podmienił wersję, którą zainstalowałam.": "%@'s own updater replaced the version I installed.",
     ]
 }

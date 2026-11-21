@@ -79,9 +79,11 @@ struct DetailColumn: View {
     @State private var quipTask: Task<Void, Never>?
     /// A confirmation or an error open on one of the screens below, reported through `WegaAttentionKey`.
     @State private var dialogOpen = false
+    /// The same, from the inspector, which draws the list's update controls (Docker's confirmation too).
+    @State private var inspectorDialogOpen = false
 
     private var holdsBall: Bool {
-        WegaAttention.holdsBall(bannerVariant: scan.banner?.variant, isUpdating: scan.updating, dialogOpen: dialogOpen)
+        WegaAttention.holdsBall(bannerVariant: scan.banner?.variant, isUpdating: scan.updating, dialogOpen: dialogOpen || inspectorDialogOpen)
     }
 
     /// `.inspector` is attached unconditionally so the detail column is not rebuilt on every
@@ -115,6 +117,8 @@ struct DetailColumn: View {
                     caskDownloads: scan.caskDownloads
                 )
                 .inspectorColumnWidth(min: 280, ideal: 340, max: 460)
+                .onPreferenceChange(WegaAttentionKey.self) { inspectorDialogOpen = $0 }
+                .onDisappear { inspectorDialogOpen = false }
             }
             // UXP-09 — the sidebar names the run's "done/total"; stage changes inside one package
             // would re-render the root for nothing, so only a change of the pair gets through.

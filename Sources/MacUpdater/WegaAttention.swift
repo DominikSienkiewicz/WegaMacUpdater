@@ -23,7 +23,11 @@ struct WegaAttentionKey: PreferenceKey {
 extension View {
     /// Reports to `DetailColumn` that this screen holds the user's attention. Attach it to the
     /// screen's drawn root, beside its `.sheet` / `.alert`, never to a view that may be empty.
+    ///
+    /// Added to what the content already reports rather than replacing it, as
+    /// `preference(key:value:)` would: Updates' own report must not hide the Docker Desktop
+    /// confirmation drawn inside it.
     func wegaAttention(_ held: Bool) -> some View {
-        preference(key: WegaAttentionKey.self, value: held)
+        transformPreference(WegaAttentionKey.self) { $0 = $0 || held }
     }
 }

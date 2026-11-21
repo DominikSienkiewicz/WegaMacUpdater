@@ -148,9 +148,10 @@ callback) sees the process-wide language instead. `LanguageScopeTests` fails if 
 - **Wega's tone**: Wega speaks in the first person. She jokes and chases her ball only in
   empty states, during scans and on success. On errors, a publisher change, a password
   prompt or a removal confirmation she speaks calmly (PL „Nie udało mi się zainstalować %@.
-  Spróbuj jeszcze raz.”, EN “I couldn't install %@. Try again.”), and her ball waits while a
-  `.danger` banner, an update run or a confirmation is open (`WegaAttention`). `.danger` and
-  `.warning` texts never contain „Ups” or „Hau”; `WegaToneTests` guards it.
+  Spróbuj jeszcze raz.”, EN “I couldn't install %@. Try again.”), and her ball waits while an
+  error, an update run or a confirmation is open: a screen that adds one reports it with
+  `.wegaAttention(…)` (`WegaAttention.swift`). `.danger` and `.warning` texts never contain
+  „Ups” or „Hau”; `WegaToneTests` guards it.
 - **Never commit secrets.** `*.pem` files are git-ignored; the Ed25519 catalog signing
   key must live outside the repository (see below).
 

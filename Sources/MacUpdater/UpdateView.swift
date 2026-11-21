@@ -111,7 +111,7 @@ struct UpdateView: View {
             .onChange(of: showUpdateConfirmation) { _, isPresented in
                 if !isPresented { pendingUpdateTargets = [] }
             }
-            .wegaAttention(showUpdateConfirmation)
+            .wegaAttention(showUpdateConfirmation || scan.pendingForceRestart != nil)
             // Switching the sidebar category re-filters the list but not the inspector's
             // resolver, so a selection made in one category would otherwise keep showing in
             // the pane after switching away from it. Clear it so the detail pane never

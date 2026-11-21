@@ -48,6 +48,7 @@ struct DockerDesktopUpdateActions: View {
                 }
             }
         }
+        .wegaAttention(confirmHomebrew)
     }
 }
 
