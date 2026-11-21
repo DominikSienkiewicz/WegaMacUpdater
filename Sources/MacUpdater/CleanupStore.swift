@@ -98,6 +98,9 @@ final class CleanupStore: ObservableObject {
 
     @Published private(set) var report: CleanupReport?
     @Published private(set) var phase: Phase = .idle
+    /// Counts the removals that took something off the disk (outcome `.removed`). Others watch
+    /// this rather than `phase`: a removal that succeeds goes through `.scanning` before `.idle`.
+    @Published private(set) var removalCount = 0
     /// The last `PATH` read from the login shell; nil until one succeeds.
     @Published private(set) var pathSnapshot: CleanupPathSnapshot?
     @Published private(set) var lastOutcome: CleanupRemovalOutcome?
@@ -211,6 +214,7 @@ final class CleanupStore: ObservableObject {
             let outcome = await self.dependencies.remove(intent)
             self.lastOutcome = outcome
             guard outcome == .removed else { return }
+            self.removalCount += 1
             WegaLog.info(.app, Self.removalLogLine(for: intent.finding, home: self.dependencies.home))
             self.phase = .scanning
             await self.performScan()

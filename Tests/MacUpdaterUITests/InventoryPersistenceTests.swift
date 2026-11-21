@@ -39,7 +39,7 @@ struct InventoryPersistenceTests {
         let content = try source("Sources/MacUpdater/ContentView.swift")
         #expect(content.contains("InventoryStalenessWatcher()"))
         let watcher = try source("Sources/MacUpdater/InventoryStalenessWatcher.swift")
-        for literal in ["scan.updating", "cleanup.phase", "migration.migrating", "migration.duplicateBusyKey", "inventory.markStale()"] {
+        for literal in ["scan.updating", "cleanup.removalCount", "migration.migrating", "migration.duplicateBusyKey", "inventory.markStale()"] {
             #expect(watcher.contains(literal), "\(literal)")
         }
         let uninstall = try source("Sources/MacUpdater/UninstallView.swift")

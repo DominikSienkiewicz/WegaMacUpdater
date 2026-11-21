@@ -18,9 +18,7 @@ struct InventoryStalenessWatcher: View {
             .onChange(of: scan.updating) { was, now in
                 if was, !now { inventory.markStale() }
             }
-            .onChange(of: cleanup.phase) { was, now in
-                if case .removing = was, now == .idle { inventory.markStale() }
-            }
+            .onChange(of: cleanup.removalCount) { inventory.markStale() }
             .onChange(of: migration.migrating) { was, now in
                 if was != nil, now == nil { inventory.markStale() }
             }
