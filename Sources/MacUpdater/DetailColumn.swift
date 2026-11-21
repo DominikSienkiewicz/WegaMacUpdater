@@ -129,6 +129,9 @@ struct DetailColumn: View {
                 isEnabled: scan.updating && !scan.updateInterruption.isRequested,
                 run: { scan.cancelUpdate() }
             ))
+            .focusedSceneValue(\.updateRunCommandState, UpdateRunCommandState(
+                isUpdating: scan.updating, isStopping: scan.updateInterruption.isRequested
+            ))
             .onReceive(scan.$inspectedKey) { key in
                 guard key != nil else { return }
                 showInspector = true

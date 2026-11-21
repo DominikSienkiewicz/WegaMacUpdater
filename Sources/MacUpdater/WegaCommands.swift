@@ -30,11 +30,26 @@ extension WegaMenuAction {
     }
 }
 
-/// UXP-23 — ⌘. is one item for the two things that can be stopped. A running update comes
-/// first and keeps its own words; otherwise the item cancels the scan.
+/// UXP-23 — ⌘. is one item for the two things that can be stopped. While an update runs the
+/// item is the run's, in the words its own stop button uses, also once the stop is requested
+/// and the item is disabled; otherwise the item cancels the scan.
 enum CancelCommandCopy {
-    static func title(stopsUpdate: Bool) -> String {
-        stopsUpdate ? UpdateRunCopy.stopLabel(isStopping: false) : tr("Anuluj skan")
+    static func title(run: UpdateRunCommandState) -> String {
+        switch run {
+        case .idle:     return tr("Anuluj skan")
+        case .running:  return UpdateRunCopy.stopLabel(isStopping: false)
+        case .stopping: return UpdateRunCopy.stopLabel(isStopping: true)
+        }
+    }
+}
+
+/// Where the window's update run is, for the menu: none, running, or asked to stop.
+enum UpdateRunCommandState: Equatable {
+    case idle, running, stopping
+
+    init(isUpdating: Bool, isStopping: Bool) {
+        guard isUpdating else { self = .idle; return }
+        self = isStopping ? .stopping : .running
     }
 }
 
@@ -44,6 +59,7 @@ private struct StopUpdateActionKey: FocusedValueKey { typealias Value = WegaMenu
 private struct CancelScanActionKey: FocusedValueKey { typealias Value = WegaMenuAction }
 private struct SelectAllVisibleActionKey: FocusedValueKey { typealias Value = WegaMenuAction }
 private struct ToggleInspectorActionKey: FocusedValueKey { typealias Value = WegaMenuAction }
+private struct UpdateRunCommandStateKey: FocusedValueKey { typealias Value = UpdateRunCommandState }
 
 extension FocusedValues {
     /// ⌘R — the window's "Sprawdź teraz". Published by `UpdateView`, which owns the scan store.
@@ -83,6 +99,13 @@ extension FocusedValues {
     var toggleInspectorAction: WegaMenuAction? {
         get { self[ToggleInspectorActionKey.self] }
         set { self[ToggleInspectorActionKey.self] = newValue }
+    }
+
+    /// ⌘.'s title — whether an update runs and whether it was asked to stop. Published by
+    /// `DetailColumn` next to `stopUpdateAction`.
+    var updateRunCommandState: UpdateRunCommandState? {
+        get { self[UpdateRunCommandStateKey.self] }
+        set { self[UpdateRunCommandStateKey.self] = newValue }
     }
 }
 
@@ -178,6 +201,7 @@ struct WegaCommands: Commands {
     @FocusedValue(\.startCheckAction) private var startCheck
     @FocusedValue(\.runUpdateAction) private var runUpdate
     @FocusedValue(\.stopUpdateAction) private var stopUpdate
+    @FocusedValue(\.updateRunCommandState) private var updateRun
     @FocusedValue(\.cancelScanAction) private var cancelScan
     @FocusedValue(\.selectAllVisibleAction) private var selectAllVisible
     @FocusedValue(\.toggleInspectorAction) private var toggleInspector
@@ -209,7 +233,7 @@ struct WegaCommands: Commands {
                 .disabled(!(selection.tab == .update && runUpdate?.isEnabled == true))
 
             let cancelTarget = WegaMenuAction.firstEnabled(stopUpdate, cancelScan)
-            Button(CancelCommandCopy.title(stopsUpdate: stopUpdate?.isEnabled == true)) { cancelTarget?.run() }
+            Button(CancelCommandCopy.title(run: updateRun ?? .idle)) { cancelTarget?.run() }
                 .keyboardShortcut(".", modifiers: .command)
                 .disabled(cancelTarget == nil)
 

@@ -77,14 +77,18 @@ final class MenuCommandsTests: XCTestCase {
         XCTAssertTrue(detail.contains(
             ".focusedSceneValue(\\.stopUpdateAction, WegaMenuAction(\n                isEnabled: scan.updating && !scan.updateInterruption.isRequested,\n                run: { scan.cancelUpdate() }"
         ))
+        XCTAssertTrue(detail.contains(
+            ".focusedSceneValue(\\.updateRunCommandState, UpdateRunCommandState(\n                isUpdating: scan.updating, isStopping: scan.updateInterruption.isRequested\n            ))"
+        ), "the item's title follows the run, published next to its stop")
         let commands = try source("Sources/MacUpdater/WegaCommands.swift")
         XCTAssertTrue(commands.contains("let cancelTarget = WegaMenuAction.firstEnabled(stopUpdate, cancelScan)"),
                       "a stop the run can take wins over a scan to cancel")
-        XCTAssertTrue(commands.contains("Button(CancelCommandCopy.title(stopsUpdate: stopUpdate?.isEnabled == true)) { cancelTarget?.run() }"))
+        XCTAssertTrue(commands.contains("Button(CancelCommandCopy.title(run: updateRun ?? .idle)) { cancelTarget?.run() }"))
         XCTAssertEqual(commands.components(separatedBy: ".keyboardShortcut(\".\", modifiers: .command)").count, 2,
                        "one ⌘. item, never two")
         let view = try source("Sources/MacUpdater/UpdateView.swift")
-        XCTAssertTrue(view.contains("isEnabled: scan.scanTask != nil && !scan.updating,\n                run: { scan.cancelScan() }"))
+        XCTAssertTrue(view.contains("isEnabled: scan.canCancelScan,\n                run: { scan.cancelScan() }"))
+        XCTAssertFalse(view.contains("scan.scanTask"), "the gate reads published state only")
     }
 
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {

@@ -21,9 +21,49 @@ struct ShortcutsTests {
         withLanguage(.en) {
             #expect(tr("Znajdź na tym ekranie") == "Find on This Screen" && tr("Zaznacz wszystkie widoczne") == "Select All Visible")
             #expect(tr("Pokaż panel szczegółów") == "Show Inspector" && tr("Przewodnik po Wedze") == "Wega User Guide")
-            #expect(CancelCommandCopy.title(stopsUpdate: false) == "Cancel Scan")
+            #expect(CancelCommandCopy.title(run: .idle) == "Cancel Scan")
         }
-        #expect(CancelCommandCopy.title(stopsUpdate: true) == UpdateRunCopy.stopLabel(isStopping: false))
+        #expect(CancelCommandCopy.title(run: .running) == UpdateRunCopy.stopLabel(isStopping: false))
+    }
+
+    /// While a run stops, ⌘. is disabled but still names the run, in the words its own button
+    /// uses then; it never turns into „Anuluj skan” mid-run.
+    @Test func cancelNamesTheRunWhileItStops() {
+        #expect(UpdateRunCommandState(isUpdating: false, isStopping: false) == .idle)
+        #expect(UpdateRunCommandState(isUpdating: true, isStopping: false) == .running)
+        #expect(UpdateRunCommandState(isUpdating: true, isStopping: true) == .stopping)
+        #expect(UpdateRunCommandState(isUpdating: false, isStopping: true) == .idle, "a stop left over from a finished run")
+        #expect(CancelCommandCopy.title(run: .stopping) == UpdateRunCopy.stopLabel(isStopping: true))
+        #expect(CancelCommandCopy.title(run: .running) != CancelCommandCopy.title(run: .stopping))
+        withLanguage(.en) {
+            #expect(CancelCommandCopy.title(run: .stopping) != "Cancel Scan")
+        }
+    }
+
+    /// ⌘. cancels the scan the screen shows, from published state like the toolbar's „Anuluj”:
+    /// a scan that takes the window or one that refreshes under the list, never the rescan that
+    /// belongs to a run. With no run, exactly one of ⌘R and ⌘. is offered.
+    @Test func cancelFollowsTheScanOnScreenAndNeverTheRun() throws {
+        let (store, _) = try storeWithFormulaAndCask()
+        #expect(!store.canCancelScan, "nothing is scanning")
+        store.status = .checking
+        #expect(store.canCancelScan, "a scan holds the window")
+        store.status = .results
+        store.setRefreshing(true)
+        #expect(store.canCancelScan, "a refresh runs under the list")
+        store.setRefreshing(false)
+        for status in [UpdateStatus.ready, .checking, .results] {
+            for refreshing in [false, true] {
+                for updating in [false, true] {
+                    store.status = status
+                    store.setRefreshing(refreshing)
+                    store.updating = updating
+                    let state = "\(status), refreshing \(refreshing), updating \(updating)"
+                    #expect(!(store.canCancelScan && updating), "⌘. stops the run instead: \(state)")
+                    if !updating { #expect(store.canCancelScan != store.canStartCheck, "\(state)") }
+                }
+            }
+        }
     }
 
     /// ⌘. is one item for two stops: the running update when there is one to stop, the scan
@@ -47,6 +87,8 @@ struct ShortcutsTests {
         #expect(store.selected == [items.formula.key], "the cask is filtered out")
         store.selectAllVisible(filter: .all)
         #expect(store.selected == Set([items.formula.key, items.cask.key]))
+        store.selectAllVisible(filter: .cli)
+        #expect(store.selected == [items.formula.key], "the queued cask leaves with the filter that hides it")
     }
 
     /// A row a rule hides and a manually updated app are never batch rows, so ⇧⌘A queues neither.

@@ -179,6 +179,9 @@ final class ScanStore: ObservableObject {
     /// Whether a new check may start now: none running, none refreshing underneath a result,
     /// and no update in flight.
     var canStartCheck: Bool { status != .checking && !isRefreshing && !updating }
+    /// Whether ⌘. may cancel a scan now: one holds the window or refreshes under the list, as
+    /// the toolbar's „Anuluj” shows, and no update runs — the run's rescan is stopped with the run.
+    var canCancelScan: Bool { (status == .checking || isRefreshing) && !updating }
     /// UXP-13 — when the running scan started, for the band's elapsed time. `nil` between scans.
     @Published private(set) var scanStartedAt: Date?
     /// UXP-14 — how old the Homebrew catalog is, in minutes, when the scan on screen reused it

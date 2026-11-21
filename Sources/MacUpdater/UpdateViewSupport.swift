@@ -145,27 +145,7 @@ struct BrewLogPanel: View {
 
     var body: some View {
         WegaCard(padded: false) {
-            HStack(spacing: 8) {
-                Circle().fill(Color.wegaSuccess).frame(width: 6, height: 6)
-                Text("brew log")
-                    .font(.wega(.footnote, weight: .semibold, monospaced: true))
-                    .foregroundStyle(.tertiary)
-                Spacer()
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.wega(.caption, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                // The 28 pt hit area overhangs the header's padding rather than making it taller.
-                .padding(.vertical, -7)
-                .accessibilityLabel(tr("Zamknij"))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .overlay(alignment: .bottom) { Divider().opacity(0.4) }
+            header
 
             if let tapTrust {
                 let pending = TapTrustPlanner.pending(tapTrustPlan, in: lines)
@@ -200,6 +180,32 @@ struct BrewLogPanel: View {
             guard let tapTrust, !taps.isEmpty else { return }
             tapTrustPlan = await tapTrust.resolve(taps)
         }
+    }
+
+    /// The title row with the close button. Internal so the layout tests can measure it.
+    var header: some View {
+        HStack(spacing: 8) {
+            Circle().fill(Color.wegaSuccess).frame(width: 6, height: 6)
+            Text("brew log")
+                .font(.wega(.footnote, weight: .semibold, monospaced: true))
+                .foregroundStyle(.tertiary)
+            Spacer()
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.wega(.caption, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            // The 28 pt hit area overhangs the header's padding rather than making it taller:
+            // 12 pt of layout stays under the title's line.
+            .padding(.vertical, -8)
+            .accessibilityLabel(tr("Zamknij"))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) { Divider().opacity(0.4) }
     }
 }
 

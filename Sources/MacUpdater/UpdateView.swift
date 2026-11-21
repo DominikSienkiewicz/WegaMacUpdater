@@ -181,7 +181,7 @@ struct UpdateView: View {
             // UXP-23 — ⌘. cancels the store's scan when no update runs; ⇧⌘A asks the select-all
             // checkbox's gate, and only while the list is the one on screen.
             .focusedSceneValue(\.cancelScanAction, WegaMenuAction(
-                isEnabled: scan.scanTask != nil && !scan.updating,
+                isEnabled: scan.canCancelScan,
                 run: { scan.cancelScan() }
             ))
             .focusedSceneValue(\.selectAllVisibleAction, WegaMenuAction(

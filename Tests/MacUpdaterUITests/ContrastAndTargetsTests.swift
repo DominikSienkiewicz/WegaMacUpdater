@@ -74,6 +74,18 @@ struct ContrastAndTargetsTests {
         }
     }
 
+    /// The log's close button too: the header stays as tall as its title line plus its padding,
+    /// which is what it was with the bare 10 pt glyph.
+    @Test func theLogHeaderKeepsItsHeightWithTheLargerCloseTarget() {
+        let title = NSHostingView(rootView: Text(verbatim: "brew log")
+            .font(.wega(.footnote, weight: .semibold, monospaced: true))
+            .padding(.vertical, 8)).fittingSize.height
+        for width in [320, 560] as [CGFloat] {
+            let header = NSHostingView(rootView: BrewLogPanel(lines: [], onClose: {}).header.frame(width: width)).fittingSize.height
+            #expect(header == title, "width \(width): the header is \(header) pt, its title line \(title) pt")
+        }
+    }
+
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {
         let root = URL(filePath: file, directoryHint: .notDirectory)
             .deletingLastPathComponent()
