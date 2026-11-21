@@ -2,18 +2,17 @@
 
 **Designed and maintained by [Dominik Sienkiewicz](https://www.linkedin.com/in/dominik-sienkiewicz/), built with AI coding agents:** I set the architecture, write the specifications, define the quality gates enforced in CI and review every change.
 
-Native macOS app that keeps every application on your Mac up to date — Homebrew casks, Mac App Store, JetBrains IDEs, GitHub Releases, and Sparkle apps — from a single window, without ever opening a terminal.
+Native macOS app that keeps every application on your Mac up to date — Homebrew casks, Mac App Store, JetBrains IDEs, GitHub Releases, and Sparkle apps — from a single window. Daily use never needs a terminal; installing Homebrew itself, and turning on Touch ID for `sudo` without the optional Wega helper, are the two things that do.
 
-Updates uses spacious native cards, readable version changes and a clear selection action.
-Wega's portrait appears in the app icon and in a matching animated mascot with upright ears,
-a cream muzzle and a sage collar.
+The Updates screen puts a band above the list — how many updates there are, what is queued, how many of
+those an undo covers, and the one button that starts them — and the rows stay readable while a scan runs.
+Wega's portrait — broad ears with rounded tips, dark brows and muzzle, a white chin — is the app icon and the animated mascot.
 
 ![Swift](https://img.shields.io/badge/Swift-6.0-orange?style=for-the-badge&logo=swift&logoColor=white)
 ![SwiftUI](https://img.shields.io/badge/SwiftUI-macOS_26%2B-blue?style=for-the-badge&logo=apple&logoColor=white)
 ![Homebrew](https://img.shields.io/badge/Homebrew-optional-FBB040?style=for-the-badge&logo=homebrew&logoColor=white)
 ![Architecture](https://img.shields.io/badge/Architecture-SPM_Modules-purple?style=for-the-badge)
 
-[![Version](https://img.shields.io/badge/Version-0.6.0-lightgrey?style=for-the-badge)](Sources/WegaHelperKit/AppMetadata.swift)
 [![CI](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml/badge.svg)](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml)
 
 ## The Vision: one window, zero terminals

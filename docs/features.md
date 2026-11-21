@@ -16,10 +16,13 @@ no full Brew scan or background updater monitoring is started. See the
 One screen that checks every source in one pass, shows the exact commands before running
 them, and reports one honest outcome per item afterwards.
 
-The results header only reports the scan. A glass action bar pinned under the list carries
-the rest of the flow: the list-wide checkbox, the selection count, how many ticked casks the
-rollback net covers, the dry-run plan and **Update selected (N)**, the screen's one prominent
-action. Package rows and manually updated apps share one row layout: a row with nothing to
+A band above the list carries the flow. It counts the updates (*"N updates"*), sums up the
+queue (*"4 queued · 2 to finish with the developer"*), says how far an undo reaches (*"Undo: 3 of
+4"*, or *"Checking undo availability"* while a cask's verdict is still open — a cask without a
+verdict is never counted as protected), links to the dry-run plan (**Show exactly what I will
+do**) and holds the screen's one prominent action: **Update N**, or **Nothing selected** while
+nothing is queued. The band keeps one height at every window width. Above the rows a scope bar
+filters by category and the list-wide checkbox ticks the visible rows. Package rows and manually updated apps share one row layout: a row with nothing to
 select keeps the checkbox column empty, so icons line up, and the version sits in the version
 column. Release notes are read in the inspector instead of unfolding inside the list. Shared
 cards and rows use consistent spacing, larger application icons and readable version changes.
@@ -37,17 +40,21 @@ question. It replaced the status footer, whose counts were already the sidebar's
 the speech bubble that appeared over the list. Every minute or so a ball rolls along the card; Wega
 glances after it, runs off the card's edge and comes back carrying it. The full Wega on the
 "everything up to date" screen opens her repertoire of tricks with the same chase. Both are
-offset-only animations that never move the layout, and "Reduce motion" turns them off.
+offset-only animations that never move the layout, and "Reduce motion" turns them off. The
+ball waits while an error, an update run or any dialog is open. Wega's lines speak for
+her in the first person and say only what happened: a check that failed reads as *"I couldn't
+install X"*, never as cheer, and her cheerful line appears only after a complete check.
 
 The sidebar has one **Updates** row; its badge turns red while a security fix is waiting.
 The category — all, apps, CLI tools or security fixes — is a scope bar above the list, each
 segment with its count, and becomes a pop-up menu when the window is too narrow for it.
 The chosen scope is kept with the window's selection, so clicking the Updates row again does
-not reset it. The toolbar carries the scan control, the language menu (an icon that needs no
+not reset it. The toolbar carries the scan control (on Updates, To reattach and Undo updates only), the language menu (an icon that needs no
 translation) and the inspector toggle, which disappears outside Updates instead of dimming.
 
-The app icon uses the approved Wega portrait. The animated mascot shares its rounded
-upright ears, cream muzzle and dark eyes; the full mascot wears a sage collar. Its poses,
+The app icon uses the approved Wega portrait: broad ears with rounded tips, dark brows and
+eye rims, a dark muzzle and a white chin. The animated mascot is her head, drawn the same
+way. Its poses,
 blinks and Reduce Motion handling remain available. The monochrome menu-bar icon uses
 the same head and ear silhouette.
 
@@ -125,7 +132,7 @@ command is run by Wega.
 
 #### Before anything runs — the dry-run panel
 
-**"Show exactly what I will do"** in the action bar opens the **dry-run panel** as a sheet. It
+**"Show exactly what I will do"** in the band opens the **dry-run panel** as a sheet. It
 shows the literal commands (`brew upgrade --cask -- a b`, `npm install -g -- x@latest`, …,
 where the `--` fences package names off from option parsing — SEC-10) read from
 `UpdatePlanner.commands(for:)` — *the same call the upgrade itself executes*, so the preview
@@ -148,16 +155,16 @@ Per cask it also shows:
 #### One count, everywhere
 
 The window header, the sidebar badge, the menu-bar badge and the background notification all
-read the same `UpdatePlanner.unifiedCount`, and the header names both halves of it — *"12 to
-install + 3 manual"* — because they behave differently. The batch button counts only the
-installable half, so it never promises an upgrade Wega cannot perform. A scan run from the
+read the same `UpdatePlanner.unifiedCount`, and the band names the two halves of what you queued — *"4 queued · 2 to finish with the
+developer"* — because they behave differently. The button counts only what Wega installs
+itself, so it never promises an upgrade Wega cannot perform. A scan run from the
 window reports its result to the menu-bar agent, which is the single owner of the dock badge.
 
 #### Nothing is updated that you did not tick
 
-**Update selected (N)** acts on the ticked rows and on nothing else. With an empty selection
-it is disabled and says so — *"Pick what I should update"* — rather than reading *Update all*
-and upgrading every visible row on the first click. `UpdatePlanner.plan` no longer treats an
+The band's **Update** button acts on the queued rows and on nothing else. With an empty queue
+it is disabled and says so — *"Nothing selected"* — rather than reading *Update all* and
+upgrading every visible row on the first click. `UpdatePlanner.plan` no longer treats an
 empty key set as "everything" either, so no caller can arrive without a selection and mutate
 the whole machine.
 
@@ -179,30 +186,40 @@ sequential (brew → mas → npm → manual), the bar reports the phase it is ge
 **Cancel** stops it where it stands. Live log streamed into an inline panel.
 
 Every scan that starts with a result on screen — the launch refresh, **Check now** and **⌘R** —
-runs *underneath* that list rather than replacing it, and for its duration the list is a report
-rather than a menu. The header shows one chip per source in scan order (Homebrew, App Store,
-npm, vendors), each done, running, stopped or not yet started; nothing is estimated, because
-the scan is strictly sequential. The rows sit under a veil of the window's background that
-stands them down, and they stop accepting selections. At the top of the list Wega sniffs
-through the scan in the same scanning scene the first scan shows, at the same size
-(`ScanProgressScene`: the progress bar, the command the current phase runs and Wega sniffing
-across the binary stream), with a note under it that selecting comes back when the scan ends.
-Behind the scene the veil is thicker, so Wega is not drawn over row text. Below it the veil is
-deliberately translucent, not a blurring material: the rows stay legible, so the previous
-result never leaves the window. An empty state — *everything up to date*, or a list the last scan could not confirm — has no rows to stand down, so the veil never covers it and Wega stays clear. Only a scan
-with nothing to keep on screen — the very first one — takes the whole window with that scene.
-The rescans after an update or an undo also take the window, handing over from the update's
-own overlay.
-**Update selected (N)** and its **⌘⏎**
-shortcut are held back by the same rule, because a batch approved against the restored rows
+runs *in the band* rather than replacing the list, and nothing covers the rows. The band says
+what the scan is doing: a line naming the step (*"Refreshing the Homebrew catalog…"* while
+`brew update` runs, then one line per source — Homebrew, App Store, npm, vendors), the time the
+patrol has taken (counted up from the start, never estimated down), what has been found so far,
+and a ring and a chip per source, each done, running or not yet started. Once the vendor step
+starts it adds a counter, *"Vendors: 12 of 31 apps"*; a vendor step with no app to ask keeps the
+note instead of a counter of zero. Wega sniffs through the whole scan. The rows stay fully
+readable, but they stop accepting selections, and a note — *"Selecting comes back when the scan
+finishes."* — says why: in the band, and in the list header where it fits, yielding to the scope
+bar at the narrowest width. Only a scan with nothing to keep on screen — the very first one —
+takes the whole window with the sniffing scene, with the same step caption. The rescans after an
+update or an undo also take the window, handing over from the update's own overlay.
+An empty state — *everything up to date*, or a list the last scan could not confirm — has no rows
+to hold still, and Wega stays clear of it. The band's **Update** and its **⌘⏎**
+shortcut are held back while the scan runs, because a batch approved against the restored rows
 would otherwise install whatever the scan had settled on by the time the dialog was answered;
 the button's tooltip names the running scan instead of blaming an empty selection.
+
+**One scan button per screen.** The **Check now** button in the toolbar appears only on the
+screens that show a scan's result — Updates, To reattach and Undo updates. Elsewhere it would do
+nothing visible. **⌘R** works on every screen.
+
+**Rules that hide updates.** *Don't update*, *Skip this version* and *Pin version…* (the **⋯**
+menu on Homebrew, App Store and npm rows; the context menu on rows the developer finishes) hide
+the row at once, and an **Undo** toast offers the change back for 8 seconds. Afterwards the line
+*"Hidden by your rules: N · Show"* under the list (it also shows under the empty state, so hiding
+the last update never leaves the list without the way back) opens the sheet of rules, where
+**Restore** removes one. A scan's note on a skipped version says the next one will be shown.
 
 #### Running the update
 
 While a run is in progress the rest of the screen is disabled and stood down by the same
-translucent veil a scan in place uses, so the rows stay readable underneath, with a note
-explaining why. The run takes the action bar's place and shape at the bottom —
+translucent veil of the window's background, so the rows stay readable underneath, with a note
+explaining why. The run takes the band's place and shape at the bottom —
 both draw through one chrome (`wegaBottomBar()`) — with the progress, the live log toggle and
 **Stop After Active Installs**. That bar is part of the run overlay, the one layer above the
 disabled screen, so the stop button is never disabled along with what it covers.
@@ -475,7 +492,7 @@ snapshots are pruned at launch and after each run.
 The bundles the guard clones are
 located **when the upgrade starts** (`CaskAppPathResolver`), not when the scan ran — so the
 net also covers the most ordinary flow there is: open Wega, tick the list it restored from
-disk, press *Update selected*. Banners **queue** rather than overwrite, so a *publisher changed*
+disk, press **Update**. Banners **queue** rather than overwrite, so a *publisher changed*
 alert is sticky and survives the upgrade summary that used to clobber it.
 
 #### What a green banner means
@@ -577,7 +594,7 @@ The **Porządki** sidebar section (⌘6) finds duplicate copies of command-line 
 - **Report export.** *Eksportuj* writes the scan as plain text or JSON with `~` in place of your home folder; process arguments, shell output and environment are never included. The last report and `PATH` snapshot are also kept in `~/Library/Application Support/WegaMacUpdater/`.
 
 ### Migration
-Finds manually-installed apps that have a Homebrew Cask equivalent and offers to migrate them with `brew install --cask`. Runs `mas search` in parallel for apps without a cask match to find App Store equivalents. Running detection covers every matched app: the exact standardized/resolved bundle path wins, with a unique bundle ID as fallback; ambiguous duplicate bundle IDs stop the migration. Wega sends that exact process a normal application **Quit** request and waits for it to stop. Only an app that remains open produces a separate warning about unsaved data; after explicit consent Wega identifies the target again, sends `SIGKILL` only to that PID, and confirms the app stopped. A failed or ambiguous force-quit cancels the migration instead of being ignored. A match too weak to trust (the **"niepewne"** / low confidence level) is refused before anything runs: since `brew install --cask --force` overwrites the app in place, a low-confidence `.app`→cask match could replace it with a *different* program, so Wega blocks the automatic takeover and asks you to verify the token manually (`MigrationAutoTakeover` consuming `CaskMatchConfidence.allowsAutoConfirm` — the confidence score now gates execution, not just the badge). The confidence comes from **how** the match was found (`CaskMatchProvenance`, decided by `CaskMatcher` and carried on the scanned app): an already-installed cask, a curated entry in `customCaskMappings` or an exact token hit is certain; a match on one of a cask's display names is plausible and asks for confirmation; an app tied to no cask at all is the case that stays blocked. A publisher mismatch still overrules all of it. Previously the scorer re-derived this from strings its callers could not supply, so the curated table — whose whole purpose is apps whose name does not normalize to their token — scored lowest and had every one of its entries refused. Before Homebrew replaces an existing `.app`, migration takes the shared upgrade mutex, passes the same hard disk/network/power gate as an upgrade, verifies and preserves the installed publisher baseline, and requires a copy-on-write snapshot. The installed result must pass the shared Gatekeeper/Team-ID canary; otherwise Wega restores the snapshot and reports failure. The manual cask-adoption action in Updates uses this same protected transaction, so neither `brew install --cask --force` entry point can bypass it. A cask that installs **no `.app` at all** — a `pkg` cask such as `zoom` or `google-drive` — is refused up front with "Nie można przejąć", before brew runs: there is no bundle to snapshot, nothing for the Gatekeeper/Team-ID canary to validate, and nothing to restore. Adoption previously ran the force-install on these anyway and then reported the missing app artifact as `.rollbackFailed` ("the new version failed the check and could not be restored"), which described neither a check nor a rollback — both had been skipped. This is the same `RollbackProtection` question the batch upgrade path already asks, now asked by the adoption path too. A successful brew migration ends there: Wega **touches nothing in `~/Library`**. The old "clean leftovers" sheet was removed (SEC-01) — for a migration the app keeps its bundle id, so those "leftovers" are the live Application Support, preferences and container of the app you just adopted, and the sheet offered to delete them permanently with everything preselected. **npm ↔ brew duplicate row** — for CLIs installed via both `npm -g` and Homebrew (e.g. `@openai/codex` + `codex` cask), inline "Usuń z npm" / "Usuń z brew" buttons run the corresponding uninstall (`npm uninstall -g -- <pkg>` via `NpmGlobalService.uninstallEvents`, or `brew uninstall -- <token>`; the `--` terminator is SEC-10) after a confirmation alert; the duplicate disappears from the list on exit 0.
+Finds manually-installed apps that have a Homebrew Cask equivalent and offers to migrate them with `brew install --cask`. The **Move** button opens a sheet titled *"Move <app> to Homebrew?"* that names the backup Wega makes first and says the backup is restored if the new version fails the signature check. Runs `mas search` in parallel for apps without a cask match to find App Store equivalents. Running detection covers every matched app: the exact standardized/resolved bundle path wins, with a unique bundle ID as fallback; ambiguous duplicate bundle IDs stop the migration. Wega sends that exact process a normal application **Quit** request and waits for it to stop. Only an app that remains open produces a separate warning about unsaved data; after explicit consent Wega identifies the target again, sends `SIGKILL` only to that PID, and confirms the app stopped. A failed or ambiguous force-quit cancels the migration instead of being ignored. A match too weak to trust (the **"niepewne"** / low confidence level) is refused before anything runs: since `brew install --cask --force` overwrites the app in place, a low-confidence `.app`→cask match could replace it with a *different* program, so Wega blocks the automatic takeover and asks you to verify the token manually (`MigrationAutoTakeover` consuming `CaskMatchConfidence.allowsAutoConfirm` — the confidence score now gates execution, not just the badge). The confidence comes from **how** the match was found (`CaskMatchProvenance`, decided by `CaskMatcher` and carried on the scanned app): an already-installed cask, a curated entry in `customCaskMappings` or an exact token hit is certain; a match on one of a cask's display names is plausible and asks for confirmation; an app tied to no cask at all is the case that stays blocked. A publisher mismatch still overrules all of it. Previously the scorer re-derived this from strings its callers could not supply, so the curated table — whose whole purpose is apps whose name does not normalize to their token — scored lowest and had every one of its entries refused. Before Homebrew replaces an existing `.app`, migration takes the shared upgrade mutex, passes the same hard disk/network/power gate as an upgrade, verifies and preserves the installed publisher baseline, and requires a copy-on-write snapshot. The installed result must pass the shared Gatekeeper/Team-ID canary; otherwise Wega restores the snapshot and reports failure. The manual cask-adoption action in Updates uses this same protected transaction, so neither `brew install --cask --force` entry point can bypass it. A cask that installs **no `.app` at all** — a `pkg` cask such as `zoom` or `google-drive` — is refused up front with "Nie można przejąć", before brew runs: there is no bundle to snapshot, nothing for the Gatekeeper/Team-ID canary to validate, and nothing to restore. Adoption previously ran the force-install on these anyway and then reported the missing app artifact as `.rollbackFailed` ("the new version failed the check and could not be restored"), which described neither a check nor a rollback — both had been skipped. This is the same `RollbackProtection` question the batch upgrade path already asks, now asked by the adoption path too. A successful brew migration ends there: Wega **touches nothing in `~/Library`**. The old "clean leftovers" sheet was removed (SEC-01) — for a migration the app keeps its bundle id, so those "leftovers" are the live Application Support, preferences and container of the app you just adopted, and the sheet offered to delete them permanently with everything preselected. **npm ↔ brew duplicate row** — for CLIs installed via both `npm -g` and Homebrew (e.g. `@openai/codex` + `codex` cask), inline "Usuń z npm" / "Usuń z brew" buttons run the corresponding uninstall (`npm uninstall -g -- <pkg>` via `NpmGlobalService.uninstallEvents`, or `brew uninstall -- <token>`; the `--` terminator is SEC-10) after a confirmation alert; the duplicate disappears from the list on exit 0.
 
 Docker migration uses the controlled Desktop shutdown gate instead of generic force
 termination, including when a stale confirmation requests force termination.
@@ -590,15 +607,15 @@ complete check. This is separate from install origin and the file's modification
 Missing per-path evidence (including App Store) stays unconfirmed. See the
 [status rules and limitations](../USER_GUIDE.md#checking-status-in-inventory).
 
-Full list of every `.app` on the system with source badge (Brew / App Store / Manual), version, bundle ID, and last-modified date. Filterable by source, sortable by any column, searchable by name or bundle ID. Four stat cards at the top show counts per category — tap any card to filter. Any app Wega has **no known way to update** — not managed by Homebrew or the Mac App Store, and absent from the `AppCatalog` (so a hand-installed app the catalog already tracks does *not* qualify) — carries a **report button** in its source cell: one tap opens a prefilled GitHub issue (built by `CatalogIssueBuilder`) asking the maintainers to add update support, closing the community-catalog loop from the UI. **A failed scan is never passed off as a complete one**: each source (Homebrew, the cask catalog, the filesystem, App Store, npm) is tried independently, and any that fail are collected per source and raised as a banner over the table naming them — so a partial list reads as partial instead of as an authoritative empty or short list. **Export** — the toolbar's *Eksportuj* menu writes the whole inventory (not the filtered view) to a chosen location as a **Brewfile** (a `brew bundle` manifest: Homebrew casks and Mac App Store apps become installable `cask` / `mas` entries, while manual apps and global npm packages are preserved as comments so the file stays a faithful record even though `brew` cannot reinstall them) or as a **CSV** (one row per app, followed by the npm globals). The bytes are built by `InventoryExport` in the core module — deterministic and locale-independent, so re-exporting an unchanged inventory yields an identical file — and unit-tested without a save panel.
+Full list of every `.app` on the system with source badge (Brew / App Store / Manual), version, bundle ID, and last-modified date. Filterable by source, sortable by any column, searchable by name or bundle ID. Four stat cards at the top show counts per category — tap a source card to filter; the npm card is a counter of global packages and does nothing when clicked. Any app Wega has **no known way to update** — not managed by Homebrew or the Mac App Store, and absent from the `AppCatalog` (so a hand-installed app the catalog already tracks does *not* qualify) — carries a **report button** in its source cell: one tap opens a prefilled GitHub issue (built by `CatalogIssueBuilder`) asking the maintainers to add update support, closing the community-catalog loop from the UI. **A failed scan is never passed off as a complete one**: each source (Homebrew, the cask catalog, the filesystem, App Store, npm) is tried independently, and any that fail are collected per source and raised as a banner over the table naming them — so a partial list reads as partial instead of as an authoritative empty or short list. **Export** — the toolbar's *Eksportuj* menu writes the whole inventory (not the filtered view) to a chosen location as a **Brewfile** (a `brew bundle` manifest: Homebrew casks and Mac App Store apps become installable `cask` / `mas` entries, while manual apps and global npm packages are preserved as comments so the file stays a faithful record even though `brew` cannot reinstall them) or as a **CSV** (one row per app, followed by the npm globals). The bytes are built by `InventoryExport` in the core module — deterministic and locale-independent, so re-exporting an unchanged inventory yields an identical file — and unit-tested without a save panel.
 
 ### Settings
 App settings live in the **native macOS Settings window**, opened with **⌘,** or **Wega › Settings…** in the menu bar — not a sidebar tab or a toolbar button (macOS users expect app settings there). Real-time diagnostics: Homebrew version, mas-cli version, Privileged Helper status, macOS version, CPU architecture. App version, build, links. License block for bundled open-source tools. **Language card** — switch the interface between **Polski** and **English**; the choice is persisted and applies live, and switching it keeps the current scan results (and a running upgrade) intact. Until you pick one, the language follows the system locale — Polish only when macOS reports it ahead of the other languages Wega ships, **English otherwise**. **Scan directories card (UX-16)** — add your own scan roots via a directory picker (stored as **security-scoped bookmarks**, so apps on other volumes and in non-standard locations are found), list **exclusions** that are never searched, and set the **recursion depth** (how many sub-levels below each root to descend, default 1). The scan seams read these keys from `UserDefaults` on every scan, so a change takes effect on the next scan. **Project folders card (Katalogi projektów)** — the folders Porządki reads project version files from (default `~/Dev`); *Dodaj katalog…* adds one and each row's trash button removes it. A protected location, or a folder that contains one, is refused with the reason, and a list you empty stays empty instead of falling back to `~/Dev`. The next scan, and every removal's re-check, read the list as it is then. **Files and Folders map card** — the off-by-default switch for D10 with the Full Disk Access warning and a button that opens that pane in System Settings; it does not probe whether Wega has the access, the next scan shows it. **Resource gate card** — configures the large/unknown download estimate, low-battery threshold, unpacked-size multiplier, and free-disk safety margin used by both window and unattended preflights. **Ignored & pinned card** — lists every ignore / version-pin rule with a one-click remove. **Touch ID for sudo card** — on Macs with biometry hardware, shows whether `pam_tid.so` is wired into `/etc/pam.d/sudo_local` and offers a one-click enable. **App catalog card** — pulls the latest `AppCatalog` overlay from its canonical source on demand (the app also refreshes it on launch); reports the outcome and notes that a fetched update applies on the next launch.. **Unverified endpoints configuration card (SEC-08)** — appears only when an `endpoints.json` overlay is applied without a valid signature, surfacing the presence of that unverified configuration to the user rather than leaving it in the log.
 
 ### Logs
-Full activity log covering scans, source responses, install results, and errors — newest entry first. It retains menu-bar and background-source failures (including Brew stderr), exhausted HTTP retries, process aborts, rejected self-update signatures, helper installation failures, and failed rollbacks, so **"Zobacz w logach"** leads to the underlying cause rather than only a summary. Filter by severity (All / Warnings+ / Errors only), search by text, copy entries to the clipboard, or reveal the log file in Finder. When a source fails to respond and the Updates screen shows the "list may be incomplete" warning, the button jumps straight to this tab pre-filtered to errors. The log is also written to `~/Library/Logs/WegaMacUpdater/wega.log`; once the file exceeds ~5 MB it rotates to `wega.log.1`, keeping one backup. The privileged root helper separately writes rejected XPC connections and per-operation audit results to macOS Unified Logging.
+Full activity log covering scans, source responses, install results, and errors — newest entry first. It retains menu-bar and background-source failures (including Brew stderr), exhausted HTTP retries, process aborts, rejected self-update signatures, helper installation failures, and failed rollbacks, so **"Zobacz w logach"** leads to the underlying cause rather than only a summary. Filter by severity (All / Warnings+ / Errors only), search by text, copy entries to the clipboard, or reveal the log file in Finder. **Eksportuj diagnostykę** reports its result in a line under the toolbar: *"Diagnostics saved."* with **Show in Finder**, the reason it failed with a hint to try again, and nothing at all when you cancel the save panel. When a source fails to respond and the Updates screen shows the "list may be incomplete" warning, the button jumps straight to this tab pre-filtered to errors. The log is also written to `~/Library/Logs/WegaMacUpdater/wega.log`; once the file exceeds ~5 MB it rotates to `wega.log.1`, keeping one backup. The privileged root helper separately writes rejected XPC connections and per-operation audit results to macOS Unified Logging.
 
-**Reporting a bug from a log entry.** An entry that carries structural failure detail — the command that ran, its exit code, and the tail of `stderr` — expands in place behind a disclosure arrow next to the row. Select one or more entries (⌘-click, ⇧-click) and use the toolbar's **"Zgłoś błąd…"** button, disabled while nothing is selected, to open the bug-report window. That window is one composer with a single send button, not two separate ones: a description field, a segmented **channel picker** (**"Wyślij e-mailem"** / **"Zgłoś na GitHubie"**), and a preview of the exact text that will leave the machine — all driven by the one selected channel, so switching it recomputes the preview, the truncation notice and the **"Kopiuj treść"** button together, and what you copy can never diverge from what you send. E-mail and GitHub carry different URL-length limits (2000 and 8000 characters); a large selection keeps the newest entries and drops the oldest ones to fit, and when it does, both the preview header and the report body itself say how many were omitted. The body is redacted through the same `LogRedaction.redactForExport` pass Export diagnostics uses — paths, URL query strings, credentials, e-mail addresses and account names become placeholders — and Wega never sends anything on its own: the channel only opens a prefilled mail-compose window or a prefilled GitHub issue form, and sending is the user's own action. `mailto:` cannot carry attachments in any client, so the full diagnostics zip stays the separate **"Eksportuj diagnostykę"** action in the same toolbar. When the machine has nothing that can open the chosen URL, the same window falls back to a copyable subject and body plus, per channel, the recipient address or the issue-page link — so a report is never a dead end. The e-mail recipient comes from `supportEmail` in `endpoints.json` and can be overridden by the user-writable overlay at `~/Library/Application Support/WegaMacUpdater/endpoints.json`.
+**Reporting a bug from a log entry.** An entry that carries structural failure detail — the command that ran, its exit code, and the tail of `stderr` — expands in place behind a disclosure arrow next to the row. Select one or more entries (⌘-click, ⇧-click) and use the toolbar's **"Zgłoś błąd…"** button to open the bug-report window; it works with nothing selected too (the report then carries only the environment context), and **"Zgłoś błąd"** in the Settings window opens the same sheet. That window is one composer with a single button that names what it opens — **"Otwórz szkic e-maila"** or **"Otwórz zgłoszenie na GitHubie"** — not two separate ones: a description field, a segmented **channel picker** (**"Wyślij e-mailem"** / **"Zgłoś na GitHubie"**), and a preview of the exact text that will leave the machine — all driven by the one selected channel, so switching it recomputes the preview, the truncation notice and the **"Kopiuj treść"** button together, and what you copy can never diverge from what you send. E-mail and GitHub carry different URL-length limits (2000 and 8000 characters); a large selection keeps the newest entries and drops the oldest ones to fit, and when it does, both the preview header and the report body itself say how many were omitted. The body is redacted through the same `LogRedaction.redactForExport` pass Export diagnostics uses — paths, URL query strings, credentials, e-mail addresses and account names become placeholders — and Wega never sends anything on its own: the channel only opens a prefilled mail-compose window or a prefilled GitHub issue form, and sending is the user's own action. `mailto:` cannot carry attachments in any client, so the full diagnostics zip stays the separate **"Eksportuj diagnostykę"** action in the same toolbar. When the machine has nothing that can open the chosen URL, the same window falls back to a copyable subject and body plus, per channel, the recipient address or the issue-page link — so a report is never a dead end. The e-mail recipient comes from `supportEmail` in `endpoints.json` and can be overridden by the user-writable overlay at `~/Library/Application Support/WegaMacUpdater/endpoints.json`.
 
 **Persistent update traces.** Update operations also write bounded JSONL traces under
 `~/Library/Logs/WegaMacUpdater/traces`, separate from the visible activity log. Run and

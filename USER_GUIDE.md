@@ -29,8 +29,11 @@ see [`CONTRIBUTING.md`](CONTRIBUTING.md). To report a security problem, see
 - **`mas` (Mac App Store CLI) is optional.** App Store features degrade gracefully when it
   is absent.
 
-You do **not** need to open a terminal to use Wega, and Wega never asks for your Homebrew
-or App Store passwords.
+You do **not** need to open a terminal for everyday use, and Wega never asks for your Homebrew
+or App Store passwords. Two setups can still send you there: installing Homebrew itself (the
+*"install Homebrew"* card shows the command and a **Copy command** button), and turning on
+Touch ID for `sudo` when the optional Wega helper is not installed (the Touch ID card then
+shows a one-line command to paste into Terminal).
 
 ### Install the app
 
@@ -46,23 +49,38 @@ or App Store passwords.
 Stable releases are notarized, so macOS opens them without a warning.
 
 Once installed, Wega can keep **itself** up to date: the **Settings** window checks for a
-newer release and offers a one-click **Download and install**.
+newer release. With the optional Wega helper switched on the button reads **Download and
+install**; without it, it reads **Download and open the installer** and the downloaded
+package is handed to you to run yourself (see [The Wega helper](#the-wega-helper)).
 
 ---
 
 ## 2. Your first scan
 
 1. Open Wega. The window opens on the **Updates** screen, showing the last scan's result
-   straight away, and starts refreshing it by itself. That refresh runs underneath the list
-   — the rows stay put, the header says which phase it is on, and **Cancel** stops it. On a
-   first launch there is nothing to show yet, so the scan takes the window instead.
-2. Press **⌘R** (or **Check now**) whenever you want another scan. It runs underneath the
-   list too: the rows stay visible but dimmed, Wega sniffs over the top of the list, the
-   header shows a chip per source (Homebrew, App Store, npm, vendors) as each one is checked,
-   the sidebar icon spins, and **Cancel** stops it where it stands.
+   straight away, and starts refreshing it by itself. That refresh runs in the band above
+   the list — the rows stay put and readable, and **Cancel** stops it. On a first launch
+   there is nothing to show yet, so the scan takes the window instead, with Wega sniffing.
+2. Press **⌘R** (or **Check now**) whenever you want another scan. **⌘R** works on every
+   screen; the **Check now** button appears only on **Updates**, **To reattach** ("Do przepięcia")
+   and **Undo updates** ("Cofnij aktualizacje"), the screens that show the result of a scan.
 
-**A scan never changes your system.** Checking for updates is read-only — Wega does not
-install, remove, or `brew cleanup` anything during a scan.
+**What a scan shows.** The scan runs in the band, and nothing covers the rows:
+
+- a line that names the step Wega is on — for example **"Refreshing the Homebrew
+  catalog…"** first, then Homebrew, the App Store, npm and the vendors;
+- the time the patrol has taken, counted up, never estimated down;
+- once the vendor step starts, a counter such as **"Vendors: 12 of 31 apps"**; until then,
+  the note **"Selecting comes back when the scan finishes."**;
+- a ring and a chip per source (Homebrew, App Store, npm, vendors), each done, running or
+  not yet started;
+- the rows stay visible, but you cannot tick them until the scan ends, and **Cancel** stops
+  the scan where it stands.
+
+**A scan never installs, removes or cleans anything.** Checking for updates does not touch
+your apps. It does refresh Homebrew's own catalog (`brew update`), which is why the first
+step is the slowest. An app missing from the list is not proof it is up to date — check its
+status in **Inventory**.
 
 ### What Wega checks
 
@@ -91,15 +109,21 @@ Wega goes and gets them anyway:
   Pick **Group › by source** next to the categories to group by where each app came from
   (**Homebrew Casks**, **App Store**, **Manually installed**, …) — the same grouping the
   Inventory window uses.
-- The header names two numbers, for example **"12 to install + 3 manual"**. The two halves
-  behave differently: the *install* half is what Wega can upgrade for you; the *manual*
-  half are apps whose own updater or store page has to finish the job. The **Update
-  selected (N)** button in the action bar under the list counts only installable updates
-  you ticked, so it never promises something Wega can't do.
+- The band above the list counts the updates ("N updates") and sums up your queue, for
+  example **"4 queued · 2 to finish with the developer"**. Apps Wega installs for you and
+  apps whose own updater or store page has to finish the job are counted apart, so the
+  button never promises something Wega can't do. Under it the band says how far an undo
+  reaches (**"Undo: 3 of 4"**, or **"Checking undo availability"** while that is still being
+  worked out). Its button reads **Update N**, or **Nothing selected** while the queue is
+  empty.
 - **The window opens with a result, not a blank screen.** Wega restores your last scan
   from disk (or from the background menu-bar check, whichever is newer). If a restored
   result is stale it says so — e.g. *"Found 12 Jul, 21:14"* in a warning tint — rather than
   passing an old result off as fresh.
+
+Updates that your own rules (**Don't update**, **Skip this version**, a pin) hide from the
+list are not lost: a line at the bottom reads **"Hidden by your rules: N · Show"** and opens
+them.
 
 ### Checking status in Inventory
 
@@ -113,7 +137,7 @@ read **Ukryte przez politykę** (Hidden by policy); the check itself still ran.
 A result is stale after 24 hours or when a refreshed inventory finds a changed version/build. Moving an
 app or replacing it with another bundle ID requires a new check. Old saved scans without
 per-installation evidence show **Brak potwierdzenia** (Not confirmed), never “current”.
-Refreshing Inventory reads local installations; use **Check now** in Updates for a new
+Refreshing Inventory reads local installations; use **Check now** in Updates (or **⌘R**) for a new
 update check. Opening this status does not add network requests.
 
 An App Store receipt alone, a cask name match without a resolved installation path, or a
@@ -300,10 +324,10 @@ Until your first update finishes with everything installed, a card above the lis
 ### Choose what to update
 
 - Tick individual apps, a whole group with its header checkbox, or everything with the
-  checkbox in the action bar under the list. **Update selected (N)** in that bar takes only
-  what you ticked.
-- Before committing, click **"Show exactly what I will do"** in the action bar to open the
-  **dry-run panel**:
+  select-all checkbox above the list. Add the items you want to the queue. Open **Show
+  exactly what I will do** in the band above the list, then choose **Update**. The button
+  takes only what you queued; with nothing queued it reads **Nothing selected**.
+- **Show exactly what I will do** opens the **dry-run panel**:
   the literal commands Wega will run (`brew upgrade --cask …`, `npm install -g x@latest`,
   …) — read from the *same* code that performs the upgrade, so the preview can't drift from
   reality. Per cask it also shows the download host, whether Homebrew will verify the
@@ -312,7 +336,8 @@ Until your first update finishes with everything installed, a card above the lis
 
 ### Watching an update run
 
-While an update installs, its progress takes the action bar's place at the bottom of the list. It counts **whole
+While an update installs, a veil stands the rest of the screen down and its progress takes
+the bottom of the list. It counts **whole
 packages**, and the line under it names what the run is doing: preparing backups,
 downloading, or installing. It names the package too — "Installing firefox — 3 of 7" — but
 only while that package is the only one installing; once several are running at once the
@@ -445,10 +470,16 @@ a button. A failed rollback (new version rejected *and* old one not restored) ra
 
 ### Skip or pin updates
 
-Use the **⋯** menu on any row (or right-click it) to:
+Use the **⋯** menu on a Homebrew, App Store or npm row to (rows the developer finishes have
+the same choices in the context menu — right-click the row):
 
-- **Ignore** an app — *"don't update Zoom"*.
-- **Pin a version** — *"pin Parallels to 18"*; only updates up to that ceiling are shown.
+- **Don't update** an app — *"don't update Zoom"*.
+- **Skip this version** — hide just that version; the next one is shown.
+- **Pin version…** — *"pin Parallels to 18"*; only updates up to that ceiling are shown.
+
+The row disappears at once, and an **Undo** toast stays for 8 seconds — one click takes the
+change back. After that, the line **"Hidden by your rules: N · Show"** under the list opens
+the rules, where **Restore** removes any of them.
 
 Manage these rules any time from the **Settings** window (**⌘,** → *Ignored & pinned*);
 they persist across launches and the menu-bar badge honours them too.
@@ -467,7 +498,7 @@ explains why an action is unavailable.
 running containers: Wega first asks Docker Desktop to stop through its bundled CLI and
 checks that its application processes exited. Unsupported shutdown, a timeout, cancellation
 or an uncertain result postpones replacement. Wega repeats this check at retry and restore
-boundaries. Docker is excluded from **Update selected**, **Update all** and unattended
+boundaries. Docker is excluded from the queue's **Update** button and unattended
 updates, even if it was previously allowed in background settings.
 
 After a successful Homebrew replacement, the restart offer is optional. Only your click
@@ -493,7 +524,10 @@ Every scan, source response, install result and error is recorded in the **Logs*
   the visible line,
 - copy entries to the clipboard (**not redacted** — see the warning below),
 - **Reveal in Finder** the underlying log file, or
-- **Export diagnostics** — the whole troubleshooting package in one file (below).
+- **Export diagnostics** — the whole troubleshooting package in one file (below). Wega then
+  says how it went in a line under the toolbar: **"Diagnostics saved."** with **Show in
+  Finder**, or the reason it failed with a hint to try again. Cancelling the save panel
+  shows nothing.
 
 > **"Kopiuj" hands over the raw text.** It copies the visible entries exactly as they are
 > written to `wega.log`: full filesystem paths, URL query strings, and the raw `stderr` of
@@ -517,15 +551,18 @@ exit code, and the tail of `stderr`. To turn one or more of them into a bug repo
    to find it faster.
 2. Select the entries that describe the problem — ⌘-click adds one, ⇧-click a range.
    Expand any disclosure arrow first if you want to see the extra detail before reporting.
-3. Click **"Zgłoś błąd…"** in the toolbar (it stays disabled until something is selected).
+3. Click **"Zgłoś błąd…"** (Report a problem…) in the toolbar. It works with nothing
+   selected too; then the report carries only the environment context. **Zgłoś błąd** (Report
+   a bug) in the **Settings** window (**⌘,**) opens the same sheet.
 4. Describe briefly what you were doing when it happened — optional, but it helps.
-5. Pick a channel: **"Wyślij e-mailem"** or **"Zgłoś na GitHubie"**. The preview below
-   switches to match.
+5. Pick a channel: **"Wyślij e-mailem"** (Send by e-mail) or **"Zgłoś na GitHubie"** (Report
+   on GitHub). The preview below switches to match.
 6. Read the preview. It is exactly the text that will leave your computer, redacted the
    same way **Export diagnostics** is (below): paths, URL query strings, credentials,
    e-mail addresses and account names are replaced with placeholders.
-7. Click **"Wyślij zgłoszenie"**. Wega opens your mail app or a prefilled GitHub issue
-   form — it never sends the report itself; you still have to press send there.
+7. Click **"Otwórz szkic e-maila"** (Open Email Draft) or **"Otwórz zgłoszenie na GitHubie"**
+   (Open Issue on GitHub), whichever the channel is. Wega opens your mail app or a prefilled
+   GitHub issue form — it never sends the report itself; you still have to press send there.
 
 Selecting a lot of entries can push the report past the channel's size limit (e-mail and
 GitHub allow different amounts); when that happens the oldest selected entries are dropped
@@ -539,6 +576,28 @@ and environment report, use **"Eksportuj diagnostykę"** in the same toolbar ins
 your Mac has no app that can open the channel you picked, the window falls back to a
 copyable subject and body, plus — for e-mail, the recipient address; for GitHub, the
 issue-page link — so the report is never a dead end.
+
+### The Wega helper
+
+The helper is an **optional** component. Without it, everything in this guide still works;
+with it, Wega can finish a few things that need administrator rights without asking you to
+type a password. It runs as root and can do only four things: install a verified Wega
+package, turn on Touch ID for `sudo`, restore an app's pre-update copy, and move a
+root-owned app to the Trash. It checks Wega's signature on every connection.
+
+To switch it on, open **Settings** (**⌘,**) and use the **Privileged component** card:
+**Install component**. If macOS asks for approval, the card shows **Open Settings → Login
+Items** and **Check again**; **Remove component** switches it off again. On the Updates
+screen, **What does the helper do?** in the readiness card shows the same explanation.
+
+### Touch ID for administrator commands
+
+Some cask updates run `sudo`. With Touch ID turned on for `sudo`, those prompts show the
+system Touch ID sheet instead of asking for a password. It applies to **all** of `sudo` on
+your Mac, in Terminal too, not only to Wega. Turn it on with **Enable Touch ID for sudo** on
+the **Touch ID for Homebrew** card in Settings; it needs administrator rights once, to write
+`/etc/pam.d/sudo_local`. With the helper installed, Wega does that for you. Without it, the
+card shows a one-line command to copy and paste into Terminal.
 
 ### Settings diagnostics
 
