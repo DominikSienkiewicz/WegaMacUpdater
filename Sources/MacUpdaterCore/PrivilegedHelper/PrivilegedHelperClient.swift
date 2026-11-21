@@ -276,6 +276,7 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
     private var trackedInstaller: HelperPackageInstallation {
         HelperPackageInstallation(
             handshake: { _ = try await self.performHandshake(for: .beginPackageInstallation) },
+            statusHandshake: { _ = try await self.performHandshake(for: .packageInstallationStatus) },
             begin: { id, path, version in
                 try await self.installationReply { proxy, reply in
                     proxy.beginPackageInstallation(atPath: path, operationID: id.uuidString, expectedVersion: version, withReply: reply)

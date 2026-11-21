@@ -57,13 +57,12 @@ struct PrivilegedHelperDeadlineTests {
         }
     }
 
-    // MARK: - Version handshake (per verb, RC3)
+    // MARK: - Version handshake (per verb, RC3; protocol 9, Z14)
 
-    /// The four verbs whose minimum stays at 6, so rollback, self-update and the Trash keep working
-    /// through a helper that is still v6 or v7 after the app updated.
-    private let oldVerbs: [WegaHelperVerb] = [
-        .beginPackageInstallation, .packageInstallationStatus, .replaceBundle, .stageApplicationBundleForTrash,
-    ]
+    /// Every verb that changes something. Since protocol 9 each needs a helper that refuses to serve
+    /// from a bundle someone other than root can change, so the app never drives an older helper that
+    /// launchd may have started from another, unchecked copy of Wega.
+    private let actingVerbs = WegaHelperVerb.allCases.filter { $0 != .packageInstallationStatus }
 
     @Test func handshakeAcceptsMatchingVersion() {
         for verb in WegaHelperVerb.allCases {
@@ -83,56 +82,36 @@ struct PrivilegedHelperDeadlineTests {
     }
 
     @Test func eachVerbHasItsOwnMinimumHelperVersion() {
-        #expect(WegaHelper.version == "8")
+        #expect(WegaHelper.version == "9")
         #expect(Dictionary(uniqueKeysWithValues: WegaHelperVerb.allCases.map { ($0, WegaHelper.minimumHelperVersion(for: $0)) }) == [
-            .enableTouchIDForSudo: 8, .beginPackageInstallation: 6, .packageInstallationStatus: 6, .replaceBundle: 6,
-            .stageApplicationBundleForTrash: 6, .disableTouchIDForSudo: 7,
+            .enableTouchIDForSudo: 9, .beginPackageInstallation: 9, .packageInstallationStatus: 6, .replaceBundle: 9,
+            .stageApplicationBundleForTrash: 9, .disableTouchIDForSudo: 9,
         ])
     }
 
-    /// A v6 helper still running after the app updated keeps serving the four verbs whose minimum
-    /// is 6; turning Touch ID off needs v7 and on needs v8, and both are refused before anything is sent.
-    @Test func aVersionSixHelperServesTheOldVerbsButNeitherTouchIDVerb() throws {
-        for verb in oldVerbs {
-            #expect(PrivilegedHelperClient.handshakeOutcome(reported: "6", for: verb) == .compatible, "\(verb)")
-            #expect(try PrivilegedHelperClient.acceptedVersion(reported: "6", for: verb) == "6", "\(verb)")
+    /// A helper from before protocol 9 (v6 from every released Wega, v7 and v8) still running after the
+    /// app updated is sent no acting verb; it still answers where an installation it ran stands, so a
+    /// pending self-update can be settled.
+    @Test(arguments: ["6", "7", "8"])
+    func aHelperBeforeNineIsAskedOnlyAboutAnInstallation(reported: String) throws {
+        for verb in actingVerbs {
+            #expect(PrivilegedHelperClient.handshakeOutcome(reported: reported, for: verb)
+                    == .mismatch(reported: reported, expected: "9…9"), "\(verb)")
+            do {
+                _ = try PrivilegedHelperClient.acceptedVersion(reported: reported, for: verb)
+                Issue.record("a v\(reported) helper must not be sent \(verb)")
+            } catch PrivilegedHelperClient.HelperError.versionMismatch(let helper, let expected) {
+                #expect(helper == reported && expected == "9…9", "\(verb)")
+            }
         }
-        #expect(PrivilegedHelperClient.handshakeOutcome(reported: "6", for: .disableTouchIDForSudo)
-                == .mismatch(reported: "6", expected: "7…8"))
-        #expect(PrivilegedHelperClient.handshakeOutcome(reported: "6", for: .enableTouchIDForSudo)
-                == .mismatch(reported: "6", expected: "8…8"))
-        do {
-            _ = try PrivilegedHelperClient.acceptedVersion(reported: "6", for: .disableTouchIDForSudo)
-            Issue.record("a v6 helper must not be sent the v7 verb")
-        } catch PrivilegedHelperClient.HelperError.versionMismatch(let helper, let expected) {
-            #expect(helper == "6" && expected == "7…8")
-        }
-    }
-
-    /// Review focus 2: right after the app update the running helper is still v7. Turning Touch ID
-    /// off, rollback, self-update and the Trash keep working; only turning it on is refused, before
-    /// anything is sent, because v7 replies to it in another shape.
-    @Test func aV7HelperTakesEveryVerbButEnable() throws {
-        for verb in WegaHelperVerb.allCases where verb != .enableTouchIDForSudo {
-            #expect(PrivilegedHelperClient.handshakeOutcome(reported: "7", for: verb) == .compatible, "\(verb)")
-        }
-        #expect(PrivilegedHelperClient.handshakeOutcome(reported: "7", for: .enableTouchIDForSudo)
-                == .mismatch(reported: "7", expected: "8…8"))
-        do {
-            _ = try PrivilegedHelperClient.acceptedVersion(reported: "7", for: .enableTouchIDForSudo)
-            Issue.record("a v7 helper must not be sent the v8 enable verb")
-        } catch PrivilegedHelperClient.HelperError.versionMismatch(let helper, let expected) {
-            #expect(helper == "7" && expected == "8…8")
-        }
-        for verb in WegaHelperVerb.allCases {
-            #expect(PrivilegedHelperClient.handshakeOutcome(reported: "8", for: verb) == .compatible, "\(verb)")
-        }
+        #expect(PrivilegedHelperClient.handshakeOutcome(reported: reported, for: .packageInstallationStatus) == .compatible)
+        #expect(try PrivilegedHelperClient.acceptedVersion(reported: reported, for: .packageInstallationStatus) == reported)
     }
 
     /// Only 1–4 ASCII digits in the accepted range: `Int("+7")` is 7, and a newer helper than the
     /// app is never driven.
     @Test func anythingButADigitStringInRangeIsAMismatch() {
-        for reported in ["9", "x", "", "+7", " 7", "7 ", "-1", "7-old", "0x7", "00007", "٧", "5"] {
+        for reported in ["10", "x", "", "+9", " 9", "9 ", "-1", "9-old", "0x9", "00009", "٩", "5"] {
             for verb in WegaHelperVerb.allCases {
                 guard case .mismatch(let echoed, _) = PrivilegedHelperClient.handshakeOutcome(reported: reported, for: verb) else {
                     Issue.record("\(reported.debugDescription) must not be compatible for \(verb)")
@@ -141,7 +120,7 @@ struct PrivilegedHelperDeadlineTests {
                 #expect(echoed == reported)
             }
         }
-        #expect(PrivilegedHelperClient.handshakeOutcome(reported: "0007", for: .disableTouchIDForSudo) == .compatible)
+        #expect(PrivilegedHelperClient.handshakeOutcome(reported: "0009", for: .disableTouchIDForSudo) == .compatible)
     }
 
     /// Every privileged verb checks the helper's version for itself before its request is sent.
@@ -159,8 +138,10 @@ struct PrivilegedHelperDeadlineTests {
             let request = try #require(body.range(of: "call(deadline:"), "\(verb)")
             #expect(handshake.lowerBound < request.lowerBound, "\(verb)")
         }
-        #expect(try functionBody("private var trackedInstaller:", in: path)
-                    .contains("try await self.performHandshake(for: .beginPackageInstallation)"))
+        let tracked = try functionBody("private var trackedInstaller:", in: path)
+        #expect(tracked.contains("handshake: { _ = try await self.performHandshake(for: .beginPackageInstallation) }"))
+        #expect(tracked.contains("statusHandshake: { _ = try await self.performHandshake(for: .packageInstallationStatus) }"),
+                "settling a pending installation asks only for the status, which a helper before 9 still answers")
         #expect(try functionBody("public func uninstallAvailabilityAfterHandshake(", in: path)
                     .contains("try await performHandshake(for: .stageApplicationBundleForTrash)"))
         #expect(try functionBody("public func availabilityAfterHandshake(for verb:", in: path)
