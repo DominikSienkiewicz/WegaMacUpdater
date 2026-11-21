@@ -131,7 +131,7 @@ struct UpdateView: View {
                 if !isPresented { pendingUpdateTargets = [] }
             }
             .wegaAttention(showUpdateConfirmation || scan.pendingForceRestart != nil)
-            .wegaAttention(scan.runReport.map { $0.status != .finished } ?? false)
+            .wegaAttention(scan.runReport?.holdsAttention ?? false)
             // Switching the sidebar category re-filters the list but not the inspector's
             // resolver, so a selection made in one category would otherwise keep showing in
             // the pane after switching away from it. Clear it so the detail pane never
@@ -257,7 +257,8 @@ struct UpdateView: View {
                     resultsHeading
                 }
                 if scan.runReport != nil {
-                    UpdateRunSummaryHeader(remainingCount: scan.scopeCounts.all, onClose: { scan.closeRunReport() })
+                    UpdateRunSummaryHeader(remainingCount: scan.scopeCounts.all, categoryHasRows: showsRows,
+                                           onClose: { scan.closeRunReport() }, onShowAll: { onScopeChange?(.all) })
                 } else {
                     listHeader
                 }
@@ -366,7 +367,7 @@ struct UpdateView: View {
             startedAt:         scan.scanStartedAt,
             manual:            scan.manualScanProgress,
             foundSoFar:        scan.scopeCounts.all,
-            checksRunResult:   scan.updating
+            checksRunResult:   scan.updating || (scan.undoBusy != nil && scan.runReport != nil)
         )
     }
 

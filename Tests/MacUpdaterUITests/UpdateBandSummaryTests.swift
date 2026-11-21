@@ -251,7 +251,10 @@ struct UpdateBandSummaryTests {
         #expect(view.contains("onCloseSummary: { scan.closeRunReport() }"))
         let scanState = try #require(view.range(of: "private var scanPresentation: UpdateBandScanPresentation {")).upperBound
         let scanBuilder = view[scanState...].prefix(500).replacingOccurrences(of: " +", with: " ", options: .regularExpression)
-        #expect(scanBuilder.contains("checksRunResult: scan.updating"), "a scan during a run is the run's check")
+        // Final review C11 — so is the undo's check while the summary stays open: it promises the
+        // result, not a selection the summary does not offer.
+        #expect(scanBuilder.contains("checksRunResult: scan.updating || (scan.undoBusy != nil && scan.runReport != nil)"),
+                "a scan during a run is the run's check")
         let summaryState = try #require(view.range(of: "private func summaryPresentation(_ report: UpdateRunReport)")).upperBound
         let builderEnd = try #require(view.range(of: "private var runPresentation: UpdateBandRunPresentation", range: summaryState..<view.endIndex))
         let builder = view[summaryState..<builderEnd.lowerBound]
@@ -263,14 +266,30 @@ struct UpdateBandSummaryTests {
     }
 
     /// Spec R18 — Wega's ball waited for the danger banners the summary replaces; it now also
-    /// waits while an unsuccessful summary is open.
+    /// waits while an unsuccessful summary is open, or one with a row in „Wymaga uwagi” (final
+    /// review C4: a confirmed changed publisher finishes the run, its banner waits for the close).
     @Test func anUnsuccessfulSummaryHoldsWegasBall() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         let held = ".wegaAttention(showUpdateConfirmation || scan.pendingForceRestart != nil)"
         let original = try #require(view.range(of: held), "the original hold stays")
-        let summaryHold = try #require(view.range(of: ".wegaAttention(scan.runReport.map { $0.status != .finished } ?? false)"))
+        let summaryHold = try #require(view.range(of: ".wegaAttention(scan.runReport?.holdsAttention ?? false)"))
         let between = view[original.upperBound..<summaryHold.lowerBound]
         #expect(between.allSatisfy { $0.isWhitespace }, "right after the original")
+        let report = try source("Sources/MacUpdater/UpdateRunReport.swift")
+        #expect(report.contains("var holdsAttention: Bool { status != .finished || !entries(in: .needsAttention).isEmpty }"))
+    }
+
+    /// Final review C14 — the band switches its colours under Increase Contrast; the result ring's
+    /// two shares switch with it, still the palette's dark values (the band is always dark).
+    @Test func theResultRingFollowsIncreaseContrast() throws {
+        let regular = UpdateBandResultRing.shareColors(increasedContrast: false)
+        let raised = UpdateBandResultRing.shareColors(increasedContrast: true)
+        #expect(regular.updated == WegaPalette.success.dark && regular.rest == WegaPalette.danger.dark)
+        #expect(raised.updated == WegaPalette.success.darkIncreasedContrast, "the updated share")
+        #expect(raised.rest == WegaPalette.danger.darkIncreasedContrast, "the rest")
+        let views = try source("Sources/MacUpdater/UpdateBandSummaryViews.swift")
+        #expect(views.contains("@Environment(\\.colorSchemeContrast) private var contrast"))
+        #expect(views.contains("let colors = Self.shareColors(increasedContrast: contrast == .increased)"))
     }
 
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {

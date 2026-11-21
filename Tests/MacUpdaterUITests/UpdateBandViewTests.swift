@@ -759,6 +759,14 @@ extension UpdateBandViewTests {
                     let visible = summary.headline
                     let neededHeadline = height(of: visible, font: headlineFont, width: column)
                     XCTAssertLessThanOrEqual(neededHeadline, allowedHeadline, "\(context): \"\(visible)\" needs \(neededHeadline) pt")
+                    // Final review C18 — Wega's line for an incomplete run, at the lines the band
+                    // gives the summary's sentence.
+                    let summaryLineLimit = layout == .regular ? 2 : 1
+                    let allowedLine = height(of: Array(repeating: "Ag", count: summaryLineLimit).joined(separator: "\n"),
+                                             font: .wega(.callout), width: column)
+                    let neededLine = height(of: summary.line, font: .wega(.callout), width: column)
+                    XCTAssertEqual(summary.line, tr("Część pakietów się nie zaktualizowała."), context)
+                    XCTAssertLessThanOrEqual(neededLine, allowedLine, "\(context): \"\(summary.line)\" needs \(neededLine) pt of \(allowedLine)")
                     // Where the status and its time range do not fit, the status stands alone.
                     let status = eyebrowWidth(summary.shortEyebrow)
                     XCTAssertLessThanOrEqual(status, column, "\(context): \"\(summary.shortEyebrow)\" needs \(status) pt")

@@ -4,15 +4,29 @@ import MacUpdaterCore
 // MARK: - C2 stage 4 — the list while the after-update summary is open
 //
 // The summary replaces the rows until it is closed: what the run did to every planned item, the
-// hand-offs the band counts, the restart bar and the run's log. Nothing here can be queued or
-// inspected (the inspector's after-update mode is stage 5), so ⇧⌘A and ⌘⏎ have nothing to reach.
+// hand-offs the band counts, the restart bar and the run's log. The run's own rows can be neither
+// queued nor inspected (the inspector's after-update mode is stage 5), so ⇧⌘A and ⌘⏎ have nothing
+// to reach; the hand-off rows keep their inspector, as in the list.
 
 /// The list header's row while the summary is open: the queue column held empty, „Wynik
 /// aktualizacji” in the group headers' monospaced capitals and, while anything is left to update,
-/// the link that closes the summary — the same door as the band's „Zamknij podsumowanie”.
+/// the link that closes the summary — the same door as the band's „Zamknij podsumowanie”. The
+/// held queue column is as tall as the list header's select-all circle, its tallest control, so
+/// the list does not move when the summary opens or closes.
 struct UpdateRunSummaryHeader: View {
     let remainingCount: Int
+    /// Whether the category on screen still has rows (`UpdateView.showsRows`).
+    let categoryHasRows: Bool
     let onClose: () -> Void
+    /// Brings back „Wszystkie” (the window's scope selection).
+    let onShowAll: () -> Void
+
+    /// The link counts every category, so it never lands on „Nic w tej kategorii”: with no rows
+    /// left in the category on screen it also brings back „Wszystkie”.
+    func close() {
+        onClose()
+        if !categoryHasRows { onShowAll() }
+    }
 
     var body: some View {
         HStack(spacing: WegaLayout.checkboxSpacing) {
@@ -25,7 +39,7 @@ struct UpdateRunSummaryHeader: View {
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 0)
             if remainingCount > 0 {
-                Button(trf("Pozostałe aktualizacje: %@ ›", "\(remainingCount)"), action: onClose)
+                Button(trf("Pozostałe aktualizacje: %@ ›", "\(remainingCount)"), action: close)
                     .buttonStyle(.link)
                     .font(.wega(.subheadline))
                     .lineLimit(1)
@@ -36,9 +50,9 @@ struct UpdateRunSummaryHeader: View {
     }
 }
 
-/// The summary's groups, each only when it has rows: „Wymaga uwagi” (with the link to the run's
-/// log), „Nie zaczęłam”, the hand-offs `handOffs` draws, „Zaktualizowano”; then the restart bar and
-/// the log with `listColumn`'s own views and closures.
+/// The summary's groups, each only when it has rows: „Wymaga uwagi” and „Nie zaczęłam” (each with
+/// the link to the run's log, which their notes point at), the hand-offs `handOffs` draws,
+/// „Zaktualizowano”; then the restart bar and the log with `listColumn`'s own views and closures.
 struct UpdateRunSummaryList<HandOffs: View>: View {
     @EnvironmentObject private var scan: ScanStore
     let report: UpdateRunReport
@@ -60,7 +74,7 @@ struct UpdateRunSummaryList<HandOffs: View>: View {
         ScrollView {
             LazyVStack(spacing: WegaLayout.sectionSpacing) {
                 group(.needsAttention, title: tr("Wymaga uwagi"), tint: .wegaDanger, showsLogLink: true)
-                group(.notStarted, title: tr("Nie zaczęłam"), tint: .wegaToffee)
+                group(.notStarted, title: tr("Nie zaczęłam"), tint: .wegaToffee, showsLogLink: true)
                 handOffs
                 group(.updated, title: tr("Zaktualizowano"), tint: .wegaSuccess)
                 if !scan.restartCandidates.isEmpty {
@@ -120,7 +134,8 @@ struct UpdateRunSummaryList<HandOffs: View>: View {
 
 /// One planned item of the run: its icon, name, versions and what became of it, with
 /// „Zaufaj nowemu podpisowi” or „Cofnij” where the report allows one. VoiceOver reads one
-/// sentence, "{name}: {note}"; the buttons stay the row's actions.
+/// sentence, "{name}: {note}", with „cofam…” as its value while the undo runs; the buttons are
+/// also the row's named actions, as on the list's rows.
 struct UpdateRunResultRow: View {
     let entry: UpdateRunReportEntry
     /// This run's undo for the entry, which the note names ("kopia do …").
@@ -138,15 +153,31 @@ struct UpdateRunResultRow: View {
         return sentence.hasPrefix(prefix) ? String(sentence.dropFirst(prefix.count)) : sentence
     }
 
+    /// The app's name for a cask, as every other list shows it; the token otherwise.
+    var displayName: String {
+        entry.kind == .cask ? CaskDisplayName.name(token: entry.name, appPath: entry.appPath) : entry.name
+    }
+
+    /// The token under the name, only when it says something the name does not.
+    var shownToken: String? { displayName == entry.name ? nil : entry.name }
+
+    /// „cofam…” while this row's undo restores the app, where the spinner replaced „Cofnij”.
+    var accessibilityValue: String { isUndoing ? tr("cofam…") : "" }
+
     /// What VoiceOver reads for the row, worded now (re-read after a language switch).
-    var accessibilitySentence: String { "\(entry.name): \(note)" }
+    var accessibilitySentence: String { "\(displayName): \(note)" }
 
     var body: some View {
         HStack(spacing: WegaLayout.checkboxSpacing) {
             QueueColumnPlaceholder()
             icon
             VStack(alignment: .leading, spacing: 4) {
-                Text(entry.name).font(.wega(.body, weight: .semibold))
+                Text(displayName).font(.wega(.body, weight: .semibold))
+                if let shownToken {
+                    Text(shownToken)
+                        .font(.wega(.caption, monospaced: true))
+                        .foregroundStyle(.secondary)
+                }
                 if entry.from != nil || entry.to != nil {
                     VersionArrow(from: entry.from ?? "—", to: entry.to ?? "—")
                 }
@@ -163,8 +194,13 @@ struct UpdateRunResultRow: View {
         }
         .padding(.horizontal, WegaLayout.cardPadding)
         .padding(.vertical, WegaLayout.updateRowPadding)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilitySentence)
+        .accessibilityValue(accessibilityValue)
+        .accessibilityActions {
+            if let onTrust { Button(tr("Zaufaj nowemu podpisowi"), action: onTrust) }
+            if let onUndo, !isUndoing { Button(tr("Cofnij"), action: onUndo) }
+        }
     }
 
     @ViewBuilder

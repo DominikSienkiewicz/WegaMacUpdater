@@ -30,5 +30,6 @@ extension Translations {
         "Do dokończenia u producenta": "To finish with the developer",
         "Zaktualizowano": "Updated",
         "Pozostałe aktualizacje: %@ ›": "Remaining updates: %@ ›",
+        "cofam…": "undoing…",
     ]
 }

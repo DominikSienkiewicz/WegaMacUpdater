@@ -4,7 +4,8 @@ import MacUpdaterCore
 /// C2 stage 4 — the round element once a run has been checked: the updated share of the
 /// planned items in success green, the rest in danger coral, at exactly the button's diameter
 /// so nothing beside it moves when the summary opens or closes. The band is always dark, so
-/// both colours are the palette's dark values, like the glows. It does not move.
+/// both colours are the palette's dark values, like the glows, raised under Increase Contrast
+/// as the band's other colours are. It does not move.
 struct UpdateBandResultRing: View {
     let updated: Int
     let planned: Int
@@ -12,8 +13,13 @@ struct UpdateBandResultRing: View {
     /// What VoiceOver hears: "Zaktualizowano 4 z 5".
     let accessibilityValue: String
 
-    private static let updatedColor = Color(nsColor: WegaPalette.success.dark.nsColor)
-    private static let restColor = Color(nsColor: WegaPalette.danger.dark.nsColor)
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    /// The two shares' colours: the palette's dark values, or its dark increased-contrast ones.
+    static func shareColors(increasedContrast: Bool) -> (updated: WegaAdaptiveColor.Components, rest: WegaAdaptiveColor.Components) {
+        (WegaPalette.success.components(isDark: true, increasedContrast: increasedContrast),
+         WegaPalette.danger.components(isDark: true, increasedContrast: increasedContrast))
+    }
 
     private var lineWidth: CGFloat { max(4, diameter * 0.07) }
     private var updatedShare: CGFloat {
@@ -21,14 +27,15 @@ struct UpdateBandResultRing: View {
     }
 
     var body: some View {
+        let colors = Self.shareColors(increasedContrast: contrast == .increased)
         ZStack {
             Circle()
                 .strokeBorder(Color.wegaBandText.opacity(0.16), lineWidth: lineWidth)
             if updatedShare > 0 {
-                arc(from: 0, to: updatedShare, color: Self.updatedColor)
+                arc(from: 0, to: updatedShare, color: Color(nsColor: colors.updated.nsColor))
             }
             if planned > 0, updatedShare < 1 {
-                arc(from: updatedShare, to: 1, color: Self.restColor)
+                arc(from: updatedShare, to: 1, color: Color(nsColor: colors.rest.nsColor))
             }
             Text(verbatim: "\(updated)/\(planned)")
                 .font(.wega(.title2, weight: .semibold, monospaced: true))

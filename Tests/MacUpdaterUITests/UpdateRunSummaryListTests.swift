@@ -55,9 +55,63 @@ struct UpdateRunSummaryListTests {
             #expect(row.accessibilitySentence == "slack: failed — details in the log", "worded when read")
         }
         let list = try source(Self.summaryFile)
-        #expect(list.contains("\"\\(entry.name): \\(note)\""))
-        #expect(list.contains(".accessibilityElement(children: .combine)\n        .accessibilityLabel(accessibilitySentence)"),
-                "one element per row; its buttons stay its actions")
+        #expect(list.contains("\"\\(displayName): \\(note)\""))
+        #expect(list.contains("""
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel(accessibilitySentence)
+                    .accessibilityValue(accessibilityValue)
+                    .accessibilityActions {
+                        if let onTrust { Button(tr("Zaufaj nowemu podpisowi"), action: onTrust) }
+                        if let onUndo, !isUndoing { Button(tr("Cofnij"), action: onUndo) }
+                    }
+            """), "one element per row, as the list's rows: its buttons are also its named actions")
+    }
+
+    /// Final review C12 — while its undo restores the app, the row says so to VoiceOver, where the
+    /// sighted user sees the spinner that replaced „Cofnij”.
+    @Test func aRowSaysItsUndoIsRunning() throws {
+        let entry = try #require(report([cask("slack")], [.succeeded]).entries.first)
+        let undo = undoable("slack", operationID: Self.operationID)
+        let undoing = UpdateRunResultRow(entry: entry, undo: undo, isUndoing: true, onTrust: nil, onUndo: {})
+        let idle = UpdateRunResultRow(entry: entry, undo: undo, isUndoing: false, onTrust: nil, onUndo: {})
+        withLanguage(.pl) {
+            #expect(undoing.accessibilityValue == "cofam…")
+            #expect(idle.accessibilityValue.isEmpty)
+        }
+        withLanguage(.en) {
+            #expect(undoing.accessibilityValue == "undoing…", "worded when read")
+        }
+    }
+
+    /// Final review C10 — a cask row names the app as every other list in the app does, with the
+    /// token under it; the note still drops the "{token}: " its sentence starts with.
+    @Test func aCaskRowNamesTheAppAndItsToken() throws {
+        let planned = [cask("proton-mail"), OutdatedItem(key: UpdatePlanner.key(name: "wget", kind: .formula), name: "wget",
+                                                         from: "1", to: "2", kind: .formula)]
+        let outcomes = [ItemUpdateOutcome(key: planned[0].key, name: "proton-mail", kind: .cask, verdict: .publisherChanged(old: "AAA", new: "BBB")),
+                        ItemUpdateOutcome(key: planned[1].key, name: "wget", kind: .formula, verdict: .executionFailed)]
+        let built = UpdateRunReport.make(
+            planned: planned, summary: UpdateRunSummary(items: outcomes, diagnostics: [], needsSudoPassword: false),
+            finishedAt: Self.finishedAt, caskAppPaths: ["proton-mail": URL(fileURLWithPath: "/Applications/Proton Mail.app")],
+            stillOutdatedKeys: [], confirmed: true
+        )
+        let app = UpdateRunResultRow(entry: built.entries[0], undo: nil, isUndoing: false, onTrust: nil, onUndo: nil)
+        let tool = UpdateRunResultRow(entry: built.entries[1], undo: nil, isUndoing: false, onTrust: nil, onUndo: nil)
+        try withLanguage(.pl) {
+            #expect(app.displayName == "Proton Mail")
+            #expect(app.displayName == CaskDisplayName.name(token: "proton-mail", appPath: built.entries[0].appPath))
+            #expect(app.shownToken == "proton-mail")
+            #expect(!app.note.hasPrefix("proton-mail: "), "\(app.note)")
+            #expect(app.accessibilitySentence == "Proton Mail: \(app.note)")
+            #expect(tool.displayName == "wget" && tool.shownToken == nil, "a formula is named by its token alone")
+            let unnamed = try #require(report([cask("zoom")], [.succeeded]).entries.first)
+            let bare = UpdateRunResultRow(entry: unnamed, undo: nil, isUndoing: false, onTrust: nil, onUndo: nil)
+            #expect(bare.displayName == "zoom" && bare.shownToken == nil, "no bundle, no second line")
+        }
+        let list = try source(Self.summaryFile)
+        let row = try slice(list, from: "struct UpdateRunResultRow: View", to: "private var icon: some View")
+        #expect(row.contains("Text(displayName).font(.wega(.body, weight: .semibold))"))
+        #expect(row.contains("if let shownToken {\n                    Text(shownToken)\n                        .font(.wega(.caption, monospaced: true))"))
     }
 
     @Test func rowsOfferOnlyTheActionsTheReportAllows() throws {
@@ -197,7 +251,9 @@ struct UpdateRunSummaryListTests {
         let body = try slice(list, from: "struct UpdateRunSummaryList<HandOffs: View>: View", to: "struct UpdateRunResultRow: View")
         let parts = [
             "group(.needsAttention, title: tr(\"Wymaga uwagi\"), tint: .wegaDanger, showsLogLink: true)",
-            "group(.notStarted, title: tr(\"Nie zaczęłam\"), tint: .wegaToffee)",
+            // Final review C17 — „nie uruchomiłam — szczegóły w logu” points at the log, so this
+            // group offers the link too.
+            "group(.notStarted, title: tr(\"Nie zaczęłam\"), tint: .wegaToffee, showsLogLink: true)",
             "\n                handOffs\n",
             "group(.updated, title: tr(\"Zaktualizowano\"), tint: .wegaSuccess)",
             "if !scan.restartCandidates.isEmpty {\n                    RestartSection(",
@@ -306,19 +362,34 @@ struct UpdateRunSummaryListTests {
         let results = try slice(view, from: "private var resultsView: some View", to: "private var listHeader: some View")
         #expect(results.contains("""
                             if scan.runReport != nil {
-                                UpdateRunSummaryHeader(remainingCount: scan.scopeCounts.all, onClose: { scan.closeRunReport() })
+                                UpdateRunSummaryHeader(remainingCount: scan.scopeCounts.all, categoryHasRows: showsRows,
+                                                       onClose: { scan.closeRunReport() }, onShowAll: { onScopeChange?(.all) })
                             } else {
                                 listHeader
                             }
-            """))
+            """), "the category on screen has rows exactly when listColumn would not draw „Nic w tej kategorii”")
         let header = try slice(view, from: "private var listHeader: some View", to: "private var resultsBand: some View")
         #expect(!header.contains("runReport"), "listHeader's own body is not wrapped")
         let list = try source(Self.summaryFile)
         let summaryHeader = try slice(list, from: "struct UpdateRunSummaryHeader: View", to: "struct UpdateRunSummaryList<HandOffs: View>")
         for part in ["QueueColumnPlaceholder()", "Text(tr(\"Wynik aktualizacji\"))", ".textCase(.uppercase)", "Spacer(minLength: 0)",
-                     "if remainingCount > 0 {", "Button(trf(\"Pozostałe aktualizacje: %@ ›\", \"\\(remainingCount)\"), action: onClose)",
+                     "if remainingCount > 0 {", "Button(trf(\"Pozostałe aktualizacje: %@ ›\", \"\\(remainingCount)\"), action: close)",
                      ".buttonStyle(.link)"] {
             #expect(summaryHeader.contains(part), "\(part)")
+        }
+    }
+
+    /// Final review C15 — „Pozostałe aktualizacje: N ›” counts every category, so it never lands on
+    /// „Nic w tej kategorii”: when the category on screen has no rows left, closing also brings
+    /// back „Wszystkie”. The band's „Zamknij podsumowanie” promises nothing and keeps the category.
+    @Test func theRemainingLinkNeverLandsOnAnEmptyCategory() {
+        final class Calls { var made: [String] = [] }
+        for hasRows in [false, true] {
+            let calls = Calls()
+            let header = UpdateRunSummaryHeader(remainingCount: 3, categoryHasRows: hasRows,
+                                                onClose: { calls.made.append("close") }, onShowAll: { calls.made.append("all") })
+            header.close()
+            #expect(calls.made == (hasRows ? ["close"] : ["close", "all"]), "rows on screen: \(hasRows)")
         }
     }
 
@@ -348,12 +419,17 @@ struct UpdateRunSummaryListTests {
     }
 }
 
-/// The summary header takes the list header's row: no taller than the row with the scope bar
-/// and the grouping menu, its title and link on one line at the minimum detail column.
+/// The summary header takes the list header's row: exactly the height of the row with the scope
+/// bar and the grouping menu, so the list does not move when the summary opens or closes, and
+/// its title and link on one line at the minimum detail column.
 @MainActor
 final class UpdateRunSummaryHeaderLayoutTests: XCTestCase {
     /// The header's width at the 420 pt minimum detail column (as `ListHeaderScanNoteLayoutTests`).
     private static let width: CGFloat = 420 - 2 * WegaLayout.selectionColumnInset
+
+    private func header(remaining: Int) -> UpdateRunSummaryHeader {
+        UpdateRunSummaryHeader(remainingCount: remaining, categoryHasRows: true, onClose: {}, onShowAll: {})
+    }
 
     func testTheSummaryHeaderKeepsTheHeaderHeight() {
         for language in [AppLanguage.pl, .en] {
@@ -366,13 +442,17 @@ final class UpdateRunSummaryHeaderLayoutTests: XCTestCase {
                         UpdateGroupingMenu(selection: .constant(.default))
                     }
                 })
-                let summary = fitting(UpdateRunSummaryHeader(remainingCount: 123, onClose: {}))
+                let summary = fitting(header(remaining: 123))
+                let withoutLink = fitting(header(remaining: 0))
                 let title = NSHostingView(rootView: Text(tr("Wynik aktualizacji"))
                     .font(.wega(.subheadline, weight: .semibold, monospaced: true)).fixedSize()).fittingSize
-                let ideal = NSHostingView(rootView: UpdateRunSummaryHeader(remainingCount: 123, onClose: {}).fixedSize()).fittingSize
-                let closed = NSHostingView(rootView: UpdateRunSummaryHeader(remainingCount: 0, onClose: {}).fixedSize()).fittingSize
+                let ideal = NSHostingView(rootView: header(remaining: 123).fixedSize()).fittingSize
+                let closed = NSHostingView(rootView: header(remaining: 0).fixedSize()).fittingSize
                 let context = "\(language)"
-                XCTAssertLessThanOrEqual(summary.height, scopeRow.height + 0.5, "\(context): the summary header is taller than the list header")
+                XCTAssertEqual(summary.height, scopeRow.height, accuracy: 0.5,
+                               "\(context): the summary header is \(summary.height) pt, the list header \(scopeRow.height) pt")
+                XCTAssertEqual(withoutLink.height, scopeRow.height, accuracy: 0.5,
+                               "\(context): without the link the summary header is \(withoutLink.height) pt, the list header \(scopeRow.height) pt")
                 XCTAssertGreaterThanOrEqual(summary.height, title.height - 0.5, "\(context): the header shows its title")
                 XCTAssertLessThanOrEqual(ideal.width, Self.width + 0.5, "\(context): the title and the link do not fit one line")
                 XCTAssertLessThan(closed.width, ideal.width, "\(context): no link without remaining updates")
