@@ -40,8 +40,9 @@ public struct CleanupDetectorNote: Codable, Equatable, Sendable {
 /// `PATH`-active one and the shadowed ones) every candidate carries the removal that matches the tool
 /// that installed it, the installed formulae that depend on it and the processes using it;
 /// `CleanupKeepChoice` then decides which copy stays and what the others offer. A copy whose only
-/// companions are system copies or broken links offers no choice, and a broken link gets a
-/// copyable `unlink`.
+/// companions are system copies, version-manager shims or broken links offers no choice, and a
+/// broken link gets a copyable `unlink`. A shim offers nothing, and neither does a copy behind a
+/// shim that `PATH` reaches first.
 public struct CleanupDuplicateFindings: Sendable {
     private struct Context {
         let processes: [CleanupProcess]
@@ -75,7 +76,10 @@ public struct CleanupDuplicateFindings: Sendable {
         let context = Context(processes: inspector.userProcesses(), dependents: lookup.dependents, uncheckedFormulas: lookup.unchecked)
         let findings = scan.groups.flatMap { group in
             let offersChoice = Self.candidates(in: group).count >= 2
-            return group.copies.map { finding(for: $0, in: group, offersChoice: offersChoice, context: context) }
+            let shim = Self.leadingShim(in: group)
+            return group.copies.map {
+                finding(for: $0, in: group, offersChoice: offersChoice, behind: shim, context: context)
+            }
         }
         return (CleanupKeepChoice.resolve(findings, choices: [:], pathIsApproximate: pathIsApproximate), lookup.notes)
     }
@@ -86,8 +90,17 @@ public struct CleanupDuplicateFindings: Sendable {
         var notes: [CleanupDetectorNote] = []
     }
 
+    /// The copies to choose between. A shim `PATH` reaches first leaves none: Terminal runs it, and
+    /// the manager may fall back to any copy behind it as its `system` version.
     private static func candidates(in group: CleanupToolGroup) -> [CleanupCopy] {
-        group.copies.filter { $0.role == .active || $0.role == .shadowed }
+        guard leadingShim(in: group) == nil else { return [] }
+        return group.copies.filter { $0.role == .active || $0.role == .shadowed }
+    }
+
+    /// The version manager's shim that comes before every other working copy of the tool.
+    private static func leadingShim(in group: CleanupToolGroup) -> CleanupCopy? {
+        let first = group.copies.first { $0.role == .shim || $0.role == .active }
+        return first?.role == .shim ? first : nil
     }
 
     /// One query per distinct formula among the candidates of the groups that offer a choice, the
@@ -119,7 +132,8 @@ public struct CleanupDuplicateFindings: Sendable {
     }
 
     private func finding(
-        for copy: CleanupCopy, in group: CleanupToolGroup, offersChoice: Bool, context: Context
+        for copy: CleanupCopy, in group: CleanupToolGroup, offersChoice: Bool, behind shim: CleanupCopy?,
+        context: Context
     ) -> CleanupFinding {
         func make(_ status: CleanupStatus, _ reason: CleanupReason, _ action: CleanupAction, candidate: CleanupCandidate? = nil) -> CleanupFinding {
             let risk: CleanupRisk
@@ -130,8 +144,12 @@ public struct CleanupDuplicateFindings: Sendable {
                 action: action, risk: risk, bucket: .excluded, identity: copy.identity, candidate: candidate
             )
         }
+        if let shim, copy.role == .shadowed {
+            return make(.shadowed, .shadowedBy(path: shim.path.path), .none)
+        }
         switch copy.role {
         case .expected: return make(.expected, .systemCopy, .none)
+        case .shim: return make(.expected, .versionManagerShim, .none)
         case .brokenLink: return make(.brokenLink, .brokenLink, unlinkAction(for: copy.path))
         case .active where !offersChoice: return make(.active, .currentVersion, .none)
         case .active, .shadowed: break

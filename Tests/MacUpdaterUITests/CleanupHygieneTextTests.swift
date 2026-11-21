@@ -53,6 +53,15 @@ final class CleanupHygieneTextTests: XCTestCase {
         }
     }
 
+    /// The row's detail names the manager through its source ("menedżer wersji mise"), so the
+    /// reason says what a shim does rather than naming it again.
+    func testVersionManagerShimSaysItRunsTheManagersVersion() {
+        let polish = withLanguage(.pl) { CleanupPresentation.reasonText(.versionManagerShim) }
+        let english = withLanguage(.en) { CleanupPresentation.reasonText(.versionManagerShim) }
+        XCTAssertEqual(polish, "shim: uruchamia wersję, którą wskazuje menedżer")
+        XCTAssertEqual(english, "shim: runs the version the manager selects")
+    }
+
     func testEveryNewReasonHasTextInBothLanguages() {
         let reasons: [CleanupReason] = [
             .missingPathEntry, .repeatedPathEntry(count: 2), .samePlaceAs(path: "~/a"), .nestedIn(parent: "~/b"),
@@ -73,7 +82,7 @@ final class CleanupHygieneTextTests: XCTestCase {
 /// Every `CleanupReason` case, each with one sample value. `sample` and `CleanupReason.kind` have no
 /// `default`, so a reason added later does not compile here until it has a case and a sample.
 private enum ReasonKind: CaseIterable {
-    case olderVersion, newerVersion, shadowedBy, systemCopy, managedByApp, staleSinceBoot, keptSinceBoot
+    case olderVersion, newerVersion, shadowedBy, systemCopy, versionManagerShim, managedByApp, staleSinceBoot, keptSinceBoot
     case unknownVersionDirectory, currentVersion, protectedLocation, brokenLink, requiredBy, homebrewLeftovers
     case homebrewKeptVersions, installedOnlyAsDependency, recentlyUpgraded, notRequiredByProjects, requiredByProjects
     case unusedGradleDistribution, unreferencedJDK, systemJDK, ideVersionNotInstalled, ideNotFound, newerThanInstalledIDE
@@ -86,6 +95,7 @@ private enum ReasonKind: CaseIterable {
         case .newerVersion: .newerVersion(current: "1.0")
         case .shadowedBy: .shadowedBy(path: "~/.local/bin/x")
         case .systemCopy: .systemCopy
+        case .versionManagerShim: .versionManagerShim
         case .managedByApp: .managedByApp(owner: "App")
         case .staleSinceBoot: .staleSinceBoot(count: 2)
         case .keptSinceBoot: .keptSinceBoot(count: 1)
@@ -127,6 +137,7 @@ private extension CleanupReason {
         case .newerVersion: .newerVersion
         case .shadowedBy: .shadowedBy
         case .systemCopy: .systemCopy
+        case .versionManagerShim: .versionManagerShim
         case .managedByApp: .managedByApp
         case .staleSinceBoot: .staleSinceBoot
         case .keptSinceBoot: .keptSinceBoot

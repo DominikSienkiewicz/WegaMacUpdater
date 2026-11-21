@@ -117,6 +117,8 @@ public enum CleanupReason: Codable, Equatable, Sendable {
     case newerVersion(current: String)
     case shadowedBy(path: String)
     case systemCopy
+    /// A version manager's shim, which runs whichever version the manager selects.
+    case versionManagerShim
     case managedByApp(owner: String)
     case staleSinceBoot(count: Int)
     case keptSinceBoot(count: Int)
@@ -365,16 +367,42 @@ public struct CleanupTotals: Codable, Equatable, Sendable {
         self.needsDecision = needsDecision
     }
 
+    /// Each removal counts once: two copies from one Homebrew formula both offer `brew uninstall`
+    /// of it, and the formula is recovered once. A removal that any of its findings asks to look at
+    /// needs a decision.
     public static func sum(_ findings: [CleanupFinding]) -> CleanupTotals {
-        var totals = CleanupTotals(safe: 0, needsDecision: 0)
-        for finding in findings {
+        var removals: [Removal] = []
+        for finding in findings where finding.bucket != .excluded {
             let size = finding.size ?? 0
-            switch finding.bucket {
-            case .safe: totals.safe += size
-            case .needsDecision: totals.needsDecision += size
+            guard isOneRemoval(finding.action), let index = removals.firstIndex(where: { $0.action == finding.action }) else {
+                removals.append(Removal(action: finding.action, bucket: finding.bucket, size: size))
+                continue
+            }
+            if finding.bucket == .needsDecision { removals[index].bucket = .needsDecision }
+            removals[index].size = max(removals[index].size, size)
+        }
+        var totals = CleanupTotals(safe: 0, needsDecision: 0)
+        for removal in removals {
+            switch removal.bucket {
+            case .safe: totals.safe += removal.size
+            case .needsDecision: totals.needsDecision += removal.size
             case .excluded: break
             }
         }
         return totals
+    }
+
+    private struct Removal {
+        let action: CleanupAction
+        var bucket: CleanupBucket
+        var size: Int64
+    }
+
+    /// Whether the action names one particular removal, which several findings can share.
+    private static func isOneRemoval(_ action: CleanupAction) -> Bool {
+        switch action {
+        case .trash, .trashBatch, .brew, .command, .uninstallApp: true
+        case .instruction, .none: false
+        }
     }
 }

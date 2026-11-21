@@ -85,6 +85,7 @@ extension Translations {
         "nowsza wersja; bieżąca to %@": "newer version; the current one is %@",
         "przesłania ją %@, wcześniej w PATH": "shadowed by %@, earlier in PATH",
         "kopia dostarczana z macOS": "a copy that ships with macOS",
+        "shim: uruchamia wersję, którą wskazuje menedżer": "shim: runs the version the manager selects",
         "aktualizuje ją aplikacja %@": "kept up to date by the %@ app",
         "wpisy sprzed ostatniego uruchomienia systemu: %@": "entries from before the last restart: %@",
         "wpisy z bieżącego uruchomienia, zostają: %@": "entries from the current session, kept: %@",

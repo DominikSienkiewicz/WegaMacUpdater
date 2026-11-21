@@ -68,6 +68,10 @@ public struct CleanupSourceClassifier: Sendable {
         (.pnpmEnv, "Library/pnpm/nodejs"),
     ]
 
+    private static let shimDirectories: [(manager: CleanupVersionManager, path: String)] = [
+        (.mise, ".local/share/mise/shims"), (.asdf, ".asdf/shims"), (.pyenv, ".pyenv/shims"),
+    ]
+
     private static let packageManagerRoots: [(manager: CleanupPackageManager, path: String)] = [
         (.pipx, ".local/pipx/venvs"), (.pipx, ".local/share/pipx/venvs"),
         (.go, "go/bin"), (.bun, ".bun"),
@@ -98,6 +102,14 @@ public struct CleanupSourceClassifier: Sendable {
             if let source = rule(path) { return source }
         }
         return .standalone
+    }
+
+    /// The version manager whose shims directory holds the copy `PATH` lists at `path`. A shim runs
+    /// whichever version the manager selects, so its real path (the `mise` binary, a script) says
+    /// nothing about the tool; this reads the `PATH` location instead.
+    public func shimManager(ofCopyAt path: URL) -> CleanupVersionManager? {
+        let directory = CleanupPathText.components(of: path.deletingLastPathComponent().path)
+        return Self.shimDirectories.first { directory == underHome($0.path) }?.manager
     }
 
     private func underHome(_ relative: String) -> [String] {
