@@ -583,7 +583,6 @@ extension Translations {
         "Uruchom Wegę ponownie": "Restart Wega",
         "Zobacz wydanie": "View release",
         "Brak opublikowanych notatek": "No notes published",
-        "…i %@ wcześniejszych wydań": "…and %@ earlier releases",
         "Nie udało się pobrać notatek wydania": "Couldn't fetch the release notes",
         "Zobacz w logach": "View in logs",
         "Włącz Touch ID": "Enable Touch ID",

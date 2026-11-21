@@ -41,6 +41,20 @@ struct PluralRulesTests {
         #expect(pluralize(updatesAvailable, count: 5, language: .en) == "5 updates available")
     }
 
+    /// Final review M4 — the release-notes history's tail counts the releases it leaves out.
+    @Test(arguments: zip([1, 2, 5, 12, 22], ["…i 1 wcześniejsze wydanie", "…i 2 wcześniejsze wydania",
+                                             "…i 5 wcześniejszych wydań", "…i 12 wcześniejszych wydań",
+                                             "…i 22 wcześniejsze wydania"]))
+    func theOmittedReleasesAgree(count: Int, expected: String) {
+        #expect(pluralize("…i %@ wcześniejszych wydań", count: count, language: .pl) == expected)
+    }
+
+    @Test func theOmittedReleasesAgreeInEnglish() {
+        #expect(pluralize("…i %@ wcześniejszych wydań", count: 1, language: .en) == "…and 1 earlier release")
+        #expect(pluralize("…i %@ wcześniejszych wydań", count: 2, language: .en) == "…and 2 earlier releases")
+        #expect(pluralize("…i %@ wcześniejszych wydań", count: 22, language: .en) == "…and 22 earlier releases")
+    }
+
     @Test func unregisteredBaseHasNoPluralForms() {
         #expect(pluralize("Brak wariantów %@", count: 1, language: .pl) == nil)
     }

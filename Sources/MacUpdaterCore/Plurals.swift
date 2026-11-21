@@ -235,6 +235,11 @@ public enum Plurals {
             one:  "Pominięto %@ najstarszy wpis",
             few:  "Pominięto %@ najstarsze wpisy",
             many: "Pominięto %@ najstarszych wpisów"
+        ),
+        "…i %@ wcześniejszych wydań": PluralForms(
+            one:  "…i %@ wcześniejsze wydanie",
+            few:  "…i %@ wcześniejsze wydania",
+            many: "…i %@ wcześniejszych wydań"
         )
     ]
 
@@ -403,6 +408,11 @@ public enum Plurals {
             one:  "%@ oldest entry omitted",
             few:  "%@ oldest entries omitted",
             many: "%@ oldest entries omitted"
+        ),
+        "…i %@ wcześniejszych wydań": PluralForms(
+            one:  "…and %@ earlier release",
+            few:  "…and %@ earlier releases",
+            many: "…and %@ earlier releases"
         )
     ]
 }

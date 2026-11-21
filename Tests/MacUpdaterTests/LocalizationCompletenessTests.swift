@@ -45,6 +45,8 @@ struct LocalizationCompletenessTests {
         "Zeskanowano /Applications · znalazłam %@ aplikacji poza zarządzaniem",
         "Znalazłam %@ rzeczy do uporządkowania.", "Znalazłam %@ aktualizacji", "%@ źródeł nie odpowiedziało",
         "Pominięto %@ najstarszych wpisów",
+        // Final review M4 — the release-notes history's tail.
+        "…i %@ wcześniejszych wydań",
     ]
 
     @Test func everyTrpKeyHasPolishAndEnglishForms() throws {

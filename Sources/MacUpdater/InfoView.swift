@@ -479,7 +479,7 @@ extension InfoView {
                     SelfUpdateNoteDisclosure(note: note)
                 }
                 if history.omitted > 0 {
-                    Text(trf("…i %@ wcześniejszych wydań", String(history.omitted)))
+                    Text(trp("…i %@ wcześniejszych wydań", history.omitted))
                         .font(.wega(.subheadline))
                         .foregroundStyle(.secondary)
                 }
