@@ -279,6 +279,7 @@ struct UpdateSection: View {
     var onInspect: ((OutdatedItem) -> Void)? = nil
 
     @FocusState private var focusedKey: String?
+    @Environment(\.updatesOnScreen) private var onScreen
     /// UXP-21 — the row Tab lands on. Kept apart from `focusedKey`, which empties once focus
     /// leaves the rows themselves (another group, or this row's ⋯ when it takes focus), so the
     /// stop stays where the user left it.
@@ -330,7 +331,7 @@ struct UpdateSection: View {
                         onPin:          { onPin?(item) },
                         onSkip:         skipAction(for: item),
                         backgroundUpdateToken: item.kind == .cask ? item.name : nil,
-                        isTabStop:      UpdateRowFocus.isTabStop(item.key, in: keys, focused: tabStop),
+                        isTabStop:      UpdateRowFocus.isTabStop(item.key, in: keys, focused: tabStop, onScreen: onScreen),
                         onMove:         { move(from: item.key, in: keys, $0) }
                     )
                     .focused($focusedKey, equals: item.key)
@@ -531,6 +532,7 @@ struct ManualUpdateSection: View {
     var onInspect: ((ManualOutdatedApp) -> Void)? = nil
 
     @FocusState private var focusedKey: String?
+    @Environment(\.updatesOnScreen) private var onScreen
     /// UXP-21 — the row Tab lands on; see `UpdateSection.tabStop`.
     @State private var tabStop: String?
 
@@ -595,7 +597,7 @@ struct ManualUpdateSection: View {
                 .queueRowSelection(isInspected)
                 .contentShape(Rectangle())
                 .gesture(TapGesture().onEnded { focus(key); onInspect?(item) })
-                .focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop))
+                .focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop, onScreen: onScreen))
                 .focused($focusedKey, equals: key)
                 .onKeyPress(.return) {
                     ManualUpdateRowKeyboardBehavior.handle(

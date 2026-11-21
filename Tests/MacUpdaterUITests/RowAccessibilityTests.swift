@@ -75,15 +75,55 @@ struct RowAccessibilityTests {
 
     @Test func focusRovesInsideAGroup() {
         let keys = ["a", "b", "c"]
-        #expect(UpdateRowFocus.isTabStop("a", in: keys, focused: nil))
-        #expect(!UpdateRowFocus.isTabStop("b", in: keys, focused: nil))
-        #expect(UpdateRowFocus.isTabStop("b", in: keys, focused: "b") && !UpdateRowFocus.isTabStop("a", in: keys, focused: "b"))
-        #expect(UpdateRowFocus.isTabStop("a", in: keys, focused: "gone"), "a key that left the list gives the stop back to the first row")
+        #expect(UpdateRowFocus.isTabStop("a", in: keys, focused: nil, onScreen: true))
+        #expect(!UpdateRowFocus.isTabStop("b", in: keys, focused: nil, onScreen: true))
+        #expect(UpdateRowFocus.isTabStop("b", in: keys, focused: "b", onScreen: true)
+                && !UpdateRowFocus.isTabStop("a", in: keys, focused: "b", onScreen: true))
+        #expect(UpdateRowFocus.isTabStop("a", in: keys, focused: "gone", onScreen: true),
+                "a key that left the list gives the stop back to the first row")
         #expect(UpdateRowFocus.neighbour(of: "b", in: keys, direction: .down) == "c")
         #expect(UpdateRowFocus.neighbour(of: "b", in: keys, direction: .up) == "a")
         #expect(UpdateRowFocus.neighbour(of: "a", in: keys, direction: .up) == nil)
         #expect(UpdateRowFocus.neighbour(of: "c", in: keys, direction: .down) == nil)
         #expect(UpdateRowFocus.neighbour(of: "gone", in: keys, direction: .down) == nil)
+    }
+
+    /// Final review M6 — another destination covers the Updates screen, which stays mounted. Its
+    /// rows must not be Tab stops then, or Tab from Logs could land on a row nobody sees and Space
+    /// would queue it.
+    @Test func aCoveredUpdatesScreenHasNoTabStop() {
+        let keys = ["a", "b", "c"]
+        for focused in [nil, "b", "gone"] as [String?] {
+            for key in keys {
+                #expect(!UpdateRowFocus.isTabStop(key, in: keys, focused: focused, onScreen: false), "\(key), \(String(describing: focused))")
+            }
+        }
+    }
+
+    /// The gate covers the rows, their ⋯ and every control on the hidden screen, while the menu
+    /// commands the screen publishes (⌘R, ⌘⏎, ⌘., ⇧⌘A) stay outside it and keep working.
+    @Test func aCoveredUpdatesScreenStaysMountedAndKeepsItsMenuCommands() throws {
+        let detail = try source("Sources/MacUpdater/DetailColumn.swift")
+        let mounted = try #require(detail.range(of: "ZStack {\n            UpdateView(")).upperBound
+        let modifiers = detail[mounted...]
+        for literal in [".opacity(selection.tab == .update ? 1 : 0)", ".allowsHitTesting(selection.tab == .update)",
+                        ".accessibilityHidden(selection.tab != .update)", ".environment(\\.updatesOnScreen, selection.tab == .update)"] {
+            #expect(modifiers.prefix(1300).contains(literal), "\(literal)")
+        }
+
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        let bodyStart = try #require(view.range(of: "    var body: some View {\n")).upperBound
+        let bodyEnd = try #require(view.range(of: "    private var content: some View {")).lowerBound
+        let body = view[bodyStart..<bodyEnd]
+        #expect(body.hasPrefix("        content\n            .disabled(!onScreen)\n"),
+                "the gate wraps the screen's content only, never the modifiers that publish its commands")
+        #expect(body.components(separatedBy: ".disabled(").count == 2)
+        #expect(body.components(separatedBy: ".focusedSceneValue(").count == 5, "⌘R, ⌘⏎, ⌘. and ⇧⌘A")
+        #expect(view.contains("@Environment(\\.updatesOnScreen) private var onScreen"))
+
+        let support = try source("Sources/MacUpdater/UpdateViewSupport.swift")
+        #expect(support.components(separatedBy: "@Environment(\\.updatesOnScreen) private var onScreen").count == 3,
+                "UpdateSection and ManualUpdateSection")
     }
 
     @Test func theSidebarSaysWhatTheRedBadgeMeans() {
@@ -149,7 +189,7 @@ struct RowAccessibilityTests {
         let sectionEnd = try #require(support.range(of: "private struct UpdatePolicyMenu: View")).lowerBound
         let update = support[section..<sectionEnd]
         for literal in ["onSelect:       { focus(item.key); onInspect?(item) }",
-                        "isTabStop:      UpdateRowFocus.isTabStop(item.key, in: keys, focused: tabStop)",
+                        "isTabStop:      UpdateRowFocus.isTabStop(item.key, in: keys, focused: tabStop, onScreen: onScreen)",
                         "onMove:         { move(from: item.key, in: keys, $0) }"] {
             #expect(update.contains(literal), "\(literal)")
         }
@@ -164,7 +204,7 @@ struct RowAccessibilityTests {
         let end = try #require(support.range(of: "struct ManualUpdateActionView: View")).lowerBound
         let manual = support[start..<end]
         for literal in [".onKeyPress(.downArrow)", ".onKeyPress(.upArrow)", ".focused($focusedKey, equals: key)",
-                        ".focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop))",
+                        ".focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop, onScreen: onScreen))",
                         ".accessibilityHint(tr(\"Naciśnij Return lub spację, aby pokazać szczegóły.\"))"] {
             #expect(manual.contains(literal), "\(literal)")
         }

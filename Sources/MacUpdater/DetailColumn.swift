@@ -204,6 +204,9 @@ struct DetailColumn: View {
             .opacity(selection.tab == .update ? 1 : 0)
             .allowsHitTesting(selection.tab == .update)
             .accessibilityHidden(selection.tab != .update)
+            // None of the three above keeps keyboard focus out; this does, for the rows and the
+            // controls only — the menu commands the view publishes stay live (final review M6).
+            .environment(\.updatesOnScreen, selection.tab == .update)
 
             if selection.tab != .update {
                 switch selection {

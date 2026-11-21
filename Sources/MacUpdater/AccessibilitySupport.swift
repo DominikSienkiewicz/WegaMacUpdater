@@ -202,8 +202,10 @@ enum PackageRowAccessibility {
 /// arrows move between its rows without leaving it.
 enum UpdateRowFocus {
     /// One Tab stop per group: the row focus is on or last left, or the group's first row when
-    /// there is none or that row has left the list.
-    static func isTabStop(_ key: String, in keys: [String], focused: String?) -> Bool {
+    /// there is none or that row has left the list. None at all while another destination covers
+    /// the Updates screen (`updatesOnScreen`).
+    static func isTabStop(_ key: String, in keys: [String], focused: String?, onScreen: Bool) -> Bool {
+        guard onScreen else { return false }
         let stop = focused.flatMap { keys.contains($0) ? $0 : nil } ?? keys.first
         return key == stop
     }
@@ -213,6 +215,20 @@ enum UpdateRowFocus {
         guard let index = keys.firstIndex(of: key) else { return nil }
         let next = direction == .down ? keys.index(after: index) : index - 1
         return keys.indices.contains(next) ? keys[next] : nil
+    }
+}
+
+private struct UpdatesOnScreenKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    /// Final review M6 — false while another destination covers the Updates screen, which stays
+    /// mounted underneath it. Its rows are then no Tab stops and its controls are disabled, so
+    /// Tab and Space cannot reach a row nobody can see.
+    var updatesOnScreen: Bool {
+        get { self[UpdatesOnScreenKey.self] }
+        set { self[UpdatesOnScreenKey.self] = newValue }
     }
 }
 

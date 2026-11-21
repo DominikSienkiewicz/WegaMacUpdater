@@ -50,6 +50,8 @@ struct UpdateView: View {
     /// Scan results and the tasks that produce them live above the language re-key,
     /// so switching language mid-scan neither loses the list nor orphans the task.
     @EnvironmentObject private var scan: ScanStore
+    /// False while another destination covers this screen; see `EnvironmentValues.updatesOnScreen`.
+    @Environment(\.updatesOnScreen) private var onScreen
 
     /// Purely transient: a modal that no background task writes to, so it may die
     /// with the view tree.
@@ -92,6 +94,7 @@ struct UpdateView: View {
 
     var body: some View {
         content
+            .disabled(!onScreen)
             .sheet(item: $pinTarget) { req in
                 PinVersionSheet(request: req) { version in
                     policies.pin(key: req.key, name: req.name, version: version)
