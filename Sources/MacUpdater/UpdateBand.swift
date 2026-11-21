@@ -15,7 +15,7 @@ enum UpdateBandLayout {
     var headlineStyle: WegaTextStyle { self == .narrow ? .title2 : .title }
 
     /// How many lines the headline may take before it truncates. Two in every layout: one
-    /// `.title` line cut "N aktualizacji · sprawdzenie niepełne" at the compact and regular
+    /// `.title` line cut "N aktualizacji · skan niepełny" at the compact and regular
     /// layouts' narrowest widths. Two still fit the band's fixed height (at most 167 of 188 pt,
     /// compact and refreshing); three would not (193 pt).
     var headlineLineLimit: Int { 2 }
