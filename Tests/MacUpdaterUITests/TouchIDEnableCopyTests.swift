@@ -102,27 +102,29 @@ struct TouchIDEnableCopyTests {
 
     // MARK: - Source pins
 
-    /// Review focus 5 (card half): with −4/−5 seen by the app or the helper, the card has only the
-    /// recoveryOS note; the Terminal command appears only through `showsEnableCommand`, under the
+    /// Review focus 5 (card half): with −4/−5 seen by the app or the helper, an unsafe
+    /// `/etc/pam.d/sudo` or no proof of safety (RC2-6), in either state of Touch ID, the card has only
+    /// the recoveryOS note; the Terminal command appears only through `showsEnableCommand`, under the
     /// outdated-helper note when that was the reason; the button only through `offersEnableButton`.
     @Test func theCardOffersSudoOnlyWithoutAnUnsafePolicy() throws {
         let info = try String(contentsOf: root().appending(path: "Sources/MacUpdater/InfoView.swift", directoryHint: .notDirectory), encoding: .utf8)
         let start = try #require(info.range(of: "private var touchIDCard: some View")).upperBound
         let end = try #require(info[start...].range(of: "// MARK: - GitHub token")).lowerBound
         let card = String(info[start..<end])
-        let unsafe = try #require(card.range(of: "if touchIDState != .enabled, let unsafe = touchIDController.unsafePolicy {"))
-        let note = try #require(card.range(of: "touchIDNote(TouchIDEnableCopy.unsafePolicyNote(unsafe), isWarning: true)"))
+        let unsafe = try #require(card.range(of: "if let reason = touchIDController.recoveryOnlyReason {"))
+        let note = try #require(card.range(of: "touchIDNote(TouchIDEnableCopy.recoveryOnlyNote(for: reason), isWarning: true)"))
         let command = try #require(card.range(of: "} else if touchIDController.showsEnableCommand {"))
         let outdated = try #require(card.range(of: "if touchIDController.enableHelperOutdated {"))
         let outdatedNote = try #require(card.range(of: "touchIDNote(TouchIDEnableCopy.outdatedHelperAboveCommand)"))
-        let fallback = try #require(card.range(of: "manualEnableFallback"))
+        let fallback = try #require(card.range(of: "command: .enable)"))
         let button = try #require(card.range(of: "} else if touchIDController.offersEnableButton {"))
         let label = try #require(card.range(of: "Label(tr(\"Używaj Touch ID zamiast hasła administratora\"), systemImage: \"touchid\")"))
         #expect(unsafe.upperBound < note.lowerBound && note.upperBound < command.lowerBound)
         #expect(command.upperBound < outdated.lowerBound && outdated.upperBound < outdatedNote.lowerBound
                 && outdatedNote.upperBound < fallback.lowerBound && fallback.upperBound < button.lowerBound)
         #expect(button.upperBound < label.lowerBound)
-        #expect(card.components(separatedBy: "manualEnableFallback").count - 1 == 1, "the command has one way onto the card")
+        #expect(card.components(separatedBy: "command: .enable)").count - 1 == 1, "the command has one way onto the card")
+        #expect(!card.contains("touchIDController.unsafePolicy"), "the reason covers −4/−5 and more, in both states")
         #expect(!card.contains("if touchIDPermissionDenied {"), "the permission-denied state alone no longer shows the command")
         #expect(!card.contains("touchIDNote(TouchIDEnableCopy.outdatedHelper)"), "M1: the card's note is the one that says below")
         #expect(!card.contains("disableOffer == .blocked(.unsafeOwnership)"), "the unsafe note above replaces the old one")

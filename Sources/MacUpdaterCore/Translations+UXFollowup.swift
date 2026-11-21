@@ -18,6 +18,10 @@ extension Translations {
             "Don't type your password into sudo until you fix this — not even when Wega asks for it during an update: sudo reads these settings. Fix them from macOS Recovery with the user guide.",
         "Nie wiem, w jakim stanie jest teraz plik /etc/pam.d/sudo_local: zapis albo jego sprawdzenie się nie udało. Sprawdź go według przewodnika.":
             "I don't know what state /etc/pam.d/sudo_local is in now: writing it or checking the write failed. Check it with the user guide.",
+        // The disable command without the helper (E.6) and the command view both commands share.
+        "Bez pomocnika Wegi wyłączysz Touch ID dla sudo tym poleceniem w Terminalu. Usuwa tylko dokładną dyrektywę i niczego nie zmienia, jeśli plik wygląda inaczej:":
+            "Without the Wega helper, you can turn off Touch ID for sudo with this command in Terminal. It removes only the exact directive and changes nothing if the file looks different:",
+        "Skopiuj polecenie": "Copy command",
         // The sudo routes closed (RC2-6, E.9); Wega's own line under the card's note (M2).
         "Nie włączyłam Touch ID dla sudo: ustawienia, które czyta sudo, nie są bezpieczne.":
             "I didn't turn on Touch ID for sudo: the settings sudo reads aren't safe.",
