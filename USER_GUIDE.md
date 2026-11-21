@@ -358,7 +358,12 @@ Until your first update finishes with everything installed, a card above the lis
   Touch ID for `sudo` is on or Wega was installed from the `.pkg`, which brings the
   components that ask for the password. **Enable Touch ID** opens Settings on the **Touch ID for
   administrator commands** card, in the **Permissions & Privacy** tab, when Touch ID can be turned on; **What does the helper do?** explains the optional Wega helper, which does
-  not answer these password prompts.
+  not answer these password prompts. While that card shows its recoveryOS note, the row is
+  never ticked, whatever Touch ID or the `.pkg` would allow: it says **I won't ask for the
+  administrator password until the settings sudo reads are repaired.**, and **Open Touch ID
+  card** opens the card, which says how to repair them (see
+  [Touch ID for administrator commands](#touch-id-for-administrator-commands)). The warning above
+  the list names the apps the run will skip meanwhile.
 - **Notify you about new updates?** — only until you answer it.
 
 **Later** hides the card for now; **Got it** closes it for good.

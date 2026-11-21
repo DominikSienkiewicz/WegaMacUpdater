@@ -124,7 +124,10 @@ them verbatim under the new version heading, so that step is never done by hand 
   ask for the password (a `pkg`, `installer` or `preflight` stanza, or one Wega knows nothing
   about yet): they take no part in the run's preparation, their rows say **skipping — may need a
   password**, the summary lists them under **Not started** with **Open Touch ID card**, and the
-  list warns before the run which of them it will skip. An App Store update that stops where it
+  list warns before the run which of them it will skip. The readiness card's password row is
+  then never ticked, even with Touch ID on or the `.pkg` installed: it says Wega won't ask for
+  the password until those settings are repaired and offers **Open Touch ID card**.
+  An App Store update that stops where it
   would need `sudo` is not primed for it; the summary shows it under **Needs attention** as not
   finished, with the same button. Everything else updates as before. Wega checks right before
   the run and again before each such cask, so settings that turn unsafe during a run stop the

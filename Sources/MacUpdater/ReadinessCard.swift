@@ -8,7 +8,14 @@ import SwiftUI
 /// in a test: the card asks about nothing the update will not need, and answers nothing the
 /// Mac already settled.
 struct ReadinessPresentation: Equatable {
-    enum Row: Equatable { case checking, replaceApps(AppManagementPermission), password(ready: Bool), notifications }
+    /// `passwordHeld` is the password row while Wega asks for no password (owner decision 2026-11-21).
+    enum Row: Equatable { case checking, replaceApps(AppManagementPermission), password(ready: Bool), passwordHeld, notifications }
+
+    /// What the held password row says. It names nothing the run will skip: the warning above the
+    /// list does, and a longer text would not fit the card's fixed height.
+    static var passwordHeldText: String {
+        tr("Nie poproszę o hasło administratora, dopóki ustawienia, które czyta sudo, nie zostaną naprawione.")
+    }
 
     /// Written when the user closes the card, and by the first update that ends cleanly.
     static let dismissedKey = "wega.readiness.dismissed"
@@ -19,12 +26,16 @@ struct ReadinessPresentation: Equatable {
     /// `passwordPromptInstalled` is `PasswordPromptAvailability.isInstalled()`, passed in so the
     /// presentation stays pure. The privileged helper does not count: it cannot answer brew's
     /// `sudo`, so the card must not tick a row the callout above the list still warns about.
+    /// `sudoDistrust` is `SudoPasswordPromptGate.shared.check()`: while it is set, Wega asks for no
+    /// password and the run skips what may need one, so neither Touch ID nor the `.pkg` ticks the row.
     init(dismissed: Bool, hasUpdates: Bool, appManagement: AppManagementPermission,
          touchID: TouchIDSudoConfigurator.State, passwordPromptInstalled: Bool,
-         notificationsUnanswered: Bool) {
+         sudoDistrust: SudoPolicyDistrust?, notificationsUnanswered: Bool) {
         isVisible = !dismissed && hasUpdates
-        let passwordReady = PasswordPromptNotice.canAskForPassword(installed: passwordPromptInstalled, touchID: touchID)
-        var rows: [Row] = [.checking, .replaceApps(appManagement), .password(ready: passwordReady)]
+        let password: Row = sudoDistrust != nil
+            ? .passwordHeld
+            : .password(ready: PasswordPromptNotice.canAskForPassword(installed: passwordPromptInstalled, touchID: touchID))
+        var rows: [Row] = [.checking, .replaceApps(appManagement), password]
         if notificationsUnanswered { rows.append(.notifications) }
         self.rows = rows
     }
@@ -40,7 +51,8 @@ struct ReadinessCard: View {
     /// whose height follows its rows re-enters AppKit's constraint loop under
     /// `NavigationSplitView`. Sized for the worst row set (App Management denied, Touch ID
     /// available, notifications unanswered), which needs 248 pt in a 360–420 pt detail column
-    /// in Polish, plus a margin; 210 pt cut off the buttons that close the card.
+    /// in Polish, plus a margin; 210 pt cut off the buttons that close the card. The held password
+    /// row has to fit as well, which keeps its text short.
     static let baseHeight: CGFloat = 260
 
     let hasUpdates: Bool
@@ -54,12 +66,13 @@ struct ReadinessCard: View {
     @State private var probing = false
     @State private var touchID: TouchIDSudoConfigurator.State = .notSupported
     @State private var passwordPromptInstalled = false
+    @State private var sudoDistrust: SudoPolicyDistrust?
     @ScaledMetric(relativeTo: .body) private var cardHeight: CGFloat = ReadinessCard.baseHeight
 
     private var presentation: ReadinessPresentation {
         ReadinessPresentation(dismissed: dismissed, hasUpdates: hasUpdates, appManagement: appManagement,
                               touchID: touchID, passwordPromptInstalled: passwordPromptInstalled,
-                              notificationsUnanswered: agent.notificationsUnanswered)
+                              sudoDistrust: sudoDistrust, notificationsUnanswered: agent.notificationsUnanswered)
     }
 
     var body: some View {
@@ -70,10 +83,12 @@ struct ReadinessCard: View {
                 .task {
                     let probe = await Task.detached {
                         PasswordPromptNotice.Probe(installed: PasswordPromptAvailability.isInstalled(),
-                                                   touchID: TouchIDSudoConfigurator.currentState())
+                                                   touchID: TouchIDSudoConfigurator.currentState(),
+                                                   sudoDistrust: SudoPasswordPromptGate.shared.check())
                     }.value
                     touchID = probe.touchID
                     passwordPromptInstalled = probe.installed
+                    sudoDistrust = probe.sudoDistrust
                     await agent.refreshNotificationAuthorization()
                 }
         }
@@ -84,7 +99,7 @@ struct ReadinessCard: View {
             postpone: { postponed = true },
             dismiss: { dismissed = true },
             probeAppManagement: probeAppManagement,
-            enableTouchID: { SettingsRoute.shared.open(.touchID, with: openSettings) },
+            openTouchIDCard: { SettingsRoute.shared.open(.touchID, with: openSettings) },
             declineNotifications: { agent.declineNotifications() },
             agreeToNotifications: { Task { await agent.agreeToNotifications() } }
         ))
@@ -109,7 +124,7 @@ struct ReadinessCardContent: View {
         var postpone: @MainActor () -> Void = {}
         var dismiss: @MainActor () -> Void = {}
         var probeAppManagement: @MainActor () -> Void = {}
-        var enableTouchID: @MainActor () -> Void = {}
+        var openTouchIDCard: @MainActor () -> Void = {}
         var declineNotifications: @MainActor () -> Void = {}
         var agreeToNotifications: @MainActor () -> Void = {}
     }
@@ -163,7 +178,7 @@ struct ReadinessCardContent: View {
         case .password(let ready):
             line(done: ready, text: tr("Część aplikacji prosi przy aktualizacji o hasło administratora.")) {
                 if touchID == .available {
-                    Button(tr("Włącz Touch ID"), action: actions.enableTouchID)
+                    Button(tr("Włącz Touch ID"), action: actions.openTouchIDCard)
                 }
                 Button(tr("Co robi pomocnik?")) { showsHelperExplanation = true }
                     .popover(isPresented: $showsHelperExplanation) {
@@ -172,6 +187,10 @@ struct ReadinessCardContent: View {
                             .frame(width: 300)
                             .padding(12)
                     }
+            }
+        case .passwordHeld:
+            line(done: false, text: ReadinessPresentation.passwordHeldText) {
+                Button(tr("Otwórz kartę Touch ID"), action: actions.openTouchIDCard)
             }
         case .notifications:
             line(done: false, text: tr("Powiadamiać o nowych aktualizacjach?")) {
