@@ -68,10 +68,36 @@ struct SudoLocalTransactionalWriterTests {
             makeBackupURL: { _ in backup }
         )
 
-        #expect(throws: SudoLocalTransactionalWriter.WriteError.rollbackFailed) {
+        #expect(throws: SudoLocalTransactionalWriter.WriteError.rollbackFailed(backupPath: backup.path)) {
             try writer.writeAtomically(expected, to: target)
         }
         #expect(fileSystem.files[backup] == original)
+    }
+
+    /// With no previous file there is no backup to name: the new, unverified file could not be
+    /// removed, and the error says so instead of pointing at a copy that does not exist.
+    @Test func aFailedRollbackWithoutAPreviousFileNamesNoBackup() throws {
+        let target = URL(fileURLWithPath: "/etc/pam.d/sudo_local")
+        let backup = URL(fileURLWithPath: "/etc/pam.d/.sudo_local.wega-backup")
+        let fileSystem = RecordingSudoLocalFileSystem(files: [:])
+        fileSystem.corruptFirstTargetRead = true
+        fileSystem.failRemove = true
+        let writer = SudoLocalTransactionalWriter(fileSystem: fileSystem, makeBackupURL: { _ in backup })
+
+        #expect(throws: SudoLocalTransactionalWriter.WriteError.rollbackFailed(backupPath: nil)) {
+            try writer.writeAtomically(Data("auth sufficient pam_tid.so\n".utf8), to: target)
+        }
+        #expect(fileSystem.files[backup] == nil)
+    }
+
+    /// The live backup name sits in the policy directory under the helper's own prefix, so the app
+    /// accepts the path the enable reply carries for −21.
+    @Test func theLiveBackupNameIsInThePolicyDirectoryUnderTheHelpersPrefix() {
+        let target = URL(fileURLWithPath: "/private/etc/pam.d/sudo_local")
+        let backup = SudoLocalTransactionalWriter.backupURL(for: target)
+        #expect(backup.deletingLastPathComponent() == target.deletingLastPathComponent())
+        #expect(backup.lastPathComponent.hasPrefix(TouchIDSudoDisabler.swapNamePrefix + "backup-"))
+        #expect(backup != SudoLocalTransactionalWriter.backupURL(for: target), "a fresh name per write")
     }
 }
 
@@ -80,6 +106,7 @@ private final class RecordingSudoLocalFileSystem: SudoLocalFileManaging {
     var events: [String] = []
     var corruptFirstTargetRead = false
     var failRollbackWrite = false
+    var failRemove = false
     private var didCorruptTargetRead = false
     private var targetWriteCount = 0
 
@@ -136,6 +163,7 @@ private final class RecordingSudoLocalFileSystem: SudoLocalFileManaging {
 
     func removeItem(at url: URL) throws {
         events.append("remove \(url.lastPathComponent)")
+        if failRemove { throw StubFileError.writeFailed }
         files[url] = nil
     }
 
