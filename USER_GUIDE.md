@@ -744,7 +744,9 @@ an existing `sudo_local` that is a link, is not a regular file, is not owned by 
 written by group or others or has an ACL, and an existing `sudo_local.template` that is a link,
 is not owned by root, can be written by group or others or has an ACL (a missing template is
 fine); if the last line of the file has no line break, it ends that line before
-adding the directive.
+adding the directive. If it stops part-way, it removes its temporary files; only when it has
+already replaced `sudo_local` and cannot put the old one back does it keep that copy and print its
+name.
 
 **When the card offers no command and no button.** The card then names the problem, says to
 repair it from recoveryOS (macOS Recovery; the card uses that name) and not to type a password into `sudo` until then, even when Wega
@@ -1083,10 +1085,12 @@ chmod -N "/Volumes/Macintosh HD - Data/private/etc/pam.d/sudo"
 ```
 
 **When Wega says it cannot check these settings.** Wega could not read the owner, permissions or
-ACL of `/etc/pam.d`, `sudo_local` or `/etc/pam.d/sudo`, or `/etc/pam.d/sudo` is missing. Look, as
-you, without `sudo`, with `ls -ldeO@ /etc/pam.d` and
-`ls -leO@ /etc/pam.d/sudo /etc/pam.d/sudo_local`; repair anything you cannot explain from
-recoveryOS, as above.
+ACL of `/etc/pam.d`, `sudo_local` or `/etc/pam.d/sudo`, or `/etc/pam.d/sudo` is missing. When there
+is no `sudo_local`, the same goes for `/etc/pam.d/sudo_local.template`, the file a new `sudo_local`
+is made from. Look, as you, without `sudo`, with `ls -ldeO@ /etc/pam.d` and
+`ls -leO@ /etc/pam.d/sudo /etc/pam.d/sudo_local /etc/pam.d/sudo_local.template`; repair anything
+you cannot explain from recoveryOS, as above. While Touch ID for sudo is off, the card links this
+guide with **How to fix the sudo settings**.
 
 **When Wega names another policy file or directory.** Wega also stops when, once its line is
 gone, `sudo` would read another PAM file: `/etc/pam.conf`, `/usr/local/etc/pam.conf`,
