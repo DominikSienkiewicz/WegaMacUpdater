@@ -11,6 +11,18 @@ enum BannerCopy {
         return (short, names.joined(separator: ", "))
     }
 
+    /// For failures a button resolves: the permission comes first, and neither the log nor a
+    /// retry is mentioned, because a retry fails again until the permission is granted.
+    static func permissionNeeded(names: [String]) -> FailureText {
+        guard !names.isEmpty else {
+            return FailureText(
+                message: tr("Nie zaktualizowałam części pakietów — macOS potrzebuje Twojej zgody."), fullMessage: nil)
+        }
+        let template = "Nie zaktualizowałam: %@ — macOS potrzebuje Twojej zgody."
+        let (short, full) = Self.names(names)
+        return FailureText(message: trf(template, short), fullMessage: full.map { trf(template, $0) })
+    }
+
     static func updateFailed(names: [String]) -> FailureText {
         guard !names.isEmpty else {
             return FailureText(

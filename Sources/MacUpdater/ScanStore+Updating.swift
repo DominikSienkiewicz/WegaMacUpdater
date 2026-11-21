@@ -340,7 +340,7 @@ extension ScanStore {
         }
 
         let failedNames = summary.notUpgraded.map(\.name)
-        let failure = BannerCopy.updateFailed(names: failedNames)
+        let permission = BannerCopy.permissionNeeded(names: failedNames)
         // REL-05 — a missing "App Management" grant outranks the sudo hint: it explains the
         // whole failure, and its `stderr` ("ditto: …: Operation not permitted") is exactly the
         // line a user cannot act on. One named permission, one button that grants it.
@@ -350,17 +350,20 @@ extension ScanStore {
             showBanner(BannerData(
                 variant: .danger,
                 title: tr("Brak uprawnienia „Zarządzanie aplikacjami”"),
-                message: trf(appManagementTemplate, failure.message),
+                message: trf(appManagementTemplate, permission.message),
                 action: .openAppManagementSettings,
-                fullMessage: failure.fullMessage.map { trf(appManagementTemplate, $0) }
+                fullMessage: permission.fullMessage.map { trf(appManagementTemplate, $0) }
             ))
         } else {
-            let wrap: (String) -> String = { summary.needsSudoPassword ? trf(sudoTemplate, $0) : $0 }
+            let text = summary.needsSudoPassword
+                ? BannerCopy.FailureText(message: trf(sudoTemplate, permission.message),
+                                         fullMessage: permission.fullMessage.map { trf(sudoTemplate, $0) })
+                : BannerCopy.updateFailed(names: failedNames)
             showBanner(BannerData(variant: .danger,
                                   title: tr("Aktualizacja niekompletna"),
-                                  message: wrap(failure.message),
+                                  message: text.message,
                                   action: summary.needsSudoPassword ? .openSettings : .openLogs,
-                                  fullMessage: failure.fullMessage.map(wrap)))
+                                  fullMessage: text.fullMessage))
         }
         emitActivitySignal(.error)
         emitWegaState(WegaState(pose: .alert, line: tr("Część pakietów się nie zaktualizowała.")))

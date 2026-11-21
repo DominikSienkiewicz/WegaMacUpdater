@@ -118,6 +118,7 @@ struct WegaCallout<Detail: View, Actions: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(level.tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .contain)
+        .onChange(of: fullMessage) { showsAll = false }
     }
 }
 

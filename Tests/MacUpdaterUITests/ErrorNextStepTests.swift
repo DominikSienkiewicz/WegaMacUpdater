@@ -49,7 +49,7 @@ struct ErrorNextStepTests {
             for call in bannerCalls(in: try String(contentsOf: file, encoding: .utf8)) where call.contains("variant: .danger") {
                 seen += 1
                 #expect(call.contains("action:"), "\(file.lastPathComponent): \(call.prefix(90))")
-                #expect(!call.contains(": nil)"), "\(file.lastPathComponent): a conditional action falls back to the log")
+                #expect(!call.contains(": nil)") && !call.contains(": nil\n"), "\(file.lastPathComponent): a conditional action falls back to the log")
             }
         }
         #expect(seen > 10)
@@ -72,6 +72,24 @@ struct ErrorNextStepTests {
         }
     }
 
+    @Test func aPermissionFailurePutsThePermissionFirstAndNeverSendsYouToTheLog() {
+        withLanguage(.pl) {
+            let text = BannerCopy.permissionNeeded(names: ["Slack", "Zoom", "A", "B", "C", "D"])
+            #expect(text.message == "Nie zaktualizowałam: Slack, Zoom i 4 inne — macOS potrzebuje Twojej zgody.")
+            #expect(text.fullMessage == "Nie zaktualizowałam: Slack, Zoom, A, B, C, D — macOS potrzebuje Twojej zgody.")
+            #expect(BannerCopy.permissionNeeded(names: []).message == "Nie zaktualizowałam części pakietów — macOS potrzebuje Twojej zgody.")
+            #expect(!text.message.contains("Logi") && !text.message.contains("jeszcze raz"))
+        }
+        withLanguage(.en) {
+            #expect(BannerCopy.permissionNeeded(names: ["Slack"]).message == "Couldn't update: Slack — macOS needs your permission.")
+        }
+    }
+
+    @Test func aReplacedBannerStartsCollapsed() throws {
+        let callout = try source("Sources/MacUpdater/WegaCallout.swift")
+        #expect(callout.contains(".onChange(of: fullMessage) { showsAll = false }"))
+    }
+
     @Test func theBannerCanShowEveryNameAndPointsToTheLog() throws {
         let callout = try source("Sources/MacUpdater/WegaCallout.swift")
         #expect(callout.contains("Button(tr(\"Pokaż wszystkie\"))"))
@@ -81,5 +99,6 @@ struct ErrorNextStepTests {
         #expect(shared.contains("case .openLogs:     return tr(\"Pokaż w logach\")"))
         let updating = try source("Sources/MacUpdater/ScanStore+Updating.swift")
         #expect(updating.contains("action: summary.needsSudoPassword ? .openSettings : .openLogs"))
+        #expect(updating.contains("BannerCopy.permissionNeeded(names: failedNames)"))
     }
 }

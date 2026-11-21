@@ -108,6 +108,10 @@ extension Translations {
             "Couldn't update: %@. Try again; if it happens again, open Logs.",
         "Homebrew zgłosił błąd. Spróbuj jeszcze raz; jeśli to się powtórzy, otwórz Logi.":
             "Homebrew reported an error. Try again; if it happens again, open Logs.",
+        "Nie zaktualizowałam: %@ — macOS potrzebuje Twojej zgody.":
+            "Couldn't update: %@ — macOS needs your permission.",
+        "Nie zaktualizowałam części pakietów — macOS potrzebuje Twojej zgody.":
+            "Couldn't update some packages — macOS needs your permission.",
         "Pokaż w logach":
             "Show in Logs",
         "Pokaż wszystkie":
