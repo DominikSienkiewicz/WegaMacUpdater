@@ -88,8 +88,9 @@ public enum TouchIDSudoDisableResult: Equatable, Sendable {
         }
     }
 
-    /// Compared as UTF-8 bytes, so no combining mark can make another path read as this one.
-    private static func isSwapFilePath(_ path: String) -> Bool {
+    /// Whether `path` is one name with the helper's prefix in the policy directory, as the app
+    /// shows it. Compared as UTF-8 bytes, so no combining mark can make another path read as this one.
+    static func isSwapFilePath(_ path: String) -> Bool {
         let prefix = TouchIDSudoDisabler.reportedPath(of: TouchIDSudoDisabler.swapNamePrefix).utf8
         guard path.utf8.starts(with: prefix) else { return false }
         let name = path.utf8.dropFirst(prefix.count)
