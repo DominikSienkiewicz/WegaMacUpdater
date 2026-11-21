@@ -436,6 +436,58 @@ struct MigrationStoreCoverageTests {
         #expect(notStarted.duplicateBusyKey == nil)
     }
 
+    /// UXP-30 (final review I1) — a migration or a duplicate removal can end with the window
+    /// closed; the store counts each one that ran Homebrew or npm, so the inventory reads again.
+    @Test func aMigrationOrDuplicateRemovalThatRanMakesTheNextInventoryEntryReadAgain() async throws {
+        let candidate = app("Figma", token: "figma", provenance: .token)
+        let fixture = try preparation(for: candidate)
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        var dependencies = inertDependencies()
+        dependencies.prepareReplacement = { _, _, _ in .ready(fixture.value) }
+        dependencies.resolveInstalledAppURL = { _, _ in candidate.path }
+        dependencies.verifyReplacement = { _, _ in .healthy }
+        let store = MigrationStore(publisherCorrelator: unknownPublisherCorrelator(), dependencies: dependencies)
+        let inventory = InventoryStore(operations: OperationCoordinator())
+        let loader = CountingInventoryLoader()
+        func counts() -> InventoryChangeStamp { InventoryChangeStamp(migrations: store.completedCount) }
+        await enterInventory(inventory, using: loader, changes: counts())
+
+        await store.migrate(candidate, model: model(runner: MigrationCoverageRunner(eventExitCode: 0)), onWegaState: nil)
+        #expect(store.completedCount == 1)
+        #expect(inventory.isStale(given: counts()) && inventory.needsRead(given: counts()))
+        await enterInventory(inventory, using: loader, changes: counts())
+
+        let duplicate = NpmBrewDuplicate(npmPackage: "@openai/codex", brewToken: "codex")
+        await store.removeDuplicate(
+            DuplicateRemoval(dup: duplicate, side: .npm),
+            model: model(runner: MigrationCoverageRunner(eventExitCode: 9, eventOutput: "failed")),
+            onWegaState: nil
+        )
+        #expect(store.completedCount == 2, "npm ran, so the globals may have changed even though it failed")
+        #expect(inventory.needsRead(given: counts()))
+        await enterInventory(inventory, using: loader, changes: counts())
+        #expect(await loader.reads == 3)
+    }
+
+    @Test func aMigrationOrRemovalThatNeverRanChangesNothing() async {
+        let candidate = app("Figma", token: "figma", provenance: .token)
+        let first = runningTarget(pid: 20, app: candidate)
+        let second = runningTarget(pid: 21, app: candidate)
+        let store = MigrationStore(
+            runningApplicationInspector: MigrationSequenceInspector([[first, second]]),
+            publisherCorrelator: unknownPublisherCorrelator(),
+            dependencies: inertDependencies()
+        )
+        await store.migrate(candidate, model: model(), onWegaState: nil)
+        let duplicate = NpmBrewDuplicate(npmPackage: "@openai/codex", brewToken: "codex")
+        await store.removeDuplicate(
+            DuplicateRemoval(dup: duplicate, side: .brew),
+            model: model(runner: MigrationCoverageRunner(), locateBrew: false),
+            onWegaState: nil
+        )
+        #expect(store.completedCount == 0, "an ambiguous running app and a missing brew both stop before anything runs")
+    }
+
     @Test func appStoreOpeningUsesTheInjectedWorkspaceBoundary() {
         let opened = MigrationURLBox()
         var dependencies = inertDependencies()

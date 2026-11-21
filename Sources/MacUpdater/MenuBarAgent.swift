@@ -35,6 +35,9 @@ final class MenuBarAgent: ObservableObject {
     /// keep the count and throw the rest away, so the window opened empty and rescanned from
     /// scratch. Now the window adopts them, which is the whole "instant value" of M2.
     @Published private(set) var lastResult: MenuBarScanResult?
+    /// UXP-30 — background rounds that installed at least one update. The inventory reads
+    /// again after one, also when the window was closed while it ran.
+    @Published private(set) var installedRoundCount = 0
 
     /// UXP-09 — how far the update run started in the window has got, so the menu-bar menu can
     /// show it and stop it while the window is closed. `nil` when no such run is going.
@@ -217,6 +220,7 @@ final class MenuBarAgent: ObservableObject {
             candidates: current.backgroundCaskCandidates,
             policies: policies
         )
+        recordBackgroundRound(upgraded: upgraded)
         if !upgraded.isEmpty {
             // ARCH-08c: those casks are no longer outdated, so take them out of the result we
             // already have instead of scanning everything a second time. The background round
@@ -246,6 +250,12 @@ final class MenuBarAgent: ObservableObject {
         } else if current.total == 0 {
             rememberNotified("")
         }
+    }
+
+    /// Counts a background round that installed something.
+    func recordBackgroundRound(upgraded: [String]) {
+        guard !upgraded.isEmpty else { return }
+        installedRoundCount += 1
     }
 
     /// M4 — the dock badge has exactly one owner: this agent. A scan run from the window

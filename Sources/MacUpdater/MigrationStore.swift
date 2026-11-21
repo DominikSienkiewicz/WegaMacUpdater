@@ -96,6 +96,9 @@ final class MigrationStore: ObservableObject {
     @Published var duplicateConfirmation: DuplicateRemoval?
     @Published var duplicateBusyKey: String?
     @Published var pendingForceTermination: PendingForceTermination?
+    /// UXP-30 — migrations and duplicate removals that ran Homebrew or npm, whatever their
+    /// outcome: the inventory reads again after one, whether or not a window watched it end.
+    @Published private(set) var completedCount = 0
     /// LT-03 — publisher corroboration per candidate, computed once per scan (see
     /// `publisherCorrelations(for:using:)`) so the confidence badge can consult the
     /// strongest signal without any view doing I/O.
@@ -530,6 +533,7 @@ final class MigrationStore: ObservableObject {
             logLines.append("error: \(error.localizedDescription)")
             installError = error
         }
+        completedCount += 1
 
         let installedAppURL = await dependencies.resolveInstalledAppURL(
             preparation,
@@ -653,6 +657,7 @@ final class MigrationStore: ObservableObject {
             logLines.append("error: \(error.localizedDescription)")
             exitCode = -1
         }
+        completedCount += 1
 
         if exitCode == 0 {
             npmBrewDuplicates.removeAll { $0.npmPackage == removal.dup.npmPackage }

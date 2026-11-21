@@ -15,6 +15,8 @@ struct InventoryView: View {
 
     @EnvironmentObject private var model: AppViewModel
     @EnvironmentObject private var scanStore: ScanStore
+    @EnvironmentObject private var migration: MigrationStore
+    @EnvironmentObject private var cleanup: CleanupStore
     @ObservedObject private var menuBar = MenuBarAgent.shared
     @ObservedObject private var policies = UpdatePolicyStore.shared
     @State private var needsCheckingOnly = false
@@ -40,6 +42,17 @@ struct InventoryView: View {
 
     private func presentation(for app: ApplicationInfo, checks: [InstallationIdentity: InstallationCheck], now: Date) -> InventoryCheckPresentation {
         InventoryCheckPresentation(app: app, check: checks[app.installation], policies: policies.policiesMap, now: now)
+    }
+
+    /// What has finished since launch that changes the installed apps. The stores keep counting
+    /// while the window is closed, so the next entry still sees what happened.
+    private var changes: InventoryChangeStamp {
+        InventoryChangeStamp(
+            updateRuns: scanStore.completedRunCount,
+            migrations: migration.completedCount,
+            cleanupRemovals: cleanup.removalCount,
+            backgroundInstalls: menuBar.installedRoundCount
+        )
     }
 
     private var apps: [ApplicationInfo] { inventory.apps }
@@ -140,7 +153,7 @@ struct InventoryView: View {
             HStack(spacing: 10) {
                 if let read = inventory.lastReadAt {
                     let when = CheckedAtCopy.day(read, now: clock.now)
-                    Text(inventory.isStale ? trf("Odczytano %@ — spis mógł się zmienić", when) : trf("Odczytano %@", when))
+                    Text(inventory.isStale(given: changes) ? trf("Odczytano %@ — spis mógł się zmienić", when) : trf("Odczytano %@", when))
                         .font(.wega(.subheadline))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -250,7 +263,7 @@ struct InventoryView: View {
         // ⇧⌘F pressed from another destination navigates here first, so its request is
         // consumed on arrival rather than by `.onChange`.
         .receivesSearchFocusRequests(on: .inventory) { searchFocused = true }
-        .task { scanStore.restoreLastScan(); if inventory.needsInitialRead { await scan() } }
+        .task { scanStore.restoreLastScan(); if inventory.needsRead(given: changes) { await scan() } }
     }
 
     private func emptyState(_ state: InventoryEmptyState) -> some View {
@@ -313,7 +326,7 @@ struct InventoryView: View {
     }
 
     private func scan() async {
-        await inventory.scan(model: model) { state in
+        await inventory.scan(model: model, changes: changes) { state in
             onWegaState?(state)
         }
     }

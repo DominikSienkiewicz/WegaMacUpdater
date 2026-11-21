@@ -235,6 +235,7 @@ extension ScanStore {
         ])
 
         updating = false
+        countCompletedRun()
 
         // The rescan is the last phase an item has to clear: whatever the tool claimed, an
         // item the fresh list still reports was not updated, and a rescan that could not

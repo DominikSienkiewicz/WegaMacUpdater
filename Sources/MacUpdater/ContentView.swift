@@ -195,7 +195,6 @@ struct ContentView: View {
         // Deliberately no `.background(...)`. An opaque window background would leave every
         // glass surface beneath it refracting a solid rectangle, and the material would vanish.
         .frame(minWidth: WegaLayout.windowMinWidth, minHeight: WegaLayout.windowMinHeight)
-        .overlay(alignment: .topLeading) { InventoryStalenessWatcher() }
         // UXP-23 — ⌥⌘I, under the toolbar button's own gate.
         .focusedSceneValue(\.toggleInspectorAction, WegaMenuAction(isEnabled: selection.tab == .update, run: { showInspector.toggle() }))
         .onChange(of: selection) { _, new in wegaState = .forTab(new.tab) }

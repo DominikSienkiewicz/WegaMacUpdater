@@ -44,7 +44,7 @@ struct FinalArchitectureReadBoundaryTests {
         let writerRan = ArchitectureReadFlag()
 
         let scan = Task {
-            await store.scan(using: loader, onWegaState: nil)
+            await store.scan(using: loader, changes: InventoryChangeStamp(), onWegaState: nil)
         }
         await loader.waitUntilStarted()
 

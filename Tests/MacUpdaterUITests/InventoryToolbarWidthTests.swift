@@ -13,16 +13,28 @@ struct InventoryToolbarWidthTests {
 
     private func idealWidth(language: AppLanguage, stale: Bool) async -> CGFloat {
         let inventory = InventoryStore(operations: OperationCoordinator())
-        await inventory.scan(using: WidthLoader(), onWegaState: nil)
+        await inventory.scan(using: WidthLoader(), changes: InventoryChangeStamp(), onWegaState: nil)
         if stale { inventory.markStale() }
         return withLanguage(language) {
             let view = InventoryView()
                 .environmentObject(AppViewModel())
                 .environmentObject(ScanStore())
                 .environmentObject(inventory)
+                .environmentObject(MigrationStore())
+                .environmentObject(Self.inertCleanup())
                 .environmentObject(WegaCommandCenter())
             return NSHostingView(rootView: view).fittingSize.width
         }
+    }
+
+    /// The screen reads the store's removal count; nothing here may touch the real report.
+    private static func inertCleanup() -> CleanupStore {
+        let path = CleanupPathSnapshot(entries: [], ignoredEntries: [], shell: nil, capturedAt: nil, isApproximate: true)
+        return CleanupStore(dependencies: CleanupStoreDependencies(
+            home: URL(fileURLWithPath: "/Users/inventory-width-test"), coordinator: OperationCoordinator(),
+            readPath: { .failed }, approximatePath: { path }, scan: { _ in throw CancellationError() },
+            remove: { _ in .notRemovable }, loadReport: { nil }, saveReport: { _ in }, loadPath: { nil }, savePath: { _ in }
+        ))
     }
 
     @Test func theToolbarRowFitsTheNarrowestDetailColumn() async {

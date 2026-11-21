@@ -103,7 +103,7 @@ struct ScanFailureSurfacingTests {
         )
         let store = InventoryStore(operations: OperationCoordinator())
 
-        await store.scan(using: StubInventoryLoader(snapshot: snapshot), onWegaState: nil)
+        await store.scan(using: StubInventoryLoader(snapshot: snapshot), changes: InventoryChangeStamp(), onWegaState: nil)
 
         #expect(store.errorMessage != nil)
         #expect(store.errorMessage == snapshot.failures.scanErrorMessage)
@@ -115,6 +115,7 @@ struct ScanFailureSurfacingTests {
 
         await store.scan(
             using: StubInventoryLoader(snapshot: InventorySnapshot(apps: [], npmGlobals: [])),
+            changes: InventoryChangeStamp(),
             onWegaState: nil
         )
 

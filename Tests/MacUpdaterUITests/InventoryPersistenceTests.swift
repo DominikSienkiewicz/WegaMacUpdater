@@ -7,15 +7,18 @@ import Testing
 struct InventoryPersistenceTests {
     @Test func aSecondVisitReusesTheResult() async {
         let store = InventoryStore(operations: OperationCoordinator(), now: { Date(timeIntervalSince1970: 100) })
-        #expect(store.needsInitialRead)
-        await store.scan(using: PersistenceLoader(apps: [application("Slack")]), onWegaState: nil)
-        #expect(store.lastReadAt == Date(timeIntervalSince1970: 100) && !store.needsInitialRead)
+        #expect(store.needsRead(given: InventoryChangeStamp()))
+        await store.scan(using: PersistenceLoader(apps: [application("Slack")]), changes: InventoryChangeStamp(), onWegaState: nil)
+        #expect(store.lastReadAt == Date(timeIntervalSince1970: 100) && !store.needsRead(given: InventoryChangeStamp()))
     }
 
     @Test func aSecondVisitWithoutChangesReusesTheResultButAStaleOneRescans() async {
         let loader = CountingLoader()
         let store = InventoryStore(operations: OperationCoordinator())
-        func visit() async { if store.needsInitialRead { await store.scan(using: loader, onWegaState: nil) } }
+        let unchanged = InventoryChangeStamp()
+        func visit() async {
+            if store.needsRead(given: unchanged) { await store.scan(using: loader, changes: unchanged, onWegaState: nil) }
+        }
 
         await visit()
         await visit()
@@ -23,24 +26,34 @@ struct InventoryPersistenceTests {
 
         store.markStale()
         #expect(!store.apps.isEmpty, "the list stays on screen while stale")
-        #expect(store.isStale && store.needsInitialRead)
+        #expect(store.isStale(given: unchanged) && store.needsRead(given: unchanged))
         await visit()
-        #expect(await loader.loads == 2 && !store.isStale && !store.needsInitialRead)
+        #expect(await loader.loads == 2 && !store.isStale(given: unchanged) && !store.needsRead(given: unchanged))
     }
 
     @Test func aChangeDuringAReadIsNotForgotten() async {
         let store = InventoryStore(operations: OperationCoordinator())
         let loader = CountingLoader { store.markStale() }
-        await store.scan(using: loader, onWegaState: nil)
-        #expect(store.isStale && store.needsInitialRead)
+        await store.scan(using: loader, changes: InventoryChangeStamp(), onWegaState: nil)
+        #expect(store.isStale(given: InventoryChangeStamp()) && store.needsRead(given: InventoryChangeStamp()))
     }
 
     @Test func everyAppSetChangeMarksTheInventoryStaleAndTheChecksShareOneGuard() throws {
-        let content = try source("Sources/MacUpdater/ContentView.swift")
-        #expect(content.contains("InventoryStalenessWatcher()"))
-        let watcher = try source("Sources/MacUpdater/InventoryStalenessWatcher.swift")
-        for literal in ["scan.updating", "cleanup.removalCount", "migration.migrating", "migration.duplicateBusyKey", "inventory.markStale()"] {
-            #expect(watcher.contains(literal), "\(literal)")
+        // I1 — the counts live on the stores, which outlive the window; a view-scoped watcher missed
+        // every change that finished while the window was closed.
+        #expect(!(try source("Sources/MacUpdater/ContentView.swift")).contains("InventoryStalenessWatcher"))
+        #expect(throws: (any Error).self) { try source("Sources/MacUpdater/InventoryStalenessWatcher.swift") }
+        let screen = try source("Sources/MacUpdater/InventoryView.swift")
+        #expect(screen.contains("""
+            InventoryChangeStamp(
+                updateRuns: scanStore.completedRunCount,
+                migrations: migration.completedCount,
+                cleanupRemovals: cleanup.removalCount,
+                backgroundInstalls: menuBar.installedRoundCount
+            )
+    """))
+        for literal in ["inventory.isStale(given: changes)", "inventory.scan(model: model, changes: changes)"] {
+            #expect(screen.contains(literal), "\(literal)")
         }
         let uninstall = try source("Sources/MacUpdater/UninstallView.swift")
         #expect(uninstall.contains("@EnvironmentObject private var inventory: InventoryStore") && uninstall.contains("inventory.markStale()"))
@@ -52,7 +65,7 @@ struct InventoryPersistenceTests {
     @Test func aPartialReadStillCountsAsRead() async {
         let store = InventoryStore(operations: OperationCoordinator(), now: { Date(timeIntervalSince1970: 7) })
         let failure = ScanSourceFailure(source: .homebrew, message: "boom")
-        await store.scan(using: PersistenceLoader(apps: [application("Slack")], failures: [failure]), onWegaState: nil)
+        await store.scan(using: PersistenceLoader(apps: [application("Slack")], failures: [failure]), changes: InventoryChangeStamp(), onWegaState: nil)
         #expect(store.lastReadAt == Date(timeIntervalSince1970: 7) && store.errorMessage != nil)
     }
 
@@ -89,7 +102,7 @@ struct InventoryPersistenceTests {
         let view = try source("Sources/MacUpdater/InventoryView.swift")
         #expect(view.contains("@EnvironmentObject private var inventory: InventoryStore"))
         #expect(!view.contains("@StateObject private var inventory"))
-        #expect(view.contains("if inventory.needsInitialRead { await scan() }"))
+        #expect(view.contains("if inventory.needsRead(given: changes) { await scan() }"))
         #expect(view.contains("scanStore.startCheck()") && view.contains(".disabled(!scanStore.canStartCheck)"))
         #expect(view.contains(".help(tr(\"Nie sprawdza nowych wersji\"))"))
         #expect(view.contains("@ObservedObject private var clock = DayClock.shared"))

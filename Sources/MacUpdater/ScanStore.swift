@@ -132,6 +132,9 @@ final class ScanStore: ObservableObject {
     @Published var showLog:           Bool                = false
     @Published var selected:          Set<String>         = []
     @Published var updating:          Bool                = false
+    /// UXP-30 — update runs that reached their rescan, so the inventory knows the app set may
+    /// have changed, whether or not a window watched the run end.
+    @Published private(set) var completedRunCount = 0
     @Published var errorMessage:      String?
     @Published var installationChecks: [InstallationCheck] = []
     @Published var lastCheck:         Date?
@@ -492,6 +495,10 @@ final class ScanStore: ObservableObject {
 
     func setRefreshingCatalog(_ refreshing: Bool) {
         isRefreshingCatalog = refreshing
+    }
+
+    func countCompletedRun() {
+        completedRunCount += 1
     }
 
     /// Closes what only a running scan has, on every way out of it: the band goes back to the
