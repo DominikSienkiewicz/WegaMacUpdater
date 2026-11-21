@@ -874,7 +874,7 @@ extension Translations {
             "No automatic undo — the App Store does not allow going back to a previous version.",
         "Bez automatycznego cofnięcia — npm nie zachowuje poprzednich wersji pakietów.":
             "No automatic undo — npm does not keep previous package versions.",
-        // INSTALL_PROGRESS — the upgrade's progress bar.
+        // INSTALL_PROGRESS — the run's stage and ring in the band.
         "Postęp aktualizacji": "Update progress",
         "Przygotowuję kopie zapasowe…": "Preparing backups…",
         "Pobieram %@ — %@": "Downloading %@ — %@",

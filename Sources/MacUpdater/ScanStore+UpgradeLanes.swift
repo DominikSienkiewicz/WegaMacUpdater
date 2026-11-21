@@ -42,7 +42,7 @@ extension ScanStore {
 
     /// A row's process is starting.
     ///
-    /// The bar may name the package only while it is the only one running: with several
+    /// The run's stage may name the package only while it is the only one running: with several
     /// processes in flight, naming one of them misdescribes the other two, so the run falls
     /// back to the unnamed batch label the App Store phase already uses.
     func beginItem(named token: String) {
@@ -235,7 +235,7 @@ extension ScanStore {
     }
 
     /// The App Store batch. `mas` reports no per-app result, so one failure becomes the same
-    /// failure for every planned row — and the bar advances by the whole batch or not at all,
+    /// failure for every planned row — and the counter advances by the whole batch or not at all,
     /// because a failed `mas upgrade` is no evidence any single app updated.
     ///
     /// The IDs are load-bearing: a bare `mas upgrade` expands to every outdated App Store
@@ -252,7 +252,7 @@ extension ScanStore {
         }
         markRunLane(.appStore, .installing)
 
-        // An empty token on purpose: mas names no app, so the bar must not name one either.
+        // An empty token on purpose: mas names no app, so the stage must not name one either.
         // It still counts as a row in flight, which is what makes the other lanes fall back
         // to the unnamed label while this batch is working.
         beginItem(named: "")

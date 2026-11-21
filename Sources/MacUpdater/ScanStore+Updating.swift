@@ -78,7 +78,7 @@ extension ScanStore {
         let plannedCaskNames = plan.caskNames
         let npmNames      = plan.npmNames
         let masAppStoreIDs = plan.masAppStoreIDs
-        // The bar counts whole planned rows. Only the tokens this run asked brew for may be
+        // The run's counter counts whole planned rows. Only the tokens this run asked brew for may be
         // credited: `brew upgrade <names…>` also upgrades outdated dependents nobody
         // selected and announces them identically. npm and the App Store advance explicitly,
         // so they are not brew tokens. A run with a single package is the one case where a
@@ -90,8 +90,9 @@ extension ScanStore {
         )
         upgradeTracker = tracker
         upgradeProgress = tracker.progress
-        // Every later exit — the stop switch, a publisher veto, a thrown error — must leave
-        // the bar gone, so clearing is a defer rather than a line each return remembers.
+        // Every later exit — the stop switch, a publisher veto, a thrown error — must take
+        // the progress out of the band, so clearing is a defer rather than a line each return
+        // remembers.
         defer {
             upgradeProgress = nil
             upgradeTracker = nil
@@ -230,8 +231,8 @@ extension ScanStore {
         // If a cask failed (e.g. "App source not there"), it will still appear here.
         // Suppress its icon signal — the upgrade outcome below sets the final state.
         // M2(d) — lightweight: no second `brew update`, no second stale-cask sweep. The
-        // rescan is not a stage of this bar: `runCheck` replaces the results view with the
-        // scan's own screen, so the two bars hand over to each other.
+        // rescan is not a stage of the run's progress: `runCheck` replaces the results view,
+        // band included, with the scan's own screen, so the two hand over to each other.
         UpdateDiagnostics.record("rescan.started", fields: ["lightweight": "true"])
         await runCheck(emitActivity: false, lightweight: true, operationLease: operationLease)
         UpdateDiagnostics.record("rescan.result", fields: [

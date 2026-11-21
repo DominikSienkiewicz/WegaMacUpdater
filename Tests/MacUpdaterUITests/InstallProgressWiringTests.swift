@@ -4,7 +4,7 @@ import Testing
 
 @testable import WegaMacUpdater
 
-/// The progress bar's wiring: the counter is fed from the stream that is already flowing,
+/// The run progress's wiring: the counter is fed from the stream that is already flowing,
 /// it is cleared on every exit path, and nothing invents movement on a timer.
 @Suite("Install progress wiring")
 @MainActor
