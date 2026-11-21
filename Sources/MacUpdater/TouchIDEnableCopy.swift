@@ -6,7 +6,13 @@ import MacUpdaterCore
 /// helper's claim (RC2-2). −10, −20 and −21 with a path say what `TouchIDDisableCopy` says; the
 /// −4/−5 note lives here, and turning Touch ID off uses it too.
 enum TouchIDEnableCopy {
+    /// Wega's line: it names no command, because the card may show none (M1).
     static var outdatedHelper: String {
+        tr("Pomocnik Wegi jest nieaktualny albo nie odpowiada, więc nie włączy Touch ID dla sudo. W Ustawieniach usuń pomocnika i zainstaluj go ponownie albo uruchom Maca ponownie.")
+    }
+
+    /// The card's note right above the manual command, so "below" is always true.
+    static var outdatedHelperAboveCommand: String {
         tr("Pomocnik Wegi jest nieaktualny albo nie odpowiada, więc nie włączy Touch ID dla sudo. Użyj polecenia niżej albo w Ustawieniach usuń pomocnika i zainstaluj go ponownie (albo uruchom Maca ponownie).")
     }
 
@@ -19,10 +25,12 @@ enum TouchIDEnableCopy {
     static func line(for result: TouchIDSudoEnableResult, isEnabled: Bool) -> String {
         switch result {
         case .enabled, .alreadyEnabled:
-            guard isEnabled else {
-                return tr("Zapisałam plik, ale Touch ID dla sudo nadal nie wygląda na włączone. Sprawdź /etc/pam.d/sudo_local według przewodnika.")
+            if isEnabled { return tr("Touch ID podpięty pod sudo.") }
+            // I2: 0 means the helper wrote nothing, so this line never claims a write.
+            if result == .alreadyEnabled {
+                return tr("Plik /etc/pam.d/sudo_local ma już linię z Touch ID, więc niczego nie zapisałam, ale nie widzę, żeby Touch ID dla sudo było włączone. Sprawdź plik według przewodnika.")
             }
-            return tr("Touch ID podpięty pod sudo.")
+            return tr("Zapisałam plik, ale Touch ID dla sudo nadal nie wygląda na włączone. Sprawdź /etc/pam.d/sudo_local według przewodnika.")
         case .refused(let refusal):
             return line(for: refusal)
         case .restoredAfterFailure:
@@ -53,7 +61,8 @@ enum TouchIDEnableCopy {
         case .unsafeOwnership:
             return unsafePolicyNote(.unsafeOwnership)
         case .tooLarge, .unreadable:
-            return tr("Plik /etc/pam.d/sudo_local wygląda inaczej, niż się spodziewam, więc go nie zmieniłam. Włączysz Touch ID ręcznie według przewodnika.")
+            // The guide has no steps for turning it on by hand, only for checking the file.
+            return tr("Plik /etc/pam.d/sudo_local wygląda inaczej, niż się spodziewam, więc go nie zmieniłam. Sprawdź go według przewodnika.")
         case .changedDuringOperation:
             return TouchIDDisableCopy.line(for: .refused(.changedDuringOperation), stillEnabled: false)
         }

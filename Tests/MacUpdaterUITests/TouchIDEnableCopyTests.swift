@@ -15,14 +15,16 @@ struct TouchIDEnableCopyTests {
         withLanguage(.pl) {
             #expect(TouchIDEnableCopy.line(for: .enabled, isEnabled: true) == "Touch ID podpięty pod sudo.")
             #expect(TouchIDEnableCopy.line(for: .alreadyEnabled, isEnabled: true) == "Touch ID podpięty pod sudo.")
-            for result in [TouchIDSudoEnableResult.enabled, .alreadyEnabled] {
-                #expect(TouchIDEnableCopy.line(for: result, isEnabled: false)
-                        == "Zapisałam plik, ale Touch ID dla sudo nadal nie wygląda na włączone. Sprawdź /etc/pam.d/sudo_local według przewodnika.",
-                        "RC2-2: success only when the file read again says so")
-            }
+            #expect(TouchIDEnableCopy.line(for: .enabled, isEnabled: false)
+                    == "Zapisałam plik, ale Touch ID dla sudo nadal nie wygląda na włączone. Sprawdź /etc/pam.d/sudo_local według przewodnika.",
+                    "RC2-2: success only when the file read again says so")
+            #expect(TouchIDEnableCopy.line(for: .alreadyEnabled, isEnabled: false)
+                    == "Plik /etc/pam.d/sudo_local ma już linię z Touch ID, więc niczego nie zapisałam, ale nie widzę, żeby Touch ID dla sudo było włączone. Sprawdź plik według przewodnika.",
+                    "I2: code 0 means nothing was written, so the line never says it was")
             for refusal in [TouchIDSudoEnableRefusal.tooLarge, .unreadable] {
                 #expect(TouchIDEnableCopy.line(for: .refused(refusal), isEnabled: false)
-                        == "Plik /etc/pam.d/sudo_local wygląda inaczej, niż się spodziewam, więc go nie zmieniłam. Włączysz Touch ID ręcznie według przewodnika.")
+                        == "Plik /etc/pam.d/sudo_local wygląda inaczej, niż się spodziewam, więc go nie zmieniłam. Sprawdź go według przewodnika.",
+                        "the guide has no steps for turning it on by hand")
             }
             #expect(TouchIDEnableCopy.line(for: .refused(.changedDuringOperation), isEnabled: false)
                     == "Plik zmienił się w trakcie mojej pracy, więc go nie ruszyłam. Spróbuj jeszcze raz.")
@@ -33,8 +35,15 @@ struct TouchIDEnableCopyTests {
             #expect(TouchIDEnableCopy.line(for: .rollbackFailed(backupPath: nil), isEnabled: false)
                     == "Nie wiem, w jakim stanie jest teraz plik /etc/pam.d/sudo_local: zapis albo jego sprawdzenie się nie udało. Sprawdź go według przewodnika.",
                     "I1: true after a writer that could not undo and after a readback that failed")
+            // M1: Wega's line names no command, because the card may show none; the note the card puts
+            // right above the command says "below".
             #expect(TouchIDEnableCopy.outdatedHelper
+                    == "Pomocnik Wegi jest nieaktualny albo nie odpowiada, więc nie włączy Touch ID dla sudo. W Ustawieniach usuń pomocnika i zainstaluj go ponownie albo uruchom Maca ponownie.")
+            #expect(TouchIDEnableCopy.outdatedHelperAboveCommand
                     == "Pomocnik Wegi jest nieaktualny albo nie odpowiada, więc nie włączy Touch ID dla sudo. Użyj polecenia niżej albo w Ustawieniach usuń pomocnika i zainstaluj go ponownie (albo uruchom Maca ponownie).")
+            for refusal in TouchIDSudoEnableRefusal.allCases {
+                #expect(!TouchIDEnableCopy.line(for: .refused(refusal), isEnabled: false).contains("ręcznie"), "\(refusal)")
+            }
         }
     }
 
@@ -80,7 +89,7 @@ struct TouchIDEnableCopyTests {
         let note = try #require(card.range(of: "touchIDNote(TouchIDEnableCopy.unsafePolicyNote(unsafe), isWarning: true)"))
         let command = try #require(card.range(of: "} else if touchIDController.showsEnableCommand {"))
         let outdated = try #require(card.range(of: "if touchIDController.enableHelperOutdated {"))
-        let outdatedNote = try #require(card.range(of: "touchIDNote(TouchIDEnableCopy.outdatedHelper)"))
+        let outdatedNote = try #require(card.range(of: "touchIDNote(TouchIDEnableCopy.outdatedHelperAboveCommand)"))
         let fallback = try #require(card.range(of: "manualEnableFallback"))
         let button = try #require(card.range(of: "} else if touchIDController.offersEnableButton {"))
         let label = try #require(card.range(of: "Label(tr(\"Używaj Touch ID zamiast hasła administratora\"), systemImage: \"touchid\")"))
@@ -90,6 +99,7 @@ struct TouchIDEnableCopyTests {
         #expect(button.upperBound < label.lowerBound)
         #expect(card.components(separatedBy: "manualEnableFallback").count - 1 == 1, "the command has one way onto the card")
         #expect(!card.contains("if touchIDPermissionDenied {"), "the permission-denied state alone no longer shows the command")
+        #expect(!card.contains("touchIDNote(TouchIDEnableCopy.outdatedHelper)"), "M1: the card's note is the one that says below")
         #expect(!card.contains("disableOffer == .blocked(.unsafeOwnership)"), "the unsafe note above replaces the old one")
     }
 
@@ -105,8 +115,10 @@ struct TouchIDEnableCopyTests {
                     == "I wrote the file, but Touch ID for sudo still doesn't look turned on. Check /etc/pam.d/sudo_local with the user guide.")
             #expect(TouchIDEnableCopy.line(for: .refused(.callerNotAdministrator), isEnabled: false)
                     == "Only an administrator signed in at this Mac can turn on Touch ID for sudo.")
+            #expect(TouchIDEnableCopy.line(for: .alreadyEnabled, isEnabled: false)
+                    == "/etc/pam.d/sudo_local already has a Touch ID line, so I didn't write anything, but I can't see Touch ID for sudo turned on. Check the file with the user guide.")
             #expect(TouchIDEnableCopy.line(for: .refused(.unreadable), isEnabled: false)
-                    == "/etc/pam.d/sudo_local doesn't look the way I expect, so I didn't change it. Turn on Touch ID by hand with the user guide.")
+                    == "/etc/pam.d/sudo_local doesn't look the way I expect, so I didn't change it. Check it with the user guide.")
             #expect(TouchIDEnableCopy.line(for: .rollbackFailed(backupPath: nil), isEnabled: false)
                     == "I don't know what state /etc/pam.d/sudo_local is in now: writing it or checking the write failed. Check it with the user guide.")
             #expect(TouchIDEnableCopy.recoveryOnly
@@ -114,6 +126,8 @@ struct TouchIDEnableCopyTests {
             #expect(TouchIDEnableCopy.unsafePolicyNote(.notRegularFile)
                     == "/etc/pam.d/sudo_local isn't a regular file, so I didn't change it. Through it, sudo may read settings from outside /etc/pam.d. " + TouchIDEnableCopy.recoveryOnly)
             #expect(TouchIDEnableCopy.outdatedHelper
+                    == "The Wega helper is out of date or not answering, so it won't turn on Touch ID for sudo. In Settings, remove the helper and install it again, or restart your Mac.")
+            #expect(TouchIDEnableCopy.outdatedHelperAboveCommand
                     == "The Wega helper is out of date or not answering, so it won't turn on Touch ID for sudo. Use the command below, or in Settings remove the helper and install it again (or restart your Mac).")
             let all: [TouchIDSudoEnableResult] = [.enabled, .alreadyEnabled, .restoredAfterFailure, .rollbackFailed(backupPath: nil),
                                                   .rollbackFailed(backupPath: backup)] + TouchIDSudoEnableRefusal.allCases.map { .refused($0) }

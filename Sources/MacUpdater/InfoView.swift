@@ -227,7 +227,7 @@ extension InfoView {
                             touchIDNote(TouchIDEnableCopy.unsafePolicyNote(unsafe), isWarning: true)
                         } else if touchIDController.showsEnableCommand {
                             if touchIDController.enableHelperOutdated {
-                                touchIDNote(TouchIDEnableCopy.outdatedHelper)
+                                touchIDNote(TouchIDEnableCopy.outdatedHelperAboveCommand)
                             }
                             manualEnableFallback
                         } else if touchIDController.offersEnableButton {
