@@ -152,8 +152,8 @@ have changed"**. Two buttons sit beside it and do different things: **Refresh In
 reads the disk again and does not look for new versions (its tooltip says so), while **Check for
 updates** starts the same scan as **Check now** (**⌘R**) and takes you to Updates, where it can
 be stopped. When the filters hide every app, the list says **"No apps match these filters."**
-with a **Clear Filters** button; when no app was found in the scan folders, it says so and points
-at **Settings → Checking & Background → Scan directories**.
+with a **Clear Filters** button; when no app was found in the scan folders, it says so and
+suggests checking the scan folders or refreshing the inventory.
 
 A result is stale after 24 hours or when a refreshed inventory finds a changed version/build. Moving an
 app or replacing it with another bundle ID requires a new check. Old saved scans without
@@ -299,8 +299,8 @@ read-only unless you allowed background updates for specific apps; then the butt
 **Check and update in background (N)**, with N the number of apps you allowed, because a
 check may then install those apps' updates. The agent installs an update on its own only for
 an app you opted in to background updates, and only when every safety condition holds.
-The dropdown names the apps that have updates, one row each, with the versions when they are
-known (**Slack 4.47 → 4.48**); a **⚠︎** in front of a name means its release notes may describe a
+The dropdown names the apps that have updates, one row each for the first 10 and then a line
+such as **and 3 more apps**, with the versions when they are known (**Slack 4.47 → 4.48**); a **⚠︎** in front of a name means its release notes may describe a
 security fix. Clicking a row opens Wega on the Updates screen with that update's details
 showing. Under the status, the dropdown dates the last check in words — **"Checked yesterday,
 21:14"** — and, while automatic checks are on, says when the next one is due: **"Next attempt:
@@ -525,12 +525,14 @@ opens this guide.
 
 ### When something fails
 
-Every error banner says what to do next and has a button for it. Most of them are
-**Show in Logs**, which opens **Logs** with the entry that explains the failure; a permission
+On **Updates**, during an update run and on **Undo updates**, every error banner says what to do
+next and has a button for it. Most of them are **Show in Logs**, which opens **Logs** with the
+entry that explains the failure; a permission
 failure leads with the permission instead (for example **macOS needs your permission**, with
 **Open privacy settings**) and never sends you to Logs for it. When a banner names many apps or
 packages it shows the first few and a **Show All** button that expands the rest; a new banner
-replacing an old one starts collapsed again.
+replacing an old one starts collapsed again. The error banners on **Inventory**, **Cleanup**,
+**Uninstall** and **To Homebrew** name the failure but have no button.
 
 ### Skip or pin updates
 

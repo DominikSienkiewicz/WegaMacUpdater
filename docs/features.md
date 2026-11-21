@@ -478,7 +478,7 @@ Liveness is read repeatedly while
 the window is open **and once more on its closing edge**, and always through the handle the
 launch returned rather than by process name, so neither a death in the last poll gap nor a
 recycled pid can pass as a survivor. The test is on by default and can be switched off in
-**Settings → Post-update launch test**; it costs about five seconds per cask.
+**Settings → Advanced → Post-update launch test**; it costs about five seconds per cask.
 
 #### The rollback net
 
@@ -529,14 +529,15 @@ pakietów"* appears only when every item cleared all of them.
 
 #### Error banners say what to do next
 
-Every error banner carries a button. Most are **Show in Logs**, which opens Logs on the entry
-that explains the failure; a failure of macOS permission leads with the permission, offers
+On Updates, during an update run and on Undo updates, every error banner carries a button. Most
+are **Show in Logs**, which opens Logs on the entry that explains the failure; a failure of macOS permission leads with the permission, offers
 **Open privacy settings** and never points at Logs, and a developer-signature change offers
 **Trust the New Signature**, which asks for confirmation. A banner that names many apps or
 packages shows the first few and a **Show All** button for the rest, and a banner that replaces
 another starts collapsed. A failed pre-update backup says to check free disk space and try
-again. The word *snapshot* no longer appears in what Wega says: the user-facing name is the
-backup, or the pre-update copy.
+again. The error banners on Inventory, Cleanup, Uninstall and To Homebrew name the failure but
+carry no button. The word *snapshot* no longer appears in what Wega says: the user-facing name is
+the backup, or the pre-update copy.
 
 **"Why isn't my app here?"** Under the rows and under both empty states, a line — *"Can't see
 an app? Missing from the list doesn't mean up to date — check its status in Inventory"* —
@@ -675,7 +676,7 @@ the read found nothing, it points at the scan directories.
 Full list of every `.app` on the system with source badge (Brew / App Store / Manual), version, bundle ID, and last-modified date. Filterable by source, sortable by any column, searchable by name or bundle ID. Four stat cards at the top show counts per category — tap a source card to filter; the npm card is a counter of global packages and does nothing when clicked. Any app Wega has **no known way to update** — not managed by Homebrew or the Mac App Store, and absent from the `AppCatalog` (so a hand-installed app the catalog already tracks does *not* qualify) — carries a **report button** in its source cell: one tap opens a prefilled GitHub issue (built by `CatalogIssueBuilder`) asking the maintainers to add update support, closing the community-catalog loop from the UI. **A failed scan is never passed off as a complete one**: each source (Homebrew, the cask catalog, the filesystem, App Store, npm) is tried independently, and any that fail are collected per source and raised as a banner over the table naming them — so a partial list reads as partial instead of as an authoritative empty or short list. **Export** — the toolbar's *Eksportuj* menu writes the whole inventory (not the filtered view) to a chosen location as a **Brewfile** (a `brew bundle` manifest: Homebrew casks and Mac App Store apps become installable `cask` / `mas` entries, while manual apps and global npm packages are preserved as comments so the file stays a faithful record even though `brew` cannot reinstall them) or as a **CSV** (one row per app, followed by the npm globals). The bytes are built by `InventoryExport` in the core module — deterministic and locale-independent, so re-exporting an unchanged inventory yields an identical file — and unit-tested without a save panel.
 
 ### Settings
-App settings live in the **native macOS Settings window**, opened with **⌘,** or **Wega › Settings…** in the menu bar — not a sidebar tab or a toolbar button (macOS users expect app settings there). It has **five tabs**, and a card that something elsewhere points at opens on its tab and scrolls to it (`SettingsRoute`); each card shows the result of its own buttons under them, because Settings has no Wega.
+App settings live in the **native macOS Settings window**, opened with **⌘,** or **Wega › Settings…** in the menu bar — not a sidebar tab or a toolbar button (macOS users expect app settings there). It has **five tabs**, and a card that something elsewhere points at opens on its tab and scrolls to it (`SettingsRoute`); the self-update, Wega helper and Touch ID cards show the result of their buttons under them, because Settings has no Wega.
 
 - **General.** The app card (version, build, **Check for Wega updates**, **Report a bug**, links and the self-update state), the **Language card** — switch the interface between **Polski** and **English**; the choice is persisted and applies live, and switching it keeps the current scan results (and a running upgrade) intact. Until you pick one, the language follows the system locale — Polish only when macOS reports it ahead of the other languages Wega ships, **English otherwise**. **Launch at login** and **Notifications**.
 - **Checking & Background.** **Paused updates** — lists every ignore / version-pin rule with a one-click remove. **Background update permissions** — the audit of per-app unattended-update consents. **Scan directories card (UX-16)** — add your own scan roots via a directory picker (stored as **security-scoped bookmarks**, so apps on other volumes and in non-standard locations are found), list **exclusions** that are never searched, and set the **recursion depth** (how many sub-levels below each root to descend, default 1). The scan seams read these keys from `UserDefaults` on every scan, so a change takes effect on the next scan. **Update conditions card** — configures the large/unknown download estimate, low-battery threshold, unpacked-size multiplier and free-disk safety margin used by both window and unattended preflights.
@@ -713,7 +714,7 @@ save panel. It does not collect private vendor or Docker daemon logs and does no
 the internal cause of a vendor updater failure.
 
 ### Menu-bar agent
-A Wega silhouette lives in the menu bar, **badged with the number of available updates**. On a configurable schedule (off / hourly / every 6 hours / daily, default every 6 hours) it runs a background check — **read-only unless you allowed background updates for specific apps**, in which case the menu's check button reads **Check and update in background (N)** — and posts a notification when new updates appear. **A background check never raises the macOS permission dialog**: the first time the agent has something to announce, Wega asks in her card at the bottom of the sidebar, and only a user who accepts there spends the one-shot system prompt (`NotificationPrompt` in Core decides this; declining is remembered, so the question does not return on its own; **Settings → Notifications** switches notifications on or off at any time).
+A Wega silhouette lives in the menu bar, **badged with the number of available updates**. On a configurable schedule (off / hourly / every 6 hours / daily, default every 6 hours) it runs a background check — **read-only unless you allowed background updates for specific apps**, in which case the menu's check button reads **Check and update in background (N)** — and posts a notification when new updates appear. **A background check never raises the macOS permission dialog**: the first time the agent has something to announce, Wega asks in her card at the bottom of the sidebar, and only a user who accepts there spends the one-shot system prompt (`NotificationPrompt` in Core decides this; declining is remembered, so the question does not return on its own; **Settings → General → Notifications** switches notifications on or off at any time).
 
 **Docker Desktop is always excluded from unattended upgrades**, even with saved opt-in
 consent; Settings shows the reason.

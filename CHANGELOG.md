@@ -34,12 +34,14 @@ them verbatim under the new version heading, so that step is never done by hand 
 - **Settings in five tabs, and a card that says what Wega does.** Settings is now **General**,
   **Checking & Background**, **Permissions & Privacy**, **Cleanup** and **Advanced**, so each
   setting has one place, and a button, a banner or a menu item that needs a setting opens its
-  tab and card. Every card shows the result of its own buttons under them. **What Wega does**
+  tab and card. The self-update, Wega helper and Touch ID cards show the result of their
+  buttons under them. **What Wega does**
   tops **Permissions & Privacy**: why each permission is needed, what happens without it and
   how to take it back; that checking installs nothing, that nothing about you is sent and which
   fixed addresses Wega contacts (**Show Fixed Addresses**); and what stays on your Mac.
 - **The menu-bar menu is specific.** Each app with an update is a row that opens the update in
-  the window, with its versions and a **⚠︎** when its notes may describe a security fix. The
+  the window, with its versions and a **⚠︎** when its notes may describe a security fix; after
+  the first 10 rows a line says **and N more apps**. The
   menu says **Checked yesterday, 21:14** and **Next attempt: today, 15:00, while Wega is running**,
   and the check button reads **Check and update in background (N)** when N apps are allowed to
   update in the background.
@@ -80,7 +82,7 @@ them verbatim under the new version heading, so that step is never done by hand 
   quit** only when it refuses, warning that unsaved work may be lost; Return never forces it,
   and Escape leaves the app open.
 - **Notifications can be changed again.** Answering **Keep Notifications Off** is no longer
-  final: **Settings → Notifications** switches them on or off. Clicking a notification opens
+  final: **Settings → General → Notifications** switches them on or off. Clicking a notification opens
   the window with the new updates already listed, even if it was closed, and brings an open
   window forward instead of opening a second one. The texts use the right plural forms and
   name the apps that are new first.
@@ -102,10 +104,11 @@ them verbatim under the new version heading, so that step is never done by hand 
   now stay visible and readable while the check reports itself in the band above the list.
 - **The list stays readable while updates install.** During an update run the rows used to
   vanish behind the same frosted layer. They now stay visible, dimmed, behind the note.
-- **Errors say what to do next.** Every error banner has a button — mostly **Show in Logs** —
-  and a permission failure leads with the permission instead of sending you to Logs. A banner
-  naming many apps shows the first few and **Show All**. A failed backup before an update says to
-  check free disk space.
+- **Errors say what to do next.** On Updates, during an update run and on Undo updates, every
+  error banner has a button — mostly **Show in Logs** — and a permission failure leads with the
+  permission instead of sending you to Logs. A banner naming many apps shows the first few and
+  **Show All**. A failed backup before an update says to check free disk space. The error banners
+  on Inventory, Cleanup, Uninstall and To Homebrew still name the failure without a button.
 - **Reduce Transparency no longer hides the rows an update is installing.** The run's veil is not
   drawn then; the list stays locked and the note says why. State texts are easier to read, and
   the close buttons of banners and the log are larger targets.
