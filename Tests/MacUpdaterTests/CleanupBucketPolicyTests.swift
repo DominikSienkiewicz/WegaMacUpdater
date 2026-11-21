@@ -77,6 +77,29 @@ final class CleanupBucketPolicyTests: XCTestCase {
         )
     }
 
+    /// Two copies from one Homebrew formula both offer `brew uninstall` of it; the formula's size is
+    /// recovered once, and in the bucket that asks for a look when either copy does.
+    func testTotalsCountOneRemovalOnce() {
+        func removing(_ action: CleanupAction, size: Int64, bucket: CleanupBucket) -> CleanupFinding {
+            CleanupFinding(
+                detector: .pathDuplicates, tool: "python3",
+                path: URL(fileURLWithPath: "/tmp/\(UUID().uuidString)"), realpath: nil, source: nil,
+                version: nil, size: size, status: .shadowed, reason: .noCopyKept,
+                action: action, risk: .low, bucket: bucket, identity: nil
+            )
+        }
+        let formula = CleanupAction.brew(.uninstallFormula("python@3.15"))
+        let findings = [
+            removing(formula, size: 100_000_000, bucket: .safe),
+            removing(formula, size: 100_000_000, bucket: .needsDecision),
+            removing(.trash([URL(fileURLWithPath: "/tmp/a")]), size: 7_000_000, bucket: .safe),
+            removing(.trash([URL(fileURLWithPath: "/tmp/b")]), size: 3_000_000, bucket: .safe),
+        ]
+        XCTAssertEqual(
+            CleanupTotals.sum(findings), CleanupTotals(safe: 10_000_000, needsDecision: 100_000_000)
+        )
+    }
+
     /// D8 reports a directory's stale entries and its kept entries as two findings for one path;
     /// SwiftUI lists and `CleanupStore.Phase.removing(findingID:)` need them told apart.
     func testFindingIDsDifferForStaleAndKeptShellStateFindings() {
