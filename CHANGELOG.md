@@ -14,6 +14,14 @@ them verbatim under the new version heading, so that step is never done by hand 
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-11-21
+
+Updates now run, check and finish in the band: the list stays readable the whole time, and a
+run ends in a summary that puts every app in exactly one result. Touch ID for `sudo` can be
+turned on and off safely from Settings, Wega asks for no administrator password while the
+settings `sudo` reads cannot be trusted, and the root helper runs only from a root-owned copy
+of Wega. Cleanup lets you choose which copy of a tool stays and shows what needs action first.
+
 ### Added
 - **An update runs in the band.** While an update installs, the band says **Updating · since
   08:14**, names the stage (**Installing firefox — 3 of 7**, or **Installing packages — 3 of
@@ -59,11 +67,11 @@ them verbatim under the new version heading, so that step is never done by hand 
   exact directive can be removed. The command removes only that line and changes nothing, and
   says why, when the file has a backslash, other settings, a NUL byte or text that is not UTF-8,
   is too large, or when a later policy path or a linked `/usr/local` directory exists.
-- **The helper exits when idle.** From protocol v8 the helper exits after a minute with no
-  connection and no work in progress (a background installation counts as work), and macOS
-  starts it again from the installed Wega for the next request, so after a Wega update the new
-  helper runs within about a minute of idle. The app retries the version check once after a
-  dropped connection.
+- **The helper exits when idle.** The helper now exits after a minute with no connection and
+  no work in progress (a background installation counts as work), and macOS starts it again
+  from the installed Wega for the next request, so after a Wega update the new helper runs
+  within about a minute of idle. The app retries the version check once after a dropped
+  connection.
 - **Find an app on Updates.** **⌘F** shows one answer row above the list instead of
   narrowing it: where the app is on the list, what Inventory knows when it is not (up to
   date, no known source with **Report app ›** to suggest it for the catalog as in Inventory,
@@ -112,14 +120,132 @@ them verbatim under the new version heading, so that step is never done by hand 
   **↑** and **↓** move within it, **Space** queues the row and **Return** shows its details;
   VoiceOver reads a row as one sentence with its actions. A row shows the app's name with the
   Homebrew token under it.
-- **Shortcuts for finding and selecting.** **⌘F** finds on Updates, Logs, Uninstall and Inventory,
-  **⇧⌘F** finds in Inventory, **⇧⌘A** selects every visible row on Updates, **⌥⌘I** shows or
-  hides the details panel, **⌘.** cancels a scan as well as stopping an update, and **Help →
-  Wega User Guide** opens the guide.
+- **Shortcuts for finding and selecting.** **⌘F** finds on Updates, Logs, Uninstall, Inventory
+  and Cleanup, **⇧⌘F** finds in Inventory, **⇧⌘A** selects every visible row on Updates, **⌥⌘I**
+  shows or hides the details panel, **⌘.** cancels a scan as well as stopping an update, and
+  **Help → Wega User Guide** opens the guide.
 - **How to remove Wega, and where to look for a missing app.** The guide has the steps to
   remove Wega and every root-owned leftover, and a safe way to turn Touch ID for `sudo` off
   again; Uninstall and the Touch ID card link to them. Under the update list, **Can't see an
   app?** opens Inventory, since a missing app is not proof it is up to date.
+
+### Changed
+- **Shorter, plainer wording.** The note for a scan that could not reach every source is
+  shorter in Polish (**skan niepełny**, now also in Inventory, the menu bar and the VoiceOver
+  announcement) and reads **check incomplete** in English, the group that waits for you is
+  **Needs your action**, the fourth source is **vendors**, and the messages about a changed
+  signature now say **developer signature** instead of Team ID.
+- **The band names your queue.** It reads **4 queued · 2 to finish with the developer**
+  (the second half only while something is queued, counted in the category on screen), says
+  how far an undo reaches (**Undo: 3 of 4**, or **Checking undo availability** while a cask is
+  still being checked; a cask Wega could not check counts as not covered), and its button is
+  **Update N**, or **Nothing selected** when the queue is empty.
+- **Every counted noun takes its plural form.** Polish and English texts that count apps,
+  packages, casks and leftovers now use the right form for 1, 2, 5, 12 and 22.
+- **Report a problem names what it opens.** **Zgłoś błąd…** in Logs works without selecting
+  entries, the buttons read **Open Email Draft** and **Open Issue on GitHub**, **Zgłoś błąd**
+  in Settings opens the same report sheet, and the sheet says it replaced the sensitive data
+  it found. **Eksportuj diagnostykę** says whether the zip was saved (with **Show in Finder**)
+  or why it was not.
+- **Wega speaks plainly about checks and moves.** Scan lines say what is being looked at, and
+  the sheet before moving an app to Homebrew asks **Move <app> to Homebrew?**, names the
+  backup Wega makes and says it is restored if the new version fails its signature check.
+- **A calmer tone when something goes wrong.** Errors are first-person and plain (**I couldn't
+  install <app>**), Wega puts her ball down while an error, an update run or a confirmation is
+  open, and the Cleanup scan has her sniffing like the others.
+- **The scan button only where a scan shows.** **Check now** appears only on Updates, To
+  Homebrew and Undo updates; **⌘R** still works everywhere. The npm card in Inventory is a
+  counter, no longer a button that did nothing.
+- **"May fix security issues" instead of "urgent".** The band counts the updates that may
+  fix security issues, Wega's card says that their release notes mention security, and the
+  inspector shows which words were found, because the match is a guess from the notes'
+  wording.
+- **A readiness card before the first update.** After the first result, a card says which
+  permissions the first update may need (replacing apps in /Applications, an administrator
+  password), lets you check them or turn on Touch ID, and asks once about notifications.
+- **The .pkg is the recommended download.** The user guide and the release notes explain
+  that the .dmg cannot ask for an administrator password.
+- **A young Homebrew catalog is kept at launch.** Opening Wega less than 30 minutes after the
+  last refresh of Homebrew's catalog no longer runs `brew update` again, and the band says
+  **Homebrew catalog from 12 min ago**. **Check now** and **⌘R** always refresh it.
+- **One name for each thing.** The optional component is **Wega helper** (**Install Helper**,
+  **Remove Helper**), ignored and pinned updates are **Paused updates**, the Homebrew screen is
+  **To Homebrew**, apps and tools from Homebrew are **Homebrew apps** and **Homebrew tools**, a
+  changed developer signature is a **signature** that you can **Trust the New Signature**
+  for, and the copy made before an update is a backup. **Update conditions** replaces the
+  resource gate and **Show in Logs** replaces the old log links.
+- **Cleanup says what each action does.** Under the question, the confirmation says whether the
+  action moves to the Trash and can be restored, runs a Homebrew command Wega cannot undo, or only
+  copies a command, and its confirm button is red.
+- **Cleanup shows what needs action first.** Each section lists the tools that need
+  action at the top and folds the rest into **No action**, with tools that
+  share a source and folder gathered into one line. The header reads **N to do**,
+  and a search field (**⌘F**) finds a tool or path across the whole report.
+
+### Fixed
+- **Inventory knows about installs and undos.** It marks its read **the list may have
+  changed** after an install from the list through Homebrew, a reinstall and an undo of an
+  update too, so it no longer shows a stale list as current.
+- **Migration errors lead to the log.** The red banners for a failed duplicate removal on
+  To Homebrew now have **Show in Logs**.
+- **An incomplete check no longer says everything is up to date.** If some sources did not
+  answer, the menu-bar icon, its menu, Wega's card and VoiceOver now say the check was
+  incomplete instead of "all up to date", and Wega's cheerful line appears only after a
+  complete check.
+- **Undo results are visible.** The Undo screen now shows whether an undo worked or why it
+  could not be done, and keeps saying that the version is pinned. Its empty state no longer
+  promises a copy after every update: only supported Homebrew app updates keep one, for 7
+  days, and never the app's data.
+- **The plan and postponement messages say only what has happened, in your language.** The
+  plan no longer claims a checksum was verified before anything is downloaded, the reasons
+  an update was postponed follow the interface language, and the administrator-password
+  prompt follows the system language.
+- **Uninstall and restart are safer.** The destructive button in Uninstall is no longer the
+  one Return presses, and its footer counts the apps and the leftovers you selected and says
+  where each goes. **Restart** after an update first asks the app to quit and offers **Force
+  quit** only when it refuses, warning that unsaved work may be lost; Return never forces it,
+  and Escape leaves the app open.
+- **Notifications can be changed again.** Answering **Keep Notifications Off** is no longer
+  final: **Settings → General → Notifications** switches them on or off. Clicking a notification opens
+  the window with the new updates already listed, even if it was closed, and brings an open
+  window forward instead of opening a second one. The texts use the right plural forms and
+  name the apps that are new first.
+- **Installing from the .dmg no longer fails silently on password prompts.** Wega says when
+  this copy cannot ask for an administrator password and which update will not install, and
+  recommends the .pkg.
+- **Updates that run now show everywhere.** The sidebar, VoiceOver and the menu-bar dropdown
+  show "Updating 2 of 5" instead of "Checking", and the dropdown has a stop button even
+  with the window closed. The button now reads **Stop After Active Installs**, which is what
+  it does: installs already running finish, nothing new starts. Once clicked, the dropdown
+  says so too.
+- **VoiceOver announces when work ends.** Finished scans, finished or stopped update runs and
+  uninstalls that removed nothing are announced, and the list stays readable during a run.
+- **Fewer false alarms on release notes.** A flagged term now has to start a word, so
+  ordinary words that merely contain one no longer put an update among the urgent ones or
+  give it the red warning label.
+- **The list stays readable while Wega checks again.** During **Check now** or **⌘R** the
+  rows used to vanish behind a frosted layer, so the screen looked empty and frozen. They
+  now stay visible and readable while the check reports itself in the band above the list.
+- **The list stays readable while updates install.** During an update run the rows used to
+  vanish behind the same frosted layer. They now stay visible and locked, and the run is
+  reported in the band above them.
+- **Errors say what to do next.** On Updates, during an update run and on Undo updates, every
+  error banner has a button — mostly **Show in Logs** — and a permission failure leads with the
+  permission instead of sending you to Logs. A banner naming many apps shows the first few and
+  **Show All**. A failed backup before an update says to check free disk space. The two
+  duplicate-removal banners on To Homebrew have **Show in Logs** too; its other error banners and
+  those on Inventory, Cleanup and Uninstall still name the failure without a button.
+- **Reduce Transparency no longer hides the rows an update is installing.** Nothing is drawn
+  over the list any more; it stays locked and its header says why. State texts are easier to
+  read, and the close buttons of banners and the log are larger targets.
+- **Cleanup no longer offers to uninstall your version manager.** A mise, asdf or pyenv shim
+  (such as `~/.local/share/mise/shims/node`) runs the version the manager selects, but Cleanup
+  took it for one more copy of the tool: each mise shim offered **Uninstall…**, which runs
+  `brew uninstall mise`, and a pyenv or asdf shim offered **Move to Trash…**. A shim is now
+  *expected* and offers nothing, and when a shim comes first on `PATH`, the copies behind it
+  offer nothing either, since the manager may fall back to them as its `system` version. The
+  **Reclaimable** total counts a removal that several copies share once, so 36 mise shims no
+  longer add up to 8.8 GB.
 
 ### Security
 - **The Wega helper only from a copy of Wega that belongs to root.** The helper runs as root, and
@@ -192,124 +318,6 @@ them verbatim under the new version heading, so that step is never done by hand 
   development certificate. The release check now runs the same check on the signed app,
   askpass, the sudo shim, the `.dmg`, and the app and both askpass helpers inside the `.pkg`,
   so a release that Wega would refuse to install is never published.
-
-### Fixed
-- **Inventory knows about installs and undos.** It marks its read **the list may have
-  changed** after an install from the list through Homebrew, a reinstall and an undo of an
-  update too, so it no longer shows a stale list as current.
-- **Migration errors lead to the log.** The red banners for a failed duplicate removal on
-  To Homebrew now have **Show in Logs**.
-- **An incomplete check no longer says everything is up to date.** If some sources did not
-  answer, the menu-bar icon, its menu, Wega's card and VoiceOver now say the check was
-  incomplete instead of "all up to date", and Wega's cheerful line appears only after a
-  complete check.
-- **Undo results are visible.** The Undo screen now shows whether an undo worked or why it
-  could not be done, and keeps saying that the version is pinned. Its empty state no longer
-  promises a copy after every update: only supported Homebrew app updates keep one, for 7
-  days, and never the app's data.
-- **The plan and postponement messages say only what has happened, in your language.** The
-  plan no longer claims a checksum was verified before anything is downloaded, the reasons
-  an update was postponed follow the interface language, and the administrator-password
-  prompt follows the system language.
-- **Uninstall and restart are safer.** The destructive button in Uninstall is no longer the
-  one Return presses, and its footer counts the apps and the leftovers you selected and says
-  where each goes. **Restart** after an update first asks the app to quit and offers **Force
-  quit** only when it refuses, warning that unsaved work may be lost; Return never forces it,
-  and Escape leaves the app open.
-- **Notifications can be changed again.** Answering **Keep Notifications Off** is no longer
-  final: **Settings → General → Notifications** switches them on or off. Clicking a notification opens
-  the window with the new updates already listed, even if it was closed, and brings an open
-  window forward instead of opening a second one. The texts use the right plural forms and
-  name the apps that are new first.
-- **Installing from the .dmg no longer fails silently on password prompts.** Wega says when
-  this copy cannot ask for an administrator password and which update will not install, and
-  recommends the .pkg.
-- **Updates that run now show everywhere.** The sidebar, VoiceOver and the menu-bar dropdown
-  show "Updating 2 of 5" instead of "Checking", and the dropdown has a stop button even
-  with the window closed. The button now reads **Stop After Active Installs**, which is what
-  it does: installs already running finish, nothing new starts. Once clicked, the dropdown
-  says so too.
-- **VoiceOver announces when work ends.** Finished scans, finished or stopped update runs and
-  uninstalls that removed nothing are announced, and the list stays readable during a run.
-- **Fewer false alarms on release notes.** A flagged term now has to start a word, so
-  ordinary words that merely contain one no longer put an update among the urgent ones or
-  give it the red warning label.
-- **The list stays readable while Wega checks again.** During **Check now** or **⌘R** the
-  rows used to vanish behind a frosted layer, so the screen looked empty and frozen. They
-  now stay visible and readable while the check reports itself in the band above the list.
-- **The list stays readable while updates install.** During an update run the rows used to
-  vanish behind the same frosted layer. They now stay visible and locked, and the run is
-  reported in the band above them.
-- **Errors say what to do next.** On Updates, during an update run and on Undo updates, every
-  error banner has a button — mostly **Show in Logs** — and a permission failure leads with the
-  permission instead of sending you to Logs. A banner naming many apps shows the first few and
-  **Show All**. A failed backup before an update says to check free disk space. The two
-  duplicate-removal banners on To Homebrew have **Show in Logs** too; its other error banners and
-  those on Inventory, Cleanup and Uninstall still name the failure without a button.
-- **Reduce Transparency no longer hides the rows an update is installing.** Nothing is drawn
-  over the list any more; it stays locked and its header says why. State texts are easier to
-  read, and the close buttons of banners and the log are larger targets.
-- **Cleanup no longer offers to uninstall your version manager.** A mise, asdf or pyenv shim
-  (such as `~/.local/share/mise/shims/node`) runs the version the manager selects, but Cleanup
-  took it for one more copy of the tool: each mise shim offered **Uninstall…**, which runs
-  `brew uninstall mise`, and a pyenv or asdf shim offered **Move to Trash…**. A shim is now
-  *expected* and offers nothing, and when a shim comes first on `PATH`, the copies behind it
-  offer nothing either, since the manager may fall back to them as its `system` version. The
-  **Reclaimable** total counts a removal that several copies share once, so 36 mise shims no
-  longer add up to 8.8 GB.
-
-### Changed
-- **Shorter, plainer wording.** The note for a scan that could not reach every source is
-  shorter in Polish (**skan niepełny**, now also in Inventory, the menu bar and the VoiceOver
-  announcement) and reads **check incomplete** in English, the group that waits for you is
-  **Needs your action**, the fourth source is **vendors**, and the messages about a changed
-  signature now say **developer signature** instead of Team ID.
-- **The band names your queue.** It reads **4 queued · 2 to finish with the developer**
-  (the second half only while something is queued, counted in the category on screen), says
-  how far an undo reaches (**Undo: 3 of 4**, or **Checking undo availability** while a cask is
-  still being checked; a cask Wega could not check counts as not covered), and its button is
-  **Update N**, or **Nothing selected** when the queue is empty.
-- **Every counted noun takes its plural form.** Polish and English texts that count apps,
-  packages, casks and leftovers now use the right form for 1, 2, 5, 12 and 22.
-- **Report a problem names what it opens.** **Zgłoś błąd…** in Logs works without selecting
-  entries, the buttons read **Open Email Draft** and **Open Issue on GitHub**, **Zgłoś błąd**
-  in Settings opens the same report sheet, and the sheet says it replaced the sensitive data
-  it found. **Eksportuj diagnostykę** says whether the zip was saved (with **Show in Finder**)
-  or why it was not.
-- **Wega speaks plainly about checks and moves.** Scan lines say what is being looked at, and
-  the sheet before moving an app to Homebrew asks **Move <app> to Homebrew?**, names the
-  backup Wega makes and says it is restored if the new version fails its signature check.
-- **A calmer tone when something goes wrong.** Errors are first-person and plain (**I couldn't
-  install <app>**), Wega puts her ball down while an error, an update run or a confirmation is
-  open, and the Cleanup scan has her sniffing like the others.
-- **The scan button only where a scan shows.** **Check now** appears only on Updates, To
-  Homebrew and Undo updates; **⌘R** still works everywhere. The npm card in Inventory is a
-  counter, no longer a button that did nothing.
-- **"May fix security issues" instead of "urgent".** The band counts the updates that may
-  fix security issues, Wega's card says that their release notes mention security, and the
-  inspector shows which words were found, because the match is a guess from the notes'
-  wording.
-- **A readiness card before the first update.** After the first result, a card says which
-  permissions the first update may need (replacing apps in /Applications, an administrator
-  password), lets you check them or turn on Touch ID, and asks once about notifications.
-- **The .pkg is the recommended download.** The user guide and the release notes explain
-  that the .dmg cannot ask for an administrator password.
-- **A young Homebrew catalog is kept at launch.** Opening Wega less than 30 minutes after the
-  last refresh of Homebrew's catalog no longer runs `brew update` again, and the band says
-  **Homebrew catalog from 12 min ago**. **Check now** and **⌘R** always refresh it.
-- **One name for each thing.** The optional component is **Wega helper** (**Install Helper**,
-  **Remove Helper**), ignored and pinned updates are **Paused updates**, the Homebrew screen is
-  **To Homebrew**, apps and tools from Homebrew are **Homebrew apps** and **Homebrew tools**, a
-  changed developer signature is a **signature** that you can **Trust the New Signature**
-  for, and the copy made before an update is a backup. **Update conditions** replaces the
-  resource gate and **Show in Logs** replaces the old log links.
-- **Cleanup says what each action does.** Under the question, the confirmation says whether the
-  action moves to the Trash and can be restored, runs a Homebrew command Wega cannot undo, or only
-  copies a command, and its confirm button is red.
-- **Cleanup shows what needs action first.** Each section lists the tools that need
-  action at the top and folds the rest into **No action**, with tools that
-  share a source and folder gathered into one line. The header reads **N to do**,
-  and a search field (**⌘F**) finds a tool or path across the whole report.
 
 ## [0.8.0] — 2026-11-20
 
@@ -791,7 +799,8 @@ their terms are still theirs.
   what changed in it, because there is no published predecessor to have changed from.
 -->
 
-[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.6.0...v0.7.1
 [0.6.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.5.5...v0.6.0
