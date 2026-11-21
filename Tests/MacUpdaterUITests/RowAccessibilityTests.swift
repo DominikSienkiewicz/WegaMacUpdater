@@ -126,6 +126,41 @@ struct RowAccessibilityTests {
                 "UpdateSection and ManualUpdateSection")
     }
 
+    /// C2 stage 3 review — with the run's veil gone, `.disabled` alone stood between the keyboard
+    /// and the rows during a run or a scan in place, and nothing proved it keeps a focusable row out
+    /// of the Tab loop; a row focused before the run started still answered Space. Whatever
+    /// disables the list now also takes its Tab stops away, and the rows ignore Return and Space.
+    @Test func aDisabledListHasNoTabStopAndIgnoresSpaceAndReturn() throws {
+        let support = try source("Sources/MacUpdater/UpdateViewSupport.swift")
+        #expect(support.components(separatedBy: "@Environment(\\.isEnabled) private var isEnabled").count == 3,
+                "UpdateSection and ManualUpdateSection read whether the list is enabled")
+        let section = try #require(support.range(of: "struct UpdateSection: View")).upperBound
+        let sectionEnd = try #require(support.range(of: "private struct UpdatePolicyMenu: View")).lowerBound
+        #expect(support[section..<sectionEnd].contains(
+            "isTabStop:      UpdateRowFocus.isTabStop(item.key, in: keys, focused: tabStop, onScreen: onScreen && isEnabled)"
+        ), "a package row is a Tab stop only while the list is on screen and enabled")
+        let manual = try #require(support.range(of: "struct ManualUpdateSection: View")).upperBound
+        let manualEnd = try #require(support.range(of: "struct ManualUpdateActionView: View")).lowerBound
+        let manualRows = support[manual..<manualEnd]
+        #expect(manualRows.contains(
+            ".focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop, onScreen: onScreen && isEnabled))"
+        ), "so is a manual row")
+        for key in ["a", "b"] {
+            #expect(!UpdateRowFocus.isTabStop(key, in: ["a", "b"], focused: key, onScreen: false), "a disabled list hands the gate false")
+        }
+
+        let shared = try source("Sources/MacUpdater/SharedViews.swift")
+        let row = try #require(shared.range(of: "struct PackageRow: View")).lowerBound
+        let rowEnd = try #require(shared.range(of: "// MARK: - Rollback badge", range: row..<shared.endIndex)).lowerBound
+        let packageRow = shared[row..<rowEnd]
+        for (rows, name, indent) in [(packageRow, "PackageRow", "            "), (manualRows, "manual row", "                    ")] {
+            for key in [".return", ".space"] {
+                #expect(rows.contains(".onKeyPress(\(key)) {\n\(indent)guard isEnabled else { return .ignored }"),
+                        "\(name): \(key) is ignored first thing while the list is disabled")
+            }
+        }
+    }
+
     @Test func theSidebarSaysWhatTheRedBadgeMeans() {
         #expect(SidebarBadgeCopy.text(count: 3, isDanger: true) == "⚠︎ 3" && SidebarBadgeCopy.text(count: 3, isDanger: false) == "3")
         withLanguage(.pl) {
@@ -189,7 +224,7 @@ struct RowAccessibilityTests {
         let sectionEnd = try #require(support.range(of: "private struct UpdatePolicyMenu: View")).lowerBound
         let update = support[section..<sectionEnd]
         for literal in ["onSelect:       { focus(item.key); onInspect?(item) }",
-                        "isTabStop:      UpdateRowFocus.isTabStop(item.key, in: keys, focused: tabStop, onScreen: onScreen)",
+                        "isTabStop:      UpdateRowFocus.isTabStop(item.key, in: keys, focused: tabStop, onScreen: onScreen && isEnabled)",
                         "onMove:         { move(from: item.key, in: keys, $0) }"] {
             #expect(update.contains(literal), "\(literal)")
         }
@@ -204,7 +239,7 @@ struct RowAccessibilityTests {
         let end = try #require(support.range(of: "struct ManualUpdateActionView: View")).lowerBound
         let manual = support[start..<end]
         for literal in [".onKeyPress(.downArrow)", ".onKeyPress(.upArrow)", ".focused($focusedKey, equals: key)",
-                        ".focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop, onScreen: onScreen))",
+                        ".focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop, onScreen: onScreen && isEnabled))",
                         ".accessibilityHint(tr(\"Naciśnij Return lub spację, aby pokazać szczegóły.\"))"] {
             #expect(manual.contains(literal), "\(literal)")
         }

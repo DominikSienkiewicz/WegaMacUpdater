@@ -203,7 +203,8 @@ enum PackageRowAccessibility {
 enum UpdateRowFocus {
     /// One Tab stop per group: the row focus is on or last left, or the group's first row when
     /// there is none or that row has left the list. None at all while another destination covers
-    /// the Updates screen (`updatesOnScreen`).
+    /// the Updates screen (`updatesOnScreen`) or a run or a scan in place disables the list —
+    /// the sections pass both in `onScreen`.
     static func isTabStop(_ key: String, in keys: [String], focused: String?, onScreen: Bool) -> Bool {
         guard onScreen else { return false }
         let stop = focused.flatMap { keys.contains($0) ? $0 : nil } ?? keys.first

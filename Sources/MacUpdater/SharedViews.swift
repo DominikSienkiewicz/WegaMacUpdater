@@ -500,14 +500,17 @@ struct PackageRow: View {
         .contentShape(Rectangle())
         .onTapGesture { onSelect?() }
         .focusable(onSelect != nil && isTabStop)
+        // A row focused before a run or a scan disabled the list keeps its focus; it answers nothing.
         .onKeyPress(.return) {
-            PackageRowKeyboardBehavior.handle(
+            guard isEnabled else { return .ignored }
+            return PackageRowKeyboardBehavior.handle(
                 .inspect,
                 onSelect: onSelect,
                 onToggle: onToggle
             ) ? .handled : .ignored
         }
         .onKeyPress(.space) {
+            guard isEnabled else { return .ignored }
             guard !menuFocused else { return .ignored }
             return PackageRowKeyboardBehavior.handle(
                 .toggleSelection,

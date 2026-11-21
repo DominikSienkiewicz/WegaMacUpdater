@@ -221,6 +221,9 @@ struct UpdateSection: View {
 
     @FocusState private var focusedKey: String?
     @Environment(\.updatesOnScreen) private var onScreen
+    /// False while a run or a scan in place disables the list. `.disabled` alone was never shown
+    /// to keep a focusable row out of the Tab loop, so the rows lose their Tab stops with it.
+    @Environment(\.isEnabled) private var isEnabled
     /// UXP-21 — the row Tab lands on. Kept apart from `focusedKey`, which empties once focus
     /// leaves the rows themselves (another group, or this row's ⋯ when it takes focus), so the
     /// stop stays where the user left it.
@@ -272,7 +275,7 @@ struct UpdateSection: View {
                         onPin:          { onPin?(item) },
                         onSkip:         skipAction(for: item),
                         backgroundUpdateToken: item.kind == .cask ? item.name : nil,
-                        isTabStop:      UpdateRowFocus.isTabStop(item.key, in: keys, focused: tabStop, onScreen: onScreen),
+                        isTabStop:      UpdateRowFocus.isTabStop(item.key, in: keys, focused: tabStop, onScreen: onScreen && isEnabled),
                         onMove:         { move(from: item.key, in: keys, $0) }
                     )
                     .focused($focusedKey, equals: item.key)
@@ -474,6 +477,8 @@ struct ManualUpdateSection: View {
 
     @FocusState private var focusedKey: String?
     @Environment(\.updatesOnScreen) private var onScreen
+    /// See `UpdateSection.isEnabled`.
+    @Environment(\.isEnabled) private var isEnabled
     /// UXP-21 — the row Tab lands on; see `UpdateSection.tabStop`.
     @State private var tabStop: String?
 
@@ -538,17 +543,19 @@ struct ManualUpdateSection: View {
                 .queueRowSelection(isInspected)
                 .contentShape(Rectangle())
                 .gesture(TapGesture().onEnded { focus(key); onInspect?(item) })
-                .focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop, onScreen: onScreen))
+                .focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop, onScreen: onScreen && isEnabled))
                 .focused($focusedKey, equals: key)
                 .onKeyPress(.return) {
-                    ManualUpdateRowKeyboardBehavior.handle(
+                    guard isEnabled else { return .ignored }
+                    return ManualUpdateRowKeyboardBehavior.handle(
                         .returnKey,
                         item: item,
                         onInspect: onInspect
                     ) ? .handled : .ignored
                 }
                 .onKeyPress(.space) {
-                    ManualUpdateRowKeyboardBehavior.handle(
+                    guard isEnabled else { return .ignored }
+                    return ManualUpdateRowKeyboardBehavior.handle(
                         .spaceKey,
                         item: item,
                         onInspect: onInspect
