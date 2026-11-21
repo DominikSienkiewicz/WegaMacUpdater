@@ -68,10 +68,11 @@ public enum TouchIDSudoDisableResult: Equatable, Sendable {
         return nil
     }
 
-    /// Decodes a reply. `nil` for an unknown code, and for −21 whose path is not
-    /// `/etc/pam.d/.sudo_local.wega-` followed by 1–64 of `[A-Za-z0-9-]`, so the app never shows a
-    /// path outside the policy directory.
+    /// Decodes a reply. `nil` for an unknown code, for a detail on any code but −21, and for −21
+    /// whose path is not `/etc/pam.d/.sudo_local.wega-` followed by 1–64 of `[A-Za-z0-9-]`, so the
+    /// app never shows a path outside the policy directory.
     public init?(wireCode: Int, detail: String?) {
+        guard detail == nil || wireCode == Self.rollbackFailedCode else { return nil }
         switch wireCode {
         case 1...:
             self = .removed(lines: wireCode)
