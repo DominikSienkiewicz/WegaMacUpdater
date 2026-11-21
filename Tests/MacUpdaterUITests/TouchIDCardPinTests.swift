@@ -81,6 +81,15 @@ struct TouchIDCardPinTests {
         #expect(live.contains("template: policyFile(at: SystemPaths.pamPolicyDirectory + \"/sudo_local.template\"),"))
     }
 
+    /// M5: the live controller gates every `sudo` route on the app's real look. The memberwise default
+    /// `{ .clear }` proves everything safe, so `.live` must never fall back to it.
+    @Test func theLiveControllerGatesOnTheRealPreflight() throws {
+        let controller = try source("Sources/MacUpdater/TouchIDSetupController.swift")
+        let live = try slice(controller, from: "static let live", to: "@Published private(set) var state")
+        #expect(live.contains("preflight: { TouchIDDisablePreflight.live() }"))
+        #expect(live.components(separatedBy: "preflight:").count - 1 == 1, "one preflight, the live one")
+    }
+
     /// The Terminal button opens the command it was given, all the way to the dependency; nothing on
     /// the way names a command of its own.
     @Test func terminalGetsTheCommandItWasHandedAllTheWay() throws {
