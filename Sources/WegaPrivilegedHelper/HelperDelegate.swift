@@ -19,12 +19,25 @@ private enum HelperInstallations {
 /// Accepts XPC connections only from the genuine, correctly-signed app, then
 /// vends the whitelisted operations object.
 final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
+    /// Z14: whether this process runs from a bundle only root can change, decided once at start.
+    private let bundleTrust: HelperBundleTrust
+
+    init(bundleTrust: HelperBundleTrust) {
+        self.bundleTrust = bundleTrust
+        super.init()
+    }
+
     func listener(_: NSXPCListener, shouldAcceptNewConnection newConnection: NSXPCConnection) -> Bool {
         // Pin the client: Apple chain + app identifier + Team ID. The kernel
         // enforces this against the peer's audit token (not a forgeable PID).
         // macOS 13+. Refuse everything if the Team ID hasn't been configured.
         guard WegaHelper.isTeamIDConfigured else {
             HelperAuditLog.logger.error("Odrzucono połączenie XPC: Team ID helpera nie jest skonfigurowany.")
+            return false
+        }
+        // Refused before the connection counts as activity, so the idle exit still ends the process.
+        guard case .trusted = bundleTrust else {
+            HelperAuditLog.logger.error("Odrzucono połączenie XPC: pakiet, z którego działa pomocnik, nie przeszedł sprawdzenia (\(self.bundleTrust.token, privacy: .public)).")
             return false
         }
         // R2-4: an accepted connection keeps the helper alive until it is invalidated.

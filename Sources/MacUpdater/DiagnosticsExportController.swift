@@ -127,7 +127,8 @@ final class DiagnosticsExportController: ObservableObject {
                 status: Self.helperStatusLabel(PrivilegedHelperClient.shared.status),
                 expectedVersion: WegaHelper.version,
                 reportedVersion: helperVersion,
-                teamIDConfigured: WegaHelper.isTeamIDConfigured
+                teamIDConfigured: WegaHelper.isTeamIDConfigured,
+                bundle: PrivilegedHelperClient.shared.bundleTrust.token
             ),
             schedule: .init(
                 interval: agent.interval.rawValue,

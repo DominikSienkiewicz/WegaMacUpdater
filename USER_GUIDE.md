@@ -42,8 +42,10 @@ Touch ID for `sudo` on or off when the optional Wega helper is not installed or 
    [Releases page](https://github.com/DominikSienkiewicz/WegaMacUpdater/releases). The `.dmg`
    can't ask for your administrator password, so some updates will fail unless Touch ID is on.
 2. **`.pkg`** — double-click it and follow the installer. The PKG also installs the components
-   that ask for your password. The Wega helper is a separate, optional setup.
-   **`.dmg`** — open it and drag **Wega Mac Updater** into your **Applications** folder.
+   that ask for your password. The Wega helper is a separate, optional setup, and it works only
+   with Wega installed from the `.pkg` (see [The Wega helper](#the-wega-helper)).
+   **`.dmg`** — open it and drag **Wega Mac Updater** into your **Applications** folder. A dragged
+   copy belongs to your account, so Wega does not install or use its helper from it.
 3. Launch Wega from Applications or Spotlight.
 
 Stable releases are notarized, so macOS opens them without a warning.
@@ -741,8 +743,36 @@ root-owned app to the Trash. It checks on every connection that Wega is signed w
 Developer ID signature from the same developer. The helper stops by itself after a minute
 with no connection and no work in progress (an installation in the background counts as work);
 macOS starts it again from the installed Wega for the next request, so after you update Wega
-the new helper runs within about a minute of idle. A helper from before this change keeps
-running until you restart your Mac or reinstall the helper.
+the new helper runs within about a minute of idle.
+
+**Only with Wega installed from the `.pkg`.** macOS starts the helper, as root, from Wega's own
+app bundle. Wega installs and uses it only when it runs directly from `/Applications` and the
+bundle, `Contents`, `Contents/MacOS`, the helper, `Contents/Library`,
+`Contents/Library/LaunchDaemons` and the helper's launchd file all belong to root and nobody else
+can change them (no write access for the group or others, no ACL, no links). The `.pkg` installs
+Wega exactly so. A copy dragged from the `.dmg`, or one started from Downloads or a disk image,
+belongs to your account or is not in `/Applications`, and any program running as you could
+replace the helper inside it. On such a copy the card shows **Unavailable**, the reason and the
+steps: download `WegaMacUpdater.pkg` from the Releases page (**Open Releases Page**), quit Wega,
+open the package and follow the installer, then open Wega from `/Applications` and install the
+helper. A copy you dragged somewhere else can go to the Trash. Until then Wega works as without
+the helper: restoring an app, its own update (**Download and open the installer**) and Touch ID
+for `sudo` take their usual routes without it, and Uninstall says that a root-owned app needs
+Wega installed from the `.pkg`. The
+helper checks the bundle it was started from as well, and refuses every connection when that
+bundle fails the same check.
+
+If you installed the helper from a dragged copy before this change, Wega removes that
+registration when it starts, unless another copy of Wega on this Mac passes the check, and says
+so in a banner that opens the helper card. If it cannot remove it, the card offers **Remove
+Helper**.
+
+**After updating from Wega 0.8.0 or earlier.** Wega sends every action only to a helper of
+protocol 9 or later, the one that checks its own bundle. An older helper still running after the
+update (released Wega has protocol 6, or 5 up to 0.6.0, and neither stops by itself) reads as out
+of date for restoring an app, a self-update through the helper, moving an app to the Trash and
+Touch ID until you restart your Mac or remove and reinstall the helper. A self-update that a
+protocol 6 helper started is still settled through it.
 
 To switch it on, open **Settings** (**⌘,**) → **Permissions & Privacy** and use the **Wega
 helper** card: **Install Helper**. If macOS asks for approval, the card shows **Open Settings → Login
@@ -764,7 +794,7 @@ is larger than 64 KiB or is not plain text. It writes nothing when `sudo_local` 
 the line, and reads the file again afterwards; the card shows success only when that file does
 have it. Each refusal is explained on the card, and after a refusal the card does not offer the
 Terminal command, since that command goes through `sudo` too. When you click the button and the helper
-is missing, or out of date for turning Touch ID on (it needs protocol 8), the card shows a one-line
+is missing, or out of date (it needs protocol 9), the card shows a one-line
 command to copy (**Copy command**) or to run in Terminal (**Open in Terminal**). It runs
 `/usr/bin/sudo`, not whatever `sudo` comes first on your `PATH`, and it refuses, changing nothing,
 an existing `sudo_local` that is a link, is not a regular file, is not owned by root, can be
@@ -810,9 +840,7 @@ under the command the card warns when a directory on the `/usr/local` chain can 
 someone other than root. **Check again** reads the state anew. When the command is not shown,
 the card says what Wega found, or, without the helper, that you can turn it off by hand. If the
 helper is out of date, the card says so and asks you to remove and reinstall it or restart your
-Mac. A helper from Wega 0.8.0 or earlier (protocol 6) can still restore an app, move an app to
-the Trash and finish a self-update. Turning Touch ID on or off through it needs the restart or
-the reinstall first; until then the card can offer the Terminal commands described above.
+Mac; until then the card can offer the Terminal commands described above.
 **What Wega does** links to
 [Turning off Touch ID for sudo](#turning-off-touch-id-for-sudo) below.
 
@@ -885,7 +913,7 @@ collecting it by hand:
 
 | In the zip | What it holds |
 | --- | --- |
-| `report.txt` | App version and build, macOS version and CPU, detected package managers and their versions, Wega helper status and version, schedule status, the last scan's result per source, free disk space and the signature state. |
+| `report.txt` | App version and build, macOS version and CPU, detected package managers and their versions, Wega helper status and version, whether Wega's app bundle passes the helper's check (**App bundle**), schedule status, the last scan's result per source, free disk space and the signature state. |
 | `update-history.txt` | The last 40 upgrade runs, item by item: update → validation → rollback, including which apps were rolled back and where a developer's Team ID changed. |
 | `logs/wega.log`, `logs/wega.log.1` | **Both** log files — the current one and the rotated one. |
 | `logs/trace-<run-id>.jsonl` | Persistent event traces for update operations: stages, Wega log messages, command output and exit results, HTTP attempts and observed vendor-check outcomes, correlated by run and process identifiers. |
@@ -1010,7 +1038,7 @@ one if you might still need it.
 - Root-owned files. The `.pkg` payload, which a self-update installs also for people who
   first installed from the DMG, and the helper leave folders owned by root. The helper's
   folders can exist even when no package was ever installed, for example after a DMG
-  install that used the helper, so check each of them on its own:
+  install from before Wega required the `.pkg` for its helper, so check each of them on its own:
 
   ```
   ls "/Library/Application Support/WegaMacUpdater"
@@ -1199,7 +1227,8 @@ An app owned by root, which the Trash will not take without a password, is remov
 **Wega helper** when it is switched on (the row says so: it will be moved to the Trash without
 a password). Without the helper, or when the helper is outdated or does not answer, the row
 says what to do — turn it on in **Settings → Permissions & Privacy**, or remove it and install
-it again — instead of asking for a password. The helper is reported as having removed the app
+it again — instead of asking for a password. When this copy of Wega may not use the helper (see
+[The Wega helper](#the-wega-helper)), the row says to install Wega from the `.pkg`. The helper is reported as having removed the app
 only when it confirms it; if it does not, the refreshed list shows whether the app is still in
 `/Applications`.
 

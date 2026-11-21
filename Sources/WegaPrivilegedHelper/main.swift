@@ -27,7 +27,9 @@ enum HelperIdle {
     )
 }
 
-let delegate = HelperListenerDelegate()
+// Z14: the bundle launchd started this process from, checked once before the first connection. A
+// refusal is logged per connection by the delegate; the idle exit ends the process as usual.
+let delegate = HelperListenerDelegate(bundleTrust: HelperBundleGate.trustOfThisHelper())
 let listener = NSXPCListener(machServiceName: WegaHelper.machServiceName)
 listener.delegate = delegate
 HelperIdle.monitor.start()

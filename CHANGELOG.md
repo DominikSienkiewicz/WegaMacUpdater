@@ -28,9 +28,9 @@ them verbatim under the new version heading, so that step is never done by hand 
   card has **Turn Off Touch ID for sudo**. The helper removes only the exact
   `auth       sufficient     pam_tid.so` directive from `/etc/pam.d/sudo_local`, whoever wrote it, swaps the new file in atomically, checks it and puts the old file
   back if anything fails. It refuses a file that someone other than root can change, and the guide
-  says how to inspect and repair that safely. An older helper keeps its other work; the
-  Touch ID card says it is out of date and asks you to reinstall it or restart your Mac, and can
-  show the command that turns Touch ID off without the helper.
+  says how to inspect and repair that safely. With an older helper the Touch ID card says it is
+  out of date and asks you to reinstall it or restart your Mac, and can show the command that
+  turns Touch ID off without the helper.
 - **Turning Touch ID for sudo on is checked like turning it off.** Through the helper it now
   needs an administrator signed in at the Mac, and refuses an unsafe `/etc/pam.d`,
   `sudo_local` or, when there is no `sudo_local`, `sudo_local.template` (someone other than root can change it, it is not a
@@ -38,10 +38,9 @@ them verbatim under the new version heading, so that step is never done by hand 
   Apple's template as before. It writes nothing when `sudo_local` already has the line and
   checks the result before the card says it worked. The card explains each refusal and no
   longer offers the Terminal command after one; for an unsafe policy it says to repair it
-  from recoveryOS. This is helper protocol v8. A helper still running from an earlier Wega keeps rollback,
-  self-update and moving apps to the Trash working; for turning Touch ID on or off the card says
-  it is out of date, and can offer the Terminal command instead, until you restart your Mac or
-  reinstall the helper.
+  from recoveryOS. With a helper still running from an earlier Wega the card says it is out of
+  date, and can offer the Terminal command instead, until you restart your Mac or reinstall the
+  helper.
 - **Turn Touch ID for sudo off without the helper.** When the helper is missing or out of date,
   the Touch ID card shows a command to copy (**Copy command**) or run in Terminal (**Open in
   Terminal**) next to the guide link, but only when Touch ID is on, the settings `sudo` reads
@@ -112,6 +111,22 @@ them verbatim under the new version heading, so that step is never done by hand 
   app?** opens Inventory, since a missing app is not proof it is up to date.
 
 ### Security
+- **The Wega helper only from a copy of Wega that belongs to root.** The helper runs as root, and
+  macOS starts it from Wega's app bundle. A copy dragged from the `.dmg` belongs to your account,
+  so any program running as you could replace the helper in it. Wega now installs and uses the
+  helper only when it runs directly from `/Applications` and the bundle, `Contents`,
+  `Contents/MacOS`, the helper, `Contents/Library`, `Contents/Library/LaunchDaemons` and the
+  helper's launchd file all belong to root and nobody else can change them, which is how the
+  `.pkg` installs it. Otherwise the helper card shows **Unavailable**, says why and how to install
+  from the `.pkg` (**Open Releases Page**); restoring an app, Wega's own update and Touch ID for
+  sudo work as without the helper, and Uninstall says a root-owned app needs Wega from the `.pkg`. A helper registered earlier from such a copy is removed when
+  Wega starts, with a banner, unless another copy of Wega on this Mac passes the check. The helper
+  checks the bundle it was started from as well and refuses every connection when it fails. The
+  package build checks that it installs such a bundle, and the diagnostics report shows the
+  result. This is helper protocol v9: Wega sends every action only to a v9 helper, so a helper
+  still running from an earlier Wega (released Wega has v6, or v5 up to 0.6.0) is out of date for restoring
+  apps, self-updates through the helper, the Trash and Touch ID until you restart your Mac or
+  remove and reinstall the helper; a self-update a v6 helper started is still settled through it.
 - **No sudo route while the settings sudo reads are unsafe or unproven.** When `sudo_local` is
   not a regular file, `sudo_local` or `/etc/pam.d` can be changed by someone other than root
   (whether Wega saw it or the helper reported it), `/etc/pam.d/sudo` is unsafe, or Wega cannot

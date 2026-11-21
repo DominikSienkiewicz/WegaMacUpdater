@@ -1,7 +1,11 @@
 import Foundation
 import WegaHelperKit
 
-public enum UninstallHelperAvailability: Equatable, Sendable { case notSupported, off, enabled, stale }
+public enum UninstallHelperAvailability: Equatable, Sendable {
+    case notSupported, off, enabled, stale
+    /// Z14: the bundle Wega runs from fails `HelperBundleGate`, so Wega does not use the helper.
+    case untrustedBundle
+}
 
 public struct UninstallBundleFacts: Equatable, Sendable {
     public var ownerUID: UInt32
@@ -42,7 +46,8 @@ public enum UninstallRoute {
     /// The helper is offered only for a root-owned, top-level `/Applications` bundle that has a
     /// bundle identifier; every other refusal is reported with its own reason. A refusal on a
     /// user-owned bundle is App Management only when the bundle and its folder are writable;
-    /// otherwise plain file permissions block it.
+    /// otherwise plain file permissions block it. Every helper availability is decided by name, so
+    /// one added later cannot fall through to the helper.
     public static func afterPermissionDenied(_ facts: UninstallBundleFacts) -> UninstallRouteDecision {
         if facts.ownerUID == facts.currentUserUID {
             return .blocked(facts.isWritableByUser ? .needsAppManagement : .needsAdministratorRights)
@@ -52,9 +57,13 @@ public enum UninstallRoute {
         }
         if facts.helper == .notSupported { return .blocked(.needsAdministratorRights) }
         if !facts.isAdministrator { return .blocked(.needsAdministratorAccount) }
-        if facts.helper == .off { return .blocked(.needsHelper) }
-        if facts.helper == .stale { return .blocked(.helperNeedsReinstall) }
-        return .helper
+        switch facts.helper {
+        case .notSupported: return .blocked(.needsAdministratorRights)
+        case .off: return .blocked(.needsHelper)
+        case .stale: return .blocked(.helperNeedsReinstall)
+        case .untrustedBundle: return .blocked(.helperNeedsPackageInstall)
+        case .enabled: return .helper
+        }
     }
 
     public static func isPermissionDenied(_ error: Error) -> Bool {

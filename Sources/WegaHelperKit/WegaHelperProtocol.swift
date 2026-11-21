@@ -92,7 +92,7 @@ public enum WegaHelper {
     public static let appBundleID = AppMetadata.bundleIdentifier
     /// Helper protocol version. Bumped with every new verb and every change to a verb's
     /// arguments, reply or semantics; see `minimumHelperVersion(for:)`.
-    public static let version = "8"
+    public static let version = "9"
 
     /// The oldest helper protocol version whose behaviour for `verb` this app relies on.
     ///
@@ -101,14 +101,17 @@ public enum WegaHelper {
     /// A changed reply shape gets a new selector, so a helper that predates it fails instead of
     /// decoding the reply as another shape. A change that makes older helpers unsafe for every verb
     /// raises every minimum.
+    ///
+    /// Protocol 9 (Z14) is such a change: a helper from 9 on serves no one when its own bundle fails
+    /// `HelperBundleGate`, and an older one cannot tell, so every verb that acts needs 9. The status
+    /// query stays at 6, so an older helper can still report an installation it ran.
     public static func minimumHelperVersion(for verb: WegaHelperVerb) -> Int {
         switch verb {
-        case .beginPackageInstallation, .packageInstallationStatus, .replaceBundle, .stageApplicationBundleForTrash:
+        case .packageInstallationStatus:
             return 6
-        case .disableTouchIDForSudo:
-            return 7
-        case .enableTouchIDForSudo:
-            return 8
+        case .beginPackageInstallation, .replaceBundle, .stageApplicationBundleForTrash,
+             .enableTouchIDForSudo, .disableTouchIDForSudo:
+            return 9
         }
     }
 
@@ -493,7 +496,7 @@ extension WegaHelper {
     /// a trailing `/`, after which `lstat` follows a final symlink) and no NUL. Read as UTF-8
     /// bytes, the way the kernel reads it — a split on Swift `Character`s misses a `/` that a
     /// following combining mark fuses into one grapheme.
-    private static func namesEveryComponentPlainly(_ path: String) -> Bool {
+    static func namesEveryComponentPlainly(_ path: String) -> Bool {
         let bytes = Array(path.utf8)
         guard bytes.first == pathSeparator, !bytes.contains(0) else { return false }
         return bytes.dropFirst()

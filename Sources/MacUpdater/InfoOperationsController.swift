@@ -6,6 +6,8 @@ import MacUpdaterCore
 final class InfoOperationsController: ObservableObject {
     struct Dependencies {
         var helperStatus: @MainActor () -> PrivilegedHelperClient.Status
+        /// Z14: whether this copy of Wega may host the root helper.
+        var helperBundleTrust: @MainActor () -> HelperBundleTrust
         var hasGitHubToken: @MainActor () -> Bool
         var setGitHubToken: @MainActor (String) -> Bool
         var clearGitHubToken: @MainActor () -> Void
@@ -19,6 +21,7 @@ final class InfoOperationsController: ObservableObject {
 
         static let live = Dependencies(
             helperStatus: { PrivilegedHelperClient.shared.status },
+            helperBundleTrust: { PrivilegedHelperClient.shared.bundleTrust },
             hasGitHubToken: { GitHubCredentialStore.hasToken },
             setGitHubToken: { GitHubCredentialStore.setToken($0) },
             clearGitHubToken: { GitHubCredentialStore.clear() },
@@ -44,6 +47,7 @@ final class InfoOperationsController: ObservableObject {
     @Published private(set) var catalogRefreshing = false
     @Published private(set) var catalogOutcome: CatalogRefresher.Outcome?
     @Published private(set) var helperStatus: PrivilegedHelperClient.Status = .notRegistered
+    @Published private(set) var helperBundleTrust: HelperBundleTrust = .trusted
     @Published private(set) var helperBusy = false
     @Published private(set) var helperError: String?
     @Published private(set) var githubTokenStored = false
@@ -53,7 +57,12 @@ final class InfoOperationsController: ObservableObject {
 
     init(dependencies: Dependencies = .live) {
         self.dependencies = dependencies
+        // Read now, so a refused copy never shows the usual helper card before the first refresh.
+        self.helperBundleTrust = dependencies.helperBundleTrust()
     }
+
+    /// The name of the bundle this copy of Wega runs from, for the card's refusal reason.
+    static var bundleName: String { Bundle.main.bundleURL.lastPathComponent }
 
     /// What the helper card asks while the helper waits for approval in System Settings.
     static var approvalHint: String {
@@ -69,6 +78,7 @@ final class InfoOperationsController: ObservableObject {
 
     func refreshPersistentState() {
         helperStatus = dependencies.helperStatus()
+        helperBundleTrust = dependencies.helperBundleTrust()
         githubTokenStored = dependencies.hasGitHubToken()
     }
 
@@ -92,6 +102,7 @@ final class InfoOperationsController: ObservableObject {
 
     func refreshHelperStatus() {
         helperStatus = dependencies.helperStatus()
+        helperBundleTrust = dependencies.helperBundleTrust()
     }
 
     func installHelper(onWegaState: @MainActor (WegaState) -> Void) async {
@@ -100,6 +111,11 @@ final class InfoOperationsController: ObservableObject {
         defer { helperBusy = false }
         guard dependencies.teamIDConfigured() else {
             helperError = tr("Brak skonfigurowanego Team ID — helper zadziała dopiero w podpisanym buildzie.")
+            return
+        }
+        helperBundleTrust = dependencies.helperBundleTrust()
+        if let refusal = HelperBundleRefusalPresentation(trust: helperBundleTrust, status: helperStatus, bundleName: Self.bundleName) {
+            helperError = refusal.summary
             return
         }
         do {

@@ -18,6 +18,8 @@ public struct HelperPackageInstallation: Sendable {
 
     private let store: PendingHelperInstallationStore
     private let handshake: @Sendable () async throws -> Void
+    /// The handshake before settling a pending installation; `handshake` when not given.
+    private let statusHandshake: @Sendable () async throws -> Void
     private let begin: @Sendable (UUID, String, String) async throws -> PackageInstallationStatus
     private let status: @Sendable (UUID) async throws -> PackageInstallationStatus
     private let verifyInstalled: @Sendable (String) throws -> Void
@@ -37,12 +39,14 @@ public struct HelperPackageInstallation: Sendable {
     public init(
         store: PendingHelperInstallationStore = .shared,
         handshake: @escaping @Sendable () async throws -> Void,
+        statusHandshake: (@Sendable () async throws -> Void)? = nil,
         begin: @escaping @Sendable (UUID, String, String) async throws -> PackageInstallationStatus,
         status: @escaping @Sendable (UUID) async throws -> PackageInstallationStatus,
         verifyInstalled: @escaping @Sendable (String) throws -> Void
     ) {
         self.store = store
         self.handshake = handshake
+        self.statusHandshake = statusHandshake ?? handshake
         self.begin = begin
         self.status = status
         self.verifyInstalled = verifyInstalled
@@ -76,7 +80,7 @@ public struct HelperPackageInstallation: Sendable {
         guard let pending = try store.load() else { return nil }
         let result: PackageInstallationStatus
         do {
-            try await handshake()
+            try await statusHandshake()
             result = try await status(pending.operationID)
         } catch {
             WegaLog.error(.helper, "Nie można odczytać instalacji \(pending.operationID): \(error.localizedDescription)")

@@ -38,7 +38,8 @@ struct OBS02DiagnosticsExportTests {
                 status: "enabled",
                 expectedVersion: "2",
                 reportedVersion: "2",
-                teamIDConfigured: true
+                teamIDConfigured: true,
+                bundle: "notOwnedByRoot(Contents/MacOS)"
             ),
             schedule: .init(
                 interval: "daily",
@@ -115,6 +116,8 @@ struct OBS02DiagnosticsExportTests {
         #expect(report.contains("Status: enabled"))
         #expect(report.contains("Expected version: 2"))
         #expect(report.contains("Reported version: 2"))
+        // Z14: whether the bundle Wega runs from may host the helper, as a token without a path.
+        #expect(report.contains("App bundle: notOwnedByRoot(Contents/MacOS)"))
         // Schedule status.
         #expect(report.contains("Check interval: daily"))
         #expect(report.contains("Unattended updates: yes"))

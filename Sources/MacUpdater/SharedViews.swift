@@ -721,6 +721,8 @@ func selectionToggleBinding(
 // MARK: - BannerData + BannerView
 
 enum BannerAction: Equatable {
+    /// Z14: the helper card in Settings.
+    case openHelperSettings
     case openLogs, openSettings, openAppManagementSettings
     /// The Touch ID card, for its recoveryOS note rather than to turn Touch ID on (owner decision
     /// 2026-11-21: while that note shows, Touch ID is no advice).
@@ -833,6 +835,7 @@ struct BannerView: View {
         case .openSettings: return tr("Włącz Touch ID")
         case .openTouchIDCard: return tr("Otwórz kartę Touch ID")
         case .openAppManagementSettings: return tr("Otwórz ustawienia prywatności")
+        case .openHelperSettings: return tr("Otwórz ustawienia pomocnika")
         case .reinstallCask: return tr("Przeinstaluj przez Brew")
         case .trustPublisher: return tr("Zaufaj nowemu podpisowi")
         }
@@ -840,6 +843,7 @@ struct BannerView: View {
 
     private static func symbol(for action: BannerAction) -> String {
         switch action {
+        case .openHelperSettings: return "info.circle"
         case .reinstallCask: return "arrow.clockwise.circle"
         case .trustPublisher: return "checkmark.shield"
         case .openLogs, .openSettings, .openAppManagementSettings, .openTouchIDCard: return "info.circle"

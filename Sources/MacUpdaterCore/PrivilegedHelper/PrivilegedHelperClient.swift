@@ -35,6 +35,9 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         case connectionFailed
         case timedOut
         case versionMismatch(helper: String, expected: String)
+        /// Z14: the bundle the app runs from fails `HelperBundleGate`, so the helper is neither
+        /// registered nor used.
+        case bundleNotTrusted(HelperBundleRefusal)
 
         public var errorDescription: String? {
             switch self {
@@ -45,6 +48,8 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
             case .timedOut:             return "Helper nie odpowiedział w wyznaczonym czasie."
             case .versionMismatch(let helper, let expected):
                 return "Niezgodna wersja helpera (uruchomiony \(helper), oczekiwano \(expected)) — zarejestruj helper ponownie."
+            case .bundleNotTrusted:
+                return "Ta kopia Wegi nie może używać pomocnika: zainstaluj ją z podpisanego pakietu .pkg."
             }
         }
     }
@@ -62,16 +67,42 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         static let stageForTrash: Duration = .seconds(600)
     }
 
-    private let service: SMAppService
+    /// The `SMAppService` registration, behind closures so tests stand in for it.
+    struct Registration {
+        var status: () -> Status
+        var register: () throws -> Void
+        var unregister: () async throws -> Void
+    }
 
-    private init() {
-        self.service = SMAppService.daemon(plistName: WegaHelper.plistName)
+    private let registration: Registration
+    private let trustCache: HelperBundleTrustCache
+    private let machServiceName: String
+
+    private convenience init() {
+        let service = SMAppService.daemon(plistName: WegaHelper.plistName)
+        self.init(
+            registration: Registration(
+                status: { Self.status(of: service.status) },
+                register: { try service.register() },
+                unregister: { try await service.unregister() }
+            ),
+            evaluateBundleTrust: { HelperBundleGate.live(bundlePath: Bundle.main.bundlePath) },
+            machServiceName: WegaHelper.machServiceName
+        )
+    }
+
+    init(registration: Registration, evaluateBundleTrust: @escaping () -> HelperBundleTrust, machServiceName: String) {
+        self.registration = registration
+        self.trustCache = HelperBundleTrustCache(evaluate: evaluateBundleTrust)
+        self.machServiceName = machServiceName
     }
 
     // MARK: - Lifecycle (SMAppService)
 
-    public var status: Status {
-        switch service.status {
+    public var status: Status { registration.status() }
+
+    private static func status(of status: SMAppService.Status) -> Status {
+        switch status {
         case .notRegistered:    return .notRegistered
         case .enabled:          return .enabled
         case .requiresApproval: return .requiresApproval
@@ -80,12 +111,19 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         }
     }
 
-    public var isEnabled: Bool { status == .enabled }
+    /// Z14: whether the bundle Wega runs from may host the root helper (`HelperBundleGate`). Kept
+    /// once trusted, checked again while refused; see `HelperBundleTrustCache`.
+    public var bundleTrust: HelperBundleTrust { trustCache.current }
+
+    /// Registered, approved, and running from a bundle only root can change. Every caller that falls
+    /// back when the helper is off falls back the same way when the bundle is refused.
+    public var isEnabled: Bool { status == .enabled && bundleTrust == .trusted }
 
     /// Whether Uninstall may route a root-owned app to the helper. Read from the registration
     /// alone; the handshake that finds a stale helper is `uninstallAvailabilityAfterHandshake()`.
     public var uninstallAvailability: UninstallHelperAvailability {
-        Self.uninstallAvailability(isEnabled: isEnabled)
+        if case .refused = bundleTrust { return .untrustedBundle }
+        return Self.uninstallAvailability(isEnabled: isEnabled)
     }
 
     static func uninstallAvailability(isEnabled: Bool) -> UninstallHelperAvailability {
@@ -94,8 +132,11 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
 
     /// Maps how a version handshake failed to what Uninstall may do with the helper.
     static func uninstallAvailability(handshakeFailure: Error) -> UninstallHelperAvailability {
-        if case .notEnabled = handshakeFailure as? HelperError { return .off }
-        return .stale
+        switch handshakeFailure as? HelperError {
+        case .notEnabled: .off
+        case .bundleNotTrusted: .untrustedBundle
+        default: .stale
+        }
     }
 
     /// One bounded handshake (the handshake deadline, and at most one retry after a dropped
@@ -111,13 +152,16 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
     }
 
     /// Registers the daemon. May leave the service in `.requiresApproval` until
-    /// the user toggles it on in System Settings.
+    /// the user toggles it on in System Settings. A bundle that fails `HelperBundleGate` is never
+    /// registered: launchd would run the helper as root from files the user can replace. The bundle is
+    /// checked again here, not read from the kept answer, which exists only for calls during a pkg install.
     public func register() throws {
-        try service.register()
+        if case .refused(let refusal) = trustCache.evaluateAgain() { throw HelperError.bundleNotTrusted(refusal) }
+        try registration.register()
     }
 
     public func unregister() async throws {
-        try await service.unregister()
+        try await registration.unregister()
     }
 
     /// Deep-links to System Settings → Login Items so the user can approve.
@@ -188,10 +232,13 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         }
     }
 
-    /// Not enabled reads as off; everything else (wrong version, no answer, a raw XPC error) as stale.
+    /// Not enabled, or a bundle the helper may not run from, reads as off; everything else (wrong
+    /// version, no answer, a raw XPC error) as stale.
     static func verbAvailability(handshakeFailure: Error) -> HelperVerbAvailability {
-        if case .notEnabled = handshakeFailure as? HelperError { return .off }
-        return .stale
+        switch handshakeFailure as? HelperError {
+        case .notEnabled, .bundleNotTrusted: .off
+        default: .stale
+        }
     }
 
     /// Whether a call failed because its connection dropped: the client's interruption or
@@ -276,6 +323,7 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
     private var trackedInstaller: HelperPackageInstallation {
         HelperPackageInstallation(
             handshake: { _ = try await self.performHandshake(for: .beginPackageInstallation) },
+            statusHandshake: { _ = try await self.performHandshake(for: .packageInstallationStatus) },
             begin: { id, path, version in
                 try await self.installationReply { proxy, reply in
                     proxy.beginPackageInstallation(atPath: path, operationID: id.uuidString, expectedVersion: version, withReply: reply)
@@ -376,9 +424,10 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         deadline: Duration,
         _ body: @escaping @Sendable (_ proxy: WegaPrivilegedOps, _ done: @escaping @Sendable (sending Result<T, Error>) -> Void) -> Void
     ) async throws -> T {
-        guard isEnabled else { throw HelperError.notEnabled }
+        if case .refused(let refusal) = bundleTrust { throw HelperError.bundleNotTrusted(refusal) }
+        guard status == .enabled else { throw HelperError.notEnabled }
 
-        let connection = NSXPCConnection(machServiceName: WegaHelper.machServiceName, options: .privileged)
+        let connection = NSXPCConnection(machServiceName: machServiceName, options: .privileged)
         connection.remoteObjectInterface = NSXPCInterface(with: WegaPrivilegedOps.self)
         // Pin the daemon we talk to (macOS 13+). Kernel validates via audit token.
         connection.setCodeSigningRequirement(WegaHelper.helperRequirement())
@@ -418,6 +467,40 @@ public enum HelperVerbAvailability: Equatable, Sendable {
     case off
     /// The helper predates the verb, postdates the app, or did not answer.
     case stale
+}
+
+/// Z14, design §3: once the bundle is trusted the answer is kept for the process; a refusal is
+/// evaluated again on every read.
+///
+/// A root-owned bundle cannot become writable to the user without root, so a kept "trusted" cannot
+/// go stale through user-level code. Checking it per call instead would read the bundle while a
+/// helper-driven pkg install replaces it: one transient refusal on a status poll turns the install
+/// into an unknown outcome that blocks every change. Checking a refusal again lets a transient one
+/// heal and picks up a pkg installed over a dragged copy.
+final class HelperBundleTrustCache: @unchecked Sendable {
+    private let lock = NSLock()
+    private var trusted = false
+    private let evaluate: () -> HelperBundleTrust
+
+    init(evaluate: @escaping () -> HelperBundleTrust) {
+        self.evaluate = evaluate
+    }
+
+    var current: HelperBundleTrust {
+        lock.lock()
+        defer { lock.unlock() }
+        if trusted { return .trusted }
+        let answer = evaluate()
+        trusted = answer == .trusted
+        return answer
+    }
+
+    /// A fresh answer that leaves the kept one alone, for a decision that must not rest on it.
+    func evaluateAgain() -> HelperBundleTrust {
+        lock.lock()
+        defer { lock.unlock() }
+        return evaluate()
+    }
 }
 
 /// Wraps a non-Sendable `NSXPCConnection` so escaping `@Sendable` XPC handlers
