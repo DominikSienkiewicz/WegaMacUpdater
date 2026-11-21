@@ -59,16 +59,21 @@ struct TouchIDEnableCopyTests {
     }
 
     /// RC2-7, Z12: −4 and −5 name the condition and then give recoveryOS advice only, warning against
-    /// typing the password into sudo, Wega's own prompts included.
+    /// typing the password into sudo, Wega's own prompts included. M2: that note is the card's
+    /// (`recoveryOnlyNote`, drawn whenever the controller has the reason); Wega's line under it says
+    /// only what happened, so the paragraph is not shown twice, and offers no manual route.
     @Test func anUnsafePolicyGetsRecoveryOnlyAdvice() {
         withLanguage(.pl) {
             #expect(TouchIDEnableCopy.recoveryOnly == recovery)
-            #expect(TouchIDEnableCopy.line(for: .refused(.notRegularFile), isEnabled: false)
+            #expect(TouchIDEnableCopy.unsafePolicyNote(.notRegularFile)
                     == "Plik /etc/pam.d/sudo_local nie jest zwykłym plikiem, więc go nie zmieniłam. sudo może przez niego czytać ustawienia spoza /etc/pam.d. " + recovery)
-            #expect(TouchIDEnableCopy.line(for: .refused(.unsafeOwnership), isEnabled: false)
+            #expect(TouchIDEnableCopy.unsafePolicyNote(.unsafeOwnership)
                     == "Plik /etc/pam.d/sudo_local albo katalog /etc/pam.d może zmieniać ktoś poza rootem albo wygląda inaczej, niż powinien. To problem bezpieczeństwa: kto może tam pisać, może dostać uprawnienia roota bez hasła. Nie zmieniłam go. Sprawdź go według przewodnika. " + recovery)
-            #expect(TouchIDEnableCopy.unsafePolicyNote(.notRegularFile) == TouchIDEnableCopy.line(for: .refused(.notRegularFile), isEnabled: false))
-            #expect(TouchIDEnableCopy.unsafePolicyNote(.unsafeOwnership) == TouchIDEnableCopy.line(for: .refused(.unsafeOwnership), isEnabled: false))
+            for refusal in [TouchIDSudoEnableRefusal.notRegularFile, .unsafeOwnership] {
+                let line = TouchIDEnableCopy.line(for: .refused(refusal), isEnabled: false)
+                #expect(line == "Nie włączyłam Touch ID dla sudo: ustawienia, które czyta sudo, nie są bezpieczne.", "\(refusal)")
+                #expect(!line.contains("ręcznie") && !line.contains("polece"), "\(refusal): no manual route")
+            }
             for refusal in TouchIDSudoEnableRefusal.allCases where refusal != .notRegularFile && refusal != .unsafeOwnership {
                 #expect(!TouchIDEnableCopy.line(for: .refused(refusal), isEnabled: false).contains("trybu odzyskiwania"), "\(refusal)")
             }
@@ -145,6 +150,8 @@ struct TouchIDEnableCopyTests {
                     == "Don't type your password into sudo until you fix this — not even when Wega asks for it during an update: sudo reads these settings. Fix them from macOS Recovery with the user guide.")
             #expect(TouchIDEnableCopy.unsafePolicyNote(.notRegularFile)
                     == "/etc/pam.d/sudo_local isn't a regular file, so I didn't change it. Through it, sudo may read settings from outside /etc/pam.d. " + TouchIDEnableCopy.recoveryOnly)
+            #expect(TouchIDEnableCopy.line(for: .refused(.unsafeOwnership), isEnabled: false)
+                    == "I didn't turn on Touch ID for sudo: the settings sudo reads aren't safe.")
             #expect(TouchIDEnableCopy.outdatedHelper
                     == "The Wega helper is out of date or not answering, so it won't turn on Touch ID for sudo. In Settings, remove the helper and install it again, or restart your Mac.")
             #expect(TouchIDEnableCopy.outdatedHelperAboveCommand

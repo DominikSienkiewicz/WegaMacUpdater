@@ -207,11 +207,11 @@ final class TouchIDSetupController: ObservableObject {
       state = .idle(touchIDState)
     case .permissionDenied:
       state = .permissionDenied(touchIDState)
-      onWegaState(
-        WegaState(
-          pose: .alert,
-          line: tr("macOS zablokował zapis — wklej komendę do Terminala.")
-        ))
+      // M3: the line points at the command only where the card shows one; otherwise the card's
+      // recoveryOS note is the whole message.
+      if showsEnableCommand {
+        onWegaState(WegaState(pose: .alert, line: tr("macOS zablokował zapis — wklej komendę do Terminala.")))
+      }
     case .otherError(let message):
       state = .failed(touchIDState, message)
     }

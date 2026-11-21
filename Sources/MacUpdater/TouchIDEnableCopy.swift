@@ -4,7 +4,7 @@ import MacUpdaterCore
 /// What Wega says after asking the helper to turn Touch ID for sudo on: calm, first person, and always
 /// the next step. `isEnabled` is the state read from the file after the helper answered, not the
 /// helper's claim (RC2-2). −10, −20 and −21 with a path say what `TouchIDDisableCopy` says; the
-/// −4/−5 note lives here, and turning Touch ID off uses it too.
+/// card's −4/−5 note and its other recoveryOS notes live here, for both directions.
 enum TouchIDEnableCopy {
     /// Wega's line: it names no command, because the card may show none (M1).
     static var outdatedHelper: String {
@@ -69,10 +69,10 @@ enum TouchIDEnableCopy {
         switch refusal {
         case .noConsoleUser, .callerNotConsoleUser, .callerNotAdministrator:
             return tr("Touch ID dla sudo może włączyć tylko administrator zalogowany przy tym Macu.")
-        case .notRegularFile:
-            return unsafePolicyNote(.notRegularFile)
-        case .unsafeOwnership:
-            return unsafePolicyNote(.unsafeOwnership)
+        case .notRegularFile, .unsafeOwnership:
+            // M2: the card shows `unsafePolicyNote` for the reason the controller now keeps; this
+            // line under it only says what happened.
+            return tr("Nie włączyłam Touch ID dla sudo: ustawienia, które czyta sudo, nie są bezpieczne.")
         case .tooLarge, .unreadable:
             // The guide has no steps for turning it on by hand, only for checking the file.
             return tr("Plik /etc/pam.d/sudo_local wygląda inaczej, niż się spodziewam, więc go nie zmieniłam. Sprawdź go według przewodnika.")

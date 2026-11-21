@@ -61,8 +61,9 @@ enum TouchIDDisableCopy {
         case .tooLarge, .unreadable, .lineContinuation:
             return tr("Plik /etc/pam.d/sudo_local wygląda inaczej, niż się spodziewam, więc go nie zmieniłam. Wyłączysz Touch ID ręcznie według przewodnika.")
         case .notRegularFile, .unsafeOwnership:
-            // RC2-7: `sudo` reads this file, so the manual route through `sudo` is no advice here.
-            return TouchIDEnableCopy.unsafePolicyNote(refusal)
+            // RC2-7: `sudo` reads this file, so the manual route through `sudo` is no advice here; the
+            // card's recoveryOS note says what is wrong (M2), and this line only what happened.
+            return tr("Nie wyłączyłam Touch ID dla sudo: ustawienia, które czyta sudo, nie są bezpieczne.")
         case .fallbackPolicyPresent:
             guard let fallbackPath, TouchIDSudoDisabler.fallbackPolicyPaths.contains(fallbackPath) else {
                 return tr("Po usunięciu tej dyrektywy sudo czytałby też inny plik ustawień PAM, więc nic nie zmieniłam. Sprawdź przewodnik.")

@@ -114,6 +114,30 @@ struct TouchIDSetupControllerGateTests {
         #expect(!on.offersDisableButton)
     }
 
+    /// M3: "wklej komendę do Terminala" only when the card shows the command. Here the policy turns
+    /// unsafe while the helper does not answer, so no command is shown and no line points at one.
+    @Test func theTerminalLinePointsAtACommandOnlyWhenOneIsShown() async {
+        let observed = GateBox(TouchIDDisablePreflight.clear)
+        let racing = TouchIDSetupController(dependencies: .init(
+            currentState: { .available }, helperIsEnabled: { true },
+            enableWithHelper: {
+                observed.value = TouchIDDisablePreflight(refusal: .unsafeOwnership, unsafeLocalDirectory: nil, fallbackPath: nil)
+                throw PrivilegedHelperClient.HelperError.connectionFailed
+            },
+            authorizeFallback: { .permissionDenied }, openInTerminal: { _ in }, preflight: { observed.value },
+            logHelperCode: { _, _ in }
+        ))
+        var lines: [String] = []
+        await racing.enable { lines.append($0.line) }
+        #expect(racing.wasPermissionDenied && !racing.showsEnableCommand)
+        #expect(lines.isEmpty, "the card's recoveryOS note is the whole message: \(lines)")
+
+        let shown = controller(state: .available, preflight: .clear) { throw PrivilegedHelperClient.HelperError.connectionFailed }
+        var shownLines: [String] = []
+        await shown.enable { shownLines.append($0.line) }
+        #expect(shown.showsEnableCommand && shownLines == [tr("macOS zablokował zapis — wklej komendę do Terminala.")])
+    }
+
     /// What was seen comes before what is missing, so the card names the real problem.
     @Test func theReasonNamesWhatWasSeenFirst() {
         var preflight = TouchIDDisablePreflight(refusal: .notRegularFile, unsafeLocalDirectory: nil, fallbackPath: nil)
