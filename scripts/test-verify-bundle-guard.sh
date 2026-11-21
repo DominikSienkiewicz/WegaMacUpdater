@@ -19,6 +19,11 @@ set -euo pipefail
 #   * REQUIRE_SIGNED=1 (tryb wydania stabilnego) zamienia pominięcia w błędy —
 #     build ad-hoc nie może przejść bramki wydania na zielono.
 #
+# RC2-4 dokłada krok 7: podpisana aplikacja i pomocnik muszą spełniać wymagania XPC, którymi
+# przypinają się nawzajem (clientRequirement()/helperRequirement()). Stub `codesign` sprawdza
+# w nich to, na czym bramka polega: tekstową postać `-R "=…"`, identyfikator celu i OU jego
+# certyfikatu liścia — więc obcy zespół albo zły identyfikator pomocnika musi odpaść.
+#
 # `codesign`/`pkgutil` są tu podmienione na stuby w PATH, więc test nie potrzebuje ani
 # certyfikatu Developer ID, ani sieci — działa tak samo lokalnie i w CI.
 # ---------------------------------------------------------------------------
@@ -58,7 +63,33 @@ mkdir -p "$STUB_BIN"
 
 cat > "$STUB_BIN/codesign" <<'STUB'
 #!/usr/bin/env bash
-[[ "${1:-}" == "--verify" ]] && exit 0
+if [[ "${1:-}" == "--verify" ]]; then
+    # `--verify -R "=<tekst>" <cel>` to krok 7. Prawdziwy codesign czyta `-R="=…"` jako tekst
+    # "=…", czyli błąd składni — stub też. Podpis celu: identyfikator i OU liścia (prawdziwy
+    # Team ID z WegaHelperProtocol.swift, chyba że test podstawi inny).
+    requirement="" previous="" target=""
+    for arg in "$@"; do
+        case "$arg" in
+            -R=*) echo "line 1:1: unexpected token: =" >&2; exit 1 ;;
+        esac
+        [[ "$previous" == "-R" ]] && requirement="$arg"
+        previous="$arg"
+        target="$arg"
+    done
+    [[ -z "$requirement" ]] && exit 0
+    case "$(basename "$target")" in
+        WegaPrivilegedHelper)
+            identifier="${WEGA_TEST_HELPER_IDENTIFIER:-com.wega.WegaMacUpdater.helper}"
+            ou="${WEGA_TEST_HELPER_OU:-$WEGA_TEST_REAL_TEAM_ID}" ;;
+        *)
+            identifier="com.wega.WegaMacUpdater"
+            ou="${WEGA_TEST_APP_OU:-$WEGA_TEST_REAL_TEAM_ID}" ;;
+    esac
+    printf '%s %s\n' "$(basename "$target")" "$requirement" >> "${WEGA_TEST_REQUIREMENT_LOG:-/dev/null}"
+    [[ "$requirement" == "=anchor apple generic and identifier \"$identifier\" and "* ]] || exit 3
+    [[ "$requirement" == *" and certificate leaf[subject.OU] = \"$ou\"" ]] || exit 3
+    exit 0
+fi
 
 if [[ "${WEGA_TEST_SIGN_MODE:-}" == "adhoc" ]]; then
     cat >&2 <<'ADHOC'
@@ -120,6 +151,10 @@ STUB
 
 chmod +x "$STUB_BIN"/*
 export PATH="$STUB_BIN:$PATH"
+WEGA_TEST_REAL_TEAM_ID="$(sed -n 's/.*static let teamIdentifier = "\(.*\)".*/\1/p' \
+    "$REPO_ROOT/Sources/WegaHelperKit/WegaHelperProtocol.swift")"
+export WEGA_TEST_REAL_TEAM_ID
+export WEGA_TEST_REQUIREMENT_LOG="$WORK/requirements.log"
 
 # --- 0. Bramka jest wykonywalna (workflowy wołają ./scripts/verify-bundle.sh) ---
 echo "→ verify-bundle.sh ma bit wykonywalności"
@@ -154,6 +189,7 @@ fi
 
 # --- 2. Build ad-hoc nadal przechodzi z pominiętym krokiem 5 ----------------
 echo "→ build ad-hoc ⇒ notaryzacja pominięta, bramka przechodzi"
+: > "$WEGA_TEST_REQUIREMENT_LOG"
 set +e
 adhoc_out="$(WEGA_TEST_SIGN_MODE=adhoc bash "$REPO_ROOT/scripts/verify-bundle.sh" "$APP" 2>&1)"
 adhoc_rc=$?
@@ -169,9 +205,15 @@ if grep -q "Pominięto: notaryzacja i stapling" <<< "$adhoc_out"; then
 else
     fail "brak informacji o pominiętej notaryzacji dla builda ad-hoc"
 fi
+if grep -q "Pominięto: wymagania XPC" <<< "$adhoc_out" && [[ ! -s "$WEGA_TEST_REQUIREMENT_LOG" ]]; then
+    pass "wymagania XPC pominięte dla builda ad-hoc (anchor apple generic nie może tu zachodzić)"
+else
+    fail "build ad-hoc: wymagania XPC nie zostały pominięte"
+fi
 
 # --- 3. SEC-04: Team ID zgodny ⇒ bramka przechodzi --------------------------
 echo "→ notaryzowany artefakt z oczekiwanym Team ID ⇒ bramka przechodzi"
+: > "$WEGA_TEST_REQUIREMENT_LOG"
 set +e
 match_out="$(WEGA_TEST_SIGN_MODE=developer-id WEGA_TEST_NOTARIZED=1 \
              WEGA_TEST_TEAM_ID=TEAMIDTEST EXPECTED_TEAM_ID=TEAMIDTEST \
@@ -189,6 +231,46 @@ if grep -q "Team ID TEAMIDTEST" <<< "$match_out"; then
 else
     fail "bramka nie raportuje odczytanego Team ID — krok 6 nie działa"
 fi
+
+# --- 3a. RC2-4: każdy plik sprawdzony własnym wymaganiem XPC ----------------
+echo "→ podpis Developer ID ⇒ aplikacja i pomocnik sprawdzone każdy swoim wymaganiem XPC"
+app_checks="$(grep -c '^WegaMacUpdater.app =anchor apple generic and identifier "com.wega.WegaMacUpdater" and ' "$WEGA_TEST_REQUIREMENT_LOG" || true)"
+helper_checks="$(grep -c '^WegaPrivilegedHelper =anchor apple generic and identifier "com.wega.WegaMacUpdater.helper" and ' "$WEGA_TEST_REQUIREMENT_LOG" || true)"
+if [[ "$app_checks" -eq 1 && "$helper_checks" -eq 1 && "$(wc -l < "$WEGA_TEST_REQUIREMENT_LOG")" -eq 2 ]]; then
+    pass "codesign --verify -R \"=…\": aplikacja z clientRequirement, pomocnik z helperRequirement"
+else
+    fail "wymagania XPC nie sprawdzone po jednym na plik: $(cat "$WEGA_TEST_REQUIREMENT_LOG")"
+fi
+if grep -q "wymaganie XPC spełnione: WegaMacUpdater.app" <<< "$match_out" \
+    && grep -q "wymaganie XPC spełnione: WegaPrivilegedHelper" <<< "$match_out"; then
+    pass "oba spełnione wymagania raportowane"
+else
+    fail "brak raportu o spełnionych wymaganiach XPC"
+fi
+
+# Każdy z trzech przypadków: notaryzowany, Team ID aplikacji zgodny (krok 6 przechodzi),
+# a jeden podpis nie spełnia wymagania XPC — bramka musi odrzucić i nazwać plik.
+requirement_rejects() {
+    local description="$1" named="$2" out rc
+    shift 2
+    set +e
+    out="$(env "$@" WEGA_TEST_SIGN_MODE=developer-id WEGA_TEST_NOTARIZED=1 \
+           WEGA_TEST_TEAM_ID=TEAMIDTEST EXPECTED_TEAM_ID=TEAMIDTEST \
+           bash "$REPO_ROOT/scripts/verify-bundle.sh" "$APP" "$PKG" 2>&1)"
+    rc=$?
+    set -e
+    if [[ "$rc" -ne 0 ]] && grep -q "✗ .*wymagania XPC.*: $named" <<< "$out"; then
+        pass "$description ⇒ bramka odrzuca (exit $rc) i nazywa $named"
+    else
+        fail "$description ⇒ bramka przepuściła albo nie nazwała $named (exit $rc): $out"
+    fi
+}
+
+echo "→ RC2-4: podpis, którego pomocnik albo aplikacja nie przyjmie ⇒ bramka odrzuca"
+requirement_rejects "pomocnik podpisany przez obcy zespół" WegaPrivilegedHelper WEGA_TEST_HELPER_OU=FOREIGN123
+requirement_rejects "pomocnik podpisany bez swojego identyfikatora" WegaPrivilegedHelper \
+    WEGA_TEST_HELPER_IDENTIFIER=WegaPrivilegedHelper
+requirement_rejects "aplikacja, której liść ma obce OU" WegaMacUpdater.app WEGA_TEST_APP_OU=FOREIGN123
 
 # --- 4. SEC-04: obcy Team ID ⇒ bramka odrzuca (sedno wpisu) -----------------
 echo "→ obcy (ale notaryzowany) artefakt ⇒ bramka odrzuca"

@@ -250,6 +250,25 @@ struct PrivilegedHelperSecurityTests {
             + " and certificate leaf[subject.OU] = \"\(WegaHelper.teamIdentifier)\"")
     }
 
+    /// RC2-4: unit tests run on ad hoc builds, where `anchor apple generic` cannot hold, so a slip in
+    /// either requirement would show only once a v8 helper refused the genuine app. The release gate
+    /// checks the signed app and helper against exactly these two strings.
+    @Test func theReleaseGateChecksTheSignedFilesAgainstExactlyTheseRequirements() throws {
+        let script = try String(
+            contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().appendingPathComponent("scripts/verify-bundle.sh"),
+            encoding: .utf8
+        )
+        let lines = script.components(separatedBy: "\n")
+        #expect(lines.filter { $0.hasPrefix("CLIENT_REQUIREMENT=") } == ["CLIENT_REQUIREMENT='\(WegaHelper.clientRequirement())'"])
+        #expect(lines.filter { $0.hasPrefix("HELPER_REQUIREMENT=") } == ["HELPER_REQUIREMENT='\(WegaHelper.helperRequirement())'"])
+        #expect(script.contains("codesign --verify -R \"=$CLIENT_REQUIREMENT\" \"$APP_BUNDLE\""))
+        #expect(script.contains("codesign --verify -R \"=$HELPER_REQUIREMENT\" \"$HELPER\""))
+        // `-R="=…"` hands codesign the text "=…", which it rejects as a syntax error on every build.
+        let commands = lines.filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("#") }
+        #expect(commands.allSatisfy { !$0.contains("-R=") })
+    }
+
     @Test func teamIDConfiguredFlagReflectsPlaceholder() {
         // Default ships with the placeholder → fail-closed paths must see "not configured".
         #expect(WegaHelper.isTeamIDConfigured == (WegaHelper.teamIdentifier != "REPLACE_TEAMID"))
