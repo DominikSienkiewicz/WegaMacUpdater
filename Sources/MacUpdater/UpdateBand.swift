@@ -242,7 +242,9 @@ struct UpdateBand<Action: View>: View {
             .lineLimit(1)
     }
 
-    private var summaryColumn: some View {
+    /// The regular layout's summary. Internal, like `compactSummary`, so the layout tests can
+    /// measure what the band draws.
+    var summaryColumn: some View {
         VStack(alignment: .leading, spacing: 6) {
             queueSummaryText
             protection
@@ -250,13 +252,13 @@ struct UpdateBand<Action: View>: View {
         }
     }
 
-    private var compactSummary: some View {
+    /// The narrow and compact layouts' summary: the queue, the undo coverage and the plan link,
+    /// one row each. Side by side, the link was cut next to the longer undo line (M9).
+    var compactSummary: some View {
         VStack(alignment: .leading, spacing: 2) {
             queueSummaryText
-            HStack(spacing: 8) {
-                protection.layoutPriority(1)
-                planLink
-            }
+            protection
+            planLink
         }
     }
 

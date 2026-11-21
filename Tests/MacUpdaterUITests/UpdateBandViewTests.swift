@@ -450,10 +450,13 @@ final class UpdateBandViewTests: XCTestCase {
 
     func testTheUndoLineIsNeverTheOneThatGetsDropped() throws {
         let text = try source("Sources/MacUpdater/UpdateBand.swift")
-        let start = try XCTUnwrap(text.range(of: "private var compactSummary: some View")).upperBound
-        let compact = text[start...].prefix(500)
+        let start = try XCTUnwrap(text.range(of: "var compactSummary: some View")).upperBound
+        let end = try XCTUnwrap(text.range(of: "private var queueSummaryText: some View", range: start..<text.endIndex)).lowerBound
+        let compact = text[start..<end]
         XCTAssertFalse(compact.contains("ViewThatFits"))
-        XCTAssertTrue(compact.contains("protection.layoutPriority(1)"))
+        // M9 — the undo line has a row of its own, shared with nothing it could yield its width to.
+        XCTAssertFalse(compact.contains("HStack"))
+        XCTAssertTrue(compact.contains("queueSummaryText\n            protection\n            planLink"))
         for bandWidth in Self.narrowestBandWidths {
             let column = UpdateBandLayout.style(forWidth: bandWidth) == .regular
                 ? WegaLayout.bandSummaryWidth : headlineColumnWidth(bandWidth: bandWidth)
@@ -463,6 +466,34 @@ final class UpdateBandViewTests: XCTestCase {
                     let width = NSHostingView(rootView: Label(label, systemImage: "shield.lefthalf.filled")
                         .font(.wega(.caption)).fixedSize()).fittingSize.width
                     XCTAssertLessThanOrEqual(width, column, "\(language) \(bandWidth) pt: \(label)")
+                }
+            }
+        }
+    }
+
+    /// M9 — next to the longest undo line, "Pokaż, co dokładnie zrobię" was cut in the narrow
+    /// and compact columns. Measured on the summary the band draws there, at its ideal width
+    /// (a short queue line, which wraps by design otherwise): nothing in it needs more than the
+    /// column, so neither the link nor the undo line is truncated.
+    func testThePlanLinkIsNeverTruncated() {
+        for bandWidth in Self.narrowestBandWidths {
+            let layout = UpdateBandLayout.style(forWidth: bandWidth)
+            let column = layout == .regular ? WegaLayout.bandSummaryWidth : headlineColumnWidth(bandWidth: bandWidth)
+            for language in [AppLanguage.pl, .en] {
+                for key in ["Sprawdzam możliwość cofnięcia", "Cofnięcie: %@ z %@"] {
+                    let width = withLanguage(language) {
+                        let protection = key.contains("%@") ? trf(key, "22", "22") : tr(key)
+                        let band = UpdateBand(
+                            presentation: UpdateBandPresentation(
+                                totalCount: 22, urgentCount: 0, queueCount: 3, protectionText: protection,
+                                lastCheck: nil, freshness: .fresh, sources: [], wegaLine: "Wega"
+                            ),
+                            scan: nil, planLinkEnabled: true, onShowPlan: {}, action: { _ in EmptyView() }
+                        )
+                        let summary = layout == .regular ? AnyView(band.summaryColumn) : AnyView(band.compactSummary)
+                        return NSHostingView(rootView: summary.fixedSize()).fittingSize.width
+                    }
+                    XCTAssertLessThanOrEqual(width, column, "M9: \(language), band \(bandWidth) pt (\(layout)), \(key): needs \(width) pt")
                 }
             }
         }
