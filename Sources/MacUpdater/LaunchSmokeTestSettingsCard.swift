@@ -19,7 +19,7 @@ struct LaunchSmokeTestSettingsCard: View {
                                titleTinted: true)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(tr("Kontrola Gatekeepera i wydawcy mówi, czym plik jest — nie mówi, czy da się go uruchomić. Po tych kontrolach Wega startuje zaktualizowaną aplikację ukrytą, w tle, i sprawdza, czy przeżyje pięć sekund. Jeśli padnie od razu, poprzednia wersja wraca ze snapshotu."))
+                    Text(tr("Po aktualizacji Wega na chwilę uruchamia aplikację w tle i sprawdza, czy nie zamyka się od razu. Jeśli tak, wraca poprzednia wersja."))
                         .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

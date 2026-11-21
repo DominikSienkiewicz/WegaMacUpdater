@@ -65,7 +65,7 @@ extension ScanStore {
         }
 
         guard runError == nil, exitCode == 0 else {
-            showBanner(BannerData(variant: .danger, title: tr("Nie udało się zmienić tapów"),
+            showBanner(BannerData(variant: .danger, title: tr("Nie udało się zmienić źródeł Homebrew"),
                                   message: tr("Sprawdź logi poniżej.")))
             emitActivitySignal(.error)
             let reason = runError?.localizedDescription ?? "kod \(exitCode)"
@@ -76,7 +76,7 @@ extension ScanStore {
         let title: String
         switch remedy.kind {
         case .untapUnused:
-            title = tr("Odpięto nieużywane tapy")
+            title = tr("Usunięto nieużywane źródła pakietów")
         case .trustInstalledCasks, .trustInstalledFormulae:
             title = tr("Zaufano zainstalowanym pakietom")
         case .trustRequiredCask, .trustRequiredFormula:

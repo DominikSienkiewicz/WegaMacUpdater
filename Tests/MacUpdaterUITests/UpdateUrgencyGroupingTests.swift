@@ -4,7 +4,7 @@ import Testing
 @testable import WegaMacUpdater
 
 /// UX-18 — the Updates list was grouped only by package manager: up to nine cards, two of
-/// them titled "Homebrew Casks", with a possible security fix somewhere in the middle. The
+/// them titled "Aplikacje Homebrew", with a possible security fix somewhere in the middle. The
 /// owner chose grouping by what the user does next: possible security fixes first, then apps,
 /// then CLI tools, then what the vendor or the user has to finish. Grouping by source stays
 /// one menu choice away, because it is the grouping the Inventory window shares.
@@ -71,8 +71,8 @@ struct UpdateUrgencyGroupingTests {
     /// Mixed groups lose the per-source header, so each row names its source, and a row the
     /// rollback net cannot cover says so itself — LT-01's disclosure, moved onto the row.
     @Test func everyRowNamesItsSourceAndItsRollbackLimit() {
-        #expect(OutdatedItem.Kind.cask.sourceLabel == tr("Homebrew (cask)"))
-        #expect(OutdatedItem.Kind.formula.sourceLabel == tr("Homebrew (formuła)"))
+        #expect(OutdatedItem.Kind.cask.sourceLabel == tr("Aplikacja Homebrew"))
+        #expect(OutdatedItem.Kind.formula.sourceLabel == tr("Narzędzie Homebrew"))
         #expect(OutdatedItem.Kind.appStore.sourceLabel == tr("Mac App Store"))
         #expect(OutdatedItem.Kind.npm.sourceLabel == tr("npm (globalny)"))
 
@@ -116,7 +116,7 @@ struct UpdateUrgencyGroupingTests {
 
     @Test func groupHeaderLabelPadsItsNumber() {
         #expect(UpdateGroupHeader.label(ordinal: 1, title: "Aplikacje") == "01 · Aplikacje")
-        #expect(UpdateGroupHeader.label(ordinal: nil, title: "Homebrew Casks") == "Homebrew Casks")
+        #expect(UpdateGroupHeader.label(ordinal: nil, title: "Aplikacje Homebrew") == "Aplikacje Homebrew")
     }
 
     @Test func groupHeadersUseTheC2Style() throws {

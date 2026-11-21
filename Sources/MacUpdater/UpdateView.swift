@@ -635,8 +635,8 @@ struct UpdateView: View {
 
     private func updateTargetDescription(_ item: OutdatedItem) -> String {
         switch item.kind {
-        case .formula:  return "\(tr("Homebrew Formulae")): \(item.name)"
-        case .cask:     return "\(tr("Homebrew Casks")): \(item.name)"
+        case .formula:  return "\(tr("Narzędzia Homebrew")): \(item.name)"
+        case .cask:     return "\(tr("Aplikacje Homebrew")): \(item.name)"
         case .appStore: return "\(tr("Mac App Store")): \(item.name)"
         case .npm:      return "npm: \(item.name)"
         }
@@ -771,7 +771,7 @@ extension UpdateView {
         let npmPkgs  = visibleItems.filter { $0.kind == .npm }
         if !formulae.isEmpty && updateFilter.allowsCli {
             UpdateSection(
-                title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"), tint: .wegaInfo,
+                title: tr("Narzędzia Homebrew"), subtitle: tr("narzędzia CLI"), tint: .wegaInfo,
                 items: formulae,
                 rollbackCaption: Self.rollbackCaption(for: .formula),
                 selected: $scan.selected, inspectedKey: scan.inspectedKey,
@@ -781,7 +781,7 @@ extension UpdateView {
         }
         if !casks.isEmpty && updateFilter.allowsApps {
             UpdateSection(
-                title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), tint: .wegaLavender,
+                title: tr("Aplikacje Homebrew"), subtitle: tr("aplikacje .app"), tint: .wegaLavender,
                 items: casks, iconPaths: scan.caskIconPaths, rollbackProtection: scan.caskProtection,
                 selected: $scan.selected, inspectedKey: scan.inspectedKey,
                 onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
@@ -811,7 +811,7 @@ extension UpdateView {
         }
         // Group manual updates by INSTALL ORIGIN (same axis the Inventory
         // window labels), not by update source. A self-updating Homebrew
-        // cask (Postman, ChatGPT…) stays under "Homebrew Casks" so
+        // cask (Postman, ChatGPT…) stays under "Aplikacje Homebrew" so
         // both windows agree it's Brew — only genuinely non-package-manager
         // apps land under "Ręcznie zainstalowane".
         let dockerManual = visibleManual.filter { DockerDesktopUpdatePolicy.isDocker($0) }
@@ -861,7 +861,7 @@ extension UpdateView {
                 items: brewManual,
                 busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
-                title: tr("Homebrew Casks"),
+                title: tr("Aplikacje Homebrew"),
                 tint: .wegaToffee,
                 subtitle: tr("samoaktualizujące się"),
                 caption: tr("Homebrew nie pilnuje wersji tych apek (auto_updates) — robią to same. Wega sprawdza je u źródła."),
@@ -880,7 +880,7 @@ extension UpdateView {
                 onInstall: { token in Task { await scan.installManual(token: token) } },
                 title: tr("Ręcznie zainstalowane"),
                 tint: .wegaToffee,
-                caption: tr("Bez automatycznego cofnięcia — poprzednią wersję pobierzesz od wydawcy."),
+                caption: tr("Bez automatycznego cofnięcia — poprzednią wersję pobierzesz od producenta."),
                 inspectedKey: scan.inspectedKey,
                 onIgnore: scan.ignoreManual,
                 onPin: requestPinManual,

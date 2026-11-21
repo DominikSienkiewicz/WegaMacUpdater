@@ -15,11 +15,11 @@ struct ResourceGateSettingsCard: View {
     var body: some View {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
-                WegaCardHeader(icon: "externaldrive.badge.checkmark", title: tr("Bramka zasobów"),
+                WegaCardHeader(icon: "externaldrive.badge.checkmark", title: tr("Warunki aktualizacji"),
                                titleTinted: true)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(tr("Wega sprawdza miejsce, łącze, baterię i temperaturę przed snapshotem i pobraniem."))
+                    Text(tr("Przed zrobieniem kopii sprzed aktualizacji i pobraniem Wega sprawdza miejsce, łącze, baterię i temperaturę."))
                         .font(.wega(.callout))
                         .foregroundStyle(.secondary)
 

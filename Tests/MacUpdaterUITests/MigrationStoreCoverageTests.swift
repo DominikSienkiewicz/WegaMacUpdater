@@ -215,7 +215,7 @@ struct MigrationStoreCoverageTests {
             dependencies: snapshotDependencies
         )
         await snapshot.migrate(candidate, model: model(), onWegaState: nil)
-        #expect(snapshot.errorMessage?.contains("snapshotu") == true)
+        #expect(snapshot.errorMessage?.contains("kopii zapasowej") == true)
         #expect(resource.migrating == nil)
         #expect(publisher.migrating == nil)
         #expect(snapshot.migrating == nil)

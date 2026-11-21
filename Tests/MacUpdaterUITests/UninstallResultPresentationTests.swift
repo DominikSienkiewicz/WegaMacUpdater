@@ -103,7 +103,7 @@ struct UninstallResultPresentationTests {
         )
 
         let banner = try #require(report.banner)
-        #expect(banner.message.contains("Helped do Kosza przez pomocnika Wega"))
+        #expect(banner.message.contains("Helped do Kosza przez pomocnika Wegi"))
         #expect(banner.message.contains("Trashed do Kosza"))
         #expect(!banner.message.contains("Trashed do Kosza przez"))
         #expect(report.rows.isEmpty)
@@ -130,7 +130,7 @@ struct UninstallResultPresentationTests {
     @Test func helperThatMustBeReinstalledSaysSo() {
         let reason = UninstallResultPresentation.blockReason(.helperNeedsReinstall)
 
-        #expect(reason == "pomocnik Wega jest nieaktualny lub nie odpowiada — w ustawieniach usuń go i zainstaluj ponownie.")
+        #expect(reason == "pomocnik Wegi jest nieaktualny lub nie odpowiada — w Ustawieniach usuń go i zainstaluj ponownie.")
         #expect(reason != UninstallResultPresentation.blockReason(.needsHelper))
     }
 

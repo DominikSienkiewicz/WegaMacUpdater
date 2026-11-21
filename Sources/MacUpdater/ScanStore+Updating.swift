@@ -263,7 +263,7 @@ extension ScanStore {
 
         for outcome in summary.rollbackFailures {
             showStickyBanner(BannerData(variant: .danger,
-                                        title: tr("Rollback się nie powiódł"),
+                                        title: tr("Nie udało się cofnąć aktualizacji"),
                                         message: trf("%@: nowa wersja nie przeszła kontroli, a przywrócenie poprzedniej nie powiodło się. Sprawdź aplikację przed użyciem.", "\(outcome.name)"),
                                         action: .openLogs))
         }
@@ -287,13 +287,13 @@ extension ScanStore {
             case .publisherMismatchBeforeUpgrade(let previous, let current):
                 old = previous
                 new = current
-                message = trf("%@: Team ID już różnił się od zaufanego baseline (%@ → %@). Aktualizację zablokowano przed uruchomieniem.",
+                message = trf("%@: podpis producenta już przed aktualizacją różnił się od zaufanego (%@ → %@). Aktualizację zablokowałam. Zaufaj nowemu podpisowi tylko wtedy, gdy producent zmienił konto.",
                               "\(outcome.name)", "\(old)", "\(new ?? "—")")
                 action = trustPublisherAction(for: outcome, teamID: new)
             default:
                 continue
             }
-            showStickyBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"),
+            showStickyBanner(BannerData(variant: .danger, title: tr("Zmienił się podpis producenta"),
                                         message: message, action: action))
         }
 

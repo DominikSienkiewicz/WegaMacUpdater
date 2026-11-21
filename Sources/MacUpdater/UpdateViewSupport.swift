@@ -638,7 +638,7 @@ struct ManualUpdateActionView: View {
             Button {
                 Task { await scan.trustNewPublisher(token: token, reportedTeamID: nil) }
             } label: {
-                Label(tr("Zaufaj nowemu wydawcy"), systemImage: "checkmark.shield")
+                Label(tr("Zaufaj nowemu podpisowi"), systemImage: "checkmark.shield")
             }
             .controlSize(.small)
             .disabled(busyToken != nil)
@@ -862,7 +862,7 @@ struct ReleaseNotesDisclosure: View {
                 }
                 .controlSize(.small)
                 if let link = notes.link {
-                    Link(tr("Zobacz u wydawcy"), destination: link).font(.wega(.subheadline))
+                    Link(tr("Zobacz u producenta"), destination: link).font(.wega(.subheadline))
                 }
             }
         }

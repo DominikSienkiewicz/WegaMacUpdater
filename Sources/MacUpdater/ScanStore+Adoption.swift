@@ -68,7 +68,7 @@ extension ScanStore {
                 && $0.caskPolicyToken.map { DockerDesktopMutationGate.isDocker(token: $0) } == true
         }) else {
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
-                                  message: tr("Nie udało się utworzyć wymaganego snapshotu.")))
+                                  message: tr("Nie udało się zrobić kopii zapasowej przed aktualizacją. Sprawdź wolne miejsce na dysku i spróbuj ponownie.")))
             emitActivitySignal(.error)
             return
         }
@@ -121,7 +121,7 @@ extension ScanStore {
             let message = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
                               "\(token)", "\(old)", "\(new ?? "—")")
             brewLog.append("⏸ " + message)
-            showBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"), message: message,
+            showBanner(BannerData(variant: .danger, title: tr("Zmienił się podpis producenta"), message: message,
                                   action: .trustPublisher(token: token, teamID: new)))
             emitActivitySignal(.error)
             return
@@ -134,7 +134,7 @@ extension ScanStore {
         case .snapshotFailed:
             UpdateDiagnostics.record("adoption.deferred", fields: ["token": token, "reason": "snapshotFailed"])
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
-                                  message: tr("Nie udało się utworzyć wymaganego snapshotu.")))
+                                  message: tr("Nie udało się zrobić kopii zapasowej przed aktualizacją. Sprawdź wolne miejsce na dysku i spróbuj ponownie.")))
             emitActivitySignal(.error)
             return
         case .caskInstallsNoApp:
@@ -235,18 +235,18 @@ extension ScanStore {
             title = tr("Aktualizacja niekompletna")
             message = trf("%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.", "\(token)")
         case .rollbackFailed:
-            title = tr("Rollback się nie powiódł")
+            title = tr("Nie udało się cofnąć aktualizacji")
             message = trf(
                 "%@: nowa wersja nie przeszła kontroli, a przywrócenie poprzedniej nie powiodło się. Sprawdź aplikację przed użyciem.",
                 "\(token)"
             )
         case .publisherChanged(let old, let new):
-            title = tr("Zmiana wydawcy")
+            title = tr("Zmienił się podpis producenta")
             message = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
                           "\(token)", "\(old)", "\(new ?? "—")")
             action = .trustPublisher(token: token, teamID: new)
         case .publisherChangedAndRolledBack(let old, let new):
-            title = tr("Zmiana wydawcy")
+            title = tr("Zmienił się podpis producenta")
             message = trf("%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
                           "\(token)", "\(old)", "\(new ?? "—")")
         case .notUpgraded:

@@ -10,7 +10,7 @@ enum CaskReplacementSafety {
         let snapshotURL: URL
         let expectedTeamID: String?
         /// The version the cask offers, when this run is an *update* rather than a takeover.
-        /// `nil` for "Przepnij pod Brew", where the app on disk already is what the cask ships
+        /// `nil` for "Przenieś do Homebrew", where the app on disk already is what the cask ships
         /// and the bundle is not expected to change — see ``CaskArrivalEvidence``.
         let expectedVersion: String?
         let identity: CaskReplacementArtifactIdentity

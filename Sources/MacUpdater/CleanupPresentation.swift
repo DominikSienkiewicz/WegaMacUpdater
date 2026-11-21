@@ -63,6 +63,8 @@ enum CleanupPresentation {
         let reason: String
         let action: String
         let risk: String
+        /// Whether the confirmed action can be undone; nil when the action removes nothing.
+        let effect: String?
         /// The processes that used the item during the scan, arguments included. Shown live only.
         let processes: [String]
         let confirmTitle: String
@@ -571,10 +573,21 @@ enum CleanupPresentation {
             reason: reasonText(displayed(finding.reason, home: home), requiredBy: pinnedPaths(in: finding.status, home: home)),
             action: actionText(finding.action, home: home),
             risk: riskText(finding.risk),
+            effect: effectText(for: finding.action),
             processes: processes(of: finding).map(processLine),
             confirmTitle: confirmTitle(for: finding.action),
             takeover: takeoverText(for: finding, home: home)
         )
+    }
+
+    /// Whether the confirmed action can be taken back; nil for an action that removes nothing.
+    static func effectText(for action: CleanupAction) -> String? {
+        switch action {
+        case .trash, .trashBatch: tr("Przeniesie do Kosza — możesz przywrócić, dopóki go nie opróżnisz.")
+        case .brew: tr("Uruchomi polecenie Homebrew — Wega tego nie cofnie.")
+        case .command: tr("Tylko kopiuje polecenie; nic teraz nie usuwa.")
+        case .instruction, .uninstallApp, .none: nil
+        }
     }
 
     private static func confirmTitle(for action: CleanupAction) -> String {

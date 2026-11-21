@@ -143,7 +143,7 @@ enum UninstallResultPresentation {
         var parts = removed.map { app in
             switch results[app.id] {
             case .removedByHomebrew: trf("%@ przez brew", app.name)
-            case .movedToTrashByHelper: trf("%@ do Kosza przez pomocnika Wega", app.name)
+            case .movedToTrashByHelper: trf("%@ do Kosza przez pomocnika Wegi", app.name)
             default: trf("%@ do Kosza", app.name)
             }
         }
@@ -210,9 +210,9 @@ enum UninstallResultPresentation {
     static func blockReason(_ block: UninstallBlock) -> String {
         switch block {
         case .needsHelper:
-            tr("wymaga pomocnika Wega — włącz go w ustawieniach.")
+            tr("wymaga pomocnika Wegi — włącz go w Ustawieniach.")
         case .helperNeedsReinstall:
-            tr("pomocnik Wega jest nieaktualny lub nie odpowiada — w ustawieniach usuń go i zainstaluj ponownie.")
+            tr("pomocnik Wegi jest nieaktualny lub nie odpowiada — w Ustawieniach usuń go i zainstaluj ponownie.")
         case .needsAdministratorAccount:
             tr("wymaga konta administratora.")
         case .needsAdministratorRights:

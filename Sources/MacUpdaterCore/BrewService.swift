@@ -293,7 +293,7 @@ public final class BrewService: @unchecked Sendable {
         ["reinstall", "--cask", "--", token]
     }
 
-    /// Arguments for "Odepnij nieużywane tapy" — removing third-party taps Homebrew stopped
+    /// Arguments for "Usuń nieużywane źródła pakietów" — removing third-party taps Homebrew stopped
     /// loading because they are not trusted, and from which nothing installed came. Untapping
     /// is Homebrew's own first suggestion for such a tap. Streamed via `events(arguments:)`.
     public static func untapArguments(taps: [String]) -> [String] {

@@ -327,6 +327,7 @@ private struct CleanupFindingRow: View {
                         onCopy(command)
                     }
                     .controlSize(.small)
+                    .help(CleanupPresentation.effectText(for: .command(command)) ?? "")
                 case .uninstallApp(_, let bundle):
                     Button(CleanupPresentation.buttonTitle(button)) { onUninstallApp(bundle) }
                         .controlSize(.small)

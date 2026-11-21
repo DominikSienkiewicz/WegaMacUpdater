@@ -33,7 +33,7 @@ enum SidebarTab: String, Identifiable {
         case .rollback:  return tr("Co da się cofnąć")
         case .uninstall: return tr("Usuń aplikacje")
         case .cleanup:   return tr("Duplikaty i pozostałości")
-        case .migration: return tr("Przepnij pod Brew")
+        case .migration: return tr("Przenieś do Homebrew")
         case .inventory: return tr("Pełny obchód")
         case .logs:      return tr("Co się działo")
         }

@@ -347,7 +347,7 @@ public enum UpdatePlanner {
         selected.count == allKeys.count ? [] : Set(allKeys)
     }
 
-    /// Toggling one group's checkbox (e.g. "Homebrew Casks"): a fully-ticked group is
+    /// Toggling one group's checkbox (e.g. "Aplikacje Homebrew"): a fully-ticked group is
     /// cleared, an empty or partly-ticked one becomes fully ticked. Rows belonging to other
     /// groups keep whatever state they had — the control speaks for its own section only.
     public static func toggledGroup(selected: Set<String>, groupKeys: [String]) -> Set<String> {
@@ -381,7 +381,7 @@ public enum UpdatePlanner {
     }
 
     /// Manual updates split by install origin so the Updates window can present each
-    /// under an origin-consistent header — Brew casks under "Homebrew Casks", everything
+    /// under an origin-consistent header — Brew casks under "Aplikacje Homebrew", everything
     /// genuinely outside a package manager under "Ręcznie zainstalowane". Grouping by
     /// `origin` (not by `source`) is what keeps the window in step with the Inventory
     /// badge: a self-updating Homebrew cask (Docker, Postman, ChatGPT…) stays in the

@@ -132,7 +132,7 @@ struct BackgroundUpdateConsentSettingsCard: View {
   private var runtimeNote: some View {
     Text(
       tr(
-        "Status każdego pakietu uwzględnia bieżącą aktualizację, reguły i uruchomioną aplikację. Snapshot, zasoby i bezpieczeństwo wydawcy są sprawdzane dopiero bezpośrednio przed aktualizacją."
+        "Status każdego pakietu uwzględnia bieżącą aktualizację, reguły i uruchomioną aplikację. Kopia sprzed aktualizacji, zasoby i podpis producenta są sprawdzane dopiero bezpośrednio przed aktualizacją."
       )
     )
     .font(.wega(.footnote))
@@ -197,7 +197,7 @@ struct BackgroundUpdateConsentSettingsCard: View {
         return tr("Pakiet nie oczekuje teraz na aktualizację; zgoda pozostaje zapisana.")
       case .installedAppUnavailable:
         return tr(
-          "Nie można rozpoznać zainstalowanej aplikacji .app wymaganej do snapshotu i kontroli wyniku."
+          "Nie mogę znaleźć zainstalowanej aplikacji .app potrzebnej do kopii sprzed aktualizacji i sprawdzenia wyniku."
         )
       case .running:
         return tr("Aplikacja jest teraz uruchomiona i nie może być bezpiecznie zastąpiona.")
@@ -210,7 +210,7 @@ struct BackgroundUpdateConsentSettingsCard: View {
         )
       case .noAppBundle:
         return tr(
-          "Cask nie instaluje aplikacji .app, więc nie można utworzyć snapshotu ani sprawdzić wyniku."
+          "Ten cask nie instaluje aplikacji .app, więc nie zrobię kopii sprzed aktualizacji ani nie sprawdzę wyniku."
         )
       case .privilegedArtifact:
         return tr(

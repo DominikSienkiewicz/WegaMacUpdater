@@ -14,7 +14,7 @@ struct TapTrustNoticeTests {
 
         let row = TapTrustRemedyPresentation(remedy)
 
-        #expect(row.buttonTitle == tr("Odepnij nieużywane tapy"))
+        #expect(row.buttonTitle == tr("Usuń nieużywane źródła pakietów"))
         #expect(row.explanation == tr("Nic zainstalowanego nie pochodzi z tych tapów."))
         #expect(row.command == "brew untap -- manaflow-ai/cmux steipete/tap")
     }

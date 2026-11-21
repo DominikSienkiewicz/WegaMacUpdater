@@ -58,7 +58,7 @@ final class AccessibilityInteractionTests: XCTestCase {
     func testMigrationActionsNameTheAppTheyActOn() throws {
         let migration = try source("Sources/MacUpdater/MigrationView.swift")
 
-        XCTAssertTrue(migration.contains(".accessibilityLabel(trf(\"Przepnij %@ do Homebrew\", app.name))"))
+        XCTAssertTrue(migration.contains(".accessibilityLabel(trf(\"Przenieś %@ do Homebrew\", app.name))"))
         XCTAssertTrue(migration.contains(".accessibilityLabel(trf(\"Otwórz %@ w App Store\", app.name))"))
         XCTAssertTrue(migration.contains(".accessibilityLabel(trf(\"Usuń %@ z npm\", dup.npmPackage))"))
         XCTAssertTrue(migration.contains(".accessibilityLabel(trf(\"Usuń %@ z brew\", dup.brewToken))"))

@@ -155,18 +155,18 @@ struct TrustPanel: View {
     @ViewBuilder
     private func teamIDRows(teamID: String?, audit: TeamIDAudit) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            signalRow(label: tr("Wydawca (Team ID)"), value: teamID ?? "—", monospaced: true)
+            signalRow(label: tr("Producent (podpis)"), value: teamID ?? "—", monospaced: true)
             switch audit {
             case .changed(let old, let new):
-                Text(tr("Wydawca się zmienił:") + " \(old) → \(new ?? "—")")
+                Text(tr("Podpis producenta się zmienił:") + " \(old) → \(new ?? "—")")
                     .font(.wega(.footnote))
                     .foregroundStyle(Color.wegaDanger)
             case .firstSeen:
-                Text(tr("pierwsze sprawdzenie wydawcy"))
+                Text(tr("pierwsze sprawdzenie podpisu"))
                     .font(.wega(.footnote))
                     .foregroundStyle(.tertiary)
             case .unchanged:
-                Text(tr("wydawca bez zmian"))
+                Text(tr("podpis bez zmian"))
                     .font(.wega(.footnote))
                     .foregroundStyle(.tertiary)
             }

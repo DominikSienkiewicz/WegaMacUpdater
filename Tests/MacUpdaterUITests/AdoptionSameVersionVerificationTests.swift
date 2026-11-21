@@ -5,7 +5,7 @@ import Testing
 
 /// Adoption lands the version that is already on disk — and that is a success, not a no-op.
 ///
-/// Observed 2026-08-20 on "Przepnij pod Brew": `/Applications/Proton Drive.app` at 3.0.2, cask
+/// Observed 2026-08-20 on "Przenieś do Homebrew": `/Applications/Proton Drive.app` at 3.0.2, cask
 /// `proton-drive` at 3.0.2. The log shows brew doing the whole job — `Removing App`, `Moving
 /// App`, `was successfully installed!` — and the migration was then reported as
 /// `.notUpgraded`: *"brew zakończył się sukcesem, ale na dysku została wersja sprzed migracji

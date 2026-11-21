@@ -367,7 +367,7 @@ final class MigrationStore: ObservableObject {
         onWegaState?(WegaState(
             pose: total > 0 ? .alert : .happy,
             line: total > 0
-                ? trp("Zwęszyłam %@ aplikacji do przepięcia.", total)
+                ? trp("Zwęszyłam %@ aplikacji do przeniesienia do Homebrew.", total)
                 : tr("Wszystko w porządku. Wega nie znalazła uciekinierów.")
         ))
     }
@@ -487,7 +487,7 @@ final class MigrationStore: ObservableObject {
             onWegaState?(WegaState(pose: .alert, line: message))
             return
         case .snapshotFailed:
-            errorMessage = tr("Nie udało się utworzyć wymaganego snapshotu.")
+            errorMessage = tr("Nie udało się zrobić kopii zapasowej przed aktualizacją. Sprawdź wolne miejsce na dysku i spróbuj ponownie.")
             onWegaState?(WegaState(pose: .alert, line: tr("Aktualizacja odroczona")))
             return
         case .caskInstallsNoApp:

@@ -606,7 +606,7 @@ struct UninstallDialog: View {
     static func routeNote(for route: UninstallRouteDecision?) -> String? {
         switch route {
         case .userTrash: tr("trafi do Kosza")
-        case .helper: tr("pomocnik Wega usunie ją bez hasła")
+        case .helper: tr("pomocnik Wegi usunie ją bez hasła")
         case .blocked(let block): UninstallResultPresentation.blockReason(block)
         case nil: nil
         }

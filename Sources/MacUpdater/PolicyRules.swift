@@ -59,7 +59,7 @@ struct PolicyRulesSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(tr("Ignorowane i przypięte"))
+            Text(tr("Wstrzymane aktualizacje"))
                 .font(.wega(.title3, weight: .semibold))
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {

@@ -111,7 +111,7 @@ extension InfoView {
     private var policiesCard: some View {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
-                WegaCardHeader(icon: "hand.raised", title: tr("Ignorowane i przypięte")) {
+                WegaCardHeader(icon: "hand.raised", title: tr("Wstrzymane aktualizacje")) {
                     if !policies.isEmpty {
                         Text("\(policies.sortedEntries.count)")
                             .font(.wega(.callout, monospaced: true))
@@ -120,7 +120,7 @@ extension InfoView {
                 }
 
                 if policies.isEmpty {
-                    Text(tr("Brak reguł. Kliknij aktualizację prawym przyciskiem, aby ją zignorować lub przypiąć wersję."))
+                    Text(tr("Brak reguł. Na liście aktualizacji otwórz „Więcej działań” przy aplikacji."))
                         .font(.wega(.callout))
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -235,7 +235,7 @@ extension InfoView {
     private var privilegedHelperCard: some View {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
-                WegaCardHeader(icon: "lock.shield", title: tr("Komponent uprzywilejowany")) {
+                WegaCardHeader(icon: "lock.shield", title: tr("Pomocnik Wegi")) {
                     helperStatusBadge
                 }
 
@@ -278,7 +278,7 @@ extension InfoView {
             case .enabled:
                 Button(role: .destructive) {
                     Task { await removeHelper() }
-                } label: { Label(tr("Usuń komponent"), systemImage: "trash") }
+                } label: { Label(tr("Usuń pomocnika"), systemImage: "trash") }
                     .controlSize(.small)
                     .disabled(helperBusy)
             case .requiresApproval:
@@ -293,7 +293,7 @@ extension InfoView {
                     Task { await installHelper() }
                 } label: {
                     if helperBusy { ProgressView().controlSize(.small) }
-                    else { Label(tr("Zainstaluj komponent"), systemImage: "lock.shield") }
+                    else { Label(tr("Zainstaluj pomocnika"), systemImage: "lock.shield") }
                 }
                 .controlSize(.small)
                 .disabled(helperBusy)

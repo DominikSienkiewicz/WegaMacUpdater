@@ -12,7 +12,7 @@ struct TapTrustRemedyPresentation: Equatable {
     init(_ remedy: TapTrustRemedy) {
         switch remedy.kind {
         case .untapUnused:
-            buttonTitle = tr("Odepnij nieużywane tapy")
+            buttonTitle = tr("Usuń nieużywane źródła pakietów")
             explanation = tr("Nic zainstalowanego nie pochodzi z tych tapów.")
         case .trustInstalledCasks:
             buttonTitle = tr("Zaufaj zainstalowanym caskom")
@@ -48,7 +48,7 @@ struct TapTrustNotice: View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "exclamationmark.shield").foregroundStyle(Color.wegaToffee)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(tr("Homebrew pomija pakiety z niezaufanych tapów"))
+                    Text(tr("Homebrew pomija pakiety z niezaufanych źródeł (tapów)"))
                         .font(.wega(.callout, weight: .semibold))
                     Text(tr("Przycisk zmienia konfigurację Homebrew: uruchamia dokładnie polecenie obok, dopiero po kliknięciu."))
                         .font(.wega(.subheadline)).foregroundStyle(.secondary)

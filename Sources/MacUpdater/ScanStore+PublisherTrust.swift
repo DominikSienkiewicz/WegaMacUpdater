@@ -46,17 +46,17 @@ extension ScanStore {
             dependencies.rollbackLedger.clear(token: token)
             dropRowsSettledByPublisherTrust(token: token)
             WegaLog.warning(.homebrew, "\(token): użytkownik zaakceptował nowego wydawcę (\(previous ?? "—") → \(new)).")
-            showBanner(BannerData(variant: .success, title: tr("Zaufano nowemu wydawcy"),
+            showBanner(BannerData(variant: .success, title: tr("Zaufano nowemu podpisowi"),
                                   message: trf("%@: Team ID %@ jest teraz zaufanym wydawcą.", "\(token)", "\(new)")))
         case .alreadyTrusted:
-            showBanner(BannerData(variant: .success, title: tr("Wydawca już zaufany"),
+            showBanner(BannerData(variant: .success, title: tr("Ten podpis już jest zaufany"),
                                   message: trf("%@: zainstalowana aplikacja jest podpisana zaufanym Team ID.", "\(token)")))
         case .signatureUnreadable:
             showBanner(BannerData(variant: .danger, title: tr("Nie zmieniono zaufania"),
                                   message: trf("%@: nie udało się odczytać podpisu zainstalowanej aplikacji.", "\(token)")))
         case .installedDiffersFromReport(let reported, let installed):
             WegaLog.error(.homebrew, "\(token): podpis zmienił się od ostrzeżenia (\(reported) → \(installed)) — nie zmieniono zaufania.")
-            showStickyBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"),
+            showStickyBanner(BannerData(variant: .danger, title: tr("Zmienił się podpis producenta"),
                                         message: trf("%@: aplikację podpisano ponownie innym Team ID (%@ zamiast %@). Nie zmieniono zaufania.",
                                                      "\(token)", "\(installed)", "\(reported)")))
         }
@@ -91,13 +91,13 @@ enum PublisherChangeAlert {
     static func confirm(_ prompt: ScanStore.PublisherChangePrompt) -> Bool {
         let alert = NSAlert()
         alert.alertStyle = .critical
-        alert.messageText = trf("Zaufać nowemu wydawcy %@?", "\(prompt.token)")
+        alert.messageText = trf("Zaufać nowemu podpisowi aplikacji %@?", "\(prompt.token)")
         alert.informativeText = trf(
             "Teraz podpisuje ją Team ID %@ zamiast zaufanego %@. Potwierdź tylko, jeśli wiesz, że producent zmienił konto deweloperskie.",
             "\(prompt.newTeamID)", "\(prompt.previousTeamID ?? "—")"
         )
         alert.addButton(withTitle: tr("Anuluj"))
-        alert.addButton(withTitle: tr("Zaufaj nowemu wydawcy"))
+        alert.addButton(withTitle: tr("Zaufaj nowemu podpisowi"))
         NSApplication.shared.activate(ignoringOtherApps: true)
         return alert.runModal() == .alertSecondButtonReturn
     }

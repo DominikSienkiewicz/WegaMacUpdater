@@ -90,6 +90,6 @@ struct LT01UpdateOperationWiringTests {
         #expect(view.contains("Bez automatycznego cofnięcia — Homebrew nie zachowuje poprzednich wersji formuł."))
         #expect(view.contains("Bez automatycznego cofnięcia — App Store nie pozwala wrócić do poprzedniej wersji."))
         #expect(view.contains("Bez automatycznego cofnięcia — npm nie zachowuje poprzednich wersji pakietów."))
-        #expect(view.contains("Bez automatycznego cofnięcia — poprzednią wersję pobierzesz od wydawcy."))
+        #expect(view.contains("Bez automatycznego cofnięcia — poprzednią wersję pobierzesz od producenta."))
     }
 }

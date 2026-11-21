@@ -47,6 +47,22 @@ final class CleanupConfirmationSheetTests: XCTestCase {
         XCTAssertGreaterThan(hostingView.fittingSize.height, 300)
     }
 
+    func testTheSheetStatesTheEffectAndConfirmsInRed() throws {
+        let sheet = try source("Sources/MacUpdater/CleanupConfirmationSheet.swift")
+        XCTAssertTrue(sheet.contains("if let effect = confirmation.effect"))
+        let buttons = try XCTUnwrap(sheet.range(of: "private func buttons(")).upperBound
+        XCTAssertTrue(sheet[buttons...].prefix(900).contains(".tint(Color.wegaDanger)"))
+        XCTAssertFalse(sheet[buttons...].prefix(900).contains("Color.wegaHoneyFill"))
+        let view = try source("Sources/MacUpdater/CleanupView.swift")
+        XCTAssertTrue(view.contains(".help(CleanupPresentation.effectText(for: .command(command)) ?? \"\")"))
+    }
+
+    private func source(_ relativePath: String, file: String = #filePath) throws -> String {
+        let root = URL(fileURLWithPath: file)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
     /// Twelve processes with forty long arguments each.
     private static let longProcesses = (0..<12).map { index in
         CleanupProcess(

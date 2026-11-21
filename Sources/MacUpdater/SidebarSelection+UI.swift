@@ -22,7 +22,7 @@ extension SidebarSelection {
         switch self {
         // UX-16 — one destination: the category is the scope bar's, not the title's.
         case .updates:            return tr("Aktualizacje")
-        case .migration:          return tr("Do przepięcia")
+        case .migration:          return tr("Do Homebrew")
         case .inventory:          return tr("Spis aplikacji")
         case .rollback:           return tr("Cofnij aktualizacje")
         case .uninstall:          return tr("Odinstaluj aplikacje")

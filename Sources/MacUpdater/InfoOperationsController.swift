@@ -102,12 +102,12 @@ final class InfoOperationsController: ObservableObject {
                 line: tr("Zatwierdź komponent w Ustawieniach → Elementy logowania.")
             ))
         } else if helperStatus == .enabled {
-            onWegaState(WegaState(pose: .happy, line: tr("Komponent uprzywilejowany gotowy.")))
+            onWegaState(WegaState(pose: .happy, line: tr("Pomocnik Wegi jest gotowy.")))
         }
     }
 
     func removeHelper() async {
-        switch await dependencies.authenticate(tr("Potwierdź usunięcie komponentu uprzywilejowanego")) {
+        switch await dependencies.authenticate(tr("Potwierdź usunięcie pomocnika Wegi")) {
         case .success, .unavailable:
             break
         case .cancelled:

@@ -77,7 +77,7 @@ struct UninstallDialogCountsTests {
     @Test func helperRouteSaysWegasHelperRemovesItWithoutAPassword() {
         let note = UninstallDialog.routeNote(for: .helper)
 
-        #expect(note == "pomocnik Wega usunie ją bez hasła")
+        #expect(note == "pomocnik Wegi usunie ją bez hasła")
         #expect(note != UninstallResultPresentation.blockReason(.needsHelper))
     }
 

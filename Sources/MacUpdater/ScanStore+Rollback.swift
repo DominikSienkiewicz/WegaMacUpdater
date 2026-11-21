@@ -69,10 +69,10 @@ extension ScanStore {
             operation.abortUnfinished()
             UpdateOperationStore.shared.removeOperation(id: operation.operation.id)
             let names = missing.joined(separator: ", ")
-            brewLog.append("⏸ " + trf("Nie udało się utworzyć snapshotu dla: %@.", "\(names)"))
+            brewLog.append("⏸ " + trf("Nie udało się zrobić kopii sprzed aktualizacji: %@.", "\(names)"))
             WegaLog.error(.homebrew, "Aktualizacja z okna odroczona — brak snapshotu: \(names).")
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
-                                  message: tr("Nie udało się utworzyć wymaganego snapshotu.")))
+                                  message: tr("Nie udało się zrobić kopii zapasowej przed aktualizacją. Sprawdź wolne miejsce na dysku i spróbuj ponownie.")))
             emitActivitySignal(.error)
             return .blocked(publisherVetoes: publisherVetoes)
         }

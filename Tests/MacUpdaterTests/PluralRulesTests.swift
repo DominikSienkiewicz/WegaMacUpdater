@@ -26,6 +26,7 @@ struct PluralRulesTests {
     }
 
     @Test func polishFormsAreGrammaticalForEveryRange() {
+        #expect(pluralize("Zwęszyłam %@ aplikacji do przeniesienia do Homebrew.", count: 2, language: .pl) == "Zwęszyłam 2 aplikacje do przeniesienia do Homebrew.")
         #expect(pluralize(updatesAvailable, count: 1, language: .pl) == "1 aktualizacja dostępna")
         #expect(pluralize(updatesAvailable, count: 3, language: .pl) == "3 aktualizacje dostępne")
         #expect(pluralize(updatesAvailable, count: 22, language: .pl) == "22 aktualizacje dostępne")

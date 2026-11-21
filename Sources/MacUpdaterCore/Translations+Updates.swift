@@ -17,10 +17,6 @@ extension Translations {
             "by urgency",
         "według źródła":
             "by source",
-        "Homebrew (cask)":
-            "Homebrew (cask)",
-        "Homebrew (formuła)":
-            "Homebrew (formula)",
         "npm (globalny)":
             "npm (global)",
         "Możliwe poprawki bezpieczeństwa":

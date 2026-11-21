@@ -769,7 +769,7 @@ struct BannerView: View {
         case .openSettings: return tr("Włącz Touch ID")
         case .openAppManagementSettings: return tr("Otwórz ustawienia prywatności")
         case .reinstallCask: return tr("Przeinstaluj przez Brew")
-        case .trustPublisher: return tr("Zaufaj nowemu wydawcy")
+        case .trustPublisher: return tr("Zaufaj nowemu podpisowi")
         }
     }
 
