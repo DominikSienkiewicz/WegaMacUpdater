@@ -221,3 +221,65 @@ extension HelperBundleGate {
         return trust(bundlePath: bundlePath, facts: reader.facts(of:))
     }
 }
+
+extension HelperBundleGate {
+    /// The helper's own check (design §5): the gate over the bundle this process was started from,
+    /// found from the kernel's path of its executable. Called once at start.
+    public static func trustOfThisHelper() -> HelperBundleTrust {
+        trust(ofHelperExecutable: executablePathOfThisProcess() ?? "")
+    }
+
+    /// The gate over the bundle a helper at `path` runs from; an executable that is not
+    /// `<bundle>/Contents/MacOS/WegaPrivilegedHelper` cannot establish its bundle and is refused.
+    public static func trust(ofHelperExecutable path: String) -> HelperBundleTrust {
+        guard let bundle = bundlePath(ofHelperExecutable: path) else { return .refused(.unreadable(.helperExecutable)) }
+        return live(bundlePath: bundle)
+    }
+
+    /// `proc_pidpath` of this process: the path of the file the kernel runs, as it resolved it.
+    public static func executablePathOfThisProcess() -> String? {
+        // PROC_PIDPATHINFO_MAXSIZE, a macro Swift does not import.
+        var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+        let length = proc_pidpath(getpid(), &buffer, UInt32(buffer.count))
+        guard length > 0 else { return nil }
+        return String(decoding: buffer.prefix(Int(length)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    }
+}
+
+extension HelperBundleRefusal {
+    /// A stable English token for logs and diagnostics: the refusal and the entry under the bundle,
+    /// never a path that could name the user.
+    public var token: String {
+        switch self {
+        case .notInApplications: "notInApplications"
+        case .unreadable(let entry): "unreadable(\(entry.token))"
+        case .symbolicLink(let entry): "symbolicLink(\(entry.token))"
+        case .unexpectedKind(let entry): "unexpectedKind(\(entry.token))"
+        case .notOwnedByRoot(let entry): "notOwnedByRoot(\(entry.token))"
+        case .writableByGroupOrOthers(let entry): "writableByGroupOrOthers(\(entry.token))"
+        case .accessControlList(let entry): "accessControlList(\(entry.token))"
+        }
+    }
+
+    /// The entry the refusal is about; `nil` for the bundle's location.
+    public var entry: HelperBundleEntry? {
+        switch self {
+        case .notInApplications: nil
+        case .unreadable(let entry), .symbolicLink(let entry), .unexpectedKind(let entry), .notOwnedByRoot(let entry),
+             .writableByGroupOrOthers(let entry), .accessControlList(let entry): entry
+        }
+    }
+}
+
+extension HelperBundleTrust {
+    public var token: String {
+        switch self {
+        case .trusted: "trusted"
+        case .refused(let refusal): refusal.token
+        }
+    }
+}
+
+private extension HelperBundleEntry {
+    var token: String { relativePath.isEmpty ? "bundle" : relativePath }
+}
