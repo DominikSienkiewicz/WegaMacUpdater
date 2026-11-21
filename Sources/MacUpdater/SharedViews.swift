@@ -542,7 +542,7 @@ struct PackageRow: View {
                 .fixedSize(horizontal: false, vertical: true)
             if let token = shownToken {
                 Text(source.map { "\(token) · \($0)" } ?? token)
-                    .font(.caption.monospaced())
+                    .font(.wega(.caption, monospaced: true))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else if let source {
@@ -575,7 +575,7 @@ struct PackageRow: View {
                 VersionArrow(from: from, to: to, emphasis: emphasis)
             } else if let version = currentVersion ?? latestVersion {
                 Text(version)
-                    .font(.caption.monospaced())
+                    .font(.wega(.caption, monospaced: true))
                     .foregroundStyle(.secondary)
             }
         }

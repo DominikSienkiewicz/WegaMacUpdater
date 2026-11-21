@@ -125,7 +125,7 @@ struct InspectorPane: View {
                 .fixedSize(horizontal: false, vertical: true)
             if let token = info.token, token != info.name {
                 Text(token)
-                    .font(.caption.monospaced())
+                    .font(.wega(.caption, monospaced: true))
                     .foregroundStyle(.secondary)
             }
             VersionArrow(from: info.from, to: info.to, emphasis: info.emphasis, style: .full)

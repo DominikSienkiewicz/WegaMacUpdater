@@ -475,7 +475,7 @@ struct UndoUpdateSection: View {
                             .fontWeight(.medium)
                         if item.token != CaskDisplayName.name(token: item.token, appPath: URL(fileURLWithPath: item.appPath)) {
                             Text(item.token)
-                                .font(.caption.monospaced())
+                                .font(.wega(.caption, monospaced: true))
                                 .foregroundStyle(.secondary)
                         }
                         Text(subtitle(for: item))

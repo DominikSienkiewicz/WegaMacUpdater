@@ -134,6 +134,25 @@ struct SemanticTypographyTests {
         #expect(Font.wega(.subheadline) != .system(size: 11))
     }
 
+    /// Final review M4 — the token lines added to the update row, the inspector and the undo list
+    /// went around the alias with `.caption.monospaced()`.
+    @Test("The update row, the inspector and the undo list take every font from the alias")
+    func theUpdateScreensTextGoesThroughTheAlias() throws {
+        let shared = try UX03Sources.text(ofFileNamed: "SharedViews.swift")
+        let row = try #require(shared.range(of: "struct PackageRow: View")).lowerBound
+        let rowEnd = try #require(shared.range(of: "// MARK: - Rollback badge")).lowerBound
+        let views: [(String, Substring)] = [
+            ("PackageRow", shared[row..<rowEnd]),
+            ("InspectorPane.swift", Substring(try UX03Sources.text(ofFileNamed: "InspectorPane.swift"))),
+            ("UpdateViewSupport.swift", Substring(try UX03Sources.text(ofFileNamed: "UpdateViewSupport.swift"))),
+        ]
+        for (name, text) in views {
+            let raw = text.components(separatedBy: ".font(.").dropFirst().filter { !$0.hasPrefix("wega(") }
+            #expect(raw.isEmpty, "\(name): \(raw.map { $0.prefix(30) })")
+        }
+        #expect(Font.wega(.caption, monospaced: true) == Font.caption.monospaced(), "the same text style, so nothing moves")
+    }
+
     @Test("Weight and monospacing modify the style instead of replacing it")
     func modifiersStayOnTopOfTheStyle() {
         #expect(Font.wega(.callout, weight: .medium) == Font.callout.weight(.medium))
