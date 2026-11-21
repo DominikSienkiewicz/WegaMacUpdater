@@ -12,7 +12,8 @@ extension ScanStore {
     /// producenta" banner for every publisher change still unsettled, in plan order.
     ///
     /// Each is the banner `report(run:)` raised before the summary existed: the same title, the
-    /// same words and the trust action for a cask. It is built inline, so the sticky banners'
+    /// same words and the trust action for a cask, which names the bundle the run prepared
+    /// (`trustPublisherAction(for:)`). It is built inline, so the sticky banners'
     /// guard (`BannerDismissalTests`) sees that it is raised as a `.danger`.
     func closeRunReport() {
         guard let report = runReport else { return }

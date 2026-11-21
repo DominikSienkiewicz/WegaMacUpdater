@@ -438,6 +438,59 @@ struct RunReportStoreTests {
         }
     }
 
+    /// Another cask stayed outdated, so the check after the run rebuilt `caskIconPaths` for that
+    /// one alone and the list no longer knows where the updated cask lives. The banner the
+    /// summary returns carries the bundle the run prepared, and its trust reads that bundle.
+    @Test func theReturnedBannerTrustsTheBundleTheRunPrepared() async throws {
+        let (defaults, teardown) = TestDefaults.isolated("run-report-banner-trust")
+        defer { teardown() }
+        let prepared = Self.appURL
+        let store = makeStore(defaults: defaults) { dependencies in
+            dependencies.teamIDOfApp = { $0 == prepared ? "BBB" : nil }
+            dependencies.bundleIdentifierOfApp = { _ in "ch.protonmail.desktop" }
+            dependencies.confirmPublisherChange = { _ in true }
+        }.store
+        let ledger = store.dependencies.teamIDLedger
+        ledger.record(bundleID: TeamIDLedger.caskKey("proton-mail"), teamID: "AAA")
+        store.caskIconPaths = ["figma": URL(fileURLWithPath: "/TestApplications/Figma.app")]
+        let item = cask("proton-mail")
+
+        try await withLanguage(.pl) {
+            store.report(run: publisherChanged(item), planned: [item], caskAppPaths: ["proton-mail": prepared])
+            store.closeRunReport()
+            let action = try #require(publisherBanners(store).first?.action)
+            await store.trustNewPublisher(for: action)
+
+            #expect(store.banner?.title == "Zaufano nowemu podpisowi")
+            #expect(ledger.teamID(forBundleID: TeamIDLedger.caskKey("proton-mail")) == "BBB")
+            #expect(ledger.teamID(forBundleID: "ch.protonmail.desktop") == "BBB")
+        }
+    }
+
+    /// The banners raised outside the summary (an adoption, a rolled-back row) carry no bundle,
+    /// so their trust still looks the app up on the list.
+    @Test func aBannerWithoutABundleLooksTheAppUpOnTheList() async {
+        let (defaults, teardown) = TestDefaults.isolated("run-report-banner-lookup")
+        defer { teardown() }
+        let listed = Self.appURL
+        let store = makeStore(defaults: defaults) { dependencies in
+            dependencies.teamIDOfApp = { $0 == listed ? "BBB" : nil }
+            dependencies.bundleIdentifierOfApp = { _ in "ch.protonmail.desktop" }
+            dependencies.confirmPublisherChange = { _ in true }
+        }.store
+        let ledger = store.dependencies.teamIDLedger
+        ledger.record(bundleID: TeamIDLedger.caskKey("proton-mail"), teamID: "AAA")
+        store.manualOutdated = [ManualOutdatedApp(name: "Proton Mail", path: listed, installedVersion: "1.15.1",
+                                                  availableVersion: "1.16.0", source: .cask(token: "proton-mail"))]
+
+        await withLanguage(.pl) {
+            await store.trustNewPublisher(for: .trustPublisher(token: "proton-mail", teamID: "BBB"))
+
+            #expect(store.banner?.title == "Zaufano nowemu podpisowi")
+            #expect(ledger.teamID(forBundleID: TeamIDLedger.caskKey("proton-mail")) == "BBB")
+        }
+    }
+
     /// The undo's rescan is not a scan the user started: it leaves the summary open, and the row
     /// it undid says so instead of offering the copy again.
     @Test func anUndoFromTheSummaryMarksItsRowAndLeavesTheSummaryOpen() async throws {
