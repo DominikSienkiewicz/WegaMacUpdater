@@ -5,9 +5,10 @@ import MacUpdaterCore
 /// away from the menu so each line can be tested.
 enum MenuBarMenuCopy {
     /// When the next automatic check is due, and that it needs Wega running — closing the window
-    /// does not quit it. An overdue check is due now; with checks switched off there is no line.
-    static func nextAttempt(lastCheck: Date?, interval: CheckInterval, now: Date) -> String? {
-        guard let seconds = interval.seconds else { return nil }
+    /// does not quit it. An overdue check is due now; with checks switched off, or a check under
+    /// way, there is no line.
+    static func nextAttempt(lastCheck: Date?, interval: CheckInterval, isChecking: Bool, now: Date) -> String? {
+        guard !isChecking, let seconds = interval.seconds else { return nil }
         let next = UpdateSchedule.nextCheckDate(lastCheck: lastCheck, interval: seconds, now: now)
         return trf(
             "Kolejna próba: %@, gdy Wega jest uruchomiona. Zamknięcie okna nie kończy aplikacji.",

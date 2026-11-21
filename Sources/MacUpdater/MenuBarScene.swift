@@ -35,6 +35,8 @@ struct MenuBarContent: View {
     @ObservedObject var agent: MenuBarAgent
     /// UXP-17 — the check button names the background updates a check may start.
     @ObservedObject private var consents = BackgroundUpdateOptInStore.shared
+    /// Redraws the day words at midnight, after a clock change and after sleep.
+    @ObservedObject private var clock = DayClock.shared
     @Environment(\.openWindow) private var openWindow
 
     /// UX-11g — how many app names the dropdown lists before collapsing the rest into a
@@ -90,9 +92,10 @@ struct MenuBarContent: View {
         Text(statusText)
 
         if let last = agent.lastCheck {
-            Text(CheckedAtCopy.checked(at: last, now: .now))
+            Text(CheckedAtCopy.checked(at: last, now: clock.now))
         }
-        if let next = MenuBarMenuCopy.nextAttempt(lastCheck: agent.lastCheck, interval: agent.interval, now: .now) {
+        if let next = MenuBarMenuCopy.nextAttempt(
+            lastCheck: agent.lastCheck, interval: agent.interval, isChecking: agent.isChecking, now: clock.now) {
             Text(next)
         }
 

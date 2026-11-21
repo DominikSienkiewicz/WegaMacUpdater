@@ -171,10 +171,12 @@ struct WegaCompanionCard: View {
     var attentionHeld = false
 
     @ObservedObject private var agent = MenuBarAgent.shared
+    /// UXP-17 — „Sprawdzono wczoraj, …” after midnight without waiting for another check.
+    @ObservedObject private var clock = DayClock.shared
 
     var body: some View {
         WegaCompanionCardContent(
-            presentation: WegaCompanionPresentation(state: state, quip: quip, lastCheck: lastCheck),
+            presentation: WegaCompanionPresentation(state: state, quip: quip, lastCheck: lastCheck, now: clock.now),
             asksForNotifications: agent.needsNotificationExplanation,
             onDecline: { agent.declineNotifications() },
             onAgree: { Task { await agent.agreeToNotifications() } },

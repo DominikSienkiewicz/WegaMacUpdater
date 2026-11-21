@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import MacUpdaterCore
 import Testing
@@ -49,14 +50,16 @@ struct MenuBarMenuTests {
         let last = now.addingTimeInterval(-3 * 3600)
         let next = last.addingTimeInterval(6 * 3600)
         withLanguage(.pl) {
-            #expect(MenuBarMenuCopy.nextAttempt(lastCheck: last, interval: .every6Hours, now: now)
+            #expect(MenuBarMenuCopy.nextAttempt(lastCheck: last, interval: .every6Hours, isChecking: false, now: now)
                     == "Kolejna próba: dziś, \(next.formatted(date: .omitted, time: .shortened)), gdy Wega jest uruchomiona. Zamknięcie okna nie kończy aplikacji.")
-            #expect(MenuBarMenuCopy.nextAttempt(lastCheck: last, interval: .off, now: now) == nil)
-            #expect(MenuBarMenuCopy.nextAttempt(lastCheck: now.addingTimeInterval(-2 * 86_400), interval: .daily, now: now)?
+            #expect(MenuBarMenuCopy.nextAttempt(lastCheck: last, interval: .off, isChecking: false, now: now) == nil)
+            #expect(MenuBarMenuCopy.nextAttempt(lastCheck: last, interval: .every6Hours, isChecking: true, now: now) == nil,
+                    "a check under way is not a next attempt at „dziś, <now>”")
+            #expect(MenuBarMenuCopy.nextAttempt(lastCheck: now.addingTimeInterval(-2 * 86_400), interval: .daily, isChecking: false, now: now)?
                 .contains(now.formatted(date: .omitted, time: .shortened)) == true, "an overdue attempt is now")
         }
         withLanguage(.en) {
-            #expect(MenuBarMenuCopy.nextAttempt(lastCheck: last, interval: .every6Hours, now: now)?
+            #expect(MenuBarMenuCopy.nextAttempt(lastCheck: last, interval: .every6Hours, isChecking: false, now: now)?
                 .hasPrefix("Next attempt: today, ") == true)
         }
     }
@@ -96,6 +99,67 @@ struct MenuBarMenuTests {
         #expect(try source("Sources/MacUpdater/ScanStore.swift").contains("MenuBarAgent.shared.revealInWindow = { [weak self] key in self?.inspectedKey = key }"))
     }
 
+    /// Fix round 1 — „Sprawdzono 23:55” and „Kolejna próba: jutro, …” were worked out once, when
+    /// the menu was last drawn, and nothing drew it again at midnight. The day clock re-draws the
+    /// menu and Wega's card when macOS says the day, the clock or the sleep changed.
+    @Test func theDayWordsMoveWhenTheDayChanges() async {
+        let calendar = Calendar.current
+        let lastCheck = calendar.date(from: DateComponents(year: 2026, month: 11, day: 21, hour: 23, minute: 50))!
+        let time = TestTime(calendar.date(from: DateComponents(year: 2026, month: 11, day: 21, hour: 23, minute: 55))!)
+        let center = NotificationCenter()
+        let names: [Notification.Name] = [.NSCalendarDayChanged, .NSSystemClockDidChange, NSWorkspace.didWakeNotification]
+        let clock = DayClock(sources: names.map { DayClock.Source(center: center, name: $0) }, now: { time.date })
+        let renders = RenderCount()
+        let watch = clock.objectWillChange.sink { renders.value += 1 }
+        defer { watch.cancel() }
+        let checked = { CheckedAtCopy.checked(at: lastCheck, now: clock.now) }
+        let next = { MenuBarMenuCopy.nextAttempt(lastCheck: lastCheck, interval: .every6Hours, isChecking: false, now: clock.now) }
+        let nextTime = lastCheck.addingTimeInterval(6 * 3600).formatted(date: .omitted, time: .shortened)
+
+        withLanguage(.pl) {
+            #expect(checked() == "Sprawdzono \(lastCheck.formatted(date: .omitted, time: .shortened))")
+            #expect(next()?.hasPrefix("Kolejna próba: jutro, \(nextTime)") == true)
+        }
+        time.date = calendar.date(from: DateComponents(year: 2026, month: 11, day: 22, hour: 0, minute: 5))!
+        center.post(name: .NSCalendarDayChanged, object: nil)
+        await mainQueueTurn()
+        #expect(renders.value == 1, "a day change re-draws the menu")
+        withLanguage(.pl) {
+            #expect(checked() == "Sprawdzono wczoraj, \(lastCheck.formatted(date: .omitted, time: .shortened))")
+            #expect(next()?.hasPrefix("Kolejna próba: dziś, \(nextTime)") == true)
+        }
+        center.post(name: .NSSystemClockDidChange, object: nil)
+        center.post(name: NSWorkspace.didWakeNotification, object: nil)
+        await mainQueueTurn()
+        #expect(renders.value == 3, "so do a clock change and a wake from sleep")
+    }
+
+    @Test func theLiveClockListensWhereMacOSAnnounces() {
+        let sources = DayClock.liveSources
+        #expect(sources.map(\.name) == [.NSCalendarDayChanged, .NSSystemClockDidChange, NSWorkspace.didWakeNotification])
+        #expect(sources.map(\.center) == [.default, .default, NSWorkspace.shared.notificationCenter])
+    }
+
+    /// Only the menu and Wega's card watch the clock: the agent drives the menu-bar label, and a
+    /// change there rebuilds the whole App body.
+    @Test func theMenuAndTheCardReadTheClock() throws {
+        let menu = try source("Sources/MacUpdater/MenuBarScene.swift")
+        #expect(menu.contains("@ObservedObject private var clock = DayClock.shared"))
+        #expect(menu.contains("CheckedAtCopy.checked(at: last, now: clock.now)"))
+        #expect(menu.contains("isChecking: agent.isChecking, now: clock.now)"))
+        #expect(!menu.contains("now: .now"))
+        let card = try source("Sources/MacUpdater/WegaCompanionCard.swift")
+        #expect(card.contains("@ObservedObject private var clock = DayClock.shared"))
+        #expect(card.contains("lastCheck: lastCheck, now: clock.now)"))
+        #expect(!(try source("Sources/MacUpdater/MenuBarAgent.swift")).contains("DayClock"))
+        #expect(!(try source("Sources/MacUpdater/MacUpdaterApp.swift")).contains("DayClock"))
+    }
+
+    /// The clock hands its notifications to the main queue; one more turn of that queue has run them.
+    private func mainQueueTurn() async {
+        await withCheckedContinuation { continuation in DispatchQueue.main.async { continuation.resume() } }
+    }
+
     /// The row's key reaches the store before the window has appeared, and the window then
     /// re-applies its filter (on appearing, and when the route changes it). On "all updates"
     /// every row is listed, so the row the menu asked for must stay inspected; a narrower
@@ -110,4 +174,13 @@ struct MenuBarMenuTests {
         UpdateFilterInteraction.apply(.cli, to: store)
         #expect(store.inspectedKey == nil)
     }
+}
+
+private final class TestTime {
+    var date: Date
+    init(_ date: Date) { self.date = date }
+}
+
+private final class RenderCount {
+    var value = 0
 }
