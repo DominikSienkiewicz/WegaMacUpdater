@@ -99,7 +99,7 @@ final class InfoOperationsController: ObservableObject {
         if helperStatus == .requiresApproval {
             onWegaState(WegaState(
                 pose: .alert,
-                line: tr("Zatwierdź komponent w Ustawieniach → Elementy logowania.")
+                line: tr("Zatwierdź pomocnika w Ustawieniach systemowych → Elementy logowania, potem wróć tutaj.")
             ))
         } else if helperStatus == .enabled {
             onWegaState(WegaState(pose: .happy, line: tr("Pomocnik Wegi jest gotowy.")))

@@ -37,7 +37,7 @@ struct ScanDirectoriesSettingsCard: View {
     private var depthRow: some View {
         HStack {
             VStack(alignment: .leading, spacing: 1) {
-                Text(tr("Głębokość zagłębiania")).font(.wega(.callout))
+                Text(tr("Głębokość podfolderów")).font(.wega(.callout))
                 Text(tr("0 = tylko sam katalog. 1 = katalog i jego bezpośrednie podfoldery."))
                     .font(.wega(.footnote))
                     .foregroundStyle(.tertiary)

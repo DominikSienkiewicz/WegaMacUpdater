@@ -758,7 +758,7 @@ struct ManualUpdateActionView: View {
             // The row leads to the in-app installer in Settings — signature verification,
             // the headless helper install and the restart all live there. Never a browser.
             Button {
-                openSettings()
+                SettingsRoute.shared.open(.selfUpdate, with: openSettings)
             } label: {
                 Label(tr("Aktualizuj Wegę"), systemImage: "arrow.down.circle")
             }

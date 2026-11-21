@@ -111,7 +111,7 @@ struct UninstallResultPresentationTests {
     }
 
     /// The helper's switch is in Wega's Settings window (`InfoView`'s helper card), so the
-    /// "needs Wega's helper" row's button opens that window.
+    /// "needs Wega's helper" row's button opens that window at that card.
     @Test func helperSettingsActionOpensWegasSettingsWindow() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -122,7 +122,7 @@ struct UninstallResultPresentationTests {
         let branch = view[branchStart.upperBound...].prefix { $0 != "}" }
 
         #expect(view.contains("@Environment(\\.openSettings) private var openSettings"))
-        #expect(branch.contains("openSettings()"))
+        #expect(branch.contains("SettingsRoute.shared.open(.helper, with: openSettings)"))
     }
 
     /// Ruling 19: a stale or silent helper is already on, so "turn it on" would send the user to a

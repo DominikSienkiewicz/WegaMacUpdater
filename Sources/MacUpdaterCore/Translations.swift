@@ -124,7 +124,6 @@ extension Translations {
         // SEC-08 — token GitHub (Keychain).
         "Token GitHub (opcjonalny)": "GitHub token (optional)",
         "Zapisany": "Saved",
-        "Podnosi limit GitHub z 60 do 5000 zapytań/h i włącza zwolnienie 304. Trzymany w Keychain.": "Raises the GitHub limit from 60 to 5000 requests/h and enables the 304 exemption. Stored in the Keychain.",
         "Zapisz token": "Save token",
         "Token zapisany w Keychain": "Token saved in the Keychain",
         "Nie udało się zapisać tokenu": "Failed to save the token",
@@ -165,8 +164,6 @@ extension Translations {
         "Uwaga: kosztowne łącze lub throttling — pobieram mimo to.": "Note: metered link or throttling — downloading anyway.",
         "Duże pobranie": "Large download",
         "Niska bateria": "Low battery",
-        "Mnożnik rozpakowania": "Unpacking multiplier",
-        "Margines dysku": "Disk safety margin",
         "Aktualizacja odroczona": "Update postponed",
         "Warunki nie pozwalają teraz bezpiecznie pobrać aktualizacji.": "Current conditions do not allow the update to be downloaded safely.",
         // FEAT-05 — rollback casków.
@@ -219,7 +216,6 @@ extension Translations {
         "Nie znaleziono": "Not found",
         "Otwórz Ustawienia → Elementy logowania": "Open Settings → Login Items",
         "Brak skonfigurowanego Team ID — helper zadziała dopiero w podpisanym buildzie.": "No Team ID configured — the helper works only in a signed build.",
-        "Zatwierdź komponent w Ustawieniach → Elementy logowania.": "Approve the component in Settings → Login Items.",
         // BG-02 — „Uruchamiaj przy logowaniu" (SMAppService.mainApp): tryb tła po restarcie Maca.
         "Uruchamiaj przy logowaniu": "Launch at login",
         "Uruchamiaj Wegę przy logowaniu": "Launch Wega at login",
@@ -390,7 +386,6 @@ extension Translations {
         "Katalogi skanowania": "Scan directories",
         "Wega skanuje /Applications, ~/Applications i ich podfoldery. Dodaj własne katalogi (także na innych wolumenach), pomiń te, których nie chcesz przeszukiwać, i ustaw głębokość zagłębiania.":
             "Wega scans /Applications, ~/Applications and their subfolders. Add your own directories (including on other volumes), skip the ones you don't want searched, and set how deep to descend.",
-        "Głębokość zagłębiania": "Recursion depth",
         "0 = tylko sam katalog. 1 = katalog i jego bezpośrednie podfoldery.":
             "0 = the directory only. 1 = the directory and its immediate subfolders.",
         "Katalogi użytkownika": "Your directories",

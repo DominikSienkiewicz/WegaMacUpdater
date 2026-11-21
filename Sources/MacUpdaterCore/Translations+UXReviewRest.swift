@@ -116,5 +116,23 @@ extension Translations {
             "Show in Logs",
         "Pokaż wszystkie":
             "Show All",
+        "Ogólne":
+            "General",
+        "Sprawdzanie i tło":
+            "Checking & Background",
+        "Uprawnienia i prywatność":
+            "Permissions & Privacy",
+        "Zaawansowane":
+            "Advanced",
+        "Zatwierdź pomocnika w Ustawieniach systemowych → Elementy logowania, potem wróć tutaj.":
+            "Approve the helper in System Settings → Login Items, then come back here.",
+        "Zapas na rozpakowanie":
+            "Unpacking headroom",
+        "Zapas wolnego miejsca":
+            "Free-space buffer",
+        "Głębokość podfolderów":
+            "Subfolder depth",
+        "Opcjonalny token zmniejsza przerwy przez limity zapytań GitHuba. Jest w pęku kluczy.":
+            "An optional token reduces interruptions from GitHub request limits. It is kept in the Keychain.",
     ]
 }

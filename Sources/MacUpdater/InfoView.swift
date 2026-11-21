@@ -16,6 +16,9 @@ struct InfoView: View {
     // SEC-08: opcjonalny token GitHub (Keychain).
     @State private var githubTokenInput: String = ""
     @State private var reportController: BugReportController?
+    @ObservedObject private var route = SettingsRoute.shared
+    /// UXP-15 — the last message of each card's action, shown under that card's buttons.
+    @State private var cardHints: [SettingsCard: String] = [:]
 
     private var diagnostics: DiagnosticsResult? { operations.diagnostics }
     private var catalogRefreshing: Bool { operations.catalogRefreshing }
@@ -40,30 +43,12 @@ struct InfoView: View {
 // reachable).
 extension InfoView {
     var body: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                unverifiedOverlayCard
-                appCard
-                languageCard
-                ScanDirectoriesSettingsCard()
-                CleanupProjectRootsSettingsCard()
-                CleanupTCCMapSettingsCard()
-                ResourceGateSettingsCard()
-                LaunchSmokeTestSettingsCard()
-                LaunchAtLoginSettingsCard()
-                NotificationsSettingsCard()
-                BackgroundUpdateConsentSettingsCard()
-                CrashReportingSettingsCard()
-                policiesCard
-                diagnosticsCard
-                catalogCard
-                githubTokenCard
-                touchIDCard
-                privilegedHelperCard
-                licensesCard
-                environmentCard
-            }
-            .padding(16)
+        TabView(selection: $route.tab) {
+            Tab(SettingsTab.general.title, systemImage: SettingsTab.general.systemImage, value: SettingsTab.general) { generalTab }
+            Tab(SettingsTab.checking.title, systemImage: SettingsTab.checking.systemImage, value: SettingsTab.checking) { checkingTab }
+            Tab(SettingsTab.permissions.title, systemImage: SettingsTab.permissions.systemImage, value: SettingsTab.permissions) { permissionsTab }
+            Tab(SettingsTab.cleanup.title, systemImage: SettingsTab.cleanup.systemImage, value: SettingsTab.cleanup) { cleanupTab }
+            Tab(SettingsTab.advanced.title, systemImage: SettingsTab.advanced.systemImage, value: SettingsTab.advanced) { advancedTab }
         }
         .onAppear {
             onWegaState?(WegaState(pose: .idle, line: tr("Oto co o sobie wiem.")))
@@ -83,6 +68,75 @@ extension InfoView {
         }
         .sheet(item: $reportController) { controller in
             BugReportSheet(controller: controller) { reportController = nil }
+        }
+    }
+
+    // MARK: - Tabs
+
+    private var generalTab: some View {
+        page(.general) {
+            appCard
+            languageCard
+            LaunchAtLoginSettingsCard()
+            NotificationsSettingsCard()
+        }
+    }
+
+    private var checkingTab: some View {
+        page(.checking) {
+            policiesCard
+            BackgroundUpdateConsentSettingsCard()
+            ScanDirectoriesSettingsCard()
+            ResourceGateSettingsCard()
+        }
+    }
+
+    private var permissionsTab: some View {
+        page(.permissions) {
+            privilegedHelperCard
+            touchIDCard
+        }
+    }
+
+    private var cleanupTab: some View {
+        page(.cleanup) {
+            CleanupProjectRootsSettingsCard()
+            CleanupTCCMapSettingsCard()
+        }
+    }
+
+    private var advancedTab: some View {
+        page(.advanced) {
+            LaunchSmokeTestSettingsCard()
+            CrashReportingSettingsCard()
+            catalogCard
+            githubTokenCard
+            diagnosticsCard
+            environmentCard
+            licensesCard
+        }
+    }
+
+    // MARK: - Page
+
+    /// One tab's page: the unverified-endpoints warning tops every tab, then the tab's cards.
+    private func page<Content: View>(_ tab: SettingsTab, @ViewBuilder _ content: () -> Content) -> some View {
+        SettingsPage(tab: tab, route: route) {
+            unverifiedOverlayCard
+            content()
+        }
+    }
+
+    // MARK: - Card hints
+
+    /// Sends a card's messages to the line under that card's buttons, and on to Wega when the
+    /// window hosting this view has her. Asking for a relay starts a new action on the card, so
+    /// the card's previous message goes first.
+    func relay(_ card: SettingsCard) -> @MainActor (WegaState) -> Void {
+        cardHints[card] = nil
+        return { state in
+            cardHints[card] = state.line
+            onWegaState?(state)
         }
     }
 
@@ -131,6 +185,7 @@ extension InfoView {
                 }
             }
         }
+        .id(SettingsCard.policies)
     }
 
     // MARK: - Touch ID for sudo
@@ -178,10 +233,13 @@ extension InfoView {
                             .disabled(enablingTouchID)
                             .controlSize(.small)
                         }
+
+                        SettingsCardHint(text: cardHints[.touchID])
                     }
                     .padding(14)
                 }
             }
+            .id(SettingsCard.touchID)
         }
     }
 
@@ -196,7 +254,7 @@ extension InfoView {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(tr("Podnosi limit GitHub z 60 do 5000 zapytań/h i włącza zwolnienie 304. Trzymany w Keychain."))
+                    Text(tr("Opcjonalny token zmniejsza przerwy przez limity zapytań GitHuba. Jest w pęku kluczy."))
                         .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -253,10 +311,12 @@ extension InfoView {
                     }
 
                     helperActions
+                    SettingsCardHint(text: cardHints[.helper])
                 }
                 .padding(14)
             }
         }
+        .id(SettingsCard.helper)
     }
 
     private var helperStatusBadge: some View {
@@ -286,8 +346,11 @@ extension InfoView {
                     operations.openLoginItemsSettings()
                 } label: { Label(tr("Otwórz Ustawienia → Elementy logowania"), systemImage: "gearshape") }
                     .controlSize(.small)
-                Button(tr("Sprawdź ponownie")) { operations.refreshHelperStatus() }
-                    .controlSize(.small)
+                Button(tr("Sprawdź ponownie")) {
+                    cardHints[.helper] = nil
+                    operations.refreshHelperStatus()
+                }
+                .controlSize(.small)
             default:
                 Button {
                     Task { await installHelper() }
@@ -303,12 +366,11 @@ extension InfoView {
     }
 
     private func installHelper() async {
-        await operations.installHelper { state in
-            onWegaState?(state)
-        }
+        await operations.installHelper(onWegaState: relay(.helper))
     }
 
     private func removeHelper() async {
+        cardHints[.helper] = nil
         await operations.removeHelper()
     }
 
@@ -376,6 +438,7 @@ extension InfoView {
                 Spacer()
 
                 Button(tr("Sprawdź ponownie")) {
+                    cardHints[.touchID] = nil
                     touchIDController.refresh()
                 }
                 .controlSize(.small)
@@ -408,7 +471,7 @@ extension InfoView {
                 Spacer()
                 Button(tr("Sprawdź stan instalacji")) {
                     Task {
-                        await selfUpdateController.reconcileInstallation { state in onWegaState?(state) }
+                        await selfUpdateController.reconcileInstallation(onWegaState: relay(.selfUpdate))
                     }
                 }
                 .disabled(selfUpdateController.isReconcilingInstallation)
@@ -511,15 +574,11 @@ extension InfoView {
     /// `.pkg`, DiskImageMounter for `.dmg`). On any failure, fall back to opening the asset
     /// URL in the browser so the user can still grab it.
     private func applySelfUpdate(_ action: SelfUpdateAction, version: String) async {
-        await selfUpdateController.apply(action, version: version) { state in
-            onWegaState?(state)
-        }
+        await selfUpdateController.apply(action, version: version, onWegaState: relay(.selfUpdate))
     }
 
     private func enableTouchID() async {
-        await touchIDController.enable { state in
-            onWegaState?(state)
-        }
+        await touchIDController.enable(onWegaState: relay(.touchID))
     }
 
     // MARK: - Unverified endpoints overlay (SEC-08)
@@ -573,6 +632,10 @@ extension InfoView {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
 
+                SettingsCardHint(text: cardHints[.selfUpdate])
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 10)
+
                 selfUpdateNotes
                     .padding(.horizontal, 14)
                     .padding(.bottom, 10)
@@ -610,6 +673,7 @@ extension InfoView {
                 .padding(.vertical, 10)
             }
         }
+        .id(SettingsCard.selfUpdate)
     }
 
     // MARK: - Diagnostics card
@@ -832,107 +896,5 @@ extension InfoView {
 
     private func loadDiagnostics() async {
         await operations.loadDiagnostics()
-    }
-}
-
-// MARK: - Sub-views
-
-private struct LabeledValue: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(label)
-                .font(.wega(.footnote, weight: .semibold))
-                .foregroundStyle(.tertiary)
-                .textCase(.uppercase)
-                .tracking(0.5)
-            Text(value)
-                .font(.wega(.callout, monospaced: true))
-        }
-    }
-}
-
-private struct DiagRow: View {
-    let label: String
-    var required: Bool = false
-    var value: String? = nil
-    var active: Bool? = nil
-    /// Overrides the dot's colour for rows whose *value* carries the verdict — a present
-    /// value normally means "found", but "odmowa" is a present value that is not healthy.
-    var healthy: Bool? = nil
-
-    private var statusColor: Color {
-        if let healthy { return healthy ? .wegaSuccess : Color.wegaDanger }
-        if value != nil { return .wegaSuccess }
-        if active == true { return .wegaSuccess }
-        if required { return Color.wegaDanger }
-        return .secondary
-    }
-
-    private var statusText: String {
-        if let v = value { return v }
-        if let a = active { return a ? tr("aktywny") : tr("nieaktywny") }
-        return required ? tr("nie znaleziono") : tr("niedostępny")
-    }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Circle().fill(statusColor).frame(width: 8, height: 8)
-            Text(label).font(.wega(.callout))
-            Spacer()
-            Text(statusText)
-                .font(.wega(.subheadline, monospaced: true))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 5)
-    }
-}
-
-private struct LicenseRow: View {
-    let name: String
-    let license: String
-    let url: URL
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(name).font(.wega(.callout, weight: .medium))
-            Text(license)
-                .font(.wega(.subheadline))
-                .foregroundStyle(.secondary)
-            Spacer()
-            Link("↗", destination: url)
-                .font(.wega(.callout))
-        }
-        .padding(.vertical, 5)
-    }
-}
-
-/// Notatki jednego wydania, domyślnie zwinięte.
-///
-/// Wydzielone z `InfoView.selfUpdateNotes`, bo `WegaDisclosure` potrzebuje bindingu,
-/// a `ForEach` nie może trzymać `@State` dla każdego elementu z osobna.
-private struct SelfUpdateNoteDisclosure: View {
-    let note: ReleaseNote
-
-    @State private var isExpanded = false
-
-    var body: some View {
-        WegaDisclosure(isExpanded: $isExpanded) {
-            Text(note.body.isEmpty ? tr("Brak opublikowanych notatek") : note.body)
-                .font(.wega(.subheadline))
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-        } label: {
-            HStack(spacing: 6) {
-                Text(note.version).font(.wega(.callout, weight: .medium))
-                if let published = note.publishedAt {
-                    Text(published, style: .date)
-                        .font(.wega(.subheadline))
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
     }
 }

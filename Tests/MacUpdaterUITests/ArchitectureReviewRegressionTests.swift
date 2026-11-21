@@ -58,7 +58,9 @@ struct ArchitectureReviewRegressionTests {
 
     @Test func viewsContainNoRealProcessNetworkOrFilesystemWork() throws {
         let root = packageRoot()
-        let info = executableSource(try source("Sources/MacUpdater/InfoView.swift", root: root))
+        // The Settings sub-views left InfoView.swift for SettingsSubviews.swift (UXP-15); the guard follows them.
+        let info = executableSource(try source("Sources/MacUpdater/InfoView.swift", root: root)
+            + source("Sources/MacUpdater/SettingsSubviews.swift", root: root))
         let migration = executableSource(
             try source("Sources/MacUpdater/MigrationView.swift", root: root)
         )

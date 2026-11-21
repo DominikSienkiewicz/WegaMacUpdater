@@ -114,7 +114,7 @@ struct WegaCommands: Commands {
         // macOS convention: an app's own update check lives in the app menu, right under About.
         // The item opens the Settings window, where the self-update screen owns the operation.
         CommandGroup(after: .appInfo) {
-            Button(tr("Sprawdź aktualizacje Wegi…")) { openSettings() }
+            Button(tr("Sprawdź aktualizacje Wegi…")) { SettingsRoute.shared.open(.selfUpdate, with: openSettings) }
         }
 
         CommandMenu(tr("Aktualizacje")) {

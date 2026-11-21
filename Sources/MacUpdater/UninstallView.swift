@@ -300,7 +300,7 @@ struct UninstallView: View {
         case .openAppManagementSettings:
             NSWorkspace.shared.open(AppManagementSettings.paneURL)
         case .openHelperSettings:
-            openSettings()
+            SettingsRoute.shared.open(.helper, with: openSettings)
         }
     }
 
