@@ -92,14 +92,18 @@ struct HelperLeftoverRegistrationCleanupTests {
         #expect(!cleanup.consumeNotice())
     }
 
-    @Test func theBannerSaysWhatHappenedAndOpensTheHelperCard() {
-        let banner = HelperLeftoverRegistrationCleanup.banner
+    @Test func theBannerSaysWhatHappenedAndOpensTheHelperCard() throws {
+        let scan = ScanStore()
+        HelperLeftoverRegistrationCleanup.showBanner(on: scan)
+        let banner = try #require(scan.banner)
         #expect(banner.variant == .danger)
         #expect(banner.action == .openHelperSettings)
         #expect(banner.title == "Usunęłam pomocnika Wegi")
         #expect(banner.message == "Był zarejestrowany z kopii Wegi, którą może zmienić ktoś inny niż root, a macOS uruchamia go jako root. Jeśli go potrzebujesz, zainstaluj Wegę z pakietu .pkg.")
-        withLanguage(.en) {
-            let english = HelperLeftoverRegistrationCleanup.banner
+        try withLanguage(.en) {
+            let scan = ScanStore()
+            HelperLeftoverRegistrationCleanup.showBanner(on: scan)
+            let english = try #require(scan.banner)
             #expect(english.title == "I removed the Wega helper")
             #expect(english.message == "It was registered from a copy of Wega that someone other than root can change, and macOS runs it as root. If you need it, install Wega from the .pkg.")
         }
@@ -114,7 +118,7 @@ struct HelperLeftoverRegistrationCleanupTests {
         let app = try source("Sources/MacUpdater/MacUpdaterApp.swift")
         #expect(app.contains("Task{@MainActorinawaitHelperLeftoverRegistrationCleanup.shared.run()}"))
         #expect(app.contains(".onReceive(HelperLeftoverRegistrationCleanup.shared.$removedRegistration){removedin"
-            + "ifremoved,HelperLeftoverRegistrationCleanup.shared.consumeNotice(){scan.showStickyBanner(HelperLeftoverRegistrationCleanup.banner)}}"))
+            + "ifremoved,HelperLeftoverRegistrationCleanup.shared.consumeNotice(){HelperLeftoverRegistrationCleanup.showBanner(on:scan)}}"))
         let host = try source("Sources/MacUpdater/ScanBannerHost.swift")
         #expect(host.contains("case.openHelperSettings:SettingsRoute.shared.open(.helper,with:openSettings)"))
     }

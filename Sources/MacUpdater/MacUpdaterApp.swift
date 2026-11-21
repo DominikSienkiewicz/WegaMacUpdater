@@ -55,7 +55,7 @@ struct WegaMacUpdaterApp: App {
 #endif
                 }
                 .onReceive(HelperLeftoverRegistrationCleanup.shared.$removedRegistration) { removed in
-                    if removed, HelperLeftoverRegistrationCleanup.shared.consumeNotice() { scan.showStickyBanner(HelperLeftoverRegistrationCleanup.banner) }
+                    if removed, HelperLeftoverRegistrationCleanup.shared.consumeNotice() { HelperLeftoverRegistrationCleanup.showBanner(on: scan) }
                 }
         }
         .windowToolbarStyle(.unified)
