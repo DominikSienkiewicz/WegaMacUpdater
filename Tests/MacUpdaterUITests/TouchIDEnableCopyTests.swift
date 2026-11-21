@@ -75,6 +75,26 @@ struct TouchIDEnableCopyTests {
         }
     }
 
+    /// RC2-6, E.9: whatever closes the sudo routes, the card names it and then gives the recoveryOS
+    /// advice, Wega's own password prompts included (Z12).
+    @Test func everyRecoveryOnlyReasonNamesItsCauseThenRecoveryOS() {
+        withLanguage(.pl) {
+            for refusal in [TouchIDSudoDisableRefusal.notRegularFile, .unsafeOwnership] {
+                #expect(TouchIDEnableCopy.recoveryOnlyNote(for: .unsafePolicy(refusal)) == TouchIDEnableCopy.unsafePolicyNote(refusal))
+            }
+            #expect(TouchIDEnableCopy.recoveryOnlyNote(for: .unsafeSudoFile)
+                    == "Plik /etc/pam.d/sudo może zmieniać ktoś poza rootem. To problem bezpieczeństwa: kto może tam pisać, może dostać uprawnienia roota bez hasła. " + recovery)
+            #expect(TouchIDEnableCopy.recoveryOnlyNote(for: .noProofOfSafety)
+                    == "Nie mogę sprawdzić, czy ustawienia sudo w /etc/pam.d są bezpieczne, więc nie podaję polecenia ani przycisku. " + recovery)
+        }
+        withLanguage(.en) {
+            #expect(TouchIDEnableCopy.recoveryOnlyNote(for: .unsafeSudoFile)
+                    == "Someone other than root can change /etc/pam.d/sudo. This is a security problem: whoever can write there can get root without a password. " + TouchIDEnableCopy.recoveryOnly)
+            #expect(TouchIDEnableCopy.recoveryOnlyNote(for: .noProofOfSafety)
+                    == "I can't check whether the sudo settings in /etc/pam.d are safe, so I'm not offering a command or a button. " + TouchIDEnableCopy.recoveryOnly)
+        }
+    }
+
     // MARK: - Source pins
 
     /// Review focus 5 (card half): with −4/−5 seen by the app or the helper, the card has only the

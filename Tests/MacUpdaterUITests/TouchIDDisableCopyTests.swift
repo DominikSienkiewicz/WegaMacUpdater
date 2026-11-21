@@ -82,6 +82,23 @@ struct TouchIDDisableCopyTests {
         }
     }
 
+    /// E.6: without a helper and without the command, the card says what the app's own read found.
+    @Test func withoutTheCommandTheCardSaysWhatTheAppsOwnReadFound() {
+        withLanguage(.pl) {
+            let remove = TouchIDSudoDisablePlan.remove(lines: 1, contents: Data())
+            #expect(TouchIDDisableCopy.withoutCommand(plan: remove, fallbackPath: fallback)
+                    == TouchIDDisableCopy.line(for: .refused(.fallbackPolicyPresent), stillEnabled: true, fallbackPath: fallback))
+            #expect(TouchIDDisableCopy.withoutCommand(plan: .nothingToRemove, fallbackPath: nil)
+                    == TouchIDDisableCopy.line(for: .nothingToRemove, stillEnabled: true), "RC6: a line written differently")
+            for refusal in [TouchIDSudoDisableRefusal.tooLarge, .unreadable, .lineContinuation, .otherDirectivesPresent] {
+                #expect(TouchIDDisableCopy.withoutCommand(plan: .refused(refusal), fallbackPath: nil)
+                        == TouchIDDisableCopy.line(for: .refused(refusal), stillEnabled: true), "\(refusal)")
+            }
+            #expect(TouchIDDisableCopy.withoutCommand(plan: remove, fallbackPath: nil) == nil, "the command says it")
+            #expect(TouchIDDisableCopy.withoutCommand(plan: nil, fallbackPath: nil) == nil, "nothing read, nothing to add")
+        }
+    }
+
     @Test func theLineForANonMatchingFileNeverClaimsWegaWroteIt() {
         withLanguage(.pl) {
             let line = TouchIDDisableCopy.line(for: .nothingToRemove, stillEnabled: true)

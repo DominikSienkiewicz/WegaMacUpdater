@@ -30,6 +30,17 @@ enum TouchIDDisableCopy {
         return tr("Pomocnik Wegi nie odpowiedział, a Touch ID dla sudo jest nadal włączone. Spróbuj ponownie albo wyłącz je ręcznie według przewodnika.")
     }
 
+    /// Without a helper that can do it and without the command (E.6): what the app's own read of
+    /// `sudo_local` found, by the helper's rules. `nil` when it found nothing to add.
+    static func withoutCommand(plan: TouchIDSudoDisablePlan?, fallbackPath: String?) -> String? {
+        if let fallbackPath { return line(for: .refused(.fallbackPolicyPresent), stillEnabled: true, fallbackPath: fallbackPath) }
+        switch plan {
+        case .nothingToRemove?: return line(for: .nothingToRemove, stillEnabled: true)
+        case .refused(let refusal)?: return line(for: .refused(refusal), stillEnabled: true)
+        case .remove?, nil: return nil
+        }
+    }
+
     static func localDirectoryWarning(path: String) -> String {
         trf("Katalog %@ może zmieniać ktoś poza rootem. Gdy Touch ID dla sudo jest wyłączone, sudo czyta też ustawienia z tego miejsca, więc program działający na Twoim koncie mógłby tam dodać takie, które pozwolą sudo pominąć hasło. Zajrzyj do przewodnika.", path)
     }

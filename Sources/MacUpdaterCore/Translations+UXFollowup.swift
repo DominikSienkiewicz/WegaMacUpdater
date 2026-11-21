@@ -18,6 +18,11 @@ extension Translations {
             "Don't type your password into sudo until you fix this — not even when Wega asks for it during an update: sudo reads these settings. Fix them from macOS Recovery with the user guide.",
         "Nie wiem, w jakim stanie jest teraz plik /etc/pam.d/sudo_local: zapis albo jego sprawdzenie się nie udało. Sprawdź go według przewodnika.":
             "I don't know what state /etc/pam.d/sudo_local is in now: writing it or checking the write failed. Check it with the user guide.",
+        // The sudo routes closed (RC2-6, E.9).
+        "Plik /etc/pam.d/sudo może zmieniać ktoś poza rootem. To problem bezpieczeństwa: kto może tam pisać, może dostać uprawnienia roota bez hasła.":
+            "Someone other than root can change /etc/pam.d/sudo. This is a security problem: whoever can write there can get root without a password.",
+        "Nie mogę sprawdzić, czy ustawienia sudo w /etc/pam.d są bezpieczne, więc nie podaję polecenia ani przycisku.":
+            "I can't check whether the sudo settings in /etc/pam.d are safe, so I'm not offering a command or a button.",
         "Zapisałam plik, ale Touch ID dla sudo nadal nie wygląda na włączone. Sprawdź /etc/pam.d/sudo_local według przewodnika.":
             "I wrote the file, but Touch ID for sudo still doesn't look turned on. Check /etc/pam.d/sudo_local with the user guide.",
         "Pomocnik Wegi jest nieaktualny albo nie odpowiada, więc nie włączy Touch ID dla sudo. Użyj polecenia niżej albo w Ustawieniach usuń pomocnika i zainstaluj go ponownie (albo uruchom Maca ponownie).":

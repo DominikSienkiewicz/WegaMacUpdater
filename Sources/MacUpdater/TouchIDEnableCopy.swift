@@ -52,6 +52,19 @@ enum TouchIDEnableCopy {
         return condition + " " + recoveryOnly
     }
 
+    /// The card's note while nothing but recoveryOS is safe advice (RC2-6, RC2-7, E.9): what is
+    /// wrong or could not be checked, then `recoveryOnly`.
+    static func recoveryOnlyNote(for reason: TouchIDSetupController.RecoveryOnlyReason) -> String {
+        switch reason {
+        case .unsafePolicy(let refusal):
+            return unsafePolicyNote(refusal)
+        case .unsafeSudoFile:
+            return tr("Plik /etc/pam.d/sudo może zmieniać ktoś poza rootem. To problem bezpieczeństwa: kto może tam pisać, może dostać uprawnienia roota bez hasła.") + " " + recoveryOnly
+        case .noProofOfSafety:
+            return tr("Nie mogę sprawdzić, czy ustawienia sudo w /etc/pam.d są bezpieczne, więc nie podaję polecenia ani przycisku.") + " " + recoveryOnly
+        }
+    }
+
     private static func line(for refusal: TouchIDSudoEnableRefusal) -> String {
         switch refusal {
         case .noConsoleUser, .callerNotConsoleUser, .callerNotAdministrator:
