@@ -449,13 +449,13 @@ extension ScanStore {
 
     private func scanManualUpdates(brewOutdatedCasks: Set<String> = []) async -> ManualScanReport {
         guard let model else { return ManualScanReport(apps: [], failedChecks: 0) }
+        if let scan = dependencies.detailedManualScan { return await scan(model.brewService, brewOutdatedCasks) }
         if let scan = dependencies.manualScanWithProgress {
             let generation = scanGeneration
             return await scan(model.brewService, brewOutdatedCasks) { [weak self] progress in
                 await self?.acceptManualScanProgress(progress, generation: generation)
             }
         }
-        if let scan = dependencies.detailedManualScan { return await scan(model.brewService, brewOutdatedCasks) }
         let legacy = await dependencies.manualScan(model.brewService, brewOutdatedCasks)
         return ManualScanReport(apps: legacy.apps, failedChecks: legacy.failedChecks)
     }

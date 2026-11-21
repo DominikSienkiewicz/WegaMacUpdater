@@ -62,10 +62,41 @@ struct ScanProgressReportingTests {
         #expect(!flags.contains(true), "a post-run rescan skips brew update")
     }
 
+    /// M10 — a copy of `.live` carries the live progress scan. A test that stubs
+    /// `detailedManualScan` on it must get its stub, not the real scanner; a recording progress
+    /// scan stands in for the live one here.
+    @Test func aStubbedDetailedScanWinsOverTheProgressScan() async throws {
+        let app = ManualOutdatedApp(
+            name: "Stubbed", path: URL(fileURLWithPath: "/Applications/Stubbed-\(UUID().uuidString).app"),
+            installedVersion: "1", availableVersion: "2", source: .sparkle,
+            bundleIdentifier: "example.stubbed.\(UUID().uuidString)"
+        )
+        let progressScan = ProgressScanRecorder()
+        let (store, _) = try storeReporting([], recorder: progressScan) { _, _ in
+            ManualScanReport(apps: [app], failedChecks: 0)
+        }
+
+        await store.runCheck(quiet: true)
+
+        #expect(store.manualOutdated.map(\.name) == ["Stubbed"])
+        #expect(!progressScan.ran, "the progress scan a copy of .live carries stays out of the way")
+        #expect(ScanStoreDependencies.live.detailedManualScan == nil && ScanStoreDependencies.live.manualScanWithProgress != nil,
+                "the app itself runs the progress scan")
+    }
+
+    @MainActor private final class ProgressScanRecorder {
+        var ran = false
+    }
+
     /// A store whose manual scan replays `values` through the progress sink, built like
     /// `ScanStatusPipelineTests`' one: the harness's runner, lock and snapshot store, with the
-    /// vendor scan swapped for the one that reports.
-    private func storeReporting(_ values: [ManualScanProgress]) throws -> (ScanStore, ScanStoreRuntimeHarness) {
+    /// vendor scan swapped for the one that reports. `detailed`, when given, is a stubbed
+    /// detailed scan next to it.
+    private func storeReporting(
+        _ values: [ManualScanProgress],
+        recorder: ProgressScanRecorder? = nil,
+        detailed: ((BrewService, Set<String>) async -> ManualScanReport)? = nil
+    ) throws -> (ScanStore, ScanStoreRuntimeHarness) {
         let runner = ScanStoreRuntimeProcessRunner { request in
             let output: String
             if request.arguments.contains("--json=v2") { output = "{\"formulae\":[],\"casks\":[]}" }
@@ -76,9 +107,11 @@ struct ScanProgressReportingTests {
         let harness = makeScanStoreRuntimeHarness(runner: runner)
         var deps = harness.store.dependencies
         deps.manualScanWithProgress = { _, _, report in
+            recorder?.ran = true
             for p in values { await report(p) }
             return ManualScanReport(apps: [], failedChecks: 0)
         }
+        deps.detailedManualScan = detailed
         let store = ScanStore(
             resultStore: ScanResultStore(io: harness.snapshots),
             runningApplicationInspector: ScanStoreRuntimeApplicationInspector(applications: []),

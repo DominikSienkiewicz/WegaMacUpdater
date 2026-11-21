@@ -38,9 +38,12 @@ struct ScanStoreDependencies {
     var recordUpdateRun: (UpdateJournalEntry) -> Void
     let settleAppManagementPermission: ((Bool) -> Void)?
     let undoableUpdates: () -> [UndoableUpdate]
+    /// A test's stubbed manual scan. Tried first, before `manualScanWithProgress`, so a test that
+    /// copies `.live` and sets this gets its stub rather than the real scanner `.live` carries.
+    /// The app leaves it `nil`.
     var detailedManualScan: ((BrewService, Set<String>) async -> ManualScanReport)? = nil
-    /// UXP-13 — the manual scan that also reports how many vendor apps have answered. Tried
-    /// first; the test stubs set `detailedManualScan` or `manualScan` and keep their path.
+    /// UXP-13 — the manual scan that also reports how many vendor apps have answered: the one
+    /// `.live` runs. Tried after `detailedManualScan` and before the legacy `manualScan`.
     var manualScanWithProgress: ((BrewService, Set<String>, @escaping @Sendable (ManualScanProgress) async -> Void) async -> ManualScanReport)? = nil
     var checkVendorUpdate: @Sendable (ManualOutdatedApp) async throws -> VendorUpdateCompletionResult = {
         try await VendorUpdateCompletionChecker().check($0)
