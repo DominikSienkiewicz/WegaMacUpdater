@@ -152,11 +152,21 @@ final class InventoryStore: ObservableObject {
     @Published private(set) var isScanning = false
     @Published private(set) var errorMessage: String?
 
-    private let operations: OperationCoordinator
+    /// When the last successful read finished, partial reads included. `nil` until then;
+    /// a cancelled or failed read leaves it alone.
+    @Published private(set) var lastReadAt: Date?
 
-    init(operations: OperationCoordinator = .shared) {
+    private let operations: OperationCoordinator
+    private let now: @MainActor () -> Date
+
+    init(operations: OperationCoordinator = .shared, now: @escaping @MainActor () -> Date = { .now }) {
         self.operations = operations
+        self.now = now
     }
+
+    /// True until the first read has landed. The store outlives the view, so a second visit
+    /// to the screen reuses the result instead of reading every folder again.
+    var needsInitialRead: Bool { lastReadAt == nil && !isScanning }
 
     func scan(
         model: AppViewModel,
@@ -185,6 +195,7 @@ final class InventoryStore: ObservableObject {
             apps = snapshot.apps
             npmGlobals = snapshot.npmGlobals
             errorMessage = snapshot.failures.scanErrorMessage
+            lastReadAt = now()
             onWegaState?(WegaState(
                 pose: .happy,
                 line: trp("Obchód skończony — %@ aplikacji pod opieką.", apps.count)

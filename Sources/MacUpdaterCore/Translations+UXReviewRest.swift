@@ -197,5 +197,12 @@ extension Translations {
         "Aktualizacje: %@, w tym %@ z możliwą poprawką bezpieczeństwa": "Updates: %@, %@ may fix security issues",
         "Usuń regułę dla %@": "Remove rule for %@",
         "Przywróć %@": "Restore %@",
+        "Odczytano %@": "Read %@",
+        "Odśwież spis": "Refresh Inventory",
+        "Nie sprawdza nowych wersji": "Does not check for new versions",
+        "Żadna aplikacja nie pasuje do tych filtrów.": "No apps match these filters.",
+        "Wyczyść filtry": "Clear Filters",
+        "Nie znalazłam aplikacji w wybranych folderach. Sprawdź katalogi skanowania albo odśwież spis.":
+            "I found no apps in the selected folders. Check the scan folders or refresh the inventory.",
     ]
 }

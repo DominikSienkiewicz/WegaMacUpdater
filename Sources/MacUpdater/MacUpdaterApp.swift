@@ -16,6 +16,9 @@ struct WegaMacUpdaterApp: App {
     /// Held here, above `.id(localization.language)`, so a language switch re-keys the
     /// view tree without discarding scan results or a running upgrade.
     @StateObject private var scan = ScanStore()
+    /// The inventory read, held above the language re-key like `scan`: leaving the screen and
+    /// coming back shows the result again instead of reading every folder anew (UXP-30).
+    @StateObject private var inventory = InventoryStore()
     /// Migration can remain active while `.id(localization.language)` rebuilds its view.
     @StateObject private var migration = MigrationStore()
     /// Cleanup ("Porządki") keeps a running scan or removal, and its last report, across the
@@ -38,6 +41,7 @@ struct WegaMacUpdaterApp: App {
                 .environmentObject(localization)
                 .environmentObject(policies)
                 .environmentObject(scan)
+                .environmentObject(inventory)
                 .environmentObject(migration)
                 .environmentObject(cleanup)
                 .environmentObject(commandCenter)
@@ -141,7 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
-    /// REL-06 — ⌘Q, "Zakończ Wega", log-out and shutdown all arrive here. Without this
+    /// REL-06 — ⌘Q, "Zakończ Wegę", log-out and shutdown all arrive here. Without this
     /// method they ended the process on the spot, including halfway through `brew upgrade
     /// --cask`: the old bundle already moved aside, the new one not yet in place.
     ///

@@ -176,6 +176,9 @@ final class ScanStore: ObservableObject {
     /// of a full scan. A caption of its own rather than a fifth `ScanPhase`: the ring counts the
     /// four sources, and the catalog is not one of them.
     @Published private(set) var isRefreshingCatalog = false
+    /// Whether a new check may start now: none running, none refreshing underneath a result,
+    /// and no update in flight.
+    var canStartCheck: Bool { status != .checking && !isRefreshing && !updating }
     /// UXP-13 — when the running scan started, for the band's elapsed time. `nil` between scans.
     @Published private(set) var scanStartedAt: Date?
     /// UXP-14 — how old the Homebrew catalog is, in minutes, when the scan on screen reused it

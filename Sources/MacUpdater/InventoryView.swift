@@ -20,7 +20,9 @@ struct InventoryView: View {
     /// field to take focus.
     @EnvironmentObject private var commandCenter: WegaCommandCenter
 
-    @StateObject private var inventory = InventoryStore()
+    @EnvironmentObject private var inventory: InventoryStore
+    /// The „dziś”/„wczoraj” of „Odczytano …” moves at midnight, after wake and on a clock change.
+    @ObservedObject private var clock = DayClock.shared
     @State private var search:       String            = ""
     @State private var filter:       SourceFilter      = .all
     @State private var sortKey:      InventorySortKey  = .name
@@ -130,11 +132,25 @@ struct InventoryView: View {
                 .disabled(isScanning || (apps.isEmpty && npmGlobals.isEmpty))
                 .help(tr("Zapisz spis aplikacji jako Brewfile lub CSV"))
 
+                if let read = inventory.lastReadAt {
+                    Text(trf("Odczytano %@", CheckedAtCopy.day(read, now: clock.now)))
+                        .font(.wega(.subheadline))
+                        .foregroundStyle(.secondary)
+                }
+
                 Button { Task { await scan() } } label: {
-                    Label(tr("Odśwież"), systemImage: "arrow.clockwise")
+                    Label(tr("Odśwież spis"), systemImage: "arrow.clockwise")
                 }
                 .controlSize(.small)
                 .disabled(isScanning)
+                .help(tr("Nie sprawdza nowych wersji"))
+
+                // The only scan button on this screen: the toolbar one is hidden here.
+                Button { scanStore.startCheck() } label: {
+                    Label(tr("Sprawdź aktualizacje"), systemImage: "arrow.triangle.2.circlepath")
+                }
+                .controlSize(.small)
+                .disabled(!scanStore.canStartCheck)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 10)
@@ -186,6 +202,11 @@ struct InventoryView: View {
                         .padding(.vertical, 12)
                         Spacer()
                     }
+                } else if let empty = InventoryEmptyState.of(
+                    appCount: apps.count, rowCount: rows.count, isScanning: isScanning,
+                    hasError: errorMessage != nil, lastReadAt: inventory.lastReadAt
+                ) {
+                    emptyState(empty)
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
@@ -217,11 +238,30 @@ struct InventoryView: View {
         // `.searchFocused` keeps UX-10's ⌘F able to move focus into it.
         .searchable(text: $search, prompt: tr("Szukaj po nazwie lub bundle ID…"))
         .searchFocused($searchFocused)
-        .task { scanStore.restoreLastScan(); await scan() }
+        .task { scanStore.restoreLastScan(); if inventory.needsInitialRead { await scan() } }
         // UX-10 — ⌘F pressed while already here fires `.onChange`; pressed from another
         // destination it navigates here first, so the request is instead consumed on appear.
         .onAppear { focusSearchIfRequested() }
         .onChange(of: commandCenter.inventorySearchFocusRequests) { _, _ in focusSearchIfRequested() }
+    }
+
+    private func emptyState(_ state: InventoryEmptyState) -> some View {
+        VStack(spacing: 12) {
+            WegaFull(pose: state == .noMatches ? .sniff : .idle, size: 100)
+            Text(state.message)
+                .font(.wega(.body)).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            if state == .noMatches {
+                Button(tr("Wyczyść filtry")) {
+                    filter = .all
+                    search = ""
+                    needsCheckingOnly = false
+                }
+                .controlSize(.small)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
     }
 
     private func focusSearchIfRequested() {
