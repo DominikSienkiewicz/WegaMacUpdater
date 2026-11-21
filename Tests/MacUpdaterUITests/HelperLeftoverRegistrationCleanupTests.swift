@@ -56,6 +56,31 @@ struct HelperLeftoverRegistrationCleanupTests {
         #expect(harness.copyListings == 0)
     }
 
+    /// Final security review, finding 1: while a helper installation is pending its bundle may be
+    /// half replaced, and the helper doing it must not be booted out.
+    @Test func nothingHappensWhileAHelperInstallationIsPending() async {
+        let harness = Harness(status: .enabled, ownTrust: Self.refused, copies: [], installationPending: true)
+        let cleanup = HelperLeftoverRegistrationCleanup(dependencies: harness.dependencies)
+
+        await cleanup.run()
+
+        #expect(harness.copyListings == 0)
+        #expect(harness.unregisterCalls == 0)
+        #expect(!cleanup.consumeNotice())
+    }
+
+    /// Final security review, finding 5: the banner is raised only when the registration is gone.
+    @Test(arguments: [PrivilegedHelperClient.Status.enabled, .requiresApproval])
+    func aRegistrationThatSurvivesTheRemovalRaisesNoBanner(after: PrivilegedHelperClient.Status) async {
+        let harness = Harness(status: .enabled, ownTrust: Self.refused, copies: [], statusAfterUnregister: after)
+        let cleanup = HelperLeftoverRegistrationCleanup(dependencies: harness.dependencies)
+
+        await cleanup.run()
+
+        #expect(harness.unregisterCalls == 1)
+        #expect(!cleanup.consumeNotice())
+    }
+
     /// The card still offers removal; no banner claims a removal that did not happen.
     @Test func aFailedRemovalRaisesNoBanner() async {
         let harness = Harness(status: .enabled, ownTrust: Self.refused, copies: [], unregisterFails: true)
@@ -96,24 +121,33 @@ struct HelperLeftoverRegistrationCleanupTests {
 
     @MainActor
     private final class Harness {
-        let status: PrivilegedHelperClient.Status
+        private(set) var status: PrivilegedHelperClient.Status
         let ownTrust: HelperBundleTrust
         let copies: [HelperBundleTrust]
         let unregisterFails: Bool
+        let installationPending: Bool
+        let statusAfterUnregister: PrivilegedHelperClient.Status
         var unregisterCalls = 0
         var copyListings = 0
 
-        init(status: PrivilegedHelperClient.Status, ownTrust: HelperBundleTrust, copies: [HelperBundleTrust], unregisterFails: Bool = false) {
+        init(
+            status: PrivilegedHelperClient.Status, ownTrust: HelperBundleTrust, copies: [HelperBundleTrust],
+            unregisterFails: Bool = false, installationPending: Bool = false,
+            statusAfterUnregister: PrivilegedHelperClient.Status = .notRegistered
+        ) {
             self.status = status
             self.ownTrust = ownTrust
             self.copies = copies
             self.unregisterFails = unregisterFails
+            self.installationPending = installationPending
+            self.statusAfterUnregister = statusAfterUnregister
         }
 
         var dependencies: HelperLeftoverRegistrationCleanup.Dependencies {
             HelperLeftoverRegistrationCleanup.Dependencies(
                 status: { self.status },
                 ownTrust: { self.ownTrust },
+                installationPending: { self.installationPending },
                 copies: {
                     self.copyListings += 1
                     return self.copies
@@ -121,6 +155,7 @@ struct HelperLeftoverRegistrationCleanupTests {
                 unregister: {
                     self.unregisterCalls += 1
                     if self.unregisterFails { throw POSIXError(.EPERM) }
+                    self.status = self.statusAfterUnregister
                 }
             )
         }

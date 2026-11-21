@@ -24,6 +24,18 @@ struct HelperLeftoverRegistrationTests {
         ))
     }
 
+    /// Final security review, finding 1: an entry that could not be read may be a bundle a pkg
+    /// install is replacing, so it decides nothing — for this copy or for any listed copy. A dragged
+    /// copy refuses as not owned by root and a Downloads copy as not in /Applications, so this loses
+    /// nothing.
+    @Test(arguments: HelperBundleEntry.allCases)
+    func anUnreadableEntryCannotDecide(entry: HelperBundleEntry) {
+        #expect(!HelperLeftoverRegistration.shouldUnregister(status: .enabled, ownTrust: .refused(.unreadable(entry)), copies: []))
+        #expect(!HelperLeftoverRegistration.shouldUnregister(
+            status: .enabled, ownTrust: Self.refused, copies: [Self.refused, .refused(.unreadable(entry))]
+        ))
+    }
+
     @Test func aTrustedRunningCopyNeverRemovesIt() {
         #expect(!HelperLeftoverRegistration.shouldUnregister(status: .enabled, ownTrust: .trusted, copies: []))
     }
