@@ -95,6 +95,9 @@ extension ScanStore {
             upgradeProgress = nil
             upgradeTracker = nil
         }
+        // C2 stage 3 — the board leaves on every exit for the same reason, through its own defer.
+        beginRunBoard(planned: plannedItems)
+        defer { endRunBoard() }
         // REL-12 — zeroth boundary: stopping here also skips the snapshot/preflight work.
         guard !shouldStopUpdate(before: Array(plannedKeys)) else {
             updating = false
@@ -155,6 +158,7 @@ extension ScanStore {
         let caskLanePreparation = caskArgs != nil && caskPreparation?.trustedCaskNames.isEmpty == false
             ? caskPreparation
             : nil
+        markCasksThatWillNotRun(plannedItems, trusted: caskLanePreparation?.trustedCaskNames ?? [])
 
         // The four lanes overlap. They drive four different tools over four different sets
         // of paths, so nothing one of them touches is anything another one can reach — and

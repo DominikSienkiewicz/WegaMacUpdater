@@ -89,6 +89,14 @@ struct LocalizationCompletenessTests {
         #expect(repeated.isEmpty, "M9: Translations+UXReviewRest.swift repeats \(repeated)")
     }
 
+    /// M9 — the next batch's section repeats no key of any other section.
+    @Test func theNextBatchSectionRepeatsNoKeyOfAnotherSection() {
+        let others = Self.sectionsBeforeUXReview + [Translations.uxReview, Translations.uxReviewNext, Translations.uxReviewRest]
+        let elsewhere = others.reduce(into: Set<String>()) { $0.formUnion($1.keys) }
+        let repeated = Set(Translations.uxNextBatch.keys).intersection(elsewhere).sorted()
+        #expect(repeated.isEmpty, "M9: Translations+UXNextBatch.swift repeats \(repeated)")
+    }
+
     /// UXP-24 — one name per concept. These keys were replaced; nothing may use or translate them.
     static let retiredKeys: Set<String> = [
         "Komponent uprzywilejowany",

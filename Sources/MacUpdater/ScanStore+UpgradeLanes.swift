@@ -84,8 +84,10 @@ extension ScanStore {
     ) async -> LaneItemResult {
         let token = item.name
         if let failure = await dockerMutationFailure(token: token, bundleURL: appPaths[token]) {
+            markRunRow(item.key, .failed)
             return LaneItemResult(item: item, outcome: failure)
         }
+        markRunRow(item.key, .installing)
         beginItem(named: token)
         defer { endItem() }
 
@@ -110,6 +112,7 @@ extension ScanStore {
             WegaLog.info(.homebrew, "Kolizja blokad Homebrew — ponawiam \(token)")
             try? await Task.sleep(for: .seconds(2))
             if let failure = await dockerMutationFailure(token: token, bundleURL: appPaths[token]) {
+                markRunRow(item.key, .failed)
                 return LaneItemResult(item: item, outcome: failure)
             }
             outcome = await runBrewUpgrade(
@@ -123,6 +126,7 @@ extension ScanStore {
         // previous, cut-short run occupies the destination. `--force` overwrites it.
         if outcome.tokensRetryableWithForce.contains(token) {
             if let failure = await dockerMutationFailure(token: token, bundleURL: appPaths[token]) {
+                markRunRow(item.key, .failed)
                 return LaneItemResult(item: item, outcome: failure)
             }
             attempt += 1
@@ -138,6 +142,9 @@ extension ScanStore {
             outcome = BrewUpgradeOutcome.merging(original: outcome, forcedRetry: retry, retriedTokens: [token])
         }
 
+        // The canary and the rollback run under „zainstalowano — sprawdzam”: the tool is done,
+        // the verdict is not.
+        markRunRow(item.key, outcome.isSuccessful ? .installedChecking : .failed)
         let verdicts = await postCaskUpgrade(
             [token], appPaths: appPaths, snapshots: snapshots, operation: operation
         )
@@ -149,11 +156,13 @@ extension ScanStore {
 
     func upgradeOneNpmPackage(item: OutdatedItem) async -> LaneItemResult {
         let name = item.name
+        markRunRow(item.key, .installing)
         beginItem(named: name)
         defer { endItem() }
 
         let outcome = await runNpmUpgrade(name: name)
         if outcome.isSuccessful { creditUnit() }
+        markRunRow(item.key, outcome.isSuccessful ? .installedChecking : .failed)
         return LaneItemResult(item: item, outcome: outcome)
     }
 
@@ -182,6 +191,7 @@ extension ScanStore {
         catch {
             UpdateDiagnostics.record("upgrade.deferred", fields: ["reason": "journalUnavailable", "error": error.localizedDescription])
             reportJournalFailure(error)
+            markCasksThatWillNotRun(items, trusted: [])
             return []
         }
 
@@ -214,7 +224,9 @@ extension ScanStore {
     func runFormulaLane(items: [OutdatedItem], arguments: [String]?) async -> [LaneItemResult] {
         let formulae = items.filter { $0.kind == .formula }
         guard let arguments, !formulae.isEmpty else { return [] }
+        markRunLane(.formulae, .installing)
         let outcome = await runBrewUpgrade(arguments: arguments, logSource: "brew", streamsProgress: true)
+        markRunLane(.formulae, outcome.isSuccessful ? .installedChecking : .failed)
         return formulae.map { LaneItemResult(item: $0, outcome: outcome) }
     }
 
@@ -230,7 +242,11 @@ extension ScanStore {
     ) async -> (items: [OutdatedItem], failure: String?) {
         let appStoreItems = items.filter { $0.kind == .appStore }
         guard let model, !appStoreIDs.isEmpty, !appStoreItems.isEmpty else { return ([], nil) }
-        guard !shouldStopUpdate(before: appStoreItems.map(\.key)) else { return ([], nil) }
+        guard !shouldStopUpdate(before: appStoreItems.map(\.key)) else {
+            markRunLane(.appStore, .notStarted)
+            return ([], nil)
+        }
+        markRunLane(.appStore, .installing)
 
         // An empty token on purpose: mas names no app, so the bar must not name one either.
         // It still counts as a row in flight, which is what makes the other lanes fall back
@@ -244,10 +260,12 @@ extension ScanStore {
             let result = try await model.masService.upgrade(appStoreIDs: appStoreIDs)
             let lines = result.stdout.components(separatedBy: "\n").filter { !$0.isEmpty }
             brewLog.append(contentsOf: UpgradeLogPrefix.lines(lines, from: "mas"))
+            markRunLane(.appStore, .installedChecking)
             upgradeTracker?.completeUnits(appStoreItems.count)
             upgradeProgress = upgradeTracker?.progress
             return (appStoreItems, nil)
         } catch {
+            markRunLane(.appStore, .failed)
             brewLog.append(UpgradeLogPrefix.line("error: \(error.localizedDescription)", from: "mas"))
             WegaLog.error(.app, "mas upgrade: \(error.localizedDescription)")
             return (appStoreItems, error.localizedDescription)
@@ -266,6 +284,7 @@ extension ScanStore {
             guard let item = itemsByName[name] else { return nil }
             return {
                 guard !self.shouldStopUpdate(before: [item.key]) else {
+                    self.markRunRow(item.key, .notStarted)
                     return LaneItemResult(item: item, outcome: nil)
                 }
                 return await self.upgradeOneNpmPackage(item: item)
@@ -287,6 +306,7 @@ extension ScanStore {
     ) async -> LaneItemResult {
         guard !shouldStopUpdate(before: [item.key]) else {
             UpdateDiagnostics.record("upgrade.skipped", fields: ["token": item.name, "reason": "stopRequested"])
+            markRunRow(item.key, .notStarted)
             return LaneItemResult(item: item, outcome: nil)
         }
         return await upgradeOneCask(

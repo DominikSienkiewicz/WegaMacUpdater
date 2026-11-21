@@ -202,6 +202,10 @@ final class ScanStore: ObservableObject {
     @Published var upgradeProgress: UpgradeProgress? {
         didSet { publishWindowRun() }
     }
+    /// C2 stage 3 — what the running update knows about each planned row and each batch.
+    /// Written only at a row's or a batch's boundary, never per output chunk, and only when
+    /// it changes.
+    @Published private(set) var runBoard = UpdateRunBoard.idle
     /// The counter behind `upgradeProgress`. One per run, created by the upgrade and read
     /// by the brew streaming loop — a stored property, so it cannot live in the extension
     /// that uses it.
@@ -507,6 +511,48 @@ final class ScanStore: ObservableObject {
         isRefreshingCatalog = false
         scanStartedAt = nil
         manualScanProgress = nil
+    }
+
+    /// C2 stage 3 — opens the run's board: every planned cask and npm row, and each batch the
+    /// plan has, starts out waiting.
+    func beginRunBoard(planned: [OutdatedItem]) {
+        var board = UpdateRunBoard(startedAt: dependencies.now(), planned: Set(planned.map(\.key)))
+        for item in planned where item.kind == .cask || item.kind == .npm {
+            board.rows[item.key] = .waiting
+        }
+        for lane in UpdateRunLane.allCases where planned.contains(where: { $0.kind == lane.kind }) {
+            board.lanes[lane] = .waiting
+        }
+        runBoard = board
+    }
+
+    /// Ignores a key the board has no row for, and a status the row already has: the lanes
+    /// run side by side, and a republished board rebuilds every row that reads it.
+    func markRunRow(_ key: String, _ status: UpdateRunRowStatus) {
+        guard let current = runBoard.rows[key], current != status else { return }
+        runBoard.rows[key] = status
+    }
+
+    func markRunLane(_ lane: UpdateRunLane, _ status: UpdateRunRowStatus) {
+        guard let current = runBoard.lanes[lane], current != status else { return }
+        runBoard.lanes[lane] = status
+    }
+
+    /// Planned casks outside `trusted` — vetoed by the publisher check, or left without a
+    /// preparation to run on — that the cask lane will never start. One publish for all.
+    func markCasksThatWillNotRun(_ planned: [OutdatedItem], trusted: [String]) {
+        let trusted = Set(trusted)
+        var board = runBoard
+        for item in planned where item.kind == .cask && !trusted.contains(item.name) && board.rows[item.key] != nil {
+            board.rows[item.key] = .notStarted
+        }
+        guard board != runBoard else { return }
+        runBoard = board
+    }
+
+    func endRunBoard() {
+        guard runBoard != .idle else { return }
+        runBoard = .idle
     }
 
     /// Stores a vendor report from the scan numbered `generation`, when the rule below allows.
