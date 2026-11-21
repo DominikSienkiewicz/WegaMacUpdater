@@ -1,7 +1,9 @@
 import Foundation
 
+/// `shim` is a version manager's shim: it holds its place on `PATH`, but runs whichever version the
+/// manager selects, so it is no copy to keep or remove.
 public enum CleanupCopyRole: String, Codable, Equatable, Sendable {
-    case active, shadowed, expected, brokenLink
+    case active, shadowed, expected, brokenLink, shim
 }
 
 public struct CleanupCopy: Equatable, Sendable {
@@ -154,6 +156,10 @@ public struct CleanupPathDuplicateDetector: Sendable {
         let copies = kept.map { candidate -> CleanupCopy in
             guard let realpath = candidate.realpath else {
                 return copy(of: candidate, source: .standalone, version: nil, role: .brokenLink)
+            }
+            if let manager = classifier.shimManager(ofCopyAt: candidate.entry.url) {
+                activeAssigned = true
+                return copy(of: candidate, source: .versionManager(manager), version: nil, role: .shim)
             }
             let source = classifier.classify(realpath)
             let role: CleanupCopyRole

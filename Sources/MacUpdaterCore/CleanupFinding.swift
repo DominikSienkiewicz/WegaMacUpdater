@@ -117,6 +117,8 @@ public enum CleanupReason: Codable, Equatable, Sendable {
     case newerVersion(current: String)
     case shadowedBy(path: String)
     case systemCopy
+    /// A version manager's shim, which runs whichever version the manager selects.
+    case versionManagerShim
     case managedByApp(owner: String)
     case staleSinceBoot(count: Int)
     case keptSinceBoot(count: Int)

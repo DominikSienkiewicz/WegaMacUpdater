@@ -427,13 +427,14 @@ enum CleanupPresentation {
         case .newerThanInstalledIDE(let installed):
             trf("nowsza niż zainstalowane IDE (%@)", installed.joined(separator: ", "))
         case .missingPathEntry, .repeatedPathEntry, .samePlaceAs, .nestedIn, .olderCopyWins, .tccEntry, .tccEntryFileGone,
-             .keptInstead, .keptByChoice, .noCopyKept:
+             .keptInstead, .keptByChoice, .noCopyKept, .versionManagerShim:
             hygieneReasonText(reason, requiredBy: paths)
         }
     }
 
-    /// The `PATH` hygiene, Files and Folders and keep-choice reasons. The other reasons are listed rather than
-    /// defaulted, so a reason added later fails to compile here until it has a text.
+    /// The `PATH` hygiene, Files and Folders, keep-choice and version-manager shim reasons. The other
+    /// reasons are listed rather than defaulted, so a reason added later fails to compile here until
+    /// it has a text.
     private static func hygieneReasonText(_ reason: CleanupReason, requiredBy paths: [String]) -> String {
         switch reason {
         case .missingPathEntry: tr("ten katalog nie istnieje albo nie jest katalogiem, więc nic w nim nie szukamy")
@@ -449,6 +450,7 @@ enum CleanupPresentation {
         case .keptInstead(let path): trf("zostawiasz %@", path)
         case .keptByChoice: tr("tę kopię zostawiasz")
         case .noCopyKept: tr("nie wybrano kopii do zostawienia")
+        case .versionManagerShim: tr("shim: uruchamia wersję, którą wskazuje menedżer")
         case .olderVersion, .newerVersion, .shadowedBy, .systemCopy, .managedByApp, .staleSinceBoot, .keptSinceBoot,
              .unknownVersionDirectory, .currentVersion, .protectedLocation, .brokenLink, .requiredBy, .homebrewLeftovers,
              .homebrewKeptVersions, .installedOnlyAsDependency, .recentlyUpgraded, .notRequiredByProjects, .requiredByProjects,

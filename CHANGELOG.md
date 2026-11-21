@@ -226,6 +226,14 @@ them verbatim under the new version heading, so that step is never done by hand 
 - **Reduce Transparency no longer hides the rows an update is installing.** Nothing is drawn
   over the list any more; it stays locked and its header says why. State texts are easier to
   read, and the close buttons of banners and the log are larger targets.
+- **Cleanup no longer offers to uninstall your version manager.** A mise, asdf or pyenv shim
+  (such as `~/.local/share/mise/shims/node`) runs the version the manager selects, but Cleanup
+  took it for one more copy of the tool: each mise shim offered **Uninstall…**, which runs
+  `brew uninstall mise`, and a pyenv or asdf shim offered **Move to Trash…**. A shim is now
+  *expected* and offers nothing, and when a shim comes first on `PATH`, the copies behind it
+  offer nothing either, since the manager may fall back to them as its `system` version. The
+  **Reclaimable** total counts a removal that several copies share once, so 36 mise shims no
+  longer add up to 8.8 GB.
 
 ### Changed
 - **Shorter, plainer wording.** The note for a scan that could not reach every source is
