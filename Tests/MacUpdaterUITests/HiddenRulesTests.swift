@@ -60,8 +60,8 @@ struct HiddenRulesTests {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         let start = try #require(view.range(of: "private var listColumn: some View")).upperBound
         let end = try #require(view.range(of: "private var planSheet: some View", range: start..<view.endIndex)).lowerBound
-        #expect(view[start..<end].components(separatedBy: "HiddenByRulesRow(").count == 3,
-                "under the last group and under the empty state")
+        #expect(view[start..<end].components(separatedBy: "HiddenByRulesRow(").count == 4,
+                "under the last group, under the empty state and under an empty category")
         #expect(view.contains("RuleUndoToast(notice:"))
         let rules = try source("Sources/MacUpdater/PolicyRules.swift")
         let toast = try #require(rules.range(of: "struct RuleUndoToast: View")).upperBound
@@ -119,7 +119,98 @@ struct HiddenRulesTests {
         #expect(closed == 1)
 
         await RuleUndoToast.countDown(RuleUndoToast.lifetime, sleep: { _ in throw CancellationError() }, then: { closed += 1 })
-        #expect(closed == 1, "a replaced toast must not close the one that replaced it")
+        #expect(closed == 1, "a countdown whose sleep was cancelled closes nothing")
+    }
+
+    /// The other half of cancellation: the sleep ends normally, but the toast was replaced or
+    /// closed meanwhile. The task created here is cancelled before it ever runs.
+    @Test func aCountdownCancelledBeforeItsSleepEndsClosesNothing() async {
+        let closed = Counter()
+        let countdown = Task { @MainActor in
+            await RuleUndoToast.countDown(RuleUndoToast.lifetime, sleep: { _ in }, then: { closed.value += 1 })
+        }
+        countdown.cancel()
+        await countdown.value
+        #expect(closed.value == 0)
+    }
+
+    // MARK: - Fix round 1
+
+    /// M1 — closing is by id: the countdown or the close button of a toast that has since
+    /// been replaced leaves the newer toast on screen.
+    @Test func anOlderToastNeverClosesANewerOne() throws {
+        let (store, item) = try storeWithOneFormula()
+        let other = OutdatedItem(key: "f:other-\(UUID().uuidString)", name: "Other", from: "1", to: "2", kind: .formula)
+        defer { [item.policyKey, other.policyKey].forEach(UpdatePolicyStore.shared.remove(key:)) }
+        store.ignoreItem(item)
+        let older = try #require(store.ruleUndo).id
+        store.ignoreItem(other)
+        let newer = try #require(store.ruleUndo).id
+
+        store.dismissRuleUndo(id: older)
+        #expect(store.ruleUndo?.id == newer)
+        store.dismissRuleUndo(id: newer)
+        #expect(store.ruleUndo == nil)
+        #expect(try source("Sources/MacUpdater/UpdateView.swift").contains("onClose: { scan.dismissRuleUndo(id: notice.id) }"))
+    }
+
+    /// M4 — "Przywróć", in the sheet or in Settings, removes the rule a toast would undo; the
+    /// toast goes with it, so "Cofnij" cannot put the change's `previous` back afterwards.
+    @Test func restoringTheRuleByHandClosesItsToast() throws {
+        let (store, item) = try storeWithOneFormula()
+        let unrelated = "f:unrelated-\(UUID().uuidString)"
+        defer { [item.policyKey, unrelated].forEach(UpdatePolicyStore.shared.remove(key:)) }
+        UpdatePolicyStore.shared.pin(key: item.policyKey, name: item.name, version: "9")
+        store.skipItem(item)
+
+        UpdatePolicyStore.shared.ignore(key: unrelated, name: "Unrelated")
+        #expect(store.ruleUndo?.key == item.policyKey, "another key's rule leaves the toast alone")
+
+        UpdatePolicyStore.shared.remove(key: item.policyKey)
+        #expect(store.ruleUndo == nil)
+        store.undoRuleChange()
+        #expect(UpdatePolicyStore.shared.policy(for: item.policyKey) == nil, "the old pin does not come back")
+    }
+
+    /// M2, M3, M6 and M8, where the source is the only witness.
+    @Test func theSheetClosesAfterTheLastRestoreAndTheRowIsOneTarget() throws {
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        let start = try #require(view.range(of: "private var listColumn: some View")).upperBound
+        let end = try #require(view.range(of: "private var planSheet: some View", range: start..<view.endIndex)).lowerBound
+        #expect(view[start..<end].components(separatedBy: "scan.rulesHidingResults").count == 2,
+                "the hidden rules are counted once per list, not once per use")
+        let rules = try source("Sources/MacUpdater/PolicyRules.swift")
+        let sheet = try #require(rules.range(of: "struct PolicyRulesSheet: View"))
+        let sheetEnd = try #require(rules.range(of: "struct HiddenByRulesRow: View", range: sheet.upperBound..<rules.endIndex))
+        let sheetSource = rules[sheet.upperBound..<sheetEnd.lowerBound]
+        #expect(sheetSource.contains(".onChange(of: entries.isEmpty)"))
+        #expect(sheetSource.contains("dismiss()"))
+        #expect(!sheetSource.contains("Group {"))
+        let row = try #require(rules.range(of: "struct HiddenByRulesRow: View")).upperBound
+        let rowEnd = try #require(rules.range(of: "struct RuleUndoToast: View", range: row..<rules.endIndex)).lowerBound
+        #expect(rules[row..<rowEnd].contains(".contentShape(Rectangle())"), "the whole row is the button, gaps included")
+    }
+
+    /// M7 — the narrow (388 pt) and compact (480 pt) list widths, in Polish and English, with
+    /// the longest line each view carries: the text wraps instead of being cut, and "Cofnij",
+    /// the close button and the row's chevron stay inside the column.
+    @Test(arguments: [CGFloat(388), 480])
+    func theToastAndTheRowFitTheNarrowestList(width: CGFloat) {
+        for language in [AppLanguage.pl, .en] {
+            withLanguage(language) {
+                let message = trf("Pominęłam wersję %@ aplikacji %@. Następną pokażę.", "10.13.2", "Microsoft Remote Desktop Beta")
+                let notice = RuleUndoNotice(
+                    id: UUID(), message: message, key: "k",
+                    previous: nil, written: UpdatePolicyEntry(key: "k", displayName: "k", policy: .ignored)
+                )
+                expectTextFits(RuleUndoToast(notice: notice, onUndo: {}, onClose: {}),
+                               text: message, font: .wega(.callout, weight: .semibold),
+                               width: width, label: "toast, \(language), \(width) pt")
+                expectTextFits(HiddenByRulesRow(count: 22, onShow: {}),
+                               text: trf("Ukryte przez Twoje reguły: %@ · Pokaż", "22"), font: .wega(.subheadline),
+                               width: width, label: "row, \(language), \(width) pt")
+            }
+        }
     }
 
     /// The countdown hangs on the callout the toast draws, so hosting the toast starts it — a
@@ -128,7 +219,8 @@ struct HiddenRulesTests {
         var slept: Duration?
         var closed = false
         let toast = RuleUndoToast(
-            notice: RuleUndoNotice(id: UUID(), message: "Slack", key: "c:slack", previous: nil),
+            notice: RuleUndoNotice(id: UUID(), message: "Slack", key: "c:slack", previous: nil,
+                                   written: UpdatePolicyEntry(key: "c:slack", displayName: "Slack", policy: .ignored)),
             onUndo: {},
             onClose: { closed = true },
             sleep: { slept = $0 }
@@ -152,6 +244,23 @@ struct HiddenRulesTests {
     }
 
     // MARK: - Helpers
+
+    @MainActor private final class Counter {
+        var value = 0
+    }
+
+    /// Lays `view` out `width` wide and checks that nothing in it is pushed past that width and
+    /// that it is tall enough for `text` wrapped in the width the rest of the view leaves it.
+    private func expectTextFits(_ view: some View, text: String, font: Font, width: CGFloat, label: String) {
+        let fitted = NSHostingController(rootView: view)
+            .sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude))
+        let others = NSHostingView(rootView: view.fixedSize()).fittingSize.width
+            - NSHostingView(rootView: Text(verbatim: text).font(font).fixedSize()).fittingSize.width
+        let needed = NSHostingController(rootView: Text(verbatim: text).font(font))
+            .sizeThatFits(in: CGSize(width: width - others, height: .greatestFiniteMagnitude)).height
+        #expect(fitted.width <= width, "\(label): needs \(fitted.width) pt, so a control is pushed out")
+        #expect(fitted.height + 0.5 >= needed, "\(label): \(fitted.height) pt tall, the text needs \(needed) pt")
+    }
 
     /// A store whose scan found one formula, named with a UUID so its policy key collides with
     /// no other suite's — `ScanStore` reads `UpdatePolicyStore.shared`.

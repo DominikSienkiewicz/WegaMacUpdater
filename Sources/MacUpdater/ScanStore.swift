@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import MacUpdaterCore
 
@@ -204,6 +205,8 @@ final class ScanStore: ObservableObject {
     /// UXP-11 — the rule a "Nie aktualizuj" or a skip just wrote, offered back as "Cofnij"
     /// until the toast closes. See `ScanStore+Rules.swift`.
     @Published var ruleUndo: RuleUndoNotice?
+    /// Keeps `ruleUndo` honest when a rule changes outside this store, e.g. in Settings.
+    private var ruleUndoWatch: AnyCancellable?
 
     /// Rebound on every appearance of the view that owns the backing `@State` — see
     /// `bind(_:)`. Replayed from `replayLastScan()` so a rebuilt tree does not show an
@@ -257,6 +260,9 @@ final class ScanStore: ObservableObject {
         self.resultStore = resultStore
         self.runningApplicationInspector = runningApplicationInspector
         self.dependencies = dependencies
+        ruleUndoWatch = UpdatePolicyStore.shared.$entries.sink { [weak self] entries in
+            MainActor.assumeIsolated { self?.dropRuleUndo(ifStaleIn: entries) }
+        }
     }
 
     /// Services are owned by the app-level `AppViewModel`; hand them over on first appearance.

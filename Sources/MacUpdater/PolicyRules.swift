@@ -74,6 +74,10 @@ struct PolicyRulesSheet: View {
         }
         .padding(20)
         .frame(minWidth: 420, idealWidth: 480, minHeight: 240, idealHeight: 360)
+        // After the last "Przywróć" nothing is left to show.
+        .onChange(of: entries.isEmpty) { _, isEmpty in
+            if isEmpty { dismiss() }
+        }
     }
 }
 
@@ -94,6 +98,7 @@ struct HiddenByRulesRow: View {
             }
             .font(.wega(.subheadline))
             .foregroundStyle(.secondary)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

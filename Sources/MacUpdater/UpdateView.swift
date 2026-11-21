@@ -385,7 +385,7 @@ struct UpdateView: View {
 
             // UXP-11 — in the column above the list, so it never lies on a row.
             if let notice = scan.ruleUndo {
-                RuleUndoToast(notice: notice, onUndo: { scan.undoRuleChange() }, onClose: { scan.dismissRuleUndo() })
+                RuleUndoToast(notice: notice, onUndo: { scan.undoRuleChange() }, onClose: { scan.dismissRuleUndo(id: notice.id) })
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
             }
@@ -452,9 +452,6 @@ struct UpdateView: View {
         !(allItems.isEmpty && visibleManual.isEmpty)
     }
 
-    /// UXP-11 — how many of the user's rules hide something from this scan.
-    private var hiddenRuleCount: Int { scan.rulesHidingResults.count }
-
     /// Whether the list shows rows rather than one of its empty states — the one answer
     /// `listColumn` and the list header's scan note both read.
     private var showsRows: Bool {
@@ -463,6 +460,7 @@ struct UpdateView: View {
 
     @ViewBuilder
     private var listColumn: some View {
+        let hiddenRuleCount = scan.rulesHidingResults.count
         if !hasResults {
             VStack(spacing: 0) {
                 // REL-09 — an empty list only means "up to date" when the scan behind it heard
@@ -513,12 +511,18 @@ struct UpdateView: View {
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
         } else {
-            EmptyHero(
-                pose: .idle,
-                title: tr("Nic w tej kategorii"),
-                message: tr("W tej kategorii nie ma teraz aktualizacji. Przełącz kategorię nad listą."),
-                compact: true
-            )
+            VStack(spacing: 0) {
+                EmptyHero(
+                    pose: .idle,
+                    title: tr("Nic w tej kategorii"),
+                    message: tr("W tej kategorii nie ma teraz aktualizacji. Przełącz kategorię nad listą."),
+                    compact: true
+                )
+                if hiddenRuleCount > 0 {
+                    HiddenByRulesRow(count: hiddenRuleCount) { showsHiddenRules = true }
+                        .padding(.bottom, WegaLayout.listGutter)
+                }
+            }
         }
     }
 
