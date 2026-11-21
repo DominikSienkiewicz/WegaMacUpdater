@@ -115,16 +115,45 @@ final class TouchIDSetupController: ObservableObject {
   }
 
   /// The manual Terminal command runs through `sudo`, so the card offers it only after the helper
-  /// could not do it, and never while the app or the helper saw an unsafe policy.
-  var showsEnableCommand: Bool { wasPermissionDenied && preflight.refusal == nil && !helperObservedUnsafePolicy }
+  /// could not do it, and only on proof that what `sudo` reads is safe.
+  var showsEnableCommand: Bool { wasPermissionDenied && recoveryOnlyReason == nil }
 
   var helperObservedUnsafePolicy: Bool { helperReportedUnsafePolicy != nil }
 
-  /// −4 or −5 that the app's own look or the helper saw. While there is one, the card offers no
-  /// `sudo` command and no enable button, only recoveryOS advice: `sudo` reads those settings.
+  /// −4 or −5 that the app's own look or the helper saw.
   var unsafePolicy: TouchIDSudoDisableRefusal? { preflight.refusal ?? helperReportedUnsafePolicy }
 
-  var offersEnableButton: Bool { touchIDState == .available && !wasPermissionDenied && unsafePolicy == nil }
+  /// Why the card offers no `sudo` route at all, neither a Terminal command nor a helper button, only
+  /// recoveryOS advice: `sudo` reads these settings before it asks for anything (RC2-6, RC2-7).
+  enum RecoveryOnlyReason: Equatable {
+    /// −4 or −5, as the app saw it or a helper call reported it.
+    case unsafePolicy(TouchIDSudoDisableRefusal)
+    /// The app saw that someone other than root can change `/etc/pam.d/sudo`.
+    case unsafeSudoFile
+    /// The app could not establish that the settings are root's alone; treated like −5.
+    case noProofOfSafety
+  }
+
+  /// What was seen comes before what could not be established.
+  var recoveryOnlyReason: RecoveryOnlyReason? {
+    if let unsafePolicy { return .unsafePolicy(unsafePolicy) }
+    if preflight.sudoPolicyIsUnsafe { return .unsafeSudoFile }
+    return preflight.commandsAreSafe ? nil : .noProofOfSafety
+  }
+
+  var offersEnableButton: Bool { touchIDState == .available && !wasPermissionDenied && recoveryOnlyReason == nil }
+
+  var offersDisableButton: Bool { touchIDState == .enabled && disableOffer == .available && recoveryOnlyReason == nil }
+
+  /// Aneks E.6: without a helper that can do it, the Terminal command, but only when nothing closes
+  /// the `sudo` routes, no later policy file would take over, and the app's own read of `sudo_local`
+  /// plans a removal by the helper's rules. The command checks all of it again when it runs.
+  var showsDisableCommand: Bool {
+    guard touchIDState == .enabled, disableOffer == .helperMissing || disableOffer == .helperOutdated,
+          recoveryOnlyReason == nil, preflight.fallbackPath == nil, case .remove? = preflight.removalPlan
+    else { return false }
+    return true
+  }
 
   func refresh() {
     // ARCH-08a: re-checking Touch ID is the one moment the sudo/askpass wiring can
