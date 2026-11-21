@@ -145,7 +145,7 @@ extension ScanStore {
             outcome = BrewUpgradeOutcome.merging(original: outcome, forcedRetry: retry, retriedTokens: [token])
         }
 
-        // The canary and the rollback run under „zainstalowano — sprawdzam”: the tool is done,
+        // The canary and the rollback run under „zainstalowano, sprawdzam”: the tool is done,
         // the verdict is not.
         markRunRow(item.key, outcome.isSuccessful ? .installedChecking : .failed)
         let verdicts = await postCaskUpgrade(

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import MacUpdaterCore
 
 /// C2 stage 3 — where one planned row, or one batch, has got to in the running update.
@@ -13,7 +14,7 @@ enum UpdateRunRowStatus: Equatable, Sendable {
         switch self {
         case .waiting:           return isStopping ? tr("nie zacznę") : tr("czeka")
         case .installing:        return tr("instaluję…")
-        case .installedChecking: return tr("zainstalowano — sprawdzam")
+        case .installedChecking: return tr("zainstalowano, sprawdzam")
         case .failed:            return tr("nie udało się")
         case .notStarted:        return tr("nie zacznę")
         }
@@ -99,9 +100,9 @@ struct UpdateRunListState: Equatable {
         }
     }
 
-    /// A row this run is not about.
+    /// A row this run is not about. Nothing steps back before the run has opened its board.
     func isDimmed(_ key: String) -> Bool {
-        !board.planned.contains(key)
+        board.startedAt != nil && !board.planned.contains(key)
     }
 
     /// The batches on the board whose rows a header with `kinds` groups, in
@@ -112,5 +113,17 @@ struct UpdateRunListState: Equatable {
             return "\(lane.title): \(status.laneTitle(isStopping: isStopping && lane.stopsBeforeStarting))"
         }
         return notes.isEmpty ? nil : notes.joined(separator: " · ")
+    }
+}
+
+private struct UpdateRunListKey: EnvironmentKey {
+    static let defaultValue: UpdateRunListState? = nil
+}
+
+extension EnvironmentValues {
+    /// C2 §4.6 — what the update list says about the running update; `nil` outside a run.
+    var updateRun: UpdateRunListState? {
+        get { self[UpdateRunListKey.self] }
+        set { self[UpdateRunListKey.self] = newValue }
     }
 }

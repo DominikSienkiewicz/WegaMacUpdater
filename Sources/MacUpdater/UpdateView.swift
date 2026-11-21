@@ -419,7 +419,14 @@ struct UpdateView: View {
             listColumn
                 .frame(maxWidth: .infinity)
                 .disabled(!ScanSelectionGate.allowsSelection(isRefreshing: scan.isRefreshing))
+                .environment(\.updateRun, runListState)
         }
+    }
+
+    /// What the locked list says about the run: each row's status, which rows step back, and
+    /// the batches' notes on their group headers.
+    private var runListState: UpdateRunListState? {
+        scan.updating ? UpdateRunListState(board: scan.runBoard, isStopping: scan.updateInterruption.isRequested) : nil
     }
 
     /// UX-16 — shown once there is something to filter, and kept while a scope is applied so

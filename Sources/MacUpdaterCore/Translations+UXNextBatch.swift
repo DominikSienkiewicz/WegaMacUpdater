@@ -5,10 +5,11 @@ extension Translations {
     static let uxNextBatch: [String: String] = [
         "czeka": "waiting",
         "instaluję…": "installing…",
-        "zainstalowano — sprawdzam": "installed — checking",
+        "zainstalowano, sprawdzam": "installed, checking",
         "nie udało się": "failed",
         "nie zacznę": "won't start",
         "w toku": "in progress",
+        "u producenta": "with the vendor",
         "Trwa aktualizacja · od %@": "Updating · since %@",
         "Bieżącej instalacji nie przerywam w połowie.": "I never stop an install halfway.",
         "Do końca aktualizacji lista jest zablokowana.": "The list stays locked until the update ends.",

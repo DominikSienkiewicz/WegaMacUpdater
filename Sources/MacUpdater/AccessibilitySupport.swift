@@ -170,7 +170,7 @@ enum PackageRowAccessibility {
     /// of a source that keeps no previous version, `rollbackUnavailable`) and the queue.
     static func label(name: String, token: String? = nil, from: String?, to: String?, source: String? = nil,
                       rollback: RollbackProtection.Verdict? = nil, rollbackUnavailable: Bool = false,
-                      isQueued: Bool) -> String {
+                      run: String? = nil, isQueued: Bool) -> String {
         var parts = [name]
         if let token, spoken(token) != spoken(name) { parts.append(token) }
         if let from, let to {
@@ -183,6 +183,7 @@ enum PackageRowAccessibility {
         case .unprotected: parts.append(tr("bez automatycznego cofnięcia"))
         case nil:          if rollbackUnavailable { parts.append(tr("bez automatycznego cofnięcia")) }
         }
+        if let run { parts.append(run) }
         parts.append(isQueued ? tr("w kolejce") : tr("poza kolejką"))
         return parts.joined(separator: ", ")
     }

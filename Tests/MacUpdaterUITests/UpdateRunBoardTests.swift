@@ -14,7 +14,7 @@ struct UpdateRunBoardTests {
             #expect(UpdateRunRowStatus.waiting.title(isStopping: false) == "czeka")
             #expect(UpdateRunRowStatus.waiting.title(isStopping: true) == "nie zacznę")
             #expect(UpdateRunRowStatus.installing.title(isStopping: true) == "instaluję…")
-            #expect(UpdateRunRowStatus.installedChecking.title(isStopping: false) == "zainstalowano — sprawdzam")
+            #expect(UpdateRunRowStatus.installedChecking.title(isStopping: false) == "zainstalowano, sprawdzam")
             #expect(UpdateRunRowStatus.failed.title(isStopping: false) == "nie udało się")
             #expect(UpdateRunRowStatus.notStarted.title(isStopping: false) == "nie zacznę")
             #expect(UpdateRunRowStatus.installing.laneTitle(isStopping: false) == "w toku")
@@ -23,7 +23,7 @@ struct UpdateRunBoardTests {
             #expect(UpdateRunRowStatus.waiting.title(isStopping: false) == "waiting")
             #expect(UpdateRunRowStatus.waiting.title(isStopping: true) == "won't start")
             #expect(UpdateRunRowStatus.installing.title(isStopping: false) == "installing…")
-            #expect(UpdateRunRowStatus.installedChecking.title(isStopping: false) == "installed — checking")
+            #expect(UpdateRunRowStatus.installedChecking.title(isStopping: false) == "installed, checking")
             #expect(UpdateRunRowStatus.failed.title(isStopping: false) == "failed")
             #expect(UpdateRunRowStatus.installing.laneTitle(isStopping: false) == "in progress")
         }
@@ -169,7 +169,7 @@ struct UpdateRunBoardTests {
     }
 
     /// Once `postCaskUpgrade` has answered, a cask restored to its previous version, one whose
-    /// restore failed and one brew never replaced stop reading „zainstalowano — sprawdzam”.
+    /// restore failed and one brew never replaced stop reading „zainstalowano, sprawdzam”.
     @Test func aCaskThatFailsItsCheckOrNeverChangedReadsFailed() throws {
         let failing: [CaskValidationVerdict] = [
             .rolledBack, .publisherChangedAndRolledBack(old: "A", new: "B"), .rollbackFailed, .notUpgraded,

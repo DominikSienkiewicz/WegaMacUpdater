@@ -426,6 +426,10 @@ struct PackageRow: View {
     /// UX-18 — why the rollback net cannot cover this row, for sources that keep no previous
     /// version. Shown as a muted shield on the row when its card has no per-source caption.
     var rollbackUnavailableReason: String? = nil
+    /// C2 §4.6 — where the running update has got to for this row; `nil` outside a run and for
+    /// rows whose batch speaks on the group header.
+    var runStatus: UpdateRunRowStatus? = nil
+    var runIsStopping = false
     var onToggle: (@MainActor @Sendable () -> Void)? = nil
     var onSelect: (() -> Void)? = nil
     /// M5 — the ignore / pin actions, previously reachable only by right-click.
@@ -523,7 +527,8 @@ struct PackageRow: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(PackageRowAccessibility.label(name: name, token: shownToken, from: currentVersion, to: latestVersion,
                                                           source: source, rollback: rollback,
-                                                          rollbackUnavailable: rollbackUnavailableReason != nil, isQueued: isSelected))
+                                                          rollbackUnavailable: rollbackUnavailableReason != nil,
+                                                          run: runStatus.map { $0.title(isStopping: runIsStopping) }, isQueued: isSelected))
         .accessibilityHint(PackageRowAccessibility.hint(isQueued: isSelected))
         .accessibilityActions {
             if isEnabled {
@@ -559,7 +564,21 @@ struct PackageRow: View {
         }
     }
 
+    /// During a run the chip takes the version's place; the hidden version keeps the column its
+    /// width, so the row lays out exactly as it does outside the run.
+    @ViewBuilder
     private var versionDetails: some View {
+        if let runStatus {
+            ZStack(alignment: .trailing) {
+                versionContent.hidden().accessibilityHidden(true)
+                UpdateRunStatusChip(status: runStatus, isStopping: runIsStopping)
+            }
+        } else {
+            versionContent
+        }
+    }
+
+    private var versionContent: some View {
         HStack(spacing: 8) {
             if let rollback {
                 RollbackBadge(verdict: rollback, scope: RollbackProtection.scope(token: token ?? name))
