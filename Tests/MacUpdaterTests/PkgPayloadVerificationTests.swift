@@ -72,6 +72,49 @@ final class PkgPayloadVerificationTests: XCTestCase {
         XCTAssertTrue(result.output.contains("relocat"), result.output)
     }
 
+    /// Final security review, finding 4: the owner column is read. A package that records the builder's
+    /// own user installs a bundle that does not belong to root.
+    func testAPayloadOwnedByTheBuilderFails() throws {
+        let pkg = try buildPackage(ownership: "preserve")
+
+        let result = try verify(pkg)
+
+        XCTAssertEqual(result.status, 1, result.output)
+        XCTAssertTrue(result.output.contains("nie root"), result.output)
+    }
+
+    func testALinkedEntryFails() throws {
+        let helper = "Applications/WegaMacUpdater.app/Contents/MacOS/WegaPrivilegedHelper"
+        let pkg = try buildPackage { payload in
+            let url = payload.appendingPathComponent(helper)
+            try FileManager.default.removeItem(at: url)
+            try FileManager.default.createSymbolicLink(atPath: url.path, withDestinationPath: "/usr/bin/true")
+        }
+
+        let result = try verify(pkg)
+
+        XCTAssertEqual(result.status, 1, result.output)
+        XCTAssertTrue(result.output.contains("zły rodzaj"), result.output)
+    }
+
+    /// The package must install at `/`, as root, and not as a relocatable package.
+    func testAPackageInstalledElsewhereFails() throws {
+        let pkg = try buildPackage(installLocation: "/Users/Shared")
+
+        let result = try verify(pkg)
+
+        XCTAssertEqual(result.status, 1, result.output)
+        XCTAssertTrue(result.output.contains("install-location"), result.output)
+    }
+
+    func testTheScriptChecksThePackageAttributes() throws {
+        let script = try String(contentsOf: packageRoot().appendingPathComponent("scripts/verify-pkg-payload.sh"), encoding: .utf8)
+        for check in ["expect_attribute relocatable false", "expect_attribute install-location /",
+                      "expect_attribute auth root", "expect_attribute overwrite-permissions true"] {
+            XCTAssertTrue(script.contains("\n" + check + "\n"), check)
+        }
+    }
+
     /// The script checks exactly the entries the gate checks.
     func testTheScriptChecksEveryEntryOfTheGate() throws {
         let script = try String(contentsOf: packageRoot().appendingPathComponent("scripts/verify-pkg-payload.sh"), encoding: .utf8)
@@ -98,7 +141,10 @@ final class PkgPayloadVerificationTests: XCTestCase {
     // MARK: - Fixtures
 
     /// A pkgbuild package of a minimal Wega bundle, folders 0755 and files 0644 (the helper 0755).
-    private func buildPackage(relocatable: Bool = false, change: (URL) throws -> Void = { _ in }) throws -> URL {
+    private func buildPackage(
+        relocatable: Bool = false, ownership: String = "recommended", installLocation: String = "/",
+        change: (URL) throws -> Void = { _ in }
+    ) throws -> URL {
         let payload = root.appendingPathComponent("payload")
         let bundle = payload.appendingPathComponent("Applications/WegaMacUpdater.app")
         for entry in HelperBundleEntry.allCases {
@@ -119,7 +165,7 @@ final class PkgPayloadVerificationTests: XCTestCase {
         try chmod(info, 0o644)
         try change(payload)
 
-        var arguments = ["--root", payload.path, "--install-location", "/", "--ownership", "recommended",
+        var arguments = ["--root", payload.path, "--install-location", installLocation, "--ownership", ownership,
                          "--identifier", "com.wega.tests.payload", "--version", "1"]
         if relocatable {
             let components = root.appendingPathComponent("components.plist")

@@ -10,7 +10,8 @@ set -euo pipefail
 # group or other write bit (a builder's umask is enough), or that Installer may relocate into a copy
 # the user owns, would leave every genuine install refused. This reads the built package:
 #
-#   1. PackageInfo — no bundle Installer may relocate, and permissions are overwritten on install,
+#   1. PackageInfo — not relocatable, installed at `/` as root, no bundle Installer may relocate, and
+#                    permissions overwritten on install,
 #   2. Bom         — each gate entry is in the payload, of its kind, owned by root, and not
 #                    writable by its group or by others.
 #
@@ -53,12 +54,20 @@ if [[ "$relocatable" == "0" ]]; then
 else
     bad "Installer może zainstalować $relocatable bundle(i) w innym miejscu (relocatable)"
 fi
-overwrite="$(xmllint --xpath 'string(/pkg-info/@overwrite-permissions)' "$INFO")"
-if [[ "$overwrite" == "true" ]]; then
-    ok "instalacja nadpisuje uprawnienia (overwrite-permissions)"
-else
-    bad "instalacja nie nadpisuje uprawnień (overwrite-permissions=\"$overwrite\")"
-fi
+# The package itself: not relocatable, installed at `/` as root, permissions overwritten.
+expect_attribute() {
+    local attribute="$1" wanted="$2" value
+    value="$(xmllint --xpath "string(/pkg-info/@$attribute)" "$INFO")"
+    if [[ "$value" == "$wanted" ]]; then
+        ok "$attribute=\"$value\""
+    else
+        bad "$attribute=\"$value\", oczekiwano \"$wanted\""
+    fi
+}
+expect_attribute relocatable false
+expect_attribute install-location /
+expect_attribute auth root
+expect_attribute overwrite-permissions true
 
 # `lsbom -p MUf`: mode, owner and path, separated by tabs; the mode is `ls`-style (drwxr-xr-x).
 listing="$(lsbom -p MUf "$BOM")"
