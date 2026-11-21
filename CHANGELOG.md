@@ -116,10 +116,14 @@ them verbatim under the new version heading, so that step is never done by hand 
   so any program running as you could replace the helper in it. Wega now installs and uses the
   helper only when it runs directly from `/Applications` and the bundle, `Contents`,
   `Contents/MacOS`, the helper, `Contents/Library`, `Contents/Library/LaunchDaemons` and the
-  helper's launchd file all belong to root and nobody else can change them, which is how the
-  `.pkg` installs it. Otherwise the helper card shows **Unavailable**, says why and how to install
+  helper's launchd file all belong to root, lie on the volume of `/Applications`, which must
+  honour ownership (no file system mounted into the bundle), and nobody else can change them,
+  which is how the `.pkg` installs it. Otherwise the helper card shows **Unavailable**, says why and how to install
   from the `.pkg` (**Open Releases Page**); restoring an app, Wega's own update and Touch ID for
-  sudo work as without the helper, and Uninstall says a root-owned app needs Wega from the `.pkg`. A helper registered earlier from such a copy is removed when
+  sudo work as without the helper, and Uninstall says a root-owned app needs Wega from the `.pkg`.
+  When such a copy finds an installation whose result is unknown, changes stay blocked and
+  Settings says to quit it and open the Wega installed from the `.pkg` in `/Applications`, which
+  can check that installation. A helper registered earlier from such a copy is removed when
   Wega starts, with a banner, unless another copy of Wega on this Mac passes the check. The helper
   checks the bundle it was started from as well and refuses every connection when it fails. The
   package build checks that it installs such a bundle, and the diagnostics report shows the
