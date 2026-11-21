@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// The folders and files launchd follows to start the helper as root, in the order the gate checks
@@ -136,4 +137,87 @@ public enum HelperBundleGate {
     private static let pathSeparator = UInt8(ascii: "/")
     private static let applicationSuffix = Array(".app".utf8)
     private static let executableSuffix = "/" + HelperBundleEntry.helperExecutable.relativePath
+}
+
+/// Reads the entries of one bundle for `HelperBundleGate`, through descriptors.
+///
+/// The bundle is `lstat`ed and opened with `O_NOFOLLOW_ANY`; every other entry is `fstatat`ed and
+/// opened in its folder's descriptor with `O_NOFOLLOW`. The opened descriptor must show the device
+/// and inode the name pointed at, and the ACL is read from it, where only `ENOENT` means none
+/// (`PAMAccessControlState`). A link, a FIFO or any other kind is reported without being opened, and
+/// only a folder's descriptor is kept, so nothing below a link or a file is ever read. Ask for an
+/// entry only after its folder, as the gate does; `nil` means missing, unreadable or changed.
+public final class HelperBundleReader {
+    private let bundlePath: String
+    private var folders: [HelperBundleEntry: Int32] = [:]
+
+    public init(bundlePath: String) {
+        self.bundlePath = bundlePath
+    }
+
+    deinit {
+        for descriptor in folders.values { close(descriptor) }
+    }
+
+    public func facts(of entry: HelperBundleEntry) -> HelperBundleEntryFacts? {
+        var named = stat()
+        let folder = entry.parent.flatMap { folders[$0] }
+        if entry.parent == nil {
+            guard lstat(bundlePath, &named) == 0 else { return nil }
+        } else {
+            guard let folder, fstatat(folder, entry.name, &named, AT_SYMLINK_NOFOLLOW) == 0 else { return nil }
+        }
+        let kind = Self.kind(of: named)
+        guard kind == .directory || kind == .regularFile else {
+            return Self.facts(named, kind: kind, accessControl: .unreadable)
+        }
+        let flags = O_RDONLY | O_CLOEXEC | (kind == .directory ? O_DIRECTORY : O_NONBLOCK)
+        let descriptor = folder.map { openat($0, entry.name, flags | O_NOFOLLOW) }
+            ?? open(bundlePath, flags | O_NOFOLLOW_ANY)
+        guard descriptor >= 0 else { return nil }
+        var opened = stat()
+        guard fstat(descriptor, &opened) == 0, Self.isSameEntry(opened, named) else {
+            close(descriptor)
+            return nil
+        }
+        let facts = Self.facts(opened, kind: kind, accessControl: SystemPAMPolicyDirectory.accessControl(of: descriptor))
+        if kind == .directory {
+            folders[entry] = descriptor
+        } else {
+            close(descriptor)
+        }
+        return facts
+    }
+
+    private static func kind(of status: stat) -> HelperBundleEntryFacts.Kind {
+        switch status.st_mode & S_IFMT {
+        case S_IFDIR: .directory
+        case S_IFREG: .regularFile
+        case S_IFLNK: .symbolicLink
+        default: .other
+        }
+    }
+
+    private static func isSameEntry(_ opened: stat, _ named: stat) -> Bool {
+        opened.st_dev == named.st_dev && opened.st_ino == named.st_ino && opened.st_mode & S_IFMT == named.st_mode & S_IFMT
+    }
+
+    private static func facts(
+        _ status: stat, kind: HelperBundleEntryFacts.Kind, accessControl: PAMAccessControlState
+    ) -> HelperBundleEntryFacts {
+        HelperBundleEntryFacts(
+            kind: kind, ownerUID: status.st_uid, permissions: UInt16(status.st_mode & 0o7777), accessControl: accessControl
+        )
+    }
+}
+
+extension HelperBundleGate {
+    /// The gate over the live file system: the location first, then each entry through
+    /// `HelperBundleReader`. Pass `Bundle.main.bundlePath`, never a URL's `path(percentEncoded:)`,
+    /// which keeps a directory's trailing `/`.
+    public static func live(bundlePath: String) -> HelperBundleTrust {
+        guard isApplicationsEntry(bundlePath) else { return .refused(.notInApplications) }
+        let reader = HelperBundleReader(bundlePath: bundlePath)
+        return trust(bundlePath: bundlePath, facts: reader.facts(of:))
+    }
 }
