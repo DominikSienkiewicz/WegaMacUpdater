@@ -206,8 +206,8 @@ readable, but they stop accepting selections, and a note — *"Selecting comes b
 finishes."* — says why: in the band, and in the list header where it fits, yielding to the scope
 bar at the narrowest width. Only a scan with nothing to keep on screen — the very first one —
 takes the whole window with the sniffing scene, with the same step caption. The check after an
-update run and the rescan after an undo started from the result summary run in the band as well,
-with the list in place (see *The check after a run and the summary* below).
+update run and the rescan after any undo, whichever screen started it, run in the band as well
+while results are on screen, with the list in place (see *The check after a run and the summary* below).
 An empty state — *everything up to date*, or a list the last scan could not confirm — has no rows
 to hold still, and Wega stays clear of it. The band's **Update** and its **⌘⏎**
 shortcut are held back while the scan runs, because a batch approved against the restored rows
@@ -525,7 +525,8 @@ The bundles the guard clones are
 located **when the upgrade starts** (`CaskAppPathResolver`), not when the scan ran — so the
 net also covers the most ordinary flow there is: open Wega, tick the list it restored from
 disk, press **Update**. Banners **queue** rather than overwrite, so a *publisher changed*
-alert is sticky and survives the upgrade summary that used to clobber it.
+alert is sticky: while the upgrade summary is open the warning is folded into it, and when the
+summary closes it comes back as the sticky notice.
 
 #### The check after a run and the summary
 
@@ -550,15 +551,18 @@ just because the items that did report all passed.
   *Updated N packages* when everything is. A ring shows the share that succeeded. The band lists
   the non-zero counts (*Updated: 4*, *Failed: 1*, *Rolled back: 1*, *Not confirmed: 1*,
   *Not started: 1*, *With the developer: 2*) and, while a copy is still kept, *backup until
-  …*. **Close summary** returns to the normal list.
-- The list switches to the result: a group for what needs your attention (failed, rolled back,
-  not confirmed, a changed developer signature), one for what was not started, one for the
-  updates left to finish with the developer, and one for what was updated. Each row says in one
-  line what happened and, where it helps, offers the action — **Undo** on an updated cask whose
-  pre-update copy is still kept (the note then reads *undone to …* afterwards), **Trust the New
-  Signature** on a changed signature, and a link that opens the run's log. Nothing in this list
-  can be selected or queued; a link at the top of the list, with the number of remaining
-  updates, closes the summary and returns to them.
+  …*. The time range and the backup date appear only where the band is wide enough; the compact
+  and narrow bands show the status alone. **Close summary** returns to the normal list.
+- The list switches to the result: a group for what needs your attention (*Needs attention*:
+  failed, rolled back, not confirmed, a changed developer signature), one for what was not started
+  (*Not started*), one for the updates left to finish with the developer (*To finish with the
+  developer*), and one for what was updated (*Updated*). Each row says in one line what happened
+  and, where it helps, offers the action — **Undo** on an updated cask whose pre-update copy is
+  still kept (the note then reads *undone to …* afterwards), **Trust the New Signature** on a
+  changed signature (also in *Not started*, for a publisher mismatch found before the upgrade),
+  and a **Show log** link that opens the run's log (in *Not started* too). A cask row shows the
+  app's name with its token beneath it. Nothing in this list can be selected or queued; a link
+  at the top of the list (*Remaining updates: N ›*) closes the summary and returns to them.
 - A cask whose publisher changed during the run does not count as confirmed until the check
   agrees: if the check still lists it, or could not answer for it, the summary says so rather
   than calling it updated. An update Wega never offered is never added to the summary.

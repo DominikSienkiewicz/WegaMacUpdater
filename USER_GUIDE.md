@@ -532,11 +532,13 @@ the security canary, the rollback net and the follow-up re-scan. Every app you c
 exactly one result, so none can go missing: updated, failed, rolled back, not confirmed (it was
 installed but the check could not confirm it), or not started (you stopped the run first, or it
 could not begin). The band shows how many are updated out of how many were planned, the count of
-each result, and how long Wega keeps the pre-update copy. A list below it groups the apps: what
-needs your attention comes first, with a one-line reason for each and a button where one helps
-(**Trust the New Signature** if the developer's signature changed; a link that opens the log),
-then what was not started, the updates left to finish with the developer, and what was updated
-(with **Undo** while the copy is kept). Nothing in that list can be ticked, so you cannot queue
+each result, and, where the band is wide enough, the time range of the run and how long Wega
+keeps the pre-update copy (the compact and narrow bands show the status alone). A list below it
+groups the apps: *Needs attention* comes first, with a one-line reason for each and a button
+where one helps (**Trust the New Signature** if the developer's signature changed, also offered
+under *Not started* when the mismatch was found before the upgrade; a **Show log** link that
+opens the log), then *Not started*, *To finish with the developer*, and *Updated* (with **Undo**
+while the copy is kept). A cask row shows the app's name with its token beneath it. Nothing in that list can be ticked, so you cannot queue
 an update from it by mistake.
 
 A failed rollback (new version rejected *and* old one not restored) also raises a **red sticky

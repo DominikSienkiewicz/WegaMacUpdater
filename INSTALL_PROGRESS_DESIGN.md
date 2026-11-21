@@ -24,7 +24,10 @@ executes strictly in this order:
    tokens left over from an interrupted upgrade;
 4. **npm** — one call per package, in a loop;
 5. **mas** — one `mas upgrade <ids…>` call;
-6. **rescan** — `runCheck(lightweight:)`, which decides what the list says afterwards. It runs quietly, in place: the band reads "Checking the result" and the list stays on screen. The run's result is then summed up in an `UpdateRunReport` shown as the summary in the band and the list.
+6. **rescan** — `runCheck(lightweight:)`, which decides what the list says afterwards. It runs
+   quietly, in place: the band reads "Checking the result" and the list stays on screen. The
+   run's result is then summed up in an `UpdateRunReport` shown as the summary in the band and
+   the list.
 
 Every brew and npm call already streams stdout and stderr chunk by chunk through
 `ProcessEventStream.drain`, and the chunk handler already writes them into `brewLog`. That
@@ -158,8 +161,8 @@ happened; the summary that follows already explains it.
 - `runUpdateCoordinated` owns one tracker per run: `.preparing` before `prepareForegroundCasks`,
   `.installing` named before each npm package and before the `mas` batch, `nil` wherever
   `updating` is set back to `false`. The closing `runCheck` is not a stage of this bar: it
-  replaces the results view with the scan's own screen, which carries its own honest bar, so
-  the two hand over to each other.
+  runs in place under the band's "Checking the result" state, whose source ring, which carries
+  its own honest progress, takes over from the run's ring.
 - `runBrewUpgrade` feeds the tracker from inside the existing `onChunk` closure, next to the
   line that appends to `brewLog`. No new streaming loop — the architecture test
   `brewNpmEventStreamingRunsThroughOneSharedHelper` requires exactly one, and this design does
