@@ -78,12 +78,14 @@ final class HelperLeftoverRegistrationCleanup: ObservableObject {
         return true
     }
 
-    static var banner: BannerData {
-        BannerData(
+    /// Raises the banner after a removal. It is built inside the call, where the sticky-banner rule
+    /// (`BannerDismissalTests`) can read its variant.
+    static func showBanner(on scan: ScanStore) {
+        scan.showStickyBanner(BannerData(
             variant: .danger,
             title: tr("Usunęłam pomocnika Wegi"),
             message: tr("Był zarejestrowany z kopii Wegi, którą może zmienić ktoś inny niż root, a macOS uruchamia go jako root. Jeśli go potrzebujesz, zainstaluj Wegę z pakietu .pkg."),
             action: .openHelperSettings
-        )
+        ))
     }
 }
