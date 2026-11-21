@@ -75,8 +75,36 @@ struct UpdateRunBoardTests {
         #expect(recorder.rows(keys.npm) == [.waiting, .installing, .installedChecking])
         #expect(recorder.lanes(.formulae) == [.waiting, .installing, .installedChecking])
         #expect(recorder.lanes(.appStore) == [.waiting, .installing, .installedChecking])
-        #expect(recorder.boards.contains { $0.startedAt != nil && $0.planned == keys.all })
+        #expect(recorder.boards.contains { $0.startedAt == Self.clock && $0.planned == keys.all },
+                "the run's clock is the injected one, not the wall clock")
         #expect(harness.store.runBoard == .idle)
+    }
+
+    /// A stop asked for the moment the board opens is honoured at the zeroth boundary: nothing
+    /// starts, no row or batch moves past waiting, and the board is gone when the run returns.
+    @Test func aStopAtTheZerothBoundaryStartsNothingAndClearsTheBoard() async {
+        let (harness, keys) = Self.harness(npmFails: false)
+        let store = harness.store
+        let recorder = BoardRecorder()
+        let watch = store.$runBoard.sink { board in
+            recorder.boards.append(board)
+            if board.startedAt != nil, !store.updateInterruption.isRequested { store.cancelUpdate() }
+        }
+        defer { watch.cancel() }
+
+        await store.runUpdate(targetKeys: keys.all)
+
+        #expect(store.updateInterruption.skippedKeys == keys.all)
+        #expect(recorder.boards.contains { $0.startedAt != nil })
+        #expect(recorder.boards.allSatisfy { board in
+            board.rows.values.allSatisfy { $0 == .waiting } && board.lanes.values.allSatisfy { $0 == .waiting }
+        }, "no row or batch moved past waiting")
+        #expect(recorder.rows(keys.npm) == [.waiting])
+        #expect(recorder.lanes(.formulae) == [.waiting])
+        #expect(recorder.lanes(.appStore) == [.waiting])
+        #expect(!store.brewLog.contains { $0.contains("$ brew") || $0.contains("$ npm") || $0.contains("$ mas") },
+                "no tool was started")
+        #expect(store.runBoard == .idle)
     }
 
     @Test func aFailedPackageSaysSoAndNeverReadsInstalled() async {
@@ -179,6 +207,9 @@ struct UpdateRunBoardTests {
         let npm: String
     }
 
+    /// The store's injected clock in every run of this suite.
+    private static let clock = Date(timeIntervalSinceReferenceDate: 800_000_000)
+
     private enum StubError: Error {
         case npmUpgradeFailed
         case unexpected([String])
@@ -223,7 +254,7 @@ struct UpdateRunBoardTests {
                 }
             }
         )
-        let harness = makeScanStoreRuntimeHarness(runner: runner)
+        let harness = makeScanStoreRuntimeHarness(runner: runner, now: { clock })
         harness.store.brewOutdated = BrewOutdated(
             formulae: [BrewOutdatedItem(name: formula, installedVersions: ["1"], currentVersion: "2")],
             casks: []
