@@ -43,12 +43,11 @@ struct ValidatedPublisherTeamIDTests {
     func aGenuineDeveloperIDAppKeepsItsTeamID() async {
         let candidates = Array(InstalledDeveloperIDApps.candidates.prefix(3))
 
-        let validated = await offTheCooperativePool {
-            candidates.map { CodeSignatureVerifier.validatedTeamID(ofAppAt: $0.url) }
+        let oneKeptItsTeamID = await offTheCooperativePool {
+            candidates.contains { CodeSignatureVerifier.validatedTeamID(ofAppAt: $0.url) == $0.teamID }
         }
 
-        #expect(zip(candidates, validated).contains { $0.teamID == $1 },
-                "none of \(candidates.map(\.url.lastPathComponent)) kept its Team ID")
+        #expect(oneKeptItsTeamID, "none of \(candidates.map(\.url.lastPathComponent)) kept its Team ID")
     }
 
     /// Any member of a team can make an Apple Development certificate in Xcode, and it carries the
@@ -91,8 +90,9 @@ struct ValidatedPublisherTeamIDTests {
     }
 }
 
-/// Developer ID apps in `/Applications`, fewest sealed files first so that validating them is
-/// quick. Choosing them reads each signature's claim and leaf certificate and hashes nothing.
+/// Developer ID apps in `/Applications`, smallest resource seal (`CodeResources`, in bytes) first,
+/// as a rough proxy for a quick validation. Choosing them reads each signature's claim and leaf
+/// certificate and hashes nothing.
 private enum InstalledDeveloperIDApps {
     struct Candidate: Sendable {
         let url: URL

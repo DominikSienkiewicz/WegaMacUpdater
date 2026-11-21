@@ -362,7 +362,8 @@ the check before an upgrade (which also records a first-seen baseline), adoption
 the helper's rollback gate, the Trust panel, Uninstall's leftovers, migration and diagnostics.
 So a Mac App Store build keeps its Team ID there (its leaf certificate is Apple's), an
 installed app whose own signature broke does not block the update that replaces it, and the
-helper can still roll back an upgrade whose signature fails.
+helper can still roll back an upgrade whose signature fails as long as the failed bundle claims
+the snapshot's Team ID (its gate refuses a bundle with no Team ID or a different one, as before).
 
 #### When the package manager installed nothing
 

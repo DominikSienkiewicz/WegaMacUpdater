@@ -82,7 +82,9 @@ public enum CodeSignatureVerifier {
     /// the Developer ID Application leaf marker (…6.1.13), the clauses `WegaHelper` pins Wega's
     /// own signature with. The same team's Apple Development or Apple Distribution certificate,
     /// which any team member can make, has the OU and an Apple anchor but not these markers.
-    public static func developerIDRequirement(teamID: String) -> String {
+    /// Internal: `teamID` is interpolated unchecked, so callers pass a claim that has cleared
+    /// `isWellFormedTeamID` first.
+    static func developerIDRequirement(teamID: String) -> String {
         "anchor apple generic "
             + "and certificate 1[field.1.2.840.113635.100.6.2.6] "
             + "and certificate leaf[field.1.2.840.113635.100.6.1.13] "
