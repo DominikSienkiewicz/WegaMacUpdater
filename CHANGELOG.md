@@ -18,7 +18,8 @@ them verbatim under the new version heading, so that step is never done by hand 
 - **An update runs in the band.** While an update installs, the band says **Updating · since
   08:14**, names the stage (**Installing firefox — 3 of 7**, or **Installing packages — 3 of
   7** while several run at once), counts whole packages in a ring and holds **Stop After
-  Active Installs** and **Show log**; the log opens under the list. The list stays readable
+  Active Installs**; the log opens by itself under the list, and **Show log** returns it after
+  you close it. The list stays readable
   and locked, with a note in its header, and nothing covers it. Casks and npm packages say
   on their own row whether they are *waiting*, *installing…*, *installed, checking*, *failed*
   or *won't start*; Homebrew formulae and the App Store say *in progress* once on the group,
@@ -27,13 +28,13 @@ them verbatim under the new version heading, so that step is never done by hand 
   card has **Turn Off Touch ID for sudo**. The helper removes only Wega's line from
   `/etc/pam.d/sudo_local`, swaps the new file in atomically, checks it and puts the old file
   back if anything fails. It refuses a file that someone other than root can change, and the guide
-  says how to inspect and repair that safely. The helper now answers at protocol version 7:
-  with an older one the card says the helper is out of date.
+  says how to inspect and repair that safely. An older helper keeps working; the
+  Touch ID card asks you to reinstall it before turning Touch ID off.
 - **Find an app on Updates.** **⌘F** shows one answer row above the list instead of
   narrowing it: where the app is on the list, what Inventory knows when it is not (up to
   date, no known source, the check failed, hidden by one of your rules with **Show Rules**,
-  or not on this Mac), with **Open Inventory** beside every answer that comes from Inventory,
-  and says when Inventory may have changed since it was read.
+  or not on this Mac), with **Show Rules** beside an answer about your rules and **Open Inventory**
+  beside the others, and says when the Inventory read may have changed or was incomplete.
 - **The menu knows when the window is checking.** While a check from the Wega window runs, the
   menu-bar menu says **Checking for updates in the Wega window…**, and its check button and
   the agent's own scheduled attempt wait.
@@ -136,8 +137,9 @@ them verbatim under the new version heading, so that step is never done by hand 
 - **Errors say what to do next.** On Updates, during an update run and on Undo updates, every
   error banner has a button — mostly **Show in Logs** — and a permission failure leads with the
   permission instead of sending you to Logs. A banner naming many apps shows the first few and
-  **Show All**. A failed backup before an update says to check free disk space. The error banners
-  on Inventory, Cleanup and Uninstall still name the failure without a button.
+  **Show All**. A failed backup before an update says to check free disk space. The two
+  duplicate-removal banners on To Homebrew have **Show in Logs** too; its other error banners and
+  those on Inventory, Cleanup and Uninstall still name the failure without a button.
 - **Reduce Transparency no longer hides the rows an update is installing.** Nothing is drawn
   over the list any more; it stays locked and its header says why. State texts are easier to
   read, and the close buttons of banners and the log are larger targets.
@@ -146,7 +148,7 @@ them verbatim under the new version heading, so that step is never done by hand 
 - **Shorter, plainer wording.** The note for a scan that could not reach every source is
   shorter in Polish and reads **check incomplete** in English, the group that waits for you is
   **Needs your action**, the fourth source is **vendors**, and the messages about a changed
-  signature now say **developer signature** instead of a team identifier.
+  signature now say **developer signature** instead of Team ID.
 - **The band names your queue.** It reads **4 queued · 2 to finish with the developer**
   (the second half only while something is queued, counted in the category on screen), says
   how far an undo reaches (**Undo: 3 of 4**, or **Checking undo availability** while a cask is

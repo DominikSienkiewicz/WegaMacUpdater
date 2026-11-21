@@ -217,10 +217,10 @@ the button's tooltip names the running scan instead of blaming an empty selectio
 list. It shows one answer row above it. When the app is among the updates, the row links to the
 matching rows. Otherwise it says what Inventory
 knows: up to date and how it was checked, no known source to update from, the check failed, no
-current result, hidden by one of your rules, or not on this Mac. **Open Inventory** accompanies
-every answer that comes from Inventory and **Show Rules** the answer about your rules. It never
-starts an Inventory read; when Inventory was never read it says so. When Inventory may have
-changed since it was read, the answer carries that caveat.
+current result, hidden by one of your rules, or not on this Mac. **Show Rules** accompanies an
+answer about your rules, **Open Inventory** the others. It never starts an Inventory read; when
+Inventory was never read it says so. An answer from an Inventory read that may have changed, or
+that was incomplete, carries that caveat.
 
 **The scan button only where a scan shows.** The **Check now** button in the toolbar appears only
 on the screens that show a scan's result — Updates, To Homebrew (which also keeps its own
@@ -244,15 +244,15 @@ says the next one will be shown.
 The run happens in the band, and nothing covers the list. The band's heading reads *"Updating ·
 since 08:14"* (the start time, never an estimate of the end), the stage line names the work
 (*"Installing firefox — 3 of 7"*; *"Installing packages — 3 of 7"* while several run at once),
-a ring counts whole packages as *3/7*, and the band holds **Stop After Active Installs** and
-**Show log**. The list stays readable and is locked: it is disabled with its checkboxes,
+a ring counts whole packages as *3/7*, and the band holds **Stop After Active Installs** (and **Show log** once you have closed the log
+that opens with the run). The list stays readable and is locked: it is disabled with its checkboxes,
 banner actions and manual installs, its header says *"The list stays locked until the update
 ends."*, and no veil is drawn, so **Reduce Transparency** has nothing to remove. Casks and npm
 globals show their own state on the row — *waiting*, *installing…*, *installed, checking*,
 *failed* or *won't start* (a row the run will not begin after a stop request or a vendor
 signature change); the Homebrew formula batch and the App Store batch say *in progress* once in
 the group header, and an update the vendor finishes says *with the vendor*. A row keeps its
-height when its state appears. **Show log** opens the log panel under the list. The band is the
+height when its state appears. The log panel under the list opens by itself when the run starts; **Show log** in the band reopens it after you close it. The band is the
 one place the stop button lives, so it stays enabled while the list is locked.
 
 - **Selected updates run side by side.** A run no longer walks its selection one package at a
@@ -550,8 +550,8 @@ are **Show in Logs**, which opens Logs on the entry that explains the failure; a
 packages shows the first few and a **Show All** button for the rest, and a banner that replaces
 another starts collapsed. A failed pre-update backup says to check free disk space and try
 again. The red banners on To Homebrew that report a failed duplicate removal also carry **Show in
-Logs**; the error banners on Inventory, Cleanup and Uninstall name the failure but carry no
-button. The word *snapshot* no longer appears in what Wega says: the user-facing name is
+Logs**; the other error banners on To Homebrew, and those on Inventory, Cleanup and Uninstall,
+name the failure but carry no button. The word *snapshot* no longer appears in what Wega says: the user-facing name is
 the backup, or the pre-update copy.
 
 **"Why isn't my app here?"** Under the rows and under both empty states, a line — *"Can't see
@@ -697,7 +697,7 @@ App settings live in the **native macOS Settings window**, opened with **⌘,** 
 
 - **General.** The app card (version, build, **Check for Wega updates**, **Report a bug**, links and the self-update state), the **Language card** — switch the interface between **Polski** and **English**; the choice is persisted and applies live, and switching it keeps the current scan results (and a running upgrade) intact. Until you pick one, the language follows the system locale — Polish only when macOS reports it ahead of the other languages Wega ships, **English otherwise**. **Launch at login** and **Notifications**.
 - **Checking & Background.** **Paused updates** — lists every ignore / version-pin rule with a one-click remove. **Background update permissions** — the audit of per-app unattended-update consents. **Scan directories card (UX-16)** — add your own scan roots via a directory picker (stored as **security-scoped bookmarks**, so apps on other volumes and in non-standard locations are found), list **exclusions** that are never searched, and set the **recursion depth** (how many sub-levels below each root to descend, default 1). The scan seams read these keys from `UserDefaults` on every scan, so a change takes effect on the next scan. **Update conditions card** — configures the large/unknown download estimate, low-battery threshold, unpacked-size multiplier and free-disk safety margin used by both window and unattended preflights.
-- **Permissions & Privacy.** The **What Wega does** trust card on top, then the **Wega helper** card (**Install Helper** / **Remove Helper**) and the **Touch ID for administrator commands** card — on Macs with biometry hardware, it shows whether `pam_tid.so` is wired into `/etc/pam.d/sudo_local` and offers **Use Touch ID Instead of Your Admin Password**, and, when the Wega helper is installed and current, **Turn Off Touch ID for sudo**. The helper removes only the exact `auth       sufficient     pam_tid.so` line from `/etc/pam.d/sudo_local`, keeps Apple's template, swaps the new file in atomically, checks it and puts the old file back if anything fails (no backup stays after a success; a file is left behind only when the write and its restore both fail, or the file changed meanwhile); it refuses a file or directory that someone other than root can change. With an older helper the card says the helper is out of date; without one it points to the manual steps, unless its own check has already observed the unsafe file or directory, when it shows that security note instead. The helper does four things: install a verified Wega package, turn Touch ID for `sudo` on or off, restore an app's pre-update copy, and move a root-owned app to the Trash. The trust card has three sections. **Permissions** gives, for the Wega helper, Touch ID, App Management (with its current state) and Full Disk Access, why it is needed, what happens without it and how to take it back, and links the steps for turning Touch ID for `sudo` off. **Connections** says that checking installs and removes nothing (the exception being apps allowed to update in the background), that Wega sends no telemetry or analytics, and lists the fixed hosts behind **Show Fixed Addresses** — read from `endpoints.json`, so the list cannot drift from what Wega contacts — with a caption for the dynamic ones (update addresses stored in installed apps, the npm registry, App Store servers). **Local data and reports** says logs, the last scan and pre-update copies (up to 7 days) stay on the Mac.
+- **Permissions & Privacy.** The **What Wega does** trust card on top, then the **Wega helper** card (**Install Helper** / **Remove Helper**) and the **Touch ID for administrator commands** card — on Macs with biometry hardware, it shows whether `pam_tid.so` is wired into `/etc/pam.d/sudo_local` and offers **Use Touch ID Instead of Your Admin Password**, and, when the Wega helper is installed and current, **Turn Off Touch ID for sudo**. The helper removes only the exact `auth       sufficient     pam_tid.so` line from `/etc/pam.d/sudo_local`, keeps Apple's template, swaps the new file in atomically, checks it and puts the old file back if anything fails (a backup stays behind only when something fails, including the last cleanup step: the write and its restore both fail, the file changes meanwhile, or the cleanup of the swap file fails; the helper reports it); it refuses a file or directory that someone other than root can change. With an older helper the card says the helper is out of date; without one it points to the manual steps, unless its own check has already observed the unsafe file or directory, or a file that looks different from what Wega expects, when it shows the red security note instead. The helper does four things: install a verified Wega package, turn Touch ID for `sudo` on or off, restore an app's pre-update copy, and move a root-owned app to the Trash. The trust card has three sections. **Permissions** gives, for the Wega helper, Touch ID, App Management (with its current state) and Full Disk Access, why it is needed, what happens without it and how to take it back, and links the steps for turning Touch ID for `sudo` off. **Connections** says that checking installs and removes nothing (the exception being apps allowed to update in the background), that Wega sends no telemetry or analytics, and lists the fixed hosts behind **Show Fixed Addresses** — read from `endpoints.json`, so the list cannot drift from what Wega contacts — with a caption for the dynamic ones (update addresses stored in installed apps, the npm registry, App Store servers). **Local data and reports** says logs, the last scan and pre-update copies (up to 7 days) stay on the Mac.
 - **Cleanup.** The **Project folders card** — the folders Cleanup reads project version files from (default `~/Dev`); *Dodaj katalog…* adds one and each row's trash button removes it. A protected location, or a folder that contains one, is refused with the reason, and a list you empty stays empty instead of falling back to `~/Dev`. The next scan, and every removal's re-check, read the list as it is then. The **Files and Folders map card** — the off-by-default switch for D10 with the Full Disk Access warning and a button that opens that pane in System Settings; it does not probe whether Wega has the access, the next scan shows it.
 - **Advanced.** **Post-update launch test**, **Crash reporting**, the **Application catalog card** — pulls the latest `AppCatalog` overlay from its canonical source on demand (the app also refreshes it on launch), reports the outcome and notes that a fetched update applies on the next launch; the **GitHub token** card, **System diagnostics** (Homebrew and mas-cli versions, and **Export diagnostics**), **Environment** (macOS, CPU architecture) and the license block for bundled open-source tools.
 

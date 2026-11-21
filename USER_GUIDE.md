@@ -138,9 +138,9 @@ updates, the row says so (**On the update list:**) and links to the matching row
 up to date and how that was checked, that Wega does not know where to update it from, that the
 check failed or that Wega has no current result and will check it next scan, or that one of
 your rules hides it, with **Show Rules** to open them. When Inventory has never been read, the
-row says so; searching never starts that read itself. **Open Inventory** comes with every
-answer that comes from Inventory, and **Show Rules** with the answer about your rules. When
-Inventory may have changed since it was read, the answer says so. When the
+row says so; searching never starts that read itself. **Show Rules** comes with an answer
+about your rules, **Open Inventory** with the others. An answer from an Inventory read that may
+have changed, or that was incomplete, says so. When the
 name matches nothing on this Mac, the row says it can't see the app among the apps here.
 
 Updates that your own rules (**Don't update**, **Skip this version**, a pin) hide from the
@@ -318,7 +318,7 @@ showing. Under the status, the dropdown dates the last check in words — **"Che
 21:14"** — and, while automatic checks are on, says when the next one is due: **"Next attempt:
 today, 15:00, while Wega is running. Closing the window doesn't quit the app."** While a check you started in the main window
 runs, the menu says **Checking for updates in the Wega window…**, its check button waits, and
-the agent's own scheduled attempt waits too, so two checks never run at once. While an update you started in the main
+the agent's own scheduled attempt waits for that check. While an update you started in the main
 window runs, it shows how far the run has got ("Updating 2 of 5…") with a **Stop After
 Active Installs** button, even with the window closed; once clicked, the button reads
 **Finishing active installs, not starting new ones**. Updates the agent installs in the
@@ -391,8 +391,9 @@ will end — and under it a line names what the run is doing: preparing backups,
 installing. It names the package too — "Installing firefox — 3 of 7" — but only while that
 package is the only one installing; once several are running at once the line reads
 "Installing packages — 3 of 7" instead, because naming one of three would misdescribe the
-other two. A ring beside it shows **3/7**, and the band holds **Stop After Active Installs**
-and **Show log**. It counts **whole packages**. When the last package is done, Wega re-checks
+other two. A ring beside it shows **3/7**, and the band holds **Stop After Active Installs**;
+the log opens by itself under the list when the run starts, and **Show log** appears in the band
+only after you close it. It counts **whole packages**. When the last package is done, Wega re-checks
 the list and the scan's band takes over.
 
 The list stays readable but locked, and its header says **"The list stays locked until the
@@ -411,8 +412,8 @@ ring at the same place while it downloads — the line keeps saying what is happ
 A run that fails part-way stops short of the end: six of seven packages upgraded leaves the
 ring at 6/7, and the banner explains the rest.
 
-**Show log** opens a **log panel** under the list that streams what the package
-managers are printing. Because several packages install at once, **every line is prefixed
+The **log panel** under the list opens by itself when a run starts, and **Show log** in the band
+brings it back after you close it. It streams what the package managers are printing. Because several packages install at once, **every line is prefixed
 with the package it came from** — `[figma] ==> Downloading…`, `[mas] error: …` — so three
 interleaved downloads stay tellable apart. That prefix is the package's own token and is
 never translated, whatever language the interface is in: it is the name Homebrew, `mas` or
@@ -422,8 +423,8 @@ npm uses, so a log you paste into a bug report stays searchable by it.
 
 While an update runs, the Updates screen belongs to it: the list, its checkboxes, banner
 actions and manual installs stay visible but greyed out, and the list header says why. The
-band shows the progress, the package being installed, **Show log** and **Stop After Active
-Installs**. The sidebar and the menu-bar dropdown show the run too, so you can leave this
+band shows the progress, the package being installed and **Stop After Active Installs**, plus
+**Show log** once you have closed the log that opens with the run. The sidebar and the menu-bar dropdown show the run too, so you can leave this
 screen and still see how far it has got. Nothing can be selected or started until the run
 lands. Stopping is the one control the run keeps; **⌘.** and the menu-bar dropdown's button do
 the same. Wega stops at the **next package boundary** — the installs already running are
@@ -555,8 +556,8 @@ failure leads with the permission instead (for example **macOS needs your permis
 **Open privacy settings**) and never sends you to Logs for it. When a banner names many apps or
 packages it shows the first few and a **Show All** button that expands the rest; a new banner
 replacing an old one starts collapsed again. The red banners on **To Homebrew** that report a failed duplicate removal also have **Show in
-Logs**. The error banners on **Inventory**, **Cleanup** and **Uninstall** name the failure but
-have no button.
+Logs**. The other error banners on **To Homebrew**, and those on **Inventory**, **Cleanup** and
+**Uninstall**, name the failure but have no button.
 
 ### Skip or pin updates
 
@@ -964,11 +965,12 @@ Privacy → Touch ID for administrator commands** and click **Turn Off Touch ID 
 helper removes only the line `auth       sufficient     pam_tid.so` from
 `/etc/pam.d/sudo_local` and leaves Apple's template in place. It swaps the new file in
 atomically, checks it, and puts the old file back if anything goes wrong; no backup stays
-behind after a success. Then open a new Terminal
+behind unless something fails, including the last cleanup step. Then open a new Terminal
 window and run `sudo -k; sudo true`; it should ask for your password. Wega will not touch the
 file when it holds other settings, a line written differently, or anything else it did not
-expect; it says so, and you use the manual steps below. If the card instead shows a security
-note about who can change the file, read the repair advice below; that note can appear even
+expect; it says so, and you use the manual steps below. If the card instead shows a red note
+that someone other than root can change the file or directory, or that the file looks different
+from what it should, read the repair advice below; that note can appear even
 without the helper.
 
 **By hand.** Follow these steps in this order.
@@ -1001,8 +1003,11 @@ or a flag you did not set, and any line in the file that you did not add. Do not
 typing your password into `sudo`: `sudo` reads that very file, so a tampered file is not a safe
 place to type it. Use one of two other ways.
 
-*Through an administrator prompt.* `osascript` asks macOS itself for the password, and macOS's
-authorization service does not read `sudo_local`, so a tampered file never sees that password:
+*Through an administrator prompt (only when the file is the problem and the `/etc/pam.d`
+directory is fine).* `osascript` asks macOS itself for the password, and macOS's authorization
+service does not read `sudo_local`, so a tampered file never sees that password. That service is
+driven by `/etc/pam.d/authorization`, which lives in the same directory, so when someone other
+than root can change the directory itself this way is not safe either; use recoveryOS then:
 
 ```
 osascript -e 'do shell script "chown root:wheel /etc/pam.d/sudo_local; chmod go-w /etc/pam.d/sudo_local; chmod -N /etc/pam.d/sudo_local" with administrator privileges'
@@ -1019,15 +1024,16 @@ chmod go-w "/Volumes/Macintosh HD - Data/private/etc/pam.d/sudo_local"
 chmod -N "/Volumes/Macintosh HD - Data/private/etc/pam.d/sudo_local"
 ```
 
-The last command removes the ACL. When the directory is the problem, run the same commands
-for `/etc/pam.d` (with the volume prefix in recoveryOS), without the `-N` one, and check
-`ls -ldeO@ /etc/pam.d` again afterwards.
+The last command removes the ACL. When the directory is the problem, only recoveryOS is safe:
+run the same commands for the directory, `/Volumes/<name> - Data/private/etc/pam.d` (for example
+`/Volumes/Macintosh HD - Data/private/etc/pam.d`), without the `-N` one, and check
+`ls -ldeO@` on that path again afterwards.
 
 **When Wega names another policy file or directory.** Wega also stops when, once its line is
 gone, `sudo` would read another PAM file: `/etc/pam.conf`, `/usr/local/etc/pam.conf`,
-`/usr/local/etc/pam.d/sudo_local` or `/usr/share/pam.d/sudo_local`. It also warns when
-`/usr/local`, `/usr/local/etc` or `/usr/local/etc/pam.d` (the nearest of them that exists)
-can be changed by someone other than root. Read the
+`/usr/local/etc/pam.d/sudo_local` or `/usr/share/pam.d/sudo_local`. It also warns when any
+existing directory on the chain `/usr/local`, `/usr/local/etc`, `/usr/local/etc/pam.d` can be
+changed by someone other than root. Read the
 file with `cat`; if you did not create it, treat it like the case above. Wega does not edit
 those files.
 
@@ -1036,8 +1042,10 @@ those files.
 files with `cat /etc/pam.d/.sudo_local.wega-swap-<UUID>` and `cat /etc/pam.d/sudo_local` (use the
 real name from the message; `ls -a /etc/pam.d` lists it). If `sudo_local` is damaged or missing,
 put the saved one back with `mv /etc/pam.d/.sudo_local.wega-swap-<UUID> /etc/pam.d/sudo_local`,
-under the same rule: `osascript` with administrator privileges (wrap the `mv` as above) or
-recoveryOS (with the Data volume's path prefix), not a password typed into `sudo`.
+under the same rule: `osascript` with administrator privileges (wrap the `mv` as above; only
+when the `/etc/pam.d` directory itself is fine) or recoveryOS (with the Data volume's path
+`/Volumes/<name> - Data/private/etc/pam.d/` in place of `/etc/pam.d/`), not a password typed
+into `sudo`.
 
 **After "the file changed while I was working".** A `.sudo_local.wega-swap-*` file may be left
 in `/etc/pam.d`. Check it the same way. Once `sudo_local` is confirmed correct, the leftover

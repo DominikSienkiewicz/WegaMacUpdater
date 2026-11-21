@@ -175,8 +175,9 @@ history of that removed bar, kept for the reasoning behind the label and the cou
 
 The band's ring (`UpdateBandRunRing`) replaced it. It is the run's only progress; there is no
 linear bar, so the `maxWidth` frame trap does not apply. It draws `completed/total` inside an
-arc that fills by `completed ÷ total`, and while `.preparing` it shows `0/0` with an empty arc
-instead of an indeterminate bar. Its VoiceOver label is `Postęp aktualizacji` and its value is
+arc that fills by `completed ÷ total`, and before the run has counted its batch (`progress == nil`) it shows `0/0` with an empty arc
+instead of an indeterminate bar. While `.preparing` it can already show `0/N`, and the
+`.preparing` stage label has no counter (`UpgradeProgressCopy.label`). Its VoiceOver label is `Postęp aktualizacji` and its value is
 the stage line from `UpgradeProgressCopy` (for example `Instaluję firefox — 3 z 7`), which
 already ends with the counter, not a bare `3 z 7`. The stage line is the label below, drawn in
 the band.
