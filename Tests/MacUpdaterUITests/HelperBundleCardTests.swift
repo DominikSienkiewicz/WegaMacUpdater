@@ -119,6 +119,16 @@ struct HelperBundleCardTests {
 
     // MARK: - The controller
 
+    /// Final review, minor 3: a refused copy never shows the usual card for a frame before the
+    /// first refresh.
+    @Test func aNewControllerAlreadyKnowsTheBundle() {
+        let harness = Harness(trust: .refused(.notInApplications))
+
+        let controller = InfoOperationsController(dependencies: harness.dependencies)
+
+        #expect(controller.helperBundleTrust == .refused(.notInApplications))
+    }
+
     @Test func theControllerReadsTheBundleWithTheRegistration() {
         let harness = Harness(trust: .refused(.notOwnedByRoot(.bundle)))
         let controller = InfoOperationsController(dependencies: harness.dependencies)

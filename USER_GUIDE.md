@@ -729,8 +729,9 @@ replace the helper inside it. On such a copy the card shows **Unavailable**, the
 steps: download `WegaMacUpdater.pkg` from the Releases page (**Open Releases Page**), quit Wega,
 open the package and follow the installer, then open Wega from `/Applications` and install the
 helper. A copy you dragged somewhere else can go to the Trash. Until then Wega works as without
-the helper: restoring an app, its own update (**Download and open the installer**), moving a
-root-owned app to the Trash and Touch ID for `sudo` take their usual routes without it. The
+the helper: restoring an app, its own update (**Download and open the installer**) and Touch ID
+for `sudo` take their usual routes without it, and Uninstall says that a root-owned app needs
+Wega installed from the `.pkg`. The
 helper checks the bundle it was started from as well, and refuses every connection when that
 bundle fails the same check.
 
@@ -996,7 +997,7 @@ one if you might still need it.
 - Root-owned files. The `.pkg` payload, which a self-update installs also for people who
   first installed from the DMG, and the helper leave folders owned by root. The helper's
   folders can exist even when no package was ever installed, for example after a DMG
-  install that used the helper, so check each of them on its own:
+  install from before Wega required the `.pkg` for its helper, so check each of them on its own:
 
   ```
   ls "/Library/Application Support/WegaMacUpdater"

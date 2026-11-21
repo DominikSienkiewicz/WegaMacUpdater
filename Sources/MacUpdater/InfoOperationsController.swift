@@ -57,6 +57,8 @@ final class InfoOperationsController: ObservableObject {
 
     init(dependencies: Dependencies = .live) {
         self.dependencies = dependencies
+        // Read now, so a refused copy never shows the usual helper card before the first refresh.
+        self.helperBundleTrust = dependencies.helperBundleTrust()
     }
 
     /// The name of the bundle this copy of Wega runs from, for the card's refusal reason.
