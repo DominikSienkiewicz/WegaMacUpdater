@@ -206,10 +206,10 @@ public enum Plurals {
             few:  "Obchód skończony — %@ aplikacje pod opieką.",
             many: "Obchód skończony — %@ aplikacji pod opieką."
         ),
-        "Zwęszyłam %@ aplikacji do przepięcia.": PluralForms(
-            one:  "Zwęszyłam %@ aplikację do przepięcia.",
-            few:  "Zwęszyłam %@ aplikacje do przepięcia.",
-            many: "Zwęszyłam %@ aplikacji do przepięcia."
+        "Zwęszyłam %@ aplikacji do przeniesienia do Homebrew.": PluralForms(
+            one:  "Zwęszyłam %@ aplikację do przeniesienia do Homebrew.",
+            few:  "Zwęszyłam %@ aplikacje do przeniesienia do Homebrew.",
+            many: "Zwęszyłam %@ aplikacji do przeniesienia do Homebrew."
         ),
         "Zeskanowano /Applications · znalazłam %@ aplikacji poza zarządzaniem": PluralForms(
             one:  "Zeskanowano /Applications · znalazłam %@ aplikację poza zarządzaniem",
@@ -379,10 +379,10 @@ public enum Plurals {
             few:  "Patrol complete — %@ apps under watch.",
             many: "Patrol complete — %@ apps under watch."
         ),
-        "Zwęszyłam %@ aplikacji do przepięcia.": PluralForms(
-            one:  "I sniffed out %@ app to migrate.",
-            few:  "I sniffed out %@ apps to migrate.",
-            many: "I sniffed out %@ apps to migrate."
+        "Zwęszyłam %@ aplikacji do przeniesienia do Homebrew.": PluralForms(
+            one:  "I sniffed out %@ app to move to Homebrew.",
+            few:  "I sniffed out %@ apps to move to Homebrew.",
+            many: "I sniffed out %@ apps to move to Homebrew."
         ),
         "Zeskanowano /Applications · znalazłam %@ aplikacji poza zarządzaniem": PluralForms(
             one:  "Scanned /Applications · found %@ app outside management",

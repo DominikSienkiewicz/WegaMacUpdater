@@ -17,11 +17,14 @@ extension ScanStore {
     ///
     /// `quiet` runs it underneath the result already on screen — see ``ScanStore/isRefreshing``.
     /// Left out, the scan runs in place whenever there is a result to keep (UX-19).
-    func startCheck(quiet: Bool? = nil) {
+    ///
+    /// `refreshesCatalog: false` is the launch scan that found the Homebrew catalog young enough
+    /// to keep (UXP-14); every other caller, "Check now" included, refreshes it.
+    func startCheck(quiet: Bool? = nil, refreshesCatalog: Bool = true) {
         guard scanTask == nil else { return }
         let inPlace = quiet ?? scansInPlace
         scanTask = Task { @MainActor [weak self] in
-            await self?.runCheck(quiet: inPlace)
+            await self?.runCheck(quiet: inPlace, refreshesCatalog: refreshesCatalog)
             self?.scanTask = nil
         }
     }
@@ -65,6 +68,7 @@ extension ScanStore {
         emitActivity: Bool = true,
         lightweight: Bool = false,
         quiet: Bool = false,
+        refreshesCatalog: Bool = true,
         operationLease: OperationCoordinator.Lease? = nil
     ) async {
         guard let model else { return }
@@ -91,9 +95,10 @@ extension ScanStore {
         WegaLog.info(.scanner, lightweight ? "Lekkie odświeżenie listy" : tr("Skan rozpoczęty"))
         emitWegaState(WegaState(pose: .sniff, line: tr("Węszę po Homebrew…")))
 
+        let catalogAge = (!lightweight && !refreshesCatalog) ? reusedCatalogAgeMinutes() : nil
         progress = .running(.brew)
         var metadata: ScanSourceReport?
-        if !lightweight {
+        if !lightweight && refreshesCatalog {
             // Refresh brew metadata before asking what is outdated — otherwise a
             // newly-released cask/formula version that hasn't landed locally yet
             // would be missed even though `brew info` against the API shows it.
@@ -114,7 +119,8 @@ extension ScanStore {
                             model: model,
                             emitActivity: emitActivity,
                             lightweight: lightweight,
-                            metadata: metadata
+                            metadata: metadata,
+                            catalogAge: catalogAge
                         )
                     }
                 } else {
@@ -126,7 +132,8 @@ extension ScanStore {
                             model: model,
                             emitActivity: emitActivity,
                             lightweight: lightweight,
-                            metadata: metadata
+                            metadata: metadata,
+                            catalogAge: catalogAge
                         )
                     }
                 }
@@ -136,7 +143,8 @@ extension ScanStore {
                         model: model,
                         emitActivity: emitActivity,
                         lightweight: lightweight,
-                        metadata: metadata
+                        metadata: metadata,
+                        catalogAge: catalogAge
                     )
                 }
             }
@@ -155,7 +163,8 @@ extension ScanStore {
         model: AppViewModel,
         emitActivity: Bool,
         lightweight: Bool,
-        metadata: ScanSourceReport?
+        metadata: ScanSourceReport?,
+        catalogAge: Int?
     ) async {
         // F4 — an absent tool is "not applicable", never a failure. `brewNotFound` used to
         // land in the generic catch below, so a machine without Homebrew wore a permanent
@@ -316,6 +325,8 @@ extension ScanStore {
             previous: installationChecks
         )
         lastCheck = Date()
+        // `nil` after a lightweight rescan too: it stamps a new check time over no catalog read.
+        setCatalogAgeMinutes(catalogAge)
         // REL-09 — the per-source picture is part of the result from here on: it decides
         // what gets persisted, and whether an empty list may call itself "up to date".
         // Published first, because closing hand-offs trusts this scan's completeness.
@@ -355,6 +366,14 @@ extension ScanStore {
         }
     }
 
+    /// UXP-14 — the age of the catalog a launch scan keeps, counted to the scan's start; `nil`
+    /// when no refresh was ever recorded.
+    private func reusedCatalogAgeMinutes() -> Int? {
+        dependencies.catalogStamp.load().map {
+            BrewCatalogFreshness.ageMinutes(refreshedAt: $0, scanStartedAt: scanStartedAt ?? dependencies.now())
+        }
+    }
+
     /// REL-09 — refresh Homebrew's metadata and **report** what happened.
     ///
     /// This used to run as `_ = try? await …update()`. Offline, brew then computed the
@@ -369,7 +388,10 @@ extension ScanStore {
                 defer { MutationGuard.shared.end(ticket) }
                 return try await model.brewService.update()
             }
-            guard result.exitCode != 0 else { return ScanSourceReport(outcome: .succeeded) }
+            guard result.exitCode != 0 else {
+                dependencies.catalogStamp.save(dependencies.now())
+                return ScanSourceReport(outcome: .succeeded)
+            }
             let stderr = result.stderr.components(separatedBy: "\n").first { !$0.isEmpty }
             let reason = stderr ?? "kod wyjścia \(result.exitCode)"
             WegaLog.error(.homebrew, "brew update: \(reason)")

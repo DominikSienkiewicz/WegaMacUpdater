@@ -39,7 +39,7 @@ final class FinalQAReviewRegressionTests: XCTestCase {
             endingAt: "struct ManualUpdateActionView: View"
         )
 
-        XCTAssertTrue(manualRows.contains(".focusable(onInspect != nil)"))
+        XCTAssertTrue(manualRows.contains(".focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop, onScreen: onScreen))"))
         XCTAssertTrue(manualRows.contains(".onKeyPress(.return)"))
         XCTAssertTrue(manualRows.contains(".onKeyPress(.space)"))
         XCTAssertTrue(manualRows.contains(".accessibilityLabel("))

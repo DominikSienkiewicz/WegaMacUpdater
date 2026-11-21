@@ -14,13 +14,22 @@ struct UpdateBandPresentationTests {
         handOff: Int = 0,
         lastCheck: Date? = nil,
         freshness: ScanFreshness = .fresh,
-        sources: [UpdateBandPresentation.SourceChip] = []
+        sources: [UpdateBandPresentation.SourceChip] = [],
+        catalogAge: Int? = nil
     ) -> UpdateBandPresentation {
         UpdateBandPresentation(
             totalCount: total, urgentCount: urgent, queueCount: queue,
             protectionText: nil, lastCheck: lastCheck, freshness: freshness,
-            sources: sources, wegaLine: "Wega", handOffCount: handOff
+            sources: sources, wegaLine: "Wega", handOffCount: handOff, catalogAgeMinutes: catalogAge
         )
+    }
+
+    @Test func theCatalogNoteNamesItsAge() {
+        withLanguage(.pl) {
+            #expect(presentation(catalogAge: 12).catalogNote == "katalog Homebrew sprzed 12 min")
+            #expect(presentation().catalogNote == nil)
+        }
+        withLanguage(.en) { #expect(presentation(catalogAge: 12).catalogNote == "Homebrew catalog from 12 min ago") }
     }
 
     @Test func anIncompleteScanSaysSoInTheHeadline() {

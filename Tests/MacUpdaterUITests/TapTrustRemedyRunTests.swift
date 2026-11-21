@@ -61,7 +61,7 @@ final class TapTrustRemedyRunTests: XCTestCase {
 
         XCTAssertEqual(runner.requests.map(\.arguments), [["untap", "--", "manaflow-ai/cmux"]])
         XCTAssertEqual(harness.store.banner?.variant, .danger)
-        XCTAssertEqual(harness.store.banner?.title, tr("Nie udało się zmienić tapów"))
+        XCTAssertEqual(harness.store.banner?.title, tr("Nie udało się zmienić źródeł Homebrew"))
         XCTAssertEqual(harness.store.brewLog.last, "Error: No available tap manaflow-ai/cmux.")
         let remedy = TapTrustRemedy(kind: .untapUnused, arguments: BrewService.untapArguments(taps: ["manaflow-ai/cmux"]))
         XCTAssertEqual(TapTrustPlanner.pending([remedy], in: harness.store.brewLog), [remedy])

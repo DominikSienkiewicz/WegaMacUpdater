@@ -466,13 +466,13 @@ private struct MigrationRow: View {
                 onMigrate()
             } label: {
                 if isBusy { ProgressView().controlSize(.small) }
-                else { Label(tr("Przepnij"), systemImage: "arrow.right.doc.on.clipboard") }
+                else { Label(tr("Przenieś"), systemImage: "arrow.right.doc.on.clipboard") }
             }
             .controlSize(.small)
             .disabled(isBusy)
-            // UX-02 — every row carries the same button, so "Przepnij" alone tells a
+            // UX-02 — every row carries the same button, so "Przenieś" alone tells a
             // VoiceOver user which of them they are on: nothing.
-            .accessibilityLabel(trf("Przepnij %@ do Homebrew", app.name))
+            .accessibilityLabel(trf("Przenieś %@ do Homebrew", app.name))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)

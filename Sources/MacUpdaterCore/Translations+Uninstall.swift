@@ -19,7 +19,6 @@ extension Translations {
         "Odinstalowanie niepełne — nie usunięto: %@. Powody poniżej.": "Uninstall incomplete — not removed: %@. Reasons below.",
         "Ukryj wynik": "Hide result",
         "%@: %@": "%@: %@",
-        "wymaga pomocnika Wega — włącz go w ustawieniach.": "needs Wega's helper — turn it on in Settings.",
         "wymaga konta administratora.": "needs an administrator account.",
         "wymaga uprawnień administratora — usuń ją w Finderze.": "needs administrator rights — remove it in Finder.",
         "macOS blokuje usuwanie — zezwól Wega w Zarządzaniu aplikacjami.": "macOS is blocking removal — allow Wega under App Management.",
@@ -28,12 +27,6 @@ extension Translations {
         "Pokaż, czego nie usunięto": "Show what was not removed",
         "Otwórz ustawienia pomocnika": "Open helper settings",
         "Lista aplikacji się odświeża — poczekaj, aż skończy.": "The app list is refreshing — wait until it finishes.",
-        "pomocnik Wega usunie ją bez hasła": "Wega's helper will remove it without a password",
-        "pomocnik Wega jest nieaktualny lub nie odpowiada — w ustawieniach usuń go i zainstaluj ponownie.":
-            "Wega's helper is outdated or not responding — in Settings, remove it and install it again.",
-        "%@ do Kosza przez pomocnika Wega": "%@ to Trash via Wega's helper",
-        "Pomocnik Wega nie potwierdził usunięcia — aplikacja mogła już opuścić /Applications. Odświeżona lista pokazuje, czy nadal tam jest.":
-            "Wega's helper did not confirm the removal — the app may already have left /Applications. The refreshed list shows whether it is still there.",
         "Resztki aplikacji": "App leftovers",
         "Prawdopodobne — sprawdź przed zaznaczeniem": "Probable — check before ticking",
         "lista Homebrew": "Homebrew list",

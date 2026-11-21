@@ -32,21 +32,23 @@ struct UpdateRunOverlay<Progress: View>: View {
     let onHideLog: () -> Void
     @ViewBuilder let progress: () -> Progress
 
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     /// How much of the window's background lies over the screen: enough to read as stood down,
     /// little enough that every row stays legible. It was the scan's veil; UXP-13 removed the
     /// scan's overlay, so the run owns it now. Computed, because a generic type cannot store it.
     static var scrimOpacity: Double { 0.5 }
 
+    /// UXP-22 — the veil drawn for the current Reduce Transparency setting. With the setting on
+    /// there is no veil at all: an opaque one would hide the rows the run is installing, so the
+    /// rows stay as they are and only the disabled screen says they are locked.
+    static func scrim(reduceTransparency: Bool) -> Double {
+        reduceTransparency ? 0 : scrimOpacity
+    }
+
     var body: some View {
         VStack(spacing: 12) {
-            Text(UpdateRunCopy.note(isStopping: isStopping))
-                .font(.wega(.subheadline))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            note
                 .padding(24)
             Spacer(minLength: 0)
             if let logLines {
@@ -56,9 +58,28 @@ struct UpdateRunOverlay<Progress: View>: View {
             runBar
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor).opacity(Self.scrimOpacity))
+        // A veil of no opacity takes no clicks; the shape keeps the run's layer taking the ones it took.
+        .background(Color(nsColor: .windowBackgroundColor).opacity(Self.scrim(reduceTransparency: reduceTransparency)))
+        .contentShape(Rectangle())
         .accessibilityElement(children: .contain)
         .accessibilityLabel(tr("Trwa aktualizacja"))
+    }
+
+    /// Why the list is locked. Under Reduce Transparency it sits on a solid surface instead of glass.
+    @ViewBuilder
+    private var note: some View {
+        let text = Text(UpdateRunCopy.note(isStopping: isStopping))
+            .font(.wega(.subheadline))
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        if reduceTransparency {
+            text.background(Color.wegaRecessedSurface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        } else {
+            text.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
     }
 
     /// The bar at the bottom of the list, carrying the run.

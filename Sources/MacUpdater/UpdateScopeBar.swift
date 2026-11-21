@@ -85,3 +85,40 @@ struct ListHeaderGroupingSlot<Menu: View>: View {
         .layoutPriority(-1)
     }
 }
+
+/// UXP-21 — the list header's "Grupuj" menu. The labelled picker took 191.5 pt in Polish and
+/// pushed the header past the 420 pt minimum detail column, so where it does not fit it drops
+/// its label, and then becomes an icon that opens the same choice.
+struct UpdateGroupingMenu: View {
+    @Binding var selection: UpdateGrouping
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            picker
+                .pickerStyle(.menu)
+                .fixedSize()
+            picker
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .fixedSize()
+            Menu {
+                picker.pickerStyle(.inline)
+            } label: {
+                Image(systemName: "list.bullet.indent")
+            }
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help(tr("Grupuj"))
+            .accessibilityLabel(tr("Grupuj"))
+            .accessibilityValue(selection.title)
+        }
+    }
+
+    private var picker: some View {
+        Picker(tr("Grupuj"), selection: $selection) {
+            ForEach(UpdateGrouping.allCases, id: \.self) { option in
+                Text(option.title).tag(option)
+            }
+        }
+    }
+}

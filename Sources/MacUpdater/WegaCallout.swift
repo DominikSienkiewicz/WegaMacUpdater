@@ -45,6 +45,9 @@ struct WegaCallout<Detail: View, Actions: View>: View {
     let level: WegaCalloutLevel
     let title: String
     var message: String?
+    /// The untruncated message; when set, a "show all" button expands it in place.
+    var fullMessage: String?
+    @State private var showsAll = false
     /// Overrides the level's symbol where the notice has a more specific one (a trash can for
     /// a cleanup offer); the tint still comes from the level.
     var symbol: String?
@@ -56,6 +59,7 @@ struct WegaCallout<Detail: View, Actions: View>: View {
         _ level: WegaCalloutLevel,
         title: String,
         message: String? = nil,
+        fullMessage: String? = nil,
         symbol: String? = nil,
         onClose: (() -> Void)? = nil,
         @ViewBuilder detail: () -> Detail,
@@ -64,6 +68,7 @@ struct WegaCallout<Detail: View, Actions: View>: View {
         self.level = level
         self.title = title
         self.message = message
+        self.fullMessage = fullMessage
         self.symbol = symbol
         self.onClose = onClose
         self.detail = detail()
@@ -80,20 +85,39 @@ struct WegaCallout<Detail: View, Actions: View>: View {
                     .font(.wega(.callout, weight: .semibold))
                     .fixedSize(horizontal: false, vertical: true)
                 if let message {
-                    Text(message)
-                        .font(.wega(.subheadline))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
+                    if showsAll, let fullMessage {
+                        Text(fullMessage)
+                            .font(.wega(.subheadline))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text(message)
+                            .font(.wega(.subheadline))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
+                    }
+                    if fullMessage != nil, !showsAll {
+                        Button(tr("Pokaż wszystkie")) { showsAll = true }
+                            .buttonStyle(.link)
+                            .font(.wega(.subheadline))
+                    }
                 }
                 detail
             }
             Spacer(minLength: 8)
             actions
             if let onClose {
-                Button(action: onClose) { Image(systemName: "xmark") }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.tertiary)
-                    .accessibilityLabel(tr("Zamknij"))
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tertiary)
+                // The 28 pt hit area overhangs the banner's padding: a one-line banner keeps its
+                // height and the cross stays on the title's line.
+                .padding(.vertical, -7)
+                .accessibilityLabel(tr("Zamknij"))
             }
         }
         .padding(.horizontal, 12)
@@ -101,6 +125,7 @@ struct WegaCallout<Detail: View, Actions: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(level.tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .contain)
+        .onChange(of: fullMessage) { showsAll = false }
     }
 }
 
@@ -109,11 +134,12 @@ extension WegaCallout where Detail == EmptyView {
         _ level: WegaCalloutLevel,
         title: String,
         message: String? = nil,
+        fullMessage: String? = nil,
         symbol: String? = nil,
         onClose: (() -> Void)? = nil,
         @ViewBuilder actions: () -> Actions
     ) {
-        self.init(level, title: title, message: message, symbol: symbol, onClose: onClose,
+        self.init(level, title: title, message: message, fullMessage: fullMessage, symbol: symbol, onClose: onClose,
                   detail: { EmptyView() }, actions: actions)
     }
 }
@@ -123,10 +149,11 @@ extension WegaCallout where Detail == EmptyView, Actions == EmptyView {
         _ level: WegaCalloutLevel,
         title: String,
         message: String? = nil,
+        fullMessage: String? = nil,
         symbol: String? = nil,
         onClose: (() -> Void)? = nil
     ) {
-        self.init(level, title: title, message: message, symbol: symbol, onClose: onClose,
+        self.init(level, title: title, message: message, fullMessage: fullMessage, symbol: symbol, onClose: onClose,
                   detail: { EmptyView() }, actions: { EmptyView() })
     }
 }

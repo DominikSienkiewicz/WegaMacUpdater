@@ -87,6 +87,12 @@ struct CleanupConfirmationSheet: View {
             Text(confirmation.risk)
                 .font(.wega(.callout, weight: .semibold))
                 .foregroundStyle(finding.risk == .high ? Color.wegaDanger : Color.secondary)
+            if let effect = confirmation.effect {
+                Text(effect)
+                    .font(.wega(.callout))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if !confirmation.processes.isEmpty {
                 field(tr("Używane podczas skanu przez")) { CleanupProcessLines(lines: confirmation.processes) }
             }
@@ -114,8 +120,7 @@ struct CleanupConfirmationSheet: View {
                     .disabled(state == .working)
                 Button(confirmTitle) { confirm(state) }
                     .buttonStyle(.borderedProminent)
-                    .tint(Color.wegaHoneyFill)
-                    .foregroundStyle(Color.wegaInk)
+                    .tint(Color.wegaDanger)
                     .disabled(!CleanupPresentation.canConfirm(state, phase: store.phase, acknowledged: acknowledged))
             }
         }

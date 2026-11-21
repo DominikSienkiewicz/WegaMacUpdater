@@ -16,7 +16,11 @@ struct UninstallView: View {
     @State private var protections:    [String: UninstallProtection] = [:]
     @State private var selected:       Set<String>       = []
     @State private var search:         String            = ""
+    /// UXP-23 — ⌘F focuses the search field below.
+    @FocusState private var searchFocused: Bool
     @StateObject private var operations = UninstallCoordinator()
+    /// What the uninstall changes is what the inventory lists; it is told once the run ends.
+    @EnvironmentObject private var inventory: InventoryStore
     private let announcer: any AccessibilityAnnouncing = LiveAccessibilityAnnouncer()
     @State private var showDialog:     Bool              = false
     /// UX-01: the exact visible installations named by the confirmation. Execution
@@ -250,6 +254,13 @@ struct UninstallView: View {
                                 // removal selection.
                                 .contextMenu { rowContextMenu(for: app, isSelected: isSelected, canToggle: protection == nil) }
 
+                                if protection == .wegaItself {
+                                    Link(tr("Jak usunąć Wegę i jej pomocnika"), destination: AppEndpoints.shared.uninstallGuideURL)
+                                        .font(.wega(.callout))
+                                        .padding(.leading, 54)
+                                        .padding(.bottom, 8)
+                                }
+
                                 Divider().opacity(0.4).padding(.leading, 54)
                             }
                         }
@@ -261,6 +272,8 @@ struct UninstallView: View {
         }
         // UX-11c — native `.searchable` in place of the header's hand-built search field.
         .searchable(text: $search, prompt: tr("Szukaj…"))
+        .searchFocused($searchFocused)
+        .receivesSearchFocusRequests(on: .uninstall) { searchFocused = true }
         .sheet(isPresented: $showDialog) {
             UninstallDialog(
                 targets:     pendingUninstallTargets,
@@ -300,7 +313,7 @@ struct UninstallView: View {
         case .openAppManagementSettings:
             NSWorkspace.shared.open(AppManagementSettings.paneURL)
         case .openHelperSettings:
-            openSettings()
+            SettingsRoute.shared.open(.helper, with: openSettings)
         }
     }
 
@@ -495,6 +508,7 @@ struct UninstallView: View {
             skipped: skipped,
             using: model.brewService
         )
+        inventory.markStale()
         let succeeded = Set(targets.map(\.id).filter { outcome.results[$0]?.isRemoved == true })
         selected.subtract(succeeded)
         await scan()
@@ -606,7 +620,7 @@ struct UninstallDialog: View {
     static func routeNote(for route: UninstallRouteDecision?) -> String? {
         switch route {
         case .userTrash: tr("trafi do Kosza")
-        case .helper: tr("pomocnik Wega usunie ją bez hasła")
+        case .helper: tr("pomocnik Wegi usunie ją bez hasła")
         case .blocked(let block): UninstallResultPresentation.blockReason(block)
         case nil: nil
         }

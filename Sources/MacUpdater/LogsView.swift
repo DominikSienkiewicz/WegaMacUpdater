@@ -32,6 +32,8 @@ struct LogsView: View {
     @State private var confirmingClear = false
     @State private var selection: Set<LogEntry.ID> = []
     @State private var reportController: BugReportController?
+    /// UXP-23 — ⌘F focuses the search field below.
+    @FocusState private var searchFocused: Bool
     // OBS-02 — "Kopiuj" hands over the 2000 lines currently on screen. The export hands over
     // both log files plus the environment they were produced in, redacted.
     @StateObject private var diagnosticsExport = DiagnosticsExportController()
@@ -62,6 +64,8 @@ struct LogsView: View {
         }
         // UX-11c — native `.searchable` in place of the toolbar's hand-built search field.
         .searchable(text: $search, prompt: tr("Szukaj w logach…"))
+        .searchFocused($searchFocused)
+        .receivesSearchFocusRequests(on: .logs) { searchFocused = true }
         .onAppear {
             filter = initialFilter
             onWegaState?(WegaState(pose: .sniff, line: tr("Zaglądam do notatek…")))

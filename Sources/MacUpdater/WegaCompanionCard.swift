@@ -11,10 +11,10 @@ struct WegaCompanionPresentation: Equatable {
     let line: String
     let freshness: String
 
-    init(state: WegaState, quip: String?, lastCheck: Date?) {
+    init(state: WegaState, quip: String?, lastCheck: Date?, now: Date = .now) {
         line = quip ?? state.line
         if let lastCheck {
-            freshness = trf("Sprawdzono %@", "\(lastCheck.formatted(date: .omitted, time: .shortened))")
+            freshness = CheckedAtCopy.checked(at: lastCheck, now: now)
         } else {
             freshness = tr("Jeszcze nie sprawdzano")
         }
@@ -171,10 +171,12 @@ struct WegaCompanionCard: View {
     var attentionHeld = false
 
     @ObservedObject private var agent = MenuBarAgent.shared
+    /// UXP-17 — „Sprawdzono wczoraj, …” after midnight without waiting for another check.
+    @ObservedObject private var clock = DayClock.shared
 
     var body: some View {
         WegaCompanionCardContent(
-            presentation: WegaCompanionPresentation(state: state, quip: quip, lastCheck: lastCheck),
+            presentation: WegaCompanionPresentation(state: state, quip: quip, lastCheck: lastCheck, now: clock.now),
             asksForNotifications: agent.needsNotificationExplanation,
             onDecline: { agent.declineNotifications() },
             onAgree: { Task { await agent.agreeToNotifications() } },

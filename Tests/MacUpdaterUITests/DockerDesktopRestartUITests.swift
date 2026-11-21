@@ -19,6 +19,7 @@ final class DockerDesktopRestartUITests: XCTestCase {
         XCTAssertEqual(store.restartCandidates, [info])
         XCTAssertEqual(store.restartDockerBundleURLs[info.processName], bundleURL)
         XCTAssertEqual(store.banner?.variant, .danger)
+        XCTAssertEqual(store.banner?.action, .openLogs, "an unconfirmed engine says where to look next")
         XCTAssertTrue(store.banner?.message.contains("engine unavailable") == true)
         XCTAssertNil(store.restartBusy)
     }
@@ -36,6 +37,7 @@ final class DockerDesktopRestartUITests: XCTestCase {
         XCTAssertNil(store.restartDiagnosticOperationIDs[info.processName])
         XCTAssertEqual(store.banner?.variant, .success)
         XCTAssertEqual(store.banner?.title, tr("Silnik Docker gotowy"))
+        XCTAssertNil(store.banner?.action)
         XCTAssertNil(store.restartBusy)
     }
 
@@ -49,6 +51,7 @@ final class DockerDesktopRestartUITests: XCTestCase {
         XCTAssertTrue(calls.urls.isEmpty)
         XCTAssertEqual(store.restartCandidates, [info])
         XCTAssertEqual(store.banner?.variant, .danger)
+        XCTAssertEqual(store.banner?.action, .openLogs)
         XCTAssertNil(store.restartBusy)
     }
 

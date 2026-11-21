@@ -41,7 +41,7 @@ struct LocalizationCompletenessTests {
         "%@ resztek do Kosza", "Pominięto %@ aplikacji — powody poniżej.",
         "Nie udało się przenieść %@ resztek do Kosza.", "%@ aplikacji", "odinstalowanie %@ aplikacji",
         "Odinstalować %@ aplikacji?", "%@ aplikacji nie jest zarządzanych przez Homebrew — trafią do Kosza.",
-        "Obchód skończony — %@ aplikacji pod opieką.", "Zwęszyłam %@ aplikacji do przepięcia.",
+        "Obchód skończony — %@ aplikacji pod opieką.", "Zwęszyłam %@ aplikacji do przeniesienia do Homebrew.",
         "Zeskanowano /Applications · znalazłam %@ aplikacji poza zarządzaniem",
         "Znalazłam %@ rzeczy do uporządkowania.", "Znalazłam %@ aktualizacji", "%@ źródeł nie odpowiedziało",
         "Pominięto %@ najstarszych wpisów",
@@ -79,6 +79,92 @@ struct LocalizationCompletenessTests {
         let elsewhere = others.reduce(into: Set<String>()) { $0.formUnion($1.keys) }
         let repeated = Set(Translations.uxReviewNext.keys).intersection(elsewhere).sorted()
         #expect(repeated.isEmpty, "M9: Translations+UXReviewNext.swift repeats \(repeated)")
+    }
+
+    /// M9 — this round's section repeats no key of any other section.
+    @Test func theRestUXReviewSectionRepeatsNoKeyOfAnotherSection() {
+        let others = Self.sectionsBeforeUXReview + [Translations.uxReview, Translations.uxReviewNext]
+        let elsewhere = others.reduce(into: Set<String>()) { $0.formUnion($1.keys) }
+        let repeated = Set(Translations.uxReviewRest.keys).intersection(elsewhere).sorted()
+        #expect(repeated.isEmpty, "M9: Translations+UXReviewRest.swift repeats \(repeated)")
+    }
+
+    /// UXP-24 — one name per concept. These keys were replaced; nothing may use or translate them.
+    static let retiredKeys: Set<String> = [
+        "Komponent uprzywilejowany",
+        "Zainstaluj komponent",
+        "Usuń komponent",
+        "Komponent uprzywilejowany gotowy.",
+        "Potwierdź usunięcie komponentu uprzywilejowanego",
+        "wymaga pomocnika Wega — włącz go w ustawieniach.",
+        "pomocnik Wega usunie ją bez hasła",
+        "pomocnik Wega jest nieaktualny lub nie odpowiada — w ustawieniach usuń go i zainstaluj ponownie.",
+        "%@ do Kosza przez pomocnika Wega",
+        "Pomocnik Wega nie potwierdził usunięcia — aplikacja mogła już opuścić /Applications. Odświeżona lista pokazuje, czy nadal tam jest.",
+        "Do przepięcia",
+        "Zwęszyłam %@ aplikacji do przepięcia.",
+        "Przepnij pod Brew",
+        "Przepnij",
+        "Przepnij %@ do Homebrew",
+        "Homebrew Casks",
+        "Homebrew Formulae",
+        "Homebrew (cask)",
+        "Homebrew (formuła)",
+        "Odepnij nieużywane tapy",
+        "Odpięto nieużywane tapy",
+        "Homebrew pomija pakiety z niezaufanych tapów",
+        "Nie udało się zmienić tapów",
+        "Bramka zasobów",
+        "Ignorowane i przypięte",
+        "Ukryte przez politykę",
+        "Brak reguł. Kliknij aktualizację prawym przyciskiem, aby ją zignorować lub przypiąć wersję.",
+        "Przywróciłam %@ do wersji %@. Nie będę proponować nowszych, dopóki tego nie zmienisz w Ustawieniach → Ignorowane i przypięte.",
+        "Rollback się nie powiódł",
+        "Nie udało się utworzyć snapshotu dla: %@.",
+        "Nie udało się utworzyć wymaganego snapshotu.",
+        "Wega sprawdza miejsce, łącze, baterię i temperaturę przed snapshotem i pobraniem.",
+        "Kontrola Gatekeepera i wydawcy mówi, czym plik jest — nie mówi, czy da się go uruchomić. Po tych kontrolach Wega startuje zaktualizowaną aplikację ukrytą, w tle, i sprawdza, czy przeżyje pięć sekund. Jeśli padnie od razu, poprzednia wersja wraca ze snapshotu.",
+        "Przed każdą aktualizacją Wega ponownie sprawdza, czy aplikacja nie działa, nie jest zignorowana lub przypięta oraz czy można utworzyć snapshot.",
+        "Status każdego pakietu uwzględnia bieżącą aktualizację, reguły i uruchomioną aplikację. Snapshot, zasoby i bezpieczeństwo wydawcy są sprawdzane dopiero bezpośrednio przed aktualizacją.",
+        "Nie można rozpoznać zainstalowanej aplikacji .app wymaganej do snapshotu i kontroli wyniku.",
+        "Cask nie instaluje aplikacji .app, więc nie można utworzyć snapshotu ani sprawdzić wyniku.",
+        "Wydawca (Team ID)",
+        "Wydawca się zmienił:",
+        "pierwsze sprawdzenie wydawcy",
+        "wydawca bez zmian",
+        "Zmiana wydawcy",
+        "Zaufaj nowemu wydawcy",
+        "Zaufano nowemu wydawcy",
+        "Wydawca już zaufany",
+        "Zaufać nowemu wydawcy %@?",
+        "Zobacz u wydawcy",
+        "%@: Team ID już różnił się od zaufanego baseline (%@ → %@). Aktualizację zablokowano przed uruchomieniem.",
+        "Bez automatycznego cofnięcia — poprzednią wersję pobierzesz od wydawcy.",
+    ]
+
+    /// Fragments of the retired families. Every key that carried one was replaced.
+    static let retiredFragments = [
+        "omponent uprzywilejowan", "Przepnij", "przepięcia", "Homebrew Casks", "Homebrew Formulae",
+        "Homebrew (cask)", "Homebrew (formuła)", "Bramka zasobów", "Ignorowane i przypięte",
+        "napshot", "pomocnik Wega ", "pomocnika Wega", "Pomocnik Wega ",
+    ]
+
+    @Test func theGlossaryRetiredEveryVariant() throws {
+        let used = try usedKeys(functions: ["tr", "trf", "trp"])
+        #expect(used.isDisjoint(with: Self.retiredKeys), "\(used.intersection(Self.retiredKeys).sorted())")
+        #expect(Set(Translations.en.keys).isDisjoint(with: Self.retiredKeys))
+        for fragment in Self.retiredFragments {
+            #expect(!used.contains { $0.contains(fragment) }, "\(fragment)")
+        }
+        let english = Translations.en.values.joined(separator: "\n")
+        for variant in ["rivileged component", "Reattach", "Adopt ", "Resource gate", "Ignored & pinned", "Hidden by policy",
+                        "Untap", "Homebrew Casks", "Homebrew Formulae", "napshot", "Wega's helper", "new publisher",
+                        "Publisher (Team ID)"] {
+            #expect(!english.contains(variant), "\(variant)")
+        }
+        #expect(Translations.en["Pomocnik Wegi"] == "Wega helper")
+        #expect(Translations.en["Wstrzymane aktualizacje"] == "Paused updates")
+        #expect(Translations.en["Do Homebrew"] == "To Homebrew")
     }
 
     private func packageRoot(file: String = #filePath) -> URL {

@@ -285,7 +285,7 @@ public enum UpdateOperationRecoveryPlan {
     /// nothing further to check. `brew install --cask --force` is asked for two different
     /// reasons, and only one of them expects the version to move:
     ///
-    /// - a **takeover** ("Przepnij pod Brew") adopts an app that is already the version the
+    /// - a **takeover** ("Przenieś do Homebrew") adopts an app that is already the version the
     ///   cask ships, so an unchanged bundle is the successful outcome;
     /// - an **update** ("Aktualizuj przez Brew") runs against a cask offering something newer,
     ///   so an unchanged bundle is the same no-op an upgrade would have caught.

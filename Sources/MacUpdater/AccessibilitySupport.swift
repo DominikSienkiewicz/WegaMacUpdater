@@ -158,3 +158,90 @@ enum UninstallDialogKeyboardBehavior {
         }
     }
 }
+
+/// Which way an arrow key moves focus within a group of update rows.
+enum RowMoveDirection { case up, down }
+
+/// UXP-21 — what VoiceOver says for an update row: one sentence in the row's reading order,
+/// instead of a string of separate texts, a checkbox and a menu to step through.
+enum PackageRowAccessibility {
+    /// The parts the row shows, joined by ", ": the name, the token line when it adds something to
+    /// the name, the versions in their short form, the source, the rollback verdict (or the shield
+    /// of a source that keeps no previous version, `rollbackUnavailable`) and the queue.
+    static func label(name: String, token: String? = nil, from: String?, to: String?, source: String? = nil,
+                      rollback: RollbackProtection.Verdict? = nil, rollbackUnavailable: Bool = false,
+                      isQueued: Bool) -> String {
+        var parts = [name]
+        if let token, spoken(token) != spoken(name) { parts.append(token) }
+        if let from, let to {
+            let shown = VersionDisplay.pair(from: from, to: to)
+            parts.append(trf("aktualizacja %@ do %@", shown.from, shown.to))
+        }
+        if let source { parts.append(source) }
+        switch rollback {
+        case .protected:   parts.append(tr("z automatycznym cofnięciem"))
+        case .unprotected: parts.append(tr("bez automatycznego cofnięcia"))
+        case nil:          if rollbackUnavailable { parts.append(tr("bez automatycznego cofnięcia")) }
+        }
+        parts.append(isQueued ? tr("w kolejce") : tr("poza kolejką"))
+        return parts.joined(separator: ", ")
+    }
+
+    /// What Space does to this row right now, and what Return does.
+    static func hint(isQueued: Bool) -> String {
+        isQueued ? tr("Spacja usuwa z kolejki, Return pokazuje szczegóły.") : tr("Spacja dodaje do kolejki, Return pokazuje szczegóły.")
+    }
+
+    /// "Google Chrome" and "google-chrome" read the same; "firefox@beta" does not read as "Firefox".
+    private static func spoken(_ text: String) -> String {
+        text.lowercased().filter { !" -_".contains($0) }
+    }
+}
+
+/// UXP-21 — roving focus inside one group of update rows: Tab reaches the group once, and the
+/// arrows move between its rows without leaving it.
+enum UpdateRowFocus {
+    /// One Tab stop per group: the row focus is on or last left, or the group's first row when
+    /// there is none or that row has left the list. None at all while another destination covers
+    /// the Updates screen (`updatesOnScreen`).
+    static func isTabStop(_ key: String, in keys: [String], focused: String?, onScreen: Bool) -> Bool {
+        guard onScreen else { return false }
+        let stop = focused.flatMap { keys.contains($0) ? $0 : nil } ?? keys.first
+        return key == stop
+    }
+
+    /// The neighbour inside the group; nil at its edge, so the key press falls through.
+    static func neighbour(of key: String, in keys: [String], direction: RowMoveDirection) -> String? {
+        guard let index = keys.firstIndex(of: key) else { return nil }
+        let next = direction == .down ? keys.index(after: index) : index - 1
+        return keys.indices.contains(next) ? keys[next] : nil
+    }
+}
+
+private struct UpdatesOnScreenKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    /// Final review M6 — false while another destination covers the Updates screen, which stays
+    /// mounted underneath it. Its rows are then no Tab stops and its controls are disabled, so
+    /// Tab and Space cannot reach a row nobody can see.
+    var updatesOnScreen: Bool {
+        get { self[UpdatesOnScreenKey.self] }
+        set { self[UpdatesOnScreenKey.self] = newValue }
+    }
+}
+
+/// UXP-21 — the sidebar's badges say in words what their colour says: a warning sign on a red
+/// badge, and the Updates row names its count and the possible security fixes in it.
+enum SidebarBadgeCopy {
+    static func text(count: Int, isDanger: Bool) -> String {
+        isDanger ? "\u{26A0}\u{FE0E} \(count)" : "\(count)"
+    }
+
+    static func updatesLabel(count: Int, security: Int) -> String {
+        guard count > 0 else { return tr("Aktualizacje") }
+        guard security > 0 else { return trf("Aktualizacje: %@", "\(count)") }
+        return trf("Aktualizacje: %@, w tym %@ z możliwą poprawką bezpieczeństwa", "\(count)", "\(security)")
+    }
+}

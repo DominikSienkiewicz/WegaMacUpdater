@@ -13,7 +13,9 @@ enum InspectedUpdate: Equatable {
 @MainActor
 enum UpdateFilterInteraction {
     static func apply(_ filter: UpdateFilter, to scan: ScanStore) {
-        scan.inspectedKey = nil
+        // Every row is listed under "all", so its inspection stays: a menu-bar row (UXP-17)
+        // sets it before the window it opens re-applies the filter.
+        if filter != .all { scan.inspectedKey = nil }
         scan.restrictSelection(to: filter)
     }
 }
@@ -48,6 +50,8 @@ struct UpdateView: View {
     /// Scan results and the tasks that produce them live above the language re-key,
     /// so switching language mid-scan neither loses the list nor orphans the task.
     @EnvironmentObject private var scan: ScanStore
+    /// False while another destination covers this screen; see `EnvironmentValues.updatesOnScreen`.
+    @Environment(\.updatesOnScreen) private var onScreen
 
     /// Purely transient: a modal that no background task writes to, so it may die
     /// with the view tree.
@@ -90,6 +94,7 @@ struct UpdateView: View {
 
     var body: some View {
         content
+            .disabled(!onScreen)
             .sheet(item: $pinTarget) { req in
                 PinVersionSheet(request: req) { version in
                     policies.pin(key: req.key, name: req.name, version: version)
@@ -111,7 +116,7 @@ struct UpdateView: View {
                 }
                 Button(tr("Anuluj"), role: .cancel) { pendingUpdateTargets = [] }
             } message: {
-                Text(pendingUpdateTargets.map(updateTargetDescription).joined(separator: "\n"))
+                Text(updateTargetLines(pendingUpdateTargets))
             }
             .onChange(of: showUpdateConfirmation) { _, isPresented in
                 if !isPresented { pendingUpdateTargets = [] }
@@ -169,12 +174,23 @@ struct UpdateView: View {
             // scan hooks regardless of which destination is on screen; the menu itself gates
             // ⌘⏎ to the Updates destination.
             .focusedSceneValue(\.startCheckAction, WegaMenuAction(
-                isEnabled: scan.status != .checking && !scan.isRefreshing && !scan.updating,
+                isEnabled: scan.canStartCheck,
                 run: { scan.startCheck() }
             ))
             .focusedSceneValue(\.runUpdateAction, WegaMenuAction(
                 isEnabled: scan.status == .results && allowsUpdateRun,
                 run: { requestUpdate() }
+            ))
+            // UXP-23 — ⌘. cancels the store's scan when no update runs; ⇧⌘A asks the select-all
+            // checkbox's gate, and only while the list is the one on screen.
+            .focusedSceneValue(\.cancelScanAction, WegaMenuAction(
+                isEnabled: scan.canCancelScan,
+                run: { scan.cancelScan() }
+            ))
+            .focusedSceneValue(\.selectAllVisibleAction, WegaMenuAction(
+                isEnabled: scan.status == .results && !visibleItems.isEmpty
+                    && ScanSelectionGate.allowsListSelection(isRefreshing: scan.isRefreshing, isUpdating: scan.updating),
+                run: { scan.selectAllVisible(filter: updateFilter) }
             ))
     }
 
@@ -313,7 +329,8 @@ struct UpdateView: View {
             sources:        UpdateBandPresentation.SourceChip.chips(from: scan.sourceReports),
             wegaLine:       wegaLine,
             incompleteNote: scan.lastScanComplete ? nil : tr("sprawdzenie niepełne"),
-            handOffCount:   scan.handOffCount(for: updateFilter)
+            handOffCount:   scan.handOffCount(for: updateFilter),
+            catalogAgeMinutes: scan.catalogAgeMinutes
         )
     }
 
@@ -429,13 +446,7 @@ struct UpdateView: View {
     @ViewBuilder
     private var groupingMenu: some View {
         if scan.scopeCounts.all > 0 {
-            Picker(tr("Grupuj"), selection: $grouping) {
-                ForEach(UpdateGrouping.allCases, id: \.self) { option in
-                    Text(option.title).tag(option)
-                }
-            }
-            .pickerStyle(.menu)
-            .fixedSize()
+            UpdateGroupingMenu(selection: $grouping)
         }
     }
 
@@ -480,6 +491,9 @@ struct UpdateView: View {
                     HiddenByRulesRow(count: hiddenRuleCount) { showsHiddenRules = true }
                         .padding(.bottom, WegaLayout.listGutter)
                 }
+                MissingAppHint(onOpenInventory: { onNavigate?(.inventory) })
+                    .padding(.horizontal, WegaLayout.listGutter)
+                    .padding(.bottom, WegaLayout.listGutter)
             }
         } else if showsRows {
             ScrollView {
@@ -491,6 +505,7 @@ struct UpdateView: View {
                     if hiddenRuleCount > 0 {
                         HiddenByRulesRow(count: hiddenRuleCount) { showsHiddenRules = true }
                     }
+                    MissingAppHint(onOpenInventory: { onNavigate?(.inventory) })
                     if !scan.restartCandidates.isEmpty {
                         RestartSection(
                             candidates: scan.restartCandidates,
@@ -523,6 +538,9 @@ struct UpdateView: View {
                     HiddenByRulesRow(count: hiddenRuleCount) { showsHiddenRules = true }
                         .padding(.bottom, WegaLayout.listGutter)
                 }
+                MissingAppHint(onOpenInventory: { onNavigate?(.inventory) })
+                    .padding(.horizontal, WegaLayout.listGutter)
+                    .padding(.bottom, WegaLayout.listGutter)
             }
         }
     }
@@ -564,7 +582,7 @@ struct UpdateView: View {
                         if scan.probingSizes {
                             HStack(spacing: 6) {
                                 ProgressView().controlSize(.small)
-                                Text(tr("Sprawdzam rozmiary pobrań…")).font(.wega(.subheadline)).foregroundStyle(.tertiary)
+                                Text(tr("Sprawdzam rozmiary pobrań…")).font(.wega(.subheadline)).foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -632,10 +650,18 @@ struct UpdateView: View {
         showUpdateConfirmation = true
     }
 
-    private func updateTargetDescription(_ item: OutdatedItem) -> String {
+    private func updateTargetLines(_ items: [OutdatedItem]) -> String {
+        let casks = items.filter { $0.kind == .cask }
+        let labels = Dictionary(
+            zip(casks.map(\.name), CaskDisplayName.labels(for: casks.map { ($0.name, scan.caskIconPaths[$0.name]) })),
+            uniquingKeysWith: { first, _ in first })
+        return items.map { updateTargetDescription($0, caskLabel: labels[$0.name]) }.joined(separator: "\n")
+    }
+
+    private func updateTargetDescription(_ item: OutdatedItem, caskLabel: String?) -> String {
         switch item.kind {
-        case .formula:  return "\(tr("Homebrew Formulae")): \(item.name)"
-        case .cask:     return "\(tr("Homebrew Casks")): \(item.name)"
+        case .formula:  return "\(tr("Narzędzia Homebrew")): \(item.name)"
+        case .cask:     return "\(tr("Aplikacje Homebrew")): \(caskLabel ?? item.name)"
         case .appStore: return "\(tr("Mac App Store")): \(item.name)"
         case .npm:      return "npm: \(item.name)"
         }
@@ -682,81 +708,6 @@ struct UpdateView: View {
     }
 }
 
-/// One cask in the plan preview (F2): download host, checksum status, rollback coverage,
-/// a possible admin-password prompt, and the download size.
-///
-/// Every field is allowed to say "I don't know". `brew info --json` has no size, so a size
-/// is a HEAD probe away and a CDN may still withhold `Content-Length`; a `pkg`/`installer`/
-/// `preflight` stanza is visible but its contents are not, so the password note says *may*.
-private struct PlanPreviewCaskRow: View {
-    let token: String
-    let download: CaskDownloadInfo?
-    let protection: RollbackProtection.Verdict?
-    let mayNeedPassword: Bool
-    let size: DownloadSizeProbeResult?
-
-    private var host: String {
-        download?.url.flatMap { URL(string: $0)?.host() } ?? tr("nieznany host")
-    }
-
-    private var sizeLabel: String {
-        switch size {
-        case .known(let bytes):
-            return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
-        case .unknown, .failed:
-            return tr("rozmiar nieznany")
-        case nil:
-            return "—"
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(token)
-                    .font(.wega(.subheadline, weight: .medium, monospaced: true))
-                    .frame(width: 150, alignment: .leading)
-                Text(host)
-                    .font(.wega(.footnote))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                Spacer(minLength: 6)
-                if download?.hasChecksum == true {
-                    Label(tr("suma zostanie sprawdzona"), systemImage: "checkmark.seal")
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(.secondary)
-                        .help(tr("suma zostanie sprawdzona"))
-                } else {
-                    Label(tr("źródło nie podaje sumy do sprawdzenia"), systemImage: "exclamationmark.shield")
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(Color.wegaDanger)
-                        .help(tr("źródło nie podaje sumy do sprawdzenia"))
-                }
-                if protection == .protected {
-                    Image(systemName: "shield.lefthalf.filled").foregroundStyle(Color.wegaSuccess)
-                        .help(RollbackScopePresentation.notice(for: RollbackProtection.scope(token: token))?.localizedDescription
-                              ?? tr("Chronione automatycznym cofnięciem"))
-                } else if protection != nil {
-                    Image(systemName: "shield.slash").foregroundStyle(.tertiary)
-                        .help(tr("Bez ochrony cofnięciem"))
-                }
-                if mayNeedPassword {
-                    Image(systemName: "key").foregroundStyle(Color.wegaToffee)
-                        .help(tr("Może poprosić o hasło administratora."))
-                }
-                Text(sizeLabel)
-                    .font(.wega(.footnote, monospaced: true))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 96, alignment: .trailing)
-            }
-            .font(.wega(.subheadline))
-            if protection == .protected {
-                RollbackScopeNotice(scope: RollbackProtection.scope(token: token))
-            }
-        }
-    }
-}
-
 // MARK: - List groupings (UX-18)
 
 extension UpdateView {
@@ -770,7 +721,7 @@ extension UpdateView {
         let npmPkgs  = visibleItems.filter { $0.kind == .npm }
         if !formulae.isEmpty && updateFilter.allowsCli {
             UpdateSection(
-                title: tr("Homebrew Formulae"), subtitle: tr("narzędzia CLI"), tint: .wegaInfo,
+                title: tr("Narzędzia Homebrew"), subtitle: tr("narzędzia CLI"), tint: .wegaInfo,
                 items: formulae,
                 rollbackCaption: Self.rollbackCaption(for: .formula),
                 selected: $scan.selected, inspectedKey: scan.inspectedKey,
@@ -780,7 +731,7 @@ extension UpdateView {
         }
         if !casks.isEmpty && updateFilter.allowsApps {
             UpdateSection(
-                title: tr("Homebrew Casks"), subtitle: tr("aplikacje .app"), tint: .wegaLavender,
+                title: tr("Aplikacje Homebrew"), subtitle: tr("aplikacje .app"), tint: .wegaLavender,
                 items: casks, iconPaths: scan.caskIconPaths, rollbackProtection: scan.caskProtection,
                 selected: $scan.selected, inspectedKey: scan.inspectedKey,
                 onIgnore: scan.ignoreItem, onPin: requestPin, onSkip: scan.skipItem,
@@ -810,7 +761,7 @@ extension UpdateView {
         }
         // Group manual updates by INSTALL ORIGIN (same axis the Inventory
         // window labels), not by update source. A self-updating Homebrew
-        // cask (Postman, ChatGPT…) stays under "Homebrew Casks" so
+        // cask (Postman, ChatGPT…) stays under "Aplikacje Homebrew" so
         // both windows agree it's Brew — only genuinely non-package-manager
         // apps land under "Ręcznie zainstalowane".
         let dockerManual = visibleManual.filter { DockerDesktopUpdatePolicy.isDocker($0) }
@@ -860,7 +811,7 @@ extension UpdateView {
                 items: brewManual,
                 busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
-                title: tr("Homebrew Casks"),
+                title: tr("Aplikacje Homebrew"),
                 tint: .wegaToffee,
                 subtitle: tr("samoaktualizujące się"),
                 caption: tr("Homebrew nie pilnuje wersji tych apek (auto_updates) — robią to same. Wega sprawdza je u źródła."),
@@ -879,7 +830,7 @@ extension UpdateView {
                 onInstall: { token in Task { await scan.installManual(token: token) } },
                 title: tr("Ręcznie zainstalowane"),
                 tint: .wegaToffee,
-                caption: tr("Bez automatycznego cofnięcia — poprzednią wersję pobierzesz od wydawcy."),
+                caption: tr("Bez automatycznego cofnięcia — poprzednią wersję pobierzesz od producenta."),
                 inspectedKey: scan.inspectedKey,
                 onIgnore: scan.ignoreManual,
                 onPin: requestPinManual,

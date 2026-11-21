@@ -145,6 +145,18 @@ struct LiveInventorySnapshotLoader: InventorySnapshotLoading {
     }
 }
 
+/// UXP-30 — how many of the actions that change the installed apps have finished: update runs,
+/// migrations (duplicate removals included), Cleanup removals and background rounds that
+/// installed something. Each count lives on the store that runs the action, and those stores
+/// live in the app rather than in the window, so an action that finishes while the window is
+/// closed still counts. The inventory keeps the counts its last read started from.
+struct InventoryChangeStamp: Equatable, Sendable {
+    var updateRuns = 0
+    var migrations = 0
+    var cleanupRemovals = 0
+    var backgroundInstalls = 0
+}
+
 @MainActor
 final class InventoryStore: ObservableObject {
     @Published private(set) var apps: [ApplicationInfo] = []
@@ -152,29 +164,62 @@ final class InventoryStore: ObservableObject {
     @Published private(set) var isScanning = false
     @Published private(set) var errorMessage: String?
 
-    private let operations: OperationCoordinator
+    /// When the last successful read finished, partial reads included. `nil` until then;
+    /// a cancelled or failed read leaves it alone.
+    @Published private(set) var lastReadAt: Date?
+    /// Set by a change no store counts: an uninstall reports itself through `markStale()`.
+    @Published private var markedStale = false
+    /// The counts the last successful read started from.
+    private var changesAtLastRead = InventoryChangeStamp()
 
-    init(operations: OperationCoordinator = .shared) {
+    private let operations: OperationCoordinator
+    private let now: @MainActor () -> Date
+
+    init(operations: OperationCoordinator = .shared, now: @escaping @MainActor () -> Date = { .now }) {
         self.operations = operations
+        self.now = now
+    }
+
+    /// Whether the list may no longer match the disk: something counted in `changes` finished
+    /// after the last read started, or an uninstall said so.
+    func isStale(given changes: InventoryChangeStamp) -> Bool {
+        markedStale || changes != changesAtLastRead
+    }
+
+    /// True until the first read has landed, and again once the list is stale. The store
+    /// outlives the view, so a second visit with nothing changed reuses the result.
+    func needsRead(given changes: InventoryChangeStamp) -> Bool {
+        (lastReadAt == nil || isStale(given: changes)) && !isScanning
     }
 
     func scan(
         model: AppViewModel,
+        changes: InventoryChangeStamp,
         onWegaState: (@MainActor (WegaState) -> Void)?
     ) async {
         await scan(
             using: LiveInventorySnapshotLoader(model: model),
+            changes: changes,
             onWegaState: onWegaState
         )
     }
 
+    /// An uninstall changed the app set behind the list. The list stays on screen, but it no
+    /// longer claims to be current and the next entry reads again.
+    func markStale() { markedStale = true }
+
     func scan(
         using loader: any InventorySnapshotLoading,
+        changes: InventoryChangeStamp,
         onWegaState: (@MainActor (WegaState) -> Void)?
     ) async {
         guard !isScanning else { return }
         isScanning = true
         errorMessage = nil
+        // A change that lands while this read runs moves the counts past `changes`, or sets the
+        // flag again, and survives it.
+        let wasStale = markedStale
+        markedStale = false
         defer { isScanning = false }
         onWegaState?(WegaState(pose: .sniff, line: tr("Obchód wszystkich kątów…")))
 
@@ -185,13 +230,17 @@ final class InventoryStore: ObservableObject {
             apps = snapshot.apps
             npmGlobals = snapshot.npmGlobals
             errorMessage = snapshot.failures.scanErrorMessage
+            changesAtLastRead = changes
+            lastReadAt = now()
             onWegaState?(WegaState(
                 pose: .happy,
                 line: trp("Obchód skończony — %@ aplikacji pod opieką.", apps.count)
             ))
         } catch is CancellationError {
+            markedStale = markedStale || wasStale
             return
         } catch {
+            markedStale = markedStale || wasStale
             errorMessage = error.localizedDescription
         }
     }

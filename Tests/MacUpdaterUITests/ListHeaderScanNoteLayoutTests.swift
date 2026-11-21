@@ -11,9 +11,9 @@ import XCTest
 /// overlap it, or make the header wider than it is without a scan; and it must not be cut where
 /// the header has room for it.
 ///
-/// At the minimum detail column the header is already wider than its 360 pt without a scan: the
-/// grouping picker alone takes 191.5 pt in Polish (415 of 360 pt in all). That predates the
-/// note, so the note is held to "no wider than idle", not to the column.
+/// UXP-21 — at the minimum detail column the idle header used to be wider than its 360 pt (the
+/// labelled grouping picker alone took 191.5 pt in Polish). `UpdateGroupingMenu` now shortens to
+/// fit, so the idle header is held to the column and the note to "no wider than idle".
 @MainActor
 final class ListHeaderScanNoteLayoutTests: XCTestCase {
     /// The header's width at the minimum detail column (420 pt, as `UpdateBandViewTests`), up to
@@ -46,6 +46,20 @@ final class ListHeaderScanNoteLayoutTests: XCTestCase {
         }
     }
 
+    /// At the 420 pt detail column the idle header used to be 415 of 360 pt wide; no width may
+    /// overflow now, including those where the scope bar turns segmented.
+    func testTheIdleHeaderFitsEveryColumn() {
+        for width in Self.headerWidths {
+            for language in [AppLanguage.pl, .en] {
+                let idle = withLanguage(language) { frames(scanning: false, width: width) }
+                let context = "\(language), \(width) pt"
+                guard let scope = idle["scope"], let slot = idle["slot"] else { return XCTFail("\(context): not measured") }
+                XCTAssertLessThanOrEqual(scope.maxX, slot.minX + 0.5, "\(context): the grouping menu overlaps the scope bar")
+                XCTAssertLessThanOrEqual(slot.maxX, width + 0.5, "\(context): the header is wider than its column")
+            }
+        }
+    }
+
     /// The composition above is `UpdateView.listHeader`'s; this keeps the two the same.
     func testTheMeasuredHeaderIsTheRealOne() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
@@ -54,6 +68,7 @@ final class ListHeaderScanNoteLayoutTests: XCTestCase {
         XCTAssertTrue(header.contains("HStack(spacing: WegaLayout.checkboxSpacing) {"))
         XCTAssertTrue(header.contains("scopeBar\n            Spacer(minLength: 0)\n            groupingControl"))
         XCTAssertTrue(view.contains("ListHeaderGroupingSlot(showsScanNote: ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows))"))
+        XCTAssertTrue(view.contains("UpdateGroupingMenu(selection: $grouping)"))
     }
 
     // MARK: - Helpers
@@ -65,13 +80,7 @@ final class ListHeaderScanNoteLayoutTests: XCTestCase {
                 .measured("scope")
             Spacer(minLength: 0)
             ListHeaderGroupingSlot(showsScanNote: scanning) {
-                Picker(tr("Grupuj"), selection: .constant(UpdateGrouping.default)) {
-                    ForEach(UpdateGrouping.allCases, id: \.self) { option in
-                        Text(option.title).tag(option)
-                    }
-                }
-                .pickerStyle(.menu)
-                .fixedSize()
+                UpdateGroupingMenu(selection: .constant(.default))
             }
             .measured("slot")
         }

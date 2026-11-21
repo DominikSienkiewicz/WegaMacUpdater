@@ -103,7 +103,7 @@ struct UninstallResultPresentationTests {
         )
 
         let banner = try #require(report.banner)
-        #expect(banner.message.contains("Helped do Kosza przez pomocnika Wega"))
+        #expect(banner.message.contains("Helped do Kosza przez pomocnika Wegi"))
         #expect(banner.message.contains("Trashed do Kosza"))
         #expect(!banner.message.contains("Trashed do Kosza przez"))
         #expect(report.rows.isEmpty)
@@ -111,7 +111,7 @@ struct UninstallResultPresentationTests {
     }
 
     /// The helper's switch is in Wega's Settings window (`InfoView`'s helper card), so the
-    /// "needs Wega's helper" row's button opens that window.
+    /// "needs Wega's helper" row's button opens that window at that card.
     @Test func helperSettingsActionOpensWegasSettingsWindow() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -122,7 +122,7 @@ struct UninstallResultPresentationTests {
         let branch = view[branchStart.upperBound...].prefix { $0 != "}" }
 
         #expect(view.contains("@Environment(\\.openSettings) private var openSettings"))
-        #expect(branch.contains("openSettings()"))
+        #expect(branch.contains("SettingsRoute.shared.open(.helper, with: openSettings)"))
     }
 
     /// Ruling 19: a stale or silent helper is already on, so "turn it on" would send the user to a
@@ -130,7 +130,7 @@ struct UninstallResultPresentationTests {
     @Test func helperThatMustBeReinstalledSaysSo() {
         let reason = UninstallResultPresentation.blockReason(.helperNeedsReinstall)
 
-        #expect(reason == "pomocnik Wega jest nieaktualny lub nie odpowiada — w ustawieniach usuń go i zainstaluj ponownie.")
+        #expect(reason == "pomocnik Wegi jest nieaktualny lub nie odpowiada — w Ustawieniach usuń go i zainstaluj ponownie.")
         #expect(reason != UninstallResultPresentation.blockReason(.needsHelper))
     }
 

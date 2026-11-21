@@ -204,6 +204,9 @@ final class CleanupPresentationTests: XCTestCase {
             .uninstallApp(name: "Ollama", bundle: URL(filePath: "/Applications/Ollama.app")),
         ], CleanupPresentation.buttonTitle)
         assertTranslated(reasons, CleanupPresentation.reasonText)
+        assertTranslated([
+            .trash([Fixture.home]), .brew(.cleanup("node")), .command("unlink /x"),
+        ] as [CleanupAction], { CleanupPresentation.effectText(for: $0) ?? "" })
         assertTranslated(instructions, CleanupPresentation.instructionText)
         assertTranslated(notes, CleanupPresentation.noteText)
     }
@@ -227,6 +230,26 @@ final class CleanupPresentationTests: XCTestCase {
             XCTAssertEqual(tr("przybliżony"), "przybliżony")
         }
         XCTAssertEqual(withLanguage(.en) { CleanupPresentation.pathHint(Fixture.approximatePath, now: now) }, "approximate")
+    }
+
+    func testTheSheetSaysWhetherTheActionCanBeUndone() {
+        let url = URL(filePath: "/Users/cleanup-test/.nvm/versions/node/v18.0.0")
+        withLanguage(.pl) {
+            XCTAssertEqual(CleanupPresentation.effectText(for: .trash([url])), "Przeniesie do Kosza — możesz przywrócić, dopóki go nie opróżnisz.")
+            XCTAssertEqual(CleanupPresentation.effectText(for: .trashBatch(parent: url, entries: [url])), "Przeniesie do Kosza — możesz przywrócić, dopóki go nie opróżnisz.")
+            XCTAssertEqual(CleanupPresentation.effectText(for: .brew(.uninstallFormula("node"))), "Uruchomi polecenie Homebrew — Wega tego nie cofnie.")
+            XCTAssertEqual(CleanupPresentation.effectText(for: .command("brew untap x/y")), "Tylko kopiuje polecenie; nic teraz nie usuwa.")
+            XCTAssertNil(CleanupPresentation.effectText(for: .none))
+            let trashed = CleanupPresentation.confirmation(for: Fixture.fnmStale, home: Fixture.home)
+            XCTAssertEqual(trashed.effect, "Przeniesie do Kosza — możesz przywrócić, dopóki go nie opróżnisz.")
+            let brewed = CleanupPresentation.confirmation(for: Fixture.ghFormula, home: Fixture.home)
+            XCTAssertEqual(brewed.effect, "Uruchomi polecenie Homebrew — Wega tego nie cofnie.")
+        }
+        withLanguage(.en) {
+            XCTAssertEqual(CleanupPresentation.effectText(for: .trash([url])), "Moves to the Trash — you can restore it until you empty the Trash.")
+            XCTAssertEqual(CleanupPresentation.effectText(for: .brew(.cleanup("node"))), "Runs a Homebrew command — Wega can't undo it.")
+            XCTAssertEqual(CleanupPresentation.effectText(for: .command("x")), "Only copies the command; nothing is removed now.")
+        }
     }
 
     func testConfirmationSpellsTheExactActionPathSizeAndRisk() {

@@ -16,6 +16,9 @@ struct InfoView: View {
     // SEC-08: opcjonalny token GitHub (Keychain).
     @State private var githubTokenInput: String = ""
     @State private var reportController: BugReportController?
+    @ObservedObject private var route = SettingsRoute.shared
+    /// UXP-15 — the last message of each card's action, shown under that card's buttons.
+    @State private var cardHints: [SettingsCard: String] = [:]
 
     private var diagnostics: DiagnosticsResult? { operations.diagnostics }
     private var catalogRefreshing: Bool { operations.catalogRefreshing }
@@ -40,30 +43,15 @@ struct InfoView: View {
 // reachable).
 extension InfoView {
     var body: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                unverifiedOverlayCard
-                appCard
-                languageCard
-                ScanDirectoriesSettingsCard()
-                CleanupProjectRootsSettingsCard()
-                CleanupTCCMapSettingsCard()
-                ResourceGateSettingsCard()
-                LaunchSmokeTestSettingsCard()
-                LaunchAtLoginSettingsCard()
-                NotificationsSettingsCard()
-                BackgroundUpdateConsentSettingsCard()
-                CrashReportingSettingsCard()
-                policiesCard
-                diagnosticsCard
-                catalogCard
-                githubTokenCard
-                touchIDCard
-                privilegedHelperCard
-                licensesCard
-                environmentCard
-            }
-            .padding(16)
+        TabView(selection: $route.tab) {
+            Tab(SettingsTab.general.title, systemImage: SettingsTab.general.systemImage, value: SettingsTab.general) { generalTab }
+            Tab(SettingsTab.checking.title, systemImage: SettingsTab.checking.systemImage, value: SettingsTab.checking) { checkingTab }
+            Tab(SettingsTab.permissions.title, systemImage: SettingsTab.permissions.systemImage, value: SettingsTab.permissions) { permissionsTab }
+            Tab(SettingsTab.cleanup.title, systemImage: SettingsTab.cleanup.systemImage, value: SettingsTab.cleanup) { cleanupTab }
+            Tab(SettingsTab.advanced.title, systemImage: SettingsTab.advanced.systemImage, value: SettingsTab.advanced) { advancedTab }
+        }
+        .onChange(of: helperStatus) { _, status in
+            cardHints[.helper] = InfoOperationsController.helperHint(cardHints[.helper], after: status)
         }
         .onAppear {
             onWegaState?(WegaState(pose: .idle, line: tr("Oto co o sobie wiem.")))
@@ -83,6 +71,74 @@ extension InfoView {
         }
         .sheet(item: $reportController) { controller in
             BugReportSheet(controller: controller) { reportController = nil }
+        }
+    }
+
+    // MARK: - Tabs
+
+    private var generalTab: some View {
+        page(.general) {
+            appCard
+            languageCard
+            LaunchAtLoginSettingsCard()
+            NotificationsSettingsCard()
+        }
+    }
+
+    private var checkingTab: some View {
+        page(.checking) {
+            policiesCard
+            BackgroundUpdateConsentSettingsCard()
+            ScanDirectoriesSettingsCard()
+            ResourceGateSettingsCard()
+        }
+    }
+
+    private var permissionsTab: some View {
+        page(.permissions) {
+            TrustSettingsCard(appManagement: diagnostics?.appManagement, touchIDSupported: touchIDState != .notSupported)
+                .id(SettingsCard.trust)
+            privilegedHelperCard
+            touchIDCard
+        }
+    }
+
+    private var cleanupTab: some View {
+        page(.cleanup) {
+            CleanupProjectRootsSettingsCard()
+            CleanupTCCMapSettingsCard()
+        }
+    }
+
+    private var advancedTab: some View {
+        page(.advanced) {
+            LaunchSmokeTestSettingsCard()
+            CrashReportingSettingsCard()
+            catalogCard
+            githubTokenCard
+            diagnosticsCard
+            environmentCard
+            licensesCard
+        }
+    }
+
+    // MARK: - Page and card hints
+
+    /// One tab's page: the unverified-endpoints warning tops every tab, then the tab's cards.
+    private func page<Content: View>(_ tab: SettingsTab, @ViewBuilder _ content: () -> Content) -> some View {
+        SettingsPage(tab: tab, route: route) {
+            unverifiedOverlayCard
+            content()
+        }
+    }
+
+    /// Sends a card's messages under its buttons, and on to Wega when the hosting window has her.
+    /// Asking for a relay starts a new action on the card, so its previous message goes first.
+    func relay(_ card: SettingsCard) -> @MainActor (WegaState) -> Void {
+        cardHints[card] = nil
+        return { state in
+            cardHints[card] = state.line
+            onWegaState?(state)
         }
     }
 
@@ -111,7 +167,7 @@ extension InfoView {
     private var policiesCard: some View {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
-                WegaCardHeader(icon: "hand.raised", title: tr("Ignorowane i przypięte")) {
+                WegaCardHeader(icon: "hand.raised", title: tr("Wstrzymane aktualizacje")) {
                     if !policies.isEmpty {
                         Text("\(policies.sortedEntries.count)")
                             .font(.wega(.callout, monospaced: true))
@@ -120,7 +176,7 @@ extension InfoView {
                 }
 
                 if policies.isEmpty {
-                    Text(tr("Brak reguł. Kliknij aktualizację prawym przyciskiem, aby ją zignorować lub przypiąć wersję."))
+                    Text(tr("Brak reguł. Na liście aktualizacji otwórz „Więcej działań” przy aplikacji."))
                         .font(.wega(.callout))
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -131,6 +187,7 @@ extension InfoView {
                 }
             }
         }
+        .id(SettingsCard.policies)
     }
 
     // MARK: - Touch ID for sudo
@@ -140,7 +197,7 @@ extension InfoView {
         if touchIDState != .notSupported {
             WegaCard {
                 VStack(alignment: .leading, spacing: 0) {
-                    WegaCardHeader(icon: "touchid", title: tr("Touch ID dla Homebrew")) {
+                    WegaCardHeader(icon: "touchid", title: tr("Touch ID dla poleceń administratora")) {
                         statusBadge
                     }
 
@@ -151,9 +208,9 @@ extension InfoView {
                             .fixedSize(horizontal: false, vertical: true)
 
                         // UX-01: jawne ujawnienie zakresu zmiany.
-                        Text(tr("Działa dla całego sudo w systemie, nie tylko dla Wegi."))
+                        Text(tr("Działa też w Terminalu, nie tylko w Wedze."))
                             .font(.wega(.footnote))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
 
                         if let err = touchIDError {
@@ -172,16 +229,19 @@ extension InfoView {
                                 if enablingTouchID {
                                     ProgressView().controlSize(.small)
                                 } else {
-                                    Label(tr("Włącz Touch ID dla sudo"), systemImage: "touchid")
+                                    Label(tr("Używaj Touch ID zamiast hasła administratora"), systemImage: "touchid")
                                 }
                             }
                             .disabled(enablingTouchID)
                             .controlSize(.small)
                         }
+
+                        SettingsCardHint(text: cardHints[.touchID])
                     }
                     .padding(14)
                 }
             }
+            .id(SettingsCard.touchID)
         }
     }
 
@@ -196,7 +256,7 @@ extension InfoView {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(tr("Podnosi limit GitHub z 60 do 5000 zapytań/h i włącza zwolnienie 304. Trzymany w Keychain."))
+                    Text(tr("Opcjonalny token zmniejsza przerwy przez limity zapytań GitHuba. Jest w pęku kluczy."))
                         .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -235,12 +295,12 @@ extension InfoView {
     private var privilegedHelperCard: some View {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
-                WegaCardHeader(icon: "lock.shield", title: tr("Komponent uprzywilejowany")) {
+                WegaCardHeader(icon: "lock.shield", title: tr("Pomocnik Wegi")) {
                     helperStatusBadge
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(tr("Pozwala instalować zweryfikowane aktualizacje i konfigurować Touch ID bez wpisywania hasła — przez podpisany helper (XPC) z białą listą operacji."))
+                    Text(tr("Pomocnik Wegi działa jako root i umie tylko cztery rzeczy: zainstalować zweryfikowany pakiet Wegi, włączyć Touch ID dla sudo, przywrócić kopię aplikacji sprzed aktualizacji, przenieść do Kosza aplikację należącą do roota. Przy każdym połączeniu sprawdza podpis Wegi. Jest opcjonalny."))
                         .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -253,10 +313,12 @@ extension InfoView {
                     }
 
                     helperActions
+                    SettingsCardHint(text: cardHints[.helper])
                 }
                 .padding(14)
             }
         }
+        .id(SettingsCard.helper)
     }
 
     private var helperStatusBadge: some View {
@@ -278,7 +340,7 @@ extension InfoView {
             case .enabled:
                 Button(role: .destructive) {
                     Task { await removeHelper() }
-                } label: { Label(tr("Usuń komponent"), systemImage: "trash") }
+                } label: { Label(tr("Usuń pomocnika"), systemImage: "trash") }
                     .controlSize(.small)
                     .disabled(helperBusy)
             case .requiresApproval:
@@ -286,14 +348,17 @@ extension InfoView {
                     operations.openLoginItemsSettings()
                 } label: { Label(tr("Otwórz Ustawienia → Elementy logowania"), systemImage: "gearshape") }
                     .controlSize(.small)
-                Button(tr("Sprawdź ponownie")) { operations.refreshHelperStatus() }
-                    .controlSize(.small)
+                Button(tr("Sprawdź ponownie")) {
+                    cardHints[.helper] = nil
+                    operations.refreshHelperStatus()
+                }
+                .controlSize(.small)
             default:
                 Button {
                     Task { await installHelper() }
                 } label: {
                     if helperBusy { ProgressView().controlSize(.small) }
-                    else { Label(tr("Zainstaluj komponent"), systemImage: "lock.shield") }
+                    else { Label(tr("Zainstaluj pomocnika"), systemImage: "lock.shield") }
                 }
                 .controlSize(.small)
                 .disabled(helperBusy)
@@ -303,12 +368,11 @@ extension InfoView {
     }
 
     private func installHelper() async {
-        await operations.installHelper { state in
-            onWegaState?(state)
-        }
+        await operations.installHelper(onWegaState: relay(.helper))
     }
 
     private func removeHelper() async {
+        cardHints[.helper] = nil
         await operations.removeHelper()
     }
 
@@ -328,9 +392,9 @@ extension InfoView {
     private var touchIDDescription: String {
         switch touchIDState {
         case .enabled:
-            return tr("Sudo używa Touch ID. Aktualizacje casków z sudo (Zoom, sterowniki, launchd) potwierdzisz odciskiem zamiast hasła.")
+            return tr("Polecenia administratora potwierdzasz odciskiem palca zamiast hasła — także aktualizacje casków, które o nie proszą.")
         case .available:
-            return tr("Po włączeniu, brew nie zapyta o hasło w okienku — pojawi się natywny sheet Touch ID. Wymaga jednorazowo uprawnień administratora do zapisu /etc/pam.d/sudo_local.")
+            return tr("Po włączeniu Homebrew poprosi o odcisk palca zamiast hasła. Włączenie raz wymaga uprawnień administratora.")
         case .notSupported:
             return ""
         }
@@ -376,6 +440,7 @@ extension InfoView {
                 Spacer()
 
                 Button(tr("Sprawdź ponownie")) {
+                    cardHints[.touchID] = nil
                     touchIDController.refresh()
                 }
                 .controlSize(.small)
@@ -408,7 +473,7 @@ extension InfoView {
                 Spacer()
                 Button(tr("Sprawdź stan instalacji")) {
                     Task {
-                        await selfUpdateController.reconcileInstallation { state in onWegaState?(state) }
+                        await selfUpdateController.reconcileInstallation(onWegaState: relay(.selfUpdate))
                     }
                 }
                 .disabled(selfUpdateController.isReconcilingInstallation)
@@ -511,15 +576,11 @@ extension InfoView {
     /// `.pkg`, DiskImageMounter for `.dmg`). On any failure, fall back to opening the asset
     /// URL in the browser so the user can still grab it.
     private func applySelfUpdate(_ action: SelfUpdateAction, version: String) async {
-        await selfUpdateController.apply(action, version: version) { state in
-            onWegaState?(state)
-        }
+        await selfUpdateController.apply(action, version: version, onWegaState: relay(.selfUpdate))
     }
 
     private func enableTouchID() async {
-        await touchIDController.enable { state in
-            onWegaState?(state)
-        }
+        await touchIDController.enable(onWegaState: relay(.touchID))
     }
 
     // MARK: - Unverified endpoints overlay (SEC-08)
@@ -573,6 +634,10 @@ extension InfoView {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
 
+                SettingsCardHint(text: cardHints[.selfUpdate])
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 10)
+
                 selfUpdateNotes
                     .padding(.horizontal, 14)
                     .padding(.bottom, 10)
@@ -610,6 +675,7 @@ extension InfoView {
                 .padding(.vertical, 10)
             }
         }
+        .id(SettingsCard.selfUpdate)
     }
 
     // MARK: - Diagnostics card
@@ -624,21 +690,6 @@ extension InfoView {
                         DiagRow(label: "Homebrew", required: true, value: d.brewVersion)
                         Divider().opacity(0.3).padding(.leading, 30)
                         DiagRow(label: "mas-cli", required: false, value: d.masVersion)
-                        Divider().opacity(0.3).padding(.leading, 30)
-                        // REL-05 — the preflight, so a missing "App Management" grant is
-                        // visible before the first upgrade rather than after it fails.
-                        DiagRow(label: tr("Zarządzanie aplikacjami"),
-                                required: true,
-                                value: Self.appManagementStatusText(d.appManagement),
-                                healthy: d.appManagement != .denied)
-                        if d.appManagement == .denied {
-                            Button(tr("Otwórz ustawienia prywatności")) {
-                                NSWorkspace.shared.open(AppManagementSettings.paneURL)
-                            }
-                            .buttonStyle(.link)
-                            .font(.wega(.subheadline))
-                            .padding(.top, 4)
-                        }
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
@@ -813,14 +864,6 @@ extension InfoView {
 
     /// REL-05 — the preflight is *indicative*: `unknown` says so instead of implying a
     /// clean bill of health nobody checked.
-    private static func appManagementStatusText(_ permission: AppManagementPermission) -> String {
-        switch permission {
-        case .granted: return tr("przyznane")
-        case .denied:  return tr("odmowa")
-        case .unknown: return tr("nieustalone")
-        }
-    }
-
     private static func cpuArch() -> String {
         var info = utsname()
         guard uname(&info) == 0 else { return "unknown" }
@@ -832,107 +875,5 @@ extension InfoView {
 
     private func loadDiagnostics() async {
         await operations.loadDiagnostics()
-    }
-}
-
-// MARK: - Sub-views
-
-private struct LabeledValue: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(label)
-                .font(.wega(.footnote, weight: .semibold))
-                .foregroundStyle(.tertiary)
-                .textCase(.uppercase)
-                .tracking(0.5)
-            Text(value)
-                .font(.wega(.callout, monospaced: true))
-        }
-    }
-}
-
-private struct DiagRow: View {
-    let label: String
-    var required: Bool = false
-    var value: String? = nil
-    var active: Bool? = nil
-    /// Overrides the dot's colour for rows whose *value* carries the verdict — a present
-    /// value normally means "found", but "odmowa" is a present value that is not healthy.
-    var healthy: Bool? = nil
-
-    private var statusColor: Color {
-        if let healthy { return healthy ? .wegaSuccess : Color.wegaDanger }
-        if value != nil { return .wegaSuccess }
-        if active == true { return .wegaSuccess }
-        if required { return Color.wegaDanger }
-        return .secondary
-    }
-
-    private var statusText: String {
-        if let v = value { return v }
-        if let a = active { return a ? tr("aktywny") : tr("nieaktywny") }
-        return required ? tr("nie znaleziono") : tr("niedostępny")
-    }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Circle().fill(statusColor).frame(width: 8, height: 8)
-            Text(label).font(.wega(.callout))
-            Spacer()
-            Text(statusText)
-                .font(.wega(.subheadline, monospaced: true))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 5)
-    }
-}
-
-private struct LicenseRow: View {
-    let name: String
-    let license: String
-    let url: URL
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(name).font(.wega(.callout, weight: .medium))
-            Text(license)
-                .font(.wega(.subheadline))
-                .foregroundStyle(.secondary)
-            Spacer()
-            Link("↗", destination: url)
-                .font(.wega(.callout))
-        }
-        .padding(.vertical, 5)
-    }
-}
-
-/// Notatki jednego wydania, domyślnie zwinięte.
-///
-/// Wydzielone z `InfoView.selfUpdateNotes`, bo `WegaDisclosure` potrzebuje bindingu,
-/// a `ForEach` nie może trzymać `@State` dla każdego elementu z osobna.
-private struct SelfUpdateNoteDisclosure: View {
-    let note: ReleaseNote
-
-    @State private var isExpanded = false
-
-    var body: some View {
-        WegaDisclosure(isExpanded: $isExpanded) {
-            Text(note.body.isEmpty ? tr("Brak opublikowanych notatek") : note.body)
-                .font(.wega(.subheadline))
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-        } label: {
-            HStack(spacing: 6) {
-                Text(note.version).font(.wega(.callout, weight: .medium))
-                if let published = note.publishedAt {
-                    Text(published, style: .date)
-                        .font(.wega(.subheadline))
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
     }
 }

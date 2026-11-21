@@ -1,5 +1,27 @@
 import Foundation
 
+/// UXP-17 — one update the menu-bar dropdown names, and where a click on it leads.
+///
+/// `key` is what the window's inspector reads (`ScanStore.inspectedKey`): a package item's
+/// source-tagged key, or `"m:"` and the path for a manually checked app. The possible-security
+/// flag follows the window's badge: it is read from a manual app's release notes, the only
+/// notes the window weighs for it.
+public struct MenuBarOutdatedEntry: Equatable, Sendable {
+    public let key: String
+    public let name: String
+    public let from: String?
+    public let to: String?
+    public let possibleSecurityFix: Bool
+
+    public init(key: String, name: String, from: String?, to: String?, possibleSecurityFix: Bool) {
+        self.key = key
+        self.name = name
+        self.from = from
+        self.to = to
+        self.possibleSecurityFix = possibleSecurityFix
+    }
+}
+
 /// The **full** result of a menu-bar background check: the per-source outdated
 /// lists (`brew`/`mas`/`npm`) and the manual-scan result (`manualApps` + `failedChecks`),
 /// plus the policy-filtered badge `total` and a `scannedAt` timestamp.
@@ -81,19 +103,29 @@ public struct MenuBarScanResult: Equatable, Sendable {
     ) -> [String] {
         let entries = outdatedEntries(policies: policies)
         guard let previous else { return entries.map(\.name) }
-        let known = Set(previous.outdatedEntries(policies: policies).map(\.identity))
-        let fresh = entries.filter { !known.contains($0.identity) }
-        let seen = entries.filter { known.contains($0.identity) }
+        let known = Set(previous.outdatedEntries(policies: policies).map(\.key))
+        let fresh = entries.filter { !known.contains($0.key) }
+        let seen = entries.filter { known.contains($0.key) }
         return (fresh + seen).map(\.name)
     }
 
-    private func outdatedEntries(policies: [String: UpdatePolicy]) -> [(identity: String, name: String)] {
+    /// UXP-17 — the rows of the menu-bar dropdown: the same updates, order and ignore/pin rules
+    /// as `outdatedDisplayNames`, each with the key, versions and possible-security flag a row
+    /// shows and opens.
+    public func outdatedEntries(policies: [String: UpdatePolicy] = [:]) -> [MenuBarOutdatedEntry] {
         let reconciled = UpdatePlanner.reconciledUpdates(
             items: UpdatePlanner.outdatedItems(brew: brew, mas: mas, npm: npm), manual: manualApps
         )
         let items = UpdatePlanner.applyPolicies(reconciled.items, policies: policies)
         let manual = UpdatePlanner.applyPolicies(reconciled.manual, policies: policies)
-        return items.map { ($0.key, $0.name) } + manual.map { ("m:" + $0.path.path, $0.name) }
+        return items.map { item in
+            MenuBarOutdatedEntry(key: item.key, name: item.name, from: item.from, to: item.to, possibleSecurityFix: false)
+        } + manual.map { app in
+            MenuBarOutdatedEntry(
+                key: "m:" + app.path.path, name: app.name, from: app.installedVersion, to: app.availableVersion,
+                possibleSecurityFix: app.releaseNotes.map { ReleaseNotesTriage.heuristic($0.plainText).isLikelySecurityFix } ?? false
+            )
+        }
     }
 
     /// ARCH-08c: the same result with the casks a background round upgraded taken out, and the

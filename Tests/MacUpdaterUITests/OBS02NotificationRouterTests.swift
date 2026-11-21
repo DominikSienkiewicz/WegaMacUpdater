@@ -84,7 +84,7 @@ struct OBS02NotificationRouterTests {
         #expect(activated)
     }
 
-    /// The menu's „Otwórz Wega” had the same unconditional `openWindow`.
+    /// The menu's „Otwórz Wegę” had the same unconditional `openWindow`.
     @Test func theOpenCommandUsesTheSameLookup() throws {
         let router = NotificationRouter(defaults: TestDefaults.isolated("obs02-notification-router-window").0)
         let window = FakeMainWindow()
@@ -98,9 +98,9 @@ struct OBS02NotificationRouterTests {
         #expect(opened == 1)
 
         let menuBar = try read("Sources/MacUpdater/MenuBarScene.swift")
-        let command = try #require(menuBar.range(of: "Button(tr(\"Otwórz Wega\"))"))
+        let command = try #require(menuBar.range(of: "Button(tr(\"Otwórz Wegę\"))"))
         #expect(menuBar[command.upperBound...].prefix(250).contains("NotificationRouter.shared.showMainWindow("),
-                "I1: „Otwórz Wega” goes through the router's lookup")
+                "I1: „Otwórz Wegę” goes through the router's lookup")
         #expect(!menuBar.contains("openWindow(id: \"main\")\n            NSApplication"),
                 "I1: the menu no longer opens a window unconditionally")
     }
@@ -118,11 +118,11 @@ struct OBS02NotificationRouterTests {
         #expect(events == ["activate", "find", "open"])
 
         let menuBar = try read("Sources/MacUpdater/MenuBarScene.swift")
-        let command = try #require(menuBar.range(of: "Button(tr(\"Otwórz Wega\"))"))
+        let command = try #require(menuBar.range(of: "Button(tr(\"Otwórz Wegę\"))"))
         let body = menuBar[command.upperBound...].prefix(250)
         let activate = try #require(body.range(of: "NSApplication.shared.activate("))
         let show = try #require(body.range(of: "NotificationRouter.shared.showMainWindow("))
-        #expect(activate.lowerBound < show.lowerBound, "F2: „Otwórz Wega” activates before it looks for the window")
+        #expect(activate.lowerBound < show.lowerBound, "F2: „Otwórz Wegę” activates before it looks for the window")
     }
 
     /// Only the windows of the main group count, and only while they are on screen or in the

@@ -41,7 +41,7 @@ extension ScanStore {
         guard let model else { return }
         guard dependencies.upgradeMutex.acquire() else {
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja w toku"),
-                                  message: tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.")))
+                                  message: tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę."), action: .openLogs))
             return
         }
         defer { dependencies.upgradeMutex.release() }
@@ -65,8 +65,8 @@ extension ScanStore {
         }
 
         guard runError == nil, exitCode == 0 else {
-            showBanner(BannerData(variant: .danger, title: tr("Nie udało się zmienić tapów"),
-                                  message: tr("Sprawdź logi poniżej.")))
+            showBanner(BannerData(variant: .danger, title: tr("Nie udało się zmienić źródeł Homebrew"),
+                                  message: tr("Sprawdź logi poniżej."), action: .openLogs))
             emitActivitySignal(.error)
             let reason = runError?.localizedDescription ?? "kod \(exitCode)"
             WegaLog.error(.homebrew, "\(remedy.commandLine) nieudane (\(reason))")
@@ -76,7 +76,7 @@ extension ScanStore {
         let title: String
         switch remedy.kind {
         case .untapUnused:
-            title = tr("Odpięto nieużywane tapy")
+            title = tr("Usunięto nieużywane źródła pakietów")
         case .trustInstalledCasks, .trustInstalledFormulae:
             title = tr("Zaufano zainstalowanym pakietom")
         case .trustRequiredCask, .trustRequiredFormula:

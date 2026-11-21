@@ -83,7 +83,7 @@ struct ForcedReinstallNoOpTests {
     }
 
     /// The other half of the same rule, and the reason it cannot simply be switched on for
-    /// every forced reinstall: „Przepnij pod Brew" adopts an app that is *already* the version
+    /// every forced reinstall: „Przenieś do Homebrew" adopts an app that is *already* the version
     /// the cask ships. An unchanged bundle there is the expected outcome of a successful
     /// takeover, not evidence that brew did nothing.
     @Test func aPlainTakeoverIsStillReportedAsTheSuccessItIs() async throws {

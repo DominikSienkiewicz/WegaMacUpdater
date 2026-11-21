@@ -49,7 +49,7 @@ extension ScanStore {
         guard dependencies.upgradeMutex.acquire() else {
             UpdateDiagnostics.record("adoption.skipped", fields: ["token": token, "reason": "upgradeMutexBusy"])
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja w toku"),
-                                  message: tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.")))
+                                  message: tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę."), action: .openLogs))
             return
         }
         defer { dependencies.upgradeMutex.release() }
@@ -68,7 +68,7 @@ extension ScanStore {
                 && $0.caskPolicyToken.map { DockerDesktopMutationGate.isDocker(token: $0) } == true
         }) else {
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
-                                  message: tr("Nie udało się utworzyć wymaganego snapshotu.")))
+                                  message: tr("Nie udało się zrobić kopii zapasowej przed aktualizacją. Sprawdź wolne miejsce na dysku i spróbuj ponownie."), action: .openLogs))
             emitActivitySignal(.error)
             return
         }
@@ -113,7 +113,7 @@ extension ScanStore {
             UpdateDiagnostics.record("adoption.deferred", fields: ["token": token, "reason": "resources", "detail": String(describing: reason)])
             brewLog.append(reason.logLine)
             showBanner(BannerData(variant: .danger, title: tr("Odkładam pobieranie"),
-                                  message: reason.localizedMessage))
+                                  message: reason.localizedMessage, action: .openLogs))
             emitActivitySignal(.error)
             return
         case .publisherRejected(let old, let new):
@@ -121,7 +121,7 @@ extension ScanStore {
             let message = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
                               "\(token)", "\(old)", "\(new ?? "—")")
             brewLog.append("⏸ " + message)
-            showBanner(BannerData(variant: .danger, title: tr("Zmiana wydawcy"), message: message,
+            showBanner(BannerData(variant: .danger, title: tr("Zmienił się podpis producenta"), message: message,
                                   action: .trustPublisher(token: token, teamID: new)))
             emitActivitySignal(.error)
             return
@@ -134,7 +134,7 @@ extension ScanStore {
         case .snapshotFailed:
             UpdateDiagnostics.record("adoption.deferred", fields: ["token": token, "reason": "snapshotFailed"])
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
-                                  message: tr("Nie udało się utworzyć wymaganego snapshotu.")))
+                                  message: tr("Nie udało się zrobić kopii zapasowej przed aktualizacją. Sprawdź wolne miejsce na dysku i spróbuj ponownie."), action: .openLogs))
             emitActivitySignal(.error)
             return
         case .caskInstallsNoApp:
@@ -200,7 +200,7 @@ extension ScanStore {
 
         if let installError {
             // UX-07 — the raw, English error text goes to the log below; the banner shows
-            // a short, translated line and points there via "Zobacz w logach".
+            // a short, translated line and points there via "Pokaż w logach".
             showBanner(BannerData(variant: .danger, title: trf("Nie udało mi się zainstalować %@", "\(token)"),
                                   message: tr("Nie udało się dokończyć instalacji — szczegóły w logu."),
                                   action: .openLogs))
@@ -211,7 +211,7 @@ extension ScanStore {
             reportManualInstallSuccess(token: token, appURL: installedAppURL ?? target.path)
         } else {
             showBanner(BannerData(variant: .danger, title: trf("Nie udało mi się zainstalować %@", "\(token)"),
-                                  message: tr("Sprawdź logi poniżej.")))
+                                  message: tr("Sprawdź logi poniżej."), action: .openLogs))
             emitActivitySignal(.error)
             emitWegaState(WegaState(pose: .idle, line: trf("Nie udało mi się zainstalować %@. Spróbuj jeszcze raz.", "\(token)")))
             let reason = ScanLog.brewErrorReason(from: brewLog).map { ": \($0)" } ?? ""
@@ -235,18 +235,18 @@ extension ScanStore {
             title = tr("Aktualizacja niekompletna")
             message = trf("%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.", "\(token)")
         case .rollbackFailed:
-            title = tr("Rollback się nie powiódł")
+            title = tr("Nie udało się cofnąć aktualizacji")
             message = trf(
                 "%@: nowa wersja nie przeszła kontroli, a przywrócenie poprzedniej nie powiodło się. Sprawdź aplikację przed użyciem.",
                 "\(token)"
             )
         case .publisherChanged(let old, let new):
-            title = tr("Zmiana wydawcy")
+            title = tr("Zmienił się podpis producenta")
             message = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
                           "\(token)", "\(old)", "\(new ?? "—")")
             action = .trustPublisher(token: token, teamID: new)
         case .publisherChangedAndRolledBack(let old, let new):
-            title = tr("Zmiana wydawcy")
+            title = tr("Zmienił się podpis producenta")
             message = trf("%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
                           "\(token)", "\(old)", "\(new ?? "—")")
         case .notUpgraded:

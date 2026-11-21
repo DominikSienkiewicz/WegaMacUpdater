@@ -24,8 +24,14 @@ struct WegaCompanionCardTests {
 
         #expect(WegaCompanionPresentation(state: state, quip: nil, lastCheck: nil).freshness
                 == tr("Jeszcze nie sprawdzano"))
-        #expect(WegaCompanionPresentation(state: state, quip: nil, lastCheck: date).freshness
+        #expect(WegaCompanionPresentation(state: state, quip: nil, lastCheck: date, now: date).freshness
                 == trf("Sprawdzono %@", date.formatted(date: .omitted, time: .shortened)))
+        let nextDay = date.addingTimeInterval(86_400)
+        withLanguage(.pl) {
+            #expect(WegaCompanionPresentation(state: state, quip: nil, lastCheck: date, now: nextDay).freshness
+                    == "Sprawdzono wczoraj, \(date.formatted(date: .omitted, time: .shortened))",
+                    "UXP-17: the card names the day as the menu does")
+        }
     }
 
     /// The quip comments on the result, and a pending security fix wins over the count.

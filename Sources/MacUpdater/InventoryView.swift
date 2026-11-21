@@ -10,23 +10,27 @@ private enum SourceFilter: String, CaseIterable {
 
 struct InventoryView: View {
     var onWegaState: ((WegaState) -> Void)?
+    /// „Sprawdź aktualizacje” takes the user to Updates, where the scan shows and can be stopped.
+    var onNavigate: ((SidebarSelection) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
     @EnvironmentObject private var scanStore: ScanStore
+    @EnvironmentObject private var migration: MigrationStore
+    @EnvironmentObject private var cleanup: CleanupStore
     @ObservedObject private var menuBar = MenuBarAgent.shared
     @ObservedObject private var policies = UpdatePolicyStore.shared
     @State private var needsCheckingOnly = false
-    /// UX-10 — ⌘F ("Znajdź w spisie aplikacji") asks, through here, for the `.searchable`
-    /// field to take focus.
-    @EnvironmentObject private var commandCenter: WegaCommandCenter
 
-    @StateObject private var inventory = InventoryStore()
+    @EnvironmentObject private var inventory: InventoryStore
+    /// The „dziś”/„wczoraj” of „Odczytano …” moves at midnight, after wake and on a clock change.
+    @ObservedObject private var clock = DayClock.shared
     @State private var search:       String            = ""
     @State private var filter:       SourceFilter      = .all
     @State private var sortKey:      InventorySortKey  = .name
     @State private var sortAsc:      Bool              = true
     /// UX-11f — set when a chosen export destination cannot be written; shown as a banner.
     @State private var exportError:  String?           = nil
+    /// ⌘F and ⇧⌘F („Znajdź w spisie aplikacji”) focus the search field below.
     @FocusState private var searchFocused: Bool
 
     private var checksByPath: [InstallationIdentity: InstallationCheck] {
@@ -38,6 +42,17 @@ struct InventoryView: View {
 
     private func presentation(for app: ApplicationInfo, checks: [InstallationIdentity: InstallationCheck], now: Date) -> InventoryCheckPresentation {
         InventoryCheckPresentation(app: app, check: checks[app.installation], policies: policies.policiesMap, now: now)
+    }
+
+    /// What has finished since launch that changes the installed apps. The stores keep counting
+    /// while the window is closed, so the next entry still sees what happened.
+    private var changes: InventoryChangeStamp {
+        InventoryChangeStamp(
+            updateRuns: scanStore.completedRunCount,
+            migrations: migration.completedCount,
+            cleanupRemovals: cleanup.removalCount,
+            backgroundInstalls: menuBar.installedRoundCount
+        )
     }
 
     private var apps: [ApplicationInfo] { inventory.apps }
@@ -129,12 +144,35 @@ struct InventoryView: View {
                 .fixedSize()
                 .disabled(isScanning || (apps.isEmpty && npmGlobals.isEmpty))
                 .help(tr("Zapisz spis aplikacji jako Brewfile lub CSV"))
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
 
+            // The read time and the two scan buttons get a line of their own: beside the filters
+            // they would not fit the 740 pt detail column at the window's minimum width.
+            HStack(spacing: 10) {
+                if let read = inventory.lastReadAt {
+                    let when = CheckedAtCopy.day(read, now: clock.now)
+                    Text(inventory.isStale(given: changes) ? trf("Odczytano %@ — spis mógł się zmienić", when) : trf("Odczytano %@", when))
+                        .font(.wega(.subheadline))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                Spacer(minLength: 8)
                 Button { Task { await scan() } } label: {
-                    Label(tr("Odśwież"), systemImage: "arrow.clockwise")
+                    Label(tr("Odśwież spis"), systemImage: "arrow.clockwise")
                 }
                 .controlSize(.small)
                 .disabled(isScanning)
+                .help(tr("Nie sprawdza nowych wersji"))
+
+                // The only scan button on this screen: the toolbar one is hidden here.
+                Button { scanStore.startCheck(); onNavigate?(.updates(.all)) } label: {
+                    Label(tr("Sprawdź aktualizacje"), systemImage: "arrow.triangle.2.circlepath")
+                }
+                .controlSize(.small)
+                .disabled(!scanStore.canStartCheck)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 10)
@@ -186,6 +224,11 @@ struct InventoryView: View {
                         .padding(.vertical, 12)
                         Spacer()
                     }
+                } else if let empty = InventoryEmptyState.of(
+                    appCount: apps.count, rowCount: rows.count, isScanning: isScanning,
+                    hasError: errorMessage != nil, lastReadAt: inventory.lastReadAt
+                ) {
+                    emptyState(empty)
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
@@ -217,17 +260,29 @@ struct InventoryView: View {
         // `.searchFocused` keeps UX-10's ⌘F able to move focus into it.
         .searchable(text: $search, prompt: tr("Szukaj po nazwie lub bundle ID…"))
         .searchFocused($searchFocused)
-        .task { scanStore.restoreLastScan(); await scan() }
-        // UX-10 — ⌘F pressed while already here fires `.onChange`; pressed from another
-        // destination it navigates here first, so the request is instead consumed on appear.
-        .onAppear { focusSearchIfRequested() }
-        .onChange(of: commandCenter.inventorySearchFocusRequests) { _, _ in focusSearchIfRequested() }
+        // ⇧⌘F pressed from another destination navigates here first, so its request is
+        // consumed on arrival rather than by `.onChange`.
+        .receivesSearchFocusRequests(on: .inventory) { searchFocused = true }
+        .task { scanStore.restoreLastScan(); if inventory.needsRead(given: changes) { await scan() } }
     }
 
-    private func focusSearchIfRequested() {
-        guard commandCenter.consumePendingInventorySearchFocus() else { return }
-        // A field that is only just appearing needs a runloop tick before it accepts focus.
-        Task { @MainActor in searchFocused = true }
+    private func emptyState(_ state: InventoryEmptyState) -> some View {
+        VStack(spacing: 12) {
+            WegaFull(pose: state == .noMatches ? .sniff : .idle, size: 100)
+            Text(state.message)
+                .font(.wega(.body)).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            if state == .noMatches {
+                Button(tr("Wyczyść filtry")) {
+                    filter = .all
+                    search = ""
+                    needsCheckingOnly = false
+                }
+                .controlSize(.small)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
     }
 
     private func setFilter(_ f: SourceFilter) { filter = filter == f ? .all : f }
@@ -271,7 +326,7 @@ struct InventoryView: View {
     }
 
     private func scan() async {
-        await inventory.scan(model: model) { state in
+        await inventory.scan(model: model, changes: changes) { state in
             onWegaState?(state)
         }
     }

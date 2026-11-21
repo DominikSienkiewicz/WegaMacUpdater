@@ -32,7 +32,7 @@ struct ScanBannerHost: View {
         switch action {
         case .openLogs: onNavigate?(.logs)
         case .openSettings:
-            openSettings()
+            SettingsRoute.shared.open(.touchID, with: openSettings)
         case .openAppManagementSettings:
             // REL-05 — straight to the pane that grants the permission,
             // not to Wega's own settings, which cannot grant anything.

@@ -10,12 +10,16 @@ struct WegaMacUpdaterApp: App {
     @StateObject private var localization = LocalizationManager.shared
     @StateObject private var policies = UpdatePolicyStore.shared
     @StateObject private var menuBar = MenuBarAgent.shared
-    /// UX-10 — bus for menu commands that must reach a not-yet-mounted view (⌘F → inventory
-    /// search). Held above the language re-key so a ⌘F pending across a switch is not lost.
+    /// UX-10 — bus for menu commands that must reach a not-yet-mounted view (⌘F and ⇧⌘F → a
+    /// screen's search field). Held above the language re-key so a request pending across a
+    /// switch is not lost.
     @StateObject private var commandCenter = WegaCommandCenter()
     /// Held here, above `.id(localization.language)`, so a language switch re-keys the
     /// view tree without discarding scan results or a running upgrade.
     @StateObject private var scan = ScanStore()
+    /// The inventory read, held above the language re-key like `scan`: leaving the screen and
+    /// coming back shows the result again instead of reading every folder anew (UXP-30).
+    @StateObject private var inventory = InventoryStore()
     /// Migration can remain active while `.id(localization.language)` rebuilds its view.
     @StateObject private var migration = MigrationStore()
     /// Cleanup ("Porządki") keeps a running scan or removal, and its last report, across the
@@ -38,6 +42,7 @@ struct WegaMacUpdaterApp: App {
                 .environmentObject(localization)
                 .environmentObject(policies)
                 .environmentObject(scan)
+                .environmentObject(inventory)
                 .environmentObject(migration)
                 .environmentObject(cleanup)
                 .environmentObject(commandCenter)
@@ -52,7 +57,7 @@ struct WegaMacUpdaterApp: App {
         }
         .windowToolbarStyle(.unified)
         .windowStyle(.titleBar)
-        // UX-10 — the app's `CommandMenu` and its keyboard shortcuts (⌘R, ⌘⏎, ⌘1…⌘7, ⌘F).
+        // UX-10 — the app's `CommandMenu` and its keyboard shortcuts (⌘R, ⌘⏎, ⌘1…⌘7, ⌘F and the rest).
         // The menu itself is `WegaCommands`; it reads `@FocusedValue`s the view tree publishes,
         // which a `Commands` conformer can do and this `.commands` closure cannot.
         .commands {
@@ -141,7 +146,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
-    /// REL-06 — ⌘Q, "Zakończ Wega", log-out and shutdown all arrive here. Without this
+    /// REL-06 — ⌘Q, "Zakończ Wegę", log-out and shutdown all arrive here. Without this
     /// method they ended the process on the spot, including halfway through `brew upgrade
     /// --cask`: the old bundle already moved aside, the new one not yet in place.
     ///

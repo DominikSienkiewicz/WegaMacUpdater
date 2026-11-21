@@ -33,11 +33,15 @@ struct MenuBarLabel: View {
 /// The dropdown shown when the menu-bar item is clicked (standard `.menu` style).
 struct MenuBarContent: View {
     @ObservedObject var agent: MenuBarAgent
+    /// UXP-17 — the check button names the background updates a check may start.
+    @ObservedObject private var consents = BackgroundUpdateOptInStore.shared
+    /// Redraws the day words at midnight, after a clock change and after sleep.
+    @ObservedObject private var clock = DayClock.shared
     @Environment(\.openWindow) private var openWindow
 
     /// UX-11g — how many app names the dropdown lists before collapsing the rest into a
     /// „i jeszcze N" summary, so a large backlog can't turn the menu into a wall of rows.
-    /// The full list is one click away behind „Otwórz Wega".
+    /// The full list is one click away behind „Otwórz Wegę".
     private static let maxListedApps = 10
 
     var body: some View {
@@ -50,12 +54,12 @@ struct MenuBarContent: View {
 
         Divider()
 
-        Button(agent.isChecking ? tr("Sprawdzam…") : tr("Sprawdź teraz")) {
+        Button(MenuBarMenuCopy.checkTitle(isChecking: agent.isChecking, consentCount: consents.consents.count)) {
             Task { await agent.checkNow() }
         }
         .disabled(agent.isChecking)
 
-        Button(tr("Otwórz Wega")) {
+        Button(tr("Otwórz Wegę")) {
             // Activate first: while the app is hidden its window counts as closed.
             NSApplication.shared.activate(ignoringOtherApps: true)
             NotificationRouter.shared.showMainWindow(opening: { openWindow(id: "main") })
@@ -71,7 +75,7 @@ struct MenuBarContent: View {
 
         Divider()
 
-        Button(tr("Zakończ Wega")) {
+        Button(tr("Zakończ Wegę")) {
             requestQuit()
         }
     }
@@ -81,23 +85,38 @@ struct MenuBarContent: View {
     /// whole point of the card: the dropdown used to say only *how many* updates there were,
     /// never *which* apps. The names come from the last check under the same ignore/pin
     /// rules as the badge, so the list can never disagree with the count above it.
+    ///
+    /// UXP-17 — the time names its day, the next automatic check says it needs Wega running,
+    /// and each name is a row that opens its update in the window.
     @ViewBuilder private var statusSection: some View {
         Text(statusText)
 
         if let last = agent.lastCheck {
-            Text(trf("Sprawdzono %@", last.formatted(date: .omitted, time: .shortened)))
+            Text(CheckedAtCopy.checked(at: last, now: clock.now))
+        }
+        if let next = MenuBarMenuCopy.nextAttempt(
+            lastCheck: agent.lastCheck, interval: agent.interval, isChecking: agent.isChecking, now: clock.now) {
+            Text(next)
         }
 
-        let names = agent.outdatedNames
-        if !names.isEmpty {
+        let entries = agent.outdatedEntries
+        if !entries.isEmpty {
             Divider()
-            ForEach(Array(names.prefix(Self.maxListedApps).enumerated()), id: \.offset) { _, name in
-                Text(name)
+            ForEach(agent.outdatedEntries.prefix(Self.maxListedApps), id: \.key) { entry in
+                Button(MenuBarMenuCopy.entryTitle(entry)) { reveal(entry) }
             }
-            if names.count > Self.maxListedApps {
-                Text(trp("i jeszcze %@ aplikacji", names.count - Self.maxListedApps))
+            if entries.count > Self.maxListedApps {
+                Text(trp("i jeszcze %@ aplikacji", entries.count - Self.maxListedApps))
             }
         }
+    }
+
+    /// Opens the window on all updates with this row in the inspector. Activate first, as
+    /// „Otwórz Wegę” does: while the app is hidden its window counts as closed.
+    private func reveal(_ entry: MenuBarOutdatedEntry) {
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        NotificationRouter.shared.route(to: .updates(.all))
+        agent.revealInWindow?(entry.key)
     }
 
     /// REL-06 — this used to be a bare `terminate(nil)`, which killed a running `brew
@@ -120,7 +139,8 @@ struct MenuBarContent: View {
     private var statusText: String {
         MenuBarStatusPresentation(
             count: agent.updateCount, isChecking: agent.isChecking, failed: agent.lastCheckFailed,
-            incomplete: agent.lastCheckIncomplete, lastCheck: agent.lastCheck, run: agent.windowRun
+            incomplete: agent.lastCheckIncomplete, lastCheck: agent.lastCheck, run: agent.windowRun,
+            securityCount: agent.outdatedEntries.filter(\.possibleSecurityFix).count
         ).statusText
     }
 

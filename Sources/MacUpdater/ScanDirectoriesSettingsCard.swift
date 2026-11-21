@@ -16,7 +16,7 @@ struct ScanDirectoriesSettingsCard: View {
                                titleTinted: true)
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(tr("Wega skanuje /Applications, ~/Applications i ich podfoldery. Dodaj własne katalogi (także na innych wolumenach), pomiń te, których nie chcesz przeszukiwać, i ustaw głębokość zagłębiania."))
+                    Text(tr("Wega skanuje /Applications, ~/Applications i ich podfoldery. Dodaj własne katalogi (także na innych wolumenach), pomiń te, których nie chcesz przeszukiwać, i ustaw głębokość podfolderów."))
                         .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -37,7 +37,7 @@ struct ScanDirectoriesSettingsCard: View {
     private var depthRow: some View {
         HStack {
             VStack(alignment: .leading, spacing: 1) {
-                Text(tr("Głębokość zagłębiania")).font(.wega(.callout))
+                Text(tr("Głębokość podfolderów")).font(.wega(.callout))
                 Text(tr("0 = tylko sam katalog. 1 = katalog i jego bezpośrednie podfoldery."))
                     .font(.wega(.footnote))
                     .foregroundStyle(.tertiary)

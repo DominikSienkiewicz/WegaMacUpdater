@@ -15,11 +15,11 @@ struct ResourceGateSettingsCard: View {
     var body: some View {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
-                WegaCardHeader(icon: "externaldrive.badge.checkmark", title: tr("Bramka zasobów"),
+                WegaCardHeader(icon: "externaldrive.badge.checkmark", title: tr("Warunki aktualizacji"),
                                titleTinted: true)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(tr("Wega sprawdza miejsce, łącze, baterię i temperaturę przed snapshotem i pobraniem."))
+                    Text(tr("Przed zrobieniem kopii sprzed aktualizacji i pobraniem Wega sprawdza miejsce, łącze, baterię i temperaturę."))
                         .font(.wega(.callout))
                         .foregroundStyle(.secondary)
 
@@ -29,10 +29,10 @@ struct ResourceGateSettingsCard: View {
                     gateStepper(tr("Niska bateria"), value: "\(lowBatteryThresholdPercent)%") {
                         Stepper("", value: $lowBatteryThresholdPercent, in: 5...100, step: 5).labelsHidden()
                     }
-                    gateStepper(tr("Mnożnik rozpakowania"), value: unpackedSizeMultiplier.formatted(.number.precision(.fractionLength(1)))) {
+                    gateStepper(tr("Zapas na rozpakowanie"), value: unpackedSizeMultiplier.formatted(.number.precision(.fractionLength(1)))) {
                         Stepper("", value: $unpackedSizeMultiplier, in: 0.5...5, step: 0.5).labelsHidden()
                     }
-                    gateStepper(tr("Margines dysku"), value: "\(safetyMarginGB) GB") {
+                    gateStepper(tr("Zapas wolnego miejsca"), value: "\(safetyMarginGB) GB") {
                         Stepper("", value: $safetyMarginGB, in: 0...20).labelsHidden()
                     }
                 }

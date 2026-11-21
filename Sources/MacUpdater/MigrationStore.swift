@@ -96,6 +96,9 @@ final class MigrationStore: ObservableObject {
     @Published var duplicateConfirmation: DuplicateRemoval?
     @Published var duplicateBusyKey: String?
     @Published var pendingForceTermination: PendingForceTermination?
+    /// UXP-30 — migrations and duplicate removals that ran Homebrew or npm, whatever their
+    /// outcome: the inventory reads again after one, whether or not a window watched it end.
+    @Published private(set) var completedCount = 0
     /// LT-03 — publisher corroboration per candidate, computed once per scan (see
     /// `publisherCorrelations(for:using:)`) so the confidence badge can consult the
     /// strongest signal without any view doing I/O.
@@ -367,7 +370,7 @@ final class MigrationStore: ObservableObject {
         onWegaState?(WegaState(
             pose: total > 0 ? .alert : .happy,
             line: total > 0
-                ? trp("Zwęszyłam %@ aplikacji do przepięcia.", total)
+                ? trp("Zwęszyłam %@ aplikacji do przeniesienia do Homebrew.", total)
                 : tr("Wszystko w porządku. Wega nie znalazła uciekinierów.")
         ))
     }
@@ -487,7 +490,7 @@ final class MigrationStore: ObservableObject {
             onWegaState?(WegaState(pose: .alert, line: message))
             return
         case .snapshotFailed:
-            errorMessage = tr("Nie udało się utworzyć wymaganego snapshotu.")
+            errorMessage = tr("Nie udało się zrobić kopii zapasowej przed aktualizacją. Sprawdź wolne miejsce na dysku i spróbuj ponownie.")
             onWegaState?(WegaState(pose: .alert, line: tr("Aktualizacja odroczona")))
             return
         case .caskInstallsNoApp:
@@ -530,6 +533,7 @@ final class MigrationStore: ObservableObject {
             logLines.append("error: \(error.localizedDescription)")
             installError = error
         }
+        completedCount += 1
 
         let installedAppURL = await dependencies.resolveInstalledAppURL(
             preparation,
@@ -653,6 +657,7 @@ final class MigrationStore: ObservableObject {
             logLines.append("error: \(error.localizedDescription)")
             exitCode = -1
         }
+        completedCount += 1
 
         if exitCode == 0 {
             npmBrewDuplicates.removeAll { $0.npmPackage == removal.dup.npmPackage }

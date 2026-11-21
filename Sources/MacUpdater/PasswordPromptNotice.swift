@@ -68,7 +68,7 @@ struct PasswordPromptCallout: View {
                     Button(tr("Pobierz .pkg")) { openURL(url) }
                 }
                 if probe.touchID == .available {
-                    Button(tr("Włącz Touch ID")) { openSettings() }
+                    Button(tr("Włącz Touch ID")) { SettingsRoute.shared.open(.touchID, with: openSettings) }
                 }
             }
             .padding(.horizontal, 16)

@@ -73,6 +73,14 @@ final class AppEndpointsTests: XCTestCase {
                        #"/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)""#)
     }
 
+    /// UXP-23 — Help opens the user guide in the project's repository, derived from the
+    /// repository address rather than a key of its own.
+    func testUserGuideLivesInTheProjectRepository() throws {
+        let e = try AppEndpoints.loadBundled()
+        XCTAssertEqual(e.userGuideURL.absoluteString,
+                       "https://github.com/DominikSienkiewicz/WegaMacUpdater/blob/main/USER_GUIDE.md")
+    }
+
     // MARK: Templated endpoints substitute placeholders into the legacy URLs
 
     func testTemplatedEndpointsFillPlaceholders() throws {

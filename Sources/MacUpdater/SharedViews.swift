@@ -436,6 +436,14 @@ struct PackageRow: View {
     /// F3 — per-app opt-in for unattended background upgrades. Offered only where the
     /// rollback net covers the cask, so the menu never proposes what Wega cannot undo.
     var backgroundUpdateToken: String? = nil
+    /// UXP-21 — whether this row is its group's one Tab stop; the others are reached by arrow.
+    var isTabStop = true
+    /// UXP-21 — moves focus to the neighbouring row; `false` at the group's edge.
+    var onMove: ((RowMoveDirection) -> Bool)? = nil
+
+    @Environment(\.isEnabled) private var isEnabled
+    /// Space on a focused ⋯ opens its menu; reaching the row, it would queue the update.
+    @FocusState private var menuFocused: Bool
 
     var body: some View {
         HStack(spacing: WegaLayout.checkboxSpacing) {
@@ -444,7 +452,8 @@ struct PackageRow: View {
                     EmptyView()
                 }
                 .toggleStyle(WegaQueueToggleStyle())
-                .accessibilityLabel(trf("W kolejce: %@", name))
+                .accessibilityLabel(trf("Kolejka: %@", name))
+                .focusable(false)
             }
             if let path = iconPath {
                 AppIcon(path: path, size: WegaLayout.updateIconSize)
@@ -478,8 +487,11 @@ struct PackageRow: View {
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
-                .frame(width: 22)
-                .accessibilityLabel(tr("Więcej działań"))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+                .focusable(isTabStop)
+                .focused($menuFocused)
+                .accessibilityLabel(trf("Więcej działań dla %@", name))
             }
         }
         .padding(.horizontal, WegaLayout.cardPadding)
@@ -487,7 +499,7 @@ struct PackageRow: View {
         .queueRowSelection(isInspected)
         .contentShape(Rectangle())
         .onTapGesture { onSelect?() }
-        .focusable(onSelect != nil)
+        .focusable(onSelect != nil && isTabStop)
         .onKeyPress(.return) {
             PackageRowKeyboardBehavior.handle(
                 .inspect,
@@ -496,27 +508,47 @@ struct PackageRow: View {
             ) ? .handled : .ignored
         }
         .onKeyPress(.space) {
-            PackageRowKeyboardBehavior.handle(
+            guard !menuFocused else { return .ignored }
+            return PackageRowKeyboardBehavior.handle(
                 .toggleSelection,
                 onSelect: onSelect,
                 onToggle: onToggle
             ) ? .handled : .ignored
         }
+        .onKeyPress(.upArrow) { onMove?(.up) == true ? .handled : .ignored }
+        .onKeyPress(.downArrow) { onMove?(.down) == true ? .handled : .ignored }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(PackageRowAccessibility.label(name: name, token: shownToken, from: currentVersion, to: latestVersion,
+                                                          source: source, rollback: rollback,
+                                                          rollbackUnavailable: rollbackUnavailableReason != nil, isQueued: isSelected))
+        .accessibilityHint(PackageRowAccessibility.hint(isQueued: isSelected))
+        .accessibilityActions {
+            if isEnabled {
+                if let onSelect { Button(tr("Pokaż szczegóły"), action: onSelect) }
+                if let onIgnore { Button(tr("Nie aktualizuj"), action: onIgnore) }
+                if let onSkip { Button(tr("Pomiń tę wersję"), action: onSkip) }
+            }
+        }
+    }
+
+    /// The token line under the name, only when the token says something the name does not.
+    private var shownToken: String? {
+        token == name ? nil : token
     }
 
     private var identity: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(name).fontWeight(.semibold)
                 .fixedSize(horizontal: false, vertical: true)
-            if let source {
+            if let token = shownToken {
+                Text(source.map { "\(token) · \($0)" } ?? token)
+                    .font(.wega(.caption, monospaced: true))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let source {
                 Text(source)
                     .font(.wega(.footnote))
                     .foregroundStyle(.secondary)
-            }
-            if let token, token != name {
-                Text(token)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.tertiary)
             }
             if rollback == .protected {
                 RollbackScopeNotice(scope: RollbackProtection.scope(token: token ?? name), compact: true)
@@ -543,7 +575,7 @@ struct PackageRow: View {
                 VersionArrow(from: from, to: to, emphasis: emphasis)
             } else if let version = currentVersion ?? latestVersion {
                 Text(version)
-                    .font(.caption.monospaced())
+                    .font(.wega(.caption, monospaced: true))
                     .foregroundStyle(.secondary)
             }
         }
@@ -680,6 +712,8 @@ struct BannerData: Equatable {
     let message: String
     var action: BannerAction? = nil
     var autoDismiss: Bool = true
+    /// The whole message when `message` is the shortened form (a long list of names).
+    var fullMessage: String? = nil
 }
 
 /// When a banner may take itself off the screen.
@@ -724,11 +758,12 @@ struct BannerView: View {
     var body: some View {
         // UX-15 — drawn through the shared callout; UX-07's three-line cap on the message
         // lives there. A failure's full, untranslated `stderr` stays in the log (see
-        // "Zobacz w logach").
+        // "Pokaż w logach").
         WegaCallout(
             WegaCalloutLevel(banner: data.variant),
             title: data.title,
             message: data.message,
+            fullMessage: data.fullMessage,
             onClose: { close() },
             actions: { actionButton }
         )
@@ -765,11 +800,11 @@ struct BannerView: View {
 
     private static func label(for action: BannerAction) -> String {
         switch action {
-        case .openLogs:     return tr("Zobacz w logach")
+        case .openLogs:     return tr("Pokaż w logach")
         case .openSettings: return tr("Włącz Touch ID")
         case .openAppManagementSettings: return tr("Otwórz ustawienia prywatności")
         case .reinstallCask: return tr("Przeinstaluj przez Brew")
-        case .trustPublisher: return tr("Zaufaj nowemu wydawcy")
+        case .trustPublisher: return tr("Zaufaj nowemu podpisowi")
         }
     }
 

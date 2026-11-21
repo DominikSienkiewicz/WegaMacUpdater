@@ -76,7 +76,7 @@ final class UpdatePlannerTests: XCTestCase {
         XCTAssertEqual(UpdatePlanner.toggledGroup(selected: ["a", "b"], groupKeys: ["a", "b"]), [])
     }
 
-    /// A group checkbox speaks for its own section: ticking or clearing "Homebrew Casks"
+    /// A group checkbox speaks for its own section: ticking or clearing "Aplikacje Homebrew"
     /// must not disturb a formula the user picked in the section above it.
     func testToggledGroupLeavesRowsOutsideTheGroupAlone() {
         XCTAssertEqual(

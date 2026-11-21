@@ -73,7 +73,7 @@ struct HonestCoreCopyTests {
     }
 
     @Test func thePlanSpeaksInTheFutureAboutChecksums() throws {
-        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        let view = try source("Sources/MacUpdater/PlanPreviewCaskRow.swift")
         #expect(view.contains("tr(\"suma zostanie sprawdzona\")"))
         #expect(!view.contains("tr(\"suma sprawdzana\")"))
     }

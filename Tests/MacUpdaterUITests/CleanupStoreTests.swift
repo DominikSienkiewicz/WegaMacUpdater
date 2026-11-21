@@ -193,6 +193,31 @@ final class CleanupStoreTests: XCTestCase {
         XCTAssertEqual(store.phase, .idle)
     }
 
+    func testASuccessfulRemovalMarksTheInventoryStaleAndARefusedOneDoesNot() async {
+        let inventory = InventoryStore(operations: OperationCoordinator())
+        let loader = CountingInventoryLoader()
+        let boundary = FakeCleanupBoundary()
+        boundary.persistedReport = CleanupStoreFixtures.report(tool: "before")
+        let store = CleanupStore(dependencies: boundary.dependencies)
+        func counts() -> InventoryChangeStamp { InventoryChangeStamp(cleanupRemovals: store.removalCount) }
+        await enterInventory(inventory, using: loader, changes: counts())
+
+        boundary.removalOutcome = .needsInUseAcknowledgement([CleanupStoreFixtures.processWithArguments])
+        store.remove(CleanupStoreFixtures.intent())
+        await store.task?.value
+        XCTAssertEqual(store.removalCount, 0)
+        XCTAssertFalse(inventory.isStale(given: counts()), "a refused removal changed nothing")
+
+        boundary.removalOutcome = .removed
+        store.remove(CleanupStoreFixtures.intent())
+        await store.task?.value
+        XCTAssertEqual(store.removalCount, 1)
+        XCTAssertTrue(inventory.isStale(given: counts()), "the removal went removing -> scanning -> idle, never straight to idle")
+        await enterInventory(inventory, using: loader, changes: counts())
+        let reads = await loader.reads
+        XCTAssertEqual(reads, 2, "with no window watching, the next entry still reads again")
+    }
+
     func testNeedsAcknowledgementDoesNotRescan() async {
         let boundary = FakeCleanupBoundary()
         let previous = CleanupStoreFixtures.report(tool: "previous")

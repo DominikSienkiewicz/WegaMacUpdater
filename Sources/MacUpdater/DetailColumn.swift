@@ -129,6 +129,9 @@ struct DetailColumn: View {
                 isEnabled: scan.updating && !scan.updateInterruption.isRequested,
                 run: { scan.cancelUpdate() }
             ))
+            .focusedSceneValue(\.updateRunCommandState, UpdateRunCommandState(
+                isUpdating: scan.updating, isStopping: scan.updateInterruption.isRequested
+            ))
             .onReceive(scan.$inspectedKey) { key in
                 guard key != nil else { return }
                 showInspector = true
@@ -201,6 +204,9 @@ struct DetailColumn: View {
             .opacity(selection.tab == .update ? 1 : 0)
             .allowsHitTesting(selection.tab == .update)
             .accessibilityHidden(selection.tab != .update)
+            // None of the three above keeps keyboard focus out; this does, for the rows and the
+            // controls only — the menu commands the view publishes stay live (final review M6).
+            .environment(\.updatesOnScreen, selection.tab == .update)
 
             if selection.tab != .update {
                 switch selection {
@@ -223,7 +229,7 @@ struct DetailColumn: View {
                 case .migration:
                     MigrationView(onWegaState: { wegaState = $0 })
                 case .inventory:
-                    InventoryView(onWegaState: { wegaState = $0 })
+                    InventoryView(onWegaState: { wegaState = $0 }, onNavigate: onNavigate)
                 case .rollback:
                     RollbackView(onNavigate: navigate(fromBanner:))
                 case .logs:

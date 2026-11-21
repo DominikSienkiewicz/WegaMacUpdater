@@ -26,6 +26,7 @@ struct PluralRulesTests {
     }
 
     @Test func polishFormsAreGrammaticalForEveryRange() {
+        #expect(pluralize("Zwęszyłam %@ aplikacji do przeniesienia do Homebrew.", count: 2, language: .pl) == "Zwęszyłam 2 aplikacje do przeniesienia do Homebrew.")
         #expect(pluralize(updatesAvailable, count: 1, language: .pl) == "1 aktualizacja dostępna")
         #expect(pluralize(updatesAvailable, count: 3, language: .pl) == "3 aktualizacje dostępne")
         #expect(pluralize(updatesAvailable, count: 22, language: .pl) == "22 aktualizacje dostępne")
@@ -81,5 +82,11 @@ struct PluralRulesTests {
         #expect(pluralize("Zaktualizowano %@ pakietów", count: 1, language: .en) == "Updated 1 package")
         #expect(pluralize("%@ źródeł nie odpowiedziało", count: 1, language: .en) == "1 source didn't respond")
         #expect(pluralize("Odinstalować %@ aplikacji?", count: 22, language: .en) == "Uninstall 22 apps?")
+    }
+
+    @Test(arguments: zip([2, 5, 12, 22], ["i 2 inne", "i 5 innych", "i 12 innych", "i 22 inne"]))
+    func theRestOfAListIsCounted(count: Int, expected: String) {
+        #expect(pluralize("i %@ innych", count: count, language: .pl) == expected)
+        #expect(pluralize("i %@ innych", count: count, language: .en) == "and \(count) more")
     }
 }

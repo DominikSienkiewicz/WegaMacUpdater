@@ -89,7 +89,7 @@ struct UpgradeProgressBar: View {
                 .frame(minWidth: 0, maxWidth: .infinity)
             Text(label)
                 .font(.wega(.subheadline, monospaced: true))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(tr("Postęp aktualizacji"))
@@ -135,6 +135,7 @@ struct BrewLogPanel: View {
     var tapTrust: TapTrustActions? = nil
     let onClose: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var tapTrustPlan: [TapTrustRemedy] = []
 
     /// Taps named by the warning in the log; the receipts are read again only when these change.
@@ -144,23 +145,7 @@ struct BrewLogPanel: View {
 
     var body: some View {
         WegaCard(padded: false) {
-            HStack(spacing: 8) {
-                Circle().fill(Color.wegaSuccess).frame(width: 6, height: 6)
-                Text("brew log")
-                    .font(.wega(.footnote, weight: .semibold, monospaced: true))
-                    .foregroundStyle(.tertiary)
-                Spacer()
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.wega(.caption, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(tr("Zamknij"))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .overlay(alignment: .bottom) { Divider().opacity(0.4) }
+            header
 
             if let tapTrust {
                 let pending = TapTrustPlanner.pending(tapTrustPlan, in: lines)
@@ -185,7 +170,7 @@ struct BrewLogPanel: View {
                 }
                 .frame(maxHeight: 220)
                 .onChange(of: lines.count) { _, _ in
-                    withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                    withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
             }
         }
@@ -195,6 +180,32 @@ struct BrewLogPanel: View {
             guard let tapTrust, !taps.isEmpty else { return }
             tapTrustPlan = await tapTrust.resolve(taps)
         }
+    }
+
+    /// The title row with the close button. Internal so the layout tests can measure it.
+    var header: some View {
+        HStack(spacing: 8) {
+            Circle().fill(Color.wegaSuccess).frame(width: 6, height: 6)
+            Text("brew log")
+                .font(.wega(.footnote, weight: .semibold, monospaced: true))
+                .foregroundStyle(.tertiary)
+            Spacer()
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.wega(.caption, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            // The 28 pt hit area overhangs the header's padding rather than making it taller:
+            // 12 pt of layout stays under the title's line.
+            .padding(.vertical, -8)
+            .accessibilityLabel(tr("Zamknij"))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) { Divider().opacity(0.4) }
     }
 }
 
@@ -267,6 +278,13 @@ struct UpdateSection: View {
     var onSkip:   ((OutdatedItem) -> Void)? = nil
     var onInspect: ((OutdatedItem) -> Void)? = nil
 
+    @FocusState private var focusedKey: String?
+    @Environment(\.updatesOnScreen) private var onScreen
+    /// UXP-21 — the row Tab lands on. Kept apart from `focusedKey`, which empties once focus
+    /// leaves the rows themselves (another group, or this row's ⋯ when it takes focus), so the
+    /// stop stays where the user left it.
+    @State private var tabStop: String?
+
     /// A skip closure only when there is a concrete version on offer to skip.
     private func skipAction(for item: OutdatedItem) -> (() -> Void)? {
         guard let onSkip, let to = item.to, !to.isEmpty else { return nil }
@@ -291,25 +309,32 @@ struct UpdateSection: View {
                                   toggle: { toggleGroup() }
                               ))
 
+            let keys = items.map(\.key)
             ForEach(items) { item in
                 VStack(spacing: 0) {
                     PackageRow(
-                        name:           item.name,
+                        name:           item.kind == .cask
+                            ? CaskDisplayName.name(token: item.name, appPath: iconPaths[item.name])
+                            : item.name,
+                        token:          item.kind == .cask ? item.name : nil,
                         iconPath:       iconPaths[item.name],
                         currentVersion: item.from,
                         latestVersion:  item.to,
                         isSelected:     selected.contains(item.key),
                         isInspected:    item.key == inspectedKey,
                         rollback:       rollbackProtection[item.name],
-                        source:         showsSource ? item.kind.sourceLabel : nil,
+                        source:         showsSource ? (item.kind == .cask ? "Homebrew" : item.kind.sourceLabel) : nil,
                         rollbackUnavailableReason: showsSource ? UpdateView.rollbackCaption(for: item.kind) : nil,
                         onToggle:       { toggle(item.key) },
-                        onSelect:       { onInspect?(item) },
+                        onSelect:       { focus(item.key); onInspect?(item) },
                         onIgnore:       { onIgnore?(item) },
                         onPin:          { onPin?(item) },
                         onSkip:         skipAction(for: item),
-                        backgroundUpdateToken: item.kind == .cask ? item.name : nil
+                        backgroundUpdateToken: item.kind == .cask ? item.name : nil,
+                        isTabStop:      UpdateRowFocus.isTabStop(item.key, in: keys, focused: tabStop, onScreen: onScreen),
+                        onMove:         { move(from: item.key, in: keys, $0) }
                     )
+                    .focused($focusedKey, equals: item.key)
                     // UX-14 — F1's release notes live in the inspector only: unfolding them
                     // here gave every row a different height and repeated the inspector.
                 }
@@ -321,6 +346,20 @@ struct UpdateSection: View {
                 }
             }
         }
+        .focusSection()
+        .onChange(of: focusedKey) { _, key in if let key { focus(key) } }
+    }
+
+    private func move(from key: String, in keys: [String], _ direction: RowMoveDirection) -> Bool {
+        guard let next = UpdateRowFocus.neighbour(of: key, in: keys, direction: direction) else { return false }
+        focus(next)
+        return true
+    }
+
+    /// Makes `key` the group's Tab stop and focuses it — by arrow, by click, or when Tab arrives.
+    private func focus(_ key: String) {
+        tabStop = key
+        focusedKey = key
     }
 
     private func toggle(_ key: String) {
@@ -433,7 +472,13 @@ struct UndoUpdateSection: View {
                 HStack(spacing: 12) {
                     AppIcon(path: URL(fileURLWithPath: item.appPath), size: 28)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(item.token).fontWeight(.medium)
+                        Text(CaskDisplayName.name(token: item.token, appPath: URL(fileURLWithPath: item.appPath)))
+                            .fontWeight(.medium)
+                        if item.token != CaskDisplayName.name(token: item.token, appPath: URL(fileURLWithPath: item.appPath)) {
+                            Text(item.token)
+                                .font(.wega(.caption, monospaced: true))
+                                .foregroundStyle(.secondary)
+                        }
                         Text(subtitle(for: item))
                             .font(.wega(.subheadline))
                             .foregroundStyle(.tertiary)
@@ -486,6 +531,11 @@ struct ManualUpdateSection: View {
     var onSkip:    ((ManualOutdatedApp) -> Void)? = nil
     var onInspect: ((ManualOutdatedApp) -> Void)? = nil
 
+    @FocusState private var focusedKey: String?
+    @Environment(\.updatesOnScreen) private var onScreen
+    /// UXP-21 — the row Tab lands on; see `UpdateSection.tabStop`.
+    @State private var tabStop: String?
+
     /// A skip closure only when the source reported a concrete version to skip.
     private func skipAction(for app: ManualOutdatedApp) -> (() -> Void)? {
         guard let onSkip, let version = app.availableVersion, !version.isEmpty else { return nil }
@@ -497,8 +547,10 @@ struct ManualUpdateSection: View {
             UpdateGroupHeader(title: title, tint: tint, ordinal: ordinal, count: items.count,
                               note: subtitle, caption: caption)
 
+            let keys = items.map { "m:" + $0.path.path }
             ForEach(items, id: \.path) { item in
-                let isInspected = "m:" + item.path.path == inspectedKey
+                let key = "m:" + item.path.path
+                let isInspected = key == inspectedKey
                 VStack(spacing: 0) {
                 // UX-14 — the same columns as a package row: the hand-off mark holds the
                 // queue column, so this icon lines up with every selectable row's, and the
@@ -544,8 +596,9 @@ struct ManualUpdateSection: View {
                 }
                 .queueRowSelection(isInspected)
                 .contentShape(Rectangle())
-                .gesture(TapGesture().onEnded { onInspect?(item) })
-                .focusable(onInspect != nil)
+                .gesture(TapGesture().onEnded { focus(key); onInspect?(item) })
+                .focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop, onScreen: onScreen))
+                .focused($focusedKey, equals: key)
                 .onKeyPress(.return) {
                     ManualUpdateRowKeyboardBehavior.handle(
                         .returnKey,
@@ -560,6 +613,8 @@ struct ManualUpdateSection: View {
                         onInspect: onInspect
                     ) ? .handled : .ignored
                 }
+                .onKeyPress(.upArrow) { move(from: key, in: keys, .up) ? .handled : .ignored }
+                .onKeyPress(.downArrow) { move(from: key, in: keys, .down) ? .handled : .ignored }
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel(item.name)
                 .accessibilityValue(
@@ -577,6 +632,20 @@ struct ManualUpdateSection: View {
                 }
             }
         }
+        .focusSection()
+        .onChange(of: focusedKey) { _, key in if let key { focus(key) } }
+    }
+
+    private func move(from key: String, in keys: [String], _ direction: RowMoveDirection) -> Bool {
+        guard let next = UpdateRowFocus.neighbour(of: key, in: keys, direction: direction) else { return false }
+        focus(next)
+        return true
+    }
+
+    /// Makes `key` the group's Tab stop and focuses it — by arrow, by click, or when Tab arrives.
+    private func focus(_ key: String) {
+        tabStop = key
+        focusedKey = key
     }
 }
 
@@ -638,7 +707,7 @@ struct ManualUpdateActionView: View {
             Button {
                 Task { await scan.trustNewPublisher(token: token, reportedTeamID: nil) }
             } label: {
-                Label(tr("Zaufaj nowemu wydawcy"), systemImage: "checkmark.shield")
+                Label(tr("Zaufaj nowemu podpisowi"), systemImage: "checkmark.shield")
             }
             .controlSize(.small)
             .disabled(busyToken != nil)
@@ -758,7 +827,7 @@ struct ManualUpdateActionView: View {
             // The row leads to the in-app installer in Settings — signature verification,
             // the headless helper install and the restart all live there. Never a browser.
             Button {
-                openSettings()
+                SettingsRoute.shared.open(.selfUpdate, with: openSettings)
             } label: {
                 Label(tr("Aktualizuj Wegę"), systemImage: "arrow.down.circle")
             }
@@ -862,7 +931,7 @@ struct ReleaseNotesDisclosure: View {
                 }
                 .controlSize(.small)
                 if let link = notes.link {
-                    Link(tr("Zobacz u wydawcy"), destination: link).font(.wega(.subheadline))
+                    Link(tr("Zobacz u producenta"), destination: link).font(.wega(.subheadline))
                 }
             }
         }

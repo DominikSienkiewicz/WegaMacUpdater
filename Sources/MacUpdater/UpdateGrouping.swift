@@ -75,8 +75,8 @@ extension OutdatedItem.Kind {
     /// Names the source on the row itself, where grouping by urgency mixes sources in a card.
     var sourceLabel: String {
         switch self {
-        case .cask:     return tr("Homebrew (cask)")
-        case .formula:  return tr("Homebrew (formuła)")
+        case .cask:     return tr("Aplikacja Homebrew")
+        case .formula:  return tr("Narzędzie Homebrew")
         case .appStore: return tr("Mac App Store")
         case .npm:      return tr("npm (globalny)")
         }

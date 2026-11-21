@@ -84,7 +84,7 @@ struct ReadinessCard: View {
             postpone: { postponed = true },
             dismiss: { dismissed = true },
             probeAppManagement: probeAppManagement,
-            enableTouchID: { openSettings() },
+            enableTouchID: { SettingsRoute.shared.open(.touchID, with: openSettings) },
             declineNotifications: { agent.declineNotifications() },
             agreeToNotifications: { Task { await agent.agreeToNotifications() } }
         ))

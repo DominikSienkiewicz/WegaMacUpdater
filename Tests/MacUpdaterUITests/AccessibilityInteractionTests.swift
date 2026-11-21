@@ -25,7 +25,7 @@ final class AccessibilityInteractionTests: XCTestCase {
 
         XCTAssertTrue(packageRow.contains("Toggle(isOn: selectionToggleBinding(isOn: isSelected, toggle: onToggle))"))
         XCTAssertTrue(packageRow.contains(".toggleStyle(WegaQueueToggleStyle())"))
-        XCTAssertTrue(packageRow.contains(".accessibilityLabel(trf(\"W kolejce: %@\", name))"))
+        XCTAssertTrue(packageRow.contains(".accessibilityLabel(trf(\"Kolejka: %@\", name))"))
         XCTAssertFalse(packageRow.contains(".onTapGesture { onToggle?() }"))
 
         let uninstall = try source("Sources/MacUpdater/UninstallView.swift")
@@ -58,7 +58,7 @@ final class AccessibilityInteractionTests: XCTestCase {
     func testMigrationActionsNameTheAppTheyActOn() throws {
         let migration = try source("Sources/MacUpdater/MigrationView.swift")
 
-        XCTAssertTrue(migration.contains(".accessibilityLabel(trf(\"Przepnij %@ do Homebrew\", app.name))"))
+        XCTAssertTrue(migration.contains(".accessibilityLabel(trf(\"Przenieś %@ do Homebrew\", app.name))"))
         XCTAssertTrue(migration.contains(".accessibilityLabel(trf(\"Otwórz %@ w App Store\", app.name))"))
         XCTAssertTrue(migration.contains(".accessibilityLabel(trf(\"Usuń %@ z npm\", dup.npmPackage))"))
         XCTAssertTrue(migration.contains(".accessibilityLabel(trf(\"Usuń %@ z brew\", dup.brewToken))"))
@@ -128,7 +128,7 @@ final class AccessibilityInteractionTests: XCTestCase {
             startingAt: "struct PackageRow: View",
             endingAt: "// MARK: - Rollback badge"
         )
-        XCTAssertTrue(packageRow.contains(".focusable(onSelect != nil)"))
+        XCTAssertTrue(packageRow.contains(".focusable(onSelect != nil && isTabStop)"))
         XCTAssertTrue(packageRow.contains(".onKeyPress(.return)"))
         XCTAssertTrue(packageRow.contains(".onKeyPress(.space)"))
     }
@@ -175,6 +175,11 @@ final class AccessibilityInteractionTests: XCTestCase {
     func testPackageRowReflowsWithLargeEnvironmentText() {
         let regularHeight = packageRowHeight(font: .body)
         let accessibilityHeight = packageRowHeight(font: .system(size: 32))
+        XCTAssertEqual(
+            packageRowHeight(font: .body, source: "Homebrew"),
+            packageRowHeight(font: .body),
+            "The token and the source share one line under the name (UXP-20)"
+        )
 
         XCTAssertGreaterThan(
             accessibilityHeight,
@@ -236,13 +241,14 @@ final class AccessibilityInteractionTests: XCTestCase {
     }
 
     @MainActor
-    private func packageRowHeight(font: Font) -> CGFloat {
+    private func packageRowHeight(font: Font, source: String? = nil) -> CGFloat {
         let row = PackageRow(
             name: "Accessibility Regression Package",
             token: "accessibility-regression-package",
             currentVersion: "1.0.0",
             latestVersion: "2.0.0",
             isSelected: true,
+            source: source,
             onToggle: {}
         )
         .environment(\.font, font)

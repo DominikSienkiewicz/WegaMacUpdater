@@ -23,7 +23,8 @@ struct PolicyRulesList: View {
                 Spacer()
                 Button(tr("Przywróć")) { onRestore(entry) }
                     .controlSize(.small)
-                    .help(tr("Usuń regułę"))
+                    .help(trf("Usuń regułę dla %@", entry.displayName))
+                    .accessibilityLabel(trf("Przywróć %@", entry.displayName))
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
@@ -59,7 +60,7 @@ struct PolicyRulesSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(tr("Ignorowane i przypięte"))
+            Text(tr("Wstrzymane aktualizacje"))
                 .font(.wega(.title3, weight: .semibold))
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {

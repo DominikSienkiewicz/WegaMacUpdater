@@ -148,6 +148,24 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public var masRepositoryURL: URL { URL(string: masRepository)! }
 }
 
+extension AppEndpoints {
+    /// UXP-23 — the user guide the Help menu opens: `USER_GUIDE.md` on the repository's main
+    /// branch, derived from `projectRepository` so an overlay that moves the repository moves it too.
+    public var userGuideURL: URL { projectRepositoryURL.appending(path: "blob/main/USER_GUIDE.md") }
+
+    /// UXP-34 — the guide's "Uninstalling Wega" section: removing Wega, her helper and Touch ID for `sudo`.
+    public var uninstallGuideURL: URL { userGuideURL(fragment: "uninstalling-wega") }
+
+    /// UXP-34 — the guide's "Turning off Touch ID for sudo" steps, which work with Wega still installed.
+    public var touchIDGuideURL: URL { userGuideURL(fragment: "turning-off-touch-id-for-sudo") }
+
+    private func userGuideURL(fragment: String) -> URL {
+        var components = URLComponents(url: userGuideURL, resolvingAgainstBaseURL: false)
+        components?.fragment = fragment
+        return components?.url ?? userGuideURL
+    }
+}
+
 /// Whether a user endpoints overlay is currently shaping these endpoints, and whether it was
 /// cryptographically verified. Surfaced by ``AppEndpoints/overlayStatus`` so the Info card can
 /// show the presence of an *unverified* overlay to the user — SEC-08 requires that this is not
@@ -463,4 +481,19 @@ public struct AppEndpointsOverlay: Decodable, Sendable, Equatable {
     public var supportEmail: String? = nil
     public let authorLinkedIn: String?
     public let masRepository: String?
+}
+
+extension AppEndpoints {
+    /// The host of every http(s) address in the configuration, unique and sorted — the pages
+    /// Wega fetches and the ones it opens in the browser alike. Homebrew's install command and
+    /// the support e-mail are not addresses, so they drop out.
+    public var connectionHosts: [String] {
+        let hosts = Mirror(reflecting: self).children.compactMap { child -> String? in
+            guard let value = child.value as? String,
+                  let scheme = ["https://", "http://"].first(where: { value.hasPrefix($0) }) else { return nil }
+            let host = value.dropFirst(scheme.count).prefix { !"/?:".contains($0) }
+            return host.isEmpty || host.contains("{") ? nil : String(host)
+        }
+        return Array(Set(hosts)).sorted()
+    }
 }

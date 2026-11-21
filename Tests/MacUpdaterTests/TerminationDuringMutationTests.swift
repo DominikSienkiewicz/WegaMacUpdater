@@ -6,7 +6,7 @@ import Foundation
 /// The app had no `applicationShouldTerminate` at all, so ⌘Q, log-out and shutdown ended
 /// the process *immediately* — including in the middle of `runUpdate`, a background round,
 /// an uninstall or a migration, which is exactly how a Caskroom is left half-written (the
-/// old version already moved aside, the new one not yet in place). "Zakończ Wega" in the
+/// old version already moved aside, the new one not yet in place). "Zakończ Wegę" in the
 /// menu bar made it worse: it called `terminate(nil)` unconditionally, without ever asking
 /// `UpgradeMutex` whether something was in flight.
 ///
@@ -77,11 +77,11 @@ struct TerminationDuringMutationTests {
                 "REL-06: something must hold ProcessInfo.beginActivity(.suddenTerminationDisabled) while a mutation can run")
     }
 
-    /// "Zakończ Wega" used to be a plain `terminate(nil)`.
+    /// "Zakończ Wegę" used to be a plain `terminate(nil)`.
     @Test func theMenuBarQuitConsultsTheMutationGuard() throws {
         let text = try source("Sources/MacUpdater/MenuBarScene.swift")
         #expect(text.contains("MutationGuard.shared.isMutating"),
-                "REL-06: „Zakończ Wega” must check for a running mutation instead of terminating unconditionally")
+                "REL-06: „Zakończ Wegę” must check for a running mutation instead of terminating unconditionally")
     }
 
     /// `UpgradeMutex` only ever covered `runUpdate` and the background round. A migration

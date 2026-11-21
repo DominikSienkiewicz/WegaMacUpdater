@@ -31,7 +31,7 @@ struct InventoryCheckPresentation {
         case .updateAvailable: return tr("Dostępna aktualizacja")
         case .failed: return tr("Sprawdzenie niepełne")
         case .noSource: return tr("Brak rozpoznanego źródła")
-        case .excluded: return tr("Ukryte przez politykę")
+        case .excluded: return tr("Ukryte przez Twoją regułę")
         case .stale: return tr("Wynik nieaktualny")
         }
     }

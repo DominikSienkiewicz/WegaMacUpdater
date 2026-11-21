@@ -427,8 +427,9 @@ enum WegaLayout {
     /// UX-03 — the Settings window was pinned to exactly 640×600. At the larger system text
     /// sizes its content no longer fits in that box and had nowhere to go: the frame was
     /// fixed in both axes, so the text clipped instead of the window growing. It now opens
-    /// at the same size and is free to be resized, and to grow, from there.
-    static let settingsMinWidth: CGFloat     = 480
+    /// at the same size and is free to be resized, and to grow, from there. The minimum keeps
+    /// the five toolbar tabs (UXP-15, about 515 pt in Polish) out of the toolbar's » menu.
+    static let settingsMinWidth: CGFloat     = 560
     static let settingsIdealWidth: CGFloat   = 640
     static let settingsMinHeight: CGFloat    = 400
     static let settingsIdealHeight: CGFloat  = 600

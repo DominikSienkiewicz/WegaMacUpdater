@@ -68,6 +68,10 @@ struct ScanStoreDependencies {
     /// `UpgradeMutex.shared` in the app, so the background round and a migration are excluded;
     /// injectable like the background updater's, so a test's store has one of its own.
     var upgradeMutex: UpgradeMutex = .shared
+    /// UXP-14 — when `brew update` last succeeded; decides whether a launch scan refreshes the catalog.
+    var catalogStamp: BrewCatalogStamp = .none
+    /// The scan's clock: the launch decision, the catalog's age and the stamp it writes.
+    var now: @MainActor () -> Date = { Date() }
 
     static let live = ScanStoreDependencies(
         operations: .shared,
@@ -94,7 +98,8 @@ struct ScanStoreDependencies {
         },
         reportVendorCheck: { item, remaining, check, count, fingerprint in
             MenuBarAgent.shared.reportVendorCheck(item: item, remaining: remaining, check: check, count: count, fingerprint: fingerprint)
-        }
+        },
+        catalogStamp: .defaults(.standard)
     )
 }
 
@@ -127,6 +132,9 @@ final class ScanStore: ObservableObject {
     @Published var showLog:           Bool                = false
     @Published var selected:          Set<String>         = []
     @Published var updating:          Bool                = false
+    /// UXP-30 — update runs that reached their rescan, so the inventory knows the app set may
+    /// have changed, whether or not a window watched the run end.
+    @Published private(set) var completedRunCount = 0
     @Published var errorMessage:      String?
     @Published var installationChecks: [InstallationCheck] = []
     @Published var lastCheck:         Date?
@@ -171,8 +179,18 @@ final class ScanStore: ObservableObject {
     /// of a full scan. A caption of its own rather than a fifth `ScanPhase`: the ring counts the
     /// four sources, and the catalog is not one of them.
     @Published private(set) var isRefreshingCatalog = false
+    /// Whether a new check may start now: none running, none refreshing underneath a result,
+    /// and no update in flight.
+    var canStartCheck: Bool { status != .checking && !isRefreshing && !updating }
+    /// Whether ⌘. may cancel a scan now: one holds the window or refreshes under the list, as
+    /// the toolbar's „Anuluj” shows, and no update runs — the run's rescan is stopped with the run.
+    var canCancelScan: Bool { (status == .checking || isRefreshing) && !updating }
     /// UXP-13 — when the running scan started, for the band's elapsed time. `nil` between scans.
     @Published private(set) var scanStartedAt: Date?
+    /// UXP-14 — how old the Homebrew catalog is, in minutes, when the scan on screen reused it
+    /// instead of running `brew update`. `nil` when the scan refreshed it itself, and for a
+    /// result that did not come from this window's scan.
+    @Published private(set) var catalogAgeMinutes: Int?
     /// UXP-13 — how many vendor apps the running scan has heard back from. `nil` outside the
     /// vendor phase of the current scan.
     @Published private(set) var manualScanProgress: ManualScanProgress?
@@ -279,6 +297,7 @@ final class ScanStore: ObservableObject {
     func attach(model: AppViewModel) {
         self.model = model
         MenuBarAgent.shared.stopWindowRun = { [weak self] in self?.cancelUpdate() }
+        MenuBarAgent.shared.revealInWindow = { [weak self] key in self?.inspectedKey = key }
     }
 
     // MARK: - REL-12: stopping a running update
@@ -328,7 +347,8 @@ final class ScanStore: ObservableObject {
             variant: .danger,
             title: tr("Aktualizacja przerwana"),
             message: trf("Zatrzymano po bieżącym pakiecie: zaktualizowano %@, pominięto %@. Nic nie zostało przerwane w połowie.",
-                         "\(upgraded)", "\(skipped)")
+                         "\(upgraded)", "\(skipped)"),
+            action: .openLogs
         ))
         emitActivitySignal(.idle)
         emitWegaState(WegaState(pose: .idle, line: tr("Przerwałam aktualizację.")))
@@ -367,6 +387,7 @@ final class ScanStore: ObservableObject {
             manualOutdated = snapshot.manual
             installationChecks = snapshot.installationChecks
             lastCheck      = snapshot.scannedAt
+            catalogAgeMinutes = nil
             // REL-09 — a scan that went half-blind stays visibly half-blind across a
             // relaunch. Without this an outage read exactly like "everything is current".
             sourceReports    = snapshot.sources
@@ -413,6 +434,7 @@ final class ScanStore: ObservableObject {
         manualOutdated = background.manualApps
         installationChecks = InstallationCheck.retainingLastSuccess(background.installationChecks, previous: previousChecks)
         lastCheck      = background.scannedAt
+        catalogAgeMinutes = nil
         failedSources  = background.failedChecks
         // Background checks carry the same evidence as the window scan.
         sourceReports     = background.sources
@@ -444,7 +466,9 @@ final class ScanStore: ObservableObject {
 #endif
         guard !startedLaunchRefresh, !updating, status != .checking else { return }
         startedLaunchRefresh = true
-        startCheck()
+        startCheck(refreshesCatalog: BrewCatalogFreshness.refreshesAtLaunch(
+            lastRefreshedAt: dependencies.catalogStamp.load(), now: dependencies.now()
+        ))
     }
 
     /// The scan's one door onto `isRefreshing`, which is why the property itself is
@@ -461,12 +485,20 @@ final class ScanStore: ObservableObject {
     /// vendor count yet. The three below are `private(set)` for the reason `isRefreshing` is.
     func beginScanProgress() {
         scanGeneration += 1
-        scanStartedAt = .now
+        scanStartedAt = dependencies.now()
         manualScanProgress = nil
+    }
+
+    func setCatalogAgeMinutes(_ minutes: Int?) {
+        catalogAgeMinutes = minutes
     }
 
     func setRefreshingCatalog(_ refreshing: Bool) {
         isRefreshingCatalog = refreshing
+    }
+
+    func countCompletedRun() {
+        completedRunCount += 1
     }
 
     /// Closes what only a running scan has, on every way out of it: the band goes back to the
@@ -710,6 +742,16 @@ final class ScanStore: ObservableObject {
     func toggleAll(filter: UpdateFilter) {
         restrictSelection(to: filter)
         selected = UpdatePlanner.toggledAll(selected: selected, allKeys: visibleItems(for: filter).map(\.key))
+    }
+
+    /// UXP-23 — ⇧⌘A: queues every batch row `filter` shows, never a manual app or a row a rule
+    /// hides. Refused, like the select-all checkbox, while no result is on screen, while a
+    /// refresh replaces it and while an update owns it.
+    func selectAllVisible(filter: UpdateFilter) {
+        guard status == .results,
+              ScanSelectionGate.allowsListSelection(isRefreshing: isRefreshing, isUpdating: updating) else { return }
+        restrictSelection(to: filter)
+        selected.formUnion(visibleItems(for: filter).map(\.key))
     }
 
     func ignoreItem(_ item: OutdatedItem) {

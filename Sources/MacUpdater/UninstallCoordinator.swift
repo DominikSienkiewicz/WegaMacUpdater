@@ -203,7 +203,7 @@ final class UninstallCoordinator: ObservableObject {
     /// The helper took the request but never answered: it may have moved the app already, so
     /// the result must not read as "nothing happened". The rescan after the run shows the truth.
     static var unconfirmedHelperRemoval: String {
-        tr("Pomocnik Wega nie potwierdził usunięcia — aplikacja mogła już opuścić /Applications. Odświeżona lista pokazuje, czy nadal tam jest.")
+        tr("Pomocnik Wegi nie potwierdził usunięcia — aplikacja mogła już opuścić /Applications. Odświeżona lista pokazuje, czy nadal tam jest.")
     }
 
     @Published private(set) var state: State = .idle

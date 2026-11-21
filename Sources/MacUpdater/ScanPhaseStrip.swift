@@ -74,7 +74,7 @@ struct ScanPhaseStrip: View {
                 Image(systemName: "circle.dotted").foregroundStyle(.tertiary)
             }
             Text(step.title)
-                .foregroundStyle(step.state == .pending ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
+                .foregroundStyle(step.state == .pending ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
         }
         .font(.wega(.footnote, weight: step.state == .running ? .semibold : .regular))
         .padding(.horizontal, 8)

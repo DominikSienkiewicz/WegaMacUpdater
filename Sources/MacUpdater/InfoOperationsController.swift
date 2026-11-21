@@ -55,6 +55,18 @@ final class InfoOperationsController: ObservableObject {
         self.dependencies = dependencies
     }
 
+    /// What the helper card asks while the helper waits for approval in System Settings.
+    static var approvalHint: String {
+        tr("Zatwierdź pomocnika w Ustawieniach systemowych → Elementy logowania, potem wróć tutaj.")
+    }
+
+    /// The helper card's hint once the helper's status is `status`. The approval request goes as
+    /// soon as the helper no longer waits for approval; any other message, such as the one
+    /// `installHelper` has just set, stays.
+    static func helperHint(_ hint: String?, after status: PrivilegedHelperClient.Status) -> String? {
+        hint == approvalHint && status != .requiresApproval ? nil : hint
+    }
+
     func refreshPersistentState() {
         helperStatus = dependencies.helperStatus()
         githubTokenStored = dependencies.hasGitHubToken()
@@ -97,17 +109,14 @@ final class InfoOperationsController: ObservableObject {
         }
         refreshHelperStatus()
         if helperStatus == .requiresApproval {
-            onWegaState(WegaState(
-                pose: .alert,
-                line: tr("Zatwierdź komponent w Ustawieniach → Elementy logowania.")
-            ))
+            onWegaState(WegaState(pose: .alert, line: Self.approvalHint))
         } else if helperStatus == .enabled {
-            onWegaState(WegaState(pose: .happy, line: tr("Komponent uprzywilejowany gotowy.")))
+            onWegaState(WegaState(pose: .happy, line: tr("Pomocnik Wegi jest gotowy.")))
         }
     }
 
     func removeHelper() async {
-        switch await dependencies.authenticate(tr("Potwierdź usunięcie komponentu uprzywilejowanego")) {
+        switch await dependencies.authenticate(tr("Potwierdź usunięcie pomocnika Wegi")) {
         case .success, .unavailable:
             break
         case .cancelled:

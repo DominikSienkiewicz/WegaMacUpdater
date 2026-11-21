@@ -23,6 +23,7 @@ public enum Translations {
         .merging(uninstallTexts) { first, _ in first }
         .merging(updatesActionBar.merging(uxReview) { first, _ in first }) { first, _ in first }
         .merging(uxReviewNext) { first, _ in first }
+        .merging(uxReviewRest) { first, _ in first }
 }
 
 extension Translations {
@@ -78,7 +79,6 @@ extension Translations {
         "Dostępna aktualizacja": "Update available",
         "Sprawdzenie niepełne": "Check incomplete",
         "Brak rozpoznanego źródła": "No recognized source",
-        "Ukryte przez politykę": "Hidden by policy",
         "Wynik nieaktualny": "Stale result",
         "Aktualizacja; sprawdzenie niepełne": "Update available; check incomplete",
         "Źródła i czas ostatniego sprawdzenia": "Sources and last check time",
@@ -124,7 +124,6 @@ extension Translations {
         // SEC-08 — token GitHub (Keychain).
         "Token GitHub (opcjonalny)": "GitHub token (optional)",
         "Zapisany": "Saved",
-        "Podnosi limit GitHub z 60 do 5000 zapytań/h i włącza zwolnienie 304. Trzymany w Keychain.": "Raises the GitHub limit from 60 to 5000 requests/h and enables the 304 exemption. Stored in the Keychain.",
         "Zapisz token": "Save token",
         "Token zapisany w Keychain": "Token saved in the Keychain",
         "Nie udało się zapisać tokenu": "Failed to save the token",
@@ -134,7 +133,6 @@ extension Translations {
         "Zmienił się wydawca aplikacji — sprawdź.": "The app's publisher changed — review.",
         "instalacja %@": "install %@",
         // UX-01 — ujawnienie zakresu Touch ID dla sudo.
-        "Działa dla całego sudo w systemie, nie tylko dla Wegi.": "Applies to all sudo on the system, not just Wega.",
         // FEAT-03 — transparentność pobrania (UpdateView).
         "Bez weryfikacji sumy kontrolnej": "Without checksum verification",
         "Homebrew zainstaluje bez sprawdzenia sumy: %@": "Homebrew will install without checking the checksum: %@",
@@ -163,16 +161,10 @@ extension Translations {
         // FEAT-07 — gating pobrań.
         "Niekorzystne warunki pobierania (%@) — kontynuuję na żądanie.": "Unfavorable download conditions (%@) — continuing at your request.",
         "Uwaga: kosztowne łącze lub throttling — pobieram mimo to.": "Note: metered link or throttling — downloading anyway.",
-        "Bramka zasobów": "Resource gate",
-        "Wega sprawdza miejsce, łącze, baterię i temperaturę przed snapshotem i pobraniem.": "Wega checks disk space, network, battery and temperature before snapshotting and downloading.",
         "Duże pobranie": "Large download",
         "Niska bateria": "Low battery",
-        "Mnożnik rozpakowania": "Unpacking multiplier",
-        "Margines dysku": "Disk safety margin",
         "Aktualizacja odroczona": "Update postponed",
         "Warunki nie pozwalają teraz bezpiecznie pobrać aktualizacji.": "Current conditions do not allow the update to be downloaded safely.",
-        "Nie udało się utworzyć snapshotu dla: %@.": "Could not create a snapshot for: %@.",
-        "Nie udało się utworzyć wymaganego snapshotu.": "Could not create the required snapshot.",
         // FEAT-05 — rollback casków.
         "%@: nowa wersja nie przeszła kontroli — przywrócono poprzednią.": "%@: the new version failed the check — restored the previous one.",
         "%@: brew nie zainstalował nowej wersji — na dysku została poprzednia.":
@@ -193,8 +185,6 @@ extension Translations {
         "%@: nowa wersja nie przeszła kontroli, ale rollback się nie powiódł.": "%@: the new version failed the check, but rollback did not succeed.",
         // LT-02 — canary ze smoke-testem: aplikacja jest startowana ukryta i musi przeżyć okno.
         "Test startu po aktualizacji": "Post-update launch test",
-        "Kontrola Gatekeepera i wydawcy mówi, czym plik jest — nie mówi, czy da się go uruchomić. Po tych kontrolach Wega startuje zaktualizowaną aplikację ukrytą, w tle, i sprawdza, czy przeżyje pięć sekund. Jeśli padnie od razu, poprzednia wersja wraca ze snapshotu.":
-            "The Gatekeeper and publisher checks say what the file is — they do not say whether it runs. After those checks Wega starts the updated app hidden, in the background, and watches whether it stays alive for five seconds. If it dies immediately, the previous version is restored from the snapshot.",
         "Sprawdzaj, czy zaktualizowana aplikacja się uruchamia": "Check that the updated app starts",
         "Aplikacja, którą masz właśnie otwartą, jest pomijana — Wega nie zamknie jej, żeby zrobić sobie miejsce. Wyłącz test, jeśli któraś z aktualizowanych aplikacji źle znosi start i natychmiastowe zamknięcie.":
             "An app you currently have open is skipped — Wega will not quit it to make room. Turn the test off if one of the apps being updated takes badly to being started and closed straight away.",
@@ -207,13 +197,10 @@ extension Translations {
         "%@: ten cask instaluje pakiet .pkg — aktualizacja pójdzie bez ochrony rollbackiem.":
             "%@: this cask installs a .pkg package — the update will run without rollback protection.",
         // REL-02 — nieudany rollback to czerwony baner sticky, nie wpis w zwijanym logu.
-        "Rollback się nie powiódł": "Rollback failed",
         "%@: nowa wersja nie przeszła kontroli, a przywrócenie poprzedniej nie powiodło się. Sprawdź aplikację przed użyciem.": "%@: the new version failed the check and the previous one could not be restored. Check the app before using it.",
         // FEAT-04 — watchdog (upgrade).
-        "Zmiana wydawcy": "Publisher changed",
         "%@: Team ID zmienił się (%@ → %@). Zweryfikuj.": "%@: Team ID changed (%@ → %@). Verify.",
         "%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.": "%@: Team ID changed (%@ → %@). Restored the previous trusted version.",
-        "%@: Team ID już różnił się od zaufanego baseline (%@ → %@). Aktualizację zablokowano przed uruchomieniem.": "%@: Team ID already differed from the trusted baseline (%@ → %@). The upgrade was blocked before execution.",
         "%@: zmienił się Team ID wydawcy — przywrócono poprzednią zaufaną wersję.": "%@: the publisher's Team ID changed — restored the previous trusted version.",
         "Cofnęłam %@ — zmienił się wydawca.": "Rolled back %@ — the publisher changed.",
         // FEAT-06 — AI triage (self-update).
@@ -221,19 +208,12 @@ extension Translations {
         // FEAT-01 / SEC-03 — privileged helper + self-update verification.
         "Aktualizacja nie przeszła weryfikacji podpisu — otwieram stronę wydania.": "The update failed signature verification — opening the release page.",
         // ICE-01 — in-app biometric gate.
-        "Potwierdź usunięcie komponentu uprzywilejowanego": "Confirm removing the privileged component",
-        "Komponent uprzywilejowany": "Privileged component",
-        "Pozwala instalować zweryfikowane aktualizacje i konfigurować Touch ID bez wpisywania hasła — przez podpisany helper (XPC) z białą listą operacji.": "Installs verified updates and configures Touch ID without typing a password — via a signed helper (XPC) with a whitelist of operations.",
         "Aktywny": "Active",
         "Wymaga zgody": "Needs approval",
         "Niezarejestrowany": "Not registered",
         "Nie znaleziono": "Not found",
-        "Usuń komponent": "Remove component",
         "Otwórz Ustawienia → Elementy logowania": "Open Settings → Login Items",
-        "Zainstaluj komponent": "Install component",
         "Brak skonfigurowanego Team ID — helper zadziała dopiero w podpisanym buildzie.": "No Team ID configured — the helper works only in a signed build.",
-        "Zatwierdź komponent w Ustawieniach → Elementy logowania.": "Approve the component in Settings → Login Items.",
-        "Komponent uprzywilejowany gotowy.": "Privileged component ready.",
         // BG-02 — „Uruchamiaj przy logowaniu" (SMAppService.mainApp): tryb tła po restarcie Maca.
         "Uruchamiaj przy logowaniu": "Launch at login",
         "Uruchamiaj Wegę przy logowaniu": "Launch Wega at login",
@@ -289,9 +269,7 @@ extension Translations {
         "Skan nie powiódł się": "Scan failed",
         "Zamknij": "Close",
         "%@ z %@ zaznaczonych": "%@ of %@ selected",
-        "Homebrew Formulae": "Homebrew Formulae",
         "narzędzia CLI": "CLI tools",
-        "Homebrew Casks": "Homebrew Casks",
         "aplikacje .app": ".app applications",
         "samoaktualizujące się": "self-updating",
         "Homebrew nie pilnuje wersji tych apek (auto_updates) — robią to same. Wega sprawdza je u źródła.": "Homebrew doesn't track these apps' versions (auto_updates) — they update themselves. Wega checks them at the source.",
@@ -317,8 +295,6 @@ extension Translations {
         "Sprawdź logi poniżej.": "Check the logs below.",
         "Nie udało się dokończyć instalacji — szczegóły w logu.": "The installation could not be completed — see the log for details.",
         "Aktualizuję, chwila…": "Updating, one moment…",
-        "Brew zgłosił błąd — sprawdź log poniżej.": "Brew reported an error — check the log below.",
-        "Nie udało się: %@. Szczegóły w logu.": "Failed: %@. Details in the log.",
         "%@ Cask wymaga hasła administratora — uruchom Wega ponownie, helper askpass zapyta o nie w okienku.": "%@ The cask requires an administrator password — launch Wega again, the askpass helper will ask for it in a window.",
         "Aktualizacja niekompletna": "Update incomplete",
         // REL-05 — the "App Management" TCC refusal, named instead of left as raw stderr.
@@ -338,15 +314,11 @@ extension Translations {
         "Przeinstaluj przez Brew": "Reinstall via Brew",
         // Tap trust — przyciski w logu brew na ostrzeżenie Homebrew 7 o niezaufanych tapach.
         "zmiana tapów Homebrew": "changing Homebrew taps",
-        "Nie udało się zmienić tapów": "Could not change the taps",
-        "Odpięto nieużywane tapy": "Unused taps untapped",
         "Zaufano zainstalowanym pakietom": "Installed packages trusted",
         "Zaufano wskazanej definicji pakietu": "Specified package definition trusted",
         "Wykonano: %@": "Ran: %@",
-        "Homebrew pomija pakiety z niezaufanych tapów": "Homebrew is skipping packages from untrusted taps",
         "Przycisk zmienia konfigurację Homebrew: uruchamia dokładnie polecenie obok, dopiero po kliknięciu.":
             "A button changes your Homebrew configuration: it runs exactly the command beside it, only when clicked.",
-        "Odepnij nieużywane tapy": "Untap unused taps",
         "Nic zainstalowanego nie pochodzi z tych tapów.": "Nothing installed came from these taps.",
         "Zaufaj zainstalowanym caskom": "Trust installed casks",
         "Tylko te zainstalowane caski — nie cały tap.": "Only these installed casks — not the whole tap.",
@@ -356,16 +328,12 @@ extension Translations {
         "Zaufaj definicji formuły": "Trust formula definition",
         "Homebrew wymaga tej definicji przy odpinaniu tapu. Zaufanie pozostanie zapisane; potem ponów odpięcie.":
             "Homebrew requires this definition when untapping. Trust will remain saved; retry untapping afterwards.",
-        "Zaufaj nowemu wydawcy": "Trust the new publisher",
-        "Zaufano nowemu wydawcy": "New publisher trusted",
         "%@: Team ID %@ jest teraz zaufanym wydawcą.": "%@: Team ID %@ is now the trusted publisher.",
-        "Wydawca już zaufany": "Publisher already trusted",
         "%@: zainstalowana aplikacja jest podpisana zaufanym Team ID.": "%@: the installed app is signed by the trusted Team ID.",
         "Nie zmieniono zaufania": "Trust not changed",
         "%@: nie znaleziono zainstalowanej aplikacji.": "%@: the installed app could not be found.",
         "%@: nie udało się odczytać podpisu zainstalowanej aplikacji.": "%@: couldn't read the installed app's signature.",
         "%@: aplikację podpisano ponownie innym Team ID (%@ zamiast %@). Nie zmieniono zaufania.": "%@: the app was re-signed by a different Team ID (%@ instead of %@). Trust not changed.",
-        "Zaufać nowemu wydawcy %@?": "Trust the new publisher of %@?",
         "Teraz podpisuje ją Team ID %@ zamiast zaufanego %@. Potwierdź tylko, jeśli wiesz, że producent zmienił konto deweloperskie.": "It is now signed by Team ID %@ instead of the trusted %@. Confirm only if you know the vendor changed its developer account.",
         // REL-07 — label on a cask a prior auto-rollback reverted (kept visible for a retry).
         "cofnięto — ponów próbę": "rolled back — retry",
@@ -414,9 +382,6 @@ extension Translations {
         "Tropię intruzów w Twoich katalogach aplikacji…": "Tracking down intruders in your app folders…",
         // UX-16 — configurable scan directories, exclusions and recursion depth (Settings).
         "Katalogi skanowania": "Scan directories",
-        "Wega skanuje /Applications, ~/Applications i ich podfoldery. Dodaj własne katalogi (także na innych wolumenach), pomiń te, których nie chcesz przeszukiwać, i ustaw głębokość zagłębiania.":
-            "Wega scans /Applications, ~/Applications and their subfolders. Add your own directories (including on other volumes), skip the ones you don't want searched, and set how deep to descend.",
-        "Głębokość zagłębiania": "Recursion depth",
         "0 = tylko sam katalog. 1 = katalog i jego bezpośrednie podfoldery.":
             "0 = the directory only. 1 = the directory and its immediate subfolders.",
         "Katalogi użytkownika": "Your directories",
@@ -459,11 +424,9 @@ extension Translations {
         "Duplikat zniknął. PATH ma już tylko jedną wersję.": "The duplicate is gone. PATH now has only one version.",
         "Nie udało się usunąć duplikatu": "Failed to remove the duplicate",
         "Szczegóły w logu poniżej.": "Details in the log below.",
-        "Przepnij": "Migrate",
         "Otwórz w App Store": "Open in App Store",
         // UX-02 — every migration row carries the identical button above, so the spoken label
         // has to say which app it belongs to.
-        "Przepnij %@ do Homebrew": "Adopt %@ into Homebrew",
         "Otwórz %@ w App Store": "Open %@ in the App Store",
         "Polecenie:": "Command:",
         "Log migracji": "Migration log",
@@ -584,7 +547,6 @@ extension Translations {
         "Zobacz wydanie": "View release",
         "Brak opublikowanych notatek": "No notes published",
         "Nie udało się pobrać notatek wydania": "Couldn't fetch the release notes",
-        "Zobacz w logach": "View in logs",
         "Włącz Touch ID": "Enable Touch ID",
         "%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła.": "%@ The cask requires an administrator password. Enable Touch ID to authorize updates with your fingerprint — no password prompt.",
         "Spis aplikacji": "Inventory",
@@ -596,21 +558,16 @@ extension Translations {
         "Przypnij wersję": "Pin version",
         "Przypnij": "Pin",
         "Wega nie pokaże aktualizacji nowszych niż podana wersja. Zostaw bieżącą, żeby zatrzymać aplikację tu, gdzie jest.": "Wega won't show updates newer than the version you set. Leave the current one to hold the app where it is.",
-        "Ignorowane i przypięte": "Ignored & pinned",
-        "Brak reguł. Kliknij aktualizację prawym przyciskiem, aby ją zignorować lub przypiąć wersję.": "No rules. Right-click an update to ignore it or pin a version.",
         "Ignorowane": "Ignored",
         "Przypięte do %@": "Pinned to %@",
         "Pominięta wersja %@": "Skipped version %@",
-        "Usuń regułę": "Remove rule",
         "Sprawdzam…": "Checking…",
         "Sprawdź teraz": "Check now",
         // UX-10 — menu bar i skróty klawiaturowe (WegaCommands).
         "Aktualizacje": "Updates",
         "Aktualizuj": "Update",
         "Znajdź w spisie aplikacji": "Find in inventory",
-        "Otwórz Wega": "Open Wega",
         "Sprawdzaj automatycznie": "Check automatically",
-        "Zakończ Wega": "Quit Wega",
         "Sprawdzam aktualizacje…": "Checking for updates…",
         // UX-08 — „%@ aktualizacji dostępnych" jest odmieniane przez liczbę: warianty
         // one/few/many trzyma `Plurals`, a menu bar woła `trp(base, count)` zamiast `trf`.
@@ -629,7 +586,6 @@ extension Translations {
         "Obejdę wszystkie kąty.": "I'll patrol every corner.",
         "Co do odświeżenia": "What needs refreshing",
         "Usuń aplikacje": "Remove apps",
-        "Przepnij pod Brew": "Reattach to Brew",
         "Pełny obchód": "Full sweep",
         "O aplikacji": "About the app",
         // M3(d) — wyjaśniamy się zanim macOS pokaże swój jednorazowy dialog.
@@ -644,12 +600,11 @@ extension Translations {
         "Wyrejestruj": "Deregister",
         // M5 — siatka bezpieczeństwa staje się widoczna; badge nie obiecuje ręcznego „Cofnij”.
         "Przed aktualizacją robię kopię. Jeśli nowa wersja nie przejdzie testu, wracam do poprzedniej.":
-            "I snapshot the app before updating. If the new version fails its check, I put the old one back.",
+            "I make a pre-update copy of the app. If the new version fails its check, I put the old one back.",
         "Chronione automatycznym cofnięciem": "Protected by automatic rollback",
         "Ten cask nie instaluje aplikacji, więc nie da się zrobić kopii ani cofnąć aktualizacji.":
-            "This cask installs no app, so it cannot be snapshotted or rolled back.",
+            "This cask installs no app, so I can't make a pre-update copy or undo the update.",
         "Bez ochrony cofnięciem": "No rollback protection",
-        "Więcej działań": "More actions",
         // F3 — ciche aktualizacje w tle: opt-in per aplikacja, tylko dla chronionych casków.
         "Aktualizuj automatycznie w tle": "Update automatically in the background",
         // BG-05 — trwały audyt i cofanie zgód niezależnie od bieżącej listy aktualizacji.
@@ -658,10 +613,6 @@ extension Translations {
             "No permissions. You can grant one from the ⋯ menu of a protected cask in the update list.",
         "Zgoda udzielona: %@": "Granted: %@",
         "Cofnij zgodę": "Revoke permission",
-        "Przed każdą aktualizacją Wega ponownie sprawdza, czy aplikacja nie działa, nie jest zignorowana lub przypięta oraz czy można utworzyć snapshot.":
-            "Before every update, Wega checks again that the app is not running, ignored or pinned, and that a snapshot can be created.",
-        "Status każdego pakietu uwzględnia bieżącą aktualizację, reguły i uruchomioną aplikację. Snapshot, zasoby i bezpieczeństwo wydawcy są sprawdzane dopiero bezpośrednio przed aktualizacją.":
-            "Each package status includes its current update, policies, and running app. Snapshot, resources, and publisher safety are checked only immediately before an update.",
         "Stałe warunki spełnione": "Stable requirements met",
         "Stałe warunki niespełnione": "Stable requirements not met",
         "Gotowe do kontroli końcowej": "Ready for final checks",
@@ -676,14 +627,10 @@ extension Translations {
         "Wersja %@ tego pakietu jest pominięta.": "Version %@ of this package is skipped.",
         "Pakiet nie oczekuje teraz na aktualizację; zgoda pozostaje zapisana.":
             "The package has no update waiting right now; its permission remains saved.",
-        "Nie można rozpoznać zainstalowanej aplikacji .app wymaganej do snapshotu i kontroli wyniku.":
-            "The installed .app required for a snapshot and result verification cannot be resolved.",
         "Aplikacja jest teraz uruchomiona i nie może być bezpiecznie zastąpiona.":
             "The app is currently running and cannot be replaced safely.",
         "Homebrew nie opisuje artefaktów tego casku, więc nie można potwierdzić bezpiecznej aktualizacji.":
             "Homebrew does not describe this cask's artifacts, so a safe update cannot be confirmed.",
-        "Cask nie instaluje aplikacji .app, więc nie można utworzyć snapshotu ani sprawdzić wyniku.":
-            "The cask does not install an .app, so Wega cannot create a snapshot or verify the result.",
         "Cask zawiera uprzywilejowany lub nieznany artefakt, który może wymagać nadzoru.":
             "The cask contains a privileged or unknown artifact that may require supervision.",
         "Pobranie nie ma konkretnej sumy SHA-256, więc Homebrew nie zweryfikuje pliku.":
@@ -732,7 +679,6 @@ extension Translations {
         "Aplikacje": "Apps",
         "Narzędzia CLI": "CLI tools",
         "Poprawki bezp.": "Security fixes",
-        "Do przepięcia": "To reattach",
         "Homebrew nie jest zainstalowany": "Homebrew is not installed",
         "Polecenie instalacji (wklej w Terminal):": "Installation command (paste into Terminal):",
         "Otwórz brew.sh": "Open brew.sh",
@@ -748,12 +694,8 @@ extension Translations {
         "Zostań chwilę, sprawdzam…": "Hang on a sec, checking…",
         "Stary cask to zły cask.": "An old cask is a bad cask.",
         "Oto co o sobie wiem.": "Here's what I know about myself.",
-        "Touch ID dla Homebrew": "Touch ID for Homebrew",
-        "Włącz Touch ID dla sudo": "Enable Touch ID for sudo",
         "Aktywne": "Active",
         "Dostępne": "Available",
-        "Sudo używa Touch ID. Aktualizacje casków z sudo (Zoom, sterowniki, launchd) potwierdzisz odciskiem zamiast hasła.": "Sudo uses Touch ID. You'll confirm cask updates that require sudo (Zoom, drivers, launchd) with your fingerprint instead of a password.",
-        "Po włączeniu, brew nie zapyta o hasło w okienku — pojawi się natywny sheet Touch ID. Wymaga jednorazowo uprawnień administratora do zapisu /etc/pam.d/sudo_local.": "Once enabled, brew won't ask for a password in a dialog — a native Touch ID sheet appears instead. Requires administrator privileges once to write /etc/pam.d/sudo_local.",
         "macOS zablokował zapis do /etc/pam.d/sudo_local z poziomu Wegi (TCC). Uruchom poniższą komendę w Terminalu — wystarczy raz:": "macOS blocked writing to /etc/pam.d/sudo_local from within Wega (TCC). Run the command below in Terminal — just once:",
         "Bezpieczny zapis PAM wymaga podpisanego helpera. Jeśli jest niedostępny, uruchom poniższą transakcyjną komendę w Terminalu — wystarczy raz:": "A safe PAM write requires the signed helper. If it is unavailable, run the transactional command below in Terminal — just once:",
         "Skopiuj komendę": "Copy command",
@@ -859,7 +801,6 @@ extension Translations {
         "Pobieram notatki wydania…": "Fetching release notes…",
         "Notatki są dłuższe — to początek": "The notes are longer — this is the start",
         "Zobacz pełne notatki": "See the full notes",
-        "Zobacz u wydawcy": "See at the publisher",
         "Spróbuj ponownie": "Try again",
         "Akcje": "Actions",
         "Brak informacji o zmianach": "No release notes available",
@@ -873,10 +814,6 @@ extension Translations {
         "Zweryfikowano": "Verified",
         "Wykryto ostrzeżenie": "Warning detected",
         "Weryfikacja niedostępna": "Verification unavailable",
-        "Wydawca (Team ID)": "Publisher (Team ID)",
-        "Wydawca się zmienił:": "Publisher changed:",
-        "pierwsze sprawdzenie wydawcy": "first publisher check",
-        "wydawca bez zmian": "publisher unchanged",
         "Podpis": "Signature",
         "ważny": "valid",
         "nieważny": "invalid",
@@ -936,8 +873,6 @@ extension Translations {
             "No automatic undo — the App Store does not allow going back to a previous version.",
         "Bez automatycznego cofnięcia — npm nie zachowuje poprzednich wersji pakietów.":
             "No automatic undo — npm does not keep previous package versions.",
-        "Bez automatycznego cofnięcia — poprzednią wersję pobierzesz od wydawcy.":
-            "No automatic undo — download the previous version from the vendor.",
         // INSTALL_PROGRESS — the upgrade's progress bar.
         "Postęp aktualizacji": "Update progress",
         "Przygotowuję kopie zapasowe…": "Preparing backups…",
