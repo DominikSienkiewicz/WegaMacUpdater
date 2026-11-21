@@ -8,6 +8,9 @@ import MacUpdaterCore
 /// the canary and the rescan, and `installedChecking` says exactly that.
 enum UpdateRunRowStatus: Equatable, Sendable {
     case waiting, installing, installedChecking, failed, notStarted
+    /// It may ask for the administrator password, and the settings `sudo` reads cannot be trusted,
+    /// so it will not start (owner decision 2026-11-21).
+    case heldForPassword
 
     /// Waiting after a stop request reads as `notStarted`.
     func title(isStopping: Bool) -> String {
@@ -17,6 +20,7 @@ enum UpdateRunRowStatus: Equatable, Sendable {
         case .installedChecking: return tr("zainstalowano, sprawdzam")
         case .failed:            return tr("nie udało się")
         case .notStarted:        return tr("nie zacznę")
+        case .heldForPassword:   return tr("pomijam — wymaga hasła")
         }
     }
 

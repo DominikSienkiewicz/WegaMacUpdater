@@ -102,6 +102,7 @@ extension ScanStore {
         // C2 stage 3 — the board leaves on every exit for the same reason, through its own defer.
         beginRunBoard(planned: plannedItems)
         defer { endRunBoard() }
+        beginPasswordHold(plannedCaskNames: plannedCaskNames, planned: plannedItems)
         // REL-12 — zeroth boundary: stopping here also skips the snapshot/preflight work.
         guard !shouldStopUpdate(before: Array(plannedKeys)) else {
             updating = false
@@ -267,7 +268,8 @@ extension ScanStore {
         let summary = run.summary
         let report = UpdateRunReport.make(
             planned: planned, summary: summary,
-            skippedKeys: updateInterruption.skippedKeys, wasStopped: updateInterruption.didSkipWork,
+            skippedKeys: updateInterruption.skippedKeys, heldForPasswordKeys: heldForPasswordKeys,
+            wasStopped: updateInterruption.didSkipWork,
             startedAt: runBoard.startedAt, finishedAt: dependencies.now(),
             caskOperationID: caskOperationID, caskAppPaths: caskAppPaths,
             stillOutdatedKeys: Set(allItems.map(\.key)),
@@ -376,6 +378,20 @@ extension ScanStore {
         }
         for line in report.failureLogLinesBeyondTheSummary {
             WegaLog.error(.homebrew, line)
+        }
+    }
+
+    /// Owner decision 2026-11-21 — right before the run starts, the gate reads the settings `sudo`
+    /// reads. While they cannot be trusted, the casks that may ask for the administrator password
+    /// (and those whose profile is unknown) read „pomijam — wymaga hasła” from the start.
+    func beginPasswordHold(plannedCaskNames: [String], planned: [OutdatedItem]) {
+        heldForPasswordKeys = []
+        passwordHold = dependencies.sudoPolicyDistrust()
+        guard let passwordHold else { return }
+        UpdateDiagnostics.record("update.passwordHold", fields: ["distrust": passwordHold.logName])
+        let mayAsk = Set(CaskUpgradeLanes(tokens: plannedCaskNames, profiles: caskProfiles).serial)
+        for item in planned where item.kind == .cask && mayAsk.contains(item.name) {
+            markRunRow(item.key, .heldForPassword)
         }
     }
 

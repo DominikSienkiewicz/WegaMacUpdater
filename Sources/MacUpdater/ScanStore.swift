@@ -77,6 +77,10 @@ struct ScanStoreDependencies {
     /// Where a fully updated run records that the readiness card has done its job
     /// (`ReadinessPresentation.dismissedKey`, which the card reads through `@AppStorage`).
     var defaults: UserDefaults = .standard
+    /// Owner decision 2026-11-21 — reads, now, whether the settings `sudo` reads can be trusted;
+    /// `nil` when they can. A run asks at its start and before each cask that may ask for the
+    /// administrator password. A test's store says it outright; `.live` asks the app's gate.
+    var sudoPolicyDistrust: @MainActor () -> SudoPolicyDistrust? = { nil }
 
     static let live = ScanStoreDependencies(
         operations: .shared,
@@ -105,7 +109,8 @@ struct ScanStoreDependencies {
             MenuBarAgent.shared.reportVendorCheck(item: item, remaining: remaining, check: check, count: count, fingerprint: fingerprint)
         },
         catalogStamp: .defaults(.standard),
-        reportWindowScanRunning: { MenuBarAgent.shared.setWindowScanRunning($0) }
+        reportWindowScanRunning: { MenuBarAgent.shared.setWindowScanRunning($0) },
+        sudoPolicyDistrust: { SudoPasswordPromptGate.shared.check() }
     )
 }
 
@@ -232,6 +237,11 @@ final class ScanStore: ObservableObject {
     /// run's stage may name the package it is installing — with several processes out, any
     /// single name is a claim about the other two as well.
     var inFlightItemCount = 0
+    /// Owner decision 2026-11-21 — why this run holds what may ask for the administrator password;
+    /// `nil` while the settings `sudo` reads can be trusted. Once set, it stays for the run.
+    var passwordHold: SudoPolicyDistrust?
+    /// Planned keys this run held for that reason; the report names them.
+    var heldForPasswordKeys: Set<String> = []
     /// F4 — tools the user has not installed. An invitation to install them, not an error.
     @Published var unavailableSources = 0
     /// REL-09 — what each source of the result currently on screen answered. Survives a
