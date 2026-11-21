@@ -36,6 +36,60 @@ enum UpdateBandLayout {
     }
 }
 
+/// C2 stage 4 — the one state the band describes. Every slot (eyebrow, headline, sentence,
+/// summary, round element) reads this, so no slot can mix the words of two states.
+enum UpdateBandMode: Equatable {
+    case scan(UpdateBandScanPresentation)
+    case run(UpdateBandRunPresentation)
+    case summary(UpdateBandSummaryPresentation)
+    case results
+
+    /// The precedence: a scan (the run's check included) over the run it confirms, the run over
+    /// a summary still open from the previous run, the summary over the results.
+    static func resolve(scan: UpdateBandScanPresentation?, run: UpdateBandRunPresentation?,
+                        summary: UpdateBandSummaryPresentation?) -> UpdateBandMode {
+        if let scan { return .scan(scan) }
+        if let run { return .run(run) }
+        if let summary { return .summary(summary) }
+        return .results
+    }
+
+    func headline(results: UpdateBandPresentation) -> String {
+        switch self {
+        case .scan(let scan):       scan.headline
+        case .run(let run):         run.headline
+        case .summary(let summary): summary.headline
+        case .results:              results.headline
+        }
+    }
+
+    func line(results: UpdateBandPresentation) -> String {
+        switch self {
+        case .scan(let scan):       scan.line
+        case .run(let run):         run.line
+        case .summary(let summary): summary.line
+        case .results:              results.line
+        }
+    }
+
+    /// The eyebrow of a state whose time does not move (since when the run started, when the
+    /// summarised run ran); `nil` for the scan's ticking eyebrow and the results' freshness.
+    var fixedEyebrow: String? {
+        switch self {
+        case .run(let run):         run.eyebrow
+        case .summary(let summary): summary.eyebrow
+        case .scan, .results:       nil
+        }
+    }
+
+    /// What the fixed eyebrow gives way to where it does not fit: the summary's status without
+    /// its time range („Aktualizacja niekompletna · 8:35–9:00” needs 259 pt of a 220 pt column).
+    var shortEyebrow: String? {
+        if case .summary(let summary) = self { return summary.shortEyebrow }
+        return nil
+    }
+}
+
 /// The dark band above the Updates list: Wega, what was found, what is queued and the round
 /// update button. Always `WegaLayout.bandHeight` tall so the list below never moves; text
 /// truncates before the band grows. The caller builds the button, so its gate stays with the
@@ -49,6 +103,10 @@ enum UpdateBandLayout {
 /// when, the stage, the counter) and carries its stop and „Pokaż log”, and a ring of finished
 /// packages stands where the button was. Wega stays still. The band sits outside the disabled
 /// screen, so the stop stays live while the rows are locked.
+///
+/// C2 stage 4 — after the run the caller passes `summary` until the user closes it: the band
+/// then says how the run ended, counts each result and offers „Zamknij podsumowanie”, and a
+/// result ring stands where the button was. The run's check is a scan (`scan` wins over `run`).
 struct UpdateBand<Action: View>: View {
     let presentation: UpdateBandPresentation
     let scan: UpdateBandScanPresentation?
@@ -57,6 +115,8 @@ struct UpdateBand<Action: View>: View {
     let onShowPlan: () -> Void
     let onStop: () -> Void
     let onShowLog: () -> Void
+    let summary: UpdateBandSummaryPresentation?
+    let onCloseSummary: () -> Void
     let action: (UpdateBandLayout) -> Action
 
     @Environment(\.colorScheme) private var colorScheme
@@ -70,6 +130,8 @@ struct UpdateBand<Action: View>: View {
         onShowPlan: @escaping () -> Void,
         onStop: @escaping () -> Void = {},
         onShowLog: @escaping () -> Void = {},
+        summary: UpdateBandSummaryPresentation? = nil,
+        onCloseSummary: @escaping () -> Void = {},
         @ViewBuilder action: @escaping (UpdateBandLayout) -> Action
     ) {
         self.presentation = presentation
@@ -79,6 +141,8 @@ struct UpdateBand<Action: View>: View {
         self.onShowPlan = onShowPlan
         self.onStop = onStop
         self.onShowLog = onShowLog
+        self.summary = summary
+        self.onCloseSummary = onCloseSummary
         self.action = action
     }
 
@@ -138,17 +202,25 @@ struct UpdateBand<Action: View>: View {
         }
     }
 
-    private var wegaPose: WegaPose { scan == nil ? .idle : .sniff }
+    private var mode: UpdateBandMode { .resolve(scan: scan, run: run, summary: summary) }
 
-    /// The update button, or the ring that counts a scan's sources or a run's packages. Last in
-    /// every layout, so VoiceOver reads it last.
+    private var wegaPose: WegaPose {
+        if case .scan = mode { return .sniff }
+        return .idle
+    }
+
+    /// The update button, or the ring that counts a scan's sources, a run's packages or the
+    /// summarised run's result. Last in every layout, so VoiceOver reads it last.
     @ViewBuilder
     private func roundElement(_ layout: UpdateBandLayout) -> some View {
-        if let scan {
+        switch mode {
+        case .scan(let scan):
             UpdateBandScanRing(completed: scan.completedSources, total: scan.totalSources, diameter: layout.buttonDiameter, showsWega: layout == .narrow)
-        } else if let run {
+        case .run(let run):
             UpdateBandRunRing(completed: run.completed, total: run.total, diameter: layout.buttonDiameter, accessibilityValue: run.line)
-        } else {
+        case .summary(let summary):
+            UpdateBandResultRing(updated: summary.updated, planned: summary.planned, diameter: layout.buttonDiameter, accessibilityValue: summary.ringValue)
+        case .results:
             action(layout)
         }
     }
@@ -156,34 +228,44 @@ struct UpdateBand<Action: View>: View {
     private func textColumn(_ layout: UpdateBandLayout) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             eyebrow(layout)
-            Text(run?.headline ?? scan?.headline ?? presentation.headline)
+            Text(mode.headline(results: presentation))
                 .font(.wega(layout.headlineStyle, weight: .semibold))
                 .foregroundStyle(Color.wegaBandText)
                 .lineLimit(layout.headlineLineLimit)
                 .accessibilityAddTraits(.isHeader)
-            Text(run?.line ?? scan?.line ?? presentation.line)
+            Text(mode.line(results: presentation))
                 .font(.wega(.callout))
                 .foregroundStyle(Color.wegaBandSecondaryText)
                 .lineLimit(scan == nil && run == nil ? (layout == .regular ? 2 : 1) : layout.scanLineLimit)
             if layout != .regular {
-                if let scan {
-                    scanSummary(scan)
-                } else if let run {
-                    UpdateBandRunControls(run: run, showsNote: false, onStop: onStop, onShowLog: onShowLog)
-                } else {
-                    compactSummary
-                }
+                compactRow
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// The compact and narrow layouts' row under the sentence: what the regular layout's
+    /// summary column says, in the text column.
+    @ViewBuilder
+    private var compactRow: some View {
+        switch mode {
+        case .scan(let scan):
+            scanSummary(scan)
+        case .run(let run):
+            UpdateBandRunControls(run: run, showsNote: false, onStop: onStop, onShowLog: onShowLog)
+        case .summary(let summary):
+            UpdateBandSummaryControls(summary: summary, compact: true, onClose: onCloseSummary)
+        case .results:
+            compactSummary
+        }
+    }
+
     @ViewBuilder
     private func eyebrow(_ layout: UpdateBandLayout) -> some View {
-        if let scan {
+        if case .scan(let scan) = mode {
             scanEyebrow(scan)
-        } else if let run {
-            runEyebrow(run)
+        } else if let fixed = mode.fixedEyebrow {
+            fixedEyebrow(fixed, shortened: mode.shortEyebrow)
         } else if layout == .narrow {
             freshnessLabel
         } else {
@@ -264,9 +346,22 @@ struct UpdateBand<Action: View>: View {
         .clipped()
     }
 
-    /// When the run started. The time does not move, so nothing ticks under it.
-    private func runEyebrow(_ run: UpdateBandRunPresentation) -> some View {
-        Text(run.eyebrow)
+    /// When the run started, or when the summarised run ran. The time does not move, so
+    /// nothing ticks under it. Where the text does not fit, its `shortened` form stands instead.
+    @ViewBuilder
+    private func fixedEyebrow(_ text: String, shortened: String?) -> some View {
+        if let shortened {
+            ViewThatFits(in: .horizontal) {
+                fixedEyebrowText(text)
+                fixedEyebrowText(shortened)
+            }
+        } else {
+            fixedEyebrowText(text)
+        }
+    }
+
+    private func fixedEyebrowText(_ text: String) -> some View {
+        Text(text)
             .font(.wega(.caption, weight: .semibold, monospaced: true))
             .tracking(0.8)
             .textCase(.uppercase)
@@ -278,21 +373,26 @@ struct UpdateBand<Action: View>: View {
 
     @ViewBuilder
     private var regularSummary: some View {
-        if let scan {
+        switch mode {
+        case .scan(let scan):
             scanSummary(scan)
-        } else if let run {
+        case .run(let run):
             UpdateBandRunControls(run: run, showsNote: true, onStop: onStop, onShowLog: onShowLog)
-        } else {
+        case .summary(let summary):
+            UpdateBandSummaryControls(summary: summary, compact: false, onClose: onCloseSummary)
+        case .results:
             summaryColumn
         }
     }
 
-    /// While a scan runs the summary says only what it has found so far.
+    /// While a scan runs the summary says only what it has found so far; during the run's check,
+    /// that the result follows the check. Two lines: "I'll show the result after the check."
+    /// needs 205 pt of the regular column's 190 pt, and no scan state is short of height.
     private func scanSummary(_ scan: UpdateBandScanPresentation) -> some View {
         Text(scan.summary)
             .font(.wega(.callout, weight: .semibold))
             .foregroundStyle(Color.wegaBandText)
-            .lineLimit(1)
+            .lineLimit(2)
     }
 
     /// The regular layout's summary. Internal, like `compactSummary`, so the layout tests can

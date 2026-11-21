@@ -131,6 +131,7 @@ struct UpdateView: View {
                 if !isPresented { pendingUpdateTargets = [] }
             }
             .wegaAttention(showUpdateConfirmation || scan.pendingForceRestart != nil)
+            .wegaAttention(scan.runReport.map { $0.status != .finished } ?? false)
             // Switching the sidebar category re-filters the list but not the inspector's
             // resolver, so a selection made in one category would otherwise keep showing in
             // the pane after switching away from it. Clear it so the detail pane never
@@ -243,15 +244,15 @@ struct UpdateView: View {
     // MARK: Results
     private var resultsView: some View {
         VStack(spacing: 0) {
-            // The band reports the scan or the run and carries the update button; with nothing to
-            // update the plain heading does. The list header carries select-all next to the categories.
-            if hasUpdates {
+            // The band reports the scan, the run, its check and its summary, and carries the update
+            // button; without any of them the plain heading does. The list header carries select-all.
+            if showsBand {
                 resultsBand
                     .padding(.horizontal, WegaLayout.listGutter)
                     .padding(.top, WegaLayout.sectionSpacing)
             }
             VStack(alignment: .leading, spacing: 12) {
-                if !hasUpdates {
+                if !showsBand {
                     resultsHeading
                 }
                 listHeader
@@ -312,6 +313,8 @@ struct UpdateView: View {
             onShowPlan: { scan.showPlanPreview = true },
             onStop: { scan.cancelUpdate() },
             onShowLog: { scan.showLog = true },
+            summary: scan.runReport.map(summaryPresentation),
+            onCloseSummary: { scan.closeRunReport() },
             action: { layout in
                 UpdateBandButton(
                     title: presentation.buttonTitle,
@@ -357,7 +360,18 @@ struct UpdateView: View {
             catalogRefreshing: scan.isRefreshingCatalog,
             startedAt:         scan.scanStartedAt,
             manual:            scan.manualScanProgress,
-            foundSoFar:        scan.scopeCounts.all
+            foundSoFar:        scan.scopeCounts.all,
+            checksRunResult:   scan.updating
+        )
+    }
+
+    /// C2 stage 4 — the band's summary of the run on screen, read live for what can change
+    /// under it: the check's completeness, the hand-offs and this run's undos.
+    private func summaryPresentation(_ report: UpdateRunReport) -> UpdateBandSummaryPresentation {
+        UpdateBandSummaryPresentation(
+            report: report, wegaLine: wegaLine, scanComplete: scan.lastScanComplete,
+            handOffCount: scan.handOffCount(for: .all),
+            undoExpiry: UpdateBandSummaryPresentation.earliestUndoExpiry(of: report, in: scan.undoableUpdates)
         )
     }
 
@@ -516,11 +530,15 @@ struct UpdateView: View {
         !(allItems.isEmpty && visibleManual.isEmpty && scan.restartCandidates.isEmpty)
     }
 
-    /// Whether the scan found anything to update — what `resultsView` (band or plain heading)
+    /// Whether the scan found anything to update — what `showsBand` (band or plain heading)
     /// reads. Apps that only wait for a restart keep today's "Wszystko aktualne" heading.
     private var hasUpdates: Bool {
         !(allItems.isEmpty && visibleManual.isEmpty)
     }
+
+    /// C2 stage 4 — the band also stays for a run, its check and its summary, even when the run
+    /// emptied the list: its geometry never changes until the summary is closed.
+    private var showsBand: Bool { hasUpdates || scan.updating || scan.runReport != nil }
 
     /// Whether the list shows rows rather than one of its empty states — the one answer
     /// `listColumn` and the list header's scan note both read.

@@ -30,7 +30,7 @@ struct ContrastAndTargetsTests {
     @Test func reduceTransparencyHasNoVeilToRemove() throws {
         let overlay = packageRoot().appending(path: "Sources/MacUpdater/UpdateRunOverlay.swift", directoryHint: .notDirectory)
         #expect(!FileManager.default.fileExists(atPath: overlay.path), "the run's veil is gone")
-        for file in ["UpdateBand.swift", "UpdateBandRunViews.swift", "UpdateBandRunPresentation.swift"] {
+        for file in ["UpdateBand.swift", "UpdateBandRunViews.swift", "UpdateBandRunPresentation.swift", "UpdateBandSummaryViews.swift"] {
             let text = try source("Sources/MacUpdater/\(file)")
             #expect(!text.contains(".glassEffect("), "\(file)")
             #expect(!text.contains("Material"), "\(file)")
