@@ -20,6 +20,7 @@ struct RunReportStoreTests {
 
     private final class ActivityRecorder {
         var activities: [UpdateActivity] = []
+        var wegaLines: [String] = []
     }
 
     /// A store with a lock, a clock, defaults and ledgers of its own, and a check that answered
@@ -211,6 +212,9 @@ struct RunReportStoreTests {
         defer { stop.watch.cancel() }
         let store = stop.store
         let keys = stop.keys
+        let recorder = ActivityRecorder()
+        store.bind(ScanSinks(wegaState: { recorder.wegaLines.append($0.line) },
+                             activity: { recorder.activities.append($0) }))
 
         await withLanguage(.pl) { await store.runUpdate(targetKeys: keys) }
 
@@ -220,6 +224,11 @@ struct RunReportStoreTests {
         withLanguage(.pl) {
             #expect(store.runReport?.entries.map { $0.note(undo: nil) } == ["zatrzymano przed startem", "zatrzymano przed startem"])
             #expect(store.runReport?.statusTitle == "Aktualizacja przerwana")
+            // A clean stop stays a stop: an empty summary has `allItemsUpgraded`, and without the
+            // guard after the success path the run would fall into the failure branch.
+            #expect(!recorder.activities.contains(.error), "\(recorder.activities)")
+            #expect(recorder.activities.last == .idle, "\(recorder.activities)")
+            #expect(recorder.wegaLines.last == tr("Przerwałam aktualizację."), "\(recorder.wegaLines)")
         }
         #expect(store.banner == nil)
     }
