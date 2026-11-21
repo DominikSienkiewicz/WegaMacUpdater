@@ -124,7 +124,7 @@ bundle identifier, signature and version. The helper repeats this on its root-ow
 copy. After installer exit 0, both helper and client check the signed app at
 `/Applications/WegaMacUpdater.app`; recovery also checks that app before reporting success.
 A terminal failure clears the operation block without claiming that the update succeeded.
-Older helpers fail the version handshake and must be updated and re-registered. The check is per verb: since protocol 9 every acting verb needs a helper that refuses to serve from an unsafe bundle, so a running v5 or v6 helper (what released Wega ships: v5 up to 0.6.0, v6 since) or v7/v8 one reports an outdated helper for rollback, self-update, Trash and Touch ID until the Mac restarts or the helper is re-registered (v6 and v7 have no idle exit). Settling a pending installation handshakes only for `packageInstallationStatus` (minimum 6), so an older helper can still report an installation it ran.
+Older helpers fail the version handshake and must be updated and re-registered. The check is per verb: since protocol 9 every acting verb needs a helper that refuses to serve from an unsafe bundle, so a running v5 or v6 helper (what released Wega ships: v5 up to 0.6.0, v6 since) or v7/v8 one reports an outdated helper for rollback, self-update, Trash and Touch ID until the Mac restarts or the helper is re-registered (v5, v6 and v7 have no idle exit). Settling a pending installation handshakes only for `packageInstallationStatus` (minimum 6), so an older helper can still report an installation it ran.
 
 Manual scan deduplication uses `InstallationIdentity`, matching inventory and policy keys.
 Direct `.app` casks use `CaskAppPathResolver`; installer apps use `PackageCaskAttribution`

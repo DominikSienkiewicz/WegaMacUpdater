@@ -126,7 +126,7 @@ them verbatim under the new version heading, so that step is never done by hand 
   result. This is helper protocol v9: Wega sends every action only to a v9 helper, so a helper
   still running from an earlier Wega (released Wega has v6, or v5 up to 0.6.0) is out of date for restoring
   apps, self-updates through the helper, the Trash and Touch ID until you restart your Mac or
-  remove and reinstall the helper; a self-update it started is still settled through it.
+  remove and reinstall the helper; a self-update a v6 helper started is still settled through it.
 - **No sudo route while the settings sudo reads are unsafe or unproven.** When `sudo_local` is
   not a regular file, `sudo_local` or `/etc/pam.d` can be changed by someone other than root
   (whether Wega saw it or the helper reported it), `/etc/pam.d/sudo` is unsafe, or Wega cannot
