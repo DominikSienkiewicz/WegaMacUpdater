@@ -98,8 +98,9 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         return .stale
     }
 
-    /// One bounded handshake (the handshake deadline) before Uninstall promises the helper, so a
-    /// stale or dead helper is found before Wega quits anything.
+    /// One bounded handshake (the handshake deadline, and at most one retry after a dropped
+    /// connection) before Uninstall promises the helper, so a stale or dead helper is found before
+    /// Wega quits anything.
     public func uninstallAvailabilityAfterHandshake() async -> UninstallHelperAvailability {
         do {
             try await performHandshake(for: .stageApplicationBundleForTrash)
@@ -176,8 +177,8 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         try Self.acceptedVersion(reported: try await helperVersion(), for: verb)
     }
 
-    /// One bounded handshake for `verb`, so a screen can offer the verb only when the running
-    /// helper will take it.
+    /// One bounded handshake for `verb` (at most one retry after a dropped connection), so a screen
+    /// can offer the verb only when the running helper will take it.
     public func availabilityAfterHandshake(for verb: WegaHelperVerb) async -> HelperVerbAvailability {
         do {
             try await performHandshake(for: verb)

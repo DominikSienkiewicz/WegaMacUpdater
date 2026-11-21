@@ -6,9 +6,10 @@ import Foundation
 /// connection starts the binary of the current app bundle. One activity is an open connection, a
 /// running `WegaPrivilegedOps` method or a background installation. Whenever the count of activities
 /// drops to zero, and at `start()`, one check is scheduled `idleInterval` later. The check exits only
-/// when the count is still zero and the generation, which every `begin()` and `end()` bumps, is the one
-/// it was armed with. The decision and the exit hold the lock `begin()` takes, so a connection the
-/// delegate accepts is either counted before the decision or never meets a live process.
+/// when the count is still zero and the generation, which every `begin()` and the first `end()` of
+/// each activity bump, is the one it was armed with. The decision and the exit hold the lock
+/// `begin()` takes, so a connection the delegate accepts is either counted before the decision or
+/// never meets a live process.
 public final class HelperIdleMonitor: @unchecked Sendable {
     /// Runs `check` once, `delay` from now, and returns before it runs.
     public typealias Schedule = @Sendable (_ delay: Duration, _ check: @escaping @Sendable () -> Void) -> Void

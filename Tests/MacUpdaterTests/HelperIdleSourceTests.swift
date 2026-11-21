@@ -25,11 +25,14 @@ struct HelperIdleSourceTests {
     }
 
     /// Z6: `.info` is not persisted, so the exit is logged at `.notice`, and it carries nothing else.
-    @Test func theIdleExitIsLoggedAtNoticeAndEndsTheProcessCleanly() throws {
+    /// The exit runs under the monitor's lock, so it is `_exit`: no exit handler or static teardown
+    /// runs while another thread may wait on that lock (review of group C, M1).
+    @Test func theIdleExitIsLoggedAtNoticeAndEndsTheProcessWithoutExitHandlers() throws {
         let main = try source(Self.mainPath)
         let monitor = try #require(main.range(of: "HelperIdleMonitor("))
         let notice = try #require(main.range(of: "logger.notice(\"Pomocnik kończy pracę po bezczynności\")"))
-        let exit = try #require(main.range(of: "exit(EXIT_SUCCESS)"))
+        let exit = try #require(main.range(of: "_exit(EXIT_SUCCESS)"))
+        #expect(main.components(separatedBy: "exit(EXIT_SUCCESS)").count - 1 == 1, "only the `_exit` form ends the helper")
         #expect(monitor.upperBound <= notice.lowerBound)
         #expect(notice.upperBound <= exit.lowerBound, "logged before the process ends")
         #expect(!main.contains("logger.info("))

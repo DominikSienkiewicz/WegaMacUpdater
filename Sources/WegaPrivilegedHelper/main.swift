@@ -20,7 +20,9 @@ enum HelperIdle {
         exit: {
             // `.notice` is persisted, so `log show` still finds the exit afterwards; `.info` is not.
             HelperIdle.logger.notice("Pomocnik kończy pracę po bezczynności")
-            exit(EXIT_SUCCESS)
+            // Called under the monitor's lock: `_exit` runs no exit handler or static teardown that
+            // could wait on a thread blocked on that lock.
+            _exit(EXIT_SUCCESS)
         }
     )
 }
