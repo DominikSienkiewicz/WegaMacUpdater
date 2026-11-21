@@ -243,6 +243,45 @@ struct HiddenRulesTests {
         #expect(closed, "the toast never closed itself")
     }
 
+    // MARK: - Final review
+
+    /// I1 — a pin written from the row's sheet hides a ticked row. The row leaves the queue with
+    /// it, so "Przywróć" in the sheet brings it back to the list and not into the queue.
+    @Test func aPinnedRowLeavesTheQueueAndRestoreDoesNotPutItBack() throws {
+        let (store, item) = try storeWithOneFormula()
+        defer { UpdatePolicyStore.shared.remove(key: item.policyKey) }
+        store.selected = [item.key]
+
+        UpdatePolicyStore.shared.pin(key: item.policyKey, name: item.name, version: "1")
+        #expect(!store.selected.contains(item.key), "a row a rule hides is not queued")
+
+        UpdatePolicyStore.shared.remove(key: item.policyKey)
+        #expect(store.allItems.contains { $0.key == item.key })
+        #expect(!store.selected.contains(item.key), "restore brings the row back to the list, never into the queue")
+    }
+
+    /// I1 — the same for a rule written straight to the store, as Settings does: only the rows
+    /// a rule hides leave the queue (a pin the offer stays under hides nothing), and taking the
+    /// rules back adds nothing.
+    @Test func aRuleWrittenToTheStoreDeselectsOnlyWhatItHides() throws {
+        let (store, item) = try storeWithOneFormula()
+        let keptName = "hidden-rules-kept-\(UUID().uuidString)"
+        store.brewOutdated?.formulae.append(BrewOutdatedItem(name: keptName, installedVersions: ["1"], currentVersion: "2"))
+        let kept = try #require(store.allItems.first { $0.name == keptName })
+        defer { [item.policyKey, kept.policyKey].forEach(UpdatePolicyStore.shared.remove(key:)) }
+        store.selected = [item.key, kept.key]
+
+        UpdatePolicyStore.shared.pin(key: kept.policyKey, name: kept.name, version: "9")
+        #expect(store.selected == [item.key, kept.key], "a pin the offer stays under hides nothing")
+
+        UpdatePolicyStore.shared.ignore(key: item.policyKey, name: item.name)
+        #expect(store.selected == [kept.key])
+
+        UpdatePolicyStore.shared.remove(key: item.policyKey)
+        UpdatePolicyStore.shared.remove(key: kept.policyKey)
+        #expect(store.selected == [kept.key], "restoring a rule adds nothing to the queue")
+    }
+
     // MARK: - Helpers
 
     @MainActor private final class Counter {

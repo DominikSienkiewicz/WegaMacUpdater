@@ -261,7 +261,10 @@ final class ScanStore: ObservableObject {
         self.runningApplicationInspector = runningApplicationInspector
         self.dependencies = dependencies
         ruleUndoWatch = UpdatePolicyStore.shared.$entries.sink { [weak self] entries in
-            MainActor.assumeIsolated { self?.dropRuleUndo(ifStaleIn: entries) }
+            MainActor.assumeIsolated {
+                self?.dropRuleUndo(ifStaleIn: entries)
+                self?.deselectRows(hiddenBy: entries)
+            }
         }
     }
 
@@ -578,6 +581,20 @@ final class ScanStore: ObservableObject {
     // Items the user has ignored or pinned below the available version are filtered out.
     var allItems: [OutdatedItem] {
         UpdatePlanner.applyPolicies(itemCandidates, policies: UpdatePolicyStore.shared.policiesMap)
+    }
+
+    /// A row a rule hides leaves the queue with it, wherever the rule was written: a pin from
+    /// the row's sheet or a rule from Settings, not only "Nie aktualizuj" and a skip. Only ever
+    /// removes, so taking a rule back never puts the row into the queue. Fed every change of the
+    /// policy store, before the store holds the new `entries`, so it reads them from here.
+    func deselectRows(hiddenBy entries: [String: UpdatePolicyEntry]) {
+        guard !selected.isEmpty, !entries.isEmpty else { return }
+        let policies = entries.mapValues(\.policy)
+        let hidden = itemCandidates
+            .filter { UpdatePlanner.isSuppressed(key: $0.policyKey, availableVersion: $0.to, policies: policies) }
+            .map(\.key)
+        guard !selected.isDisjoint(with: hidden) else { return }
+        selected.subtract(hidden)
     }
 
     /// The installable rows the active sidebar category actually renders.
