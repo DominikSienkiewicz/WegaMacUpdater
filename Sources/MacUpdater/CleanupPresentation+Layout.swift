@@ -1,0 +1,114 @@
+import Foundation
+import MacUpdaterCore
+
+// MARK: - Section layout
+
+extension CleanupPresentation {
+    /// A tool's rows, from the row that names it up to the next one that does. A row outside any
+    /// tool (shell state, a protected location) is a group of its own with no name.
+    struct ToolGroup: Equatable {
+        let name: String?
+        let rows: [Row]
+
+        var isActionable: Bool { rows.contains(where: \.isActionable) }
+
+        fileprivate func matches(_ query: String) -> Bool {
+            name?.localizedStandardContains(query) == true
+                || rows.contains { $0.title.localizedStandardContains(query) || $0.detail.localizedStandardContains(query) }
+        }
+    }
+
+    /// Tools without action whose first copy comes from one source and directory, as one line.
+    struct OriginLine: Equatable {
+        let origin: Row.Origin
+        let tools: [ToolGroup]
+        let title: String
+        /// Where the tools' other copies live; nil when they have none.
+        let companions: String?
+    }
+
+    enum QuietItem: Equatable {
+        case tool(ToolGroup)
+        case origin(OriginLine)
+    }
+
+    struct SectionLayout: Equatable {
+        /// Groups shown expanded: the ones that need action, or every match while searching.
+        let shown: [ToolGroup]
+        /// What the collapsed "Bez akcji" group holds; empty while searching.
+        let quiet: [QuietItem]
+        let actionCount: Int
+        let headerNote: String
+        /// The collapsed group's title; nil when there is nothing quiet to collapse.
+        let quietTitle: String?
+    }
+
+    /// Nil only when a non-empty search matches nothing in the section. The counts always describe
+    /// the whole section, so a search never changes what the header says.
+    static func layout(of section: Section, search: String) -> SectionLayout? {
+        let groups = toolGroups(of: section.rows)
+        let actionCount = groups.filter(\.isActionable).count
+        let headerNote = actionCount == 0 ? tr("nic do zrobienia") : trf("%@ do zrobienia", "\(actionCount)")
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty {
+            let matching = groups.filter { $0.matches(query) }
+            guard !matching.isEmpty else { return nil }
+            return SectionLayout(shown: matching, quiet: [], actionCount: actionCount, headerNote: headerNote, quietTitle: nil)
+        }
+        let quietGroups = groups.filter { !$0.isActionable }
+        return SectionLayout(
+            shown: groups.filter(\.isActionable), quiet: quietItems(of: quietGroups), actionCount: actionCount,
+            headerNote: headerNote,
+            quietTitle: quietTitle(count: quietGroups.count, namesTools: section.rows.contains { $0.groupHeader != nil })
+        )
+    }
+
+    private static func toolGroups(of rows: [Row]) -> [ToolGroup] {
+        var groups: [ToolGroup] = []
+        for row in rows {
+            if row.groupHeader == nil, let last = groups.last, last.name != nil {
+                groups[groups.count - 1] = ToolGroup(name: last.name, rows: last.rows + [row])
+            } else {
+                groups.append(ToolGroup(name: row.groupHeader, rows: [row]))
+            }
+        }
+        return groups
+    }
+
+    private static func quietTitle(count: Int, namesTools: Bool) -> String? {
+        guard count > 0 else { return nil }
+        return trp(namesTools ? "Bez akcji: %@ narzędzi" : "Bez akcji: %@ pozycji", count)
+    }
+
+    private static func quietItems(of groups: [ToolGroup]) -> [QuietItem] {
+        var items: [QuietItem] = []
+        var merged = Set<Int>()
+        for (index, group) in groups.enumerated() where !merged.contains(index) {
+            guard let origin = group.rows.first?.origin else {
+                items.append(.tool(group))
+                continue
+            }
+            let sharing = groups.indices.filter { groups[$0].rows.first?.origin == origin }
+            guard sharing.count >= 2 else {
+                items.append(.tool(group))
+                continue
+            }
+            merged.formUnion(sharing)
+            items.append(.origin(originLine(origin, tools: sharing.map { groups[$0] })))
+        }
+        return items
+    }
+
+    private static func originLine(_ origin: Row.Origin, tools: [ToolGroup]) -> OriginLine {
+        var elsewhere: [String] = []
+        for other in tools.flatMap(\.rows).compactMap(\.origin) where other != origin {
+            let text = "\(other.directory) (\(other.source))"
+            if !elsewhere.contains(text) { elsewhere.append(text) }
+        }
+        return OriginLine(
+            origin: origin, tools: tools,
+            title: trp("%@ poleceń", tools.count) + " · " + origin.source + " · " + origin.directory,
+            companions: elsewhere.isEmpty ? nil : trf("też: %@", elsewhere.joined(separator: ", "))
+        )
+    }
+}

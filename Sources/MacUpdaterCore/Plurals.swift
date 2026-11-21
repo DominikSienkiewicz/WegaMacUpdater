@@ -240,6 +240,21 @@ public enum Plurals {
             one:  "…i %@ wcześniejsze wydanie",
             few:  "…i %@ wcześniejsze wydania",
             many: "…i %@ wcześniejszych wydań"
+        ),
+        "Bez akcji: %@ narzędzi": PluralForms(
+            one:  "Bez akcji: %@ narzędzie",
+            few:  "Bez akcji: %@ narzędzia",
+            many: "Bez akcji: %@ narzędzi"
+        ),
+        "Bez akcji: %@ pozycji": PluralForms(
+            one:  "Bez akcji: %@ pozycja",
+            few:  "Bez akcji: %@ pozycje",
+            many: "Bez akcji: %@ pozycji"
+        ),
+        "%@ poleceń": PluralForms(
+            one:  "%@ polecenie",
+            few:  "%@ polecenia",
+            many: "%@ poleceń"
         )
     ]
 
@@ -413,6 +428,21 @@ public enum Plurals {
             one:  "…and %@ earlier release",
             few:  "…and %@ earlier releases",
             many: "…and %@ earlier releases"
+        ),
+        "Bez akcji: %@ narzędzi": PluralForms(
+            one:  "No action: %@ tool",
+            few:  "No action: %@ tools",
+            many: "No action: %@ tools"
+        ),
+        "Bez akcji: %@ pozycji": PluralForms(
+            one:  "No action: %@ item",
+            few:  "No action: %@ items",
+            many: "No action: %@ items"
+        ),
+        "%@ poleceń": PluralForms(
+            one:  "%@ command",
+            few:  "%@ commands",
+            many: "%@ commands"
         )
     ]
 }

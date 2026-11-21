@@ -206,5 +206,10 @@ extension Translations {
         "Ten katalog leży w lokalizacji chronionej, więc Wega go nie przeszuka.":
             "This folder is in a protected location, so Wega will not search it.",
         "Ten katalog jest już na liście.": "This folder is already on the list.",
+
+        // Section layout
+        "%@ do zrobienia": "%@ to do",
+        "nic do zrobienia": "nothing to do",
+        "też: %@": "also: %@",
     ]
 }

@@ -124,4 +124,187 @@ final class CleanupSectionLayoutTests: XCTestCase {
             XCTAssertTrue(extended.isActionable)
         }
     }
+
+    // MARK: - Layout
+
+    private typealias Group = CleanupPresentation.ToolGroup
+    private typealias Origin = Row.Origin
+
+    private func row(tool: String?, title: String, origin: Origin? = nil, actionable: Bool = false, detail: String = "") -> Row {
+        Row(
+            findingID: title, groupHeader: tool, bucket: .excluded, status: "oczekiwana", title: title, detail: detail,
+            sizeText: nil, button: nil, note: actionable ? "kopiuj" : "tylko informacja", keep: nil,
+            isActionable: actionable, origin: origin
+        )
+    }
+
+    private func section(_ rows: [Row]) -> CleanupPresentation.Section {
+        CleanupPresentation.Section(kind: .duplicates, title: "Wiele kopii", notes: [], rows: rows)
+    }
+
+    private let mise = "menedżer wersji mise"
+    private let installs = "~/.local/share/mise/installs/java/temurin-27/bin"
+
+    private func javaTool(_ name: String) -> [Row] {
+        [
+            row(tool: name, title: "\(installs)/\(name)", origin: Origin(source: mise, directory: installs)),
+            row(tool: nil, title: "~/.local/share/mise/shims/\(name)", origin: Origin(source: mise, directory: "~/.local/share/mise/shims")),
+            row(tool: nil, title: "/usr/bin/\(name)", origin: Origin(source: "kopia systemowa", directory: "/usr/bin")),
+        ]
+    }
+
+    func testActionableToolsComeFirstAndTheRestIsQuiet() throws {
+        let gh = [row(tool: "gh", title: "/opt/homebrew/bin/gh", actionable: true), row(tool: nil, title: "/usr/local/bin/gh")]
+        let git = [row(tool: "git", title: "/usr/bin/git", origin: Origin(source: "a", directory: "/usr/bin"))]
+        let jq = [row(tool: "jq", title: "/usr/bin/jq", origin: Origin(source: "b", directory: "/usr/bin"))]
+
+        try withLanguage(.pl) {
+            let layout = try XCTUnwrap(CleanupPresentation.layout(of: section(git + gh + jq), search: ""))
+
+            XCTAssertEqual(layout.shown.map(\.name), ["gh"])
+            XCTAssertEqual(layout.shown.first?.rows, gh)
+            XCTAssertEqual(layout.quiet, [.tool(Group(name: "git", rows: git)), .tool(Group(name: "jq", rows: jq))])
+            XCTAssertEqual(layout.actionCount, 1)
+            XCTAssertEqual(layout.headerNote, "1 do zrobienia")
+            XCTAssertEqual(layout.quietTitle, "Bez akcji: 2 narzędzia")
+        }
+    }
+
+    func testToolsFromOnePlaceShareAnOriginLine() throws {
+        let rows = ["java", "javac", "jar"].flatMap(javaTool)
+
+        try withLanguage(.pl) {
+            let layout = try XCTUnwrap(CleanupPresentation.layout(of: section(rows), search: ""))
+
+            XCTAssertEqual(layout.quiet.count, 1)
+            guard case .origin(let line)? = layout.quiet.first else { return XCTFail("expected an origin line") }
+            XCTAssertEqual(line.tools.map(\.name), ["java", "javac", "jar"])
+            XCTAssertEqual(line.title, "3 polecenia · \(mise) · \(installs)")
+            XCTAssertEqual(
+                line.companions, "też: ~/.local/share/mise/shims (\(mise)), /usr/bin (kopia systemowa)"
+            )
+            XCTAssertEqual(layout.quietTitle, "Bez akcji: 3 narzędzia")
+        }
+    }
+
+    func testALoneToolKeepsItsRows() throws {
+        let rows = javaTool("java")
+
+        try withLanguage(.pl) {
+            let layout = try XCTUnwrap(CleanupPresentation.layout(of: section(rows), search: ""))
+
+            XCTAssertEqual(layout.quiet, [.tool(Group(name: "java", rows: rows))])
+        }
+    }
+
+    func testASectionWithNothingToDoSaysSo() throws {
+        let info = [row(tool: "git", title: "/usr/bin/git")]
+
+        try withLanguage(.pl) {
+            let quiet = try XCTUnwrap(CleanupPresentation.layout(of: section(info), search: ""))
+            let empty = try XCTUnwrap(CleanupPresentation.layout(of: section([]), search: ""))
+
+            XCTAssertEqual(quiet.shown, [])
+            XCTAssertEqual(quiet.actionCount, 0)
+            XCTAssertEqual(quiet.headerNote, "nic do zrobienia")
+            XCTAssertEqual(empty.quiet, [])
+            XCTAssertNil(empty.quietTitle)
+        }
+    }
+
+    func testASectionWhoseRowsAllNeedActionHasNoQuietGroup() throws {
+        let rows = [row(tool: "gh", title: "/opt/homebrew/bin/gh", actionable: true)]
+
+        try withLanguage(.pl) {
+            let layout = try XCTUnwrap(CleanupPresentation.layout(of: section(rows), search: ""))
+
+            XCTAssertEqual(layout.quiet, [])
+            XCTAssertNil(layout.quietTitle)
+        }
+    }
+
+    func testRowsOfASectionWithoutToolsCountAsItems() throws {
+        let rows = [row(tool: nil, title: "~/a"), row(tool: nil, title: "~/b")]
+
+        try withLanguage(.pl) {
+            let layout = try XCTUnwrap(CleanupPresentation.layout(of: section(rows), search: ""))
+
+            XCTAssertEqual(layout.quiet.count, 2)
+            XCTAssertEqual(layout.quietTitle, "Bez akcji: 2 pozycje")
+        }
+    }
+
+    func testPolishPluralFormsForTheQuietGroup() throws {
+        func quietTitle(count: Int) throws -> String? {
+            let rows = (0..<count).map { row(tool: "t\($0)", title: "/usr/bin/t\($0)") }
+            return try XCTUnwrap(CleanupPresentation.layout(of: section(rows), search: "")).quietTitle
+        }
+
+        try withLanguage(.pl) {
+            XCTAssertEqual(try [1, 5, 12, 22].map(quietTitle), [
+                "Bez akcji: 1 narzędzie", "Bez akcji: 5 narzędzi", "Bez akcji: 12 narzędzi", "Bez akcji: 22 narzędzia",
+            ])
+        }
+        try withLanguage(.en) {
+            XCTAssertEqual(try [1, 2].map(quietTitle), ["No action: 1 tool", "No action: 2 tools"])
+        }
+    }
+
+    func testSearchShowsWholeMatchingToolsExpanded() throws {
+        let rows = ["java", "javac", "jar"].flatMap(javaTool)
+        let all = section(rows)
+
+        try withLanguage(.pl) {
+            let byName = try XCTUnwrap(CleanupPresentation.layout(of: all, search: "JAVAC"))
+            XCTAssertEqual(byName.shown.map(\.name), ["javac"])
+            XCTAssertEqual(byName.shown.first?.rows.count, 3)
+            XCTAssertEqual(byName.quiet, [])
+            XCTAssertNil(byName.quietTitle)
+
+            let byPath = try XCTUnwrap(CleanupPresentation.layout(of: all, search: "temurin-27"))
+            XCTAssertEqual(byPath.shown.count, 3)
+
+            let blank = try XCTUnwrap(CleanupPresentation.layout(of: all, search: "   "))
+            XCTAssertEqual(blank, CleanupPresentation.layout(of: all, search: ""))
+            XCTAssertEqual(blank.quiet.count, 1)
+
+            XCTAssertNil(CleanupPresentation.layout(of: all, search: "nothing-here"))
+        }
+    }
+
+    func testSearchMatchesTheDetailText() throws {
+        let rows = [row(tool: "git", title: "/usr/bin/git", detail: "aktywna · 2.47.0")]
+
+        withLanguage(.pl) {
+            XCTAssertEqual(CleanupPresentation.layout(of: section(rows), search: "2.47")?.shown.map(\.name), ["git"])
+        }
+    }
+
+    func testSearchKeepsTheSectionsCount() throws {
+        let rows = [row(tool: "gh", title: "/opt/homebrew/bin/gh", actionable: true)] + javaTool("java")
+
+        try withLanguage(.pl) {
+            let unsearched = try XCTUnwrap(CleanupPresentation.layout(of: section(rows), search: ""))
+            let searched = try XCTUnwrap(CleanupPresentation.layout(of: section(rows), search: "java"))
+
+            XCTAssertEqual(searched.headerNote, unsearched.headerNote)
+            XCTAssertEqual(searched.actionCount, unsearched.actionCount)
+        }
+    }
+
+    func testLayoutTextsAreTranslated() throws {
+        let rows = [row(tool: "gh", title: "/opt/homebrew/bin/gh", actionable: true)] + ["java", "javac"].flatMap(javaTool)
+
+        try withLanguage(.en) {
+            let layout = try XCTUnwrap(CleanupPresentation.layout(of: section(rows), search: ""))
+            guard case .origin(let line)? = layout.quiet.first else { return XCTFail("expected an origin line") }
+
+            XCTAssertEqual(layout.headerNote, "1 to do")
+            XCTAssertEqual(line.title, "2 commands · \(mise) · \(installs)")
+            XCTAssertEqual(line.companions?.hasPrefix("also: "), true)
+            XCTAssertEqual(
+                try XCTUnwrap(CleanupPresentation.layout(of: section([]), search: "")).headerNote, "nothing to do"
+            )
+        }
+    }
 }
