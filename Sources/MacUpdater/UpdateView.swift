@@ -405,22 +405,10 @@ struct UpdateView: View {
     }
 
     /// UX-18's grouping menu, or while a scan runs in place over rows, the note that says why
-    /// they cannot be selected. The menu stays laid out underneath, so the header keeps its
-    /// height.
+    /// they cannot be selected — see `ListHeaderGroupingSlot`.
     private var groupingControl: some View {
-        ZStack(alignment: .trailing) {
-            if ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows) {
-                groupingMenu
-                    .opacity(0)
-                    .disabled(true)
-                    .accessibilityHidden(true)
-                Text(tr("Zaznaczanie wróci, gdy skan się skończy."))
-                    .font(.wega(.subheadline))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            } else {
-                groupingMenu
-            }
+        ListHeaderGroupingSlot(showsScanNote: ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows)) {
+            groupingMenu
         }
     }
 
