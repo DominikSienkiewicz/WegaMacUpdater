@@ -67,7 +67,8 @@ extension ScanStore {
         showBanner(BannerData(
             variant: result.engineReady ? .success : .danger,
             title: result.engineReady ? tr("Silnik Docker gotowy") : tr("Nie potwierdzono gotowości silnika Docker"),
-            message: feedback.message
+            message: feedback.message,
+            action: result.engineReady ? nil : .openLogs
         ))
         return true
     }

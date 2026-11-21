@@ -43,10 +43,24 @@ struct ErrorNextStepTests {
         return calls
     }
 
+    /// The `variant:` argument up to its comma, so a conditional `x ? .success : .danger` counts
+    /// as a danger banner too.
+    private func variantArgument(of call: String) -> Substring? {
+        guard let start = call.range(of: "variant:")?.upperBound else { return nil }
+        let rest = call[start...]
+        return rest[..<(rest.firstIndex(of: ",") ?? rest.endIndex)]
+    }
+
+    @Test func aConditionalVariantCountsAsADangerBanner() {
+        #expect(variantArgument(of: "BannerData(\n    variant: ok ? .success : .danger,\n    title: t")?.contains(".danger") == true)
+        #expect(variantArgument(of: "BannerData(variant: .success, title: t)")?.contains(".danger") == false)
+    }
+
     @Test func everyDangerBannerOnTheUpdatesPathOffersAnAction() throws {
         var seen = 0
         for file in try scanStoreSources() {
-            for call in bannerCalls(in: try String(contentsOf: file, encoding: .utf8)) where call.contains("variant: .danger") {
+            for call in bannerCalls(in: try String(contentsOf: file, encoding: .utf8))
+            where variantArgument(of: call)?.contains(".danger") == true {
                 seen += 1
                 #expect(call.contains("action:"), "\(file.lastPathComponent): \(call.prefix(90))")
                 #expect(!call.contains(": nil)") && !call.contains(": nil\n"), "\(file.lastPathComponent): a conditional action falls back to the log")
