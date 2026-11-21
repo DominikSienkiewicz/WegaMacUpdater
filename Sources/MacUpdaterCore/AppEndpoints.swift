@@ -154,9 +154,14 @@ extension AppEndpoints {
     public var userGuideURL: URL { projectRepositoryURL.appending(path: "blob/main/USER_GUIDE.md") }
 
     /// UXP-34 — the guide's "Uninstalling Wega" section: removing Wega, her helper and Touch ID for `sudo`.
-    public var uninstallGuideURL: URL {
+    public var uninstallGuideURL: URL { userGuideURL(fragment: "uninstalling-wega") }
+
+    /// UXP-34 — the guide's "Turning off Touch ID for sudo" steps, which work with Wega still installed.
+    public var touchIDGuideURL: URL { userGuideURL(fragment: "turning-off-touch-id-for-sudo") }
+
+    private func userGuideURL(fragment: String) -> URL {
         var components = URLComponents(url: userGuideURL, resolvingAgainstBaseURL: false)
-        components?.fragment = "uninstalling-wega"
+        components?.fragment = fragment
         return components?.url ?? userGuideURL
     }
 }

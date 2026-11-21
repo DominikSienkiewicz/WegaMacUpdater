@@ -211,6 +211,7 @@ extension Translations {
         "Pokaż panel szczegółów": "Show Inspector",
         "Przewodnik po Wedze": "Wega User Guide",
         "Jak usunąć Wegę i jej pomocnika": "How to remove Wega and its helper",
+        "Jak wyłączyć Touch ID dla sudo": "How to turn off Touch ID for sudo",
         "Nie widzisz aplikacji? Brak na liście nie znaczy, że jest aktualna — sprawdź jej status w Spisie":
             "Can't see an app? Missing from the list doesn't mean up to date — check its status in Inventory",
     ]

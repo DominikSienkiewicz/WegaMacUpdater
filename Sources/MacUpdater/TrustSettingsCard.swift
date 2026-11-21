@@ -74,7 +74,7 @@ struct TrustSettingsCard: View {
                     Text(permission.title).font(.wega(.callout, weight: .semibold))
                     paragraph(permission.text)
                     if permission.kind == .touchID {
-                        Link(tr("Jak usunąć Wegę i jej pomocnika"), destination: AppEndpoints.shared.uninstallGuideURL)
+                        Link(tr("Jak wyłączyć Touch ID dla sudo"), destination: AppEndpoints.shared.touchIDGuideURL)
                             .font(.wega(.subheadline))
                     }
                     if permission.kind == .appManagement, appManagement == .denied {

@@ -592,9 +592,9 @@ type a password. It runs as root and can do only four things: install a verified
 package, turn on Touch ID for `sudo`, restore an app's pre-update copy, and move a
 root-owned app to the Trash. It checks Wega's signature on every connection.
 
-To switch it on, open **Settings** (**⌘,**) and use the **Privileged component** card:
-**Install component**. If macOS asks for approval, the card shows **Open Settings → Login
-Items** and **Check again**; **Remove component** switches it off again. On the Updates
+To switch it on, open **Settings** (**⌘,**) and use the **Wega helper** card:
+**Install Helper**. If macOS asks for approval, the card shows **Open Settings → Login
+Items** and **Check again**; **Remove Helper** switches it off again. On the Updates
 screen, **What does the helper do?** in the readiness card shows the same explanation.
 
 ### Touch ID for administrator commands
@@ -772,13 +772,9 @@ Wega does not delete anything for you: you stay in control of every command.
 1. **Turn off Launch at login.** Settings → **General** → **Launch at login**.
 2. **Remove the helper**, if you installed it. Settings → **Permissions & Privacy** →
    **Wega helper** → **Remove Helper**.
-3. **Turn off Touch ID for `sudo`** (optional). If Wega turned it on and you want it off, you
-   can do this at any time, even while Wega stays installed. Open `/etc/pam.d/sudo_local` in
-   Terminal with `sudo nano /etc/pam.d/sudo_local`, delete the line
-   `auth       sufficient     pam_tid.so`, and save. This setting applies to all of `sudo`
-   on your Mac, not only to Wega, so every `sudo` prompt asks for your password again
-   afterwards. If `sudo_local` has no other lines, you can remove the file instead with
-   `sudo rm /etc/pam.d/sudo_local`.
+3. **Turn off Touch ID for `sudo`** (optional), if Wega turned it on. Follow
+   [Turning off Touch ID for sudo](#turning-off-touch-id-for-sudo) below. It also works on
+   its own, while Wega stays installed.
 4. **Quit Wega.** Use **Quit Wega** in the menu-bar menu. Closing the window does not quit the
    app.
 5. **Move `WegaMacUpdater.app` to the Trash.**
@@ -787,16 +783,50 @@ Steps 1 to 5 remove the app. What follows is optional, and each item is separate
 the copies Wega keeps means **you can no longer undo an update she made**, so skip that
 one if you might still need it.
 
-- `~/Library/Application Support/WegaMacUpdater/` holds `update-operations/` (the copies of
-  apps made before each update, used by Undo update and the rollback shield) and
-  `last-scan.json` (the last scan result).
+- `~/Library/Application Support/WegaMacUpdater/` holds, among other files, `update-operations/`
+  (the copies of apps made before each update, used by Undo update and the rollback shield)
+  and `last-scan.json` (the last scan result).
 - `~/Library/Logs/WegaMacUpdater/` holds the logs.
-- If you installed from the `.pkg`: `/Library/Application Support/WegaMacUpdater/Authorization`
-  is owned by root, so remove it with `sudo rm -r "/Library/Application Support/WegaMacUpdater/Authorization"`,
-  then run `sudo pkgutil --forget com.wega.WegaMacUpdater` so macOS forgets the package.
+- `~/Library/Caches/WegaMacUpdater/` and `~/Library/HTTPStorages/com.wega.WegaMacUpdater`, if
+  they exist, are caches.
 - Settings: `defaults delete com.wega.WegaMacUpdater`.
-- A GitHub token, if you saved one, is in Keychain Access as the item with the service name
-  `com.wega.WegaMacUpdater.github`. Delete it there.
+- A GitHub token, if you saved one, is in Keychain Access under the service
+  `com.wega.WegaMacUpdater.github`. Delete it there, or in Terminal:
+  `security delete-generic-password -s com.wega.WegaMacUpdater.github -a github-pat`.
+- Root-owned files. The `.pkg` payload, which a self-update installs also for people who
+  first installed from the DMG, and the helper leave folders owned by root. Check whether
+  they exist with `pkgutil --pkgs | grep com.wega.WegaMacUpdater` and
+  `ls "/Library/Application Support/WegaMacUpdater"`. If so, remove them one by one in
+  Terminal (each needs your password and cannot be undone):
+
+  ```
+  sudo rm -r "/Library/Application Support/WegaMacUpdater"
+  sudo rm -r "/Library/Application Support/com.wega.WegaMacUpdater"
+  sudo rm -r "/var/db/com.wega.WegaMacUpdater"
+  sudo pkgutil --forget com.wega.WegaMacUpdater
+  ```
+
+  The first holds the authorization helpers, the second the helper's staging folders, the
+  third the helper's installation record, and the last removes the package receipt. A folder
+  that does not exist is not an error you need to act on.
+
+#### Turning off Touch ID for sudo
+
+Wega turns on Touch ID for `sudo` by adding one line to `/etc/pam.d/sudo_local`. The main
+`sudo` configuration includes that file, so a half-deleted line can break **every** `sudo`,
+including the one you would need to repair it. Follow the steps in this order. The change
+applies to all of `sudo` on your Mac, not only to Wega: afterwards every `sudo` prompt asks
+for your password again.
+
+1. Open a root shell with `sudo -s` and **keep it open until the end**.
+2. Back up the file: `cp /etc/pam.d/sudo_local /etc/pam.d/sudo_local.bak`
+3. Open `/etc/pam.d/sudo_local` (`nano /etc/pam.d/sudo_local`). Delete, or comment out with
+   a leading `#`, only the line that reads exactly `auth       sufficient     pam_tid.so`.
+   Apple's example line that starts with `#auth` stays as it is.
+4. Check it in a **new** Terminal window: run `sudo -k; sudo true`. It should now ask for your
+   password instead of Touch ID.
+5. If that fails, restore the file from the root shell that is still open:
+   `cp /etc/pam.d/sudo_local.bak /etc/pam.d/sudo_local`. Then close the shell with `exit`.
 
 ### Uninstalling apps
 
