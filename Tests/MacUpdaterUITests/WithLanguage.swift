@@ -9,10 +9,9 @@ func withLanguage<T>(_ language: AppLanguage, _ body: () throws -> T) rethrows -
 }
 
 /// The `async` form of `withLanguage(_:_:)`, for a body that awaits.
-func withLanguage<T>(
+nonisolated(nonsending) func withLanguage<T>(
     _ language: AppLanguage,
-    isolation: isolated (any Actor)? = #isolation,
-    _ body: () async throws -> T
+    _ body: nonisolated(nonsending) () async throws -> T
 ) async rethrows -> T {
-    try await LocalizedStrings.withScopedLanguage(language, isolation: isolation, body)
+    try await LocalizedStrings.withScopedLanguage(language, body)
 }

@@ -18,14 +18,14 @@ struct ScanPhaseStrip: View {
         let title: String
     }
 
-    static func steps(for progress: ScanProgress?) -> [Step] {
+    nonisolated static func steps(for progress: ScanProgress?) -> [Step] {
         let phases = ScanPhase.allCases
         return phases.enumerated().map { index, phase in
             Step(phase: phase, state: state(of: index, in: progress), title: title(of: phase))
         }
     }
 
-    private static func state(of index: Int, in progress: ScanProgress?) -> StepState {
+    private nonisolated static func state(of index: Int, in progress: ScanProgress?) -> StepState {
         let phases = ScanPhase.allCases
         switch progress {
         case .none:
@@ -41,7 +41,7 @@ struct ScanPhaseStrip: View {
         }
     }
 
-    private static func title(of phase: ScanPhase) -> String {
+    private nonisolated static func title(of phase: ScanPhase) -> String {
         switch phase {
         case .brew:   return "Homebrew"
         case .mas:    return "App Store"
