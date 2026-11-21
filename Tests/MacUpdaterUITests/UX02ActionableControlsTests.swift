@@ -29,27 +29,12 @@ struct UX02ActionableControlsTests {
         #expect(!HelperChipState.inactive.opensLoginItemsSettings)
     }
 
-    /// The wiring, at source level: the view layer has no seam a unit test can drive, and
-    /// rendering SwiftUI to inspect its accessibility tree needs a running app.
-    ///
-    /// Red before the fix: `HelperChip` carried `.onTapGesture` and no `Button`.
-    @Test func theHelperChipOpensSettingsThroughAButtonNotATapGesture() throws {
-        let chip = executableSource(try slice(read("Sources/MacUpdater/WegaViews.swift"),
-                                              from: "struct HelperChip: View {",
-                                              to: "// MARK: - PawPrint"))
-
-        #expect(!chip.contains("onTapGesture"),
-                """
-                UX-02: HelperChip opens Login Items from a tap gesture. A gesture has no role, \
-                no keyboard path and nothing to announce — it is reachable by mouse only.
-                """)
-        #expect(chip.contains("Button {"),
-                "UX-02: the actionable branch is a real Button")
-        #expect(chip.contains("if state.opensLoginItemsSettings {"),
-                """
-                UX-02: and only that branch — a chip with nowhere to go stays a label rather \
-                than a disabled button offering a tab stop that leads nowhere.
-                """)
+    /// UXP-32 — the chip itself is gone (its status was never shown anywhere), so nothing in the
+    /// view layer can open Login Items from a gesture; the state machine above stays tested in Core.
+    @Test func noHelperChipViewRemainsToHideAGesture() throws {
+        let views = executableSource(try read("Sources/MacUpdater/WegaViews.swift"))
+        #expect(!views.contains("HelperChip"),
+                "UXP-32: an unused status chip is removed rather than kept as a second tap target")
     }
 
     /// The rest of the card's surface, kept honest: nothing that changes state or opens a

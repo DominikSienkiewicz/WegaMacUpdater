@@ -53,13 +53,19 @@ final class ScanLayoutTests: XCTestCase {
         XCTAssertEqual(refreshingWidth, idleWidth, accuracy: 0.5)
     }
 
+    /// UXP-32 — screens with nothing to scan hide the button, not its slot.
     @MainActor
-    private func toolbarFittingWidth(for status: UpdateStatus, refreshing: Bool = false) -> CGFloat {
+    func testToolbarControlKeepsItsWidthWhenHidden() {
+        XCTAssertEqual(toolbarFittingWidth(for: .results, isShown: false), toolbarFittingWidth(for: .results), accuracy: 0.5)
+    }
+
+    @MainActor
+    private func toolbarFittingWidth(for status: UpdateStatus, refreshing: Bool = false, isShown: Bool = true) -> CGFloat {
         let scan = ScanStore()
         scan.status = status
         scan.setRefreshing(refreshing)
         let hostingView = NSHostingView(
-            rootView: ScanControlHarness().environmentObject(scan)
+            rootView: ScanControlHarness(isShown: isShown).environmentObject(scan)
         )
 
         return hostingView.fittingSize.width
@@ -67,9 +73,10 @@ final class ScanLayoutTests: XCTestCase {
 }
 
 private struct ScanControlHarness: View {
+    var isShown = true
     @Namespace private var namespace
 
     var body: some View {
-        ScanControl(namespace: namespace)
+        ScanControl(namespace: namespace, isShown: isShown)
     }
 }

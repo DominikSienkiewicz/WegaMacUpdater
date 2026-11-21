@@ -98,10 +98,9 @@ struct UninstallView: View {
                 // Header
                 HStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(tr("Odinstaluj aplikacje")).font(.wega(.title2, weight: .semibold))
                         Text(tr("Brew casks → brew uninstall  ·  pozostałe → Kosz"))
                             .font(.wega(.subheadline, monospaced: true))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary)
                     }
                     Spacer()
                     Button { Task { await refresh() } } label: {

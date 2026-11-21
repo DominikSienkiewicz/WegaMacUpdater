@@ -42,5 +42,6 @@ extension Translations {
         "Nie udało mi się zaktualizować %@ — na dysku została poprzednia wersja.":
             "I couldn't update %@ — the previous version is still on disk.",
         "Aktualizator %@ podmienił wersję, którą zainstalowałam.": "%@'s own updater replaced the version I installed.",
+        "Globalne pakiety npm: %@": "Global npm packages: %@",
     ]
 }

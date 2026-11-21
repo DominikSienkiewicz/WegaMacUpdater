@@ -18,6 +18,15 @@ enum SidebarTab: String, Identifiable {
 
     var id: String { rawValue }
 
+    /// Only the screens that scan for updates offer the scan button; elsewhere it would do
+    /// nothing visible.
+    var showsScanControl: Bool {
+        switch self {
+        case .update, .migration, .rollback: return true
+        case .uninstall, .cleanup, .inventory, .logs: return false
+        }
+    }
+
     var hint: String {
         switch self {
         case .update:    return tr("Co do odświeżenia")
@@ -142,7 +151,7 @@ struct ContentView: View {
             .navigationSubtitle(selection.hint)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    ScanControl(namespace: glassNamespace)
+                    ScanControl(namespace: glassNamespace, isShown: selection.tab.showsScanControl)
                 }
                 ToolbarSpacer(.fixed)
                 ToolbarItem(placement: .primaryAction) {

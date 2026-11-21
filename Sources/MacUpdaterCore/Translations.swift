@@ -635,10 +635,7 @@ extension Translations {
         "Przepnij pod Brew": "Reattach to Brew",
         "Pełny obchód": "Full sweep",
         "O aplikacji": "About the app",
-        "brew · helper aktywny": "brew · helper active",
         // M3(a) — chip mówi, co naprawdę zwraca SMAppService, nie co byłoby miło zobaczyć.
-        "brew · helper wymaga zgody": "brew · helper needs approval",
-        "brew · helper nieaktywny": "brew · helper inactive",
         // M3(d) — wyjaśniamy się zanim macOS pokaże swój jednorazowy dialog.
         "Powiadamiać o nowych aktualizacjach?": "Notify you about new updates?",
         "Wega sprawdza w tle i może dać znać, gdy pojawi się coś nowego. macOS zapyta o zgodę tylko raz.":
@@ -741,7 +738,6 @@ extension Translations {
         "Poprawki bezp.": "Security fixes",
         "Do przepięcia": "To reattach",
         "Homebrew nie jest zainstalowany": "Homebrew is not installed",
-        "Wega potrzebuje Homebrew, żeby sprawdzać aktualizacje\ni zarządzać aplikacjami. Zainstaluj go i kliknij Sprawdź ponownie.": "Wega needs Homebrew to check for updates\nand manage apps. Install it and click Check again.",
         "Polecenie instalacji (wklej w Terminal):": "Installation command (paste into Terminal):",
         "Otwórz brew.sh": "Open brew.sh",
         "· %@": "· %@",
