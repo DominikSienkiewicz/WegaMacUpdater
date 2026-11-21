@@ -13,7 +13,9 @@ enum InspectedUpdate: Equatable {
 @MainActor
 enum UpdateFilterInteraction {
     static func apply(_ filter: UpdateFilter, to scan: ScanStore) {
-        scan.inspectedKey = nil
+        // Every row is listed under "all", so its inspection stays: a menu-bar row (UXP-17)
+        // sets it before the window it opens re-applies the filter.
+        if filter != .all { scan.inspectedKey = nil }
         scan.restrictSelection(to: filter)
     }
 }

@@ -10,7 +10,7 @@ import Testing
 /// focus with it. A user meeting that once turns the switch back off, which makes the whole
 /// card deliver something nobody keeps enabled.
 ///
-/// Activation belongs to paths the user actually initiated — the menu bar's "Otwórz Wega", and
+/// Activation belongs to paths the user actually initiated — the menu bar's "Otwórz Wegę", and
 /// the modal alert that has to be seen before the app quits mid-mutation. A window simply
 /// appearing is not one of them: on an ordinary Finder or Dock launch macOS already fronts the
 /// app, so the call added nothing there and only ever cost something everywhere else.
@@ -39,10 +39,10 @@ struct BG02LaunchFocusTests {
     /// activate call" by whoever touches this next.
     @Test func activationSurvivesOnTheUserInitiatedPaths() throws {
         let menuBar = try read("Sources/MacUpdater/MenuBarScene.swift")
-        let openCommand = try slice(menuBar, from: "Button(tr(\"Otwórz Wega\"))", to: "Divider()")
+        let openCommand = try slice(menuBar, from: "Button(tr(\"Otwórz Wegę\"))", to: "Divider()")
 
         #expect(openCommand.contains("activate("),
-                "BG-02: choosing \"Otwórz Wega\" is a gesture — that window is meant to come forward")
+                "BG-02: choosing \"Otwórz Wegę\" is a gesture — that window is meant to come forward")
 
         let quitAlert = try slice(appSource(), from: "alert.addButton(withTitle: tr(\"Anuluj\"))", to: "alert.runModal()")
         #expect(quitAlert.contains("activate("),

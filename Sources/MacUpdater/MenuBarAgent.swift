@@ -43,11 +43,16 @@ final class MenuBarAgent: ObservableObject {
     /// finish, nothing new starts. Registered by the `ScanStore` that owns the run.
     var stopWindowRun: (@MainActor () -> Void)?
 
+    /// UXP-17 — shows one update in the window's inspector, by the key the window's rows use.
+    /// Registered by the `ScanStore` that owns the window's list.
+    var revealInWindow: (@MainActor (String) -> Void)?
+
     /// UX-11g — the apps/packages the dropdown names as having updates, derived from the
     /// last check and filtered by the same ignore/pin rules that produced the badge count,
-    /// so the names and the count agree. Empty until the first check completes.
-    var outdatedNames: [String] {
-        lastResult?.outdatedDisplayNames(policies: UpdatePolicyStore.shared.policiesMap) ?? []
+    /// so the names and the count agree. Empty until the first check completes. UXP-17 gave
+    /// each one the key its row opens in the window.
+    var outdatedEntries: [MenuBarOutdatedEntry] {
+        lastResult?.outdatedEntries(policies: UpdatePolicyStore.shared.policiesMap) ?? []
     }
 
     /// REL-02 — the identity of the update set the user was last told about. It used to be

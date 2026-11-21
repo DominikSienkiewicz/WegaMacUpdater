@@ -12,15 +12,20 @@ struct MenuBarStatusPresentation: Equatable {
     let incomplete: Bool
     let lastCheck: Date?
     var run: WindowRunStatus?
+    /// UXP-17 — how many of the updates have notes that may describe a security fix.
+    var securityCount: Int = 0
 
+    /// The count, then the incomplete-check note, then the security nuance — the band's order.
     var statusText: String {
         if let run { return trf("Aktualizuję %@ z %@…", "\(run.completedUnits)", "\(run.totalUnits)") }
         if isChecking { return tr("Sprawdzam aktualizacje…") }
         if failed && count == 0 { return tr("Nie udało się sprawdzić") }
-        if incomplete && count > 0 {
-            return trp("%@ aktualizacji dostępnych", count) + " · " + tr("sprawdzanie niepełne")
+        if count > 0 {
+            var parts = [trp("%@ aktualizacji dostępnych", count)]
+            if incomplete { parts.append(tr("sprawdzanie niepełne")) }
+            if securityCount > 0 { parts.append(trp("%@ z możliwą poprawką bezp.", securityCount)) }
+            return parts.joined(separator: " · ")
         }
-        if count > 0 { return trp("%@ aktualizacji dostępnych", count) }
         if lastCheck == nil { return tr("Jeszcze nie sprawdzano") }
         return tr("Wszystko aktualne")
     }

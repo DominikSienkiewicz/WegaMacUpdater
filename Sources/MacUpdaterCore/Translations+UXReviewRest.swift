@@ -175,5 +175,14 @@ extension Translations {
             "You confirm administrator commands with your fingerprint instead of your password — including cask updates that ask for it.",
         "Po włączeniu Homebrew poprosi o odcisk palca zamiast hasła. Włączenie raz wymaga uprawnień administratora.":
             "Once on, Homebrew asks for your fingerprint instead of your password. Turning it on needs administrator rights once.",
+        "Sprawdzono wczoraj, %@": "Checked yesterday, %@",
+        "dziś, %@": "today, %@",
+        "wczoraj, %@": "yesterday, %@",
+        "jutro, %@": "tomorrow, %@",
+        "Kolejna próba: %@, gdy Wega jest uruchomiona. Zamknięcie okna nie kończy aplikacji.":
+            "Next attempt: %@, while Wega is running. Closing the window doesn't quit the app.",
+        "Sprawdź i zaktualizuj w tle (%@)": "Check and Update in Background (%@)",
+        "Otwórz Wegę": "Open Wega",
+        "Zakończ Wegę": "Quit Wega",
     ]
 }

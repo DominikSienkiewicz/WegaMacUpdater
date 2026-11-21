@@ -288,6 +288,7 @@ final class ScanStore: ObservableObject {
     func attach(model: AppViewModel) {
         self.model = model
         MenuBarAgent.shared.stopWindowRun = { [weak self] in self?.cancelUpdate() }
+        MenuBarAgent.shared.revealInWindow = { [weak self] key in self?.inspectedKey = key }
     }
 
     // MARK: - REL-12: stopping a running update

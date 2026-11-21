@@ -84,7 +84,7 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unc
     /// there is one, a new one only when there is none. `openWindow` on an open `WindowGroup`
     /// makes a second window, whose appearance re-binds the store's sinks and leaves the first
     /// window's badges and Wega frozen. `open` overrides the registered opener for callers that
-    /// hold their own, such as the menu's „Otwórz Wega”. Call it after activating the app: while
+    /// hold their own, such as the menu's „Otwórz Wegę”. Call it after activating the app: while
     /// the app is hidden its window is neither visible nor miniaturised, so it would be missed.
     @MainActor
     func showMainWindow(opening open: (@MainActor () -> Void)? = nil) {

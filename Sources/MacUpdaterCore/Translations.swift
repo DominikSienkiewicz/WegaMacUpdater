@@ -568,9 +568,7 @@ extension Translations {
         "Aktualizacje": "Updates",
         "Aktualizuj": "Update",
         "Znajdź w spisie aplikacji": "Find in inventory",
-        "Otwórz Wega": "Open Wega",
         "Sprawdzaj automatycznie": "Check automatically",
-        "Zakończ Wega": "Quit Wega",
         "Sprawdzam aktualizacje…": "Checking for updates…",
         // UX-08 — „%@ aktualizacji dostępnych" jest odmieniane przez liczbę: warianty
         // one/few/many trzyma `Plurals`, a menu bar woła `trp(base, count)` zamiast `trf`.
