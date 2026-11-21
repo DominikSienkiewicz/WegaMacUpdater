@@ -53,7 +53,22 @@ Security-relevant areas most worth a look include:
   signature (the intermediate and leaf certificate markers, besides the Team ID and the
   identifier), and `scripts/verify-bundle.sh` checks a signed release against both. Each verb
   has its own minimum protocol version. The helper exits after 60 seconds with no connection
-  and no work, and launchd starts it again from the current app bundle. Turning Touch ID on or
+  and no work, and launchd starts it again from the current app bundle.
+  Because launchd runs the helper as root from that bundle, Wega neither registers nor uses it
+  unless the app runs directly from `/Applications` and every entry launchd runs the helper from
+  (the bundle, `Contents`, `Contents/MacOS`, the helper, `Contents/Library`,
+  `Contents/Library/LaunchDaemons`, the launchd plist) belongs to root, is not a link and cannot be
+  written by its group, by others or through an ACL (`HelperBundleGate`, read through descriptors).
+  The `.pkg` installs it so; a drag-installed bundle belongs to the user, who could swap the helper
+  for another binary. The helper checks the bundle it was started from and refuses every
+  connection when that check fails, and from protocol 9 every acting verb needs such a helper. A
+  registration left from a refused copy is removed at launch when no copy LaunchServices knows
+  passes the check, and the package build verifies that its payload passes it. Known limits:
+  `/Applications` is writable by the `admin` group, so code running as an administrator — on most
+  Macs, the user — can still rename the bundle and put another in its place; what launchd runs is
+  decided by the job's launch constraint (a cdhash list that macOS may repair after an update),
+  and nothing in the app stops launchd from starting an older genuine helper from another copy of
+  Wega, only Wega from using it. Turning Touch ID on or
   off needs an administrator at the console and refuses an unsafe `/etc/pam.d` or `sudo_local`
   (and, when turning it on with no `sudo_local`, an unsafe `sudo_local.template`) instead of
   rewriting it. When the policy `sudo` reads is unsafe
