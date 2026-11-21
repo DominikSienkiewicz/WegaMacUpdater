@@ -20,7 +20,8 @@ struct TouchIDDisablePreflight: Equatable, Sendable {
 
     /// The refusal the helper's own gates give for the facts the app saw: −4 or −5.
     var refusal: TouchIDSudoDisableRefusal?
-    /// The nearest existing local policy directory that someone other than root can change.
+    /// The nearest local policy directory that exists and that someone other than root can change.
+    /// Every existing one counts: whoever can write a parent can rename a safe child away.
     var unsafeLocalDirectory: String?
     /// The first later policy file that exists.
     var fallbackPath: String?
@@ -36,7 +37,7 @@ struct TouchIDDisablePreflight: Equatable, Sendable {
     ) -> TouchIDDisablePreflight {
         TouchIDDisablePreflight(
             refusal: observedRefusal(policyDirectory: policyDirectory, sudoLocal: sudoLocal),
-            unsafeLocalDirectory: nearestExisting(localDirectories).flatMap { isChangeableByOthers($0.facts) ? $0.path : nil },
+            unsafeLocalDirectory: localDirectories.first { isChangeableByOthers($0.facts) }?.path,
             fallbackPath: existingFallbackPaths.first)
     }
 
@@ -53,10 +54,6 @@ struct TouchIDDisablePreflight: Equatable, Sendable {
             if let refusal = TouchIDSudoDisabler.refusal(file: file), refusal != .tooLarge { return refusal }
         }
         return nil
-    }
-
-    private static func nearestExisting(_ directories: [LocalDirectory]) -> LocalDirectory? {
-        directories.first { $0.facts != nil }
     }
 
     private static func isChangeableByOthers(_ facts: LocalDirectory.Facts?) -> Bool {

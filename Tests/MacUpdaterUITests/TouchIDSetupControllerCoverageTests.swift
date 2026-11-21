@@ -259,6 +259,36 @@ struct TouchIDSetupControllerCoverageTests {
         #expect(await calls.helperCalls == 0)
     }
 
+    /// After the helper answers, the offer is worked out again from the file read afterwards, so a
+    /// refusal the app can now see, or a Touch ID already off, does not leave the button up.
+    @Test func theOfferIsWorkedOutAgainAfterTheHelperAnswers() async {
+        let state = TouchIDStateBox(.enabled)
+        let observed = TouchIDPreflightBox(.clear)
+        let refusing = TouchIDSetupController(dependencies: .init(
+            currentState: { state.value }, helperIsEnabled: { true }, enableWithHelper: {},
+            authorizeFallback: { .cancelledByUser }, openInTerminal: { _ in },
+            disableWithHelper: {
+                observed.value = TouchIDDisablePreflight(refusal: .unsafeOwnership, unsafeLocalDirectory: nil, fallbackPath: nil)
+                return .refused(.unsafeOwnership)
+            },
+            disableAvailability: { .enabled },
+            preflight: { observed.value }
+        ))
+        await refusing.refreshDisableOffer()
+        #expect(refusing.disableOffer == .available)
+        await refusing.disable { _ in }
+        #expect(refusing.disableOffer == .blocked(.unsafeOwnership), "no button again for a refusal the app now sees")
+
+        let removing = disablingController(state: state, calls: TouchIDCallRecorder()) {
+            state.value = .available
+            return .removed(lines: 1)
+        }
+        await removing.refreshDisableOffer()
+        #expect(removing.disableOffer == .available)
+        await removing.disable { _ in }
+        #expect(removing.disableOffer == .unknown, "Touch ID is off, so there is nothing to turn off")
+    }
+
     @Test func twoDisableRequestsDoNotOverlap() async {
         let state = TouchIDStateBox(.enabled)
         let latch = TouchIDAuthorizationLatch()
@@ -309,6 +339,18 @@ private actor TouchIDAuthorizationLatch {
         released = true
         releaseWaiters.forEach { $0.resume() }
         releaseWaiters.removeAll()
+    }
+}
+
+private final class TouchIDPreflightBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: TouchIDDisablePreflight
+
+    init(_ value: TouchIDDisablePreflight) { stored = value }
+
+    var value: TouchIDDisablePreflight {
+        get { lock.withLock { stored } }
+        set { lock.withLock { stored = newValue } }
     }
 }
 

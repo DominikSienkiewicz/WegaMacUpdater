@@ -57,7 +57,7 @@ enum TouchIDDisableCopy {
             }
             return trf("Po usunięciu tej dyrektywy sudo czytałby też plik %@ — jeśli go nie tworzyłeś, może pozwolić sudo pominąć hasło. Nic nie zmieniłam; sprawdź go według przewodnika.", fallbackPath)
         case .changedDuringOperation:
-            return tr("Plik zmienił się w trakcie mojej pracy, więc zostawiłam go tak, jak go zastałam. Obok może leżeć kopia jego poprzedniej wersji (.sudo_local.wega-swap-… w /etc/pam.d); jak ją sprzątnąć, opisuje przewodnik.")
+            return tr("Plik zmienił się w trakcie mojej pracy, więc go nie ruszyłam. Spróbuj jeszcze raz.")
         case .otherDirectivesPresent:
             return tr("W pliku są też inne ustawienia sudo, więc go nie zmieniłam. Wyłączysz Touch ID ręcznie według przewodnika.")
         }

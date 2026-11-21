@@ -26,8 +26,8 @@ extension Translations {
             "After removing this directive, sudo would also read %@ — if you didn't create it, it may let sudo skip the password. I changed nothing; check it with the user guide.",
         "Po usunięciu tej dyrektywy sudo czytałby też inny plik ustawień PAM, więc nic nie zmieniłam. Sprawdź przewodnik.":
             "After removing this directive, sudo would also read another PAM settings file, so I changed nothing. Check the user guide.",
-        "Plik zmienił się w trakcie mojej pracy, więc zostawiłam go tak, jak go zastałam. Obok może leżeć kopia jego poprzedniej wersji (.sudo_local.wega-swap-… w /etc/pam.d); jak ją sprzątnąć, opisuje przewodnik.":
-            "The file changed while I was working, so I left it as I found it. A copy of its previous version may be left next to it (.sudo_local.wega-swap-… in /etc/pam.d); the user guide covers the cleanup.",
+        "Plik zmienił się w trakcie mojej pracy, więc go nie ruszyłam. Spróbuj jeszcze raz.":
+            "The file changed while I was working, so I didn't touch it. Try again.",
         "W pliku są też inne ustawienia sudo, więc go nie zmieniłam. Wyłączysz Touch ID ręcznie według przewodnika.":
             "The file holds other sudo settings too, so I didn't change it. Turn off Touch ID by hand with the user guide.",
         "Zapis się nie udał. Plik jest taki jak przedtem, nic się nie zmieniło.":

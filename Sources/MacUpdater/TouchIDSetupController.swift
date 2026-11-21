@@ -209,10 +209,11 @@ final class TouchIDSetupController: ObservableObject {
       if case .versionMismatch = error as? PrivilegedHelperClient.HelperError {
         disableOffer = .helperOutdated
         onWegaState(Self.outdatedHelperState)
-      } else {
-        onWegaState(WegaState(pose: .idle, line: TouchIDDisableCopy.afterHelperError(stillEnabled: touchIDState == .enabled)))
+        return
       }
+      onWegaState(WegaState(pose: .idle, line: TouchIDDisableCopy.afterHelperError(stillEnabled: touchIDState == .enabled)))
     }
+    await refreshDisableOffer()
   }
 
   private static var outdatedHelperState: WegaState {

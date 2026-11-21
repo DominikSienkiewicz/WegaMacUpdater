@@ -36,7 +36,7 @@ struct TouchIDDisableCopyTests {
                     == TouchIDDisableCopy.line(for: .refused(.fallbackPolicyPresent), stillEnabled: true, fallbackPath: nil),
                     "only the policy paths the app itself knows are ever shown")
             #expect(TouchIDDisableCopy.line(for: .refused(.changedDuringOperation), stillEnabled: true)
-                    == "Plik zmienił się w trakcie mojej pracy, więc zostawiłam go tak, jak go zastałam. Obok może leżeć kopia jego poprzedniej wersji (.sudo_local.wega-swap-… w /etc/pam.d); jak ją sprzątnąć, opisuje przewodnik.")
+                    == "Plik zmienił się w trakcie mojej pracy, więc go nie ruszyłam. Spróbuj jeszcze raz.")
             #expect(TouchIDDisableCopy.line(for: .refused(.otherDirectivesPresent), stillEnabled: true)
                     == "W pliku są też inne ustawienia sudo, więc go nie zmieniłam. Wyłączysz Touch ID ręcznie według przewodnika.")
             #expect(TouchIDDisableCopy.line(for: .restoredAfterFailure, stillEnabled: true)
@@ -62,6 +62,8 @@ struct TouchIDDisableCopyTests {
                     == "A line written differently from the exact directive I can remove turns on Touch ID for sudo here, so I left it alone. Turn it off by hand with the user guide.")
             #expect(TouchIDDisableCopy.line(for: .refused(.fallbackPolicyPresent), stillEnabled: true, fallbackPath: fallback)
                     == "After removing this directive, sudo would also read /usr/local/etc/pam.d/sudo_local — if you didn't create it, it may let sudo skip the password. I changed nothing; check it with the user guide.")
+            #expect(TouchIDDisableCopy.line(for: .refused(.changedDuringOperation), stillEnabled: true)
+                    == "The file changed while I was working, so I didn't touch it. Try again.")
             #expect(TouchIDDisableCopy.outdatedHelper.contains("restart your Mac"))
             #expect(tr("Wyłącz Touch ID dla sudo") == "Turn Off Touch ID for sudo")
             #expect(tr("Bez pomocnika Wegi wyłączysz je ręcznie.") == "Without the Wega helper, you turn it off by hand.")
@@ -125,7 +127,7 @@ struct TouchIDDisableCopyTests {
         #expect(evaluate(sudoLocal: file(permissions: 0o444)).refusal == nil)
     }
 
-    @Test func aLocalPolicyDirectoryOthersCanChangeWarnsOnTheNearestExistingOne() {
+    @Test func anyLocalPolicyDirectoryOthersCanChangeWarnsOnTheNearestUnsafeOne() {
         func local(_ path: String, owner: UInt32 = 0, permissions: UInt16 = 0o755, link: Bool = false) -> TouchIDDisablePreflight.LocalDirectory {
             .init(path: path, facts: .init(isSymbolicLink: link, ownerUID: owner, permissions: permissions))
         }
@@ -136,9 +138,18 @@ struct TouchIDDisableCopyTests {
         #expect(evaluate(local: [local("/usr/local/etc")]).unsafeLocalDirectory == nil)
         #expect(evaluate(local: [missing("/usr/local/etc"), missing("/usr/local")]).unsafeLocalDirectory == nil)
         let chain = [missing("/usr/local/etc/pam.d"), missing("/usr/local/etc"), local("/usr/local", owner: 501)]
-        #expect(evaluate(local: chain).unsafeLocalDirectory == "/usr/local", "the nearest existing directory is the one that matters")
-        let safeNearest = [local("/usr/local/etc/pam.d"), local("/usr/local/etc", owner: 501)]
-        #expect(evaluate(local: safeNearest).unsafeLocalDirectory == nil, "a safe pam.d shields what is above it")
+        #expect(evaluate(local: chain).unsafeLocalDirectory == "/usr/local")
+        let safePamD = [local("/usr/local/etc/pam.d"), local("/usr/local/etc", owner: 501), local("/usr/local")]
+        #expect(evaluate(local: safePamD).unsafeLocalDirectory == "/usr/local/etc",
+                "whoever can write a parent can rename a safe pam.d away and put their own in its place")
+        let safeBelowLocal = [local("/usr/local/etc/pam.d"), local("/usr/local/etc"), local("/usr/local", permissions: 0o777)]
+        #expect(evaluate(local: safeBelowLocal).unsafeLocalDirectory == "/usr/local")
+        let linkedLocal = [missing("/usr/local/etc/pam.d"), local("/usr/local/etc"), local("/usr/local", link: true)]
+        #expect(evaluate(local: linkedLocal).unsafeLocalDirectory == "/usr/local", "a missing pam.d does not end the chain")
+        let bothUnsafe = [local("/usr/local/etc/pam.d", owner: 501), local("/usr/local/etc", permissions: 0o757), local("/usr/local")]
+        #expect(evaluate(local: bothUnsafe).unsafeLocalDirectory == "/usr/local/etc/pam.d", "the nearest unsafe one is named")
+        let allSafe = [local("/usr/local/etc/pam.d"), local("/usr/local/etc"), local("/usr/local")]
+        #expect(evaluate(local: allSafe).unsafeLocalDirectory == nil)
         #expect(TouchIDDisablePreflight.localCandidatePaths == ["/usr/local/etc/pam.d", "/usr/local/etc", "/usr/local"])
     }
 
