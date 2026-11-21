@@ -300,7 +300,8 @@ struct UpdateView: View {
             selectedCount: selectedVisibleCount,
             visibleCount:  visibleItems.count,
             targets:       updateTargets,
-            protection:    scan.caskProtection
+            protection:    scan.caskProtection,
+            resolved:      scan.caskProtectionResolved
         )
         return UpdateBandPresentation(
             totalCount:     counts.all,

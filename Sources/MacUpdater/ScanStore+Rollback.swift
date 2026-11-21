@@ -191,6 +191,7 @@ extension ScanStore {
         guard let model, let casks = brewOutdated?.casks, !casks.isEmpty else {
             caskProtection = [:]
             caskProfiles = [:]
+            caskProtectionResolved = []
             return
         }
         let profiles = (try? await model.brewService.caskArtifactProfiles(tokens: casks.map(\.name))) ?? []
@@ -204,6 +205,7 @@ extension ScanStore {
             }
         }
         caskProtection = verdicts
+        caskProtectionResolved = Set(casks.map(\.name))
         caskProfiles = Dictionary(profiles.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first })
         // Sizes are a network round-trip per cask; they are not worth paying for until the
         // user asks to see the plan.

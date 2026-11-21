@@ -104,21 +104,24 @@ struct UpdateActionBarSummary: Equatable {
     let visibleCount: Int
     let protectedCount: Int
     let queuedCount: Int
-    /// Casks in the queue whose rollback verdict has not arrived yet.
+    /// Casks in the queue the rollback check has not reached yet.
     let unverifiedCount: Int
 
+    /// `resolved` names the casks the finished check asked about: one of them without a verdict
+    /// counts as not protected instead of as still being checked.
     init(
         selectedCount: Int,
         visibleCount: Int,
         targets: [OutdatedItem],
-        protection: [String: RollbackProtection.Verdict]
+        protection: [String: RollbackProtection.Verdict],
+        resolved: Set<String> = []
     ) {
         let casks = targets.filter { $0.kind == .cask }
         self.selectedCount = selectedCount
         self.visibleCount = visibleCount
         self.queuedCount = targets.count
         self.protectedCount = casks.filter { protection[$0.name] == .protected }.count
-        self.unverifiedCount = casks.filter { protection[$0.name] == nil }.count
+        self.unverifiedCount = casks.filter { protection[$0.name] == nil && !resolved.contains($0.name) }.count
     }
 
     /// An empty selection says what is missing instead of offering a dead button silently.
@@ -129,7 +132,8 @@ struct UpdateActionBarSummary: Equatable {
     }
 
     /// Undo coverage against the whole queue, formulae included. A cask without a verdict is
-    /// never counted as protected: the band says it is still checking.
+    /// never counted as protected: the band says it is still checking until the check has
+    /// finished, and counts it as not covered after.
     var protectionText: String? {
         guard queuedCount > 0 else { return nil }
         if unverifiedCount > 0 { return tr("Sprawdzam możliwość cofnięcia") }

@@ -142,6 +142,10 @@ final class ScanStore: ObservableObject {
     @Published var cleaningStaleCasks = false
     /// M5 — whether each outdated cask is covered by snapshot → canary → auto-rollback.
     @Published var caskProtection:    [String: RollbackProtection.Verdict] = [:]
+    /// M2 — the casks the last protection check asked brew about. One of them without a verdict
+    /// is one the check found nothing for (brew failed, or left it out): not covered, rather than
+    /// "still checking" for good.
+    @Published var caskProtectionResolved: Set<String> = []
     /// F2 — what each outdated cask installs. Feeds the "may need an admin password" note.
     @Published var caskProfiles:      [String: CaskArtifactProfile] = [:]
     /// F2 — download sizes, probed on demand. `unknown` is a first-class answer: brew's JSON
