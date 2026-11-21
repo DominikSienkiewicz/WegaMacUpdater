@@ -44,6 +44,10 @@ struct UpdateRunSummaryList<HandOffs: View>: View {
     let report: UpdateRunReport
     let onShowLog: () -> Void
     let handOffs: HandOffs
+    /// The undo „Cofnij” asked about, pending the undo screen's own confirmation. Transient, as
+    /// on that screen: no background task writes to it.
+    @State private var undoTarget: UndoableUpdate?
+    @State private var showUndoConfirmation = false
 
     /// `handOffs` draws exactly what the band's „U producenta” counts (`handOffCount(for: .all)`).
     init(report: UpdateRunReport, onShowLog: @escaping () -> Void, @ViewBuilder handOffs: () -> HandOffs) {
@@ -80,6 +84,8 @@ struct UpdateRunSummaryList<HandOffs: View>: View {
         // The only scan under an open summary is the undo's check, which is replacing the
         // hand-off rows: inert for its duration, like `listColumn`'s rows.
         .disabled(!ScanSelectionGate.allowsSelection(isRefreshing: scan.isRefreshing))
+        .undoConfirmation(target: $undoTarget, isPresented: $showUndoConfirmation)
+        .wegaAttention(showUndoConfirmation)
     }
 
     @ViewBuilder
@@ -97,7 +103,10 @@ struct UpdateRunSummaryList<HandOffs: View>: View {
                         }
                     }
                 ForEach(entries) { entry in
-                    UpdateRunResultRow.make(entry: entry, in: report, scan: scan)
+                    UpdateRunResultRow.make(entry: entry, in: report, scan: scan, requestUndo: { undo in
+                        undoTarget = undo
+                        showUndoConfirmation = true
+                    })
                         // One undo at a time: `undoUpdate` refuses a second while the first restores.
                         .disabled(scan.undoBusy != nil)
                         .overlay(alignment: .bottom) {
@@ -120,7 +129,14 @@ struct UpdateRunResultRow: View {
     let onTrust: (() -> Void)?
     let onUndo: (() -> Void)?
 
-    private var note: String { entry.note(undo: undo) }
+    /// The report's note without the "{name}: " that a changed publisher's or a failed rollback's
+    /// sentence starts with: the row already names the item, and VoiceOver would say it twice.
+    /// The banners raised when the summary closes keep the whole sentence.
+    var note: String {
+        let sentence = entry.note(undo: undo)
+        let prefix = "\(entry.name): "
+        return sentence.hasPrefix(prefix) ? String(sentence.dropFirst(prefix.count)) : sentence
+    }
 
     /// What VoiceOver reads for the row, worded now (re-read after a language switch).
     var accessibilitySentence: String { "\(entry.name): \(note)" }
@@ -138,6 +154,9 @@ struct UpdateRunResultRow: View {
                     .font(.wega(.subheadline))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if let undo {
+                    RollbackScopeNotice(scope: undo.rollbackScope, compact: true)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             action
@@ -174,14 +193,16 @@ struct UpdateRunResultRow: View {
 }
 
 extension UpdateRunResultRow {
-    /// The row the summary draws for `entry`: trust only where the report offers it, an undo only
-    /// with this run's undo still in `scan.undoableUpdates`, each through today's store action.
-    static func make(entry: UpdateRunReportEntry, in report: UpdateRunReport, scan: ScanStore) -> UpdateRunResultRow {
+    /// The row the summary draws for `entry`: trust only where the report offers it, through
+    /// today's store action; an undo only with this run's undo still in `scan.undoableUpdates`,
+    /// and only as a request for `UndoConfirmation`'s question (`requestUndo`), never the undo itself.
+    static func make(entry: UpdateRunReportEntry, in report: UpdateRunReport, scan: ScanStore,
+                     requestUndo: @escaping (UndoableUpdate) -> Void) -> UpdateRunResultRow {
         let undo = report.undo(for: entry, in: scan.undoableUpdates)
         let onTrust: (() -> Void)? = entry.offersPublisherTrust ? {
             Task { await scan.trustNewPublisher(token: entry.name, reportedTeamID: entry.reportedTeamID, appURL: entry.appPath) }
         } : nil
-        let onUndo: (() -> Void)? = undo.map { undo in { Task { await scan.undoUpdate(undo) } } }
+        let onUndo: (() -> Void)? = undo.map { undo in { requestUndo(undo) } }
         return UpdateRunResultRow(entry: entry, undo: undo, isUndoing: scan.undoBusy == entry.name,
                                   onTrust: onTrust, onUndo: onUndo)
     }

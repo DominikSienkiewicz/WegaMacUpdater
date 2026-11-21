@@ -451,7 +451,8 @@ struct UpdateView: View {
             }
 
             // C2 stage 4 — the run's result takes the rows' place until the summary closes. A run
-            // that empties the list leaves it blank until then: no hero, no joke before the result.
+            // that empties the list, or the category on screen, leaves it blank until then: no
+            // hero and no empty category before the result.
             // Otherwise the rows on screen are the ones the scan is in the middle of replacing, so
             // for its duration they are a report, not a menu: inert. Nothing is drawn over them
             // (UXP-13) — the band and the list header say a scan is running and why the rows
@@ -460,7 +461,7 @@ struct UpdateView: View {
                 UpdateRunSummaryList(report: report, onShowLog: { scan.showLog = true }, handOffs: {
                     UpdateRunHandOffGroup(onPinManual: requestPinManual)
                 })
-            } else if scan.updating && !hasUpdates {
+            } else if scan.updating && !showsRows {
                 Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 listColumn
@@ -556,9 +557,10 @@ struct UpdateView: View {
     private var showsBand: Bool { hasUpdates || scan.updating || scan.runReport != nil }
 
     /// Whether the list shows rows rather than one of its empty states — the one answer
-    /// `listColumn` and the list header's scan note both read.
+    /// `listColumn`, the list header's scan note and a run's blank area read.
     private var showsRows: Bool {
-        hasResults && (filterHasContent(updateFilter) || !scan.restartCandidates.isEmpty)
+        hasResults && (Self.filterHasContent(updateFilter, items: allItems, manual: visibleManual, isSecurity: scan.isSecurityApp)
+                       || !scan.restartCandidates.isEmpty)
     }
 
     @ViewBuilder
@@ -769,12 +771,13 @@ struct UpdateView: View {
     }
 
     /// Whether the given filter would surface at least one update section.
-    private func filterHasContent(_ filter: UpdateFilter) -> Bool {
+    static func filterHasContent(_ filter: UpdateFilter, items: [OutdatedItem], manual: [ManualOutdatedApp],
+                                 isSecurity: (ManualOutdatedApp) -> Bool) -> Bool {
         switch filter {
-        case .all:      return !allItems.isEmpty || !visibleManual.isEmpty
-        case .apps:     return allItems.contains { $0.kind.category == .apps } || !visibleManual.isEmpty
-        case .cli:      return allItems.contains { $0.kind.category == .cli }
-        case .security: return visibleManual.contains(where: scan.isSecurityApp)
+        case .all:      return !items.isEmpty || !manual.isEmpty
+        case .apps:     return items.contains { $0.kind.category == .apps } || !manual.isEmpty
+        case .cli:      return items.contains { $0.kind.category == .cli }
+        case .security: return manual.contains(where: isSecurity)
         }
     }
 

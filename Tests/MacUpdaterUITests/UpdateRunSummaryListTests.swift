@@ -67,7 +67,8 @@ struct UpdateRunSummaryListTests {
         let slackUndo = undoable("slack", operationID: Self.operationID)
         scan.undoableUpdates = [slackUndo, undoable("zoom", operationID: UUID())]
         func row(_ name: String) throws -> UpdateRunResultRow {
-            UpdateRunResultRow.make(entry: try #require(built.entries.first { $0.name == name }), in: built, scan: scan)
+            UpdateRunResultRow.make(entry: try #require(built.entries.first { $0.name == name }), in: built, scan: scan,
+                                    requestUndo: { _ in })
         }
 
         #expect(try row("proton-mail").onTrust != nil, "a changed publisher offers trust")
@@ -88,8 +89,88 @@ struct UpdateRunSummaryListTests {
 
         let list = try source(Self.summaryFile)
         #expect(list.contains("Task { await scan.trustNewPublisher(token: entry.name, reportedTeamID: entry.reportedTeamID, appURL: entry.appPath) }"))
-        #expect(list.contains("Task { await scan.undoUpdate(undo) }"))
         #expect(list.contains("isUndoing: scan.undoBusy == entry.name"))
+    }
+
+    /// "Cofnij" in the summary asks the undo screen's own question — the app, the pin, until when
+    /// the copy is kept and, for Docker, what the copy does not hold — and only its answer undoes.
+    @Test func theSummarysUndoAsksTheUndoScreensQuestion() throws {
+        let scan = store()
+        let built = report([cask("slack")], [.succeeded])
+        let slackUndo = undoable("slack", operationID: Self.operationID)
+        scan.undoableUpdates = [slackUndo]
+        var requested: UndoableUpdate?
+        let row = UpdateRunResultRow.make(entry: try #require(built.entries.first), in: built, scan: scan,
+                                          requestUndo: { requested = $0 })
+        let undo = try #require(row.onUndo)
+        undo()
+        #expect(requested == slackUndo, "the button asks for the confirmation of this run's undo")
+        #expect(scan.undoBusy == nil, "and starts nothing itself")
+
+        let list = try source(Self.summaryFile)
+        #expect(!list.contains("undoUpdate("), "the summary never undoes on its own")
+        #expect(list.contains("requestUndo: { undo in\n                        undoTarget = undo\n                        showUndoConfirmation = true\n                    }"))
+        #expect(list.contains(".undoConfirmation(target: $undoTarget, isPresented: $showUndoConfirmation)"))
+        #expect(list.contains(".wegaAttention(showUndoConfirmation)"), "the open question holds Wega's ball")
+        let rollback = try source("Sources/MacUpdater/RollbackView.swift")
+        #expect(rollback.contains(".undoConfirmation(target: $undoTarget, isPresented: $showUndoConfirmation)"), "one copy for both screens")
+        #expect(!rollback.contains(".confirmationDialog(") && !rollback.contains("undoUpdate("))
+        let confirmation = try source("Sources/MacUpdater/UndoConfirmation.swift")
+        #expect(confirmation.components(separatedBy: "scan.undoUpdate(").count == 2, "one call, behind „Przywróć wersję”")
+        let restore = try slice(confirmation, from: "Button(trf(\"Przywróć wersję %@\"", to: "Button(tr(\"Anuluj\"), role: .cancel)")
+        #expect(restore.contains("Task { await scan.undoUpdate(target) }"))
+
+        let docker = UndoableUpdate(operationID: Self.operationID, token: "docker-desktop", appPath: "/Applications/Docker.app",
+                                    restoredVersion: "4.40", updatedAt: Self.finishedAt,
+                                    expiresAt: Self.finishedAt.addingTimeInterval(7 * 86_400))
+        let notice = try #require(RollbackScopePresentation.notice(for: docker.rollbackScope))
+        withLanguage(.pl) {
+            let restoration = trf("%@ zostanie zastąpiona kopią sprzed aktualizacji, a przywrócona wersja zostanie przypięta. Kopia jest trzymana do %@.",
+                                  "docker-desktop", docker.expiresAt.formatted(date: .abbreviated, time: .omitted))
+            #expect(UndoConfirmation.message(for: docker) == "\(restoration)\n\n\(notice.localizedDescription)")
+            #expect(UndoConfirmation.message(for: slackUndo) == trf(
+                "%@ zostanie zastąpiona kopią sprzed aktualizacji, a przywrócona wersja zostanie przypięta. Kopia jest trzymana do %@.",
+                "slack", slackUndo.expiresAt.formatted(date: .abbreviated, time: .omitted)))
+        }
+    }
+
+    /// Docker's copy holds only Docker.app; the row says so where it offers "Cofnij".
+    @Test func aDockerUndoRowCarriesTheScopeNotice() throws {
+        let entry = try #require(report([cask("docker-desktop")], [.succeeded]).entries.first)
+        func height(undoToken: String) -> CGFloat {
+            let undo = undoable(undoToken, operationID: Self.operationID)
+            let row = UpdateRunResultRow(entry: entry, undo: undo, isUndoing: false, onTrust: nil, onUndo: {})
+            return withLanguage(.pl) { NSHostingView(rootView: row.frame(width: 420)).fittingSize.height }
+        }
+        #expect(RollbackProtection.scope(token: "docker-desktop") == .dockerAppBundleOnly)
+        #expect(RollbackProtection.scope(token: "docker-desktop-probe") == .appBundleOnly)
+        #expect(height(undoToken: "docker-desktop") > height(undoToken: "docker-desktop-probe"), "the notice is drawn")
+        let list = try source(Self.summaryFile)
+        let row = try slice(list, from: "struct UpdateRunResultRow: View", to: "private var icon: some View")
+        #expect(row.contains("if let undo {\n                    RollbackScopeNotice(scope: undo.rollbackScope, compact: true)\n                }"))
+    }
+
+    /// Spec ruling — the row names the item, so a note that begins with "{name}: " (a changed
+    /// publisher, a failed rollback) drops it; the banners raised on close keep the whole sentence.
+    @Test func aRowNamesItsItemOnce() throws {
+        let scan = store()
+        let built = report([cask("proton-mail"), cask("zoom")],
+                           [.publisherChanged(old: "AAA", new: "BBB"), .rollbackFailed])
+        for language in [AppLanguage.pl, .en] {
+            try withLanguage(language) {
+                for entry in built.entries {
+                    let row = UpdateRunResultRow(entry: entry, undo: nil, isUndoing: false, onTrust: nil, onUndo: nil)
+                    #expect(entry.note(undo: nil).hasPrefix("\(entry.name): "), "sanity: the report's sentence names it")
+                    #expect(!row.note.contains(entry.name), "\(language): \(row.note)")
+                    #expect(row.accessibilitySentence.components(separatedBy: entry.name).count == 2, "\(language): \(row.accessibilitySentence)")
+                    #expect(row.accessibilitySentence == "\(entry.name): \(row.note)")
+                }
+                let changed = try #require(built.entries.first)
+                let banner = try #require(scan.publisherChangeBanner(for: changed))
+                #expect(banner.message == changed.note(undo: nil), "\(language): the banner keeps the whole sentence")
+                #expect(banner.message.contains("proton-mail"))
+            }
+        }
     }
 
     @Test func theSummaryListCannotQueueAnything() throws {
@@ -145,7 +226,7 @@ struct UpdateRunSummaryListTests {
         let screen = try slice(view, from: "private var screenBody: some View", to: "private var runListState:")
         let summary = try #require(screen.range(of: "if let report = scan.runReport {\n                UpdateRunSummaryList(report: report, onShowLog: { scan.showLog = true }, handOffs: {"))
         let rest = try #require(screen.range(of: """
-            } else if scan.updating && !hasUpdates {
+            } else if scan.updating && !showsRows {
                             Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
                             listColumn
@@ -160,6 +241,32 @@ struct UpdateRunSummaryListTests {
         }
         #expect(summary.upperBound < rest.lowerBound)
         #expect(screen.components(separatedBy: "listColumn").count == 2, "one list, in the last branch")
+    }
+
+    /// Spec §4 names both empty states. "Nic w tej kategorii" shows when the category on screen is
+    /// empty while another still has rows — so the blank area asks `showsRows`, the list's own
+    /// answer, which a restart-only list keeps true.
+    @Test func theBlankAreaAlsoCoversAnEmptiedCategory() throws {
+        let cask = cask("slack")
+        let formula = OutdatedItem(key: UpdatePlanner.key(name: "wget", kind: .formula), name: "wget", from: "1", to: "2", kind: .formula)
+        let none: (ManualOutdatedApp) -> Bool = { _ in false }
+        #expect(UpdateView.filterHasContent(.all, items: [cask], manual: [], isSecurity: none), "there are updates")
+        #expect(!UpdateView.filterHasContent(.cli, items: [cask], manual: [], isSecurity: none),
+                "the CLI rows were all updated: the category on screen is empty")
+        #expect(UpdateView.filterHasContent(.cli, items: [formula], manual: [], isSecurity: none))
+        #expect(UpdateView.filterHasContent(.apps, items: [cask], manual: [], isSecurity: none))
+        #expect(!UpdateView.filterHasContent(.security, items: [cask], manual: [], isSecurity: none))
+
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        #expect(view.contains("""
+                private var showsRows: Bool {
+                    hasResults && (Self.filterHasContent(updateFilter, items: allItems, manual: visibleManual, isSecurity: scan.isSecurityApp)
+                                   || !scan.restartCandidates.isEmpty)
+                }
+            """), "the same answer listColumn reads; restarts alone keep the list")
+        let column = try slice(view, from: "private var listColumn: some View", to: "/// F2 — \"show me exactly what you will do\"")
+        #expect(column.contains("} else if showsRows {"), "listColumn's empty category is exactly !showsRows")
+        #expect(!view.contains("private func filterHasContent("), "one rule, the static one")
     }
 
     /// "U producenta" in the band counts `handOffCount(for: .all)`; the group draws exactly those
