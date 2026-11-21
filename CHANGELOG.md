@@ -24,6 +24,17 @@ them verbatim under the new version heading, so that step is never done by hand 
   on their own row whether they are *waiting*, *installing…*, *installed, checking*, *failed*
   or *won't start*; Homebrew formulae and the App Store say *in progress* once on the group,
   and updates the vendor finishes say *with the vendor*.
+- **The check after a run happens in place, and the run ends in a summary.** The post-run
+  check no longer takes over the window: the band says **Checking the result** while the list
+  stays on screen, locked. The result is then a summary in the band and the list instead of
+  the "Updated N packages", "Update incomplete" and "Update stopped" banners: every app the
+  run planned lands in exactly one result (updated, failed, rolled back, not confirmed, not
+  started) with a one-line reason, **Undo** and **Trust the New Signature** where they apply,
+  and the updates left to finish with the developer. A package counts as updated only after
+  the check confirms it. **Close summary** (or the link to the remaining updates) returns to
+  the normal list; a changed-publisher warning still unresolved at that point returns as the
+  sticky banner, and a failed rollback keeps its red banner. An undo started from the summary
+  rescans in place too.
 - **Turn Touch ID for sudo off from Settings.** With the Wega helper installed, the Touch ID
   card has **Turn Off Touch ID for sudo**. The helper removes only the exact
   `auth       sufficient     pam_tid.so` directive from `/etc/pam.d/sudo_local`, whoever wrote it, swaps the new file in atomically, checks it and puts the old file
