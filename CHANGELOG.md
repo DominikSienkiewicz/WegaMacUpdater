@@ -32,8 +32,8 @@ them verbatim under the new version heading, so that step is never done by hand 
   Touch ID card asks you to reinstall it before turning Touch ID off.
 - **Find an app on Updates.** **⌘F** shows one answer row above the list instead of
   narrowing it: where the app is on the list, what Inventory knows when it is not (up to
-  date, no known source, the check failed, hidden by one of your rules with **Show Rules**,
-  or not on this Mac), with **Show Rules** beside an answer about your rules and **Open Inventory**
+  date, no known source with **Report app ›** to suggest it for the catalog as in Inventory,
+  the check failed, hidden by one of your rules with **Show Rules**, or not on this Mac), with **Show Rules** beside an answer about your rules and **Open Inventory**
   beside the others, and says when the Inventory read may have changed or was incomplete.
 - **The menu knows when the window is checking.** While a check from the Wega window runs, the
   menu-bar menu says **Checking for updates in the Wega window…**, and its check button and
@@ -146,7 +146,8 @@ them verbatim under the new version heading, so that step is never done by hand 
 
 ### Changed
 - **Shorter, plainer wording.** The note for a scan that could not reach every source is
-  shorter in Polish and reads **check incomplete** in English, the group that waits for you is
+  shorter in Polish (**skan niepełny**, now also in Inventory, the menu bar and the VoiceOver
+  announcement) and reads **check incomplete** in English, the group that waits for you is
   **Needs your action**, the fourth source is **vendors**, and the messages about a changed
   signature now say **developer signature** instead of Team ID.
 - **The band names your queue.** It reads **4 queued · 2 to finish with the developer**

@@ -135,7 +135,8 @@ Wega goes and gets them anyway:
 **Finding an app.** Press **⌘F** on **Updates** and type a name; the field is **Find an app**.
 The list does not narrow. One answer row appears above it instead. When the app is among the
 updates, the row says so (**On the update list:**) and links to the matching rows. When it is not, the row says what Wega knows about it: that it is
-up to date and how that was checked, that Wega does not know where to update it from, that the
+up to date and how that was checked, that Wega does not know where to update it from (with
+**Report app ›**, the same report Inventory offers, so it can be added to the catalog), that the
 check failed or that Wega has no current result and will check it next scan, or that one of
 your rules hides it, with **Show Rules** to open them. When Inventory has never been read, the
 row says so; searching never starts that read itself. **Show Rules** comes with an answer

@@ -216,7 +216,8 @@ the button's tooltip names the running scan instead of blaming an empty selectio
 **Finding an app on Updates.** **⌘F** (and **Find an app** in the toolbar) does not filter the
 list. It shows one answer row above it. When the app is among the updates, the row links to the
 matching rows. Otherwise it says what Inventory
-knows: up to date and how it was checked, no known source to update from, the check failed, no
+knows: up to date and how it was checked, no known source to update from (with **Report app ›**,
+Inventory's catalog report for that app), the check failed, no
 current result, hidden by one of your rules, or not on this Mac. **Show Rules** accompanies an
 answer about your rules, **Open Inventory** the others. It never starts an Inventory read; when
 Inventory was never read it says so. An answer from an Inventory read that may have changed, or
