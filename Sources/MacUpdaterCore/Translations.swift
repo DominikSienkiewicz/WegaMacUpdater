@@ -133,7 +133,6 @@ extension Translations {
         "Zmienił się wydawca aplikacji — sprawdź.": "The app's publisher changed — review.",
         "instalacja %@": "install %@",
         // UX-01 — ujawnienie zakresu Touch ID dla sudo.
-        "Działa dla całego sudo w systemie, nie tylko dla Wegi.": "Applies to all sudo on the system, not just Wega.",
         // FEAT-03 — transparentność pobrania (UpdateView).
         "Bez weryfikacji sumy kontrolnej": "Without checksum verification",
         "Homebrew zainstaluje bez sprawdzenia sumy: %@": "Homebrew will install without checking the checksum: %@",
@@ -209,7 +208,6 @@ extension Translations {
         // FEAT-01 / SEC-03 — privileged helper + self-update verification.
         "Aktualizacja nie przeszła weryfikacji podpisu — otwieram stronę wydania.": "The update failed signature verification — opening the release page.",
         // ICE-01 — in-app biometric gate.
-        "Pozwala instalować zweryfikowane aktualizacje i konfigurować Touch ID bez wpisywania hasła — przez podpisany helper (XPC) z białą listą operacji.": "Installs verified updates and configures Touch ID without typing a password — via a signed helper (XPC) with a whitelist of operations.",
         "Aktywny": "Active",
         "Wymaga zgody": "Needs approval",
         "Niezarejestrowany": "Not registered",
@@ -700,12 +698,8 @@ extension Translations {
         "Zostań chwilę, sprawdzam…": "Hang on a sec, checking…",
         "Stary cask to zły cask.": "An old cask is a bad cask.",
         "Oto co o sobie wiem.": "Here's what I know about myself.",
-        "Touch ID dla Homebrew": "Touch ID for Homebrew",
-        "Włącz Touch ID dla sudo": "Enable Touch ID for sudo",
         "Aktywne": "Active",
         "Dostępne": "Available",
-        "Sudo używa Touch ID. Aktualizacje casków z sudo (Zoom, sterowniki, launchd) potwierdzisz odciskiem zamiast hasła.": "Sudo uses Touch ID. You'll confirm cask updates that require sudo (Zoom, drivers, launchd) with your fingerprint instead of a password.",
-        "Po włączeniu, brew nie zapyta o hasło w okienku — pojawi się natywny sheet Touch ID. Wymaga jednorazowo uprawnień administratora do zapisu /etc/pam.d/sudo_local.": "Once enabled, brew won't ask for a password in a dialog — a native Touch ID sheet appears instead. Requires administrator privileges once to write /etc/pam.d/sudo_local.",
         "macOS zablokował zapis do /etc/pam.d/sudo_local z poziomu Wegi (TCC). Uruchom poniższą komendę w Terminalu — wystarczy raz:": "macOS blocked writing to /etc/pam.d/sudo_local from within Wega (TCC). Run the command below in Terminal — just once:",
         "Bezpieczny zapis PAM wymaga podpisanego helpera. Jeśli jest niedostępny, uruchom poniższą transakcyjną komendę w Terminalu — wystarczy raz:": "A safe PAM write requires the signed helper. If it is unavailable, run the transactional command below in Terminal — just once:",
         "Skopiuj komendę": "Copy command",

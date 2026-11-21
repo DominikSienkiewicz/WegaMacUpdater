@@ -18,7 +18,7 @@ struct SettingsCategoriesTests {
         let expected: [String: [String]] = [
             "general":     ["appCard", "languageCard", "LaunchAtLoginSettingsCard()", "NotificationsSettingsCard()"],
             "checking":    ["policiesCard", "BackgroundUpdateConsentSettingsCard()", "ScanDirectoriesSettingsCard()", "ResourceGateSettingsCard()"],
-            "permissions": ["privilegedHelperCard", "touchIDCard"],
+            "permissions": ["TrustSettingsCard(appManagement: diagnostics?.appManagement)", "privilegedHelperCard", "touchIDCard"],
             "cleanup":     ["CleanupProjectRootsSettingsCard()", "CleanupTCCMapSettingsCard()"],
             "advanced":    ["LaunchSmokeTestSettingsCard()", "CrashReportingSettingsCard()", "catalogCard", "githubTokenCard",
                             "diagnosticsCard", "environmentCard", "licensesCard"],
@@ -120,7 +120,7 @@ struct SettingsCategoriesTests {
         try expectOrder(in: try slice(info, from: "private var appCard", to: "selfUpdateNotes"),
                         "selfUpdateRow", "SettingsCardHint(text: cardHints[.selfUpdate])")
         try expectOrder(in: try slice(info, from: "private var touchIDCard", to: "// MARK: - GitHub token"),
-                        "tr(\"Włącz Touch ID dla sudo\")", "SettingsCardHint(text: cardHints[.touchID])")
+                        "tr(\"Używaj Touch ID zamiast hasła administratora\")", "SettingsCardHint(text: cardHints[.touchID])")
         #expect(!(try source("Sources/MacUpdater/SettingsView.swift")).contains("onWegaState: { _ in"))
         withLanguage(.en) {
             #expect(tr("Zatwierdź pomocnika w Ustawieniach systemowych → Elementy logowania, potem wróć tutaj.")

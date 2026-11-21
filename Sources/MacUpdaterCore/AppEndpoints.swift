@@ -464,3 +464,18 @@ public struct AppEndpointsOverlay: Decodable, Sendable, Equatable {
     public let authorLinkedIn: String?
     public let masRepository: String?
 }
+
+extension AppEndpoints {
+    /// The host of every http(s) address in the configuration, unique and sorted — the pages
+    /// Wega fetches and the ones it opens in the browser alike. Homebrew's install command and
+    /// the support e-mail are not addresses, so they drop out.
+    public var connectionHosts: [String] {
+        let hosts = Mirror(reflecting: self).children.compactMap { child -> String? in
+            guard let value = child.value as? String,
+                  let scheme = ["https://", "http://"].first(where: { value.hasPrefix($0) }) else { return nil }
+            let host = value.dropFirst(scheme.count).prefix { !"/?:".contains($0) }
+            return host.isEmpty || host.contains("{") ? nil : String(host)
+        }
+        return Array(Set(hosts)).sorted()
+    }
+}

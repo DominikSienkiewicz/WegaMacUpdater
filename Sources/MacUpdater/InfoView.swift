@@ -96,6 +96,8 @@ extension InfoView {
 
     private var permissionsTab: some View {
         page(.permissions) {
+            TrustSettingsCard(appManagement: diagnostics?.appManagement)
+                .id(SettingsCard.trust)
             privilegedHelperCard
             touchIDCard
         }
@@ -195,7 +197,7 @@ extension InfoView {
         if touchIDState != .notSupported {
             WegaCard {
                 VStack(alignment: .leading, spacing: 0) {
-                    WegaCardHeader(icon: "touchid", title: tr("Touch ID dla Homebrew")) {
+                    WegaCardHeader(icon: "touchid", title: tr("Touch ID dla poleceń administratora")) {
                         statusBadge
                     }
 
@@ -206,9 +208,9 @@ extension InfoView {
                             .fixedSize(horizontal: false, vertical: true)
 
                         // UX-01: jawne ujawnienie zakresu zmiany.
-                        Text(tr("Działa dla całego sudo w systemie, nie tylko dla Wegi."))
+                        Text(tr("Działa też w Terminalu, nie tylko w Wedze."))
                             .font(.wega(.footnote))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
 
                         if let err = touchIDError {
@@ -227,7 +229,7 @@ extension InfoView {
                                 if enablingTouchID {
                                     ProgressView().controlSize(.small)
                                 } else {
-                                    Label(tr("Włącz Touch ID dla sudo"), systemImage: "touchid")
+                                    Label(tr("Używaj Touch ID zamiast hasła administratora"), systemImage: "touchid")
                                 }
                             }
                             .disabled(enablingTouchID)
@@ -298,7 +300,7 @@ extension InfoView {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(tr("Pozwala instalować zweryfikowane aktualizacje i konfigurować Touch ID bez wpisywania hasła — przez podpisany helper (XPC) z białą listą operacji."))
+                    Text(tr("Pomocnik Wegi działa jako root i umie tylko cztery rzeczy: zainstalować zweryfikowany pakiet Wegi, włączyć Touch ID dla sudo, przywrócić kopię aplikacji sprzed aktualizacji, przenieść do Kosza aplikację należącą do roota. Przy każdym połączeniu sprawdza podpis Wegi. Jest opcjonalny."))
                         .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -390,9 +392,9 @@ extension InfoView {
     private var touchIDDescription: String {
         switch touchIDState {
         case .enabled:
-            return tr("Sudo używa Touch ID. Aktualizacje casków z sudo (Zoom, sterowniki, launchd) potwierdzisz odciskiem zamiast hasła.")
+            return tr("Polecenia administratora potwierdzasz odciskiem palca zamiast hasła — także aktualizacje casków, które o nie proszą.")
         case .available:
-            return tr("Po włączeniu, brew nie zapyta o hasło w okienku — pojawi się natywny sheet Touch ID. Wymaga jednorazowo uprawnień administratora do zapisu /etc/pam.d/sudo_local.")
+            return tr("Po włączeniu Homebrew poprosi o odcisk palca zamiast hasła. Włączenie raz wymaga uprawnień administratora.")
         case .notSupported:
             return ""
         }
@@ -688,21 +690,6 @@ extension InfoView {
                         DiagRow(label: "Homebrew", required: true, value: d.brewVersion)
                         Divider().opacity(0.3).padding(.leading, 30)
                         DiagRow(label: "mas-cli", required: false, value: d.masVersion)
-                        Divider().opacity(0.3).padding(.leading, 30)
-                        // REL-05 — the preflight, so a missing "App Management" grant is
-                        // visible before the first upgrade rather than after it fails.
-                        DiagRow(label: tr("Zarządzanie aplikacjami"),
-                                required: true,
-                                value: Self.appManagementStatusText(d.appManagement),
-                                healthy: d.appManagement != .denied)
-                        if d.appManagement == .denied {
-                            Button(tr("Otwórz ustawienia prywatności")) {
-                                NSWorkspace.shared.open(AppManagementSettings.paneURL)
-                            }
-                            .buttonStyle(.link)
-                            .font(.wega(.subheadline))
-                            .padding(.top, 4)
-                        }
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
@@ -877,14 +864,6 @@ extension InfoView {
 
     /// REL-05 — the preflight is *indicative*: `unknown` says so instead of implying a
     /// clean bill of health nobody checked.
-    private static func appManagementStatusText(_ permission: AppManagementPermission) -> String {
-        switch permission {
-        case .granted: return tr("przyznane")
-        case .denied:  return tr("odmowa")
-        case .unknown: return tr("nieustalone")
-        }
-    }
-
     private static func cpuArch() -> String {
         var info = utsname()
         guard uname(&info) == 0 else { return "unknown" }

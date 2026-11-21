@@ -136,5 +136,41 @@ extension Translations {
             "An optional token reduces interruptions from GitHub request limits. It is kept in the Keychain.",
         "Wega skanuje /Applications, ~/Applications i ich podfoldery. Dodaj własne katalogi (także na innych wolumenach), pomiń te, których nie chcesz przeszukiwać, i ustaw głębokość podfolderów.":
             "Wega scans /Applications, ~/Applications and their subfolders. Add your own directories (including on other volumes), skip the ones you don't want searched, and set the subfolder depth.",
+        "Co Wega robi": "What Wega does",
+        "Uprawnienia": "Permissions",
+        "Połączenia": "Connections",
+        "Dane lokalne i raporty": "Local data and reports",
+        "Bez niego Wega poprosi o hasło. Wyłączysz go przyciskiem „Usuń pomocnika”.":
+            "Without it, Wega asks for your password. Switch it off with “Remove Helper”.",
+        "Touch ID dla poleceń administratora": "Touch ID for administrator commands",
+        "Zastępuje hasło administratora odciskiem palca w poleceniach sudo, także w Terminalu. Bez niego wpisujesz hasło. Jak je wyłączyć, opisuje przewodnik.":
+            "Replaces your administrator password with your fingerprint for sudo commands, in Terminal too. Without it, you type the password. The user guide explains how to turn it off.",
+        "macOS pyta o nie, gdy Wega podmienia aplikację w /Applications. Bez niego aktualizacje aplikacji się nie udadzą. Zmienisz to w Ustawieniach systemowych → Prywatność i bezpieczeństwo.":
+            "macOS asks for it when Wega replaces an app in /Applications. Without it, app updates fail. Change it in System Settings → Privacy & Security.",
+        "Nie znam jeszcze stanu uprawnienia Zarządzanie aplikacjami.":
+            "App Management permission status is not known yet.",
+        "Potrzebny tylko mapie „Pliki i foldery” w Porządkach; dostają go też procesy uruchamiane przez Wegę. Bez niego mapa jest niepełna. Odbierzesz go w Ustawieniach systemowych → Prywatność i bezpieczeństwo.":
+            "Needed only by the “Files and folders” map in Cleanup; processes Wega starts get it too. Without it, the map is incomplete. Revoke it in System Settings → Privacy & Security.",
+        "Sprawdzanie aktualizacji niczego nie instaluje ani nie usuwa — odświeża tylko katalog Homebrew. Wyjątek to aplikacje, którym pozwolisz aktualizować się w tle.":
+            "Checking for updates installs and removes nothing — it only refreshes Homebrew's catalog. The exception is apps you allow to update in the background.",
+        "Wega nie wysyła nic o Tobie: nie ma telemetrii ani analityki.":
+            "Wega sends nothing about you: no telemetry, no analytics.",
+        "Producentom wysyła tylko to, czego wymaga sprawdzenie, np. numer zainstalowanej wersji.":
+            "To developers it sends only what a check needs, such as the installed version number.",
+        "Łączy się z GitHubem (katalog aplikacji, aktualizacje Wegi), producentami zainstalowanych aplikacji, Homebrew i App Store.":
+            "It connects to GitHub (app catalog, Wega updates), the developers of apps you have installed, Homebrew and the App Store.",
+        "Pokaż pełną listę": "Show Full List",
+        "Wega łączy się z tymi adresami albo otwiera je w przeglądarce, gdy o to poprosisz.":
+            "Wega connects to these addresses, or opens them in your browser when you ask it to.",
+        "Logi, ostatni wynik skanu i kopie sprzed aktualizacji (do 7 dni) zostają na tym Macu.":
+            "Logs, the last scan result and pre-update copies (kept up to 7 days) stay on this Mac.",
+        "Raport błędu przejrzysz przed otwarciem poczty albo GitHuba.":
+            "You can review a problem report before opening email or GitHub.",
+        "Działa też w Terminalu, nie tylko w Wedze.": "Also works in Terminal, not just in Wega.",
+        "Używaj Touch ID zamiast hasła administratora": "Use Touch ID Instead of Your Admin Password",
+        "Polecenia administratora potwierdzasz odciskiem palca zamiast hasła — także aktualizacje casków, które o nie proszą.":
+            "You confirm administrator commands with your fingerprint instead of your password — including cask updates that ask for it.",
+        "Po włączeniu Homebrew poprosi o odcisk palca zamiast hasła. Włączenie raz wymaga uprawnień administratora.":
+            "Once on, Homebrew asks for your fingerprint instead of your password. Turning it on needs administrator rights once.",
     ]
 }
