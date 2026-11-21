@@ -23,7 +23,8 @@ struct PolicyRulesList: View {
                 Spacer()
                 Button(tr("Przywróć")) { onRestore(entry) }
                     .controlSize(.small)
-                    .help(tr("Usuń regułę"))
+                    .help(trf("Usuń regułę dla %@", entry.displayName))
+                    .accessibilityLabel(trf("Usuń regułę dla %@", entry.displayName))
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 9)

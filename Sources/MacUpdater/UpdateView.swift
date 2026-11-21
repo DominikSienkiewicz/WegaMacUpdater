@@ -432,13 +432,7 @@ struct UpdateView: View {
     @ViewBuilder
     private var groupingMenu: some View {
         if scan.scopeCounts.all > 0 {
-            Picker(tr("Grupuj"), selection: $grouping) {
-                ForEach(UpdateGrouping.allCases, id: \.self) { option in
-                    Text(option.title).tag(option)
-                }
-            }
-            .pickerStyle(.menu)
-            .fixedSize()
+            UpdateGroupingMenu(selection: $grouping)
         }
     }
 

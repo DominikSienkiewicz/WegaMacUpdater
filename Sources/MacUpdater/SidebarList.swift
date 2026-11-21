@@ -50,6 +50,7 @@ struct SidebarList: View {
             // turns red while a security fix is waiting, which its own row used to say.
             Section {
                 row(.updates(.all), badge: appsBadge + cliBadge, isDanger: securityBadge > 0, spins: true)
+                    .accessibilityLabel(SidebarBadgeCopy.updatesLabel(count: appsBadge + cliBadge, security: securityBadge))
             } header: { header(tr("Do aktualizacji")) }
             Section {
                 row(.migration)
@@ -123,7 +124,7 @@ struct SidebarList: View {
     }
 
     private func badgeText(_ count: Int, isDanger: Bool) -> AttributedString {
-        var text = AttributedString("\(count)")
+        var text = AttributedString(SidebarBadgeCopy.text(count: count, isDanger: isDanger))
         text.foregroundColor = isDanger ? .wegaDanger : .wegaCaramel
         return text
     }

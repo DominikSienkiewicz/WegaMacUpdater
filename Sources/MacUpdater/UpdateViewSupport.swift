@@ -267,6 +267,12 @@ struct UpdateSection: View {
     var onSkip:   ((OutdatedItem) -> Void)? = nil
     var onInspect: ((OutdatedItem) -> Void)? = nil
 
+    @FocusState private var focusedKey: String?
+    /// UXP-21 — the row Tab lands on. Kept apart from `focusedKey`, which empties once focus
+    /// leaves the rows themselves (another group, or this row's ⋯ when it takes focus), so the
+    /// stop stays where the user left it.
+    @State private var tabStop: String?
+
     /// A skip closure only when there is a concrete version on offer to skip.
     private func skipAction(for item: OutdatedItem) -> (() -> Void)? {
         guard let onSkip, let to = item.to, !to.isEmpty else { return nil }
@@ -291,6 +297,7 @@ struct UpdateSection: View {
                                   toggle: { toggleGroup() }
                               ))
 
+            let keys = items.map(\.key)
             ForEach(items) { item in
                 VStack(spacing: 0) {
                     PackageRow(
@@ -311,8 +318,11 @@ struct UpdateSection: View {
                         onIgnore:       { onIgnore?(item) },
                         onPin:          { onPin?(item) },
                         onSkip:         skipAction(for: item),
-                        backgroundUpdateToken: item.kind == .cask ? item.name : nil
+                        backgroundUpdateToken: item.kind == .cask ? item.name : nil,
+                        isTabStop:      UpdateRowFocus.isTabStop(item.key, in: keys, focused: tabStop),
+                        onMove:         { move(from: item.key, in: keys, $0) }
                     )
+                    .focused($focusedKey, equals: item.key)
                     // UX-14 — F1's release notes live in the inspector only: unfolding them
                     // here gave every row a different height and repeated the inspector.
                 }
@@ -324,6 +334,15 @@ struct UpdateSection: View {
                 }
             }
         }
+        .focusSection()
+        .onChange(of: focusedKey) { _, key in if let key { tabStop = key } }
+    }
+
+    private func move(from key: String, in keys: [String], _ direction: RowMoveDirection) -> Bool {
+        guard let next = UpdateRowFocus.neighbour(of: key, in: keys, direction: direction) else { return false }
+        tabStop = next
+        focusedKey = next
+        return true
     }
 
     private func toggle(_ key: String) {
@@ -495,6 +514,10 @@ struct ManualUpdateSection: View {
     var onSkip:    ((ManualOutdatedApp) -> Void)? = nil
     var onInspect: ((ManualOutdatedApp) -> Void)? = nil
 
+    @FocusState private var focusedKey: String?
+    /// UXP-21 — the row Tab lands on; see `UpdateSection.tabStop`.
+    @State private var tabStop: String?
+
     /// A skip closure only when the source reported a concrete version to skip.
     private func skipAction(for app: ManualOutdatedApp) -> (() -> Void)? {
         guard let onSkip, let version = app.availableVersion, !version.isEmpty else { return nil }
@@ -506,8 +529,10 @@ struct ManualUpdateSection: View {
             UpdateGroupHeader(title: title, tint: tint, ordinal: ordinal, count: items.count,
                               note: subtitle, caption: caption)
 
+            let keys = items.map { "m:" + $0.path.path }
             ForEach(items, id: \.path) { item in
-                let isInspected = "m:" + item.path.path == inspectedKey
+                let key = "m:" + item.path.path
+                let isInspected = key == inspectedKey
                 VStack(spacing: 0) {
                 // UX-14 — the same columns as a package row: the hand-off mark holds the
                 // queue column, so this icon lines up with every selectable row's, and the
@@ -554,7 +579,8 @@ struct ManualUpdateSection: View {
                 .queueRowSelection(isInspected)
                 .contentShape(Rectangle())
                 .gesture(TapGesture().onEnded { onInspect?(item) })
-                .focusable(onInspect != nil)
+                .focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop))
+                .focused($focusedKey, equals: key)
                 .onKeyPress(.return) {
                     ManualUpdateRowKeyboardBehavior.handle(
                         .returnKey,
@@ -569,6 +595,8 @@ struct ManualUpdateSection: View {
                         onInspect: onInspect
                     ) ? .handled : .ignored
                 }
+                .onKeyPress(.upArrow) { move(from: key, in: keys, .up) ? .handled : .ignored }
+                .onKeyPress(.downArrow) { move(from: key, in: keys, .down) ? .handled : .ignored }
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel(item.name)
                 .accessibilityValue(
@@ -586,6 +614,15 @@ struct ManualUpdateSection: View {
                 }
             }
         }
+        .focusSection()
+        .onChange(of: focusedKey) { _, key in if let key { tabStop = key } }
+    }
+
+    private func move(from key: String, in keys: [String], _ direction: RowMoveDirection) -> Bool {
+        guard let next = UpdateRowFocus.neighbour(of: key, in: keys, direction: direction) else { return false }
+        tabStop = next
+        focusedKey = next
+        return true
     }
 }
 

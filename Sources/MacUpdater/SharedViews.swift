@@ -436,6 +436,12 @@ struct PackageRow: View {
     /// F3 — per-app opt-in for unattended background upgrades. Offered only where the
     /// rollback net covers the cask, so the menu never proposes what Wega cannot undo.
     var backgroundUpdateToken: String? = nil
+    /// UXP-21 — whether this row is its group's one Tab stop; the others are reached by arrow.
+    var isTabStop = true
+    /// UXP-21 — moves focus to the neighbouring row; `false` at the group's edge.
+    var onMove: ((RowMoveDirection) -> Bool)? = nil
+
+    @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
         HStack(spacing: WegaLayout.checkboxSpacing) {
@@ -444,7 +450,8 @@ struct PackageRow: View {
                     EmptyView()
                 }
                 .toggleStyle(WegaQueueToggleStyle())
-                .accessibilityLabel(trf("W kolejce: %@", name))
+                .accessibilityLabel(trf("Kolejka: %@", name))
+                .focusable(false)
             }
             if let path = iconPath {
                 AppIcon(path: path, size: WegaLayout.updateIconSize)
@@ -478,8 +485,10 @@ struct PackageRow: View {
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
-                .frame(width: 22)
-                .accessibilityLabel(tr("Więcej działań"))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+                .focusable(isTabStop)
+                .accessibilityLabel(trf("Więcej działań dla %@", name))
             }
         }
         .padding(.horizontal, WegaLayout.cardPadding)
@@ -487,7 +496,7 @@ struct PackageRow: View {
         .queueRowSelection(isInspected)
         .contentShape(Rectangle())
         .onTapGesture { onSelect?() }
-        .focusable(onSelect != nil)
+        .focusable(onSelect != nil && isTabStop)
         .onKeyPress(.return) {
             PackageRowKeyboardBehavior.handle(
                 .inspect,
@@ -502,13 +511,31 @@ struct PackageRow: View {
                 onToggle: onToggle
             ) ? .handled : .ignored
         }
+        .onKeyPress(.upArrow) { onMove?(.up) == true ? .handled : .ignored }
+        .onKeyPress(.downArrow) { onMove?(.down) == true ? .handled : .ignored }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(PackageRowAccessibility.label(name: name, token: shownToken, from: currentVersion, to: latestVersion,
+                                                          source: source, rollback: rollback, isQueued: isSelected))
+        .accessibilityHint(PackageRowAccessibility.hint)
+        .accessibilityActions {
+            if isEnabled {
+                if let onSelect { Button(tr("Pokaż szczegóły"), action: onSelect) }
+                if let onIgnore { Button(tr("Nie aktualizuj"), action: onIgnore) }
+                if let onSkip { Button(tr("Pomiń tę wersję"), action: onSkip) }
+            }
+        }
+    }
+
+    /// The token line under the name, only when the token says something the name does not.
+    private var shownToken: String? {
+        token == name ? nil : token
     }
 
     private var identity: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(name).fontWeight(.semibold)
                 .fixedSize(horizontal: false, vertical: true)
-            if let token, token != name {
+            if let token = shownToken {
                 Text(source.map { "\(token) · \($0)" } ?? token)
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)

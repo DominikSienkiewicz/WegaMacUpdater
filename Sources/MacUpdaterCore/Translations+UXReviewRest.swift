@@ -184,5 +184,16 @@ extension Translations {
         "Sprawdź i zaktualizuj w tle (%@)": "Check and update in background (%@)",
         "Otwórz Wegę": "Open Wega",
         "Zakończ Wegę": "Quit Wega",
+        "aktualizacja %@ do %@": "update %@ to %@",
+        "z automatycznym cofnięciem": "can be undone automatically",
+        "bez automatycznego cofnięcia": "can't be undone automatically",
+        "w kolejce": "queued",
+        "poza kolejką": "not queued",
+        "Spacja dodaje do kolejki, Return pokazuje szczegóły.": "Space adds to the queue, Return shows details.",
+        "Kolejka: %@": "Queue: %@",
+        "Więcej działań dla %@": "More actions for %@",
+        "Aktualizacje: %@": "Updates: %@",
+        "Aktualizacje: %@, w tym %@ z możliwą poprawką bezp.": "Updates: %@, %@ may fix security issues",
+        "Usuń regułę dla %@": "Remove rule for %@",
     ]
 }

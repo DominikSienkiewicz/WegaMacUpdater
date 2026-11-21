@@ -25,7 +25,7 @@ final class AccessibilityInteractionTests: XCTestCase {
 
         XCTAssertTrue(packageRow.contains("Toggle(isOn: selectionToggleBinding(isOn: isSelected, toggle: onToggle))"))
         XCTAssertTrue(packageRow.contains(".toggleStyle(WegaQueueToggleStyle())"))
-        XCTAssertTrue(packageRow.contains(".accessibilityLabel(trf(\"W kolejce: %@\", name))"))
+        XCTAssertTrue(packageRow.contains(".accessibilityLabel(trf(\"Kolejka: %@\", name))"))
         XCTAssertFalse(packageRow.contains(".onTapGesture { onToggle?() }"))
 
         let uninstall = try source("Sources/MacUpdater/UninstallView.swift")
@@ -128,7 +128,7 @@ final class AccessibilityInteractionTests: XCTestCase {
             startingAt: "struct PackageRow: View",
             endingAt: "// MARK: - Rollback badge"
         )
-        XCTAssertTrue(packageRow.contains(".focusable(onSelect != nil)"))
+        XCTAssertTrue(packageRow.contains(".focusable(onSelect != nil && isTabStop)"))
         XCTAssertTrue(packageRow.contains(".onKeyPress(.return)"))
         XCTAssertTrue(packageRow.contains(".onKeyPress(.space)"))
     }

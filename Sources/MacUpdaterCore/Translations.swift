@@ -561,7 +561,6 @@ extension Translations {
         "Ignorowane": "Ignored",
         "Przypięte do %@": "Pinned to %@",
         "Pominięta wersja %@": "Skipped version %@",
-        "Usuń regułę": "Remove rule",
         "Sprawdzam…": "Checking…",
         "Sprawdź teraz": "Check now",
         // UX-10 — menu bar i skróty klawiaturowe (WegaCommands).
@@ -606,7 +605,6 @@ extension Translations {
         "Ten cask nie instaluje aplikacji, więc nie da się zrobić kopii ani cofnąć aktualizacji.":
             "This cask installs no app, so I can't make a pre-update copy or undo the update.",
         "Bez ochrony cofnięciem": "No rollback protection",
-        "Więcej działań": "More actions",
         // F3 — ciche aktualizacje w tle: opt-in per aplikacja, tylko dla chronionych casków.
         "Aktualizuj automatycznie w tle": "Update automatically in the background",
         // BG-05 — trwały audyt i cofanie zgód niezależnie od bieżącej listy aktualizacji.
