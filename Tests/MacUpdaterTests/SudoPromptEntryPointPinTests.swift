@@ -104,6 +104,19 @@ struct SudoPromptEntryPointPinTests {
         #expect(try source("Sources/MacUpdater/ScanStore+Updating.swift").contains("action: sudoAction,"))
     }
 
+    /// The readiness card reads the gate with the probe it already runs, and its held password row
+    /// opens the Touch ID card instead of offering Touch ID or the helper.
+    @Test func theReadinessCardReadsTheGateAndItsHeldRowOpensTheTouchIDCard() throws {
+        let card = try source("Sources/MacUpdater/ReadinessCard.swift")
+        let probe = try slice(card, from: "PasswordPromptNotice.Probe(", to: "}.value")
+        #expect(probe.contains("sudoDistrust: SudoPasswordPromptGate.shared.check()"))
+        #expect(card.contains("sudoDistrust = probe.sudoDistrust"))
+        let held = try slice(card, from: "case .passwordHeld:", to: "case .notifications:")
+        #expect(held.contains("Button(tr(\"Otwórz kartę Touch ID\"), action: actions.openTouchIDCard)"))
+        #expect(!held.contains("Włącz Touch ID"))
+        #expect(card.contains("openTouchIDCard: { SettingsRoute.shared.open(.touchID, with: openSettings) }"))
+    }
+
     /// The Touch ID card shares the app's gate, and its two Terminal commands, which run
     /// `/usr/bin/sudo`, follow the same reason.
     @Test func theTouchIDCardSharesTheGateAndItsCommandsFollowIt() throws {
