@@ -57,6 +57,8 @@ struct UpdateView: View {
     /// execution one immutable decision.
     @State private var pendingUpdateTargets: [OutdatedItem] = []
     @State private var showUpdateConfirmation = false
+    /// UXP-11 — the sheet behind "Ukryte przez Twoje reguły".
+    @State private var showsHiddenRules = false
     /// UX-18 — how the list is grouped; by urgency unless the user picks by source.
     @AppStorage(UpdateGrouping.storageKey) private var grouping: UpdateGrouping = .default
 
@@ -94,6 +96,9 @@ struct UpdateView: View {
                 }
             }
             .sheet(isPresented: $scan.showPlanPreview) { planSheet }
+            .sheet(isPresented: $showsHiddenRules) {
+                PolicyRulesSheet(entries: scan.rulesHidingResults, onRestore: { policies.remove(key: $0.key) })
+            }
             .confirmationDialog(
                 trp("Zaktualizować %@ pozycji?", pendingUpdateTargets.count),
                 isPresented: $showUpdateConfirmation,
@@ -378,6 +383,13 @@ struct UpdateView: View {
         VStack(spacing: 0) {
             ScanBannerHost(onNavigate: onNavigate)
 
+            // UXP-11 — in the column above the list, so it never lies on a row.
+            if let notice = scan.ruleUndo {
+                RuleUndoToast(notice: notice, onUndo: { scan.undoRuleChange() }, onClose: { scan.dismissRuleUndo() })
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
+
             staleCaskCard
 
             PasswordPromptCallout(queuedNeedingPassword: updateTargets.filter {
@@ -440,6 +452,9 @@ struct UpdateView: View {
         !(allItems.isEmpty && visibleManual.isEmpty)
     }
 
+    /// UXP-11 — how many of the user's rules hide something from this scan.
+    private var hiddenRuleCount: Int { scan.rulesHidingResults.count }
+
     /// Whether the list shows rows rather than one of its empty states — the one answer
     /// `listColumn` and the list header's scan note both read.
     private var showsRows: Bool {
@@ -449,16 +464,23 @@ struct UpdateView: View {
     @ViewBuilder
     private var listColumn: some View {
         if !hasResults {
-            // REL-09 — an empty list only means "up to date" when the scan behind it heard
-            // from every source. After a restart with the network down it used to mean
-            // nothing at all, and said the most reassuring thing on the screen anyway.
-            if scan.lastScanComplete {
-                EmptyHero(pose: .sleep, title: tr("Wszystko aktualne"), message: tr("Wega się zdrzemnie. Zajrzymy znowu za jakiś czas."), compact: true, playful: true)
-            } else {
-                EmptyHero(pose: .sad,
-                          title: tr("Nie wiem, czy wszystko aktualne"),
-                          message: tr("Ostatni skan nie dostał odpowiedzi od wszystkich źródeł — pusta lista nic tu nie znaczy. Odśwież, gdy wróci połączenie."),
-                          compact: true)
+            VStack(spacing: 0) {
+                // REL-09 — an empty list only means "up to date" when the scan behind it heard
+                // from every source. After a restart with the network down it used to mean
+                // nothing at all, and said the most reassuring thing on the screen anyway.
+                if scan.lastScanComplete {
+                    EmptyHero(pose: .sleep, title: tr("Wszystko aktualne"), message: tr("Wega się zdrzemnie. Zajrzymy znowu za jakiś czas."), compact: true, playful: true)
+                } else {
+                    EmptyHero(pose: .sad,
+                              title: tr("Nie wiem, czy wszystko aktualne"),
+                              message: tr("Ostatni skan nie dostał odpowiedzi od wszystkich źródeł — pusta lista nic tu nie znaczy. Odśwież, gdy wróci połączenie."),
+                              compact: true)
+                }
+                // UXP-11 — hiding the last update must not strand the way back.
+                if hiddenRuleCount > 0 {
+                    HiddenByRulesRow(count: hiddenRuleCount) { showsHiddenRules = true }
+                        .padding(.bottom, WegaLayout.listGutter)
+                }
             }
         } else if showsRows {
             ScrollView {
@@ -466,6 +488,9 @@ struct UpdateView: View {
                     switch grouping {
                     case .urgency: urgencyGroupedSections
                     case .source:  sourceGroupedSections
+                    }
+                    if hiddenRuleCount > 0 {
+                        HiddenByRulesRow(count: hiddenRuleCount) { showsHiddenRules = true }
                     }
                     if !scan.restartCandidates.isEmpty {
                         RestartSection(

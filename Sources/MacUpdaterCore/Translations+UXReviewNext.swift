@@ -52,5 +52,9 @@ extension Translations {
         "Wega węszy u producentów…": "Wega is sniffing at the vendors…",
         "Postęp skanowania": "Scan progress",
         "%@ z %@ źródeł": "%@ of %@ sources",
+        "Nie będę proponować aktualizacji %@.": "I won't offer updates for %@.",
+        "Pominęłam wersję %@ aplikacji %@. Następną pokażę.": "Skipped version %@ of %@. I'll show the next one.",
+        "Ukryte przez Twoje reguły: %@ · Pokaż": "Hidden by your rules: %@ · Show",
+        "Przywróć": "Restore",
     ]
 }

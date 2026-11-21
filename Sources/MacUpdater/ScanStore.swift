@@ -201,6 +201,9 @@ final class ScanStore: ObservableObject {
     @Published var undoableUpdates:   [UndoableUpdate] = []
     /// LT-01 — the token whose undo is currently restoring, so the row can spin.
     @Published var undoBusy:          String?
+    /// UXP-11 — the rule a "Nie aktualizuj" or a skip just wrote, offered back as "Cofnij"
+    /// until the toast closes. See `ScanStore+Rules.swift`.
+    @Published var ruleUndo: RuleUndoNotice?
 
     /// Rebound on every appearance of the view that owns the backing `@State` — see
     /// `bind(_:)`. Replayed from `replayLastScan()` so a rebuilt tree does not show an
@@ -556,17 +559,19 @@ final class ScanStore: ObservableObject {
         )
     }
 
+    /// Every installable row the scan found, before the user's rules.
+    private var itemCandidates: [OutdatedItem] {
+        UpdatePlanner.attachingReleaseNotes(
+            to: reconciledSourceUpdates.items,
+            manual: manualOutdated,
+            caskAppPaths: caskIconPaths
+        )
+    }
+
     // Keys carry a source tag ("f:", "c:", "a:", "n:"); see UpdatePlanner.
     // Items the user has ignored or pinned below the available version are filtered out.
     var allItems: [OutdatedItem] {
-        UpdatePlanner.applyPolicies(
-            UpdatePlanner.attachingReleaseNotes(
-                to: reconciledSourceUpdates.items,
-                manual: manualOutdated,
-                caskAppPaths: caskIconPaths
-            ),
-            policies: UpdatePolicyStore.shared.policiesMap
-        )
+        UpdatePlanner.applyPolicies(itemCandidates, policies: UpdatePolicyStore.shared.policiesMap)
     }
 
     /// The installable rows the active sidebar category actually renders.
@@ -605,12 +610,34 @@ final class ScanStore: ObservableObject {
         }
     }
 
-    /// Manual updates with ignore/pin rules applied.
-    var visibleManual: [ManualOutdatedApp] {
+    /// Every manual update the scan found, before the user's rules.
+    private var manualCandidates: [ManualOutdatedApp] {
         let rows = reconciledSourceUpdates.manual
         let existingPaths = Set(rows.map { InstallationIdentity(path: $0.path) })
         let managed = (dockerManagedUpdates + serviceManagedUpdates).filter { !existingPaths.contains(InstallationIdentity(path: $0.path)) }
-        return UpdatePlanner.applyPolicies((rows + managed).map(DockerDesktopUpdatePolicy.vendorUpdate), policies: UpdatePolicyStore.shared.policiesMap)
+        return (rows + managed).map(DockerDesktopUpdatePolicy.vendorUpdate)
+    }
+
+    /// Manual updates with ignore/pin rules applied.
+    var visibleManual: [ManualOutdatedApp] {
+        UpdatePlanner.applyPolicies(manualCandidates, policies: UpdatePolicyStore.shared.policiesMap)
+    }
+
+    /// UXP-11 — one entry per rule that hides something this scan found, in the order Settings
+    /// lists them. A rule that hides nothing today (a pin the offer stays under) is not here.
+    var rulesHidingResults: [UpdatePolicyEntry] {
+        let policies = UpdatePolicyStore.shared.policiesMap
+        guard !policies.isEmpty else { return [] }
+        let items = itemCandidates.map { (keys: [$0.policyKey], available: $0.to) }
+        // The same two keys `UpdatePlanner.applyPolicies` reads for a manual app.
+        let manual = manualCandidates.map { app in
+            (keys: [app.policyKey] + (app.caskPolicyToken.map { [UpdatePlanner.key(name: $0, kind: .cask)] } ?? []),
+             available: app.availableVersion)
+        }
+        let hiding = Set((items + manual).flatMap { candidate in
+            candidate.keys.filter { UpdatePlanner.isSuppressed(key: $0, availableVersion: candidate.available, policies: policies) }
+        })
+        return UpdatePolicyStore.shared.sortedEntries.filter { hiding.contains($0.key) }
     }
 
     /// The update currently shown in the inspector pane, resolved from `inspectedKey`
@@ -656,25 +683,35 @@ final class ScanStore: ObservableObject {
     }
 
     func ignoreItem(_ item: OutdatedItem) {
+        let previous = UpdatePolicyStore.shared.entries[item.policyKey]
         UpdatePolicyStore.shared.ignore(key: item.policyKey, name: item.name)
         selected.remove(item.key)
+        noteRuleChange(key: item.policyKey, previous: previous, message: trf("Nie będę proponować aktualizacji %@.", item.name))
     }
 
     func ignoreManual(_ app: ManualOutdatedApp) {
+        let previous = UpdatePolicyStore.shared.entries[app.policyKey]
         UpdatePolicyStore.shared.ignore(key: app.policyKey, name: app.name)
+        noteRuleChange(key: app.policyKey, previous: previous, message: trf("Nie będę proponować aktualizacji %@.", app.name))
     }
 
     /// UX-12 — skip just the version currently on offer; a later release surfaces again.
     /// No-op when the source can't name the available version (nothing concrete to skip).
     func skipItem(_ item: OutdatedItem) {
         guard let version = item.to, !version.isEmpty else { return }
+        let previous = UpdatePolicyStore.shared.entries[item.policyKey]
         UpdatePolicyStore.shared.skip(key: item.policyKey, name: item.name, version: version)
         selected.remove(item.key)
+        noteRuleChange(key: item.policyKey, previous: previous,
+                       message: trf("Pominęłam wersję %@ aplikacji %@. Następną pokażę.", version, item.name))
     }
 
     func skipManual(_ app: ManualOutdatedApp) {
         guard let version = app.availableVersion, !version.isEmpty else { return }
+        let previous = UpdatePolicyStore.shared.entries[app.policyKey]
         UpdatePolicyStore.shared.skip(key: app.policyKey, name: app.name, version: version)
+        noteRuleChange(key: app.policyKey, previous: previous,
+                       message: trf("Pominęłam wersję %@ aplikacji %@. Następną pokażę.", version, app.name))
     }
 
     /// The banner currently on screen, if any.

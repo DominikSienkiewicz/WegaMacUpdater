@@ -127,49 +127,9 @@ extension InfoView {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(14)
                 } else {
-                    ForEach(policies.sortedEntries) { entry in
-                        HStack(spacing: 10) {
-                            Image(systemName: policyIcon(entry.policy))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 18)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(entry.displayName).font(.wega(.body, weight: .medium))
-                                Text(policyDescription(entry.policy))
-                                    .font(.wega(.subheadline))
-                                    .foregroundStyle(.tertiary)
-                            }
-                            Spacer()
-                            Button { policies.remove(key: entry.key) } label: {
-                                Image(systemName: "trash").font(.wega(.callout))
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.secondary)
-                            .help(tr("Usuń regułę"))
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                        if entry.id != policies.sortedEntries.last?.id {
-                            Divider().opacity(0.4).padding(.leading, 42)
-                        }
-                    }
+                    PolicyRulesList(entries: policies.sortedEntries, onRestore: { policies.remove(key: $0.key) })
                 }
             }
-        }
-    }
-
-    private func policyIcon(_ policy: UpdatePolicy) -> String {
-        switch policy {
-        case .ignored: return "bell.slash"
-        case .pinned:  return "pin"
-        case .skipped: return "forward.end"
-        }
-    }
-
-    private func policyDescription(_ policy: UpdatePolicy) -> String {
-        switch policy {
-        case .ignored:              return tr("Ignorowane")
-        case .pinned(let version):  return trf("Przypięte do %@", version)
-        case .skipped(let version): return trf("Pominięta wersja %@", version)
         }
     }
 
