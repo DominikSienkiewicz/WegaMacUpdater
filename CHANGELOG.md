@@ -25,11 +25,26 @@ them verbatim under the new version heading, so that step is never done by hand 
   or *won't start*; Homebrew formulae and the App Store say *in progress* once on the group,
   and updates the vendor finishes say *with the vendor*.
 - **Turn Touch ID for sudo off from Settings.** With the Wega helper installed, the Touch ID
-  card has **Turn Off Touch ID for sudo**. The helper removes only Wega's line from
-  `/etc/pam.d/sudo_local`, swaps the new file in atomically, checks it and puts the old file
+  card has **Turn Off Touch ID for sudo**. The helper removes only the exact
+  `auth       sufficient     pam_tid.so` directive from `/etc/pam.d/sudo_local`, whoever wrote it, swaps the new file in atomically, checks it and puts the old file
   back if anything fails. It refuses a file that someone other than root can change, and the guide
   says how to inspect and repair that safely. An older helper keeps working; the
   Touch ID card asks you to reinstall it before turning Touch ID off.
+- **Turning Touch ID for sudo on is checked like turning it off.** Through the helper it now
+  needs an administrator signed in at the Mac, and refuses an unsafe `/etc/pam.d`,
+  `sudo_local` or `sudo_local.template` (someone other than root can change it, it is not a
+  regular file, it is over 64 KiB or it is not plain text) instead of replacing it with
+  Apple's template as before. It writes nothing when `sudo_local` already has the line and
+  checks the result before the card says it worked. The card explains each refusal and no
+  longer offers the Terminal command after one; for an unsafe policy it says to repair it
+  from recoveryOS. This is helper protocol v8: a running v6 or v7 helper keeps rollback,
+  self-update, Trash and (v7) turning Touch ID off working, and only turning it on says the
+  helper is out of date until you restart your Mac or reinstall the helper.
+- **The helper exits when idle.** From protocol v8 the helper exits after a minute with no
+  connection and no work in progress (a background installation counts as work), and macOS
+  starts it again from the installed Wega for the next request, so after a Wega update the new
+  helper runs within about a minute of idle. The app retries the version check once after a
+  dropped connection.
 - **Find an app on Updates.** **⌘F** shows one answer row above the list instead of
   narrowing it: where the app is on the list, what Inventory knows when it is not (up to
   date, no known source with **Report app ›** to suggest it for the catalog as in Inventory,
@@ -86,6 +101,13 @@ them verbatim under the new version heading, so that step is never done by hand 
   remove Wega and every root-owned leftover, and a safe way to turn Touch ID for `sudo` off
   again; Uninstall and the Touch ID card link to them. Under the update list, **Can't see an
   app?** opens Inventory, since a missing app is not proof it is up to date.
+
+### Security
+- **The helper and the app pin each other to a Developer ID signature.** Both XPC code
+  requirements now demand a Developer ID certificate chain (the intermediate and leaf markers),
+  besides the Team ID and the identifier, so a signature from the same team that is not
+  Developer ID no longer qualifies. The release artifact check verifies the signed app and helper
+  against both requirements.
 
 ### Fixed
 - **Inventory knows about installs and undos.** It marks its read **the list may have

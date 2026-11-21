@@ -710,7 +710,12 @@ The helper is an **optional** component. Without it, everything in this guide st
 with it, Wega can finish a few things that need administrator rights without asking you to
 type a password. It runs as root and can do only four things: install a verified Wega
 package, turn Touch ID for `sudo` on or off, restore an app's pre-update copy, and move a
-root-owned app to the Trash. It checks Wega's signature on every connection.
+root-owned app to the Trash. It checks on every connection that Wega is signed with a
+Developer ID signature from the same developer. The helper stops by itself after a minute
+with no connection and no work in progress (an installation in the background counts as work);
+macOS starts it again from the installed Wega for the next request, so after you update Wega
+the new helper runs within about a minute of idle. A helper from before this change keeps
+running until you restart your Mac or reinstall the helper.
 
 To switch it on, open **Settings** (**⌘,**) → **Permissions & Privacy** and use the **Wega
 helper** card: **Install Helper**. If macOS asks for approval, the card shows **Open Settings → Login
@@ -724,13 +729,25 @@ system Touch ID sheet instead of asking for a password. It applies to **all** of
 your Mac, in Terminal too, not only to Wega. Turn it on with **Use Touch ID Instead of Your Admin Password** on
 the **Touch ID for administrator commands** card (**Settings → Permissions & Privacy**); it
 needs administrator rights once, to write `/etc/pam.d/sudo_local`. With the helper installed,
-Wega does that for you. Without it, the card shows a one-line command to copy and paste into
+Wega does that for you, and only an administrator signed in at this Mac can ask for it. The
+helper checks `/etc/pam.d`, `sudo_local` and Apple's `sudo_local.template` first, and changes
+nothing when one of them can be changed by someone other than root, is not a regular file,
+is larger than 64 KiB or is not plain text. It writes nothing when `sudo_local` already has
+the line, and reads the file again afterwards; the card shows success only when that file does
+have it. Each refusal is explained on the card, and after a refusal the card does not offer the
+Terminal command, since that command goes through `sudo` too. When `sudo_local` is not a
+regular file, or the file or `/etc/pam.d` can be changed by someone other than root, the card
+says to repair it from recoveryOS and to type no password into `sudo` until then; the
+repair steps are in [Turning off Touch ID for sudo](#turning-off-touch-id-for-sudo) below.
+Without the helper, the card shows a one-line command to copy and paste into
 Terminal.
 
 To turn it off again, use **Turn Off Touch ID for sudo** on the same card; it appears when the
 Wega helper is installed. Without the helper the card points to the manual steps (unless it is showing a security note, below). If the
 helper is out of date, the card says so and asks you to remove and reinstall it or restart your
-Mac. **What Wega does** links to
+Mac; a helper from before protocol 8 can still turn Touch ID off, restore an app, move an app
+to the Trash and finish a self-update, and only turning Touch ID on needs the restart or the
+reinstall. **What Wega does** links to
 [Turning off Touch ID for sudo](#turning-off-touch-id-for-sudo) below.
 
 ### Settings diagnostics
@@ -771,7 +788,7 @@ the same operation; this does not start another installer. A confirmed terminal 
 releases the block. If the helper itself restarted, its previous installer cannot safely
 be assumed to have stopped: inspect **Logs**, and restart macOS before checking the state
 again if completion cannot be established. Wega does not kill the installer on a timeout.
-This recovery path requires helper protocol 5; after replacing an older Wega build,
+This recovery path requires helper protocol 6 or later; after replacing an older Wega build,
 update and re-register its bundled helper.
 
 ### Multiple installations
