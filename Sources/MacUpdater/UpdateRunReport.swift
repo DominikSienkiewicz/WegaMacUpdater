@@ -138,6 +138,9 @@ struct UpdateRunReportEntry: Equatable, Sendable, Identifiable {
         }
     }
 
+    /// Whether the row offers „Otwórz kartę Touch ID”: its note points there.
+    var pointsAtTouchIDCard: Bool { wasHeldForPassword && result != .updated }
+
     /// Points at the Touch ID card, whose note says what is wrong and that only recoveryOS fixes it.
     static var heldForPasswordNote: String {
         tr("pominęłam: może potrzebować hasła administratora, a ustawieniom, które czyta sudo, nie można teraz ufać — co zrobić, mówi karta Touch ID w Ustawieniach")

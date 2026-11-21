@@ -341,7 +341,11 @@ extension ScanStore {
         // line a user cannot act on. One named permission, one button that grants it. Any other
         // failure is the summary's to show: a banner only for a failure its button fixes.
         let appManagementTemplate = "%@ macOS nie pozwolił Wedze podmienić aplikacji w /Applications. Przyznaj uprawnienie „Zarządzanie aplikacjami” w Ustawieniach systemowych → Prywatność i bezpieczeństwo."
-        let sudoTemplate = "%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła."
+        // Owner decision 2026-11-21 — while the settings sudo reads cannot be trusted, Touch ID is
+        // no advice: the card offers no sudo route, and Wega asked for nothing.
+        let sudoTemplate = (passwordHold ?? (summary.needsSudoPassword ? dependencies.sudoPolicyDistrust() : nil)) == nil
+            ? "%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła."
+            : "%@ Cask wymaga hasła administratora, a ustawieniom, które czyta sudo, nie można teraz ufać, więc o nie nie poprosiłam. Co zrobić, mówi karta Touch ID w Ustawieniach."
         if summary.needsAppManagementPermission {
             showBanner(BannerData(
                 variant: .danger,

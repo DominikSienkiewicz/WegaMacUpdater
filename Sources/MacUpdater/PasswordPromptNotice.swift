@@ -24,6 +24,19 @@ enum PasswordPromptNotice {
     struct Probe: Equatable {
         let installed: Bool
         let touchID: TouchIDSudoConfigurator.State
+        /// Owner decision 2026-11-21 — why Wega asks for no password right now; `nil` when it may.
+        var sudoDistrust: SudoPolicyDistrust? = nil
+    }
+
+    /// Owner decision 2026-11-21 — while the settings `sudo` reads cannot be trusted, the queued
+    /// updates that may need the password will be skipped, and this says so before the run.
+    static func holdsPrompts(probe: Probe?, queuedNeedingPassword: [String]) -> Bool {
+        probe?.sudoDistrust != nil && !queuedNeedingPassword.isEmpty
+    }
+
+    static func heldMessage(names: [String]) -> String {
+        trf("Dopóki ustawieniom, które czyta sudo, nie można ufać, nie poproszę o hasło administratora, więc pominę %@. Co zrobić, mówi karta Touch ID w Ustawieniach.",
+            names.joined(separator: ", "))
     }
 
     static func shouldWarn(probe: Probe?, queuedNeedingPassword: [String]) -> Bool {
@@ -37,7 +50,8 @@ enum PasswordPromptNotice {
 }
 
 /// The warning above the Updates list. It is shown only while it can still be acted on:
-/// a queued cask needs the password, no `.pkg` payload is installed and Touch ID is off.
+/// a queued cask needs the password, no `.pkg` payload is installed and Touch ID is off. While the
+/// settings `sudo` reads cannot be trusted it says instead which of them the run will skip.
 struct PasswordPromptCallout: View {
     let queuedNeedingPassword: [String]
 
@@ -52,7 +66,8 @@ struct PasswordPromptCallout: View {
             .task(id: queuedNeedingPassword) {
                 let fresh = await Task.detached {
                     PasswordPromptNotice.Probe(installed: PasswordPromptAvailability.isInstalled(),
-                                               touchID: TouchIDSudoConfigurator.currentState())
+                                               touchID: TouchIDSudoConfigurator.currentState(),
+                                               sudoDistrust: SudoPasswordPromptGate.shared.check())
                 }.value
                 PasswordPromptProbeCache.value = fresh
                 probe = fresh
@@ -61,7 +76,13 @@ struct PasswordPromptCallout: View {
 
     @ViewBuilder
     private var banner: some View {
-        if let firstApp = queuedNeedingPassword.first, let probe,
+        if PasswordPromptNotice.holdsPrompts(probe: probe, queuedNeedingPassword: queuedNeedingPassword) {
+            WegaCallout(.warning, title: PasswordPromptNotice.heldMessage(names: queuedNeedingPassword)) {
+                Button(tr("Otwórz kartę Touch ID")) { SettingsRoute.shared.open(.touchID, with: openSettings) }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+        } else if let firstApp = queuedNeedingPassword.first, let probe,
            PasswordPromptNotice.shouldWarn(probe: probe, queuedNeedingPassword: queuedNeedingPassword) {
             WegaCallout(.warning, title: PasswordPromptNotice.message(firstApp: firstApp)) {
                 if let url = PasswordPromptNotice.releasesURL {

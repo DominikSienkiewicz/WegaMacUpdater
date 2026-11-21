@@ -55,6 +55,7 @@ struct UpdateRunSummaryHeader: View {
 /// „Zaktualizowano”; then the restart bar and the log with `listColumn`'s own views and closures.
 struct UpdateRunSummaryList<HandOffs: View>: View {
     @EnvironmentObject private var scan: ScanStore
+    @Environment(\.openSettings) private var openSettings
     let report: UpdateRunReport
     let onShowLog: () -> Void
     let handOffs: HandOffs
@@ -120,7 +121,7 @@ struct UpdateRunSummaryList<HandOffs: View>: View {
                     UpdateRunResultRow.make(entry: entry, in: report, scan: scan, requestUndo: { undo in
                         undoTarget = undo
                         showUndoConfirmation = true
-                    })
+                    }, openTouchIDCard: { SettingsRoute.shared.open(.touchID, with: openSettings) })
                         // One undo at a time: `undoUpdate` refuses a second while the first restores.
                         .disabled(scan.undoBusy != nil)
                         .overlay(alignment: .bottom) {
@@ -143,6 +144,9 @@ struct UpdateRunResultRow: View {
     let isUndoing: Bool
     let onTrust: (() -> Void)?
     let onUndo: (() -> Void)?
+    /// A row the run held while the settings `sudo` reads could not be trusted: its note points at
+    /// the Touch ID card, and this opens it (owner decision 2026-11-21).
+    var onOpenTouchIDCard: (() -> Void)? = nil
     /// `.disabled` alone leaves VoiceOver's actions reachable (R-I2); the row is disabled while
     /// any undo runs, and the list while the undo's check runs.
     @Environment(\.isEnabled) private var isEnabled
@@ -204,6 +208,7 @@ struct UpdateRunResultRow: View {
             if isEnabled {
                 if let onTrust { Button(tr("Zaufaj nowemu podpisowi"), action: onTrust) }
                 if let onUndo, !isUndoing { Button(tr("Cofnij"), action: onUndo) }
+                if let onOpenTouchIDCard { Button(tr("Otwórz kartę Touch ID"), action: onOpenTouchIDCard) }
             }
         }
     }
@@ -229,6 +234,9 @@ struct UpdateRunResultRow: View {
                 Button(tr("Cofnij"), action: onUndo)
                     .controlSize(.small)
             }
+        } else if let onOpenTouchIDCard {
+            Button(tr("Otwórz kartę Touch ID"), action: onOpenTouchIDCard)
+                .controlSize(.small)
         }
     }
 }
@@ -238,13 +246,15 @@ extension UpdateRunResultRow {
     /// today's store action; an undo only with this run's undo still in `scan.undoableUpdates`,
     /// and only as a request for `UndoConfirmation`'s question (`requestUndo`), never the undo itself.
     static func make(entry: UpdateRunReportEntry, in report: UpdateRunReport, scan: ScanStore,
-                     requestUndo: @escaping (UndoableUpdate) -> Void) -> UpdateRunResultRow {
+                     requestUndo: @escaping (UndoableUpdate) -> Void,
+                     openTouchIDCard: @escaping () -> Void = {}) -> UpdateRunResultRow {
         let undo = report.undo(for: entry, in: scan.undoableUpdates)
         let onTrust: (() -> Void)? = entry.offersPublisherTrust ? {
             Task { await scan.trustNewPublisher(token: entry.name, reportedTeamID: entry.reportedTeamID, appURL: entry.appPath) }
         } : nil
         let onUndo: (() -> Void)? = undo.map { undo in { requestUndo(undo) } }
         return UpdateRunResultRow(entry: entry, undo: undo, isUndoing: scan.undoBusy == entry.name,
-                                  onTrust: onTrust, onUndo: onUndo)
+                                  onTrust: onTrust, onUndo: onUndo,
+                                  onOpenTouchIDCard: entry.pointsAtTouchIDCard ? openTouchIDCard : nil)
     }
 }
