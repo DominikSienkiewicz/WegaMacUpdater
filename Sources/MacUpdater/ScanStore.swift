@@ -337,7 +337,8 @@ final class ScanStore: ObservableObject {
             variant: .danger,
             title: tr("Aktualizacja przerwana"),
             message: trf("Zatrzymano po bieżącym pakiecie: zaktualizowano %@, pominięto %@. Nic nie zostało przerwane w połowie.",
-                         "\(upgraded)", "\(skipped)")
+                         "\(upgraded)", "\(skipped)"),
+            action: .openLogs
         ))
         emitActivitySignal(.idle)
         emitWegaState(WegaState(pose: .idle, line: tr("Przerwałam aktualizację.")))

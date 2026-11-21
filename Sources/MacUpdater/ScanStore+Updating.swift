@@ -46,7 +46,7 @@ extension ScanStore {
         guard dependencies.upgradeMutex.acquire() else {
             UpdateDiagnostics.record("update.skipped", fields: ["reason": "upgradeMutexBusy"])
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja w toku"),
-                                  message: tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.")))
+                                  message: tr("Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę."), action: .openLogs))
             return
         }
         defer { dependencies.upgradeMutex.release() }
@@ -340,27 +340,27 @@ extension ScanStore {
         }
 
         let failedNames = summary.notUpgraded.map(\.name)
-        let baseDetail = failedNames.isEmpty
-            ? tr("Brew zgłosił błąd — sprawdź log poniżej.")
-            : trf("Nie udało się: %@. Szczegóły w logu.", "\(failedNames.joined(separator: ", "))")
+        let failure = BannerCopy.updateFailed(names: failedNames)
         // REL-05 — a missing "App Management" grant outranks the sudo hint: it explains the
         // whole failure, and its `stderr` ("ditto: …: Operation not permitted") is exactly the
         // line a user cannot act on. One named permission, one button that grants it.
+        let appManagementTemplate = "%@ macOS nie pozwolił Wedze podmienić aplikacji w /Applications. Przyznaj uprawnienie „Zarządzanie aplikacjami” w Ustawieniach systemowych → Prywatność i bezpieczeństwo."
+        let sudoTemplate = "%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła."
         if summary.needsAppManagementPermission {
             showBanner(BannerData(
                 variant: .danger,
                 title: tr("Brak uprawnienia „Zarządzanie aplikacjami”"),
-                message: trf("%@ macOS nie pozwolił Wedze podmienić aplikacji w /Applications. Przyznaj uprawnienie „Zarządzanie aplikacjami” w Ustawieniach systemowych → Prywatność i bezpieczeństwo.", "\(baseDetail)"),
-                action: .openAppManagementSettings
+                message: trf(appManagementTemplate, failure.message),
+                action: .openAppManagementSettings,
+                fullMessage: failure.fullMessage.map { trf(appManagementTemplate, $0) }
             ))
         } else {
-            let detail = summary.needsSudoPassword
-                ? trf("%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła.", "\(baseDetail)")
-                : baseDetail
+            let wrap: (String) -> String = { summary.needsSudoPassword ? trf(sudoTemplate, $0) : $0 }
             showBanner(BannerData(variant: .danger,
                                   title: tr("Aktualizacja niekompletna"),
-                                  message: detail,
-                                  action: summary.needsSudoPassword ? .openSettings : nil))
+                                  message: wrap(failure.message),
+                                  action: summary.needsSudoPassword ? .openSettings : .openLogs,
+                                  fullMessage: failure.fullMessage.map(wrap)))
         }
         emitActivitySignal(.error)
         emitWegaState(WegaState(pose: .alert, line: tr("Część pakietów się nie zaktualizowała.")))
@@ -445,7 +445,8 @@ extension ScanStore {
             showBanner(BannerData(
                 variant: .danger,
                 title: tr("Nie udało się zamknąć aplikacji"),
-                message: trf("Nie mogę zamknąć %@. Zamknij ją ręcznie.", info.appName)))
+                message: trf("Nie mogę zamknąć %@. Zamknij ją ręcznie.", info.appName),
+                action: .openLogs))
             return
         }
         restartCandidates.removeAll { $0.processName == info.processName }

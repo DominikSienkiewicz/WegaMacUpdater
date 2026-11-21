@@ -66,7 +66,7 @@ extension ScanStore {
         let currentBundleID = Bundle(url: appURL)?.infoDictionary?["CFBundleIdentifier"] as? String
         if let expected = item.bundleIdentifier, currentBundleID != expected {
             showBanner(BannerData(variant: .danger, title: tr("Cofanie przerwane"),
-                                  message: trf("%@: aplikacja pod %@ to już nie ta sama aplikacja.", "\(undoable.token)", "\(item.appPath)")))
+                                  message: trf("%@: aplikacja pod %@ to już nie ta sama aplikacja.", "\(undoable.token)", "\(item.appPath)"), action: .openLogs))
             WegaLog.error(.homebrew, "\(undoable.token): cofanie przerwane — identyfikator bundle zmienił się (\(expected) → \(currentBundleID ?? "—")).")
             return
         }

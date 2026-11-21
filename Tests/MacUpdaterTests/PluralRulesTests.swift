@@ -83,4 +83,10 @@ struct PluralRulesTests {
         #expect(pluralize("%@ źródeł nie odpowiedziało", count: 1, language: .en) == "1 source didn't respond")
         #expect(pluralize("Odinstalować %@ aplikacji?", count: 22, language: .en) == "Uninstall 22 apps?")
     }
+
+    @Test(arguments: zip([2, 5, 12, 22], ["i 2 inne", "i 5 innych", "i 12 innych", "i 22 inne"]))
+    func theRestOfAListIsCounted(count: Int, expected: String) {
+        #expect(pluralize("i %@ innych", count: count, language: .pl) == expected)
+        #expect(pluralize("i %@ innych", count: count, language: .en) == "and \(count) more")
+    }
 }

@@ -680,6 +680,8 @@ struct BannerData: Equatable {
     let message: String
     var action: BannerAction? = nil
     var autoDismiss: Bool = true
+    /// The whole message when `message` is the shortened form (a long list of names).
+    var fullMessage: String? = nil
 }
 
 /// When a banner may take itself off the screen.
@@ -724,11 +726,12 @@ struct BannerView: View {
     var body: some View {
         // UX-15 — drawn through the shared callout; UX-07's three-line cap on the message
         // lives there. A failure's full, untranslated `stderr` stays in the log (see
-        // "Zobacz w logach").
+        // "Pokaż w logach").
         WegaCallout(
             WegaCalloutLevel(banner: data.variant),
             title: data.title,
             message: data.message,
+            fullMessage: data.fullMessage,
             onClose: { close() },
             actions: { actionButton }
         )
@@ -765,7 +768,7 @@ struct BannerView: View {
 
     private static func label(for action: BannerAction) -> String {
         switch action {
-        case .openLogs:     return tr("Zobacz w logach")
+        case .openLogs:     return tr("Pokaż w logach")
         case .openSettings: return tr("Włącz Touch ID")
         case .openAppManagementSettings: return tr("Otwórz ustawienia prywatności")
         case .reinstallCask: return tr("Przeinstaluj przez Brew")

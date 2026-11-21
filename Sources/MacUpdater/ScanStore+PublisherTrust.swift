@@ -26,7 +26,7 @@ extension ScanStore {
     func trustNewPublisher(token: String, reportedTeamID: String?) async {
         guard let appURL = installedAppURL(forCask: token) else {
             showBanner(BannerData(variant: .danger, title: tr("Nie zmieniono zaufania"),
-                                  message: trf("%@: nie znaleziono zainstalowanej aplikacji.", "\(token)")))
+                                  message: trf("%@: nie znaleziono zainstalowanej aplikacji.", "\(token)"), action: .openLogs))
             return
         }
         let installedTeamID = await dependencies.teamIDOfApp(appURL)
@@ -53,12 +53,12 @@ extension ScanStore {
                                   message: trf("%@: zainstalowana aplikacja jest podpisana zaufanym Team ID.", "\(token)")))
         case .signatureUnreadable:
             showBanner(BannerData(variant: .danger, title: tr("Nie zmieniono zaufania"),
-                                  message: trf("%@: nie udało się odczytać podpisu zainstalowanej aplikacji.", "\(token)")))
+                                  message: trf("%@: nie udało się odczytać podpisu zainstalowanej aplikacji.", "\(token)"), action: .openLogs))
         case .installedDiffersFromReport(let reported, let installed):
             WegaLog.error(.homebrew, "\(token): podpis zmienił się od ostrzeżenia (\(reported) → \(installed)) — nie zmieniono zaufania.")
             showStickyBanner(BannerData(variant: .danger, title: tr("Zmienił się podpis producenta"),
                                         message: trf("%@: aplikację podpisano ponownie innym Team ID (%@ zamiast %@). Nie zmieniono zaufania.",
-                                                     "\(token)", "\(installed)", "\(reported)")))
+                                                     "\(token)", "\(installed)", "\(reported)"), action: .openLogs))
         }
     }
 

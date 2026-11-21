@@ -55,7 +55,7 @@ struct RollbackResultVisibilityTests {
         #expect(!view.contains("Po każdej aktualizacji Wega trzyma kopię"))
     }
 
-    /// M12 — „Zobacz w logach” on an Undo banner opened Logs unfiltered, while the same banner
+    /// M12 — „Pokaż w logach” on an Undo banner opened Logs unfiltered, while the same banner
     /// on Updates opened it on errors only. Both screens now go through one helper.
     @Test func everyBannerOpensTheLogsOnErrorsOnly() throws {
         let detail = try source("Sources/MacUpdater/DetailColumn.swift")

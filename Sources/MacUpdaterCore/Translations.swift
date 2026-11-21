@@ -301,8 +301,6 @@ extension Translations {
         "Sprawdź logi poniżej.": "Check the logs below.",
         "Nie udało się dokończyć instalacji — szczegóły w logu.": "The installation could not be completed — see the log for details.",
         "Aktualizuję, chwila…": "Updating, one moment…",
-        "Brew zgłosił błąd — sprawdź log poniżej.": "Brew reported an error — check the log below.",
-        "Nie udało się: %@. Szczegóły w logu.": "Failed: %@. Details in the log.",
         "%@ Cask wymaga hasła administratora — uruchom Wega ponownie, helper askpass zapyta o nie w okienku.": "%@ The cask requires an administrator password — launch Wega again, the askpass helper will ask for it in a window.",
         "Aktualizacja niekompletna": "Update incomplete",
         // REL-05 — the "App Management" TCC refusal, named instead of left as raw stderr.
@@ -558,7 +556,6 @@ extension Translations {
         "Zobacz wydanie": "View release",
         "Brak opublikowanych notatek": "No notes published",
         "Nie udało się pobrać notatek wydania": "Couldn't fetch the release notes",
-        "Zobacz w logach": "View in logs",
         "Włącz Touch ID": "Enable Touch ID",
         "%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła.": "%@ The cask requires an administrator password. Enable Touch ID to authorize updates with your fingerprint — no password prompt.",
         "Spis aplikacji": "Inventory",

@@ -37,7 +37,7 @@ extension ScanStore {
             brewLog.append(reason.logLine)
             WegaLog.info(.homebrew, "Aktualizacja z okna odroczona — \(reason.localizedMessage)")
             showBanner(BannerData(variant: .danger, title: tr("Odkładam pobieranie"),
-                                  message: reason.localizedMessage))
+                                  message: reason.localizedMessage, action: .openLogs))
             emitActivitySignal(.error)
             emitWegaState(WegaState(pose: .alert, line: tr("Warunki nie pozwalają teraz bezpiecznie pobrać aktualizacji.")))
             return .blocked(publisherVetoes: [:])
@@ -72,7 +72,7 @@ extension ScanStore {
             brewLog.append("⏸ " + trf("Nie udało się zrobić kopii sprzed aktualizacji: %@.", "\(names)"))
             WegaLog.error(.homebrew, "Aktualizacja z okna odroczona — brak snapshotu: \(names).")
             showBanner(BannerData(variant: .danger, title: tr("Aktualizacja odroczona"),
-                                  message: tr("Nie udało się zrobić kopii zapasowej przed aktualizacją. Sprawdź wolne miejsce na dysku i spróbuj ponownie.")))
+                                  message: tr("Nie udało się zrobić kopii zapasowej przed aktualizacją. Sprawdź wolne miejsce na dysku i spróbuj ponownie."), action: .openLogs))
             emitActivitySignal(.error)
             return .blocked(publisherVetoes: publisherVetoes)
         }
