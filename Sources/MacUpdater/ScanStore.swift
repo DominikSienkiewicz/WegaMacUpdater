@@ -178,12 +178,12 @@ final class ScanStore: ObservableObject {
     @Published var progress: ScanProgress?
     /// True while a scan is running *underneath* a result that stays on screen.
     ///
-    /// The launch refresh is the reason this exists. A scan normally takes the window over —
-    /// `status` goes to `.checking` and the list is replaced by the scan's own screen — which
-    /// is right when the user asked for it and wrong when the app asked for itself: the
-    /// restored list would flash up and vanish for a minute, which is worse than the stale
-    /// numbers it was meant to correct. In this mode `status` stays `.results` and only the
-    /// header and the toolbar say that something is running.
+    /// The launch refresh is the reason this exists. A scan with nothing on screen takes the
+    /// window over — `status` goes to `.checking` and the scan's own screen replaces the list —
+    /// but over a result the restored list would flash up and vanish for a minute, which is
+    /// worse than the stale numbers it was meant to correct. In this mode `status` stays
+    /// `.results` and only the band, the header and the toolbar say that something is running.
+    /// The checks after a run and after an undo over a result run this way too (C2 stage 4).
     @Published private(set) var isRefreshing = false
     /// UXP-13 — true only while `brew update` refreshes Homebrew's catalog, the slow first step
     /// of a full scan. A caption of its own rather than a fifth `ScanPhase`: the ring counts the
@@ -192,9 +192,11 @@ final class ScanStore: ObservableObject {
     /// Whether a new check may start now: none running, none refreshing underneath a result,
     /// and no update in flight.
     var canStartCheck: Bool { status != .checking && !isRefreshing && !updating }
-    /// Whether ⌘. may cancel a scan now: one holds the window or refreshes under the list, as
-    /// the toolbar's „Anuluj” shows, and no update runs — the run's rescan is stopped with the run.
-    var canCancelScan: Bool { (status == .checking || isRefreshing) && !updating }
+    /// Whether ⌘. and the toolbar's „Anuluj” may cancel a scan now: one holds the window or
+    /// refreshes under the list, and neither an update nor an undo runs. The run's and the
+    /// undo's checks run outside `scanTask`, so `cancelScan()` could not stop them; the run's
+    /// is stopped with the run.
+    var canCancelScan: Bool { (status == .checking || isRefreshing) && !updating && undoBusy == nil }
     /// UXP-13 — when the running scan started, for the band's elapsed time. `nil` between scans.
     @Published private(set) var scanStartedAt: Date?
     /// UXP-14 — how old the Homebrew catalog is, in minutes, when the scan on screen reused it

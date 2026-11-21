@@ -234,7 +234,8 @@ struct UpdateView: View {
     // MARK: Checking
     //
     // The first scan's scene — see `ScanProgressScene`, which owns its own sizing and padding.
-    // A scan over a result draws no scene: the band and the list header report it (UXP-13).
+    // A scan over a result draws no scene, the check after a run included: the band and the
+    // list header report it (UXP-13).
     private var checkingView: some View {
         ScanProgressScene(progress: scan.progress, catalogRefreshing: scan.isRefreshingCatalog)
     }

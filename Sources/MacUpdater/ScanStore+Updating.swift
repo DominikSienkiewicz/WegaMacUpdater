@@ -232,11 +232,11 @@ extension ScanStore {
         // Re-query brew/mas so the list reflects reality, not optimistic clearing.
         // If a cask failed (e.g. "App source not there"), it will still appear here.
         // Suppress its icon signal — the upgrade outcome below sets the final state.
-        // M2(d) — lightweight: no second `brew update`, no second stale-cask sweep. The
-        // rescan is not a stage of the run's progress: `runCheck` replaces the results view,
-        // band included, with the scan's own screen, so the two hand over to each other.
+        // M2(d) — lightweight: no second `brew update`, no second stale-cask sweep. C2 stage 4 —
+        // quiet: the check runs in place under the run, so the band, the locked list and the log
+        // stay on screen, and the band reads `updating && isRefreshing` as "Sprawdzam wynik".
         UpdateDiagnostics.record("rescan.started", fields: ["lightweight": "true"])
-        await runCheck(emitActivity: false, lightweight: true, operationLease: operationLease)
+        await runCheck(emitActivity: false, lightweight: true, quiet: true, operationLease: operationLease)
         UpdateDiagnostics.record("rescan.result", fields: [
             "confirmed": String(Set(plannedItems.map(\.kind)).isSubset(of: confirmedSourceKinds)),
             "stillOutdatedKeys": allItems.map(\.key).sorted().joined(separator: ",")

@@ -33,8 +33,9 @@ extension ScanStore {
     /// UX-19 — a scan the user starts over a result on screen runs in place, like the launch
     /// refresh: the list stays, stood down, and the header reports each source's phase. With
     /// nothing on screen there is nothing to keep, so the scan takes the window with the full
-    /// scanning scene. The rescans after an update or an undo keep taking the window: the band
-    /// shows the run until it returns, and the rescan's scanning scene takes over from it.
+    /// scanning scene. C2 stage 4 — the check after an update always runs in place (the run's
+    /// band says "Sprawdzam wynik" until it returns), and the one after an undo whenever this
+    /// is true, so an undo from the summary keeps the summary on screen.
     var scansInPlace: Bool { status == .results }
 
     /// M2(c) — cancellation is not new plumbing: `ProcessRunner` already honours
@@ -62,9 +63,10 @@ extension ScanStore {
     /// the stale-cask sweep (nothing has become stale in the meantime). What remains is a
     /// plain `brew outdated` re-query, which is all the post-upgrade list actually needs.
     ///
-    /// `quiet` is the launch refresh: `status` stays on `.results` so the restored list keeps
-    /// the window, and the scan reports itself through `isRefreshing` instead of replacing
-    /// what the user is looking at. Every other caller still takes the window over.
+    /// `quiet` keeps `status` on `.results` so the list on screen keeps the window, and the scan
+    /// reports itself through `isRefreshing` instead of replacing what the user is looking at:
+    /// the launch refresh, a scan started over a result, and the checks after a run and after
+    /// an undo over a result. Without it the scan takes the window with the scanning scene.
     func runCheck(
         emitActivity: Bool = true,
         lightweight: Bool = false,
