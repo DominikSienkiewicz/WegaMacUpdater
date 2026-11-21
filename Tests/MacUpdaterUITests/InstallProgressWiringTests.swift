@@ -87,28 +87,34 @@ struct InstallProgressWiringTests {
     /// M2(c) deleted five invented command bars that animated on a timer while the real work
     /// happened elsewhere. This is the guard that keeps them deleted.
     @Test func nothingAnimatesProgressOnATimer() throws {
-        let bar = executableSource(try source("Sources/MacUpdater/UpdateViewSupport.swift"))
+        for file in ["UpdateViewSupport.swift", "UpdateBandRunViews.swift"] {
+            let bar = executableSource(try source("Sources/MacUpdater/\(file)"))
 
-        #expect(!bar.contains("Timer"), "the bar must not run a timer")
-        #expect(!bar.contains("Task.sleep"), "the bar must not fabricate movement")
+            #expect(!bar.contains("Timer"), "the progress must not run a timer: \(file)")
+            #expect(!bar.contains("Task.sleep"), "the progress must not fabricate movement: \(file)")
+        }
     }
 
-    @Test func theUpdatesScreenShowsTheBarOnlyWhileInstalling() throws {
+    /// C2 stage 3 — the band carries the run while an update is running, and renders the
+    /// store's progress rather than one of its own.
+    @Test func theBandShowsTheRunOnlyWhileInstalling() throws {
         let view = executableSource(try source("Sources/MacUpdater/UpdateView.swift"))
 
-        #expect(view.contains("if scan.updating, let progress = scan.upgradeProgress"),
-                "the bar appears only while an update is running")
-        #expect(view.contains("UpgradeProgressBar(progress: progress)"),
+        #expect(view.contains("run: scan.updating ? runPresentation : nil"),
+                "the run appears in the band only while an update is running")
+        #expect(compact(view).contains("UpdateBandRunPresentation( progress: scan.upgradeProgress,"),
                 "and renders the store's value rather than one of its own")
     }
 
-    /// A linear ProgressView reports a nonzero intrinsic width; with no upper bound it
-    /// widens the detail column until the sidebar is pushed off-screen.
-    @Test func theBarIsPinnedElasticSoItCannotShoveTheSidebarOffScreen() throws {
-        let bar = executableSource(try source("Sources/MacUpdater/UpdateViewSupport.swift"))
+    /// The ring carries the progress now. The linear bar it replaced reported a nonzero
+    /// intrinsic width that, unbounded, widened the detail column until the sidebar was
+    /// pushed off-screen; no linear bar is left to do it.
+    @Test func theRunDrawsNoLinearBar() throws {
+        let support = executableSource(try source("Sources/MacUpdater/UpdateViewSupport.swift"))
+        let runViews = executableSource(try source("Sources/MacUpdater/UpdateBandRunViews.swift"))
 
-        #expect(bar.contains("struct UpgradeProgressBar"))
-        #expect(bar.contains("frame(minWidth: 0, maxWidth: .infinity)"))
+        #expect(!support.contains("struct UpgradeProgressBar"))
+        #expect(!runViews.contains("ProgressView("))
     }
 
     private func packageRoot(file: String = #filePath) -> URL {

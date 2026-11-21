@@ -35,14 +35,14 @@ struct TapTrustNoticeTests {
         #expect(formulae.command == "brew trust --formula -- steipete/tap/peekaboo")
     }
 
-    /// Buttons appear on the Updates screen's log only. The run overlay shows the same panel
-    /// mid-update, where a click would only meet the busy mutex — so it offers none.
+    /// Buttons appear on the Updates screen's log only while no update runs. During a run the
+    /// same panel sits under the list, where a click would only meet the busy mutex — so it
+    /// offers none.
     @Test func givenTheTwoBrewLogPanelsWhenWiredThenOnlyTheIdleOneOffersTapTrustButtons() throws {
         let updateView = try Self.source("UpdateView.swift")
-        let runOverlay = try Self.source("UpdateRunOverlay.swift")
 
         #expect(updateView.contains("BrewLogPanel(lines: scan.brewLog, tapTrust: scan.tapTrustActions)"))
-        #expect(runOverlay.contains("BrewLogPanel(lines: logLines, onClose: onHideLog)"))
+        #expect(updateView.contains("BrewLogPanel(lines: scan.brewLog, onClose: { scan.showLog = false })"))
     }
 
     private static func source(_ fileName: String, file: String = #filePath) throws -> String {

@@ -20,9 +20,10 @@ enum UpdateBandLayout {
     /// compact and refreshing); three would not (193 pt).
     var headlineLineLimit: Int { 2 }
 
-    /// How many lines the sentence under the headline may take while a scan runs. Two in every
-    /// layout: one cut „Zaznaczanie wróci, gdy skan się skończy.” in the compact band's 220 pt
-    /// column. The scan state has no queue summary, so the second line still fits the band.
+    /// How many lines the sentence under the headline may take while a scan or an update runs.
+    /// Two in every layout: one cut „Zaznaczanie wróci, gdy skan się skończy.” in the compact
+    /// band's 220 pt column, and a long cask's stage („Instaluję com.microsoft.edgemac — 12 z 40”)
+    /// as well. Neither state has the queue summary, so the second line still fits the band.
     var scanLineLimit: Int { 2 }
 
     /// The round button's diameter in this layout.
@@ -43,11 +44,19 @@ enum UpdateBandLayout {
 /// UXP-13 — while a scan runs in place the caller passes `scan`: the band then reports the scan
 /// (elapsed time and phase chips, the phase, the vendor count, what was found so far) and the
 /// ring stands where the button was, with Wega sniffing.
+///
+/// C2 stage 3 — while an update runs the caller passes `run`: the band reports the run (since
+/// when, the stage, the counter) and carries its stop and „Pokaż log”, and a ring of finished
+/// packages stands where the button was. Wega stays still. The band sits outside the disabled
+/// screen, so the stop stays live while the rows are locked.
 struct UpdateBand<Action: View>: View {
     let presentation: UpdateBandPresentation
     let scan: UpdateBandScanPresentation?
+    let run: UpdateBandRunPresentation?
     let planLinkEnabled: Bool
     let onShowPlan: () -> Void
+    let onStop: () -> Void
+    let onShowLog: () -> Void
     let action: (UpdateBandLayout) -> Action
 
     @Environment(\.colorScheme) private var colorScheme
@@ -56,14 +65,20 @@ struct UpdateBand<Action: View>: View {
     init(
         presentation: UpdateBandPresentation,
         scan: UpdateBandScanPresentation?,
+        run: UpdateBandRunPresentation? = nil,
         planLinkEnabled: Bool,
         onShowPlan: @escaping () -> Void,
+        onStop: @escaping () -> Void = {},
+        onShowLog: @escaping () -> Void = {},
         @ViewBuilder action: @escaping (UpdateBandLayout) -> Action
     ) {
         self.presentation = presentation
         self.scan = scan
+        self.run = run
         self.planLinkEnabled = planLinkEnabled
         self.onShowPlan = onShowPlan
+        self.onStop = onStop
+        self.onShowLog = onShowLog
         self.action = action
     }
 
@@ -125,12 +140,14 @@ struct UpdateBand<Action: View>: View {
 
     private var wegaPose: WegaPose { scan == nil ? .idle : .sniff }
 
-    /// The update button, or while a scan runs the ring that counts its sources. Last in every
-    /// layout, so VoiceOver reads it last.
+    /// The update button, or the ring that counts a scan's sources or a run's packages. Last in
+    /// every layout, so VoiceOver reads it last.
     @ViewBuilder
     private func roundElement(_ layout: UpdateBandLayout) -> some View {
         if let scan {
             UpdateBandScanRing(completed: scan.completedSources, total: scan.totalSources, diameter: layout.buttonDiameter, showsWega: layout == .narrow)
+        } else if let run {
+            UpdateBandRunRing(completed: run.completed, total: run.total, diameter: layout.buttonDiameter, accessibilityValue: run.line)
         } else {
             action(layout)
         }
@@ -139,18 +156,20 @@ struct UpdateBand<Action: View>: View {
     private func textColumn(_ layout: UpdateBandLayout) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             eyebrow(layout)
-            Text(scan?.headline ?? presentation.headline)
+            Text(run?.headline ?? scan?.headline ?? presentation.headline)
                 .font(.wega(layout.headlineStyle, weight: .semibold))
                 .foregroundStyle(Color.wegaBandText)
                 .lineLimit(layout.headlineLineLimit)
                 .accessibilityAddTraits(.isHeader)
-            Text(scan?.line ?? presentation.line)
+            Text(run?.line ?? scan?.line ?? presentation.line)
                 .font(.wega(.callout))
                 .foregroundStyle(Color.wegaBandSecondaryText)
-                .lineLimit(scan == nil ? (layout == .regular ? 2 : 1) : layout.scanLineLimit)
+                .lineLimit(scan == nil && run == nil ? (layout == .regular ? 2 : 1) : layout.scanLineLimit)
             if layout != .regular {
                 if let scan {
                     scanSummary(scan)
+                } else if let run {
+                    UpdateBandRunControls(run: run, showsNote: false, onStop: onStop, onShowLog: onShowLog)
                 } else {
                     compactSummary
                 }
@@ -163,6 +182,8 @@ struct UpdateBand<Action: View>: View {
     private func eyebrow(_ layout: UpdateBandLayout) -> some View {
         if let scan {
             scanEyebrow(scan)
+        } else if let run {
+            runEyebrow(run)
         } else if layout == .narrow {
             freshnessLabel
         } else {
@@ -243,12 +264,24 @@ struct UpdateBand<Action: View>: View {
         .clipped()
     }
 
+    /// When the run started. The time does not move, so nothing ticks under it.
+    private func runEyebrow(_ run: UpdateBandRunPresentation) -> some View {
+        Text(run.eyebrow)
+            .font(.wega(.caption, weight: .semibold, monospaced: true))
+            .tracking(0.8)
+            .textCase(.uppercase)
+            .foregroundStyle(Color.wegaBandAccentText)
+            .lineLimit(1)
+    }
+
     // MARK: Summary
 
     @ViewBuilder
     private var regularSummary: some View {
         if let scan {
             scanSummary(scan)
+        } else if let run {
+            UpdateBandRunControls(run: run, showsNote: true, onStop: onStop, onShowLog: onShowLog)
         } else {
             summaryColumn
         }

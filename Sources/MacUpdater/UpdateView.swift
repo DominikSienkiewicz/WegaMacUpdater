@@ -233,8 +233,8 @@ struct UpdateView: View {
     // MARK: Results
     private var resultsView: some View {
         VStack(spacing: 0) {
-            // The band reports the scan and carries the update button; with nothing to update
-            // the plain heading does. The list header carries select-all next to the categories.
+            // The band reports the scan or the run and carries the update button; with nothing to
+            // update the plain heading does. The list header carries select-all next to the categories.
             if hasUpdates {
                 resultsBand
                     .padding(.horizontal, WegaLayout.listGutter)
@@ -251,17 +251,16 @@ struct UpdateView: View {
             .padding(.vertical, WegaLayout.sectionSpacing)
 
             // Everything below the header is what a running update could be raced by, so for
-            // the run's duration it is inert and covered by the run itself — see
-            // `UpdateRunOverlay`. The overlay sits outside `.disabled`, so its stop button
-            // stays live.
+            // the run's duration `.disabled` makes it inert. Nothing is drawn over the rows (C2):
+            // the band above carries the run and its stop, and the run's log below the list
+            // stays live with it, both outside the disabled screen.
             screenBody
                 .disabled(!ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating))
-                .overlay {
-                    if scan.updating {
-                        updateRunOverlay
-                    }
-                }
-                .animation(.easeInOut(duration: 0.2), value: scan.updating)
+            if scan.updating && scan.showLog {
+                BrewLogPanel(lines: scan.brewLog, onClose: { scan.showLog = false })
+                    .padding(.horizontal, WegaLayout.listGutter)
+                    .padding(.bottom, WegaLayout.listGutter)
+            }
         }
     }
 
@@ -289,13 +288,20 @@ struct UpdateView: View {
 
     /// The dusk band: what the scan found, the queue, and the round update button. It is the
     /// whole path to an update — the button takes today's gate, help text and confirmation.
+    ///
+    /// REL-12 — while the update runs the band carries its stop. It does not kill the package
+    /// manager mid-install; it stops the run at the next package boundary, which is the only
+    /// safe place to stop.
     private var resultsBand: some View {
         let presentation = bandPresentation
         return UpdateBand(
             presentation: presentation,
             scan: scan.isRefreshing ? scanPresentation : nil,
+            run: scan.updating ? runPresentation : nil,
             planLinkEnabled: ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating),
             onShowPlan: { scan.showPlanPreview = true },
+            onStop: { scan.cancelUpdate() },
+            onShowLog: { scan.showLog = true },
             action: { layout in
                 UpdateBandButton(
                     title: presentation.buttonTitle,
@@ -345,6 +351,16 @@ struct UpdateView: View {
         )
     }
 
+    /// C2 stage 3 — the band's run state, from what the store knows about the run going now.
+    private var runPresentation: UpdateBandRunPresentation {
+        UpdateBandRunPresentation(
+            progress:   scan.upgradeProgress,
+            startedAt:  scan.runBoard.startedAt,
+            isStopping: scan.updateInterruption.isRequested,
+            logShown:   scan.showLog
+        )
+    }
+
     private var resultsHeading: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(tr("Wszystko aktualne"))
@@ -376,24 +392,6 @@ struct UpdateView: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
         }
-    }
-
-    /// REL-12 — the longest operation in the app has a stop button. It does not kill the
-    /// package manager mid-install; it stops the run at the next package boundary, which is
-    /// the only safe place to stop.
-    private var updateRunOverlay: some View {
-        UpdateRunOverlay(
-            isStopping: scan.updateInterruption.isRequested,
-            logLines:   scan.showLog ? scan.brewLog : nil,
-            onCancel:   { scan.cancelUpdate() },
-            onShowLog:  { scan.showLog = true },
-            onHideLog:  { scan.showLog = false },
-            progress:   {
-                if scan.updating, let progress = scan.upgradeProgress {
-                    UpgradeProgressBar(progress: progress)
-                }
-            }
-        )
     }
 
     @ViewBuilder
@@ -434,10 +432,10 @@ struct UpdateView: View {
         }
     }
 
-    /// UX-18's grouping menu, or while a scan runs in place over rows, the note that says why
-    /// they cannot be selected — see `ListHeaderGroupingSlot`.
+    /// UX-18's grouping menu, or the note that says why the rows cannot be selected: while a
+    /// scan runs in place over them, or while an update holds them — see `ListHeaderGroupingSlot`.
     private var groupingControl: some View {
-        ListHeaderGroupingSlot(showsScanNote: ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows)) {
+        ListHeaderGroupingSlot(showsScanNote: ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows), showsRunNote: scan.updating && showsRows) {
             groupingMenu
         }
     }
@@ -517,8 +515,8 @@ struct UpdateView: View {
                             onDismissForcePrompt: { info in scan.dismissForceRestartPrompt(info) }
                         )
                     }
-                    // During a run the log lives in `UpdateRunOverlay`; a second copy
-                    // under it would only be covered.
+                    // During a run the log sits under the list instead, outside the disabled
+                    // screen (`resultsView`), without tap-trust buttons the busy mutex would refuse.
                     if scan.showLog && !scan.updating {
                         BrewLogPanel(lines: scan.brewLog, tapTrust: scan.tapTrustActions) { scan.showLog = false }
                     }
@@ -916,31 +914,4 @@ extension UpdateView {
         case .cask:     return nil
         }
     }
-}
-
-// MARK: - Bottom bar chrome (UX-20)
-
-/// The chrome of the bar at the bottom of the Updates list. Until stage 3 only the running
-/// update (`UpdateRunOverlay`) uses it; the action bar it was shared with became the band.
-///
-/// Its content is padded from the column edge by `selectionColumnInset`, so the bar lines up
-/// with the column every group header and package row uses, while the glass behind it is
-/// inset by the list gutter.
-struct WegaBottomBar: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .padding(.leading, WegaLayout.selectionColumnInset)
-            .padding(.trailing, WegaLayout.listGutter + WegaLayout.actionBarInnerPadding)
-            .padding(.vertical, WegaLayout.actionBarInnerPadding)
-            .background {
-                Color.clear
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .padding(.horizontal, WegaLayout.listGutter)
-            }
-            .padding(.bottom, WegaLayout.listGutter)
-    }
-}
-
-extension View {
-    func wegaBottomBar() -> some View { modifier(WegaBottomBar()) }
 }

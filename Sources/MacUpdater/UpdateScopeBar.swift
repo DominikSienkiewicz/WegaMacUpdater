@@ -63,26 +63,44 @@ struct UpdateScopeBar: View {
 /// over rows, the note that says why they cannot be selected. The menu stays laid out
 /// underneath, so the header keeps its height. The note is wider than the menu, so the slot
 /// yields to the scope bar and the note truncates at the narrowest detail column.
+///
+/// C2 stage 3 — while an update holds the rows the slot says so instead, with the longer
+/// explanation as its tooltip; nothing lies on the rows to say it for it.
 struct ListHeaderGroupingSlot<Menu: View>: View {
     let showsScanNote: Bool
+    var showsRunNote = false
     @ViewBuilder let menu: () -> Menu
 
     var body: some View {
         ZStack(alignment: .trailing) {
-            if showsScanNote {
+            if showsScanNote || showsRunNote {
                 menu()
                     .opacity(0)
                     .disabled(true)
                     .accessibilityHidden(true)
-                Text(tr("Zaznaczanie wróci, gdy skan się skończy."))
-                    .font(.wega(.subheadline))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                note
             } else {
                 menu()
             }
         }
         .layoutPriority(-1)
+    }
+
+    @ViewBuilder
+    private var note: some View {
+        if showsRunNote {
+            noteText(UpdateRunCopy.lockNote)
+                .help(UpdateRunCopy.note(isStopping: false))
+        } else {
+            noteText(tr("Zaznaczanie wróci, gdy skan się skończy."))
+        }
+    }
+
+    private func noteText(_ text: String) -> some View {
+        Text(text)
+            .font(.wega(.subheadline))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
     }
 }
 

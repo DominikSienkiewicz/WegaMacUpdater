@@ -198,7 +198,7 @@ final class ScanStore: ObservableObject {
     /// cannot land in the next one.
     private(set) var scanGeneration = 0
     /// How far the running upgrade has got, in whole packages. `nil` when nothing is
-    /// installing, which is also what hides the bar.
+    /// installing; the band's run ring and stage read it.
     @Published var upgradeProgress: UpgradeProgress? {
         didSet { publishWindowRun() }
     }
@@ -213,7 +213,7 @@ final class ScanStore: ObservableObject {
     /// How many planned rows have a process running right now.
     ///
     /// Not `@Published`: nothing renders the number itself. It decides only whether the
-    /// progress bar may name the package it is installing — with several processes out, any
+    /// run's stage may name the package it is installing — with several processes out, any
     /// single name is a claim about the other two as well.
     var inFlightItemCount = 0
     /// F4 — tools the user has not installed. An invitation to install them, not an error.
@@ -319,7 +319,7 @@ final class ScanStore: ObservableObject {
     }
 
     /// UXP-09 — hands the menu bar what it shows of the run: done/total and whether a stop was
-    /// asked for, whichever path asked (⌘., the run bar, the menu itself). The brew loop sets
+    /// asked for, whichever path asked (⌘., the band's stop, the menu itself). The brew loop sets
     /// `upgradeProgress` on every output chunk, and every assignment to the agent's
     /// `@Published` property re-evaluates the `App` body, so only a change is assigned.
     private func publishWindowRun() {

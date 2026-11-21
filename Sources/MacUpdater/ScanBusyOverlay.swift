@@ -16,7 +16,8 @@ enum ScanSelectionGate {
 
     /// Whether anything on the Updates screen below its header accepts input right now — rows,
     /// banner actions, the plan preview, the stale-cask card and the manual installs. A running
-    /// update owns the whole screen until it lands; only its own overlay stays live.
+    /// update owns the whole screen until it lands; only the band, which carries the run and its
+    /// stop, and the run's log under the list stay live.
     static func allowsScreenInteraction(isUpdating: Bool) -> Bool {
         !isUpdating
     }
