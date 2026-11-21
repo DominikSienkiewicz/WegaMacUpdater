@@ -288,7 +288,9 @@ struct UpdateSection: View {
                 }
                 .opacity(run?.isDimmed(item.key) == true ? 0.55 : 1)
                 .contextMenu {
-                    UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) }, onSkip: skipAction(for: item))
+                    if isEnabled {
+                        UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) }, onSkip: skipAction(for: item))
+                    }
                 }
                 .overlay(alignment: .bottom) {
                     if item.id != items.last?.id { Divider().opacity(0.4).padding(.leading, 54) }
@@ -581,7 +583,9 @@ struct ManualUpdateSection: View {
                     onInspect?(item)
                 }
                 .contextMenu {
-                    UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) }, onSkip: skipAction(for: item))
+                    if isEnabled {
+                        UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) }, onSkip: skipAction(for: item))
+                    }
                 }
                 .overlay(alignment: .bottom) {
                     if item.path != items.last?.path { Divider().opacity(0.4).padding(.leading, 54) }

@@ -161,6 +161,16 @@ struct RowAccessibilityTests {
         }
     }
 
+    /// Final review R-I2 — with the veil gone, a right-click reached „Nie aktualizuj”, „Pomiń tę
+    /// wersję” and „Przypnij wersję…” behind nothing but `.disabled`. A disabled list now offers
+    /// no rule menu at all, by the same signal its Tab stops and keys follow.
+    @Test func aDisabledListOffersNoRuleMenu() throws {
+        let support = try source("Sources/MacUpdater/UpdateViewSupport.swift")
+        let gated = ".contextMenu {\n                    if isEnabled {\n                        UpdatePolicyMenu("
+        #expect(support.components(separatedBy: ".contextMenu {").count == 3, "UpdateSection and ManualUpdateSection")
+        #expect(support.components(separatedBy: gated).count == 3, "both menus are empty while the list is disabled")
+    }
+
     @Test func theSidebarSaysWhatTheRedBadgeMeans() {
         #expect(SidebarBadgeCopy.text(count: 3, isDanger: true) == "⚠︎ 3" && SidebarBadgeCopy.text(count: 3, isDanger: false) == "3")
         withLanguage(.pl) {

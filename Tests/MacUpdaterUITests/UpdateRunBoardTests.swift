@@ -120,6 +120,37 @@ struct UpdateRunBoardTests {
         #expect(store.runBoard == .idle)
     }
 
+    /// Final review R-I2 — the run's lock holds in the store too: ignoring or skipping a row while
+    /// the run works (the row's menu, the inspector) is refused, so no rule is written and the
+    /// row the run is still installing never leaves its queue.
+    @Test func aRunRefusesIgnoringOrSkippingARow() async throws {
+        let (harness, keys) = Self.harness(npmFails: false)
+        let store = harness.store
+        let items = store.allItems.filter { keys.all.contains($0.key) }
+        #expect(items.count == 3)
+        defer { items.forEach { UpdatePolicyStore.shared.remove(key: $0.policyKey) } }
+        let attempt = RuleAttemptRecorder()
+        let watch = store.$runBoard.sink { board in
+            guard board.startedAt != nil, !attempt.made else { return }
+            attempt.made = true
+            for item in items {
+                store.ignoreItem(item)
+                store.skipItem(item)
+            }
+            attempt.queuedAfter = store.selected
+            attempt.rulesAfter = items.compactMap { UpdatePolicyStore.shared.policy(for: $0.policyKey) }
+        }
+        defer { watch.cancel() }
+        store.selected = keys.all
+
+        await store.runUpdate(targetKeys: keys.all)
+
+        #expect(attempt.made, "the board opened while the run held the lock")
+        #expect(attempt.queuedAfter == keys.all, "every planned row stayed in its queue")
+        #expect(attempt.rulesAfter.isEmpty, "no rule was written mid-run")
+        #expect(items.allSatisfy { UpdatePolicyStore.shared.policy(for: $0.policyKey) == nil })
+    }
+
     @Test func aFailedPackageSaysSoAndNeverReadsInstalled() async {
         let (harness, keys) = Self.harness(npmFails: true)
         let recorder = BoardRecorder()
@@ -308,6 +339,12 @@ private final class WegaStateRecorder {
 /// Every board the store published during a run, read back per row or per lane as the
 /// sequence of different statuses it went through.
 @MainActor
+private final class RuleAttemptRecorder {
+    var made = false
+    var queuedAfter: Set<String> = []
+    var rulesAfter: [UpdatePolicy] = []
+}
+
 private final class BoardRecorder {
     var boards: [UpdateRunBoard] = []
 

@@ -817,7 +817,10 @@ final class ScanStore: ObservableObject {
         selected.formUnion(visibleItems(for: filter).map(\.key))
     }
 
+    /// Refused while an update runs: the rule would take a row the run may still be installing
+    /// out of its queue. The list offers no menu then; this also covers every other caller.
     func ignoreItem(_ item: OutdatedItem) {
+        guard !updating else { return }
         let previous = UpdatePolicyStore.shared.entries[item.policyKey]
         UpdatePolicyStore.shared.ignore(key: item.policyKey, name: item.name)
         selected.remove(item.key)
@@ -831,9 +834,10 @@ final class ScanStore: ObservableObject {
     }
 
     /// UX-12 — skip just the version currently on offer; a later release surfaces again.
-    /// No-op when the source can't name the available version (nothing concrete to skip).
+    /// No-op when the source can't name the available version (nothing concrete to skip), and
+    /// refused while an update runs, like `ignoreItem`.
     func skipItem(_ item: OutdatedItem) {
-        guard let version = item.to, !version.isEmpty else { return }
+        guard !updating, let version = item.to, !version.isEmpty else { return }
         let previous = UpdatePolicyStore.shared.entries[item.policyKey]
         UpdatePolicyStore.shared.skip(key: item.policyKey, name: item.name, version: version)
         selected.remove(item.key)
