@@ -178,8 +178,8 @@ public enum TouchIDSudoConfigurator {
     ///
     /// It runs `/usr/bin/sudo`, not the first `sudo` on the user's `PATH` (Z2), in the C locale. Its
     /// output keeps every line already there, so it refuses first, before it creates anything, a
-    /// `sudo_local` that is a link, not a regular file, not root's, or writable by group or other
-    /// (Z1): such a file must not end up as root's own. When there is no `sudo_local`, the template is
+    /// `sudo_local` that is a link, not a regular file, not root's, writable by group or other (Z1) or
+    /// with an ACL (M1): such a file must not end up as root's own. When there is no `sudo_local`, the template is
     /// the base, so the same goes for a template that is a link, not a regular file, not root's,
     /// writable by group or other or with an ACL (I1); a missing template gives an empty base. It ends
     /// an unterminated last line before it adds the directive.
@@ -201,7 +201,8 @@ public enum TouchIDSudoConfigurator {
             #"if [ -L "$target" ] || { [ -e "$target" ] && [ ! -f "$target" ]; }; then"#,
             #"echo "Wega: sudo_local is not a regular file; nothing changed." >&2; exit 1; fi;"#,
             #"if [ -e "$target" ]; then owner=$(/usr/bin/stat -f %u "$target"); mode=$(/usr/bin/stat -f %Lp "$target");"#,
-            #"if [ "$owner" -ne \#(requiredOwnerUID) ] || [ $(( 0$mode & 022 )) -ne 0 ]; then"#,
+            #"if [ "$owner" -ne \#(requiredOwnerUID) ] || [ $(( 0$mode & 022 )) -ne 0 ]"#,
+            #"|| /bin/ls -lde "$target" | /usr/bin/grep -q "^ [0-9][0-9]*: "; then"#,
             #"echo "Wega: someone other than root can change sudo_local; nothing changed." >&2; exit 1; fi; fi;"#,
             #"if [ ! -e "$target" ] && { [ -e "$template" ] || [ -L "$template" ]; }; then"#,
             #"if [ -L "$template" ] || [ ! -f "$template" ]; then"#,

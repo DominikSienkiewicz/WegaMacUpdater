@@ -54,14 +54,15 @@ struct TouchIDManualEnableCommandTests {
     }
 
     struct UnsafeCase: Sendable, CustomTestStringConvertible {
-        enum Kind: Sendable { case link, groupWritable, otherWritable, foreignOwner, directory }
+        enum Kind: Sendable { case link, groupWritable, otherWritable, foreignOwner, accessControl, directory }
         let kind: Kind
         var testDescription: String { "\(kind)" }
     }
 
-    /// Z1: a `sudo_local` that is a link, not root's, or writable by group or other is refused before
-    /// anything is created, so its lines never end up in a root-owned file.
-    @Test(arguments: [UnsafeCase.Kind.link, .groupWritable, .otherWritable, .foreignOwner, .directory].map(UnsafeCase.init),
+    /// Z1, M1: a `sudo_local` that is a link, not root's, writable by group or other or carrying an ACL
+    /// is refused before anything is created, so its lines never end up in a root-owned file.
+    @Test(arguments: [UnsafeCase.Kind.link, .groupWritable, .otherWritable, .foreignOwner, .accessControl, .directory]
+            .map(UnsafeCase.init),
           ShellLocale.allCases)
     func anUnsafeSudoLocalIsRefusedAndNothingChanges(_ unsafe: UnsafeCase, _ locale: ShellLocale) async throws {
         let sandbox = try PolicyShellSandbox()
@@ -82,6 +83,9 @@ struct TouchIDManualEnableCommandTests {
         case .foreignOwner:
             try sandbox.write(original, to: sandbox.sudoLocal)
             requiredOwnerUID = getuid() &+ 1
+        case .accessControl:
+            try sandbox.write(original, to: sandbox.sudoLocal)
+            try await sandbox.addAccessControlEntry(to: sandbox.sudoLocal)
         case .directory:
             try FileManager.default.createDirectory(atPath: sandbox.sudoLocal, withIntermediateDirectories: false)
         }
@@ -96,7 +100,7 @@ struct TouchIDManualEnableCommandTests {
             #expect(try sandbox.contents(of: checked) == Data(original))
         case .directory:
             #expect(try FileManager.default.contentsOfDirectory(atPath: sandbox.sudoLocal).isEmpty)
-        case .groupWritable, .otherWritable, .foreignOwner:
+        case .groupWritable, .otherWritable, .foreignOwner, .accessControl:
             #expect(try sandbox.contents(of: sandbox.sudoLocal) == Data(original))
         }
     }
@@ -175,6 +179,7 @@ struct TouchIDManualEnableCommandTests {
             "/usr/bin/mktemp /etc/pam.d/.sudo_local.wega-check.XXXXXX",
             "template=/etc/pam.d/sudo_local.template;", "/usr/bin/stat -f %u \"$template\"", "/usr/bin/stat -f %Lp \"$template\"",
             "[ \"$towner\" -ne 0 ]", "/bin/ls -lde \"$template\" | /usr/bin/grep -q \"^ [0-9][0-9]*: \"",
+            "/bin/ls -lde \"$target\" | /usr/bin/grep -q \"^ [0-9][0-9]*: \"",
         ] {
             #expect(command.contains(piece), "\(piece)")
         }
