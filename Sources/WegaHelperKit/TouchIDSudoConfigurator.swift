@@ -179,8 +179,10 @@ public enum TouchIDSudoConfigurator {
     /// It runs `/usr/bin/sudo`, not the first `sudo` on the user's `PATH` (Z2), in the C locale. Its
     /// output keeps every line already there, so it refuses first, before it creates anything, a
     /// `sudo_local` that is a link, not a regular file, not root's, or writable by group or other
-    /// (Z1): such a file must not end up as root's own. It ends an unterminated last line before it
-    /// adds the directive.
+    /// (Z1): such a file must not end up as root's own. When there is no `sudo_local`, the template is
+    /// the base, so the same goes for a template that is a link, not a regular file, not root's,
+    /// writable by group or other or with an ACL (I1); a missing template gives an empty base. It ends
+    /// an unterminated last line before it adds the directive.
     public static let manualEnableTerminalCommand: String = "/usr/bin/sudo /bin/sh -c '" + manualEnableShellScript(
         target: SystemPaths.sudoLocal, stagingDirectory: SystemPaths.pamPolicyDisplayDirectory,
         template: SystemPaths.sudoLocalTemplate, requiredOwnerUID: 0, ownership: "root:wheel"
@@ -195,19 +197,26 @@ public enum TouchIDSudoConfigurator {
         let temporary = stagingDirectory + "/" + TouchIDSudoDisabler.swapNamePrefix
         let chown = ownership.map { #" /usr/sbin/chown \#($0) "$staged";"# } ?? ""
         return [
-            #"set -eu; export LC_ALL=C; target=\#(target);"#,
+            #"set -eu; export LC_ALL=C; target=\#(target); template=\#(template);"#,
             #"if [ -L "$target" ] || { [ -e "$target" ] && [ ! -f "$target" ]; }; then"#,
             #"echo "Wega: sudo_local is not a regular file; nothing changed." >&2; exit 1; fi;"#,
             #"if [ -e "$target" ]; then owner=$(/usr/bin/stat -f %u "$target"); mode=$(/usr/bin/stat -f %Lp "$target");"#,
             #"if [ "$owner" -ne \#(requiredOwnerUID) ] || [ $(( 0$mode & 022 )) -ne 0 ]; then"#,
             #"echo "Wega: someone other than root can change sudo_local; nothing changed." >&2; exit 1; fi; fi;"#,
+            #"if [ ! -e "$target" ] && { [ -e "$template" ] || [ -L "$template" ]; }; then"#,
+            #"if [ -L "$template" ] || [ ! -f "$template" ]; then"#,
+            #"echo "Wega: sudo_local.template is not a regular file; nothing changed." >&2; exit 1; fi;"#,
+            #"towner=$(/usr/bin/stat -f %u "$template"); tmode=$(/usr/bin/stat -f %Lp "$template");"#,
+            #"if [ "$towner" -ne \#(requiredOwnerUID) ] || [ $(( 0$tmode & 022 )) -ne 0 ]"#,
+            #"|| /bin/ls -lde "$template" | /usr/bin/grep -q "^ [0-9][0-9]*: "; then"#,
+            #"echo "Wega: someone other than root can change sudo_local.template; nothing changed." >&2; exit 1; fi; fi;"#,
             #"backup=$(/usr/bin/mktemp \#(temporary)backup.XXXXXX);"#,
             #"staged=$(/usr/bin/mktemp \#(temporary)new.XXXXXX);"#,
             #"check=$(/usr/bin/mktemp \#(temporary)check.XXXXXX); had=0;"#,
             #"if [ -e "$target" ]; then /bin/cp -p "$target" "$backup";"#,
             #"/bin/cat "$target" > "$staged"; had=1;"#,
-            #"elif [ -r \#(template) ]; then"#,
-            #"/bin/cat \#(template) > "$staged"; fi;"#,
+            #"elif [ -f "$template" ] && [ ! -L "$template" ]; then"#,
+            #"/bin/cat "$template" > "$staged"; fi;"#,
             #"if ! /usr/bin/grep -E "^[[:space:]]*auth[[:space:]]+sufficient[[:space:]]+pam_tid\\.so""#,
             #" "$staged" >/dev/null 2>&1; then"#,
             #"if [ -n "$(/usr/bin/tail -c 1 "$staged")" ]; then /bin/echo >> "$staged"; fi;"#,

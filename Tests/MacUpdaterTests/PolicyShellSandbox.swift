@@ -49,6 +49,21 @@ struct PolicyShellSandbox {
         try FileManager.default.contentsOfDirectory(atPath: policyDirectory)
             .filter { $0.hasPrefix(TouchIDSudoDisabler.swapNamePrefix) }
     }
+
+    /// Whether anything has the name, a link included, without following it.
+    func exists(_ path: String) -> Bool {
+        (try? FileManager.default.attributesOfItem(atPath: path)) != nil
+    }
+
+    /// Gives `path` an extended ACL entry with `chmod +a`, the way the security review planted one,
+    /// and requires that `ls -le` then lists it.
+    func addAccessControlEntry(to path: String) async throws {
+        let quoted = "\"" + path + "\""
+        let added = try await PolicyShell.run(#"/bin/chmod +a "everyone allow write" "# + quoted, in: .c)
+        try #require(added.status == 0, "\(added.output)")
+        let listing = try await PolicyShell.run("/bin/ls -lde " + quoted, in: .c)
+        try #require(listing.output.contains("\n 0: "), "\(listing.output)")
+    }
 }
 
 /// The two locales a pasted command meets: Terminal's UTF-8 one, which `sudo` passes on, and C.

@@ -101,6 +101,67 @@ struct TouchIDManualEnableCommandTests {
         }
     }
 
+    struct UnsafeTemplateCase: Sendable, CustomTestStringConvertible {
+        enum Kind: Sendable { case link, danglingLink, groupWritable, otherWritable, foreignOwner, accessControl, directory }
+        let kind: Kind
+        var testDescription: String { "\(kind)" }
+    }
+
+    /// I1: with no `sudo_local`, the template is the base of a new root-owned file, so a template that
+    /// is a link, not a regular file, not root's, writable by group or other or carrying an ACL is
+    /// refused before anything is created. Its planted line never becomes active.
+    @Test(arguments: [UnsafeTemplateCase.Kind.link, .danglingLink, .groupWritable, .otherWritable, .foreignOwner, .accessControl,
+                      .directory].map(UnsafeTemplateCase.init),
+          ShellLocale.allCases)
+    func anUnsafeTemplateIsRefusedAndNothingIsCreated(_ unsafe: UnsafeTemplateCase, _ locale: ShellLocale) async throws {
+        let sandbox = try PolicyShellSandbox()
+        defer { sandbox.remove() }
+        let planted = Array("auth       sufficient     pam_permit.so\n".utf8)
+        var requiredOwnerUID = getuid()
+        switch unsafe.kind {
+        case .link:
+            let elsewhere = sandbox.moved("/elsewhere")
+            try sandbox.write(planted, to: elsewhere, permissions: 0o444)
+            try FileManager.default.createSymbolicLink(atPath: sandbox.template, withDestinationPath: elsewhere)
+        case .danglingLink:
+            try FileManager.default.createSymbolicLink(atPath: sandbox.template, withDestinationPath: sandbox.moved("/nowhere"))
+        case .groupWritable:
+            try sandbox.write(planted, to: sandbox.template, permissions: 0o664)
+        case .otherWritable:
+            try sandbox.write(planted, to: sandbox.template, permissions: 0o666)
+        case .foreignOwner:
+            try sandbox.write(planted, to: sandbox.template, permissions: 0o444)
+            requiredOwnerUID = getuid() &+ 1
+        case .accessControl:
+            try sandbox.write(planted, to: sandbox.template, permissions: 0o444)
+            try await sandbox.addAccessControlEntry(to: sandbox.template)
+        case .directory:
+            try FileManager.default.createDirectory(atPath: sandbox.template, withIntermediateDirectories: false)
+        }
+
+        let run = try await PolicyShell.run(Self.script(in: sandbox, requiredOwnerUID: requiredOwnerUID), in: locale)
+
+        #expect(run.status == 1, "\(run.output)")
+        #expect(!sandbox.exists(sandbox.sudoLocal), "no sudo_local was created")
+        #expect(try sandbox.leftovers().isEmpty, "nothing was created")
+    }
+
+    /// I1: the template is looked at only when it is the base. An existing `sudo_local` is the only
+    /// base, so the command does not refuse it over a template it never reads.
+    @Test(arguments: ShellLocale.allCases)
+    func anUnsafeTemplateDoesNotMatterBesideAnExistingSudoLocal(_ locale: ShellLocale) async throws {
+        let sandbox = try PolicyShellSandbox()
+        defer { sandbox.remove() }
+        try sandbox.write(Array("# a\n".utf8), to: sandbox.sudoLocal)
+        try sandbox.write(Array("auth       sufficient     pam_permit.so\n".utf8), to: sandbox.template, permissions: 0o666)
+
+        let run = try await PolicyShell.run(Self.script(in: sandbox), in: locale)
+
+        #expect(run.status == 0, "\(run.output)")
+        #expect(try sandbox.contents(of: sandbox.sudoLocal) == Data(Array("# a\n".utf8) + Self.directive))
+        #expect(try sandbox.leftovers().isEmpty)
+    }
+
     @Test func theProductionCommandRunsSudoFromUsrBinInTheCLocale() async throws {
         let command = TouchIDSudoConfigurator.manualEnableTerminalCommand
         let prefix = "/usr/bin/sudo /bin/sh -c '"
@@ -112,6 +173,8 @@ struct TouchIDManualEnableCommandTests {
             "/usr/sbin/chown root:wheel \"$staged\";", "/etc/pam.d/sudo_local.template",
             "/usr/bin/mktemp /etc/pam.d/.sudo_local.wega-backup.XXXXXX", "/usr/bin/mktemp /etc/pam.d/.sudo_local.wega-new.XXXXXX",
             "/usr/bin/mktemp /etc/pam.d/.sudo_local.wega-check.XXXXXX",
+            "template=/etc/pam.d/sudo_local.template;", "/usr/bin/stat -f %u \"$template\"", "/usr/bin/stat -f %Lp \"$template\"",
+            "[ \"$towner\" -ne 0 ]", "/bin/ls -lde \"$template\" | /usr/bin/grep -q \"^ [0-9][0-9]*: \"",
         ] {
             #expect(command.contains(piece), "\(piece)")
         }
@@ -119,6 +182,9 @@ struct TouchIDManualEnableCommandTests {
         let refusals = try #require(script.range(of: "nothing changed.\" >&2; exit 1; fi; fi;"))
         let firstTemporary = try #require(script.range(of: "/usr/bin/mktemp"))
         #expect(refusals.upperBound < firstTemporary.lowerBound, "the refusals come before anything is created")
+        let everyRefusal = script.ranges(of: "nothing changed.")
+        #expect(everyRefusal.count == 4, "sudo_local and the template, two refusals each")
+        #expect(everyRefusal.allSatisfy { $0.upperBound < firstTemporary.lowerBound }, "every refusal comes before anything is created")
         #expect(!script.contains("'"))
         #expect(try await PolicyShell.run(script, in: .c, arguments: ["-n"]).status == 0, "valid shell")
     }
