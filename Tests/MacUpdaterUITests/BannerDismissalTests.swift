@@ -55,7 +55,12 @@ final class BannerDismissalTests: XCTestCase {
         // between the call and the variant, which the formatter is free to move.
         let callSite = try NSRegularExpression(pattern: #"showStickyBanner\(\s*BannerData\(\s*variant:\s*\.(\w+)"#)
 
+        // Every call, the declaration aside. A banner built elsewhere and passed by name would
+        // hide its variant from the pattern above, so each call has to build its banner inline.
+        let anyCall = try NSRegularExpression(pattern: #"(?<!func )showStickyBanner\("#)
+
         var variants: [String] = []
+        var calls = 0
         for file in files {
             let text = try String(contentsOf: file, encoding: .utf8)
             let range = NSRange(text.startIndex..., in: text)
@@ -63,9 +68,11 @@ final class BannerDismissalTests: XCTestCase {
                 guard let found = Range(match.range(at: 1), in: text) else { continue }
                 variants.append(String(text[found]))
             }
+            calls += anyCall.numberOfMatches(in: text, range: range)
         }
 
         XCTAssertFalse(variants.isEmpty, "Sanity: the scan should find the sticky banner call sites")
+        XCTAssertEqual(calls, variants.count, "every showStickyBanner( call builds its BannerData(variant: inline")
         XCTAssertEqual(
             Set(variants),
             ["danger"],

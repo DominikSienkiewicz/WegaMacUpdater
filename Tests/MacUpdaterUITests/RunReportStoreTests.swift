@@ -206,6 +206,52 @@ struct RunReportStoreTests {
         }
     }
 
+    /// Final review C6 — the stop is announced in the summary's own counts, as a finished run is:
+    /// the skipped row is one of the planned ones, not a row that never existed.
+    @Test func aStoppedRunIsAnnouncedInTheSummarysCounts() {
+        let (defaults, teardown) = TestDefaults.isolated("run-report-stopped-announcement")
+        defer { teardown() }
+        let (store, announcer) = makeStore(defaults: defaults)
+        let done = formula("done")
+        let skipped = formula("skipped")
+        store.updating = true
+        store.cancelUpdate()
+        #expect(store.shouldStopUpdate(before: [skipped.key]))
+        store.updating = false
+
+        withLanguage(.pl) {
+            store.report(run: succeeded([done]), planned: [done, skipped])
+            #expect(announcer.texts.last == AnnouncementCopy.runStopped(updated: 1, total: 2), "\(announcer.texts)")
+            #expect(store.runReport.map { AnnouncementCopy.runStopped(updated: $0.updatedCount, total: $0.plannedCount) }
+                    == announcer.texts.last)
+        }
+    }
+
+    /// Final review C5 — the check confirms a run all or nothing, as Core's `applyRescan` does: with
+    /// npm unanswered the npm package is unconfirmed, and so is a changed publisher's cask, even
+    /// though the cask source answered.
+    @Test func aChangedPublisherIsConfirmedOnlyWhenTheWholeCheckIs() {
+        let (defaults, teardown) = TestDefaults.isolated("run-report-all-or-nothing")
+        defer { teardown() }
+        let store = makeStore(defaults: defaults).store
+        store.confirmedSourceKinds = [.formula, .cask, .appStore]
+        let changed = cask("proton-mail")
+        let tool = OutdatedItem(key: UpdatePlanner.key(name: "tool", kind: .npm), name: "tool", from: "1", to: "2", kind: .npm)
+        var run = publisherChanged(changed)
+        run.record([tool], outcome: BrewUpgradeOutcome(exitCode: 0, failedTokens: [], errorLines: []))
+        let confirmed = Set([changed, tool].map(\.kind)).isSubset(of: store.confirmedSourceKinds)
+        run.applyRescan(stillOutdatedKeys: [], confirmed: confirmed)
+
+        withLanguage(.pl) {
+            store.report(run: run, planned: [changed, tool])
+        }
+
+        #expect(!confirmed, "sanity: npm did not answer")
+        #expect(store.runReport?.entries.map(\.result) == [.notConfirmed, .notConfirmed],
+                "under-report: nothing the check could not confirm is „Zaktualizowano”")
+        #expect(store.runReport?.status == .incomplete)
+    }
+
     @Test func aRunStoppedAtTheZerothBoundaryReportsEveryItemAsStopped() async {
         let runner = Self.refusingRunner()
         let stop = storeStoppingAtTheZerothBoundary(runner: runner)
@@ -492,6 +538,53 @@ struct RunReportStoreTests {
         let guarded = try #require(scanning.range(of: "guard scanTask == nil else { return }"))
         let closesForScan = try #require(scanning.range(of: "closeRunReport()"))
         #expect(guarded.upperBound < closesForScan.lowerBound, "a refused scan leaves the summary open")
+    }
+
+    /// Final review C7 — closing has one door because only that door raises the sticky banner of
+    /// an unsettled publisher change: `setRunReport(nil)` lives in `closeRunReport()` alone, and
+    /// the setter has no caller beyond the report, the door and the two marks.
+    @Test func theReportHasOneClosingDoor() throws {
+        let directory = packageRoot().appendingPathComponent("Sources/MacUpdater")
+        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "swift" }
+        var calls: [String: Int] = [:]
+        var clears = 0
+        for file in files {
+            let text = executableSource(try String(contentsOf: file, encoding: .utf8))
+            let count = ranges(of: "setRunReport(", in: text).count
+            if count > 0 { calls[file.lastPathComponent] = count }
+            clears += ranges(of: "setRunReport(nil)", in: text).count
+        }
+        #expect(calls == ["ScanStore.swift": 1, "ScanStore+RunReport.swift": 3, "ScanStore+Updating.swift": 1], "\(calls)")
+        #expect(clears == 1, "only one call clears the report")
+
+        let store = executableSource(try source("Sources/MacUpdater/ScanStore.swift"))
+        #expect(store.contains("func setRunReport(_ report: UpdateRunReport?) {\n        runReport = report\n    }"))
+        let doors = executableSource(try source("Sources/MacUpdater/ScanStore+RunReport.swift"))
+        let close = try #require(doors.range(of: "func closeRunReport() {"))
+        let next = try #require(doors.range(of: "func ", range: close.upperBound..<doors.endIndex))
+        #expect(doors[close.upperBound..<next.lowerBound].contains("setRunReport(nil)"), "the clear sits in the one door")
+        let marks = ["func markRunReportUndone(", "func settleRunReportPublisher("].compactMap { doors.range(of: $0) }
+        #expect(marks.count == 2)
+        for mark in marks {
+            #expect(doors[mark.upperBound...].prefix(200).contains("setRunReport(report)"), "a mark rewrites the open report")
+        }
+        let updating = executableSource(try source("Sources/MacUpdater/ScanStore+Updating.swift"))
+        let opens = try #require(updating.range(of: "func report(run: UpdateRunOutcome, planned:"))
+        #expect(updating[opens.upperBound...].prefix(900).contains("setRunReport(report)"), "the report opens it")
+    }
+
+    /// Final review C1 — the failure log's headline and per-item lines come from the report, so
+    /// every row the summary shows as not updated is named; the summary's per-outcome lines stay.
+    @Test func theFailureLogIsWrittenFromTheReport() throws {
+        let updating = executableSource(try source("Sources/MacUpdater/ScanStore+Updating.swift"))
+        let body = try #require(updating.range(of: "func report(run: UpdateRunOutcome, planned:"))
+        let end = try #require(updating.range(of: "func fold(_ result: LaneItemResult", range: body.upperBound..<updating.endIndex))
+        let report = updating[body.upperBound..<end.lowerBound]
+        #expect(report.contains("WegaLog.error(\n            .homebrew,\n            report.failureLogHeadline,"))
+        #expect(report.contains("for line in report.failureLogLinesBeyondTheSummary {\n            WegaLog.error(.homebrew, line)\n        }"))
+        #expect(report.contains("for outcome in summary.notUpgraded {\n            WegaLog.error(.homebrew, \"\\(outcome.name): \\(outcome.verdict.logDescription)\")"))
+        #expect(!report.contains("Brew zgłosił błąd"), "nothing blames Homebrew for a run where nothing failed")
     }
 
     private func ranges(of needle: String, in text: String) -> [Range<String.Index>] {

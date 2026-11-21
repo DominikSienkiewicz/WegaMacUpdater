@@ -270,7 +270,8 @@ extension ScanStore {
             skippedKeys: updateInterruption.skippedKeys, wasStopped: updateInterruption.didSkipWork,
             startedAt: runBoard.startedAt, finishedAt: dependencies.now(),
             caskOperationID: caskOperationID, caskAppPaths: caskAppPaths,
-            stillOutdatedKeys: Set(allItems.map(\.key)), confirmedKinds: confirmedSourceKinds
+            stillOutdatedKeys: Set(allItems.map(\.key)),
+            confirmed: Set(planned.map(\.kind)).isSubset(of: confirmedSourceKinds)
         )
         setRunReport(report)
         UpdateStageDiagnostics.recordSummary(summary)
@@ -309,7 +310,7 @@ extension ScanStore {
         let interrupted = updateInterruption.didSkipWork
         if interrupted {
             reportInterruptedRun(upgraded: summary.upgraded.count)
-            announcer.announce(AnnouncementCopy.runStopped(updated: summary.upgraded.count, total: summary.attempted))
+            announcer.announce(AnnouncementCopy.runStopped(updated: report.updatedCount, total: report.plannedCount))
         } else {
             announcer.announce(AnnouncementCopy.runFinished(
                 updated: report.updatedCount,
@@ -359,10 +360,12 @@ extension ScanStore {
         // Surface *why* each upgrade failed — the brew error block, not just the token
         // name — so the log explains the failure instead of only flagging it. The block
         // rides on the failure entry as one detail rather than as N loose lines, so
-        // selecting that entry for a bug report carries the explanation with it.
+        // selecting that entry for a bug report carries the explanation with it. The headline
+        // and the extra lines name the summary's rows: a row nothing attempted has no outcome
+        // for `summary.notUpgraded` to list, and its note sends the user here.
         WegaLog.error(
             .homebrew,
-            "Aktualizacja niekompletna: \(failedNames.isEmpty ? "Brew zgłosił błąd" : failedNames.joined(separator: ", "))",
+            report.failureLogHeadline,
             detail: LogDetail(
                 stderr: summary.diagnostics.joined(separator: "\n"),
                 source: "cask"
@@ -370,6 +373,9 @@ extension ScanStore {
         )
         for outcome in summary.notUpgraded {
             WegaLog.error(.homebrew, "\(outcome.name): \(outcome.verdict.logDescription)")
+        }
+        for line in report.failureLogLinesBeyondTheSummary {
+            WegaLog.error(.homebrew, line)
         }
     }
 

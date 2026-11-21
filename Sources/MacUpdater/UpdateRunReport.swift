@@ -159,13 +159,14 @@ struct UpdateRunReport: Equatable, Sendable {
     private(set) var entries: [UpdateRunReportEntry]
 
     /// One entry per planned key, in plan order. The parameters with a default describe a run
-    /// that stopped nothing, prepared no cask and kept its own start time.
+    /// that stopped nothing, prepared no cask and kept its own start time. `confirmed` is the
+    /// answer Core's `applyRescan` was given: the check heard from every source the plan touched.
     static func make(planned: [OutdatedItem], summary: UpdateRunSummary,
                      skippedKeys: Set<String> = [], wasStopped: Bool = false,
                      startedAt: Date? = nil, finishedAt: Date,
                      caskOperationID: UUID? = nil, caskAppPaths: [String: URL] = [:],
                      stillOutdatedKeys: Set<String>,
-                     confirmedKinds: Set<OutdatedItem.Kind>) -> UpdateRunReport {
+                     confirmed: Bool) -> UpdateRunReport {
         let verdicts = Dictionary(summary.items.map { ($0.key, $0.verdict) }, uniquingKeysWith: { first, _ in first })
         var seen = Set<String>()
         let entries = planned.compactMap { item -> UpdateRunReportEntry? in
@@ -176,7 +177,7 @@ struct UpdateRunReport: Equatable, Sendable {
                 verdict: verdict,
                 wasSkipped: skippedKeys.contains(item.key),
                 checkAnswer: checkAnswer(for: verdict, key: item.key,
-                                         stillOutdatedKeys: stillOutdatedKeys, confirmedKinds: confirmedKinds),
+                                         stillOutdatedKeys: stillOutdatedKeys, confirmed: confirmed),
                 appPath: item.kind == .cask ? caskAppPaths[item.name] : nil,
                 undoneTo: nil,
                 publisherSettled: false
@@ -187,19 +188,50 @@ struct UpdateRunReport: Equatable, Sendable {
     }
 
     /// Core's `applyRescan` downgrades only `.succeeded`, so a changed publisher the check
-    /// still lists, or could not answer for, would otherwise count as updated.
+    /// still lists, or could not answer for, would otherwise count as updated. It is answered
+    /// all or nothing, as Core answers the rest of the run: with any source unheard it is
+    /// unconfirmed, the cask source's own answer notwithstanding.
     private static func checkAnswer(
         for verdict: ItemUpdateVerdict?, key: String,
-        stillOutdatedKeys: Set<String>, confirmedKinds: Set<OutdatedItem.Kind>
+        stillOutdatedKeys: Set<String>, confirmed: Bool
     ) -> UpdateRunCheckAnswer {
         guard case .publisherChanged? = verdict else { return .confirmed }
         if stillOutdatedKeys.contains(key) { return .stillListed }
-        return confirmedKinds.contains(.cask) ? .confirmed : .unanswered
+        return confirmed ? .confirmed : .unanswered
     }
 
     var status: Status {
         if wasStopped { return .stopped }
         return entries.allSatisfy { $0.result == .updated } ? .finished : .incomplete
+    }
+
+    /// Whether the open summary holds Wega's ball: a run that did not finish, or one with a row
+    /// in „Wymaga uwagi” — a confirmed changed publisher finishes the run, and its banner waits
+    /// for the summary to close.
+    var holdsAttention: Bool { status != .finished || !entries(in: .needsAttention).isEmpty }
+
+    /// The failure log's headline: every row the summary shows as not updated, in plan order.
+    /// Polish, like every `WegaLog` message.
+    var failureLogHeadline: String {
+        let names = namesNeedingAttention
+        return names.isEmpty ? "Aktualizacja niekompletna" : "Aktualizacja niekompletna: \(names.joined(separator: ", "))"
+    }
+
+    /// One line for each such row Core's summary cannot name: a planned row nothing attempted,
+    /// and a changed publisher the check did not confirm (Core counts it as upgraded). The rows
+    /// in `summary.notUpgraded` keep `report(run:)`'s own per-outcome lines.
+    var failureLogLinesBeyondTheSummary: [String] {
+        entries.compactMap { entry in
+            guard let verdict = entry.verdict else {
+                let reason = entry.wasSkipped ? "zatrzymano przed startem" : "nie uruchomiono — żaden etap aktualizacji nie objął tej pozycji"
+                return "\(entry.name): \(reason)"
+            }
+            guard case .publisherChanged = verdict, entry.result != .updated else { return nil }
+            let check = entry.checkAnswer == .stillListed
+                ? "nadal widnieje jako nieaktualne po skanie kontrolnym"
+                : "skan po aktualizacji nie potwierdził wyniku"
+            return "\(entry.name): \(verdict.logDescription) — \(check)"
+        }
     }
 
     /// `.finished` → the success eyebrow "Zaktualizowano %@ pakietów"; `.incomplete` →

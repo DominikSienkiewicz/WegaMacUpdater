@@ -24,7 +24,7 @@ struct UpdateRunReportTests {
         _ planned: [OutdatedItem], _ outcomes: [ItemUpdateOutcome],
         skipped: Set<String> = [], wasStopped: Bool = false,
         operationID: UUID? = nil, appPaths: [String: URL] = [:],
-        stillOutdated: Set<String> = [], confirmed: Set<OutdatedItem.Kind> = [.formula, .cask, .appStore, .npm]
+        stillOutdated: Set<String> = [], confirmed: Bool = true
     ) -> UpdateRunReport {
         UpdateRunReport.make(
             planned: planned,
@@ -32,7 +32,7 @@ struct UpdateRunReportTests {
             skippedKeys: skipped, wasStopped: wasStopped,
             startedAt: nil, finishedAt: Self.finishedAt,
             caskOperationID: operationID, caskAppPaths: appPaths,
-            stillOutdatedKeys: stillOutdated, confirmedKinds: confirmed
+            stillOutdatedKeys: stillOutdated, confirmed: confirmed
         )
     }
 
@@ -107,7 +107,7 @@ struct UpdateRunReportTests {
             #expect(stillListed?.note(undo: nil) == sentence)
             #expect(stillListed?.offersPublisherTrust == true)
 
-            let unanswered = entry("proton-mail", in: report([cask], changed, confirmed: [.formula, .appStore, .npm]))
+            let unanswered = entry("proton-mail", in: report([cask], changed, confirmed: false))
             #expect(unanswered?.result == .notConfirmed)
             #expect(unanswered?.checkAnswer == .unanswered)
             #expect(unanswered?.note(undo: nil) == sentence)
@@ -258,6 +258,137 @@ struct UpdateRunReportTests {
             #expect(incomplete.wegaLine == "Some packages didn't update.")
             #expect(stopped.wegaLine == "I stopped the update.")
         }
+    }
+
+    // MARK: - The mapping behind the success gate
+
+    private struct Expected {
+        let result: UpdateRunResult
+        let group: UpdateRunReport.Group
+        let note: String
+    }
+
+    private func entry(_ verdict: ItemUpdateVerdict?, kind: OutdatedItem.Kind = .formula,
+                       skipped: Bool = false, answer: UpdateRunCheckAnswer = .confirmed) -> UpdateRunReportEntry {
+        UpdateRunReportEntry(key: UpdatePlanner.key(name: "tool", kind: kind), name: "tool", kind: kind, from: "1", to: "2",
+                             verdict: verdict, wasSkipped: skipped, checkAnswer: answer, appPath: nil,
+                             undoneTo: nil, publisherSettled: false)
+    }
+
+    /// The row a verdict earns. A `switch` with no `default`: a new Core verdict does not compile
+    /// until it has a row here.
+    private func expected(_ verdict: ItemUpdateVerdict, answer: UpdateRunCheckAnswer = .confirmed) -> Expected {
+        let changed = "%@: zmienił się podpis producenta (%@ → %@). Zaufaj nowemu podpisowi tylko wtedy, gdy producent zmienił konto."
+        let restored = "%@: zmienił się podpis producenta (%@ → %@). Przywróciłam poprzednią zaufaną wersję."
+        switch verdict {
+        case .succeeded:
+            return Expected(result: .updated, group: .updated, note: tr("bez cofnięcia"))
+        case .publisherChanged(let old, let new):
+            let result: UpdateRunResult = answer == .confirmed ? .updated : answer == .stillListed ? .failed : .notConfirmed
+            return Expected(result: result, group: .needsAttention, note: trf(changed, "tool", old, new ?? "—"))
+        case .publisherChangedAndRolledBack(let old, let new):
+            return Expected(result: .rolledBack, group: .needsAttention, note: trf(restored, "tool", old, new ?? "—"))
+        case .publisherMismatchBeforeUpgrade(let old, let current):
+            return Expected(result: .notStarted, group: .notStarted, note: trf(
+                "%@: podpis producenta już przed aktualizacją różnił się od zaufanego (%@ → %@). Aktualizację zablokowałam. Zaufaj nowemu podpisowi tylko wtedy, gdy producent zmienił konto.",
+                "tool", old, current ?? "—"))
+        case .notVerified:
+            return Expected(result: .notConfirmed, group: .needsAttention, note: tr("zainstalowano, ale sprawdzenie nie potwierdziło wyniku"))
+        case .stillOutdated:
+            return Expected(result: .failed, group: .needsAttention, note: tr("nadal nieaktualna po sprawdzeniu"))
+        case .rolledBack:
+            return Expected(result: .rolledBack, group: .needsAttention, note: tr("nowa wersja nie przeszła kontroli — przywróciłam poprzednią"))
+        case .executionFailed, .executionFailedAfterRollback:
+            return Expected(result: .failed, group: .needsAttention, note: tr("nie udało się — szczegóły w logu"))
+        case .executionFailedAfterPublisherRollback(let old, let new):
+            return Expected(result: .failed, group: .needsAttention, note: trf(restored, "tool", old, new ?? "—"))
+        case .executionFailedWithPublisherChange(let old, let new):
+            return Expected(result: .failed, group: .needsAttention, note: trf(changed, "tool", old, new ?? "—"))
+        case .rollbackFailed:
+            return Expected(result: .failed, group: .needsAttention, note: trf(
+                "%@: nowa wersja nie przeszła kontroli, a przywrócenie poprzedniej nie powiodło się. Sprawdź aplikację przed użyciem.", "tool"))
+        }
+    }
+
+    /// Final review C3 — `status == .finished` rests on this mapping, so every Core verdict (and
+    /// both ways of having none) is pinned here: its result, its group and its note, and an
+    /// "Zaktualizowano" only where Core itself says the item is on the new version.
+    @Test func everyVerdictMapsToOneResultGroupAndNote() {
+        let verdicts: [ItemUpdateVerdict] = [
+            .succeeded, .publisherChanged(old: "AAA", new: "BBB"), .publisherChangedAndRolledBack(old: "AAA", new: nil),
+            .publisherMismatchBeforeUpgrade(old: "AAA", current: "CCC"), .notVerified, .stillOutdated, .rolledBack,
+            .executionFailed, .executionFailedAfterRollback, .executionFailedAfterPublisherRollback(old: "AAA", new: "DDD"),
+            .executionFailedWithPublisherChange(old: "AAA", new: "EEE"), .rollbackFailed,
+        ]
+        withLanguage(.pl) {
+            var rows: [(UpdateRunReportEntry, Expected)] = verdicts.map { (entry($0), expected($0)) }
+            let changed = ItemUpdateVerdict.publisherChanged(old: "AAA", new: "BBB")
+            for answer in [UpdateRunCheckAnswer.stillListed, .unanswered] {
+                rows.append((entry(changed, answer: answer), expected(changed, answer: answer)))
+            }
+            rows.append((entry(nil), Expected(result: .notStarted, group: .notStarted, note: tr("nie uruchomiłam — szczegóły w logu"))))
+            rows.append((entry(nil, skipped: true), Expected(result: .notStarted, group: .notStarted, note: tr("zatrzymano przed startem"))))
+            #expect(rows.count == 16, "twelve verdicts, two more check answers, two rows without a verdict")
+
+            for (row, want) in rows {
+                let context = "\(row.verdict.map { "\($0)" } ?? "nil"), \(row.checkAnswer), skipped \(row.wasSkipped)"
+                #expect(row.result == want.result, "\(context)")
+                #expect(row.group == want.group, "\(context)")
+                #expect(row.note(undo: nil) == want.note, "\(context)")
+                if row.result == .updated {
+                    #expect(row.verdict?.upgraded == true, "\(context): only what Core calls upgraded is updated")
+                }
+            }
+        }
+    }
+
+    // MARK: - Wega's ball
+
+    /// Final review C4 — a confirmed changed publisher finishes the run, and its banner waits
+    /// for the summary to close: until then the row in „Wymaga uwagi” is what holds the ball.
+    @Test func aChangedPublisherHoldsWegasBallEvenInAFinishedRun() {
+        let changed = item("proton-mail", .cask)
+        let tool = item("tool", .formula)
+        let finished = report([changed, tool], [outcome(changed, .publisherChanged(old: "AAA", new: "BBB")), outcome(tool, .succeeded)])
+        #expect(finished.status == .finished, "sanity: the check confirmed both")
+        #expect(finished.holdsAttention, "a possible takeover sits in „Wymaga uwagi”")
+
+        #expect(!report([tool], [outcome(tool, .succeeded)]).holdsAttention, "a clean run lets the ball go")
+        #expect(report([tool], [outcome(tool, .executionFailed)]).holdsAttention)
+        #expect(report([tool], [], skipped: [tool.key], wasStopped: true).holdsAttention)
+    }
+
+    // MARK: - The failure log
+
+    /// Final review C1 — the failure log names what the summary shows as not updated. A planned
+    /// row nothing attempted and a changed publisher the check did not confirm are not in
+    /// `summary.notUpgraded`, so the headline used to blame Homebrew with no item named.
+    @Test func theFailureLogNamesEveryItemTheSummaryShowsAsNotUpdated() {
+        let planned = [item("alpha", .formula), item("journal", .cask), item("stopped", .formula), item("proton-mail", .cask),
+                       item("figma", .cask), item("Pages", .appStore), item("wget", .formula)]
+        let built = report(planned, [
+            outcome(planned[0], .succeeded),
+            outcome(planned[3], .publisherChanged(old: "AAA", new: "BBB")),
+            outcome(planned[4], .publisherChanged(old: "AAA", new: "CCC")),
+            outcome(planned[6], .executionFailed),
+        ], skipped: [planned[2].key], stillOutdated: [planned[3].key])
+
+        #expect(built.failureLogHeadline == "Aktualizacja niekompletna: journal, stopped, proton-mail, Pages, wget")
+        #expect(!built.failureLogHeadline.contains("Brew zgłosił błąd"))
+        #expect(built.failureLogLinesBeyondTheSummary == [
+            "journal: nie uruchomiono — żaden etap aktualizacji nie objął tej pozycji",
+            "stopped: zatrzymano przed startem",
+            "proton-mail: zaktualizowano, ale zmienił się Team ID wydawcy — nadal widnieje jako nieaktualne po skanie kontrolnym",
+            "Pages: nie uruchomiono — żaden etap aktualizacji nie objął tej pozycji",
+        ], "wget's line is the summary's own per-outcome line; figma was confirmed")
+
+        let changed = item("proton-mail", .cask)
+        let unanswered = report([changed], [outcome(changed, .publisherChanged(old: "AAA", new: "BBB"))],
+                                confirmed: false)
+        #expect(unanswered.failureLogHeadline == "Aktualizacja niekompletna: proton-mail")
+        #expect(unanswered.failureLogLinesBeyondTheSummary == [
+            "proton-mail: zaktualizowano, ale zmienił się Team ID wydawcy — skan po aktualizacji nie potwierdził wyniku",
+        ])
     }
 
     @Test func notesFollowTheLanguageAfterTheReportIsBuilt() {

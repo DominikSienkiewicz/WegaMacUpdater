@@ -10,21 +10,18 @@ extension ScanStore {
     /// Closes the summary — "Zamknij podsumowanie", "Pozostałe aktualizacje ›", any scan the user
     /// or the launch starts, and the next run — and raises the sticky "Zmienił się podpis
     /// producenta" banner for every publisher change still unsettled, in plan order.
+    ///
+    /// Each is the banner `report(run:)` raised before the summary existed: the same title, the
+    /// same words and the trust action for a cask. It is built inline, so the sticky banners'
+    /// guard (`BannerDismissalTests`) sees that it is raised as a `.danger`.
     func closeRunReport() {
         guard let report = runReport else { return }
         setRunReport(nil)
         for entry in report.unsettledPublisherChanges {
-            guard let banner = publisherChangeBanner(for: entry) else { continue }
-            showStickyBanner(banner)
+            guard let message = entry.publisherSentence else { continue }
+            showStickyBanner(BannerData(variant: .danger, title: tr("Zmienił się podpis producenta"),
+                                        message: message, action: trustPublisherAction(for: entry)))
         }
-    }
-
-    /// The banner `report(run:)` raised for a changed publisher before the summary existed: the
-    /// same title, the same words and the trust action for a cask.
-    func publisherChangeBanner(for entry: UpdateRunReportEntry) -> BannerData? {
-        guard let message = entry.publisherSentence else { return nil }
-        return BannerData(variant: .danger, title: tr("Zmienił się podpis producenta"),
-                          message: message, action: trustPublisherAction(for: entry))
     }
 
     /// An undo restored `token` (after the journal mark and the pin).

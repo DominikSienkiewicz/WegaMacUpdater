@@ -190,8 +190,9 @@ final class ScanStore: ObservableObject {
     /// four sources, and the catalog is not one of them.
     @Published private(set) var isRefreshingCatalog = false
     /// Whether a new check may start now: none running, none refreshing underneath a result,
-    /// and no update in flight.
-    var canStartCheck: Bool { status != .checking && !isRefreshing && !updating }
+    /// and no update or undo in flight. An undo ends in a check of its own, which would hide a
+    /// scan started while it restores the app — and that scan would close the summary.
+    var canStartCheck: Bool { status != .checking && !isRefreshing && !updating && undoBusy == nil }
     /// Whether ⌘. and the toolbar's „Anuluj” may cancel a scan now: one holds the window or
     /// refreshes under the list, and neither an update nor an undo runs. The run's and the
     /// undo's checks run outside `scanTask`, so `cancelScan()` could not stop them; the run's

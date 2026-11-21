@@ -688,7 +688,7 @@ extension UpdateBandViewTests {
                 diagnostics: [], needsSudoPassword: false
             ),
             startedAt: finishedAt.addingTimeInterval(-25 * 60), finishedAt: finishedAt,
-            stillOutdatedKeys: [], confirmedKinds: [.formula, .cask, .appStore, .npm]
+            stillOutdatedKeys: [], confirmed: true
         )
         return UpdateBandSummaryPresentation(
             report: report, scanComplete: false,

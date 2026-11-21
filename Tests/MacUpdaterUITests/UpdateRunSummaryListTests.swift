@@ -28,7 +28,7 @@ struct UpdateRunSummaryListTests {
             planned: planned,
             summary: UpdateRunSummary(items: outcomes, diagnostics: [], needsSudoPassword: false),
             finishedAt: Self.finishedAt, caskOperationID: Self.operationID,
-            stillOutdatedKeys: [], confirmedKinds: [.formula, .cask, .appStore, .npm]
+            stillOutdatedKeys: [], confirmed: true
         )
     }
 
@@ -166,9 +166,13 @@ struct UpdateRunSummaryListTests {
                     #expect(row.accessibilitySentence == "\(entry.name): \(row.note)")
                 }
                 let changed = try #require(built.entries.first)
-                let banner = try #require(scan.publisherChangeBanner(for: changed))
+                scan.setRunReport(built)
+                scan.closeRunReport()
+                let banner = try #require(scan.banner)
+                #expect(banner.title == tr("Zmienił się podpis producenta"))
                 #expect(banner.message == changed.note(undo: nil), "\(language): the banner keeps the whole sentence")
                 #expect(banner.message.contains("proton-mail"))
+                while scan.banner != nil { scan.dismissBanner() }
             }
         }
     }

@@ -68,9 +68,14 @@ struct ShortcutsTests {
 
     /// C2 stage 4 — the undo's check runs outside `scanTask`, like the run's, so `cancelScan()`
     /// cannot stop it: neither ⌘. nor „Anuluj” offers to, and no second scan starts under it.
+    /// Final review C2 — nor while the undo is still restoring the app, before its check: a scan
+    /// started then would close the summary and be hidden by the undo's own check.
     @Test func nothingCancelsOrRestartsTheUndosCheck() throws {
         let (store, _) = try storeWithFormulaAndCask()
         store.undoBusy = "slack"
+        #expect(!store.isRefreshing, "sanity: the undo is restoring, its check has not started")
+        #expect(!store.canStartCheck, "⌘R and „Sprawdź teraz” wait for the undo")
+        #expect(!store.canCancelScan, "nothing to cancel yet")
         store.setRefreshing(true)
         #expect(!store.canCancelScan, "the undo's check cannot be cancelled")
         #expect(!store.canStartCheck, "no second scan under the undo's check")

@@ -63,7 +63,7 @@ struct UpdateBandSummaryTests {
             planned: planned.map(\.0),
             summary: UpdateRunSummary(items: outcomes, diagnostics: [], needsSudoPassword: false),
             skippedKeys: skipped, startedAt: Self.startedAt, finishedAt: Self.finishedAt,
-            caskOperationID: operationID, stillOutdatedKeys: [], confirmedKinds: [.formula, .cask, .appStore, .npm]
+            caskOperationID: operationID, stillOutdatedKeys: [], confirmed: true
         )
     }
 
@@ -90,7 +90,7 @@ struct UpdateBandSummaryTests {
         let stopped = withLanguage(.pl) {
             UpdateRunReport.make(planned: planned, summary: UpdateRunSummary(items: [], diagnostics: [], needsSudoPassword: false),
                                  skippedKeys: Set(planned.map(\.key)), wasStopped: true, finishedAt: Self.finishedAt,
-                                 stillOutdatedKeys: [], confirmedKinds: [.formula, .cask, .appStore, .npm])
+                                 stillOutdatedKeys: [], confirmed: true)
         }
         withLanguage(.pl) {
             #expect(summary(mixedReport).line == "Część pakietów się nie zaktualizowała.")
