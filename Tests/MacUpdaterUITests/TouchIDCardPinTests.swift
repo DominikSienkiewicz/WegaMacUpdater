@@ -57,6 +57,20 @@ struct TouchIDCardPinTests {
                         "if touchIDState == .enabled {", "Link(tr(\"Jak wyłączyć Touch ID dla sudo\")")
     }
 
+    /// Rest review, minor 15: the recoveryOS note says "według przewodnika", so every state that shows
+    /// it links the guide: the turning-off link while Touch ID is on, a repair link while it is off.
+    @Test func theRecoveryNoteHasTheGuideLinkInEveryState() throws {
+        let card = try card()
+        try expectOrder(card, "if let reason = touchIDController.recoveryOnlyReason {",
+                        "touchIDNote(TouchIDEnableCopy.recoveryOnlyNote(for: reason), isWarning: true)",
+                        "} else if touchIDController.showsEnableCommand {", "if touchIDState == .enabled {",
+                        "Link(tr(\"Jak wyłączyć Touch ID dla sudo\"), destination: AppEndpoints.shared.touchIDGuideURL)",
+                        "} else if touchIDController.recoveryOnlyReason != nil {",
+                        "Link(tr(\"Jak naprawić ustawienia sudo\"), destination: AppEndpoints.shared.touchIDGuideURL)",
+                        "SettingsCardHint(text: cardHints[.touchID])")
+        withLanguage(.en) { #expect(tr("Jak naprawić ustawienia sudo") == "How to fix the sudo settings") }
+    }
+
     /// One view for both commands: it shows, copies and opens exactly the command it was given.
     @Test func theCommandViewShowsCopiesAndOpensTheCommandItIsGiven() throws {
         let info = try source("Sources/MacUpdater/InfoView.swift")

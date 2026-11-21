@@ -273,8 +273,13 @@ extension InfoView {
                             }
                         }
 
+                        // The recoveryOS note sends the user to the guide, so it has the link while
+                        // Touch ID is off too.
                         if touchIDState == .enabled {
                             Link(tr("Jak wyłączyć Touch ID dla sudo"), destination: AppEndpoints.shared.touchIDGuideURL)
+                                .font(.wega(.subheadline))
+                        } else if touchIDController.recoveryOnlyReason != nil {
+                            Link(tr("Jak naprawić ustawienia sudo"), destination: AppEndpoints.shared.touchIDGuideURL)
                                 .font(.wega(.subheadline))
                         }
 
