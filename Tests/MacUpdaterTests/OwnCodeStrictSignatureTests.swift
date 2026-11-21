@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import Testing
 import WegaTestSupport
 @testable import WegaHelperKit
@@ -57,6 +58,40 @@ struct OwnCodeStrictSignatureTests {
         ))
 
         #expect(source[check.upperBound...].prefix(300).contains("flags: publisherValidationFlags"))
+    }
+
+    /// Tests run on ad hoc builds, where `anchor apple generic` cannot hold, so only the signed
+    /// release can show that this check accepts it. A release it refused would reach users and
+    /// fail every self-update. The release gate (`scripts/verify-bundle.sh`) runs the check on the
+    /// signed files: the requirement the app builds for each, and codesign's option for each
+    /// validation flag. The app's requirement is `clientRequirement()`, pinned above and in
+    /// PrivilegedHelperSecurityTests.
+    @Test func theReleaseGateChecksWegasOwnCodeTheWayTheAppDoes() throws {
+        let script = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("scripts/verify-bundle.sh"),
+            encoding: .utf8
+        )
+        let lines = script.components(separatedBy: "\n")
+        let team = WegaHelper.teamIdentifier
+        let requirements = [
+            ("ASKPASS_REQUIREMENT", CodeSignatureVerifier.teamIDRequirement(teamID: team, bundleID: WegaHelper.askpassSigningID)),
+            ("SUDO_SHIM_REQUIREMENT", CodeSignatureVerifier.teamIDRequirement(teamID: team, bundleID: WegaHelper.sudoShimSigningID)),
+            ("DISK_IMAGE_REQUIREMENT", CodeSignatureVerifier.teamIDRequirement(teamID: team)),
+        ]
+        for (variable, requirement) in requirements {
+            #expect(lines.filter { $0.hasPrefix("\(variable)=") } == ["\(variable)='\(requirement)'"])
+        }
+
+        let options: [(flag: UInt32, option: String)] = [
+            (kSecCSStrictValidate, "--strict"),
+            (kSecCSCheckNestedCode, "--deep"),
+            (kSecCSCheckAllArchitectures, "--all-architectures"),
+        ]
+        #expect(SecCSFlags(rawValue: options.reduce(0) { $0 | $1.flag }) == CodeSignatureVerifier.publisherValidationFlags)
+        let command = "codesign --verify \(options.map(\.option).joined(separator: " ")) -R \"=$requirement\" \"$target\""
+        #expect(script.contains(command), "\(command)")
     }
 
     /// The first of up to three installed apps that passes the check untouched, so a check that

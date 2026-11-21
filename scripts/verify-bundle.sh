@@ -20,9 +20,14 @@ set -euo pipefail
 #   7. XPC requirements    — with a Developer ID, the app satisfies the requirement the helper
 #                            demands of every client and the helper the one the app demands of
 #                            it (RC2-4), so a release can never cut its users off the helper.
+#   8. Wega's own code     — with a Developer ID, every file the app checks as its own code
+#                            (the app, askpass, the sudo shim, the .dmg, and the app and the
+#                            authorization copies in the .pkg) passes that check: the requirement
+#                            the app builds for it, in every architecture and nested program.
+#                            Every user's self-update would refuse a release that fails it.
 #
 # Signing is OPTIONAL for LOCAL/TEST builds: ad-hoc/unsigned dev builds pass 1–4 and report
-# steps 5–7 as skipped (like verify-catalog.sh's "not configured" exit).
+# steps 5–8 as skipped (like verify-catalog.sh's "not configured" exit).
 #
 # For a STABLE RELEASE it is not optional. `REQUIRE_SIGNED=1` turns the skips into failures:
 # the artifacts must be Developer-ID-signed, notarized, stapled and carry the expected Team ID
@@ -70,6 +75,15 @@ EXPECTED_TEAM_ID="${EXPECTED_TEAM_ID:-$(sed -n 's/.*static let teamIdentifier = 
 # compile Swift to learn them.
 CLIENT_REQUIREMENT='anchor apple generic and identifier "com.wega.WegaMacUpdater" and certificate 1[field.1.2.840.113635.100.6.2.6] and certificate leaf[field.1.2.840.113635.100.6.1.13] and certificate leaf[subject.OU] = "6B8FYSZFJK"'
 HELPER_REQUIREMENT='anchor apple generic and identifier "com.wega.WegaMacUpdater.helper" and certificate 1[field.1.2.840.113635.100.6.2.6] and certificate leaf[field.1.2.840.113635.100.6.1.13] and certificate leaf[subject.OU] = "6B8FYSZFJK"'
+
+# What `CodeSignatureVerifier.teamIDRequirement(teamID:bundleID:)` in
+# Sources/WegaHelperKit/CodeSignatureVerifier.swift returns for the rest of Wega's own code: askpass
+# and the sudo shim with `WegaHelper.askpassSigningID` / `sudoShimSigningID`, the disk image with no
+# identifier (OwnCodeStrictSignatureTests pins these lines). For the app it returns
+# CLIENT_REQUIREMENT.
+ASKPASS_REQUIREMENT='anchor apple generic and identifier "com.wega.WegaMacUpdater.askpass" and certificate 1[field.1.2.840.113635.100.6.2.6] and certificate leaf[field.1.2.840.113635.100.6.1.13] and certificate leaf[subject.OU] = "6B8FYSZFJK"'
+SUDO_SHIM_REQUIREMENT='anchor apple generic and identifier "com.wega.WegaMacUpdater.sudo-shim" and certificate 1[field.1.2.840.113635.100.6.2.6] and certificate leaf[field.1.2.840.113635.100.6.1.13] and certificate leaf[subject.OU] = "6B8FYSZFJK"'
+DISK_IMAGE_REQUIREMENT='anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] and certificate leaf[field.1.2.840.113635.100.6.1.13] and certificate leaf[subject.OU] = "6B8FYSZFJK"'
 
 note() { echo "::notice::$*"; }
 bad()  { echo "  ✗ $*" >&2; fail=$((fail + 1)); }
@@ -275,6 +289,62 @@ else
     else
         bad "nie spełnia wymagania XPC helperRequirement() — aplikacja mu nie zaufa: $(basename "$HELPER")"
     fi
+fi
+
+# --- 8. Wega's own code ------------------------------------------------------
+# The app trusts its own code only through `CodeSignatureVerifier.verifyStaticCode`: a downloaded
+# .dmg and the app inside it, the app inside a downloaded .pkg (in the app and again in the root
+# helper), the app the installer leaves in /Applications, and askpass and the sudo shim in
+# /Library/Application Support/WegaMacUpdater/Authorization before sudo runs them. Each needs a
+# Developer ID signature of Wega's Team ID, valid in every architecture and nested program. Step 4
+# does not check nested code and step 7 covers only the app and the helper, so a nested program left
+# ad hoc or a .dmg signed with another identity would pass both, and every user's self-update would
+# refuse the release.
+#
+# codesign's option for each of `publisherValidationFlags`: --strict (kSecCSStrictValidate),
+# --deep (kSecCSCheckNestedCode), --all-architectures (kSecCSCheckAllArchitectures).
+check_own_code() {
+    local target="$1" requirement="$2" label="$3"
+    if codesign --verify --strict --deep --all-architectures -R "=$requirement" "$target" >/dev/null 2>&1; then
+        ok "Wega przyjmie własny kod: $label"
+    else
+        bad "Wega odrzuci własny kod (podpis Developer ID w każdej architekturze i programie zagnieżdżonym): $label"
+    fi
+}
+
+# The payload as PackagePayloadVerifier expands it, with the authorization copies build-pkg.sh
+# installs next to the app.
+check_package_payload() {
+    local package="$1" label expanded authorization
+    label="$(basename "$package")"
+    expanded="$OWN_CODE_WORK/$label"
+    if ! pkgutil --expand-full "$package" "$expanded" >/dev/null 2>&1; then
+        bad "nie rozpakowano ładunku (pkgutil --expand-full), więc nie da się go sprawdzić: $label"
+        return
+    fi
+    authorization="$expanded/Payload/Library/Application Support/WegaMacUpdater/Authorization"
+    check_own_code "$expanded/Payload/Applications/$APP_NAME.app" "$CLIENT_REQUIREMENT" "$label › Applications/$APP_NAME.app"
+    check_own_code "$authorization/WegaAskpass" "$ASKPASS_REQUIREMENT" "$label › Authorization/WegaAskpass"
+    check_own_code "$authorization/sudo-shim/sudo" "$SUDO_SHIM_REQUIREMENT" "$label › Authorization/sudo-shim/sudo"
+}
+
+echo "→ 8. Własny kod Wegi (samoaktualizacja, askpass, sudo shim)"
+if [[ "$SIGNED_DEVELOPER_ID" -ne 1 ]]; then
+    note "Pominięto: własny kod Wegi da się sprawdzić tylko na podpisie Developer ID."
+else
+    OWN_CODE_WORK="$(mktemp -d "${TMPDIR:-/tmp}/wega-verify-bundle.XXXXXX")"
+    trap 'rm -rf "$OWN_CODE_WORK"' EXIT
+    check_own_code "$APP_BUNDLE" "$CLIENT_REQUIREMENT" "$(basename "$APP_BUNDLE")"
+    check_own_code "$CONTENTS/Helpers/WegaAskpass" "$ASKPASS_REQUIREMENT" "WegaAskpass"
+    check_own_code "$CONTENTS/Helpers/sudo-shim/sudo" "$SUDO_SHIM_REQUIREMENT" "sudo-shim/sudo"
+    for target in ${ARTIFACTS[@]+"${ARTIFACTS[@]}"}; do
+        # A missing artifact is already a failure of steps 5 and 6.
+        [[ -e "$target" ]] || continue
+        case "$target" in
+            *.dmg) check_own_code "$target" "$DISK_IMAGE_REQUIREMENT" "$(basename "$target")" ;;
+            *.pkg) check_package_payload "$target" ;;
+        esac
+    done
 fi
 
 echo
