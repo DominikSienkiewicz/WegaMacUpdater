@@ -30,12 +30,19 @@ public struct DiagnosticsSnapshot: Sendable {
         public let expectedVersion: String
         public let reportedVersion: String?
         public let teamIDConfigured: Bool
+        /// Z14: `HelperBundleTrust.token` for the bundle Wega runs from — `trusted`, or the refusal
+        /// and the entry under the bundle, never a path.
+        public let bundle: String
 
-        public init(status: String, expectedVersion: String, reportedVersion: String?, teamIDConfigured: Bool) {
+        public init(
+            status: String, expectedVersion: String, reportedVersion: String?, teamIDConfigured: Bool,
+            bundle: String = "unknown"
+        ) {
             self.status = status
             self.expectedVersion = expectedVersion
             self.reportedVersion = reportedVersion
             self.teamIDConfigured = teamIDConfigured
+            self.bundle = bundle
         }
     }
 

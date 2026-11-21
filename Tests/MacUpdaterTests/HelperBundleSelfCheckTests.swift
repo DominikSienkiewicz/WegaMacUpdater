@@ -46,6 +46,12 @@ struct HelperBundleSelfCheckTests {
         #expect(HelperBundleTrust.refused(.notInApplications).token == "notInApplications")
     }
 
+    /// Support reads the same token: the diagnostics export carries the app's own answer.
+    @Test func theDiagnosticsExportCarriesTheAppsAnswer() throws {
+        let export = try source("Sources/MacUpdater/DiagnosticsExportController.swift").filter { !$0.isWhitespace }
+        #expect(export.contains("teamIDConfigured:WegaHelper.isTeamIDConfigured,bundle:PrivilegedHelperClient.shared.bundleTrust.token"))
+    }
+
     // MARK: - The helper's wiring
 
     @Test func theTrustIsDecidedOnceBeforeTheListenerResumes() throws {

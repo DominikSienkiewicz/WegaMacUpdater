@@ -120,6 +120,7 @@ public enum DiagnosticsBundle {
         out.field("Expected version", snapshot.helper.expectedVersion)
         out.field("Reported version", snapshot.helper.reportedVersion ?? "unavailable")
         out.field("Team ID configured", yesNo(snapshot.helper.teamIDConfigured))
+        out.field("App bundle", snapshot.helper.bundle)
 
         out.header("Schedule")
         out.field("Check interval", snapshot.schedule.interval)
