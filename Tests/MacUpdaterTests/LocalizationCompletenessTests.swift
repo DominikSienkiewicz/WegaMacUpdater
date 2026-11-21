@@ -47,6 +47,8 @@ struct LocalizationCompletenessTests {
         "Pominięto %@ najstarszych wpisów",
         // Final review M4 — the release-notes history's tail.
         "…i %@ wcześniejszych wydań",
+        // Cleanup layout — the collapsed group's title and an origin line's count.
+        "Bez akcji: %@ narzędzi", "Bez akcji: %@ pozycji", "%@ poleceń",
     ]
 
     @Test func everyTrpKeyHasPolishAndEnglishForms() throws {

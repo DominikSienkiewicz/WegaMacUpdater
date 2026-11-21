@@ -887,6 +887,8 @@ private struct BackgroundUpdateToggle: View {
 /// żeby podmiana w istniejących miejscach była zmianą nazwy typu, a nie przepisywaniem.
 struct WegaDisclosure<Content: View, Label: View>: View {
     @Binding var isExpanded: Bool
+    /// Space before the chevron, for a disclosure that sits among rows with their own inset.
+    var leadingInset: CGFloat = 0
     @ViewBuilder var content: () -> Content
     @ViewBuilder var label: () -> Label
 
@@ -904,6 +906,7 @@ struct WegaDisclosure<Content: View, Label: View>: View {
                     label()
                     Spacer(minLength: 0)
                 }
+                .padding(.leading, leadingInset)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

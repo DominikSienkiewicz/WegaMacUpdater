@@ -13,7 +13,7 @@ struct ShortcutsTests {
 
     @Test func findWorksOnTheScreenThatHasAField() {
         let tabs: [SidebarTab] = [.update, .rollback, .uninstall, .cleanup, .migration, .inventory, .logs]
-        #expect(Set(tabs.filter(\.hasSearchField)) == [.update, .logs, .uninstall, .inventory])
+        #expect(Set(tabs.filter(\.hasSearchField)) == [.update, .logs, .uninstall, .inventory, .cleanup])
         let center = WegaCommandCenter()
         center.requestSearchFocus(on: .logs)
         #expect(!center.consumePendingSearchFocus(on: .uninstall))

@@ -45,6 +45,14 @@ final class SearchableFieldsTests: XCTestCase {
         )
     }
 
+    /// Cleanup's report is long; its search narrows it, and ⌘F reaches the field.
+    func testCleanupSearchIsReachableByCommandF() throws {
+        let cleanup = try source("Sources/MacUpdater/CleanupView.swift")
+        XCTAssertTrue(cleanup.contains(".searchable(text: $search"))
+        XCTAssertTrue(cleanup.contains(".searchFocused($searchFocused)"))
+        XCTAssertTrue(cleanup.contains(".receivesSearchFocusRequests(on: .cleanup)"))
+    }
+
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {
         let root = URL(fileURLWithPath: file)
             .deletingLastPathComponent()
