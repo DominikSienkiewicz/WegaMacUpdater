@@ -16,7 +16,7 @@ struct ScanDirectoriesSettingsCard: View {
                                titleTinted: true)
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(tr("Wega skanuje /Applications, ~/Applications i ich podfoldery. Dodaj własne katalogi (także na innych wolumenach), pomiń te, których nie chcesz przeszukiwać, i ustaw głębokość zagłębiania."))
+                    Text(tr("Wega skanuje /Applications, ~/Applications i ich podfoldery. Dodaj własne katalogi (także na innych wolumenach), pomiń te, których nie chcesz przeszukiwać, i ustaw głębokość podfolderów."))
                         .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

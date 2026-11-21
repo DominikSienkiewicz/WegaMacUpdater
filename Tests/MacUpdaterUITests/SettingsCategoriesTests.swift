@@ -29,6 +29,11 @@ struct SettingsCategoriesTests {
             #expect(body.contains("page(.\(name)) {"), "\(name): the page knows its own tab")
             for card in cards { #expect(body.contains(card), "\(name): \(card)") }
         }
+        let pages = try expected.keys.map { try tab($0, in: info) }
+        for card in expected.values.joined() {
+            let count = pages.map { $0.components(separatedBy: card).count - 1 }.reduce(0, +)
+            #expect(count == 1, "\(card) is drawn \(count) times across the tabs, not once")
+        }
         #expect(SettingsTab.allCases.map(\.rawValue) == ["general", "checking", "permissions", "cleanup", "advanced"])
     }
 
@@ -73,6 +78,26 @@ struct SettingsCategoriesTests {
         #expect(route.focusedCard == nil, "the card is consumed by its own page")
     }
 
+    /// Settings already show the card's tab, but the user has scrolled away from the card.
+    @Test func aBannerOpensTheCardAgainAfterTheUserScrolledAway() async throws {
+        let route = SettingsRoute()
+        route.show(.touchID)
+        let window = host(route)
+        defer { window.close() }
+        try await settle(window) { (visibleScrollOffset(in: window) ?? 0) > 0 }
+        let scroll = try #require(visibleScrollView(in: window))
+        scroll.contentView.scroll(to: .zero)
+        scroll.reflectScrolledClipView(scroll.contentView)
+        try await settle(window) { visibleScrollOffset(in: window) == 0 }
+        #expect(visibleScrollOffset(in: window) == 0, "scrolled back to the top")
+
+        route.show(.touchID)
+        try await settle(window) { (visibleScrollOffset(in: window) ?? 0) > 0 }
+
+        #expect((visibleScrollOffset(in: window) ?? 0) > 1_000)
+        #expect(route.focusedCard == nil)
+    }
+
     @Test func aWindowOpenedForACardStartsAtThatCard() async throws {
         let route = SettingsRoute()
         route.show(.touchID)
@@ -103,11 +128,47 @@ struct SettingsCategoriesTests {
         }
     }
 
-    /// The window's minimum width, less the page's and the card's padding: the hint wraps there
-    /// instead of widening the card, and draws nothing until a card has something to say.
+    /// The helper card asks the user to approve the helper in System Settings and come back. Once
+    /// they have, the request must not stay under the „Aktywny” badge; the card's other messages,
+    /// such as the one `installHelper` has just set, stay.
+    @Test func theApprovalHintGoesOnceTheHelperNoLongerWaits() throws {
+        let approval = InfoOperationsController.approvalHint
+        let ready = tr("Pomocnik Wegi jest gotowy.")
+        #expect(approval == tr("Zatwierdź pomocnika w Ustawieniach systemowych → Elementy logowania, potem wróć tutaj."))
+        #expect(InfoOperationsController.helperHint(approval, after: .requiresApproval) == approval)
+        for status in [PrivilegedHelperClient.Status.enabled, .notRegistered, .notFound, .unknown] {
+            #expect(InfoOperationsController.helperHint(approval, after: status) == nil, "\(status)")
+            #expect(InfoOperationsController.helperHint(ready, after: status) == ready, "\(status)")
+        }
+        #expect(InfoOperationsController.helperHint(nil, after: .enabled) == nil)
+
+        let info = try source("Sources/MacUpdater/InfoView.swift")
+        let body = try slice(info, from: "    var body: some View {", to: "// MARK: - Tabs")
+        #expect(body.contains(".onChange(of: helperStatus)"), "on the TabView, so it runs whichever tab is showing")
+        #expect(body.contains("cardHints[.helper] = InfoOperationsController.helperHint(cardHints[.helper], after: status)"))
+        #expect(try source("Sources/MacUpdater/InfoOperationsController.swift").contains("line: Self.approvalHint"))
+    }
+
+    /// Toolbar tabs are as wide as their labels plus about 20–25 pt each; a tab that does not fit
+    /// at the window's minimum width drops into the toolbar's » menu.
+    @Test func theFiveTabsFitTheToolbarAtTheNarrowestWindow() {
+        let font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        for language in [AppLanguage.pl, .en] {
+            withLanguage(language) {
+                let labels = SettingsTab.allCases.map {
+                    ceil(NSAttributedString(string: $0.title, attributes: [.font: font]).size().width)
+                }
+                let needed = labels.reduce(0, +) + CGFloat(labels.count) * 25
+                #expect(needed <= WegaLayout.settingsMinWidth, "\(language): \(needed) pt of tabs in \(WegaLayout.settingsMinWidth) pt")
+            }
+        }
+    }
+
+    /// The window's minimum width, less the page's and the card's padding: the longest message a
+    /// card shows wraps there instead of widening the card, and nil draws nothing.
     @Test func aHintWrapsInsideTheNarrowestCardAndNilDrawsNothing() {
         let width = WegaLayout.settingsMinWidth - 2 * 16 - 2 * 14
-        let message = "Zatwierdź pomocnika w Ustawieniach systemowych → Elementy logowania, potem wróć tutaj."
+        let message = "Wynik instalacji jest nieznany. Dalsze zmiany są zablokowane — sprawdź stan instalacji w Ustawieniach."
         for language in [AppLanguage.pl, .en] {
             withLanguage(language) {
                 let line = NSHostingView(rootView: SettingsCardHint(text: "Wega").frame(width: width)).fittingSize.height
@@ -129,8 +190,13 @@ struct SettingsCategoriesTests {
         #expect(try source("Sources/MacUpdater/WegaCommands.swift").contains("SettingsRoute.shared.open(.selfUpdate, with: openSettings)"))
     }
 
-    @Test func theKnobsSpeakPlainly() {
+    @Test func theKnobsSpeakPlainly() throws {
+        let directories = try source("Sources/MacUpdater/ScanDirectoriesSettingsCard.swift")
+        #expect(!directories.contains("zagłębiania"), "the card and its knob use one name for the depth")
+        #expect(directories.contains("tr(\"Wega skanuje /Applications, ~/Applications i ich podfoldery. Dodaj własne katalogi (także na innych wolumenach), pomiń te, których nie chcesz przeszukiwać, i ustaw głębokość podfolderów.\")"))
         withLanguage(.en) {
+            #expect(tr("Wega skanuje /Applications, ~/Applications i ich podfoldery. Dodaj własne katalogi (także na innych wolumenach), pomiń te, których nie chcesz przeszukiwać, i ustaw głębokość podfolderów.")
+                    == "Wega scans /Applications, ~/Applications and their subfolders. Add your own directories (including on other volumes), skip the ones you don't want searched, and set the subfolder depth.")
             #expect(tr("Zapas na rozpakowanie") == "Unpacking headroom")
             #expect(tr("Zapas wolnego miejsca") == "Free-space buffer")
             #expect(tr("Głębokość podfolderów") == "Subfolder depth")
@@ -188,11 +254,15 @@ struct SettingsCategoriesTests {
 
     /// How far the scroll view on screen is scrolled; nil while none is on screen.
     private func visibleScrollOffset(in window: NSWindow) -> CGFloat? {
+        visibleScrollView(in: window)?.contentView.bounds.origin.y
+    }
+
+    private func visibleScrollView(in window: NSWindow) -> NSScrollView? {
         func find(_ view: NSView) -> NSScrollView? {
             if let scroll = view as? NSScrollView, !scroll.isHiddenOrHasHiddenAncestor { return scroll }
             return view.subviews.lazy.compactMap(find).first
         }
-        return window.contentView.flatMap(find)?.contentView.bounds.origin.y
+        return window.contentView.flatMap(find)
     }
 
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {

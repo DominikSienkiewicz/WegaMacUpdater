@@ -50,6 +50,9 @@ extension InfoView {
             Tab(SettingsTab.cleanup.title, systemImage: SettingsTab.cleanup.systemImage, value: SettingsTab.cleanup) { cleanupTab }
             Tab(SettingsTab.advanced.title, systemImage: SettingsTab.advanced.systemImage, value: SettingsTab.advanced) { advancedTab }
         }
+        .onChange(of: helperStatus) { _, status in
+            cardHints[.helper] = InfoOperationsController.helperHint(cardHints[.helper], after: status)
+        }
         .onAppear {
             onWegaState?(WegaState(pose: .idle, line: tr("Oto co o sobie wiem.")))
             if diagnostics == nil {
@@ -117,7 +120,7 @@ extension InfoView {
         }
     }
 
-    // MARK: - Page
+    // MARK: - Page and card hints
 
     /// One tab's page: the unverified-endpoints warning tops every tab, then the tab's cards.
     private func page<Content: View>(_ tab: SettingsTab, @ViewBuilder _ content: () -> Content) -> some View {
@@ -127,11 +130,8 @@ extension InfoView {
         }
     }
 
-    // MARK: - Card hints
-
-    /// Sends a card's messages to the line under that card's buttons, and on to Wega when the
-    /// window hosting this view has her. Asking for a relay starts a new action on the card, so
-    /// the card's previous message goes first.
+    /// Sends a card's messages under its buttons, and on to Wega when the hosting window has her.
+    /// Asking for a relay starts a new action on the card, so its previous message goes first.
     func relay(_ card: SettingsCard) -> @MainActor (WegaState) -> Void {
         cardHints[card] = nil
         return { state in

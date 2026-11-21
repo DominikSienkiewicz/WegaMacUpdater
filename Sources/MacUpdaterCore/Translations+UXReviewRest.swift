@@ -134,5 +134,7 @@ extension Translations {
             "Subfolder depth",
         "Opcjonalny token zmniejsza przerwy przez limity zapytań GitHuba. Jest w pęku kluczy.":
             "An optional token reduces interruptions from GitHub request limits. It is kept in the Keychain.",
+        "Wega skanuje /Applications, ~/Applications i ich podfoldery. Dodaj własne katalogi (także na innych wolumenach), pomiń te, których nie chcesz przeszukiwać, i ustaw głębokość podfolderów.":
+            "Wega scans /Applications, ~/Applications and their subfolders. Add your own directories (including on other volumes), skip the ones you don't want searched, and set the subfolder depth.",
     ]
 }
