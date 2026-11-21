@@ -15,6 +15,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
+# Z14: the helper serves only from a bundle that nobody but root can write, so no folder or file
+# of the payload may inherit a group or other write bit from the builder's umask.
+umask 022
 # shellcheck source=scripts/sign-with-retry.sh
 source "$SCRIPT_DIR/sign-with-retry.sh"
 
@@ -277,6 +280,10 @@ else
         --version "$VERSION" \
         "$OUTPUT_PKG"
 fi
+
+# Z14: the package must install a bundle the helper's bundle gate accepts — nothing relocatable,
+# permissions overwritten, every gate entry root-owned and not writable by group or others.
+./scripts/verify-pkg-payload.sh "$OUTPUT_PKG"
 
 # ---------------------------------------------------------------------------
 echo "→ Tworzę DMG (drag-to-Applications)..."
