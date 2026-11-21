@@ -2,7 +2,8 @@ import Foundation
 
 extension Translations {
     /// C2 stage 4 — the after-update summary: the notes of its rows, the band's check and its
-    /// summary ("Nie udało się: %@" already exists elsewhere and is reused).
+    /// summary, and the list's summary header and groups ("Nie udało się: %@", "Pokaż log",
+    /// "Cofnij" and "Zaufaj nowemu podpisowi" already exist elsewhere and are reused).
     static let runSummary: [String: String] = [
         "kopia do %@": "backup until %@",
         "bez cofnięcia": "no undo",
@@ -24,5 +25,10 @@ extension Translations {
         "U producenta: %@": "With the developer: %@",
         "Zamknij podsumowanie": "Close summary",
         "Wynik aktualizacji": "Update result",
+        "Wymaga uwagi": "Needs attention",
+        "Nie zaczęłam": "Not started",
+        "Do dokończenia u producenta": "To finish with the developer",
+        "Zaktualizowano": "Updated",
+        "Pozostałe aktualizacje: %@ ›": "Remaining updates: %@ ›",
     ]
 }

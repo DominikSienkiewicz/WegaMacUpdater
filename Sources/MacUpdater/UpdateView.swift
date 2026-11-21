@@ -188,7 +188,7 @@ struct UpdateView: View {
                 run: { scan.startCheck() }
             ))
             .focusedSceneValue(\.runUpdateAction, WegaMenuAction(
-                isEnabled: scan.status == .results && allowsUpdateRun,
+                isEnabled: scan.status == .results && allowsUpdateRun && scan.runReport == nil,
                 run: { requestUpdate() }
             ))
             // UXP-23 — ⌘. cancels the store's scan when no update runs; ⇧⌘A asks the select-all
@@ -199,7 +199,7 @@ struct UpdateView: View {
             ))
             .focusedSceneValue(\.selectAllVisibleAction, WegaMenuAction(
                 isEnabled: scan.status == .results && !visibleItems.isEmpty
-                    && ScanSelectionGate.allowsListSelection(isRefreshing: scan.isRefreshing, isUpdating: scan.updating),
+                    && ScanSelectionGate.allowsListSelection(isRefreshing: scan.isRefreshing, isUpdating: scan.updating) && scan.runReport == nil,
                 run: { scan.selectAllVisible(filter: updateFilter) }
             ))
     }
@@ -245,7 +245,8 @@ struct UpdateView: View {
     private var resultsView: some View {
         VStack(spacing: 0) {
             // The band reports the scan, the run, its check and its summary, and carries the update
-            // button; without any of them the plain heading does. The list header carries select-all.
+            // button; without any of them the plain heading does. The list header carries select-all,
+            // and gives its row to the summary's header while the summary is open.
             if showsBand {
                 resultsBand
                     .padding(.horizontal, WegaLayout.listGutter)
@@ -255,7 +256,11 @@ struct UpdateView: View {
                 if !showsBand {
                     resultsHeading
                 }
-                listHeader
+                if scan.runReport != nil {
+                    UpdateRunSummaryHeader(remainingCount: scan.scopeCounts.all, onClose: { scan.closeRunReport() })
+                } else {
+                    listHeader
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, WegaLayout.selectionColumnInset)
@@ -445,14 +450,24 @@ struct UpdateView: View {
                     .padding(.bottom, 8)
             }
 
-            // The rows on screen are the ones the scan is in the middle of replacing, so for
-            // its duration they are a report, not a menu: inert. Nothing is drawn over them
+            // C2 stage 4 — the run's result takes the rows' place until the summary closes. A run
+            // that empties the list leaves it blank until then: no hero, no joke before the result.
+            // Otherwise the rows on screen are the ones the scan is in the middle of replacing, so
+            // for its duration they are a report, not a menu: inert. Nothing is drawn over them
             // (UXP-13) — the band and the list header say a scan is running and why the rows
             // cannot be selected, and every row stays readable.
-            listColumn
-                .frame(maxWidth: .infinity)
-                .disabled(!ScanSelectionGate.allowsSelection(isRefreshing: scan.isRefreshing))
-                .environment(\.updateRun, runListState)
+            if let report = scan.runReport {
+                UpdateRunSummaryList(report: report, onShowLog: { scan.showLog = true }, handOffs: {
+                    UpdateRunHandOffGroup(onPinManual: requestPinManual)
+                })
+            } else if scan.updating && !hasUpdates {
+                Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                listColumn
+                    .frame(maxWidth: .infinity)
+                    .disabled(!ScanSelectionGate.allowsSelection(isRefreshing: scan.isRefreshing))
+                    .environment(\.updateRun, runListState)
+            }
         }
     }
 
