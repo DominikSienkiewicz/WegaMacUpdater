@@ -25,6 +25,7 @@ public enum Translations {
         .merging(uxReviewNext) { first, _ in first }
         .merging(uxReviewRest) { first, _ in first }
         .merging(uxNextBatch) { first, _ in first }
+        .merging(touchIDDisable) { first, _ in first }
 }
 
 extension Translations {

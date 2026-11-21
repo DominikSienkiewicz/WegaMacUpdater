@@ -143,8 +143,6 @@ extension Translations {
         "Bez niego Wega poprosi o hasło. Wyłączysz go przyciskiem „Usuń pomocnika”.":
             "Without it, Wega asks for your password. Switch it off with “Remove Helper”.",
         "Touch ID dla poleceń administratora": "Touch ID for administrator commands",
-        "Zastępuje hasło administratora odciskiem palca w poleceniach sudo, także w Terminalu. Bez niego wpisujesz hasło. Jak je wyłączyć, opisuje przewodnik.":
-            "Replaces your administrator password with your fingerprint for sudo commands, in Terminal too. Without it, you type the password. The user guide explains how to turn it off.",
         "macOS pyta o nie, gdy Wega podmienia aplikację w /Applications. Bez niego aktualizacje aplikacji się nie udadzą. Zmienisz to w Ustawieniach systemowych → Prywatność i bezpieczeństwo.":
             "macOS asks for it when Wega replaces an app in /Applications. Without it, app updates fail. Change it in System Settings → Privacy & Security.",
         "Nie znam jeszcze stanu uprawnienia Zarządzanie aplikacjami.":

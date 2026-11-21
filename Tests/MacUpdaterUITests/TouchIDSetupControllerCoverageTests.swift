@@ -121,6 +121,161 @@ struct TouchIDSetupControllerCoverageTests {
         #expect(!controller.isEnabling)
         #expect(!controller.wasPermissionDenied)
     }
+
+    // MARK: - Turning Touch ID off
+
+    private func disablingController(
+        state: TouchIDStateBox, helper: Bool = true, availability: HelperVerbAvailability = .enabled,
+        preflight: TouchIDDisablePreflight = .clear, calls: TouchIDCallRecorder,
+        disable: @escaping @MainActor @Sendable () async throws -> TouchIDSudoDisableResult
+    ) -> TouchIDSetupController {
+        TouchIDSetupController(dependencies: .init(
+            currentState: { state.value },
+            helperIsEnabled: { helper },
+            enableWithHelper: {},
+            authorizeFallback: { .cancelledByUser },
+            openInTerminal: { _ in },
+            disableWithHelper: {
+                await calls.recordHelper()
+                return try await disable()
+            },
+            disableAvailability: { availability },
+            preflight: { preflight }
+        ))
+    }
+
+    @Test func disablingThroughTheHelperReadsTheFileAgainAndSaysSo() async {
+        let state = TouchIDStateBox(.enabled)
+        let calls = TouchIDCallRecorder()
+        let controller = disablingController(state: state, calls: calls) {
+            state.value = .available
+            return .removed(lines: 1)
+        }
+        var states: [WegaState] = []
+
+        await controller.disable { states.append($0) }
+
+        #expect(await calls.helperCalls == 1)
+        #expect(controller.state == .idle(.available))
+        #expect(states.last?.line == TouchIDDisableCopy.line(for: .removed(lines: 1), stillEnabled: false))
+        #expect(states.last?.pose == .idle)
+    }
+
+    @Test func aSuccessAddsTheLocalDirectoryWarning() async {
+        let state = TouchIDStateBox(.enabled)
+        let preflight = TouchIDDisablePreflight(refusal: nil, unsafeLocalDirectory: "/usr/local/etc", fallbackPath: nil)
+        let controller = disablingController(state: state, preflight: preflight, calls: TouchIDCallRecorder()) {
+            state.value = .available
+            return .removed(lines: 1)
+        }
+        var states: [WegaState] = []
+        await controller.disable { states.append($0) }
+        let line = TouchIDDisableCopy.line(for: .removed(lines: 1), stillEnabled: false)
+            + " " + TouchIDDisableCopy.localDirectoryWarning(path: "/usr/local/etc")
+        #expect(states.last?.line == line)
+    }
+
+    @Test func aHelperErrorDoesNotClaimNothingChanged() async {
+        let state = TouchIDStateBox(.enabled)
+        let controller = disablingController(state: state, calls: TouchIDCallRecorder()) { throw TestFailure() }
+        var states: [WegaState] = []
+
+        await controller.disable { states.append($0) }
+
+        #expect(states.last?.line == TouchIDDisableCopy.afterHelperError(stillEnabled: true))
+        #expect(controller.state == .idle(.enabled))
+    }
+
+    @Test func aVersionMismatchRaceShowsTheOutdatedHelperText() async {
+        let state = TouchIDStateBox(.enabled)
+        let controller = disablingController(state: state, calls: TouchIDCallRecorder()) {
+            throw PrivilegedHelperClient.HelperError.versionMismatch(helper: "6", expected: "7")
+        }
+        var states: [WegaState] = []
+        await controller.disable { states.append($0) }
+        #expect(states.last?.line == TouchIDDisableCopy.outdatedHelper)
+        #expect(controller.disableOffer == .helperOutdated)
+    }
+
+    @Test func aFailedRestoreShowsAsAnErrorWithTheBackupsPath() async {
+        let state = TouchIDStateBox(.enabled)
+        let controller = disablingController(state: state, calls: TouchIDCallRecorder()) {
+            .rollbackFailed(backupPath: "/etc/pam.d/.sudo_local.wega-x")
+        }
+        await controller.disable { _ in }
+        #expect(controller.errorMessage?.contains("/etc/pam.d/.sudo_local.wega-x") == true)
+        #expect(controller.touchIDState == .enabled)
+    }
+
+    @Test func aRefusalNamesTheLaterPolicyFileTheAppSaw() async {
+        let state = TouchIDStateBox(.enabled)
+        let preflight = TouchIDDisablePreflight(refusal: nil, unsafeLocalDirectory: nil, fallbackPath: "/usr/share/pam.d/sudo_local")
+        let controller = disablingController(state: state, preflight: preflight, calls: TouchIDCallRecorder()) {
+            .refused(.fallbackPolicyPresent)
+        }
+        var states: [WegaState] = []
+        await controller.disable { states.append($0) }
+        #expect(states.last?.line == TouchIDDisableCopy.line(for: .refused(.fallbackPolicyPresent), stillEnabled: true, fallbackPath: "/usr/share/pam.d/sudo_local"))
+    }
+
+    @Test func withoutTheHelperNothingIsAsked() async {
+        let calls = TouchIDCallRecorder()
+        let controller = disablingController(state: TouchIDStateBox(.enabled), helper: false, calls: calls) { .nothingToRemove }
+        await controller.disable { _ in }
+        #expect(await calls.helperCalls == 0)
+        #expect(controller.state == .idle(.enabled))
+    }
+
+    @Test func aStaleHelperIsNotAskedAndTheCardSaysSo() async {
+        let calls = TouchIDCallRecorder()
+        let controller = disablingController(state: TouchIDStateBox(.enabled), availability: .stale, calls: calls) { .nothingToRemove }
+        var states: [WegaState] = []
+
+        await controller.refreshDisableOffer()
+        #expect(controller.disableOffer == .helperOutdated)
+        await controller.disable { states.append($0) }
+
+        #expect(await calls.helperCalls == 0)
+        #expect(states.last?.line == TouchIDDisableCopy.outdatedHelper)
+        #expect(controller.state == .idle(.enabled))
+    }
+
+    @Test func theOfferFollowsWhatTheAppObserved() async {
+        let state = TouchIDStateBox(.enabled)
+        let calls = TouchIDCallRecorder()
+        let offer = { (helper: Bool, availability: HelperVerbAvailability, refusal: TouchIDSudoDisableRefusal?) async -> TouchIDSetupController.DisableOffer in
+            let controller = self.disablingController(
+                state: state, helper: helper, availability: availability,
+                preflight: TouchIDDisablePreflight(refusal: refusal, unsafeLocalDirectory: nil, fallbackPath: nil), calls: calls
+            ) { .nothingToRemove }
+            await controller.refreshDisableOffer()
+            return controller.disableOffer
+        }
+        #expect(await offer(true, .enabled, nil) == .available)
+        #expect(await offer(true, .off, nil) == .helperMissing)
+        #expect(await offer(false, .enabled, nil) == .helperMissing)
+        #expect(await offer(true, .stale, nil) == .helperOutdated)
+        #expect(await offer(true, .enabled, .unsafeOwnership) == .blocked(.unsafeOwnership), "no button for an unsafe file, and no handshake needed")
+        #expect(await calls.helperCalls == 0)
+    }
+
+    @Test func twoDisableRequestsDoNotOverlap() async {
+        let state = TouchIDStateBox(.enabled)
+        let latch = TouchIDAuthorizationLatch()
+        let calls = TouchIDCallRecorder()
+        let controller = disablingController(state: state, calls: calls) {
+            await latch.block()
+            return .nothingToRemove
+        }
+        let first = Task { @MainActor in await controller.disable { _ in } }
+        await latch.waitUntilBlocked()
+        #expect(controller.isDisabling)
+        await controller.disable { _ in }
+        #expect(await calls.helperCalls == 1)
+        await latch.release()
+        await first.value
+        #expect(!controller.isDisabling)
+    }
 }
 
 private actor TouchIDCallRecorder {

@@ -97,8 +97,20 @@ struct LocalizationCompletenessTests {
         #expect(repeated.isEmpty, "M9: Translations+UXNextBatch.swift repeats \(repeated)")
     }
 
+    /// M9 — the Touch ID turn-off section repeats no key of any other section.
+    @Test func theTouchIDDisableSectionRepeatsNoKeyOfAnotherSection() {
+        let others = Self.sectionsBeforeUXReview + [
+            Translations.uxReview, Translations.uxReviewNext, Translations.uxReviewRest, Translations.uxNextBatch,
+        ]
+        let elsewhere = others.reduce(into: Set<String>()) { $0.formUnion($1.keys) }
+        let repeated = Set(Translations.touchIDDisable.keys).intersection(elsewhere).sorted()
+        #expect(repeated.isEmpty, "M9: Translations+TouchIDDisable.swift repeats \(repeated)")
+    }
+
     /// UXP-24 — one name per concept. These keys were replaced; nothing may use or translate them.
     static let retiredKeys: Set<String> = [
+        "Pomocnik Wegi działa jako root i umie tylko cztery rzeczy: zainstalować zweryfikowany pakiet Wegi, włączyć Touch ID dla sudo, przywrócić kopię aplikacji sprzed aktualizacji, przenieść do Kosza aplikację należącą do roota. Przy każdym połączeniu sprawdza podpis Wegi. Jest opcjonalny.",
+        "Zastępuje hasło administratora odciskiem palca w poleceniach sudo, także w Terminalu. Bez niego wpisujesz hasło. Jak je wyłączyć, opisuje przewodnik.",
         "Komponent uprzywilejowany",
         "Zainstaluj komponent",
         "Usuń komponent",
