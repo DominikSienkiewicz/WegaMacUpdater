@@ -116,7 +116,8 @@ func makeScanStoreRuntimeHarness(
     bundleExists: @escaping (URL) -> Bool = { _ in true },
     undoableUpdates: @escaping () -> [UndoableUpdate] = { [] },
     announcer: any AccessibilityAnnouncing = RecordingAnnouncer(),
-    now: @escaping @MainActor () -> Date = { Date() }
+    now: @escaping @MainActor () -> Date = { Date() },
+    onWindowScanRunning: @escaping @MainActor (Bool) -> Void = { _ in }
 ) -> ScanStoreRuntimeHarness {
     let toolURL = URL(fileURLWithPath: "/bin/echo")
     let locator = BinaryLocator(brewCandidates: [toolURL], masCandidates: [toolURL])
@@ -142,7 +143,8 @@ func makeScanStoreRuntimeHarness(
         // Its own lock: the shared one would make every harness store contend with every
         // other test in the process that starts a run (G2).
         upgradeMutex: UpgradeMutex(),
-        now: now
+        now: now,
+        reportWindowScanRunning: onWindowScanRunning
     )
     let store = ScanStore(
         resultStore: ScanResultStore(io: snapshots),

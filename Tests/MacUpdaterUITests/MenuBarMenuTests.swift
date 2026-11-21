@@ -94,7 +94,7 @@ struct MenuBarMenuTests {
         #expect(menu.contains("ForEach(agent.outdatedEntries.prefix(Self.maxListedApps), id: \\.key)"))
         #expect(menu.contains("NotificationRouter.shared.route(to: .updates(.all))"))
         #expect(menu.contains("agent.revealInWindow?(entry.key)"))
-        #expect(menu.contains("MenuBarMenuCopy.checkTitle(isChecking: agent.isChecking, consentCount: consents.consents.count)"))
+        #expect(menu.contains("MenuBarMenuCopy.checkTitle(isChecking: agent.checkInProgress, consentCount: consents.consents.count)"))
         #expect(!menu.contains("tr(\"Otwórz Wega\")") && !menu.contains("tr(\"Zakończ Wega\")"))
         #expect(try source("Sources/MacUpdater/ScanStore.swift").contains("MenuBarAgent.shared.revealInWindow = { [weak self] key in self?.inspectedKey = key }"))
     }
@@ -146,7 +146,7 @@ struct MenuBarMenuTests {
         let menu = try source("Sources/MacUpdater/MenuBarScene.swift")
         #expect(menu.contains("@ObservedObject private var clock = DayClock.shared"))
         #expect(menu.contains("CheckedAtCopy.checked(at: last, now: clock.now)"))
-        #expect(menu.contains("isChecking: agent.isChecking, now: clock.now)"))
+        #expect(menu.contains("isChecking: agent.checkInProgress, now: clock.now)"))
         #expect(!menu.contains("now: .now"))
         let card = try source("Sources/MacUpdater/WegaCompanionCard.swift")
         #expect(card.contains("@ObservedObject private var clock = DayClock.shared"))

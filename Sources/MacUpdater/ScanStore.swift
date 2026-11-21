@@ -72,6 +72,8 @@ struct ScanStoreDependencies {
     var catalogStamp: BrewCatalogStamp = .none
     /// The scan's clock: the launch decision, the catalog's age and the stamp it writes.
     var now: @MainActor () -> Date = { Date() }
+    /// Tells the menu bar whether this window is scanning, so its own automatic check stands down.
+    var reportWindowScanRunning: @MainActor (Bool) -> Void = { _ in }
 
     static let live = ScanStoreDependencies(
         operations: .shared,
@@ -99,7 +101,8 @@ struct ScanStoreDependencies {
         reportVendorCheck: { item, remaining, check, count, fingerprint in
             MenuBarAgent.shared.reportVendorCheck(item: item, remaining: remaining, check: check, count: count, fingerprint: fingerprint)
         },
-        catalogStamp: .defaults(.standard)
+        catalogStamp: .defaults(.standard),
+        reportWindowScanRunning: { MenuBarAgent.shared.setWindowScanRunning($0) }
     )
 }
 
@@ -135,6 +138,10 @@ final class ScanStore: ObservableObject {
     /// UXP-30 — update runs that reached their rescan, so the inventory knows the app set may
     /// have changed, whether or not a window watched the run end.
     @Published private(set) var completedRunCount = 0
+    /// Manual installs and reinstalls whose brew process ran, and undos whose restore ran: each
+    /// can change the installed apps without a scan, so the inventory counts them too.
+    @Published private(set) var completedManualInstallCount = 0
+    @Published private(set) var completedUndoCount = 0
     @Published var errorMessage:      String?
     @Published var installationChecks: [InstallationCheck] = []
     @Published var lastCheck:         Date?
@@ -491,6 +498,7 @@ final class ScanStore: ObservableObject {
         scanGeneration += 1
         scanStartedAt = dependencies.now()
         manualScanProgress = nil
+        dependencies.reportWindowScanRunning(true)
     }
 
     func setCatalogAgeMinutes(_ minutes: Int?) {
@@ -505,12 +513,21 @@ final class ScanStore: ObservableObject {
         completedRunCount += 1
     }
 
+    func countManualInstall() {
+        completedManualInstallCount += 1
+    }
+
+    func countUndo() {
+        completedUndoCount += 1
+    }
+
     /// Closes what only a running scan has, on every way out of it: the band goes back to the
     /// results state instead of a clock and a count that no longer move.
     func endScanProgress() {
         isRefreshingCatalog = false
         scanStartedAt = nil
         manualScanProgress = nil
+        dependencies.reportWindowScanRunning(false)
     }
 
     /// C2 stage 3 — opens the run's board: every planned cask and npm row, and each batch the

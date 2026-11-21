@@ -14,11 +14,14 @@ struct MenuBarStatusPresentation: Equatable {
     var run: WindowRunStatus?
     /// UXP-17 — how many of the updates have notes that may describe a security fix.
     var securityCount: Int = 0
+    /// The window is scanning; the menu's own check stands down meanwhile.
+    var windowScanning = false
 
     /// The count, then the incomplete-check note, then the security nuance — the band's order.
     var statusText: String {
         if let run { return trf("Aktualizuję %@ z %@…", "\(run.completedUnits)", "\(run.totalUnits)") }
         if isChecking { return tr("Sprawdzam aktualizacje…") }
+        if windowScanning { return tr("Sprawdzam aktualizacje w oknie Wegi…") }
         if failed && count == 0 { return tr("Nie udało się sprawdzić") }
         if count > 0 {
             var parts = [trp("%@ aktualizacji dostępnych", count)]

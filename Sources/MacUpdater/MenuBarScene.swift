@@ -54,10 +54,10 @@ struct MenuBarContent: View {
 
         Divider()
 
-        Button(MenuBarMenuCopy.checkTitle(isChecking: agent.isChecking, consentCount: consents.consents.count)) {
+        Button(MenuBarMenuCopy.checkTitle(isChecking: agent.checkInProgress, consentCount: consents.consents.count)) {
             Task { await agent.checkNow() }
         }
-        .disabled(agent.isChecking)
+        .disabled(agent.checkInProgress)
 
         Button(tr("Otwórz Wegę")) {
             // Activate first: while the app is hidden its window counts as closed.
@@ -95,7 +95,7 @@ struct MenuBarContent: View {
             Text(CheckedAtCopy.checked(at: last, now: clock.now))
         }
         if let next = MenuBarMenuCopy.nextAttempt(
-            lastCheck: agent.lastCheck, interval: agent.interval, isChecking: agent.isChecking, now: clock.now) {
+            lastCheck: agent.lastCheck, interval: agent.interval, isChecking: agent.checkInProgress, now: clock.now) {
             Text(next)
         }
 
@@ -140,7 +140,8 @@ struct MenuBarContent: View {
         MenuBarStatusPresentation(
             count: agent.updateCount, isChecking: agent.isChecking, failed: agent.lastCheckFailed,
             incomplete: agent.lastCheckIncomplete, lastCheck: agent.lastCheck, run: agent.windowRun,
-            securityCount: agent.outdatedEntries.filter(\.possibleSecurityFix).count
+            securityCount: agent.outdatedEntries.filter(\.possibleSecurityFix).count,
+            windowScanning: agent.windowScanRunning
         ).statusText
     }
 

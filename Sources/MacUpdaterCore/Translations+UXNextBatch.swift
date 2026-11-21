@@ -39,5 +39,6 @@ extension Translations {
             "%@: I now trust the new developer signature (%@).",
         "%@: zainstalowana aplikacja ma zaufany podpis producenta.":
             "%@: the installed app has the trusted developer signature.",
+        "Sprawdzam aktualizacje w oknie Wegi…": "Checking for updates in the Wega window…",
     ]
 }

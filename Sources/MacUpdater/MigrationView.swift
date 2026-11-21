@@ -3,12 +3,14 @@ import MacUpdaterCore
 
 struct MigrationView: View {
     var onWegaState: ((WegaState) -> Void)?
+    var onNavigate: ((SidebarTab) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
     @EnvironmentObject private var migration: MigrationStore
 
-    init(onWegaState: ((WegaState) -> Void)? = nil) {
+    init(onWegaState: ((WegaState) -> Void)? = nil, onNavigate: ((SidebarTab) -> Void)? = nil) {
         self.onWegaState = onWegaState
+        self.onNavigate = onNavigate
     }
 
     private var status: MigrationStatus {
@@ -157,7 +159,7 @@ struct MigrationView: View {
                 }
 
                 if let err = errorMessage { ErrorBanner(message: err) }
-                if let b = banner { BannerView(data: b) { banner = nil } }
+                if let b = banner { BannerView(data: b, onAction: { if case .openLogs = $0 { onNavigate?(.logs) } }, onClose: { banner = nil }) }
 
                 // Matchable section
                 WegaCard(padded: false) {

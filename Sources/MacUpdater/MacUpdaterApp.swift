@@ -82,7 +82,8 @@ struct WegaMacUpdaterApp: App {
         } label: {
             MenuBarLabel(status: MenuBarStatusPresentation(
                 count: menuBar.updateCount, isChecking: menuBar.isChecking, failed: menuBar.lastCheckFailed,
-                incomplete: menuBar.lastCheckIncomplete, lastCheck: menuBar.lastCheck, run: menuBar.windowRun
+                incomplete: menuBar.lastCheckIncomplete, lastCheck: menuBar.lastCheck, run: menuBar.windowRun,
+                windowScanning: menuBar.windowScanRunning
             ))
         }
     }

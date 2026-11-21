@@ -71,7 +71,9 @@ extension ScanStore {
             return
         }
 
-        guard await CaskRollbackGuard.restoreSnapshot(snapshotURL, to: appURL, token: undoable.token) else {
+        let restored = await CaskRollbackGuard.restoreSnapshot(snapshotURL, to: appURL, token: undoable.token)
+        countUndo()
+        guard restored else {
             showBanner(BannerData(variant: .danger, title: tr("Cofanie się nie powiodło"),
                                   message: trf("%@: nie udało się przywrócić poprzedniej wersji — szczegóły w logu.", "\(undoable.token)"),
                                   action: .openLogs))

@@ -636,10 +636,12 @@ final class MigrationStore: ObservableObject {
                 )
             }
         } catch {
+            WegaLog.error(.homebrew, "Usuwanie duplikatu \(removal.busyKey): nie udało się uruchomić — \(error.localizedDescription)")
             banner = BannerData(
                 variant: .danger,
                 title: tr("Nie udało się uruchomić"),
-                message: error.localizedDescription
+                message: error.localizedDescription,
+                action: .openLogs
             )
             duplicateBusyKey = nil
             return
@@ -674,10 +676,12 @@ final class MigrationStore: ObservableObject {
                 line: tr("Duplikat zniknął. PATH ma już tylko jedną wersję.")
             ))
         } else {
+            WegaLog.error(.homebrew, "Usuwanie duplikatu \(removal.busyKey) nieudane (kod \(exitCode))")
             banner = BannerData(
                 variant: .danger,
                 title: tr("Nie udało się usunąć duplikatu"),
-                message: tr("Szczegóły w logu poniżej.")
+                message: tr("Szczegóły w logu poniżej."),
+                action: .openLogs
             )
         }
         duplicateBusyKey = nil

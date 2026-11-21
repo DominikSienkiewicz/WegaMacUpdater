@@ -42,6 +42,9 @@ final class MenuBarAgent: ObservableObject {
     /// UXP-09 — how far the update run started in the window has got, so the menu-bar menu can
     /// show it and stop it while the window is closed. `nil` when no such run is going.
     @Published var windowRun: WindowRunStatus?
+    /// True while the window's own scan runs. Only the menu draws it, so only a change is assigned.
+    @Published private(set) var windowScanRunning = false
+    var checkInProgress: Bool { isChecking || windowScanRunning }
     /// Stops the window's run the way its own button does: the packages already installing
     /// finish, nothing new starts. Registered by the `ScanStore` that owns the run.
     var stopWindowRun: (@MainActor () -> Void)?
@@ -198,13 +201,17 @@ final class MenuBarAgent: ObservableObject {
         return UpdateSchedule.shouldCheck(lastCheck: lastCheck, interval: seconds, now: Date())
     }
 
+    func setWindowScanRunning(_ running: Bool) {
+        if windowScanRunning != running { windowScanRunning = running }
+    }
+
     /// Manual "check now" from the menu.
     func checkNow() async {
         await performCheck()
     }
 
     private func performCheck() async {
-        guard !isChecking else { return }
+        guard !isChecking, !windowScanRunning else { return }
         isChecking = true
         defer { isChecking = false }
 

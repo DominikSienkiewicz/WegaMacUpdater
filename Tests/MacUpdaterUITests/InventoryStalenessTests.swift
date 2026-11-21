@@ -19,14 +19,14 @@ struct InventoryStalenessTests {
         #expect(await loader.reads == 1, "nothing changed: the result is reused")
         #expect(!store.isStale(given: counts))
 
-        let fields: [WritableKeyPath<InventoryChangeStamp, Int>] = [\.updateRuns, \.migrations, \.cleanupRemovals, \.backgroundInstalls]
+        let fields: [WritableKeyPath<InventoryChangeStamp, Int>] = [\.updateRuns, \.migrations, \.cleanupRemovals, \.backgroundInstalls, \.manualInstalls, \.undos]
         for field in fields {
             counts[keyPath: field] += 1
             #expect(store.isStale(given: counts) && store.needsRead(given: counts), "\(field)")
             await enterInventory(store, using: loader, changes: counts)
             #expect(!store.isStale(given: counts), "the read took in \(field)")
         }
-        #expect(await loader.reads == 5)
+        #expect(await loader.reads == 7)
     }
 
     @Test func aChangeThatLandsDuringAReadKeepsTheListStale() async {
@@ -96,8 +96,48 @@ struct InventoryStalenessTests {
         #expect(agent[round...].prefix(200).contains("recordBackgroundRound(upgraded: upgraded)"))
     }
 
+    @Test func aManualInstallTurnedAwayByTheLockCountsNothing() async throws {
+        let harness = makeScanStoreRuntimeHarness(runner: Self.idleBrew())
+        let token = "staleness-manual-\(UUID().uuidString)"
+        harness.store.manualOutdated = [ManualOutdatedApp(
+            name: token, path: URL(fileURLWithPath: "/TestApplications/\(token).app"),
+            installedVersion: "1", availableVersion: "2", source: .cask(token: token)
+        )]
+        let lock = harness.store.dependencies.upgradeMutex
+        #expect(lock.acquire())
+        defer { lock.release() }
+        await harness.store.installManual(token: token)
+        await harness.store.reinstallManual(token: token)
+        #expect(harness.store.completedManualInstallCount == 0, "brew never ran")
+    }
+
+    @Test func anUndoRefusedBeforeTheRestoreCountsNothing() async {
+        let harness = makeScanStoreRuntimeHarness(runner: Self.idleBrew())
+        let token = "missing-\(UUID().uuidString)"
+        await harness.store.undoUpdate(UndoableUpdate(
+            operationID: UUID(), token: token, appPath: "/TestApplications/\(token).app",
+            restoredVersion: "1", updatedAt: .now, expiresAt: .now.addingTimeInterval(60)
+        ))
+        #expect(harness.store.completedUndoCount == 0)
+    }
+
+    @Test func theInstallAndTheUndoCountOnceTheirProcessRan() throws {
+        let adoption = try source("Sources/MacUpdater/ScanStore+Adoption.swift")
+        let drain = try #require(adoption.range(of: "exitCode = try await ProcessEventStream.drain(stream) { chunk in"))
+        let count = try #require(adoption.range(of: "countManualInstall()"))
+        let record = try #require(adoption.range(of: "UpdateDiagnostics.record(\"adoption.executionResult\""))
+        #expect(drain.upperBound < count.lowerBound && count.upperBound < record.lowerBound)
+        let undo = try source("Sources/MacUpdater/ScanStore+Undo.swift")
+        let restore = try #require(undo.range(of: "let restored = await CaskRollbackGuard.restoreSnapshot(snapshotURL, to: appURL, token: undoable.token)"))
+        let counted = try #require(undo.range(of: "countUndo()"))
+        let guarded = try #require(undo.range(of: "guard restored else {"))
+        #expect(restore.upperBound < counted.lowerBound && counted.upperBound < guarded.lowerBound)
+    }
+
     /// `brew upgrade` succeeds and every listing comes back empty, so the rescan confirms the run.
-    private static func idleBrew() -> ScanStoreRuntimeProcessRunner {
+    static func idleBrewRunner() -> ScanStoreRuntimeProcessRunner { idleBrew() }
+
+    static func idleBrew() -> ScanStoreRuntimeProcessRunner {
         ScanStoreRuntimeProcessRunner { request in
             let output = request.arguments.contains("--json=v2") ? #"{"formulae":[],"casks":[]}"#
                 : request.arguments.contains("--json") ? "{}" : ""

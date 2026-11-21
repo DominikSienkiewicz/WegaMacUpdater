@@ -173,6 +173,7 @@ extension ScanStore {
             brewLog.append("error: \(error.localizedDescription)")
             installError = error
         }
+        countManualInstall()
 
         UpdateDiagnostics.record("adoption.executionResult", fields: [
             "token": token, "exitCode": String(exitCode), "error": installError?.localizedDescription ?? "none",
