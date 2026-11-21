@@ -721,9 +721,9 @@ func selectionToggleBinding(
 // MARK: - BannerData + BannerView
 
 enum BannerAction: Equatable {
-    case openLogs, openSettings, openAppManagementSettings
     /// Z14: the helper card in Settings.
     case openHelperSettings
+    case openLogs, openSettings, openAppManagementSettings
     /// Runs `brew reinstall --cask` for the token through the protected adoption flow.
     case reinstallCask(token: String)
     /// Accepts the cask's new publisher Team ID after the user confirms it. `teamID` is the ID
@@ -837,9 +837,10 @@ struct BannerView: View {
 
     private static func symbol(for action: BannerAction) -> String {
         switch action {
+        case .openHelperSettings: return "info.circle"
         case .reinstallCask: return "arrow.clockwise.circle"
         case .trustPublisher: return "checkmark.shield"
-        case .openLogs, .openSettings, .openAppManagementSettings, .openHelperSettings: return "info.circle"
+        case .openLogs, .openSettings, .openAppManagementSettings: return "info.circle"
         }
     }
 }
