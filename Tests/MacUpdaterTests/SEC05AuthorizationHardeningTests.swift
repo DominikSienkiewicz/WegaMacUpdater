@@ -121,7 +121,7 @@ struct SEC05AuthorizationHardeningTests {
 
     @Test func transactionalTerminalFallbackIsValidShellSyntax() throws {
         let command = TouchIDSudoConfigurator.manualEnableTerminalCommand
-        let prefix = "sudo /bin/sh -c '"
+        let prefix = "/usr/bin/sudo /bin/sh -c '"
         let suffix = "'"
         #expect(command.hasPrefix(prefix))
         #expect(command.hasSuffix(suffix))

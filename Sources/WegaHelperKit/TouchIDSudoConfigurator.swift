@@ -175,26 +175,52 @@ public enum TouchIDSudoConfigurator {
     /// Copy-pasteable fallback for Terminal.app. It performs backup, stages the new
     /// contents in the PAM directory, atomically renames them into place, verifies
     /// the bytes, and rolls back on failure. The grep accepts only active directives.
-    public static let manualEnableTerminalCommand: String = [
-        #"sudo /bin/sh -c 'set -eu; target=/etc/pam.d/sudo_local;"#,
-        #"backup=$(/usr/bin/mktemp /etc/pam.d/.sudo_local.wega-backup.XXXXXX);"#,
-        #"staged=$(/usr/bin/mktemp /etc/pam.d/.sudo_local.wega-new.XXXXXX);"#,
-        #"check=$(/usr/bin/mktemp /etc/pam.d/.sudo_local.wega-check.XXXXXX); had=0;"#,
-        #"if [ -e "$target" ]; then /bin/cp -p "$target" "$backup";"#,
-        #"/bin/cat "$target" > "$staged"; had=1;"#,
-        #"elif [ -r /etc/pam.d/sudo_local.template ]; then"#,
-        #"/bin/cat /etc/pam.d/sudo_local.template > "$staged"; fi;"#,
-        #"if ! /usr/bin/grep -E "^[[:space:]]*auth[[:space:]]+sufficient[[:space:]]+pam_tid\\.so""#,
-        #" "$staged" >/dev/null 2>&1; then"#,
-        #"/bin/echo "auth       sufficient     pam_tid.so" >> "$staged"; fi;"#,
-        #"/bin/chmod 0644 "$staged"; /usr/sbin/chown root:wheel "$staged";"#,
-        #"/bin/cp "$staged" "$check"; rollback() {"#,
-        #"if [ "$had" -eq 1 ]; then /bin/mv -f "$backup" "$target";"#,
-        #"else /bin/rm -f "$target"; fi; /bin/rm -f "$staged" "$check"; };"#,
-        #"if ! /bin/mv -f "$staged" "$target"; then rollback; exit 1; fi;"#,
-        #"if ! /usr/bin/cmp -s "$target" "$check"; then rollback; exit 1; fi;"#,
-        #"/bin/rm -f "$backup" "$check"'"#
-    ].joined(separator: " ")
+    ///
+    /// It runs `/usr/bin/sudo`, not the first `sudo` on the user's `PATH` (Z2), in the C locale. Its
+    /// output keeps every line already there, so it refuses first, before it creates anything, a
+    /// `sudo_local` that is a link, not a regular file, not root's, or writable by group or other
+    /// (Z1): such a file must not end up as root's own. It ends an unterminated last line before it
+    /// adds the directive.
+    public static let manualEnableTerminalCommand: String = "/usr/bin/sudo /bin/sh -c '" + manualEnableShellScript(
+        target: SystemPaths.sudoLocal, stagingDirectory: SystemPaths.pamPolicyDisplayDirectory,
+        template: SystemPaths.sudoLocalTemplate, requiredOwnerUID: 0, ownership: "root:wheel"
+    ) + "'"
+
+    /// The script behind `manualEnableTerminalCommand`, with its paths, the owner `sudo_local` must
+    /// have and the owner it gives the result as parameters, so tests run it on temporary files
+    /// without `sudo` (`ownership: nil` leaves out `chown`). The paths go in as plain words.
+    static func manualEnableShellScript(
+        target: String, stagingDirectory: String, template: String, requiredOwnerUID: UInt32, ownership: String?
+    ) -> String {
+        let temporary = stagingDirectory + "/" + TouchIDSudoDisabler.swapNamePrefix
+        let chown = ownership.map { #" /usr/sbin/chown \#($0) "$staged";"# } ?? ""
+        return [
+            #"set -eu; export LC_ALL=C; target=\#(target);"#,
+            #"if [ -L "$target" ] || { [ -e "$target" ] && [ ! -f "$target" ]; }; then"#,
+            #"echo "Wega: sudo_local is not a regular file; nothing changed." >&2; exit 1; fi;"#,
+            #"if [ -e "$target" ]; then owner=$(/usr/bin/stat -f %u "$target"); mode=$(/usr/bin/stat -f %Lp "$target");"#,
+            #"if [ "$owner" -ne \#(requiredOwnerUID) ] || [ $(( 0$mode & 022 )) -ne 0 ]; then"#,
+            #"echo "Wega: someone other than root can change sudo_local; nothing changed." >&2; exit 1; fi; fi;"#,
+            #"backup=$(/usr/bin/mktemp \#(temporary)backup.XXXXXX);"#,
+            #"staged=$(/usr/bin/mktemp \#(temporary)new.XXXXXX);"#,
+            #"check=$(/usr/bin/mktemp \#(temporary)check.XXXXXX); had=0;"#,
+            #"if [ -e "$target" ]; then /bin/cp -p "$target" "$backup";"#,
+            #"/bin/cat "$target" > "$staged"; had=1;"#,
+            #"elif [ -r \#(template) ]; then"#,
+            #"/bin/cat \#(template) > "$staged"; fi;"#,
+            #"if ! /usr/bin/grep -E "^[[:space:]]*auth[[:space:]]+sufficient[[:space:]]+pam_tid\\.so""#,
+            #" "$staged" >/dev/null 2>&1; then"#,
+            #"if [ -n "$(/usr/bin/tail -c 1 "$staged")" ]; then /bin/echo >> "$staged"; fi;"#,
+            #"/bin/echo "\#(pamDirective)" >> "$staged"; fi;"#,
+            #"/bin/chmod 0644 "$staged";"# + chown,
+            #"/bin/cp "$staged" "$check"; rollback() {"#,
+            #"if [ "$had" -eq 1 ]; then /bin/mv -f "$backup" "$target";"#,
+            #"else /bin/rm -f "$target"; fi; /bin/rm -f "$staged" "$check"; };"#,
+            #"if ! /bin/mv -f "$staged" "$target"; then rollback; exit 1; fi;"#,
+            #"if ! /usr/bin/cmp -s "$target" "$check"; then rollback; exit 1; fi;"#,
+            #"/bin/rm -f "$backup" "$check""#,
+        ].joined(separator: " ")
+    }
 
     /// The command the Touch ID card offers to turn Touch ID for `sudo` off when the helper cannot
     /// (Aneks E.6, E.9): the reviewed script, one line, through `/usr/bin/sudo` so no `sudo` earlier
