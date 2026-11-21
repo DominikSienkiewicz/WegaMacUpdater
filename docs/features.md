@@ -74,7 +74,7 @@ checker, in one pass.
 - **Grouped by urgency, or by install origin.** By default the list is grouped by what you
   do next: **Possible security fixes** (the manually updated apps whose release notes read as
   a security fix, the same set as the security scope), **Apps** and **CLI tools** that Wega
-  updates in a batch, and **Needs your move** for what the vendor's updater or you finish.
+  updates in a batch, and **Needs your action** for what the vendor's updater or you finish.
   Those cards mix sources, so each package row names its source, and a row the rollback net
   cannot cover carries a muted shield whose tooltip says why. **Group › by source** restores
   the grouping by the same `AppOrigin` the Inventory window badges by, so a self-updating
@@ -206,12 +206,19 @@ readable, but they stop accepting selections, and a note — *"Selecting comes b
 finishes."* — says why: in the band, and in the list header where it fits, yielding to the scope
 bar at the narrowest width. Only a scan with nothing to keep on screen — the very first one —
 takes the whole window with the sniffing scene, with the same step caption. The rescans after an
-update or an undo also take the window, handing over from the update's own overlay.
+update or an undo also take the window; the re-check that closes a run still occupies it.
 An empty state — *everything up to date*, or a list the last scan could not confirm — has no rows
 to hold still, and Wega stays clear of it. The band's **Update** and its **⌘⏎**
 shortcut are held back while the scan runs, because a batch approved against the restored rows
 would otherwise install whatever the scan had settled on by the time the dialog was answered;
 the button's tooltip names the running scan instead of blaming an empty selection.
+
+**Finding an app on Updates.** **⌘F** (and **Find an app** in the toolbar) does not filter the
+list. It shows one answer row above it. When the app is among the updates, the row links to the
+matching rows. Otherwise it says what Inventory
+knows: up to date and how it was checked, no known source to update from, the check failed, no
+current result, hidden by one of your rules (**Show Rules**), or not on this Mac. It never
+starts an Inventory read; when Inventory was never read it says so and offers **Open Inventory**.
 
 **The scan button only where a scan shows.** The **Check now** button in the toolbar appears only
 on the screens that show a scan's result — Updates, To Homebrew (which also keeps its own
@@ -232,14 +239,19 @@ says the next one will be shown.
 
 #### Running the update
 
-While a run is in progress the rest of the screen is disabled and stood down by the same
-translucent veil of the window's background, so the rows stay readable underneath, with a note
-explaining why. With **Reduce Transparency** on, `UpdateRunOverlay` draws no veil at all
-(`scrim(reduceTransparency:)` is zero) and the note sits on a solid surface instead of glass;
-the list stays locked, because the layer still takes the clicks it took. The run takes the band's place and shape at the bottom —
-both draw through one chrome (`wegaBottomBar()`) — with the progress, the live log toggle and
-**Stop After Active Installs**. That bar is part of the run overlay, the one layer above the
-disabled screen, so the stop button is never disabled along with what it covers.
+The run happens in the band, and nothing covers the list. The band's heading reads *"Updating ·
+since 08:14"* (the start time, never an estimate of the end), the stage line names the work
+(*"Installing firefox — 3 of 7"*; *"Installing packages — 3 of 7"* while several run at once),
+a ring counts whole packages as *3/7*, and the band holds **Stop After Active Installs** and
+**Show log**. The list stays readable and is locked: it is disabled with its checkboxes,
+banner actions and manual installs, its header says *"The list stays locked until the update
+ends."*, and no veil is drawn, so **Reduce Transparency** has nothing to remove. Casks and npm
+globals show their own state on the row — *waiting*, *installing…*, *installed, checking*,
+*failed* or *won't start* (a row the run will not begin after a stop request or a vendor
+signature change); the Homebrew formula batch and the App Store batch say *in progress* once in
+the group header, and an update the vendor finishes says *with the vendor*. A row keeps its
+height when its state appears. **Show log** opens the log panel under the list. The band is the
+one place the stop button lives, so it stays enabled while the list is locked.
 
 - **Selected updates run side by side.** A run no longer walks its selection one package at a
   time: each cask and each npm global gets its own package-manager process, with **at most
@@ -252,7 +264,7 @@ disabled screen, so the stop button is never disabled along with what it covers.
   exactly one new failure — brew refusing because another brew already holds a lock it needs
   — and because nothing was installed when that happens, that cask is **retried once**. The
   live log prefixes every line with the package it came from (`[figma] ==> Downloading…`),
-  and the progress bar counts whole packages, naming the one that is installing only while it
+  and the band counts whole packages, naming the one that is installing only while it
   is the only one. **Stop** still stops at a package boundary: the processes already running
   finish, nothing new is started, and everything still queued is reported as skipped rather
   than as anything else.
@@ -296,8 +308,8 @@ no commands to copy into a terminal:
 - **Nothing runs until you click**, and each row shows the exact command its button runs.
   The command goes through the same write gate, mutex and quit guard as every other brew
   change; its output is appended under the warning. A button is withdrawn only after a
-  successful exit; failed or unfinished actions remain available. The overlay shown during
-  an update offers no buttons.
+  successful exit; failed or unfinished actions remain available. The list is locked during
+  an update, so it offers no buttons.
 - **A trust refusal during untap has a separate recovery action.** Homebrew can load a
   same-named package from the tap before checking its install receipt, even when the
   installed copy came from another tap. Wega recognizes the exact cask/formula refusal
@@ -535,8 +547,9 @@ are **Show in Logs**, which opens Logs on the entry that explains the failure; a
 **Trust the New Signature**, which asks for confirmation. A banner that names many apps or
 packages shows the first few and a **Show All** button for the rest, and a banner that replaces
 another starts collapsed. A failed pre-update backup says to check free disk space and try
-again. The error banners on Inventory, Cleanup, Uninstall and To Homebrew name the failure but
-carry no button. The word *snapshot* no longer appears in what Wega says: the user-facing name is
+again. The red banners on To Homebrew that report a failed duplicate removal also carry **Show in
+Logs**; the error banners on Inventory, Cleanup and Uninstall name the failure but carry no
+button. The word *snapshot* no longer appears in what Wega says: the user-facing name is
 the backup, or the pre-update copy.
 
 **"Why isn't my app here?"** Under the rows and under both empty states, a line — *"Can't see
@@ -667,8 +680,8 @@ Missing per-path evidence (including App Store) stays unconfirmed. See the
 **The read is kept.** Inventory is one store shared with the window, so its last read survives
 moving between screens: the line *"Read today, 08:12"* (the day moves at midnight, after sleep
 and after a clock change) turns to *"Read today, 08:12 — the list may have changed"* when an
-update run, a background round that installed something, a Cleanup removal, a move to Homebrew
-or an uninstall finishes, also while the window is closed (the stores that run them count each
+update run, a background round that installed something, an install from the list through
+Homebrew, a reinstall, an undo, a Cleanup removal, a move to Homebrew or an uninstall finishes, also while the window is closed (the stores that run them count each
 one, and the inventory compares the counts with those of its last read). **Refresh Inventory**
 only reads the disk again and says so in its tooltip (*"Does not check for new versions"*);
 **Check for updates** starts the same scan as **⌘R** and navigates to Updates. When the filters
@@ -682,7 +695,7 @@ App settings live in the **native macOS Settings window**, opened with **⌘,** 
 
 - **General.** The app card (version, build, **Check for Wega updates**, **Report a bug**, links and the self-update state), the **Language card** — switch the interface between **Polski** and **English**; the choice is persisted and applies live, and switching it keeps the current scan results (and a running upgrade) intact. Until you pick one, the language follows the system locale — Polish only when macOS reports it ahead of the other languages Wega ships, **English otherwise**. **Launch at login** and **Notifications**.
 - **Checking & Background.** **Paused updates** — lists every ignore / version-pin rule with a one-click remove. **Background update permissions** — the audit of per-app unattended-update consents. **Scan directories card (UX-16)** — add your own scan roots via a directory picker (stored as **security-scoped bookmarks**, so apps on other volumes and in non-standard locations are found), list **exclusions** that are never searched, and set the **recursion depth** (how many sub-levels below each root to descend, default 1). The scan seams read these keys from `UserDefaults` on every scan, so a change takes effect on the next scan. **Update conditions card** — configures the large/unknown download estimate, low-battery threshold, unpacked-size multiplier and free-disk safety margin used by both window and unattended preflights.
-- **Permissions & Privacy.** The **What Wega does** trust card on top, then the **Wega helper** card (**Install Helper** / **Remove Helper**) and the **Touch ID for administrator commands** card — on Macs with biometry hardware, it shows whether `pam_tid.so` is wired into `/etc/pam.d/sudo_local` and offers **Use Touch ID Instead of Your Admin Password**. The trust card has three sections. **Permissions** gives, for the Wega helper, Touch ID, App Management (with its current state) and Full Disk Access, why it is needed, what happens without it and how to take it back, and links the steps for turning Touch ID for `sudo` off. **Connections** says that checking installs and removes nothing (the exception being apps allowed to update in the background), that Wega sends no telemetry or analytics, and lists the fixed hosts behind **Show Fixed Addresses** — read from `endpoints.json`, so the list cannot drift from what Wega contacts — with a caption for the dynamic ones (update addresses stored in installed apps, the npm registry, App Store servers). **Local data and reports** says logs, the last scan and pre-update copies (up to 7 days) stay on the Mac.
+- **Permissions & Privacy.** The **What Wega does** trust card on top, then the **Wega helper** card (**Install Helper** / **Remove Helper**) and the **Touch ID for administrator commands** card — on Macs with biometry hardware, it shows whether `pam_tid.so` is wired into `/etc/pam.d/sudo_local` and offers **Use Touch ID Instead of Your Admin Password**, and, when the Wega helper is installed and current, **Turn Off Touch ID for sudo**. The helper removes only the exact `auth       sufficient     pam_tid.so` line from `/etc/pam.d/sudo_local`, keeps Apple's template and a backup, checks the result and restores the file if the write fails; it refuses a file or directory that someone other than root can change. With an older helper the card says the helper is out of date; without one it points to the manual steps. The helper does four things: install a verified Wega package, turn Touch ID for `sudo` on or off, restore an app's pre-update copy, and move a root-owned app to the Trash. The trust card has three sections. **Permissions** gives, for the Wega helper, Touch ID, App Management (with its current state) and Full Disk Access, why it is needed, what happens without it and how to take it back, and links the steps for turning Touch ID for `sudo` off. **Connections** says that checking installs and removes nothing (the exception being apps allowed to update in the background), that Wega sends no telemetry or analytics, and lists the fixed hosts behind **Show Fixed Addresses** — read from `endpoints.json`, so the list cannot drift from what Wega contacts — with a caption for the dynamic ones (update addresses stored in installed apps, the npm registry, App Store servers). **Local data and reports** says logs, the last scan and pre-update copies (up to 7 days) stay on the Mac.
 - **Cleanup.** The **Project folders card** — the folders Cleanup reads project version files from (default `~/Dev`); *Dodaj katalog…* adds one and each row's trash button removes it. A protected location, or a folder that contains one, is refused with the reason, and a list you empty stays empty instead of falling back to `~/Dev`. The next scan, and every removal's re-check, read the list as it is then. The **Files and Folders map card** — the off-by-default switch for D10 with the Full Disk Access warning and a button that opens that pane in System Settings; it does not probe whether Wega has the access, the next scan shows it.
 - **Advanced.** **Post-update launch test**, **Crash reporting**, the **Application catalog card** — pulls the latest `AppCatalog` overlay from its canonical source on demand (the app also refreshes it on launch), reports the outcome and notes that a fetched update applies on the next launch; the **GitHub token** card, **System diagnostics** (Homebrew and mas-cli versions, and **Export diagnostics**), **Environment** (macOS, CPU architecture) and the license block for bundled open-source tools.
 
@@ -724,7 +737,7 @@ consent; Settings shows the reason.
 **The menu is specific about what it does.** Under the status line the menu dates the last
 check in words (*"Checked 21:14"*, *"Checked yesterday, 21:14"*, or the date), and, while checks
 are on, says *"Next attempt: today, 15:00, while Wega is running. Closing the window doesn't
-quit the app."* — nothing while a check runs. The words move at midnight, after a clock change
+quit the app."* — nothing while a check runs. While the Wega window runs a check, the menu says *"Checking for updates in the Wega window…"*, its check button waits, and the agent's own scheduled attempt waits too; a run you started in the window takes precedence over a check. The words move at midnight, after a clock change
 and after sleep. Each app with an update is a row (the first 10, then a count of the rest),
 with its versions when known (*Slack 4.47 → 4.48*) and a **⚠︎** when its release notes may
 describe a security fix; clicking a row brings Wega forward on Updates with that update in the

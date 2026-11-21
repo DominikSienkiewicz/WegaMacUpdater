@@ -15,6 +15,27 @@ them verbatim under the new version heading, so that step is never done by hand 
 ## [Unreleased]
 
 ### Added
+- **An update runs in the band.** While an update installs, the band says **Updating · since
+  08:14**, names the stage (**Installing firefox — 3 of 7**, or **Installing packages — 3 of
+  7** while several run at once), counts whole packages in a ring and holds **Stop After
+  Active Installs** and **Show log**; the log opens under the list. The list stays readable
+  and locked, with a note in its header, and nothing covers it. Casks and npm packages say
+  on their own row whether they are *waiting*, *installing…*, *installed, checking*, *failed*
+  or *won't start*; Homebrew formulae and the App Store say *in progress* once on the group,
+  and updates the vendor finishes say *with the vendor*.
+- **Turn Touch ID for sudo off from Settings.** With the Wega helper installed, the Touch ID
+  card has **Turn Off Touch ID for sudo**. The helper removes only Wega's line from
+  `/etc/pam.d/sudo_local`, keeps a backup, checks the result and puts the file back if
+  anything fails. It refuses a file that someone other than root can change, and the guide
+  says how to inspect and repair that safely. The helper now answers at protocol version 7:
+  with an older one the card says the helper is out of date.
+- **Find an app on Updates.** **⌘F** shows one answer row above the list instead of
+  narrowing it: where the app is on the list, what Inventory knows when it is not (up to
+  date, no known source, the check failed, hidden by one of your rules with **Show Rules**,
+  or not on this Mac), and **Open Inventory** when Inventory has never been read.
+- **The menu knows when the window is checking.** While a check from the Wega window runs, the
+  menu-bar menu says **Checking for updates in the Wega window…**, and its check button and
+  the agent's own scheduled attempt wait.
 - **A scan shows where it is, in the band.** While Wega checks, the band names the step
   (**Refreshing the Homebrew catalog…** first, then Homebrew, the App Store, npm and the
   vendors), counts the time the check has taken and the updates found so far, shows a ring
@@ -55,7 +76,7 @@ them verbatim under the new version heading, so that step is never done by hand 
   **↑** and **↓** move within it, **Space** queues the row and **Return** shows its details;
   VoiceOver reads a row as one sentence with its actions. A row shows the app's name with the
   Homebrew token under it.
-- **Shortcuts for finding and selecting.** **⌘F** finds on Logs, Uninstall and Inventory,
+- **Shortcuts for finding and selecting.** **⌘F** finds on Updates, Logs, Uninstall and Inventory,
   **⇧⌘F** finds in Inventory, **⇧⌘A** selects every visible row on Updates, **⌥⌘I** shows or
   hides the details panel, **⌘.** cancels a scan as well as stopping an update, and **Help →
   Wega User Guide** opens the guide.
@@ -65,6 +86,11 @@ them verbatim under the new version heading, so that step is never done by hand 
   app?** opens Inventory, since a missing app is not proof it is up to date.
 
 ### Fixed
+- **Inventory knows about installs and undos.** It marks its read **the list may have
+  changed** after an install from the list through Homebrew, a reinstall and an undo of an
+  update too, so it no longer shows a stale list as current.
+- **Migration errors lead to the log.** The red banners for a failed duplicate removal on
+  To Homebrew now have **Show in Logs**.
 - **An incomplete check no longer says everything is up to date.** If some sources did not
   answer, the menu-bar icon, its menu, Wega's card and VoiceOver now say the check was
   incomplete instead of "all up to date", and Wega's cheerful line appears only after a
@@ -104,17 +130,22 @@ them verbatim under the new version heading, so that step is never done by hand 
   rows used to vanish behind a frosted layer, so the screen looked empty and frozen. They
   now stay visible and readable while the check reports itself in the band above the list.
 - **The list stays readable while updates install.** During an update run the rows used to
-  vanish behind the same frosted layer. They now stay visible, dimmed, behind the note.
+  vanish behind the same frosted layer. They now stay visible and locked, and the run is
+  reported in the band above them.
 - **Errors say what to do next.** On Updates, during an update run and on Undo updates, every
   error banner has a button — mostly **Show in Logs** — and a permission failure leads with the
   permission instead of sending you to Logs. A banner naming many apps shows the first few and
   **Show All**. A failed backup before an update says to check free disk space. The error banners
-  on Inventory, Cleanup, Uninstall and To Homebrew still name the failure without a button.
-- **Reduce Transparency no longer hides the rows an update is installing.** The run's veil is not
-  drawn then; the list stays locked and the note says why. State texts are easier to read, and
-  the close buttons of banners and the log are larger targets.
+  on Inventory, Cleanup and Uninstall still name the failure without a button.
+- **Reduce Transparency no longer hides the rows an update is installing.** Nothing is drawn
+  over the list any more; it stays locked and its header says why. State texts are easier to
+  read, and the close buttons of banners and the log are larger targets.
 
 ### Changed
+- **Shorter, plainer wording.** The note for a scan that could not reach every source is
+  shorter in Polish and reads **check incomplete** in English, the group that waits for you is
+  **Needs your action**, the fourth source is **vendors**, and the messages about a changed
+  signature now say **developer signature** instead of a team identifier.
 - **The band names your queue.** It reads **4 queued · 2 to finish with the developer**
   (the second half only while something is queued, counted in the category on screen), says
   how far an undo reaches (**Undo: 3 of 4**, or **Checking undo availability** while a cask is

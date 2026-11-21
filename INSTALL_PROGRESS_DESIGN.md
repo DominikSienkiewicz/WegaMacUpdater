@@ -167,10 +167,10 @@ happened; the banner already explains it.
 
 ## 6. UI
 
-New `UpgradeProgressBar` in
-[`Sources/MacUpdater/UpdateViewSupport.swift`](Sources/MacUpdater/UpdateViewSupport.swift)
-(not in `UpdateView.swift`, which is already 705 lines against a 1050-line lint warning),
-rendered under the results header while `scan.updating`:
+The update band draws the counter and the stage while `scan.updating`, from
+`UpdateBandRunPresentation` and `UpgradeProgressCopy`
+([`Sources/MacUpdater/UpdateBandRunPresentation.swift`](Sources/MacUpdater/UpdateBandRunPresentation.swift));
+the `UpgradeProgressBar` described below no longer exists, and the rules that follow now apply to the band's ring and line:
 
 - linear `ProgressView` tinted `Color.wegaHoney`, with `.frame(minWidth: 0, maxWidth: .infinity)`.
   That frame is not cosmetic: a linear bar reports a nonzero intrinsic width, and without an
