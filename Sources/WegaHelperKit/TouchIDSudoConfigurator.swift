@@ -40,17 +40,16 @@ public enum TouchIDSudoConfigurator {
     ) -> State {
         guard pamModuleExists, biometryAvailable else { return .notSupported }
         guard let contents = sudoLocalContents else { return .available }
+        return containsActiveTouchIDLine(contents) ? .enabled : .available
+    }
 
-        for rawLine in contents.split(whereSeparator: \.isNewline) {
+    /// Whether a line that is not a comment names `auth`, `sufficient` and `pam_tid.so`: the one
+    /// detection the card's state and the enable plan share.
+    static func containsActiveTouchIDLine(_ contents: String) -> Bool {
+        contents.split(whereSeparator: \.isNewline).contains { rawLine in
             let line = String(rawLine).trimmingCharacters(in: .whitespaces)
-            if line.hasPrefix("#") { continue }
-            if line.contains("pam_tid.so") &&
-               line.contains("sufficient") &&
-               line.contains("auth") {
-                return .enabled
-            }
+            return !line.hasPrefix("#") && line.contains("pam_tid.so") && line.contains("sufficient") && line.contains("auth")
         }
-        return .available
     }
 
     /// Reads the real filesystem + biometry capability to determine state.
@@ -74,16 +73,24 @@ public enum TouchIDSudoConfigurator {
     /// so it is unit-tested directly.
     public static func contentsEnablingTouchID(current: String?) -> String {
         var base = current ?? ""
-        for rawLine in base.split(whereSeparator: \.isNewline) {
-            let line = String(rawLine).trimmingCharacters(in: .whitespaces)
-            if line.hasPrefix("#") { continue }
-            if line.contains("pam_tid.so"), line.contains("sufficient"), line.contains("auth") {
-                return base // already enabled — idempotent
-            }
-        }
+        if containsActiveTouchIDLine(base) { return base } // already enabled — idempotent
         if !base.isEmpty, !base.hasSuffix("\n") { base += "\n" }
         base += pamDirective + "\n"
         return base
+    }
+
+    /// The root helper's plan for the bytes it read through the policy directory: `sudo_local`, or
+    /// the template when there is none, or nothing. Pure; decided on bytes so nothing read is
+    /// re-encoded, and refused rather than replaced when the bytes are not UTF-8 or hold a NUL.
+    public static func contentsEnablingTouchID(current: Data) -> TouchIDSudoEnablePlan {
+        let bytes = [UInt8](current)
+        guard !bytes.contains(0), let text = String(validating: bytes, as: UTF8.self) else { return .refused(.unreadable) }
+        guard !containsActiveTouchIDLine(text) else { return .alreadyEnabled }
+        var contents = current
+        if let last = bytes.last, last != PAMPolicyLines.newline { contents.append(PAMPolicyLines.newline) }
+        contents.append(contentsOf: Array((pamDirective + "\n").utf8))
+        guard contents.count <= TouchIDSudoDisabler.maximumSize else { return .refused(.tooLarge) }
+        return .write(contents)
     }
 
     /// Writes `sudo_local` as root through a backup → atomic write → readback

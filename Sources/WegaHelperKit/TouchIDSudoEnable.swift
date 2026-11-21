@@ -79,6 +79,16 @@ public enum TouchIDSudoEnableResult: Equatable, Sendable {
     }
 }
 
+/// What `TouchIDSudoConfigurator.contentsEnablingTouchID(current:)` decided for the bytes read.
+public enum TouchIDSudoEnablePlan: Equatable, Sendable {
+    /// An active `pam_tid` line is there already.
+    case alreadyEnabled
+    /// Only `.unreadable` (not UTF-8, or a NUL) or `.tooLarge` (the result would pass the limit).
+    case refused(TouchIDSudoEnableRefusal)
+    /// Write `contents`: the bytes read, a newline if the last line had none, then the directive.
+    case write(Data)
+}
+
 /// The step of the enable operation a report names, for the helper's audit log.
 public enum TouchIDSudoEnableStep: String, Sendable {
     case caller, directory, read, template, plan, write, verify

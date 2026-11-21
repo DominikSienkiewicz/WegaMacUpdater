@@ -7,6 +7,53 @@ import Testing
 @Suite("Turning on Touch ID for sudo: plan and wire")
 struct TouchIDSudoEnableTests {
     let wega = TouchIDSudoConfigurator.pamDirective
+    let template = "# sudo_local: local config file which survives system update and is included for sudo\n"
+        + "# uncomment following line to enable Touch ID for sudo\n"
+        + "#auth       sufficient     pam_tid.so\n"
+
+    // MARK: - Plan
+
+    private func plan(_ text: String) -> TouchIDSudoEnablePlan {
+        TouchIDSudoConfigurator.contentsEnablingTouchID(current: Data(text.utf8))
+    }
+
+    @Test func theDirectiveIsAddedToTheBytesReadAndToNothingElse() {
+        #expect(plan("") == .write(Data((wega + "\n").utf8)), "no file and no template: the directive alone")
+        #expect(plan(template) == .write(Data((template + wega + "\n").utf8)), "Apple's template keeps its commented line")
+        #expect(plan("# a") == .write(Data(("# a\n" + wega + "\n").utf8)), "an unterminated last line gets its newline first")
+        #expect(plan("# a\r\n") == .write(Data(("# a\r\n" + wega + "\n").utf8)), "a line ending in CR LF already ends in a newline")
+    }
+
+    /// The same loose detection as the card's state: any active `auth … sufficient … pam_tid.so`.
+    @Test func anActiveTouchIDLineIsAlreadyEnabled() {
+        for text in [wega + "\n", wega, "auth sufficient pam_tid.so\n", "  auth\tsufficient   pam_tid.so # c\n",
+                     template + "auth sufficient pam_tid.so\n", "auth required pam_opendirectory.so\n" + wega + "\n"] {
+            #expect(plan(text) == .alreadyEnabled, "\(text.debugDescription)")
+        }
+        #expect(plan("#auth sufficient pam_tid.so\n") != .alreadyEnabled, "a comment does not enable it")
+    }
+
+    @Test func aWrittenPlanIsEnabledTheNextTime() throws {
+        guard case .write(let contents) = plan(template) else {
+            Issue.record("the template must be written")
+            return
+        }
+        #expect(TouchIDSudoConfigurator.contentsEnablingTouchID(current: contents) == .alreadyEnabled)
+    }
+
+    /// [O13]: a file that is not UTF-8 or holds a NUL was replaced with the template; now it is refused.
+    @Test func bytesThatAreNotUTF8OrHoldANulAreRefused() {
+        for bytes in [Data([0xFF, 0x0A]), Data("# a\n".utf8) + Data([0x00]) + Data("\n".utf8), Data([0xC3])] {
+            #expect(TouchIDSudoConfigurator.contentsEnablingTouchID(current: bytes) == .refused(.unreadable), "\(Array(bytes))")
+        }
+    }
+
+    /// A plan the helper could not read back, and turning Touch ID off would refuse, is not written.
+    @Test func aPlanLargerThanTheLimitIsRefused() {
+        let fits = String(repeating: "#", count: TouchIDSudoDisabler.maximumSize - wega.utf8.count - 2)
+        #expect(plan(fits) == .write(Data((fits + "\n" + wega + "\n").utf8)), "exactly the limit")
+        #expect(plan(fits + "#") == .refused(.tooLarge))
+    }
 
     // MARK: - Wire
 
