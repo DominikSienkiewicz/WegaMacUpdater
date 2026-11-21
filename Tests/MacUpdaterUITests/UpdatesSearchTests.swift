@@ -15,25 +15,25 @@ struct UpdatesSearchTests {
     let now = Date(timeIntervalSince1970: 1_800_000_000)
 
     @Test func anEmptyQueryAnswersNothing() {
-        for query in ["", "   ", "\n"] { #expect(UpdatesSearch.answer(query: query, rows: [row("c:zoom", "Zoom")], hiddenByRules: [], inventory: [], checks: [:], policies: [:], now: now) == nil) }
+        for query in ["", "   ", "\n"] { #expect(UpdatesSearch.answer(query: query, rows: [row("c:zoom", "Zoom")], hiddenByRules: [], inventory: [], inventoryIsStale: false, checks: [:], policies: [:], now: now) == nil) }
     }
     @Test func aRowOnTheListIsTheAnswerExactNameFirst() {
         let rows = [row("c:zoom-helper", "Zoom Helper"), row("c:zoom", "zoom", inScope: false), row("m:/A/Café Studio.app", "Café Studio")]
-        #expect(UpdatesSearch.answer(query: "ZOOM", rows: rows, hiddenByRules: [], inventory: nil, checks: [:], policies: [:], now: now)
+        #expect(UpdatesSearch.answer(query: "ZOOM", rows: rows, hiddenByRules: [], inventory: nil, inventoryIsStale: false, checks: [:], policies: [:], now: now)
                 == .onList([rows[1], rows[0]], more: false))
-        #expect(UpdatesSearch.answer(query: "cafe", rows: rows, hiddenByRules: [], inventory: nil, checks: [:], policies: [:], now: now)
+        #expect(UpdatesSearch.answer(query: "cafe", rows: rows, hiddenByRules: [], inventory: nil, inventoryIsStale: false, checks: [:], policies: [:], now: now)
                 == .onList([rows[2]], more: false), "diacritics are ignored")
         let many = (1...5).map { row("n:pkg\($0)", "pkg\($0)") }
-        #expect(UpdatesSearch.answer(query: "pkg", rows: many, hiddenByRules: [], inventory: nil, checks: [:], policies: [:], now: now)
+        #expect(UpdatesSearch.answer(query: "pkg", rows: many, hiddenByRules: [], inventory: nil, inventoryIsStale: false, checks: [:], policies: [:], now: now)
                 == .onList(Array(many.prefix(3)), more: true))
     }
     @Test func aRuleThatHidesItSaysSo() {
         let rule = UpdatePolicyEntry(key: "c:spotify", displayName: "Spotify", policy: .ignored)
-        #expect(UpdatesSearch.answer(query: "spot", rows: [], hiddenByRules: [rule], inventory: [], checks: [:], policies: [:], now: now)
+        #expect(UpdatesSearch.answer(query: "spot", rows: [], hiddenByRules: [rule], inventory: [], inventoryIsStale: false, checks: [:], policies: [:], now: now)
                 == .hiddenByRule(name: "Spotify"))
     }
     @Test func withoutAnInventoryWegaSaysSheHasNotLooked() {
-        #expect(UpdatesSearch.answer(query: "spotify", rows: [], hiddenByRules: [], inventory: nil, checks: [:], policies: [:], now: now)
+        #expect(UpdatesSearch.answer(query: "spotify", rows: [], hiddenByRules: [], inventory: nil, inventoryIsStale: false, checks: [:], policies: [:], now: now)
                 == .inventoryNotRead(query: "spotify"))
     }
     @Test func theInventorysEvidenceDecidesTheAnswer() {
@@ -46,7 +46,7 @@ struct UpdatesSearchTests {
         #expect(answer("spotify", app, InstallationCheck(app: app, sources: [.init(source: "Homebrew", outcome: .current)], checkedAt: now.addingTimeInterval(-90_000)))
                 == .notChecked(name: "Spotify", reason: .noCurrentResult), "older than a day is stale")
         #expect(answer("spotify", app, nil) == .notChecked(name: "Spotify", reason: .noCurrentResult))
-        #expect(UpdatesSearch.answer(query: "nothing-like-it", rows: [], hiddenByRules: [], inventory: [app], checks: [:], policies: [:], now: now)
+        #expect(UpdatesSearch.answer(query: "nothing-like-it", rows: [], hiddenByRules: [], inventory: [app], inventoryIsStale: false, checks: [:], policies: [:], now: now)
                 == .notFound(query: "nothing-like-it"))
     }
     @Test func everyAnswerReadsInBothLanguages() {
@@ -90,9 +90,9 @@ struct UpdatesSearchTests {
         let outdated = InstallationCheck(app: app, sources: [.init(source: "Homebrew", outcome: .outdated, availableVersion: "2.0", policyKey: "c:spotify")],
                                          checkedAt: now.addingTimeInterval(-600))
         let checks = [InstallationIdentity(path: outdated.path): outdated]
-        #expect(UpdatesSearch.answer(query: "spotify", rows: [], hiddenByRules: [], inventory: [app], checks: checks, policies: ["c:spotify": .ignored], now: now)
+        #expect(UpdatesSearch.answer(query: "spotify", rows: [], hiddenByRules: [], inventory: [app], inventoryIsStale: false, checks: checks, policies: ["c:spotify": .ignored], now: now)
                 == .hiddenByRule(name: "Spotify"))
-        #expect(UpdatesSearch.answer(query: "spotify", rows: [], hiddenByRules: [], inventory: [app], checks: checks, policies: [:], now: now)
+        #expect(UpdatesSearch.answer(query: "spotify", rows: [], hiddenByRules: [], inventory: [app], inventoryIsStale: false, checks: checks, policies: [:], now: now)
                 == .notChecked(name: "Spotify", reason: .noCurrentResult), "an update the list does not show is not a current result")
     }
 
@@ -146,6 +146,10 @@ struct UpdatesSearchTests {
         #expect(screen.contains("if !row.inCurrentScope { onScopeChange?(.all) }\n        scan.inspectedKey = row.key"))
         #expect(screen.contains("inventory: inventory.lastReadAt == nil ? nil : inventory.apps"), "search never reads the inventory itself")
         #expect(!screen.contains("inventory.scan("))
+        #expect(screen.contains(
+            "inventoryIsStale: inventory.isStale(given: InventoryChangeStamp.current(scan: scan, migration: migration, cleanup: cleanup, menuBar: MenuBarAgent.shared))"
+        ), "the same stamp the Inventory screen reads")
+        #expect(screen.contains("UpdatesSearchAnswerRow(answer: answer, inventoryReadAt: inventory.lastReadAt,"))
     }
 
     /// The narrow (388 pt) and compact (480 pt) list widths, less the row's 16 pt gutters, with
@@ -160,14 +164,18 @@ struct UpdatesSearchTests {
             .hiddenByRule(name: long),
             .inventoryNotRead(query: long),
             .notFound(query: long),
+            .fromStaleInventory(.upToDate(name: long, version: nil, checkedAt: now, sources: ["Homebrew", "Microsoft AutoUpdate"])),
+            .fromStaleInventory(.hiddenByRule(name: long)),
+            .fromStaleInventory(.notFound(query: long)),
         ]
         for language in [AppLanguage.pl, .en] {
             withLanguage(language) {
                 for answer in answers {
-                    let view = UpdatesSearchAnswerRow(answer: answer, onShow: { _ in }, onShowRules: {}, onOpenInventory: {})
+                    let view = UpdatesSearchAnswerRow(answer: answer, inventoryReadAt: now, onShow: { _ in }, onShowRules: {}, onOpenInventory: {})
                     let fitted = NSHostingController(rootView: view).sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude))
                     #expect(fitted.width <= width, "\(language) \(answer): needs \(fitted.width) pt")
-                    if let text = UpdatesSearch.text(for: answer, now: Date()) {
+                    let caveat = UpdatesSearch.caveat(for: answer, inventoryReadAt: now, now: Date())
+                    for text in [UpdatesSearch.text(for: answer, now: Date()), caveat].compactMap({ $0 }) {
                         let needed = NSHostingController(rootView: Text(verbatim: text).font(.wega(.callout)))
                             .sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height
                         #expect(fitted.height + 0.5 >= needed, "\(language) \(answer): \(fitted.height) pt tall, the text needs \(needed) pt")
@@ -175,6 +183,48 @@ struct UpdatesSearchTests {
                 }
             }
         }
+    }
+
+    /// An Inventory that something has changed since its read (an update run, a migration, a
+    /// removal, an install, an undo) may no longer match the disk. Wega says so under what it read,
+    /// in the Inventory screen's own words, leaves the version out and offers Inventory; a "not on
+    /// this Mac" is qualified, not withheld. The list, the rules and a never-read Inventory answer
+    /// as before.
+    @Test func aStaleInventoryQualifiesWhatItSays() throws {
+        let app = application("Spotify", version: "1.2.3")
+        let readAt = now.addingTimeInterval(-3_600)
+        let current = InstallationCheck(app: app, sources: [.init(source: "Homebrew", outcome: .current)], checkedAt: now.addingTimeInterval(-600))
+        let staleCurrent = answer("spotify", app, current, stale: true)
+        #expect(staleCurrent == .fromStaleInventory(.upToDate(name: "Spotify", version: nil, checkedAt: current.checkedAt, sources: ["Homebrew"])))
+        #expect(answer("spotify", app, nil, stale: true) == .fromStaleInventory(.notChecked(name: "Spotify", reason: .noCurrentResult)))
+        let gone = UpdatesSearch.answer(query: "nothing-like-it", rows: [], hiddenByRules: [], inventory: [app], inventoryIsStale: true, now: now)
+        #expect(gone == .fromStaleInventory(.notFound(query: "nothing-like-it")))
+        #expect(UpdatesSearch.answer(query: "spotify", rows: [row("c:spotify", "Spotify")], hiddenByRules: [], inventory: [app], inventoryIsStale: true, now: now)
+                == .onList([row("c:spotify", "Spotify")], more: false))
+        #expect(UpdatesSearch.answer(query: "spot", rows: [], hiddenByRules: [UpdatePolicyEntry(key: "c:spotify", displayName: "Spotify", policy: .ignored)],
+                                     inventory: [app], inventoryIsStale: true, now: now) == .hiddenByRule(name: "Spotify"))
+        #expect(UpdatesSearch.answer(query: "spotify", rows: [], hiddenByRules: [], inventory: nil, inventoryIsStale: true, now: now) == .inventoryNotRead(query: "spotify"))
+
+        let staleUpToDate = try #require(staleCurrent)
+        let staleGone = try #require(gone)
+        withLanguage(.pl) {
+            let caveat = "Odczytano \(CheckedAtCopy.day(readAt, now: now)) — spis mógł się zmienić"
+            for stale in [staleUpToDate, staleGone] {
+                #expect(UpdatesSearch.caveat(for: stale, inventoryReadAt: readAt, now: now) == caveat, "\(stale)")
+                #expect(UpdatesSearch.links(for: stale) == [.inventory], "\(stale)")
+            }
+            #expect(UpdatesSearch.text(for: staleUpToDate, now: now)
+                    == "Spotify — aktualna (—, sprawdzono \(CheckedAtCopy.day(current.checkedAt, now: now)) przez Homebrew)", "no version from a list that may be old")
+            #expect(UpdatesSearch.text(for: staleGone, now: now) == "Nie widzę „nothing-like-it” wśród aplikacji na tym Macu.", "qualified, not withheld")
+            #expect(UpdatesSearch.links(for: .fromStaleInventory(.hiddenByRule(name: "Spotify"))) == [.rules, .inventory])
+        }
+        let fresh = answer("spotify", app, current)
+        #expect(fresh == .upToDate(name: "Spotify", version: "1.2.3", checkedAt: current.checkedAt, sources: ["Homebrew"]), "a current Inventory is unchanged")
+        for unqualified in [fresh, .notFound(query: "x"), .hiddenByRule(name: "Spotify"), .inventoryNotRead(query: "x"), .onList([], more: false)].compactMap({ $0 }) {
+            #expect(UpdatesSearch.caveat(for: unqualified, inventoryReadAt: readAt, now: now) == nil, "\(unqualified)")
+        }
+        #expect(UpdatesSearch.links(for: .hiddenByRule(name: "Spotify")) == [.rules])
+        #expect(UpdatesSearch.links(for: .notFound(query: "x")) == [.inventory] && UpdatesSearch.links(for: .onList([], more: false)).isEmpty)
     }
 
     // MARK: - Helpers
@@ -189,8 +239,8 @@ struct UpdatesSearchTests {
                         installDate: nil, updateDate: nil, isManagedByBrew: false)
     }
 
-    private func answer(_ query: String, _ app: ApplicationInfo, _ check: InstallationCheck?) -> UpdatesSearchAnswer? {
-        UpdatesSearch.answer(query: query, rows: [], hiddenByRules: [], inventory: [app],
+    private func answer(_ query: String, _ app: ApplicationInfo, _ check: InstallationCheck?, stale: Bool = false) -> UpdatesSearchAnswer? {
+        UpdatesSearch.answer(query: query, rows: [], hiddenByRules: [], inventory: [app], inventoryIsStale: stale,
                              checks: check.map { [InstallationIdentity(path: $0.path): $0] } ?? [:], policies: [:], now: now)
     }
 

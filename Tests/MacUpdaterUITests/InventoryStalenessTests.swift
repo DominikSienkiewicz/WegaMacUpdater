@@ -135,8 +135,10 @@ struct InventoryStalenessTests {
     }
 
     @Test func theInventoryStampTakesInTheInstallAndUndoCounts() throws {
-        let inventory = try source("Sources/MacUpdater/InventoryView.swift")
-        #expect(inventory.contains("manualInstalls: scanStore.completedManualInstallCount") && inventory.contains("undos: scanStore.completedUndoCount"))
+        let stamp = try source("Sources/MacUpdater/InventoryStore.swift")
+        #expect(stamp.contains("manualInstalls: scan.completedManualInstallCount") && stamp.contains("undos: scan.completedUndoCount"))
+        #expect(try source("Sources/MacUpdater/InventoryView.swift").contains("InventoryChangeStamp.current(scan: scanStore,"),
+                "the screen reads the shared stamp")
     }
 
     /// `brew upgrade` succeeds and every listing comes back empty, so the rescan confirms the run.

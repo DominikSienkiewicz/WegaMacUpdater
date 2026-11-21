@@ -56,16 +56,18 @@ enum UpdatesSearch {
     }
 
     /// The list's matches first, then a rule that hides the app, then what Inventory knows.
-    /// `inventory` is nil until Inventory has been read once.
+    /// `inventory` is nil until Inventory has been read once; `inventoryIsStale` says something has
+    /// changed the installed apps since that read, so what it holds is only what it held then.
     static func answer(
-        query: String, rows: [Row], hiddenByRules: [UpdatePolicyEntry], inventory: [ApplicationInfo]?,
-        checks: [InstallationIdentity: InstallationCheck], policies: [String: UpdatePolicy] = [:], now: Date = Date()
+        query: String, rows: [Row], hiddenByRules: [UpdatePolicyEntry], inventory: [ApplicationInfo]?, inventoryIsStale: Bool,
+        checks: [InstallationIdentity: InstallationCheck] = [:], policies: [String: UpdatePolicy] = [:], now: Date = Date()
     ) -> UpdatesSearchAnswer? {
         guard let query = normalized(query) else { return nil }
         if let listed = listAnswer(query, rows: rows) { return listed }
         if let rule = ruleAnswer(query, rules: hiddenByRules) { return rule }
         guard let inventory else { return .inventoryNotRead(query: query) }
-        return inventoryAnswer(query, apps: inventory, checks: checks, policies: policies, now: now) ?? .notFound(query: query)
+        let read = inventoryAnswer(query, apps: inventory, checks: checks, policies: policies, now: now) ?? .notFound(query: query)
+        return inventoryIsStale ? .fromStaleInventory(withoutVersion(read)) : read
     }
 
     /// The answer as Wega says it; nil for `.onList`, which the row draws as links.
@@ -84,7 +86,36 @@ enum UpdatesSearch {
             return trf("Nie mam jeszcze spisu aplikacji, więc nie wiem, co z „%@”.", query)
         case .notFound(let query):
             return trf("Nie widzę „%@” wśród aplikacji na tym Macu.", query)
+        case .fromStaleInventory(let read):
+            return text(for: read, now: now)
         }
+    }
+
+    /// Where an answer leads besides its own text.
+    enum Link: Equatable { case rules, inventory }
+
+    /// The rules for an app a rule hides; Inventory for whatever Inventory said or could not say,
+    /// and for anything read from an Inventory that may have changed.
+    static func links(for answer: UpdatesSearchAnswer) -> [Link] {
+        switch answer {
+        case .onList: []
+        case .hiddenByRule: [.rules]
+        case .fromStaleInventory(let read): links(for: read).filter { $0 != .inventory } + [.inventory]
+        case .upToDate, .notChecked, .inventoryNotRead, .notFound: [.inventory]
+        }
+    }
+
+    /// The Inventory screen's own „Odczytano … — spis mógł się zmienić” under an answer read from
+    /// an Inventory that may have changed since; nil for every other answer.
+    static func caveat(for answer: UpdatesSearchAnswer, inventoryReadAt: Date?, now: Date) -> String? {
+        guard case .fromStaleInventory = answer, let inventoryReadAt else { return nil }
+        return trf("Odczytano %@ — spis mógł się zmienić", CheckedAtCopy.day(inventoryReadAt, now: now))
+    }
+
+    /// A version read before an update may be the one the update replaced.
+    private static func withoutVersion(_ answer: UpdatesSearchAnswer) -> UpdatesSearchAnswer {
+        guard case let .upToDate(name, _, checkedAt, sources) = answer else { return answer }
+        return .upToDate(name: name, version: nil, checkedAt: checkedAt, sources: sources)
     }
 
     private static func fold(_ text: String) -> String {
@@ -155,28 +186,50 @@ enum UpdatesSearchAnswer: Equatable {
     case notChecked(name: String, reason: NotCheckedReason)
     case inventoryNotRead(query: String)
     case notFound(query: String)
+    /// An answer read from an Inventory that something has changed since (an update run, a
+    /// migration, a removal, an install, an undo); an up-to-date answer leaves its version out.
+    indirect case fromStaleInventory(UpdatesSearchAnswer)
 }
 
 /// ⌘F's answer, one row above the Updates list: the matches as links that open the inspector, or
 /// Inventory's word on an app that is not on the list, with the way to the rules or to Inventory.
+/// What a changed Inventory said carries that Inventory's caveat on a line of its own.
 struct UpdatesSearchAnswerRow: View {
     let answer: UpdatesSearchAnswer
+    /// When the Inventory behind the answer was read; nil before the first read.
+    let inventoryReadAt: Date?
     let onShow: (UpdatesSearch.Row) -> Void
     let onShowRules: () -> Void
     let onOpenInventory: () -> Void
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) { content }
-            VStack(alignment: .leading, spacing: 4) { content }
+        let caveat = UpdatesSearch.caveat(for: answer, inventoryReadAt: inventoryReadAt, now: Date())
+        VStack(alignment: .leading, spacing: 4) {
+            line { primary(inventoryLinkHere: caveat == nil) }
+            if let caveat {
+                line {
+                    Text(caveat)
+                        .fixedSize(horizontal: false, vertical: true)
+                    inventoryLink
+                }
+            }
         }
         .font(.wega(.callout))
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// One line, or the same parts stacked when they do not fit side by side.
+    private func line<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { content() }
+            VStack(alignment: .leading, spacing: 4) { content() }
+        }
+    }
+
     @ViewBuilder
-    private var content: some View {
+    private func primary(inventoryLinkHere: Bool) -> some View {
+        let links = UpdatesSearch.links(for: answer)
         if case let .onList(rows, more) = answer {
             Text(tr("Na liście aktualizacji:"))
             ForEach(rows) { row in
@@ -189,22 +242,29 @@ struct UpdatesSearchAnswerRow: View {
         } else if let text = UpdatesSearch.text(for: answer, now: Date()) {
             Label(text, systemImage: symbol)
                 .fixedSize(horizontal: false, vertical: true)
-            if case .hiddenByRule = answer {
+            if links.contains(.rules) {
                 Button(tr("Pokaż reguły"), action: onShowRules)
                     .buttonStyle(.link)
-            } else {
-                Button(tr("Otwórz Spis"), action: onOpenInventory)
-                    .buttonStyle(.link)
+            }
+            if inventoryLinkHere, links.contains(.inventory) {
+                inventoryLink
             }
         }
     }
 
+    private var inventoryLink: some View {
+        Button(tr("Otwórz Spis"), action: onOpenInventory)
+            .buttonStyle(.link)
+    }
+
     private var symbol: String {
-        switch answer {
-        case .upToDate: "checkmark.circle"
-        case .notChecked: "questionmark.circle"
-        case .hiddenByRule: "eye.slash"
-        case .onList, .inventoryNotRead, .notFound: "magnifyingglass"
+        var shown = answer
+        if case .fromStaleInventory(let read) = answer { shown = read }
+        switch shown {
+        case .upToDate: return "checkmark.circle"
+        case .notChecked: return "questionmark.circle"
+        case .hiddenByRule: return "eye.slash"
+        case .onList, .inventoryNotRead, .notFound, .fromStaleInventory: return "magnifyingglass"
         }
     }
 }

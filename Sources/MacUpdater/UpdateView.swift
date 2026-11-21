@@ -55,6 +55,9 @@ struct UpdateView: View {
     @EnvironmentObject private var scan: ScanStore
     /// Read, never started, by the search's answer: the read asks the network for the cask catalog.
     @EnvironmentObject private var inventory: InventoryStore
+    /// With `cleanup`, the counts that say whether that read may no longer match the disk.
+    @EnvironmentObject private var migration: MigrationStore
+    @EnvironmentObject private var cleanup: CleanupStore
     /// False while another destination covers this screen; see `EnvironmentValues.updatesOnScreen`.
     @Environment(\.updatesOnScreen) private var onScreen
 
@@ -419,7 +422,7 @@ struct UpdateView: View {
 
             // UXP-35 — ⌘F answers above the list and never filters it.
             if let answer = searchAnswer {
-                UpdatesSearchAnswerRow(answer: answer, onShow: showSearchMatch, onShowRules: { showsHiddenRules = true },
+                UpdatesSearchAnswerRow(answer: answer, inventoryReadAt: inventory.lastReadAt, onShow: showSearchMatch, onShowRules: { showsHiddenRules = true },
                                        onOpenInventory: { onNavigate?(.inventory) })
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
@@ -448,6 +451,7 @@ struct UpdateView: View {
         return UpdatesSearch.answer(
             query: searchQuery, rows: searchRows, hiddenByRules: scan.rulesHidingResults,
             inventory: inventory.lastReadAt == nil ? nil : inventory.apps,
+            inventoryIsStale: inventory.isStale(given: InventoryChangeStamp.current(scan: scan, migration: migration, cleanup: cleanup, menuBar: MenuBarAgent.shared)),
             checks: InventoryCheckSource.checksByPath(scan: scan.installationChecks, scanCheckedAt: scan.lastCheck,
                                                       background: MenuBarAgent.shared.lastResult),
             policies: policies.policiesMap, now: Date()

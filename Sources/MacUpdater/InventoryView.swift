@@ -44,14 +44,7 @@ struct InventoryView: View {
     /// What has finished since launch that changes the installed apps. The stores keep counting
     /// while the window is closed, so the next entry still sees what happened.
     private var changes: InventoryChangeStamp {
-        InventoryChangeStamp(
-            updateRuns: scanStore.completedRunCount,
-            migrations: migration.completedCount,
-            cleanupRemovals: cleanup.removalCount,
-            backgroundInstalls: menuBar.installedRoundCount,
-            manualInstalls: scanStore.completedManualInstallCount,
-            undos: scanStore.completedUndoCount
-        )
+        InventoryChangeStamp.current(scan: scanStore, migration: migration, cleanup: cleanup, menuBar: menuBar)
     }
 
     private var apps: [ApplicationInfo] { inventory.apps }
