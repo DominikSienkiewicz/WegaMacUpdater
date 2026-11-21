@@ -768,13 +768,27 @@ already replaced `sudo_local` and cannot put the old one back does it keep that 
 name.
 
 **When the card offers no command and no button.** The card then names the problem, says to
-repair it from recoveryOS (macOS Recovery; the card uses that name) and not to type a password into `sudo` until then, even when Wega
-asks for one during an update, because `sudo` reads these settings before it asks for anything.
+repair it from recoveryOS (macOS Recovery; the card uses that name) and not to type a password into `sudo` until then,
+because `sudo` reads these settings before it asks for anything.
 That happens when `sudo_local` is not a regular file, when `sudo_local` or `/etc/pam.d` can be
 changed by someone other than root or looks different from what it should (whether Wega saw it
 or the helper reported it), when someone other than root can change `/etc/pam.d/sudo`, and
 when Wega cannot establish that these settings are safe. The repair steps are in
 [Turning off Touch ID for sudo](#turning-off-touch-id-for-sudo) below.
+
+**While that note shows, Wega asks for no administrator password.** An update run then skips the
+casks that may ask for it (those with a `pkg`, `installer` or `preflight` stanza, and those Wega
+knows nothing about yet); their rows say **skipping — may need a password**, and the summary
+lists them under **Not started** with **Open Touch ID card**. Above the list, a warning names
+them before you start. An App Store update that stops where it would need `sudo` is not given a
+password prompt; the summary shows it under **Needs attention** as not finished, with the same
+button. Every other update runs as usual. Wega looks at the settings right before the run and
+again before each such cask, so settings that turn unsafe during a run stop the prompts too.
+Wega's own askpass and its `sudo` shim check the settings themselves as well and ask for nothing.
+If a cask still runs `sudo` on its own, then with Touch ID for `sudo` off it fails without a
+prompt; with Touch ID on, `sudo` may still show its Touch ID sheet, but never a password field.
+The banner after such a failure offers **Open Touch ID card**. After you repair the settings from
+recoveryOS and start your Mac again, the next run updates those apps as usual.
 
 To turn it off again, use **Turn Off Touch ID for sudo** on the same card; it appears when the
 Wega helper is installed and up to date. If the helper is missing or out of date, the card shows

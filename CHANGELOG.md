@@ -116,9 +116,23 @@ them verbatim under the new version heading, so that step is never done by hand 
   not a regular file, `sudo_local` or `/etc/pam.d` can be changed by someone other than root
   (whether Wega saw it or the helper reported it), `/etc/pam.d/sudo` is unsafe, or Wega cannot
   establish that they are safe, the Touch ID card shows no button and no command and says to
-  repair it from recoveryOS and to type no password into `sudo` meanwhile, even when Wega asks
-  for one during an update. The guide no longer offers an `osascript` administrator-prompt
-  repair; recoveryOS is the only route.
+  repair it from recoveryOS and to type no password into `sudo` meanwhile. The guide no longer
+  offers an `osascript` administrator-prompt repair; recoveryOS is the only route.
+- **Wega asks for no administrator password while those settings cannot be trusted.** `sudo`
+  reads them before it asks, so a module someone added there could keep the password. Whenever
+  the Touch ID card shows its recoveryOS note, an update run starts none of the casks that may
+  ask for the password (a `pkg`, `installer` or `preflight` stanza, or one Wega knows nothing
+  about yet): they take no part in the run's preparation, their rows say **skipping — may need a
+  password**, the summary lists them under **Not started** with **Open Touch ID card**, and the
+  list warns before the run which of them it will skip. An App Store update that stops where it
+  would need `sudo` is not primed for it; the summary shows it under **Needs attention** as not
+  finished, with the same button. Everything else updates as before. Wega checks right before
+  the run and again before each such cask, so settings that turn unsafe during a run stop the
+  prompts too. Behind that, the brew environment names no askpass and puts no `sudo -A` shim
+  first, the shim runs `sudo -n` instead, and the askpass exits without showing a password field.
+  With Touch ID for `sudo` off, a cask that still runs `sudo` on its own fails without a prompt;
+  with it on, such a `sudo` may still show the Touch ID sheet, but never a password field. The
+  failure banner then offers **Open Touch ID card** instead of **Enable Touch ID**.
 - **The manual command to turn Touch ID on is safer.** It runs through `/usr/bin/sudo` in the C
   locale, refuses an existing `sudo_local` that is a link, is not a regular file, is not owned
   by root, is writable by group or others or has an ACL, refuses an unsafe `sudo_local.template`

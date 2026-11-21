@@ -117,7 +117,9 @@ func makeScanStoreRuntimeHarness(
     undoableUpdates: @escaping () -> [UndoableUpdate] = { [] },
     announcer: any AccessibilityAnnouncing = RecordingAnnouncer(),
     now: @escaping @MainActor () -> Date = { Date() },
-    onWindowScanRunning: @escaping @MainActor (Bool) -> Void = { _ in }
+    onWindowScanRunning: @escaping @MainActor (Bool) -> Void = { _ in },
+    sudoPolicyDistrust: @escaping @MainActor () -> SudoPolicyDistrust? = { nil },
+    masPasswordPromptsAllowed: @escaping @Sendable () -> Bool = { true }
 ) -> ScanStoreRuntimeHarness {
     let toolURL = URL(fileURLWithPath: "/bin/echo")
     let locator = BinaryLocator(brewCandidates: [toolURL], masCandidates: [toolURL])
@@ -144,7 +146,8 @@ func makeScanStoreRuntimeHarness(
         // other test in the process that starts a run (G2).
         upgradeMutex: UpgradeMutex(),
         now: now,
-        reportWindowScanRunning: onWindowScanRunning
+        reportWindowScanRunning: onWindowScanRunning,
+        sudoPolicyDistrust: sudoPolicyDistrust
     )
     let store = ScanStore(
         resultStore: ScanResultStore(io: snapshots),
@@ -154,7 +157,7 @@ func makeScanStoreRuntimeHarness(
     )
     store.attach(model: AppViewModel(
         brewService: BrewService(locator: locator, runner: runner),
-        masService: MasService(locator: locator, runner: runner),
+        masService: MasService(locator: locator, runner: runner, passwordPromptsAllowed: masPasswordPromptsAllowed),
         npmService: NpmGlobalService(
             locator: NpmLocator(extraCandidates: [toolURL], runner: runner),
             runner: runner

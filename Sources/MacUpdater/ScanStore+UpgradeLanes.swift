@@ -215,7 +215,7 @@ extension ScanStore {
 
         for token in lanes.serial {
             guard let item = itemsByToken[token] else { continue }
-            results.append(await upgradeCaskGated(item: item, preparation: preparation))
+            results.append(await upgradeCaskGated(item: item, preparation: preparation, mayAskForPassword: true))
         }
 
         return inPlanOrder(results, plan: items)
@@ -261,7 +261,7 @@ extension ScanStore {
             "$ mas upgrade " + appStoreIDs.joined(separator: " "), from: "mas"))
 
         do {
-            let result = try await model.masService.upgrade(appStoreIDs: appStoreIDs)
+            let result = try await model.masService.upgrade(appStoreIDs: appStoreIDs, holdingPasswordPrompts: passwordHold != nil)
             let lines = result.stdout.components(separatedBy: "\n").filter { !$0.isEmpty }
             brewLog.append(contentsOf: UpgradeLogPrefix.lines(lines, from: "mas"))
             markRunLane(.appStore, .installedChecking)
@@ -269,7 +269,12 @@ extension ScanStore {
             upgradeProgress = upgradeTracker?.progress
             return (appStoreItems, nil)
         } catch {
-            markRunLane(.appStore, .failed)
+            if case MasServiceError.passwordPromptHeld = error {
+                heldForPasswordKeys.formUnion(appStoreItems.map(\.key))
+                markRunLane(.appStore, .heldForPassword)
+            } else {
+                markRunLane(.appStore, .failed)
+            }
             brewLog.append(UpgradeLogPrefix.line("error: \(error.localizedDescription)", from: "mas"))
             WegaLog.error(.app, "mas upgrade: \(error.localizedDescription)")
             return (appStoreItems, error.localizedDescription)
@@ -306,11 +311,15 @@ extension ScanStore {
     /// exists to repair. A row that never started is recorded as skipped and reports nothing.
     private func upgradeCaskGated(
         item: OutdatedItem,
-        preparation: ForegroundCaskPreparation
+        preparation: ForegroundCaskPreparation,
+        mayAskForPassword: Bool = false
     ) async -> LaneItemResult {
         guard !shouldStopUpdate(before: [item.key]) else {
             UpdateDiagnostics.record("upgrade.skipped", fields: ["token": item.name, "reason": "stopRequested"])
             markRunRow(item.key, .notStarted)
+            return LaneItemResult(item: item, outcome: nil)
+        }
+        if mayAskForPassword, holdsPasswordPrompt(for: item) {
             return LaneItemResult(item: item, outcome: nil)
         }
         return await upgradeOneCask(
@@ -319,6 +328,20 @@ extension ScanStore {
             snapshots: preparation.snapshots,
             operation: preparation.operation
         )
+    }
+
+    /// Owner decision 2026-11-21 — a cask that may ask for the administrator password starts only
+    /// while the settings `sudo` reads can be trusted. The gate is asked again before each such
+    /// cask, so settings that turn unsafe mid-run stop the prompts too; once closed it stays closed.
+    func holdsPasswordPrompt(for item: OutdatedItem) -> Bool {
+        if passwordHold == nil { passwordHold = dependencies.sudoPolicyDistrust() }
+        guard let passwordHold else { return false }
+        heldForPasswordKeys.insert(item.key)
+        markRunRow(item.key, .heldForPassword)
+        UpdateDiagnostics.record("upgrade.skipped", fields: [
+            "token": item.name, "reason": "sudoPolicyUntrusted", "distrust": passwordHold.logName
+        ])
+        return true
     }
 
     private func inPlanOrder(_ results: [LaneItemResult], plan: [OutdatedItem]) -> [LaneItemResult] {

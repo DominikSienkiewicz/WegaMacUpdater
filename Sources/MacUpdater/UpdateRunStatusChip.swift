@@ -36,6 +36,8 @@ struct UpdateRunStatusChip: View {
             Image(systemName: "exclamationmark.triangle")
         case .notStarted:
             Image(systemName: "forward.end")
+        case .heldForPassword:
+            Image(systemName: "lock")
         }
     }
 

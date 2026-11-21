@@ -45,8 +45,11 @@ let package = Package(
             path: "Sources/WegaPrivilegedHelper",
             exclude: ["com.wega.WegaMacUpdater.helper.plist"]
         ),
+        // The askpass asks the same sudo-settings gate as the app before it shows a password
+        // field, so it links the Core read of those settings.
         .executableTarget(
             name: "WegaAskpass",
+            dependencies: ["MacUpdaterCore"],
             path: "Sources/WegaAskpass"
         ),
         .executableTarget(

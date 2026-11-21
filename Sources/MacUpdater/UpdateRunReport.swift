@@ -25,6 +25,9 @@ struct UpdateRunReportEntry: Equatable, Sendable, Identifiable {
     let verdict: ItemUpdateVerdict?
     /// The stop switch skipped it (`UpdateInterruption.skippedKeys`).
     let wasSkipped: Bool
+    /// It may ask for the administrator password, and the run did not start it, or let `mas` ask,
+    /// while the settings `sudo` reads could not be trusted (owner decision 2026-11-21).
+    var wasHeldForPassword = false
     /// `.publisherChanged` only: what the check after the run said about it. `.confirmed` for
     /// every other verdict (Core's `applyRescan` already folded the check into those).
     let checkAnswer: UpdateRunCheckAnswer
@@ -111,6 +114,11 @@ struct UpdateRunReportEntry: Equatable, Sendable, Identifiable {
     /// The row's sentence, worded now (re-read after a language switch). `undo` is this run's
     /// undo for the item, when one exists.
     func note(undo: UndoableUpdate?) -> String {
+        if wasHeldForPassword, result != .updated {
+            // The App Store batch did start: `mas` stopped where it would have asked.
+            return verdict == nil ? Self.heldForPasswordNote
+                : tr("nie dokończyłam: App Store potrzebował hasła administratora, a ustawieniom, które czyta sudo, nie można teraz ufać — co zrobić, mówi karta Touch ID w Ustawieniach")
+        }
         guard let verdict else {
             return wasSkipped ? tr("zatrzymano przed startem") : tr("nie uruchomiłam — szczegóły w logu")
         }
@@ -132,6 +140,14 @@ struct UpdateRunReportEntry: Equatable, Sendable, Identifiable {
         case .notVerified:
             return tr("zainstalowano, ale sprawdzenie nie potwierdziło wyniku")
         }
+    }
+
+    /// Whether the row offers „Otwórz kartę Touch ID”: its note points there.
+    var pointsAtTouchIDCard: Bool { wasHeldForPassword && result != .updated }
+
+    /// Points at the Touch ID card, whose note says what is wrong and that only recoveryOS fixes it.
+    static var heldForPasswordNote: String {
+        tr("pominęłam: może potrzebować hasła administratora, a ustawieniom, które czyta sudo, nie można teraz ufać — co zrobić, mówi karta Touch ID w Ustawieniach")
     }
 
     private func updatedNote(undo: UndoableUpdate?) -> String {
@@ -162,7 +178,7 @@ struct UpdateRunReport: Equatable, Sendable {
     /// that stopped nothing, prepared no cask and kept its own start time. `confirmed` is the
     /// answer Core's `applyRescan` was given: the check heard from every source the plan touched.
     static func make(planned: [OutdatedItem], summary: UpdateRunSummary,
-                     skippedKeys: Set<String> = [], wasStopped: Bool = false,
+                     skippedKeys: Set<String> = [], heldForPasswordKeys: Set<String> = [], wasStopped: Bool = false,
                      startedAt: Date? = nil, finishedAt: Date,
                      caskOperationID: UUID? = nil, caskAppPaths: [String: URL] = [:],
                      stillOutdatedKeys: Set<String>,
@@ -176,6 +192,7 @@ struct UpdateRunReport: Equatable, Sendable {
                 key: item.key, name: item.name, kind: item.kind, from: item.from, to: item.to,
                 verdict: verdict,
                 wasSkipped: skippedKeys.contains(item.key),
+                wasHeldForPassword: heldForPasswordKeys.contains(item.key),
                 checkAnswer: checkAnswer(for: verdict, key: item.key,
                                          stillOutdatedKeys: stillOutdatedKeys, confirmed: confirmed),
                 appPath: item.kind == .cask ? caskAppPaths[item.name] : nil,
@@ -223,7 +240,9 @@ struct UpdateRunReport: Equatable, Sendable {
     var failureLogLinesBeyondTheSummary: [String] {
         entries.compactMap { entry in
             guard let verdict = entry.verdict else {
-                let reason = entry.wasSkipped ? "zatrzymano przed startem" : "nie uruchomiono — żaden etap aktualizacji nie objął tej pozycji"
+                let reason = entry.wasHeldForPassword
+                    ? "pominięto — może wymagać hasła administratora, a ustawieniom, które czyta sudo, nie można ufać"
+                    : entry.wasSkipped ? "zatrzymano przed startem" : "nie uruchomiono — żaden etap aktualizacji nie objął tej pozycji"
                 return "\(entry.name): \(reason)"
             }
             guard case .publisherChanged = verdict, entry.result != .updated else { return nil }

@@ -18,6 +18,7 @@ final class HomebrewEnvironmentTouchIDTests: XCTestCase {
     }
 
     override func tearDown() {
+        HomebrewEnvironment.passwordPromptsOverride = nil
         HomebrewEnvironment.touchIDStateOverride = nil
         HomebrewEnvironment.sudoShimDirectory = nil
         HomebrewEnvironment.askpassPath = nil
@@ -46,6 +47,21 @@ final class HomebrewEnvironmentTouchIDTests: XCTestCase {
         XCTAssertTrue(path.hasPrefix("/tmp/fake-shim-dir:"),
                       "Touch ID available but not enabled: shim must be first on PATH. Got: \(path)")
         XCTAssertEqual(HomebrewEnvironment.environment["SUDO_ASKPASS"], "/tmp/fake-askpass.sh")
+    }
+
+    /// Owner decision 2026-11-21 (review 7): while the gate is closed, no environment Wega hands a
+    /// child names the askpass or puts the shim first, the cleanup queries' included.
+    func testAClosedGateTakesTheAskpassAndTheShimOutOfEveryEnvironment() {
+        HomebrewEnvironment.touchIDStateOverride = .available
+        HomebrewEnvironment.passwordPromptsOverride = false
+        for (name, env) in [("environment", HomebrewEnvironment.environment),
+                            ("brewEnvironment", HomebrewEnvironment.brewEnvironment),
+                            ("cleanupQueryEnvironment", HomebrewEnvironment.cleanupQueryEnvironment)] {
+            XCTAssertNil(env["SUDO_ASKPASS"], name)
+            XCTAssertEqual(env["PATH"], HomebrewEnvironment.processPath, name)
+        }
+        HomebrewEnvironment.passwordPromptsOverride = true
+        XCTAssertEqual(HomebrewEnvironment.environment["SUDO_ASKPASS"], "/tmp/fake-askpass.sh", "the gate opens again")
     }
 
     func testTouchIDNotSupportedKeepsShimOnPath() {

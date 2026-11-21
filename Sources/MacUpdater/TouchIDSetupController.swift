@@ -37,6 +37,9 @@ final class TouchIDSetupController: ObservableObject {
     var disableWithHelper: @MainActor @Sendable () async throws -> TouchIDSudoDisableResult = { .nothingToRemove }
     var disableAvailability: @MainActor @Sendable () async -> HelperVerbAvailability = { .enabled }
     var preflight: @Sendable () -> TouchIDDisablePreflight = { .clear }
+    /// Where the card's look and the helper's −4/−5 also close Wega's own password prompts. A test
+    /// gets a gate of its own; `.live` shares the app's.
+    var promptGate = SudoPasswordPromptGate(readPreflight: { .clear })
     /// Takes only the verb and the helper's code, so no path or byte of the file can reach the log.
     var logHelperCode: @Sendable (WegaHelperVerb, Int) -> Void = { verb, code in
       WegaLog.error(.helper, "Helper \(verb.rawValue): kod \(code)")
@@ -67,7 +70,8 @@ final class TouchIDSetupController: ObservableObject {
       disableAvailability: {
         await PrivilegedHelperClient.shared.availabilityAfterHandshake(for: .disableTouchIDForSudo)
       },
-      preflight: { TouchIDDisablePreflight.live() }
+      preflight: { TouchIDDisablePreflight.live() },
+      promptGate: .shared
     )
   }
 
@@ -84,7 +88,14 @@ final class TouchIDSetupController: ObservableObject {
   init(dependencies: Dependencies = .live) {
     self.dependencies = dependencies
     state = .idle(dependencies.currentState())
+    helperReportedUnsafePolicy = dependencies.promptGate.helperReportedUnsafePolicy
+    readPreflight()
+  }
+
+  /// The card's look, recorded where Wega's own password prompts read it as well.
+  private func readPreflight() {
     preflight = dependencies.preflight()
+    dependencies.promptGate.record(preflight)
   }
 
   var touchIDState: TouchIDSudoConfigurator.State {
@@ -124,21 +135,13 @@ final class TouchIDSetupController: ObservableObject {
   var unsafePolicy: TouchIDSudoDisableRefusal? { preflight.refusal ?? helperReportedUnsafePolicy }
 
   /// Why the card offers no `sudo` route at all, neither a Terminal command nor a helper button, only
-  /// recoveryOS advice: `sudo` reads these settings before it asks for anything (RC2-6, RC2-7).
-  enum RecoveryOnlyReason: Equatable {
-    /// −4 or −5, as the app saw it or a helper call reported it.
-    case unsafePolicy(TouchIDSudoDisableRefusal)
-    /// The app saw that someone other than root can change `/etc/pam.d/sudo`.
-    case unsafeSudoFile
-    /// The app could not establish that the settings are root's alone; treated like −5.
-    case noProofOfSafety
-  }
+  /// recoveryOS advice: `sudo` reads these settings before it asks for anything (RC2-6, RC2-7). The
+  /// same reason closes Wega's own password prompts (`SudoPasswordPromptGate`).
+  typealias RecoveryOnlyReason = SudoPolicyDistrust
 
   /// What was seen comes before what could not be established.
   var recoveryOnlyReason: RecoveryOnlyReason? {
-    if let unsafePolicy { return .unsafePolicy(unsafePolicy) }
-    if preflight.sudoPolicyIsUnsafe { return .unsafeSudoFile }
-    return preflight.commandsAreSafe ? nil : .noProofOfSafety
+    preflight.recoveryOnlyReason(helperReported: helperReportedUnsafePolicy)
   }
 
   var offersEnableButton: Bool { touchIDState == .available && !wasPermissionDenied && recoveryOnlyReason == nil }
@@ -161,7 +164,7 @@ final class TouchIDSetupController: ObservableObject {
     // rebuilds it and a freshly enabled Touch ID is respected immediately.
     HomebrewEnvironment.invalidateCache()
     state = .idle(dependencies.currentState())
-    preflight = dependencies.preflight()
+    readPreflight()
     enableHelperOutdated = false
   }
 
@@ -221,7 +224,7 @@ final class TouchIDSetupController: ObservableObject {
   /// The state in which the card may show the manual enable command. M6: the preflight is read again
   /// first, so the command never rests on the card's last look.
   private func showManualEnableRoute() {
-    preflight = dependencies.preflight()
+    readPreflight()
     state = .permissionDenied(touchIDState)
   }
 
@@ -248,13 +251,19 @@ final class TouchIDSetupController: ObservableObject {
   /// policy. A refusal or a failure is logged by its code alone.
   private func noteHelperReply(_ verb: WegaHelperVerb, code: Int) {
     if code >= 0 {
-      helperReportedUnsafePolicy = nil
+      noteHelperReported(nil)
       return
     }
     dependencies.logHelperCode(verb, code)
     if let refusal = TouchIDSudoDisableRefusal(rawValue: code), refusal == .notRegularFile || refusal == .unsafeOwnership {
-      helperReportedUnsafePolicy = refusal
+      noteHelperReported(refusal)
     }
+  }
+
+  /// Kept here for the card and in the gate for the prompts, so a Settings window opened again knows.
+  private func noteHelperReported(_ refusal: TouchIDSudoDisableRefusal?) {
+    helperReportedUnsafePolicy = refusal
+    dependencies.promptGate.helperReportedUnsafePolicy = refusal
   }
 
   /// One bounded handshake, and only when Touch ID is on and nothing the app observed already

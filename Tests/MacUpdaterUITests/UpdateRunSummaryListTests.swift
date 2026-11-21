@@ -64,6 +64,7 @@ struct UpdateRunSummaryListTests {
                         if isEnabled {
                             if let onTrust { Button(tr("Zaufaj nowemu podpisowi"), action: onTrust) }
                             if let onUndo, !isUndoing { Button(tr("Cofnij"), action: onUndo) }
+                            if let onOpenTouchIDCard { Button(tr("Otwórz kartę Touch ID"), action: onOpenTouchIDCard) }
                         }
                     }
             """), "one element per row, as the list's rows: its buttons are also its named actions")

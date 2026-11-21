@@ -722,6 +722,9 @@ func selectionToggleBinding(
 
 enum BannerAction: Equatable {
     case openLogs, openSettings, openAppManagementSettings
+    /// The Touch ID card, for its recoveryOS note rather than to turn Touch ID on (owner decision
+    /// 2026-11-21: while that note shows, Touch ID is no advice).
+    case openTouchIDCard
     /// Runs `brew reinstall --cask` for the token through the protected adoption flow.
     case reinstallCask(token: String)
     /// Accepts the cask's new publisher Team ID after the user confirms it. `teamID` is the ID
@@ -828,6 +831,7 @@ struct BannerView: View {
         switch action {
         case .openLogs:     return tr("Pokaż w logach")
         case .openSettings: return tr("Włącz Touch ID")
+        case .openTouchIDCard: return tr("Otwórz kartę Touch ID")
         case .openAppManagementSettings: return tr("Otwórz ustawienia prywatności")
         case .reinstallCask: return tr("Przeinstaluj przez Brew")
         case .trustPublisher: return tr("Zaufaj nowemu podpisowi")
@@ -838,7 +842,7 @@ struct BannerView: View {
         switch action {
         case .reinstallCask: return "arrow.clockwise.circle"
         case .trustPublisher: return "checkmark.shield"
-        case .openLogs, .openSettings, .openAppManagementSettings: return "info.circle"
+        case .openLogs, .openSettings, .openAppManagementSettings, .openTouchIDCard: return "info.circle"
         }
     }
 }

@@ -24,6 +24,25 @@ enum PasswordPromptNotice {
     struct Probe: Equatable {
         let installed: Bool
         let touchID: TouchIDSudoConfigurator.State
+        /// Owner decision 2026-11-21 — why Wega asks for no password right now; `nil` when it may.
+        var sudoDistrust: SudoPolicyDistrust? = nil
+    }
+
+    /// Owner decision 2026-11-21 — while the settings `sudo` reads cannot be trusted, the queued
+    /// updates that may need the password will be skipped, and this says so before the run.
+    static func holdsPrompts(probe: Probe?, queuedNeedingPassword: [String]) -> Bool {
+        probe?.sudoDistrust != nil && !queuedNeedingPassword.isEmpty
+    }
+
+    /// The queued casks the run will hold: those that may ask and those whose profile is unknown,
+    /// as `CaskUpgradeLanes` sends them to its serial lane.
+    static func heldTokens(casks: [String], profiles: [String: CaskArtifactProfile]) -> [String] {
+        CaskUpgradeLanes(tokens: casks, profiles: profiles).serial
+    }
+
+    static func heldMessage(names: [String]) -> String {
+        trf("Dopóki ustawieniom, które czyta sudo, nie można ufać, nie poproszę o hasło administratora, więc pominę %@. Co zrobić, mówi karta Touch ID w Ustawieniach.",
+            names.joined(separator: ", "))
     }
 
     static func shouldWarn(probe: Probe?, queuedNeedingPassword: [String]) -> Bool {
@@ -37,9 +56,12 @@ enum PasswordPromptNotice {
 }
 
 /// The warning above the Updates list. It is shown only while it can still be acted on:
-/// a queued cask needs the password, no `.pkg` payload is installed and Touch ID is off.
+/// a queued cask needs the password, no `.pkg` payload is installed and Touch ID is off. While the
+/// settings `sudo` reads cannot be trusted it says instead which of them the run will skip.
 struct PasswordPromptCallout: View {
     let queuedNeedingPassword: [String]
+    /// What the run would hold while the settings `sudo` reads cannot be trusted (`heldTokens`).
+    var queuedHeldWhileUntrusted: [String] = []
 
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openURL) private var openURL
@@ -49,10 +71,11 @@ struct PasswordPromptCallout: View {
         // A stack, not a `Group`: modifiers on a `Group` are applied to its children, and at
         // launch the banner has none — so the probe that would give it one never started.
         VStack(spacing: 0) { banner }
-            .task(id: queuedNeedingPassword) {
+            .task(id: queuedNeedingPassword + queuedHeldWhileUntrusted) {
                 let fresh = await Task.detached {
                     PasswordPromptNotice.Probe(installed: PasswordPromptAvailability.isInstalled(),
-                                               touchID: TouchIDSudoConfigurator.currentState())
+                                               touchID: TouchIDSudoConfigurator.currentState(),
+                                               sudoDistrust: SudoPasswordPromptGate.shared.check())
                 }.value
                 PasswordPromptProbeCache.value = fresh
                 probe = fresh
@@ -61,7 +84,13 @@ struct PasswordPromptCallout: View {
 
     @ViewBuilder
     private var banner: some View {
-        if let firstApp = queuedNeedingPassword.first, let probe,
+        if PasswordPromptNotice.holdsPrompts(probe: probe, queuedNeedingPassword: queuedHeldWhileUntrusted) {
+            WegaCallout(.warning, title: PasswordPromptNotice.heldMessage(names: queuedHeldWhileUntrusted)) {
+                Button(tr("Otwórz kartę Touch ID")) { SettingsRoute.shared.open(.touchID, with: openSettings) }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+        } else if let firstApp = queuedNeedingPassword.first, let probe,
            PasswordPromptNotice.shouldWarn(probe: probe, queuedNeedingPassword: queuedNeedingPassword) {
             WegaCallout(.warning, title: PasswordPromptNotice.message(firstApp: firstApp)) {
                 if let url = PasswordPromptNotice.releasesURL {

@@ -27,6 +27,7 @@ public enum HomebrewEnvironment {
         var askpassPath: String?
         var sudoShimDirectory: String?
         var touchIDStateOverride: TouchIDSudoConfigurator.State?
+        var passwordPromptsOverride: Bool?
         /// ARCH-08a: last fully-resolved environment. Populated on the first spawn
         /// and reused verbatim by every later spawn, so the sudo_local read, the
         /// biometry probe and the Mach-O signature verification happen once per
@@ -65,6 +66,13 @@ public enum HomebrewEnvironment {
     static var touchIDStateOverride: TouchIDSudoConfigurator.State? {
         get { storage.lock.withLock { storage.touchIDStateOverride } }
         set { storage.lock.withLock { storage.touchIDStateOverride = newValue; storage.cachedEnvironment = nil } }
+    }
+
+    /// Test seam — when non-nil, `environment` uses this instead of `SudoPasswordPromptGate.shared`.
+    /// Production code must leave this nil.
+    static var passwordPromptsOverride: Bool? {
+        get { storage.lock.withLock { storage.passwordPromptsOverride } }
+        set { storage.lock.withLock { storage.passwordPromptsOverride = newValue } }
     }
 
     /// Test seam (ARCH-08a): number of times `environment` was rebuilt from
@@ -106,6 +114,11 @@ public enum HomebrewEnvironment {
     /// `invalidateCache()` rebuilds it after the only mid-session change (Touch ID
     /// being enabled).
     public static var environment: [String: String] {
+        let resolved = resolvedEnvironment
+        return passwordPromptsAllowed ? resolved : withoutPasswordPrompts(resolved)
+    }
+
+    private static var resolvedEnvironment: [String: String] {
         if let cached = storage.lock.withLock({ storage.cachedEnvironment }) {
             return cached
         }
@@ -115,6 +128,15 @@ public enum HomebrewEnvironment {
             storage.computeCount += 1
         }
         return computed
+    }
+
+    /// The gate's last answer, applied to every spawn (it reads the settings only when asked: at
+    /// a run's start, before each cask that may ask, and when the Touch ID card looks). The Touch ID
+    /// test seam stands for a machine whose settings are not read, so it leaves prompts as they were.
+    private static var passwordPromptsAllowed: Bool {
+        if let override = passwordPromptsOverride { return override }
+        if touchIDStateOverride != nil { return true }
+        return SudoPasswordPromptGate.shared.allowsPasswordPrompts
     }
 
     private static func resolveEnvironment() -> [String: String] {
@@ -142,11 +164,29 @@ public enum HomebrewEnvironment {
         )
     }
 
+    /// Owner decision 2026-11-21: while the settings `sudo` reads cannot be trusted, no child of
+    /// Wega's is told where an askpass is, and no shim on its `PATH` forces `sudo -A`. A `sudo`
+    /// without a terminal then fails instead of asking for the password.
+    static func withoutPasswordPrompts(_ environment: [String: String]) -> [String: String] {
+        var closed = environment
+        closed["SUDO_ASKPASS"] = nil
+        closed["PATH"] = processPath
+        return closed
+    }
+
+    /// The shim's arguments to `/usr/bin/sudo`: `-A` while it may ask through the askpass, `-n`
+    /// otherwise, so `sudo` asks for nothing and fails instead.
+    public static func sudoShimArguments(forwarding arguments: [String], promptsAllowed: Bool) -> [String] {
+        [promptsAllowed ? "-A" : "-n"] + arguments
+    }
+
     /// Builds the trusted overrides used by the compiled sudo shim. It deliberately ignores
-    /// the shim's inherited environment and resolves the root-owned system helper again.
-    public static func trustedSudoShimOverrides() -> [String: String] {
+    /// the shim's inherited environment and resolves the root-owned system helper again, and
+    /// names it only while `promptsAllowed`. `AuthorizationEnvironment.sanitized` takes
+    /// `SUDO_ASKPASS` from overrides alone, so an inherited one never reaches `sudo`.
+    public static func trustedSudoShimOverrides(promptsAllowed: Bool) -> [String: String] {
         var overrides = ["PATH": processPath]
-        if let components = try? AuthorizationComponentResolver().resolveAndVerify() {
+        if promptsAllowed, let components = try? AuthorizationComponentResolver().resolveAndVerify() {
             overrides["SUDO_ASKPASS"] = components.askpassExecutable.path
         }
         return overrides

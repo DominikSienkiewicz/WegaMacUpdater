@@ -1,81 +1,81 @@
 import Darwin
 import Foundation
-import MacUpdaterCore
+import WegaHelperKit
 
 /// What the app can see, read-only, before it offers a way to turn Touch ID for sudo on or off:
 /// whether the helper would refuse, whether a directory outside root's reach could feed `sudo`
 /// settings once Touch ID is off, which later policy file `sudo` would read, and whether the app
 /// has proof that what `sudo` reads is root's alone. The helper decides on its own facts; a `sudo`
 /// command the user types needs the app's proof first (RC2-6).
-struct TouchIDDisablePreflight: Equatable, Sendable {
-    struct LocalDirectory: Equatable, Sendable {
-        struct Facts: Equatable, Sendable {
-            var isSymbolicLink: Bool
-            var ownerUID: UInt32
-            var permissions: UInt16
+public struct TouchIDDisablePreflight: Equatable, Sendable {
+    public struct LocalDirectory: Equatable, Sendable {
+        public struct Facts: Equatable, Sendable {
+            public var isSymbolicLink: Bool
+            public var ownerUID: UInt32
+            public var permissions: UInt16
         }
 
-        var path: String
-        var facts: Facts?
+        public var path: String
+        public var facts: Facts?
     }
 
     /// What `lstat` said about one path.
-    enum Lookup<Facts: Equatable & Sendable>: Equatable, Sendable {
+    public enum Lookup<Facts: Equatable & Sendable>: Equatable, Sendable {
         case found(Facts)
         /// `ENOENT`: nothing has the name.
         case missing
         /// Any other failure: the app cannot tell what is there.
         case unknown
 
-        var facts: Facts? {
+        public var facts: Facts? {
             if case .found(let facts) = self { return facts }
             return nil
         }
     }
 
     /// Everything the app looked at, before any decision.
-    struct Observation: Equatable, Sendable {
-        var policyDirectory: Lookup<PAMPolicyDirectoryFacts>
-        var sudoLocal: Lookup<PAMPolicyFileFacts>
+    public struct Observation: Equatable, Sendable {
+        public var policyDirectory: Lookup<PAMPolicyDirectoryFacts>
+        public var sudoLocal: Lookup<PAMPolicyFileFacts>
         /// `/etc/pam.d/sudo`, the head of the chain: `sudo` reads it first, and it includes `sudo_local`.
-        var sudoPolicy: Lookup<PAMPolicyFileFacts>
+        public var sudoPolicy: Lookup<PAMPolicyFileFacts>
         /// `/etc/pam.d/sudo_local.template`: with no `sudo_local`, the base of the file the enable
         /// command and the helper write (I1). `sudo` itself never reads it. Not looked at proves nothing.
-        var template: Lookup<PAMPolicyFileFacts> = .unknown
+        public var template: Lookup<PAMPolicyFileFacts> = .unknown
         /// What the app itself read from `sudo_local` (Z4); `nil` when it read nothing.
-        var sudoLocalBytes: Data?
-        var localDirectories: [LocalDirectory]
-        var existingFallbackPaths: [String]
+        public var sudoLocalBytes: Data?
+        public var localDirectories: [LocalDirectory]
+        public var existingFallbackPaths: [String]
     }
 
     /// The refusal the helper's own gates give for the facts the app saw: −4 or −5. An ACL the app
     /// could not read and a path it could not look at are no observation here: the helper reads
     /// them again as root.
-    var refusal: TouchIDSudoDisableRefusal?
+    public var refusal: TouchIDSudoDisableRefusal?
     /// The nearest local policy directory that exists and that someone other than root can change.
     /// Every existing one counts: whoever can write a parent can rename a safe child away.
-    var unsafeLocalDirectory: String?
+    public var unsafeLocalDirectory: String?
     /// The first later policy file that exists.
-    var fallbackPath: String?
+    public var fallbackPath: String?
     /// RC2-6: positive evidence that what `sudo` reads first is root's alone, so the card may show a
     /// `sudo` command or the helper's button: `/etc/pam.d` looked at, safe and with no ACL;
     /// `sudo_local` a regular file root's alone with no ACL, or missing with the template it would be
     /// made from missing or root's alone with no ACL (I1); `/etc/pam.d/sudo` there, a regular file
     /// root's alone with no ACL. A fact the app could not establish is no evidence.
-    var commandsAreSafe = false
+    public var commandsAreSafe = false
     /// `/etc/pam.d/sudo` is there and the app saw that someone other than root can change it.
-    var sudoPolicyIsUnsafe = false
+    public var sudoPolicyIsUnsafe = false
     /// What the helper's own rules make of the bytes the app read from `sudo_local` (E.6); `nil`
     /// when it read nothing. The disable command is offered only for `.remove`.
-    var removalPlan: TouchIDSudoDisablePlan?
+    public var removalPlan: TouchIDSudoDisablePlan?
 
     /// Everything looked at and safe, with nothing to name.
-    static let clear = TouchIDDisablePreflight(refusal: nil, unsafeLocalDirectory: nil, fallbackPath: nil, commandsAreSafe: true)
+    public static let clear = TouchIDDisablePreflight(refusal: nil, unsafeLocalDirectory: nil, fallbackPath: nil, commandsAreSafe: true)
 
     /// Nearest first: `sudo` reads `sudo_local` from the first of these that can hold one.
-    static let localCandidatePaths = ["/usr/local/etc/pam.d", "/usr/local/etc", "/usr/local"]
+    public static let localCandidatePaths = ["/usr/local/etc/pam.d", "/usr/local/etc", "/usr/local"]
 
-    static func evaluate(_ observation: Observation) -> TouchIDDisablePreflight {
+    public static func evaluate(_ observation: Observation) -> TouchIDDisablePreflight {
         TouchIDDisablePreflight(
             refusal: observedRefusal(policyDirectory: observation.policyDirectory.facts, sudoLocal: observation.sudoLocal.facts),
             unsafeLocalDirectory: observation.localDirectories.first { isChangeableByOthers($0.facts) }?.path,
@@ -142,7 +142,7 @@ struct TouchIDDisablePreflight: Equatable, Sendable {
 
 extension TouchIDDisablePreflight {
     /// The facts as `lstat` and the extended-ACL call report them, never following a link.
-    static func live() -> TouchIDDisablePreflight {
+    public static func live() -> TouchIDDisablePreflight {
         let sudoLocalPath = SystemPaths.pamPolicyDirectory + "/sudo_local"
         let sudoLocal = policyFile(at: sudoLocalPath)
         return evaluate(Observation(

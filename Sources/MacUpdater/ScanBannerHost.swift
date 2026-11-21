@@ -31,7 +31,7 @@ struct ScanBannerHost: View {
     private func perform(_ action: BannerAction) {
         switch action {
         case .openLogs: onNavigate?(.logs)
-        case .openSettings:
+        case .openSettings, .openTouchIDCard:
             SettingsRoute.shared.open(.touchID, with: openSettings)
         case .openAppManagementSettings:
             // REL-05 — straight to the pane that grants the permission,
