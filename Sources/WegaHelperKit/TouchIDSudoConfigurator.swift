@@ -93,17 +93,6 @@ public enum TouchIDSudoConfigurator {
         return .write(contents)
     }
 
-    /// Writes `sudo_local` as root through a backup → atomic write → readback
-    /// transaction. Any failure restores the original bytes and metadata; a failed
-    /// restoration is surfaced explicitly instead of leaving a partially written PAM stack.
-    public static func writeSudoLocalEnablingTouchID() throws {
-        let current = (try? String(contentsOfFile: sudoLocalPath, encoding: .utf8))
-            ?? (try? String(contentsOfFile: SystemPaths.sudoLocalTemplate, encoding: .utf8))
-        let contents = contentsEnablingTouchID(current: current)
-        let url = URL(fileURLWithPath: sudoLocalPath)
-        try SudoLocalTransactionalWriter().writeAtomically(Data(contents.utf8), to: url)
-    }
-
     /// Pure decision: combine the outcome of an `LAContext` biometry probe
     /// with an IOKit hardware-presence fallback.
     ///

@@ -66,16 +66,34 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
         reply(WegaHelper.version)
     }
 
-    func enableTouchIDForSudo(withReply reply: @escaping @Sendable (Bool, String?) -> Void) {
-        do {
-            Self.pamLock.lock()
-            defer { Self.pamLock.unlock() }
-            try TouchIDSudoConfigurator.writeSudoLocalEnablingTouchID()
-            HelperAuditLog.logger.info("enableTouchIDForSudo: sukces")
-            reply(true, nil)
-        } catch {
-            HelperAuditLog.logger.error("enableTouchIDForSudo: błąd")
-            reply(false, error.localizedDescription)
+    /// The caller's console session and `admin` membership are read here, as root, exactly as for
+    /// turning Touch ID off; every file the operation touches is handled in `WegaHelperKit`. One
+    /// reply, at the end.
+    func enableTouchIDForSudoChecked(withReply reply: @escaping @Sendable (Int, String?) -> Void) {
+        Self.pamLock.lock()
+        defer { Self.pamLock.unlock() }
+        let report = TouchIDSudoEnabler.runLive(
+            caller: .init(
+                uid: callerUID,
+                consoleUserUID: Self.consoleUserUID(),
+                isAdministrator: AdministratorGroup.contains(uid: callerUID)
+            )
+        )
+        Self.logEnable(report)
+        reply(report.result.wireCode, report.result.wireDetail)
+    }
+
+    /// The code, the step and the helper's own backup path; never a byte of the file, nor the caller.
+    private static func logEnable(_ report: TouchIDSudoEnableReport) {
+        let code = report.result.wireCode
+        if code >= 0 {
+            HelperAuditLog.logger.info("enableTouchIDForSudo: sukces, kod: \(code, privacy: .public)")
+        } else {
+            let step = report.failedStep?.rawValue ?? "-"
+            HelperAuditLog.logger.error("enableTouchIDForSudo: błąd \(code, privacy: .public) (etap: \(step, privacy: .public))")
+        }
+        if let backup = report.result.wireDetail {
+            HelperAuditLog.logger.error("enableTouchIDForSudo: poprzedni plik leży pod \(backup, privacy: .public)")
         }
     }
 

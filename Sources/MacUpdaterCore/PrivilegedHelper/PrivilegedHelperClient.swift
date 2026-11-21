@@ -201,13 +201,24 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         }
     }
 
-    public func enableTouchIDForSudo() async throws {
+    /// Turns Touch ID for `sudo` on as root. A transport error or an unknown reply means the outcome
+    /// is not known, and the caller reads the file again.
+    public func enableTouchIDForSudo() async throws -> TouchIDSudoEnableResult {
         try await performHandshake(for: .enableTouchIDForSudo)
-        _ = try await call(deadline: Deadline.enableTouchID) { (proxy, done: @escaping @Sendable (sending Result<Bool, Error>) -> Void) in
-            proxy.enableTouchIDForSudo { ok, message in
-                done(ok ? .success(true) : .failure(HelperError.operationFailed(message ?? "enableTouchIDForSudo failed")))
+        return try await call(deadline: Deadline.enableTouchID) { (proxy, done: @escaping @Sendable (sending Result<TouchIDSudoEnableResult, Error>) -> Void) in
+            proxy.enableTouchIDForSudoChecked { code, detail in
+                done(Self.enableReply(code: code, detail: detail))
             }
         }
+    }
+
+    /// An unknown code, a detail on a code other than −21, or −21 with a path outside the policy
+    /// directory is an operation failure that carries only the code: the detail is never passed on.
+    static func enableReply(code: Int, detail: String?) -> Result<TouchIDSudoEnableResult, Error> {
+        guard let result = TouchIDSudoEnableResult(wireCode: code, detail: detail) else {
+            return .failure(HelperError.operationFailed("enableTouchIDForSudo failed (\(code))"))
+        }
+        return .success(result)
     }
 
     /// Removes the exact Touch ID directive from `sudo_local` as root. A transport error or an

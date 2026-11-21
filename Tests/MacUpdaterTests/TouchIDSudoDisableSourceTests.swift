@@ -29,12 +29,51 @@ struct TouchIDSudoDisableSourceTests {
     @Test func enablingAndDisablingNeverInterleave() throws {
         let helper = try source("Sources/WegaPrivilegedHelper/HelperDelegate.swift")
         #expect(helper.contains("private static let pamLock = NSLock()"))
-        let enable = try #require(helper.range(of: "func enableTouchIDForSudo(")).upperBound
+        let enable = try #require(helper.range(of: "func enableTouchIDForSudoChecked(")).upperBound
         #expect(helper[enable...].prefix(200).contains("Self.pamLock.lock()"))
-        let body = try methodBody("func enableTouchIDForSudo(", in: helper)
+        let body = try methodBody("func enableTouchIDForSudoChecked(", in: helper)
         let lock = try #require(body.range(of: "Self.pamLock.lock()"))
-        let write = try #require(body.range(of: "writeSudoLocalEnablingTouchID()"))
+        let write = try #require(body.range(of: "TouchIDSudoEnabler.runLive("))
         #expect(lock.upperBound < write.lowerBound)
+    }
+
+    // MARK: - Turning Touch ID on (protocol v8)
+
+    /// RC2-1: the v8 reply has a new selector; the v6/v7 one leaves the protocol, so a helper that
+    /// predates it fails instead of decoding one reply shape as another.
+    @Test func theProtocolDeclaresTheCheckedEnableVerbAndNotTheOldOne() throws {
+        let protocolSource = try source("Sources/WegaHelperKit/WegaHelperProtocol.swift").filter { !$0.isWhitespace }
+        #expect(protocolSource.contains("funcenableTouchIDForSudoChecked(withReplyreply:@escaping@Sendable(Int,String?)->Void)"))
+        #expect(!protocolSource.contains("funcenableTouchIDForSudo(withReply"))
+        #expect(protocolSource.contains("Achangedreplyshapegetsanewselector"), "the rule is written where the minima are")
+    }
+
+    /// E.1: the same root-only caller facts as turning Touch ID off, under the same lock, one reply.
+    @Test func theHelperGathersTheSameCallerFactsToEnableAndRepliesOnce() throws {
+        let helper = try source("Sources/WegaPrivilegedHelper/HelperDelegate.swift")
+        let compact = helper.filter { !$0.isWhitespace }
+        #expect(compact.contains("funcenableTouchIDForSudoChecked(withReplyreply:@escaping@Sendable(Int,String?)->Void){Self.pamLock.lock()"))
+        #expect(compact.contains(
+            "TouchIDSudoEnabler.runLive(caller:.init(uid:callerUID,consoleUserUID:Self.consoleUserUID(),"
+                + "isAdministrator:AdministratorGroup.contains(uid:callerUID)))"))
+        let body = try methodBody("func enableTouchIDForSudoChecked(", in: helper)
+        #expect(body.components(separatedBy: "reply(").count - 1 == 1, "the reply is sent exactly once")
+        #expect(body.filter { !$0.isWhitespace }.contains("Self.logEnable(report)reply(report.result.wireCode,report.result.wireDetail)"))
+        #expect(!helper.contains("writeSudoLocalEnablingTouchID"), "the path-based read of the old enable is gone")
+        let configurator = try source("Sources/WegaHelperKit/TouchIDSudoConfigurator.swift")
+        #expect(!configurator.contains("func writeSudoLocalEnablingTouchID"), "no root path reads sudo_local by path")
+    }
+
+    /// Z6: the enable log names the code, the step and the helper's own backup path; never a byte of
+    /// the file, nor the caller.
+    @Test func theEnableLogCarriesCodesTheStepAndTheBackupOnly() throws {
+        let helper = try source("Sources/WegaPrivilegedHelper/HelperDelegate.swift")
+        #expect(helper.contains("enableTouchIDForSudo: błąd \\(code, privacy: .public) (etap: \\(step, privacy: .public))"))
+        #expect(helper.contains("enableTouchIDForSudo: poprzedni plik leży pod \\(backup, privacy: .public)"))
+        let logging = try methodBody("private static func logEnable(", in: helper)
+        for leak in ["callerUID", "Data(", "String(decoding", "contents", "localizedDescription"] {
+            #expect(!logging.contains(leak), "the enable log must not carry \(leak)")
+        }
     }
 
     /// The log names the result, the step and our own paths, never a byte of the file or the caller.

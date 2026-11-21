@@ -41,7 +41,12 @@ final class TouchIDSetupController: ObservableObject {
     static let live = Dependencies(
       currentState: { TouchIDSudoConfigurator.currentState() },
       helperIsEnabled: { PrivilegedHelperClient.shared.isEnabled },
-      enableWithHelper: { try await PrivilegedHelperClient.shared.enableTouchIDForSudo() },
+      enableWithHelper: {
+        let result = try await PrivilegedHelperClient.shared.enableTouchIDForSudo()
+        guard result == .enabled || result == .alreadyEnabled else {
+          throw PrivilegedHelperClient.HelperError.operationFailed("enableTouchIDForSudo failed (\(result.wireCode))")
+        }
+      },
       // SEC-05: production never executes an elevated shell string. Without the
       // bounded signed helper the controller exposes the transactional Terminal flow.
       authorizeFallback: { .permissionDenied },

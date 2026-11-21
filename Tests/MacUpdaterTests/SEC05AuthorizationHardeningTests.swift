@@ -103,6 +103,9 @@ struct SEC05AuthorizationHardeningTests {
         #expect(source.contains("verifyReadback"))
         #expect(source.contains("rollback"))
         #expect(source.contains(#"^[[:space:]]*auth[[:space:]]+sufficient"#))
+        // Turning Touch ID on as root goes through the same transactional writer, from the enabler.
+        let enabler = try contents(of: "Sources/WegaHelperKit/TouchIDSudoEnabler.swift")
+        #expect(enabler.contains("SudoLocalTransactionalWriter().writeAtomically("))
 
         // Turning Touch ID off never rewrites in place: a new file is created beside the original,
         // flushed, and swapped in atomically, with the original swapped back on any failure.
