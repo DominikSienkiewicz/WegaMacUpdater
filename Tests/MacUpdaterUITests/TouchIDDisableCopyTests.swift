@@ -28,7 +28,7 @@ struct TouchIDDisableCopyTests {
             // RC2-7: −4 and −5 from the helper give recoveryOS advice only, as on the way in. M2: the
             // card's note (the same `unsafePolicyNote` in both directions) carries the advice and
             // Wega's line says only what happened, with no manual route.
-            let recovery = "Nie wpisuj hasła do sudo, dopóki tego nie naprawisz — także gdy Wega poprosi o nie przy aktualizacji: sudo czyta te ustawienia. Napraw je z trybu odzyskiwania według przewodnika."
+            let recovery = "Nie wpisuj hasła do sudo, dopóki tego nie naprawisz: sudo czyta te ustawienia, zanim o nie poprosi. Do tego czasu Wega nie poprosi o hasło i pominie aktualizacje, które go wymagają. Napraw je z trybu odzyskiwania według przewodnika."
             let unsafe = TouchIDEnableCopy.unsafePolicyNote(.unsafeOwnership)
             #expect(unsafe == "Plik /etc/pam.d/sudo_local albo katalog /etc/pam.d może zmieniać ktoś poza rootem albo wygląda inaczej, niż powinien. To problem bezpieczeństwa: kto może tam pisać, może dostać uprawnienia roota bez hasła. Nie zmieniłam go. Sprawdź go według przewodnika. " + recovery)
             #expect(unsafe.contains("roota bez hasła") && unsafe.contains("przewodnika"))

@@ -14,8 +14,8 @@ extension Translations {
             "/etc/pam.d/sudo_local doesn't look the way I expect, so I didn't change it. Check it with the user guide.",
         "Plik /etc/pam.d/sudo_local nie jest zwykłym plikiem, więc go nie zmieniłam. sudo może przez niego czytać ustawienia spoza /etc/pam.d.":
             "/etc/pam.d/sudo_local isn't a regular file, so I didn't change it. Through it, sudo may read settings from outside /etc/pam.d.",
-        "Nie wpisuj hasła do sudo, dopóki tego nie naprawisz — także gdy Wega poprosi o nie przy aktualizacji: sudo czyta te ustawienia. Napraw je z trybu odzyskiwania według przewodnika.":
-            "Don't type your password into sudo until you fix this — not even when Wega asks for it during an update: sudo reads these settings. Fix them from macOS Recovery with the user guide.",
+        "Nie wpisuj hasła do sudo, dopóki tego nie naprawisz: sudo czyta te ustawienia, zanim o nie poprosi. Do tego czasu Wega nie poprosi o hasło i pominie aktualizacje, które go wymagają. Napraw je z trybu odzyskiwania według przewodnika.":
+            "Don't type your password into sudo until you fix this: sudo reads these settings before it asks for it. Until then, Wega won't ask for it and will skip the updates that need it. Fix them from macOS Recovery with the user guide.",
         "Nie wiem, w jakim stanie jest teraz plik /etc/pam.d/sudo_local: zapis albo jego sprawdzenie się nie udało. Sprawdź go według przewodnika.":
             "I don't know what state /etc/pam.d/sudo_local is in now: writing it or checking the write failed. Check it with the user guide.",
         // The disable command without the helper (E.6) and the command view both commands share.

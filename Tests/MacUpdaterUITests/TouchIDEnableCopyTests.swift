@@ -9,7 +9,7 @@ import Testing
 @Suite("Touch ID — what turning it on says") @MainActor
 struct TouchIDEnableCopyTests {
     private let backup = "/etc/pam.d/.sudo_local.wega-backup-0A1B"
-    private let recovery = "Nie wpisuj hasła do sudo, dopóki tego nie naprawisz — także gdy Wega poprosi o nie przy aktualizacji: sudo czyta te ustawienia. Napraw je z trybu odzyskiwania według przewodnika."
+    private let recovery = "Nie wpisuj hasła do sudo, dopóki tego nie naprawisz: sudo czyta te ustawienia, zanim o nie poprosi. Do tego czasu Wega nie poprosi o hasło i pominie aktualizacje, które go wymagają. Napraw je z trybu odzyskiwania według przewodnika."
 
     @Test func everyResultSaysWhatHappenedAndWhatToDoNext() {
         withLanguage(.pl) {
@@ -149,7 +149,7 @@ struct TouchIDEnableCopyTests {
             #expect(TouchIDEnableCopy.line(for: .rollbackFailed(backupPath: nil), isEnabled: false)
                     == "I don't know what state /etc/pam.d/sudo_local is in now: writing it or checking the write failed. Check it with the user guide.")
             #expect(TouchIDEnableCopy.recoveryOnly
-                    == "Don't type your password into sudo until you fix this — not even when Wega asks for it during an update: sudo reads these settings. Fix them from macOS Recovery with the user guide.")
+                    == "Don't type your password into sudo until you fix this: sudo reads these settings before it asks for it. Until then, Wega won't ask for it and will skip the updates that need it. Fix them from macOS Recovery with the user guide.")
             #expect(TouchIDEnableCopy.unsafePolicyNote(.notRegularFile)
                     == "/etc/pam.d/sudo_local isn't a regular file, so I didn't change it. Through it, sudo may read settings from outside /etc/pam.d. " + TouchIDEnableCopy.recoveryOnly)
             #expect(TouchIDEnableCopy.line(for: .refused(.unsafeOwnership), isEnabled: false)

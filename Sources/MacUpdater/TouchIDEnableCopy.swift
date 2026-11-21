@@ -17,9 +17,10 @@ enum TouchIDEnableCopy {
     }
 
     /// RC2-7, Z12: the only advice while the settings `sudo` reads may not be root's alone, because a
-    /// password typed into `sudo` could reach a module someone added there.
+    /// password typed into `sudo` could reach a module someone added there. Wega itself then asks
+    /// for none (owner decision 2026-11-21, `SudoPasswordPromptGate`).
     static var recoveryOnly: String {
-        tr("Nie wpisuj hasła do sudo, dopóki tego nie naprawisz — także gdy Wega poprosi o nie przy aktualizacji: sudo czyta te ustawienia. Napraw je z trybu odzyskiwania według przewodnika.")
+        tr("Nie wpisuj hasła do sudo, dopóki tego nie naprawisz: sudo czyta te ustawienia, zanim o nie poprosi. Do tego czasu Wega nie poprosi o hasło i pominie aktualizacje, które go wymagają. Napraw je z trybu odzyskiwania według przewodnika.")
     }
 
     static func line(for result: TouchIDSudoEnableResult, isEnabled: Bool) -> String {
