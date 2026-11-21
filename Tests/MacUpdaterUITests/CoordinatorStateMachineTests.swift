@@ -29,7 +29,7 @@ struct CoordinatorStateMachineTests {
         let controller = TouchIDSetupController(dependencies: .init(
             currentState: { .available },
             helperIsEnabled: { false },
-            enableWithHelper: {},
+            enableWithHelper: { .enabled },
             authorizeFallback: { .permissionDenied },
             openInTerminal: { _ in }
         ))

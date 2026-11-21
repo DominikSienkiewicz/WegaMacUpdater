@@ -115,10 +115,15 @@ public enum TouchIDSudoDisabler {
         static let nothingToRemove = Outcome(report: TouchIDSudoDisableReport(result: .nothingToRemove))
     }
 
-    /// `sudo_local` as read before anything changed: the snapshot every later check compares with.
+    /// A policy file as read before anything changed: the snapshot every later check compares with.
     struct Original {
         let facts: PAMPolicyFileFacts
         let bytes: Data
+    }
+
+    /// A refusal from a gate both directions share, before the operation names its step.
+    struct GateRefusal: Error {
+        let refusal: TouchIDSudoDisableRefusal
     }
 
     /// The whole operation over the policy directory `openDirectory` opens. `requiredOwnerUID` is
@@ -155,6 +160,32 @@ public enum TouchIDSudoDisabler {
     private static func openVerifiedDirectory(
         _ openDirectory: () throws -> any PAMPolicyDirectoryAccess, requiredOwnerUID: UInt32
     ) throws(Outcome) -> any PAMPolicyDirectoryAccess {
+        do {
+            return try verifiedDirectory(openDirectory, requiredOwnerUID: requiredOwnerUID)
+        } catch {
+            throw .refused(error.refusal, at: .directory)
+        }
+    }
+
+    private static func readOriginal(
+        in directory: any PAMPolicyDirectoryAccess, requiredOwnerUID: UInt32
+    ) throws(Outcome) -> Original {
+        let original: Original?
+        do {
+            original = try verifiedPolicyFile(named: policyFileName, in: directory, requiredOwnerUID: requiredOwnerUID)
+        } catch {
+            throw .refused(error.refusal, at: .read)
+        }
+        guard let original else { throw .nothingToRemove }
+        return original
+    }
+
+    // MARK: - Gates both directions share
+
+    /// The policy directory `openDirectory` opens, once its own descriptor passed the directory gate.
+    static func verifiedDirectory(
+        _ openDirectory: () throws -> any PAMPolicyDirectoryAccess, requiredOwnerUID: UInt32
+    ) throws(GateRefusal) -> any PAMPolicyDirectoryAccess {
         let directory: any PAMPolicyDirectoryAccess
         let facts: PAMPolicyDirectoryFacts
         do {
@@ -162,34 +193,36 @@ public enum TouchIDSudoDisabler {
             facts = try directory.directoryFacts()
         } catch {
             // A link anywhere in the path is a directory someone other than root may redirect.
-            throw .refused((error as? POSIXError)?.code == .ELOOP ? .unsafeOwnership : .unreadable, at: .directory)
+            throw GateRefusal(refusal: (error as? POSIXError)?.code == .ELOOP ? .unsafeOwnership : .unreadable)
         }
         if let refusal = refusal(directory: facts, requiredOwnerUID: requiredOwnerUID) {
-            throw .refused(refusal, at: .directory)
+            throw GateRefusal(refusal: refusal)
         }
         return directory
     }
 
-    private static func readOriginal(
-        in directory: any PAMPolicyDirectoryAccess, requiredOwnerUID: UInt32
-    ) throws(Outcome) -> Original {
+    /// `name` read through `directory` once it passed the file gate, at most `maximumSize` bytes,
+    /// exactly as many as its descriptor reported; `nil` when nothing has the name.
+    static func verifiedPolicyFile(
+        named name: String, in directory: any PAMPolicyDirectoryAccess, requiredOwnerUID: UInt32
+    ) throws(GateRefusal) -> Original? {
         let read: PAMPolicyFileRead
         do {
-            read = try directory.readPolicyFile(named: policyFileName, limit: maximumSize)
+            read = try directory.readPolicyFile(named: name, limit: maximumSize)
         } catch {
-            throw .refused(.unreadable, at: .read)
+            throw GateRefusal(refusal: .unreadable)
         }
         switch read {
         case .missing:
-            throw .nothingToRemove
+            return nil
         case .notRegular:
-            throw .refused(.notRegularFile, at: .read)
+            throw GateRefusal(refusal: .notRegularFile)
         case .changed:
-            throw .refused(.changedDuringOperation, at: .read)
+            throw GateRefusal(refusal: .changedDuringOperation)
         case .read(let facts, let bytes):
-            if let refusal = refusal(file: facts, requiredOwnerUID: requiredOwnerUID) { throw .refused(refusal, at: .read) }
-            guard bytes.count <= maximumSize else { throw .refused(.tooLarge, at: .read) }
-            guard Int64(bytes.count) == facts.size else { throw .refused(.changedDuringOperation, at: .read) }
+            if let refusal = refusal(file: facts, requiredOwnerUID: requiredOwnerUID) { throw GateRefusal(refusal: refusal) }
+            guard bytes.count <= maximumSize else { throw GateRefusal(refusal: .tooLarge) }
+            guard Int64(bytes.count) == facts.size else { throw GateRefusal(refusal: .changedDuringOperation) }
             return Original(facts: facts, bytes: bytes)
         }
     }

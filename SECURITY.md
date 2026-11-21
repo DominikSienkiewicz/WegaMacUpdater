@@ -49,6 +49,18 @@ Security-relevant areas most worth a look include:
   `sudo_local` writer, and the XPC helper. Installation status is recorded in a root-owned
   registry; losing XPC does not stop the installer or authorize a second installation.
   The client retains its mutation block until a matching terminal result is confirmed.
+  The helper and the app pin each other with code requirements that demand a Developer ID
+  signature (the intermediate and leaf certificate markers, besides the Team ID and the
+  identifier), and `scripts/verify-bundle.sh` checks a signed release against both. Each verb
+  has its own minimum protocol version. The helper exits after 60 seconds with no connection
+  and no work, and launchd starts it again from the current app bundle. Turning Touch ID on or
+  off needs an administrator at the console and refuses an unsafe `/etc/pam.d` or `sudo_local`
+  (and, when turning it on with no `sudo_local`, an unsafe `sudo_local.template`) instead of
+  rewriting it. When the policy `sudo` reads is unsafe
+  (`sudo_local` or `/etc/pam.d` writable by someone other than root, `sudo_local` not a regular
+  file, `/etc/pam.d/sudo` unsafe) or cannot be proven safe, the Touch ID card offers no
+  command and no button and advises recoveryOS only; the manual enable and disable commands run
+  through `/usr/bin/sudo` and re-check the file when they run.
 - **Publisher pinning & rollback** — Team ID baseline checks and the
   snapshot → canary → auto-rollback chain that guards cask upgrades.
 - **Self-update identity** — package publisher, product identifier, promised version and

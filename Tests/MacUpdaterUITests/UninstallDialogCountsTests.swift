@@ -61,7 +61,7 @@ struct UninstallDialogCountsTests {
     }
 
     /// A blocked app is not asked to quit, so the sheet must not say it will be.
-    @Test func blockedTargetHasNoRunningNote() {
+    @Test @MainActor func blockedTargetHasNoRunningNote() {
         let target = app("Chrome")
         let running = RunningApplicationResolution.running(RunningApplicationTarget(
             processIdentifier: 10, bundleURL: target.path, bundleIdentifier: target.bundleIdentifier,
@@ -74,7 +74,7 @@ struct UninstallDialogCountsTests {
 
     /// Spec 4.3: the sheet says ahead of time that Wega's helper removes a root-owned app, and
     /// that it needs no password.
-    @Test func helperRouteSaysWegasHelperRemovesItWithoutAPassword() {
+    @Test @MainActor func helperRouteSaysWegasHelperRemovesItWithoutAPassword() {
         let note = UninstallDialog.routeNote(for: .helper)
 
         #expect(note == "pomocnik Wegi usunie ją bez hasła")

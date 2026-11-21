@@ -33,12 +33,11 @@ enum LocalizedStrings {
     }
 
     /// The `async` form of `withScopedLanguage(_:_:)`.
-    static func withScopedLanguage<T>(
+    nonisolated(nonsending) static func withScopedLanguage<T>(
         _ language: AppLanguage,
-        isolation: isolated (any Actor)? = #isolation,
-        _ body: () async throws -> T
+        _ body: nonisolated(nonsending) () async throws -> T
     ) async rethrows -> T {
-        try await $scopedStorage.withValue(Storage(language), operation: body, isolation: isolation)
+        try await $scopedStorage.withValue(Storage(language), operation: body)
     }
 
     static func translate(_ base: String) -> String {

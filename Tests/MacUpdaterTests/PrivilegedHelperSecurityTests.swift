@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import Security
 @testable import MacUpdaterCore
 // SEC-10: contract + validation moved to WegaHelperKit; these tests reach its
 // internal seams (CodeSignatureVerifier.artifact, …).
@@ -212,6 +213,60 @@ struct PrivilegedHelperSecurityTests {
         // Both directions pin the same configured Team ID token.
         #expect(WegaHelper.clientRequirement().contains(WegaHelper.teamIdentifier))
         #expect(WegaHelper.helperRequirement().contains(WegaHelper.teamIdentifier))
+        // …as whole clauses: the exact identifier, and the Team ID as the leaf certificate's OU.
+        #expect(WegaHelper.clientRequirement().contains("and identifier \"\(WegaHelper.appBundleID)\" and "))
+        #expect(WegaHelper.helperRequirement().contains("and identifier \"\(WegaHelper.helperSigningID)\" and "))
+        let teamClause = "and certificate leaf[subject.OU] = \"\(WegaHelper.teamIdentifier)\""
+        #expect(WegaHelper.clientRequirement().hasSuffix(teamClause))
+        #expect(WegaHelper.helperRequirement().hasSuffix(teamClause))
+    }
+
+    /// R2-5 (Aneks E.5, Q2): both directions demand a Developer ID signature. Code of the same team
+    /// signed with an Apple Development or Apple Distribution certificate carries the same OU and an
+    /// Apple anchor, but not the Developer ID intermediate (…6.2.6) and leaf (…6.1.13) markers.
+    @Test func bothRequirementsDemandADeveloperIDSignature() {
+        for requirement in [WegaHelper.clientRequirement(), WegaHelper.helperRequirement()] {
+            #expect(requirement.hasPrefix("anchor apple generic and identifier "), "\(requirement)")
+            #expect(requirement.contains(" and certificate 1[field.1.2.840.113635.100.6.2.6] and "), "\(requirement)")
+            #expect(requirement.contains(" and certificate leaf[field.1.2.840.113635.100.6.1.13] and "), "\(requirement)")
+        }
+    }
+
+    /// The Security framework reads both strings as E.5 means them: each marker is an existence test
+    /// on the intended certificate. Only the signed release can show that the real certificates
+    /// satisfy them (`scripts/verify-bundle.sh`, RC2-4).
+    @Test(arguments: [
+        (WegaHelper.clientRequirement(), WegaHelper.appBundleID),
+        (WegaHelper.helperRequirement(), WegaHelper.helperSigningID),
+    ])
+    func eachRequirementCompilesToTheDeveloperIDShape(requirement: String, identifier: String) throws {
+        var compiled: SecRequirement?
+        #expect(SecRequirementCreateWithString(requirement as CFString, [], &compiled) == errSecSuccess)
+        var canonical: CFString?
+        #expect(SecRequirementCopyString(try #require(compiled), [], &canonical) == errSecSuccess)
+        #expect(canonical as String? == "anchor apple generic and identifier \"\(identifier)\""
+            + " and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */"
+            + " and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */"
+            + " and certificate leaf[subject.OU] = \"\(WegaHelper.teamIdentifier)\"")
+    }
+
+    /// RC2-4: unit tests run on ad hoc builds, where `anchor apple generic` cannot hold, so a slip in
+    /// either requirement would show only once a v8 helper refused the genuine app. The release gate
+    /// checks the signed app and helper against exactly these two strings.
+    @Test func theReleaseGateChecksTheSignedFilesAgainstExactlyTheseRequirements() throws {
+        let script = try String(
+            contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().appendingPathComponent("scripts/verify-bundle.sh"),
+            encoding: .utf8
+        )
+        let lines = script.components(separatedBy: "\n")
+        #expect(lines.filter { $0.hasPrefix("CLIENT_REQUIREMENT=") } == ["CLIENT_REQUIREMENT='\(WegaHelper.clientRequirement())'"])
+        #expect(lines.filter { $0.hasPrefix("HELPER_REQUIREMENT=") } == ["HELPER_REQUIREMENT='\(WegaHelper.helperRequirement())'"])
+        #expect(script.contains("codesign --verify -R \"=$CLIENT_REQUIREMENT\" \"$APP_BUNDLE\""))
+        #expect(script.contains("codesign --verify -R \"=$HELPER_REQUIREMENT\" \"$HELPER\""))
+        // `-R="=…"` hands codesign the text "=…", which it rejects as a syntax error on every build.
+        let commands = lines.filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("#") }
+        #expect(commands.allSatisfy { !$0.contains("-R=") })
     }
 
     @Test func teamIDConfiguredFlagReflectsPlaceholder() {

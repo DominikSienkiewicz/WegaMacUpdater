@@ -74,6 +74,17 @@ struct TouchIDSudoDisableTests {
         }
     }
 
+    /// RC2-1: only −21 carries a detail. A detail on any other code is a reply this protocol does
+    /// not produce, so it is not read as a result.
+    @Test func aDetailOnAnyCodeButMinus21IsNotAResult() {
+        let replies: [(Int, String)] = [
+            (1, "x"), (3, "/etc/pam.d/.sudo_local.wega-x"), (0, "Nie udało się"), (-5, ""), (-20, "x"), (-10, "/etc/pam.d/.sudo_local.wega-x"),
+        ]
+        for (code, detail) in replies {
+            #expect(TouchIDSudoDisableResult(wireCode: code, detail: detail) == nil, "\(code) \(detail)")
+        }
+    }
+
     /// The app never shows a path outside the policy directory, or more than one name inside it.
     @Test func theRollbackPathMustBeOneSwapNameInThePolicyDirectory() {
         let refused: [String?] = [

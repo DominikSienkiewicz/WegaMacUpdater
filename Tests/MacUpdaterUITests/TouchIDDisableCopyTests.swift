@@ -21,13 +21,24 @@ struct TouchIDDisableCopyTests {
                 #expect(TouchIDDisableCopy.line(for: .refused(refusal), stillEnabled: true)
                         == "Touch ID dla sudo może wyłączyć tylko administrator zalogowany przy tym Macu.")
             }
-            for refusal in [TouchIDSudoDisableRefusal.notRegularFile, .tooLarge, .unreadable, .lineContinuation] {
+            for refusal in [TouchIDSudoDisableRefusal.tooLarge, .unreadable, .lineContinuation] {
                 #expect(TouchIDDisableCopy.line(for: .refused(refusal), stillEnabled: true)
                         == "Plik /etc/pam.d/sudo_local wygląda inaczej, niż się spodziewam, więc go nie zmieniłam. Wyłączysz Touch ID ręcznie według przewodnika.")
             }
-            let unsafe = TouchIDDisableCopy.line(for: .refused(.unsafeOwnership), stillEnabled: true)
-            #expect(unsafe == "Plik /etc/pam.d/sudo_local albo katalog /etc/pam.d może zmieniać ktoś poza rootem albo wygląda inaczej, niż powinien. To problem bezpieczeństwa: kto może tam pisać, może dostać uprawnienia roota bez hasła. Nie zmieniłam go. Sprawdź go według przewodnika.")
+            // RC2-7: −4 and −5 from the helper give recoveryOS advice only, as on the way in. M2: the
+            // card's note (the same `unsafePolicyNote` in both directions) carries the advice and
+            // Wega's line says only what happened, with no manual route.
+            let recovery = "Nie wpisuj hasła do sudo, dopóki tego nie naprawisz — także gdy Wega poprosi o nie przy aktualizacji: sudo czyta te ustawienia. Napraw je z trybu odzyskiwania według przewodnika."
+            let unsafe = TouchIDEnableCopy.unsafePolicyNote(.unsafeOwnership)
+            #expect(unsafe == "Plik /etc/pam.d/sudo_local albo katalog /etc/pam.d może zmieniać ktoś poza rootem albo wygląda inaczej, niż powinien. To problem bezpieczeństwa: kto może tam pisać, może dostać uprawnienia roota bez hasła. Nie zmieniłam go. Sprawdź go według przewodnika. " + recovery)
             #expect(unsafe.contains("roota bez hasła") && unsafe.contains("przewodnika"))
+            #expect(TouchIDEnableCopy.unsafePolicyNote(.notRegularFile)
+                    == "Plik /etc/pam.d/sudo_local nie jest zwykłym plikiem, więc go nie zmieniłam. sudo może przez niego czytać ustawienia spoza /etc/pam.d. " + recovery)
+            for refusal in [TouchIDSudoDisableRefusal.notRegularFile, .unsafeOwnership] {
+                let line = TouchIDDisableCopy.line(for: .refused(refusal), stillEnabled: true)
+                #expect(line == "Nie wyłączyłam Touch ID dla sudo: ustawienia, które czyta sudo, nie są bezpieczne.", "\(refusal)")
+                #expect(!line.contains("ręcznie"), "\(refusal): no manual route")
+            }
             #expect(TouchIDDisableCopy.line(for: .refused(.fallbackPolicyPresent), stillEnabled: true, fallbackPath: fallback)
                     == "Po usunięciu tej dyrektywy sudo czytałby też plik /usr/local/etc/pam.d/sudo_local — jeśli go nie tworzyłeś, może pozwolić sudo pominąć hasło. Nic nie zmieniłam; sprawdź go według przewodnika.")
             #expect(TouchIDDisableCopy.line(for: .refused(.fallbackPolicyPresent), stillEnabled: true, fallbackPath: nil)
@@ -65,12 +76,31 @@ struct TouchIDDisableCopyTests {
             #expect(TouchIDDisableCopy.line(for: .refused(.changedDuringOperation), stillEnabled: true)
                     == "The file changed while I was working, so I didn't touch it. Try again.")
             #expect(TouchIDDisableCopy.outdatedHelper.contains("restart your Mac"))
+            #expect(TouchIDDisableCopy.line(for: .refused(.notRegularFile), stillEnabled: true)
+                    == "I didn't turn off Touch ID for sudo: the settings sudo reads aren't safe.")
             #expect(tr("Wyłącz Touch ID dla sudo") == "Turn Off Touch ID for sudo")
             #expect(tr("Bez pomocnika Wegi wyłączysz je ręcznie.") == "Without the Wega helper, you turn it off by hand.")
             for refusal in TouchIDSudoDisableRefusal.allCases {
                 let line = TouchIDDisableCopy.line(for: .refused(refusal), stillEnabled: true)
                 #expect(!line.contains(where: { "ąćęłńóśźż".contains($0) }), "\(refusal): \(line)")
             }
+        }
+    }
+
+    /// E.6: without a helper and without the command, the card says what the app's own read found.
+    @Test func withoutTheCommandTheCardSaysWhatTheAppsOwnReadFound() {
+        withLanguage(.pl) {
+            let remove = TouchIDSudoDisablePlan.remove(lines: 1, contents: Data())
+            #expect(TouchIDDisableCopy.withoutCommand(plan: remove, fallbackPath: fallback)
+                    == TouchIDDisableCopy.line(for: .refused(.fallbackPolicyPresent), stillEnabled: true, fallbackPath: fallback))
+            #expect(TouchIDDisableCopy.withoutCommand(plan: .nothingToRemove, fallbackPath: nil)
+                    == TouchIDDisableCopy.line(for: .nothingToRemove, stillEnabled: true), "RC6: a line written differently")
+            for refusal in [TouchIDSudoDisableRefusal.tooLarge, .unreadable, .lineContinuation, .otherDirectivesPresent] {
+                #expect(TouchIDDisableCopy.withoutCommand(plan: .refused(refusal), fallbackPath: nil)
+                        == TouchIDDisableCopy.line(for: .refused(refusal), stillEnabled: true), "\(refusal)")
+            }
+            #expect(TouchIDDisableCopy.withoutCommand(plan: remove, fallbackPath: nil) == nil, "the command says it")
+            #expect(TouchIDDisableCopy.withoutCommand(plan: nil, fallbackPath: nil) == nil, "nothing read, nothing to add")
         }
     }
 
@@ -100,16 +130,18 @@ struct TouchIDDisableCopyTests {
         directory: PAMPolicyDirectoryFacts? = nil, sudoLocal: PAMPolicyFileFacts? = nil,
         local: [TouchIDDisablePreflight.LocalDirectory] = [], fallbacks: [String] = []
     ) -> TouchIDDisablePreflight {
-        TouchIDDisablePreflight.evaluate(
-            policyDirectory: directory ?? self.directory(), sudoLocal: sudoLocal ?? file(), localDirectories: local,
-            existingFallbackPaths: fallbacks)
+        TouchIDDisablePreflight.evaluate(.init(
+            policyDirectory: .found(directory ?? self.directory()), sudoLocal: .found(sudoLocal ?? file()),
+            sudoPolicy: .found(file()), localDirectories: local, existingFallbackPaths: fallbacks))
     }
 
     @Test func aSafePolicyDirectoryAndFileLeaveTheButton() {
         #expect(evaluate() == .clear)
         #expect(evaluate(sudoLocal: nil).refusal == nil)
-        let missing = TouchIDDisablePreflight.evaluate(policyDirectory: nil, sudoLocal: nil, localDirectories: [], existingFallbackPaths: [])
+        let missing = TouchIDDisablePreflight.evaluate(.init(
+            policyDirectory: .unknown, sudoLocal: .unknown, sudoPolicy: .unknown, localDirectories: [], existingFallbackPaths: []))
         #expect(missing.refusal == nil, "what the app cannot see, the helper decides")
+        #expect(!missing.commandsAreSafe, "RC2-6: but it is no proof for a sudo command")
     }
 
     @Test func onlyAnObservedUnsafeConditionHidesTheButton() {

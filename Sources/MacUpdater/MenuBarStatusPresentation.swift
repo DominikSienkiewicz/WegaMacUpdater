@@ -25,7 +25,7 @@ struct MenuBarStatusPresentation: Equatable {
         if failed && count == 0 { return tr("Nie udało się sprawdzić") }
         if count > 0 {
             var parts = [trp("%@ aktualizacji dostępnych", count)]
-            if incomplete { parts.append(tr("sprawdzanie niepełne")) }
+            if incomplete { parts.append(tr("skan niepełny")) }
             if securityCount > 0 { parts.append(trp("%@ z możliwą poprawką bezp.", securityCount)) }
             return parts.joined(separator: " · ")
         }

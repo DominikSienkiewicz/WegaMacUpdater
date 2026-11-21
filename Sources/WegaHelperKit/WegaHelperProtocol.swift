@@ -19,10 +19,15 @@ import Foundation
     /// an app update and re-register if needed.
     func helperVersion(withReply reply: @escaping @Sendable (String) -> Void)
 
-    /// Writes `auth sufficient pam_tid.so` into `/etc/pam.d/sudo_local` as root.
-    /// Replaces the `osascript ... with administrator privileges` path — no
-    /// password dialog, because the helper is already root.
-    func enableTouchIDForSudo(withReply reply: @escaping @Sendable (Bool, String?) -> Void)
+    /// Adds the exact directive `auth       sufficient     pam_tid.so` to `/etc/pam.d/sudo_local` as root, or writes
+    /// Apple's template with it when there is no `sudo_local`; only for the administrator at the console, and only
+    /// when `/etc/pam.d`, `sudo_local` and the template are root's alone. Takes no arguments: the paths are fixed in
+    /// the helper. `code` 1: written and read back. 0: `sudo_local` already holds an active `pam_tid` line; nothing
+    /// was written. −1…−7 and −10: a `TouchIDSudoEnableRefusal`; nothing was written. −20: the write failed and the
+    /// previous state is back. −21: the write failed and could not be undone, or the file read back after it is not
+    /// the one planned; `detail` is the backup of the previous file, or nil when none is left. Protocol 8; the reply of `enableTouchIDForSudo(withReply:)` (v6/v7, `(Bool, String?)`) had another
+    /// shape, so this is a new selector and the old one is gone.
+    func enableTouchIDForSudoChecked(withReply reply: @escaping @Sendable (Int, String?) -> Void)
 
     /// Removes the exact directive `auth       sufficient     pam_tid.so` (Apple's template line without its `#`)
     /// from `/etc/pam.d/sudo_local`, and only when nothing but blank and comment lines would remain.
@@ -87,20 +92,23 @@ public enum WegaHelper {
     public static let appBundleID = AppMetadata.bundleIdentifier
     /// Helper protocol version. Bumped with every new verb and every change to a verb's
     /// arguments, reply or semantics; see `minimumHelperVersion(for:)`.
-    public static let version = "7"
+    public static let version = "8"
 
     /// The oldest helper protocol version whose behaviour for `verb` this app relies on.
     ///
     /// Rule: adding a verb bumps `version` and sets the new verb's minimum to it. Changing a verb's
-    /// arguments, reply or semantics bumps `version` and raises THAT verb's minimum to it. A change
-    /// that makes older helpers unsafe for every verb raises every minimum.
+    /// arguments, reply or semantics bumps `version` and raises THAT verb's minimum to it.
+    /// A changed reply shape gets a new selector, so a helper that predates it fails instead of
+    /// decoding the reply as another shape. A change that makes older helpers unsafe for every verb
+    /// raises every minimum.
     public static func minimumHelperVersion(for verb: WegaHelperVerb) -> Int {
         switch verb {
-        case .enableTouchIDForSudo, .beginPackageInstallation, .packageInstallationStatus, .replaceBundle,
-             .stageApplicationBundleForTrash:
+        case .beginPackageInstallation, .packageInstallationStatus, .replaceBundle, .stageApplicationBundleForTrash:
             return 6
         case .disableTouchIDForSudo:
             return 7
+        case .enableTouchIDForSudo:
+            return 8
         }
     }
 
@@ -109,16 +117,26 @@ public enum WegaHelper {
     public static let teamIdentifier = "6B8FYSZFJK"
 
     /// Requirement the **app** must satisfy — enforced by the helper on every
-    /// incoming XPC connection. Pins Apple chain + app identifier + Team ID.
+    /// incoming XPC connection. Pins Apple chain + app identifier + a Developer ID
+    /// signature + Team ID. `scripts/verify-bundle.sh` holds this exact text and checks
+    /// the signed release against it.
     public static func clientRequirement() -> String {
-        "anchor apple generic and identifier \"\(appBundleID)\" "
-        + "and certificate leaf[subject.OU] = \"\(teamIdentifier)\""
+        "anchor apple generic and identifier \"\(appBundleID)\" " + developerIDTeamClauses
     }
 
     /// Requirement the **helper** must satisfy — enforced by the app before it
-    /// trusts the daemon it connected to.
+    /// trusts the daemon it connected to. Same shape as `clientRequirement()`; both
+    /// binaries are signed with the same Developer ID Application identity.
     public static func helperRequirement() -> String {
-        "anchor apple generic and identifier \"\(helperSigningID)\" "
+        "anchor apple generic and identifier \"\(helperSigningID)\" " + developerIDTeamClauses
+    }
+
+    /// R2-5: the Developer ID intermediate CA marker (…6.2.6, G1 and G2) and the Developer ID
+    /// Application leaf marker (…6.1.13), then the Team ID. The same team's Apple Development
+    /// or Apple Distribution signature has the OU and an Apple anchor but not these markers.
+    private static var developerIDTeamClauses: String {
+        "and certificate 1[field.1.2.840.113635.100.6.2.6] "
+        + "and certificate leaf[field.1.2.840.113635.100.6.1.13] "
         + "and certificate leaf[subject.OU] = \"\(teamIdentifier)\""
     }
 

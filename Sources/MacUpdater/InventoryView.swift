@@ -599,30 +599,6 @@ private struct InventoryRow: View {
     }
 }
 
-/// UX-14 — the Inventory affordance that reports an app Wega has no known way to update. It is the
-/// one and only call site of `CatalogIssueBuilder`: the action builds a prefilled GitHub "new issue"
-/// URL and hands it to `NSWorkspace`, closing the community-catalog loop from the UI.
-private struct ReportAppButton: View {
-    let app: ApplicationInfo
-
-    var body: some View {
-        Button(action: report) {
-            Image(systemName: "plus.bubble")
-                .font(.wega(.subheadline))
-                .foregroundStyle(Color.wegaHoney)
-        }
-        .buttonStyle(.plain)
-        .help(tr("Zgłoś tę aplikację do katalogu"))
-        .accessibilityLabel(tr("Zgłoś aplikację"))
-    }
-
-    private func report() {
-        let builder = CatalogReporting.issueBuilder(for: app)
-        guard let url = builder.url(newIssueEndpoint: AppEndpoints.shared.projectNewIssueURL) else { return }
-        NSWorkspace.shared.open(url)
-    }
-}
-
 /// Lays out its subviews side by side with widths proportional to `weights` (M5).
 ///
 /// Replaces `.frame(maxWidth: .infinity * weight)`, which reads like proportional sizing

@@ -30,6 +30,17 @@ enum TouchIDDisableCopy {
         return tr("Pomocnik Wegi nie odpowiedział, a Touch ID dla sudo jest nadal włączone. Spróbuj ponownie albo wyłącz je ręcznie według przewodnika.")
     }
 
+    /// Without a helper that can do it and without the command (E.6): what the app's own read of
+    /// `sudo_local` found, by the helper's rules. `nil` when it found nothing to add.
+    static func withoutCommand(plan: TouchIDSudoDisablePlan?, fallbackPath: String?) -> String? {
+        if let fallbackPath { return line(for: .refused(.fallbackPolicyPresent), stillEnabled: true, fallbackPath: fallbackPath) }
+        switch plan {
+        case .nothingToRemove?: return line(for: .nothingToRemove, stillEnabled: true)
+        case .refused(let refusal)?: return line(for: .refused(refusal), stillEnabled: true)
+        case .remove?, nil: return nil
+        }
+    }
+
     static func localDirectoryWarning(path: String) -> String {
         trf("Katalog %@ może zmieniać ktoś poza rootem. Gdy Touch ID dla sudo jest wyłączone, sudo czyta też ustawienia z tego miejsca, więc program działający na Twoim koncie mógłby tam dodać takie, które pozwolą sudo pominąć hasło. Zajrzyj do przewodnika.", path)
     }
@@ -47,10 +58,12 @@ enum TouchIDDisableCopy {
         switch refusal {
         case .noConsoleUser, .callerNotConsoleUser, .callerNotAdministrator:
             return tr("Touch ID dla sudo może wyłączyć tylko administrator zalogowany przy tym Macu.")
-        case .notRegularFile, .tooLarge, .unreadable, .lineContinuation:
+        case .tooLarge, .unreadable, .lineContinuation:
             return tr("Plik /etc/pam.d/sudo_local wygląda inaczej, niż się spodziewam, więc go nie zmieniłam. Wyłączysz Touch ID ręcznie według przewodnika.")
-        case .unsafeOwnership:
-            return tr("Plik /etc/pam.d/sudo_local albo katalog /etc/pam.d może zmieniać ktoś poza rootem albo wygląda inaczej, niż powinien. To problem bezpieczeństwa: kto może tam pisać, może dostać uprawnienia roota bez hasła. Nie zmieniłam go. Sprawdź go według przewodnika.")
+        case .notRegularFile, .unsafeOwnership:
+            // RC2-7: `sudo` reads this file, so the manual route through `sudo` is no advice here; the
+            // card's recoveryOS note says what is wrong (M2), and this line only what happened.
+            return tr("Nie wyłączyłam Touch ID dla sudo: ustawienia, które czyta sudo, nie są bezpieczne.")
         case .fallbackPolicyPresent:
             guard let fallbackPath, TouchIDSudoDisabler.fallbackPolicyPaths.contains(fallbackPath) else {
                 return tr("Po usunięciu tej dyrektywy sudo czytałby też inny plik ustawień PAM, więc nic nie zmieniłam. Sprawdź przewodnik.")

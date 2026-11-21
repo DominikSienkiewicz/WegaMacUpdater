@@ -27,6 +27,9 @@ final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked 
             HelperAuditLog.logger.error("Odrzucono połączenie XPC: Team ID helpera nie jest skonfigurowany.")
             return false
         }
+        // R2-4: an accepted connection keeps the helper alive until it is invalidated.
+        let connection = HelperIdle.monitor.begin()
+        newConnection.invalidationHandler = { connection.end() }
         newConnection.setCodeSigningRequirement(WegaHelper.clientRequirement())
 
         newConnection.exportedInterface = NSXPCInterface(with: WegaPrivilegedOps.self)
@@ -62,26 +65,50 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
     }
 
     func helperVersion(withReply reply: @escaping @Sendable (String) -> Void) {
+        let activity = HelperIdle.monitor.begin()
+        defer { activity.end() }
         HelperAuditLog.logger.info("helperVersion: sukces")
         reply(WegaHelper.version)
     }
 
-    func enableTouchIDForSudo(withReply reply: @escaping @Sendable (Bool, String?) -> Void) {
-        do {
-            Self.pamLock.lock()
-            defer { Self.pamLock.unlock() }
-            try TouchIDSudoConfigurator.writeSudoLocalEnablingTouchID()
-            HelperAuditLog.logger.info("enableTouchIDForSudo: sukces")
-            reply(true, nil)
-        } catch {
-            HelperAuditLog.logger.error("enableTouchIDForSudo: błąd")
-            reply(false, error.localizedDescription)
+    /// The caller's console session and `admin` membership are read here, as root, exactly as for
+    /// turning Touch ID off; every file the operation touches is handled in `WegaHelperKit`. One
+    /// reply, at the end.
+    func enableTouchIDForSudoChecked(withReply reply: @escaping @Sendable (Int, String?) -> Void) {
+        let activity = HelperIdle.monitor.begin()
+        defer { activity.end() }
+        Self.pamLock.lock()
+        defer { Self.pamLock.unlock() }
+        let report = TouchIDSudoEnabler.runLive(
+            caller: .init(
+                uid: callerUID,
+                consoleUserUID: Self.consoleUserUID(),
+                isAdministrator: AdministratorGroup.contains(uid: callerUID)
+            )
+        )
+        Self.logEnable(report)
+        reply(report.result.wireCode, report.result.wireDetail)
+    }
+
+    /// The code, the step and the helper's own backup path; never a byte of the file, nor the caller.
+    private static func logEnable(_ report: TouchIDSudoEnableReport) {
+        let code = report.result.wireCode
+        if code >= 0 {
+            HelperAuditLog.logger.info("enableTouchIDForSudo: sukces, kod: \(code, privacy: .public)")
+        } else {
+            let step = report.failedStep?.rawValue ?? "-"
+            HelperAuditLog.logger.error("enableTouchIDForSudo: błąd \(code, privacy: .public) (etap: \(step, privacy: .public))")
+        }
+        if let backup = report.result.wireDetail {
+            HelperAuditLog.logger.error("enableTouchIDForSudo: poprzedni plik leży pod \(backup, privacy: .public)")
         }
     }
 
     /// The caller's console session and `admin` membership are read here, as root; every file the
     /// operation touches is handled in `WegaHelperKit`. One reply, at the end.
     func disableTouchIDForSudo(withReply reply: @escaping @Sendable (Int, String?) -> Void) {
+        let activity = HelperIdle.monitor.begin()
+        defer { activity.end() }
         Self.pamLock.lock()
         defer { Self.pamLock.unlock() }
         let report = TouchIDSudoDisabler.runLive(
@@ -122,13 +149,19 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
     func beginPackageInstallation(
         atPath path: String, operationID: String, expectedVersion: String, withReply reply: @escaping @Sendable (Data?, String?) -> Void
     ) {
+        let activity = HelperIdle.monitor.begin()
+        defer { activity.end() }
         guard let id = UUID(uuidString: operationID) else { reply(nil, "Niepoprawny identyfikator instalacji."); return }
         do {
             let registry = try HelperInstallations.registry.get()
             let shouldStart = try registry.begin(id)
             let state = try registry.status(id)
+            // R2-4, Z5: the installation outlives this call and its connection; it counts until
+            // `installVerifiedPackage` has returned, i.e. after its staging cleanup and its record.
             if shouldStart {
+                let installation = HelperIdle.monitor.begin()
                 DispatchQueue.global(qos: .utility).async {
+                    defer { installation.end() }
                     self.installVerifiedPackage(atPath: path, expectedVersion: expectedVersion) { succeeded, message in
                         do { try registry.finish(id, succeeded: succeeded, message: message) }
                         catch { HelperAuditLog.logger.error("Nie zapisano końcowego stanu instalacji: \(id.uuidString, privacy: .public)") }
@@ -142,6 +175,8 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
     }
 
     func packageInstallationStatus(operationID: String, withReply reply: @escaping @Sendable (Data?, String?) -> Void) {
+        let activity = HelperIdle.monitor.begin()
+        defer { activity.end() }
         guard let id = UUID(uuidString: operationID) else { reply(nil, "Niepoprawny identyfikator instalacji."); return }
         do {
             let status = try HelperInstallations.registry.get().status(id)
@@ -226,6 +261,8 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
     }
 
     func replaceBundle(atPath targetPath: String, withSnapshotAtPath snapshotPath: String, withReply reply: @escaping @Sendable (Bool, String?) -> Void) {
+        let activity = HelperIdle.monitor.begin()
+        defer { activity.end() }
         do { try HelperInstallations.registry.get().requireNoUnresolvedInstallation() }
         catch { reply(false, error.localizedDescription); return }
         let fileManager = FileManager.default
@@ -306,6 +343,8 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
     func stageApplicationBundleForTrash(
         atPath path: String, expectedBundleID: String, withReply reply: @escaping @Sendable (String?, String?) -> Void
     ) {
+        let activity = HelperIdle.monitor.begin()
+        defer { activity.end() }
         Self.stagingLock.lock()
         defer { Self.stagingLock.unlock() }
         do { try HelperInstallations.registry.get().requireNoUnresolvedInstallation() }

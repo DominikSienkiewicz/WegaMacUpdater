@@ -36,7 +36,6 @@ struct InfoView: View {
     private var enablingTouchID: Bool { touchIDController.isEnabling }
     private var disablingTouchID: Bool { touchIDController.isDisabling }
     private var touchIDError: String? { touchIDController.errorMessage }
-    private var touchIDPermissionDenied: Bool { touchIDController.wasPermissionDenied }
 }
 
 // Body, cards and actions live in an extension so the `InfoView` type body stays
@@ -222,9 +221,18 @@ extension InfoView {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
 
-                        if touchIDPermissionDenied {
-                            manualEnableFallback
-                        } else if touchIDState == .available {
+                        // RC2-6/RC2-7: `sudo` reads these settings, so an unsafe or unproven policy
+                        // leaves no command and no button in either state, only recoveryOS advice.
+                        if let reason = touchIDController.recoveryOnlyReason {
+                            touchIDNote(TouchIDEnableCopy.recoveryOnlyNote(for: reason), isWarning: true)
+                        } else if touchIDController.showsEnableCommand {
+                            if touchIDController.enableHelperOutdated {
+                                touchIDNote(TouchIDEnableCopy.outdatedHelperAboveCommand)
+                            }
+                            manualCommand(
+                                intro: tr("Bezpieczny zapis PAM wymaga podpisanego helpera. Jeśli jest niedostępny, uruchom poniższą transakcyjną komendę w Terminalu — wystarczy raz:"),
+                                command: .enable)
+                        } else if touchIDController.offersEnableButton {
                             Button {
                                 Task { await enableTouchID() }
                             } label: {
@@ -239,35 +247,40 @@ extension InfoView {
                         } else if touchIDState == .enabled {
                             switch touchIDController.disableOffer {
                             case .available:
-                                Button {
-                                    Task { await disableTouchID() }
-                                } label: {
-                                    if disablingTouchID {
-                                        ProgressView().controlSize(.small)
-                                    } else {
-                                        Label(tr("Wyłącz Touch ID dla sudo"), systemImage: "touchid")
+                                if touchIDController.offersDisableButton {
+                                    Button {
+                                        Task { await disableTouchID() }
+                                    } label: {
+                                        if disablingTouchID {
+                                            ProgressView().controlSize(.small)
+                                        } else {
+                                            Label(tr("Wyłącz Touch ID dla sudo"), systemImage: "touchid")
+                                        }
                                     }
-                                }
-                                .disabled(disablingTouchID)
-                                .controlSize(.small)
-                                if let path = touchIDController.preflight.unsafeLocalDirectory {
-                                    touchIDNote(TouchIDDisableCopy.localDirectoryWarning(path: path))
+                                    .disabled(disablingTouchID)
+                                    .controlSize(.small)
+                                    localDirectoryWarning
                                 }
                             case .helperOutdated:
                                 touchIDNote(TouchIDDisableCopy.outdatedHelper)
-                            case .blocked(let refusal):
-                                touchIDNote(TouchIDDisableCopy.line(for: .refused(refusal), stillEnabled: true), isWarning: true)
+                                disableWithoutHelper(otherwise: nil)
                             case .helperMissing:
-                                touchIDNote(tr("Bez pomocnika Wegi wyłączysz je ręcznie."))
+                                disableWithoutHelper(otherwise: tr("Bez pomocnika Wegi wyłączysz je ręcznie."))
+                            case .blocked(let refusal):
+                                touchIDNote(TouchIDEnableCopy.unsafePolicyNote(refusal), isWarning: true)
                             case .unknown:
                                 EmptyView()
                             }
-                            Link(tr("Jak wyłączyć Touch ID dla sudo"), destination: AppEndpoints.shared.touchIDGuideURL)
-                                .font(.wega(.subheadline))
                         }
 
-                        if touchIDState != .enabled, touchIDController.disableOffer == .blocked(.unsafeOwnership) {
-                            touchIDNote(TouchIDDisableCopy.line(for: .refused(.unsafeOwnership), stillEnabled: false), isWarning: true)
+                        // The recoveryOS note sends the user to the guide, so it has the link while
+                        // Touch ID is off too.
+                        if touchIDState == .enabled {
+                            Link(tr("Jak wyłączyć Touch ID dla sudo"), destination: AppEndpoints.shared.touchIDGuideURL)
+                                .font(.wega(.subheadline))
+                        } else if touchIDController.recoveryOnlyReason != nil {
+                            Link(tr("Jak naprawić ustawienia sudo"), destination: AppEndpoints.shared.touchIDGuideURL)
+                                .font(.wega(.subheadline))
                         }
 
                         SettingsCardHint(text: cardHints[.touchID])
@@ -276,6 +289,29 @@ extension InfoView {
                 }
             }
             .id(SettingsCard.touchID)
+        }
+    }
+
+    /// Without a helper that can do it (E.6): the disable command when the controller allows it, with
+    /// the `/usr/local` warning under it; otherwise what the app's own read found, or `otherwise`.
+    @ViewBuilder
+    private func disableWithoutHelper(otherwise: String?) -> some View {
+        if touchIDController.showsDisableCommand {
+            manualCommand(
+                intro: tr("Bez pomocnika Wegi wyłączysz Touch ID dla sudo tym poleceniem w Terminalu. Usuwa tylko dokładną dyrektywę i niczego nie zmienia, jeśli plik wygląda inaczej:"),
+                command: .disable)
+            localDirectoryWarning
+        } else if let line = TouchIDDisableCopy.withoutCommand(
+            plan: touchIDController.preflight.removalPlan, fallbackPath: touchIDController.preflight.fallbackPath
+        ) ?? otherwise {
+            touchIDNote(line)
+        }
+    }
+
+    @ViewBuilder
+    private var localDirectoryWarning: some View {
+        if let path = touchIDController.preflight.unsafeLocalDirectory {
+            touchIDNote(TouchIDDisableCopy.localDirectoryWarning(path: path))
         }
     }
 
@@ -441,18 +477,18 @@ extension InfoView {
         }
     }
 
-    /// Manual fallback shown when the signed privileged helper is unavailable.
-    /// Renders the exact one-liner the user should paste into Terminal,
-    /// plus buttons to copy it and to open Terminal.app pre-armed with it.
+    /// A `sudo` command for Terminal when the helper cannot act: the exact one-liner, with buttons to
+    /// copy it, to open Terminal.app pre-armed with it and to check again. The enum, never text,
+    /// travels to Terminal, so what opens is what the card shows (RC2-8).
     @ViewBuilder
-    private var manualEnableFallback: some View {
+    private func manualCommand(intro: String, command: TouchIDManualCommand) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(tr("Bezpieczny zapis PAM wymaga podpisanego helpera. Jeśli jest niedostępny, uruchom poniższą transakcyjną komendę w Terminalu — wystarczy raz:"))
+            Text(intro)
                 .font(.wega(.subheadline))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text(TouchIDSudoConfigurator.manualEnableTerminalCommand)
+            Text(command.text)
                 .font(.wega(.subheadline, monospaced: true))
                 .textSelection(.enabled)
                 .padding(8)
@@ -462,17 +498,14 @@ extension InfoView {
             HStack(spacing: 8) {
                 Button {
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(
-                        TouchIDSudoConfigurator.manualEnableTerminalCommand,
-                        forType: .string
-                    )
+                    NSPasteboard.general.setString(command.text, forType: .string)
                 } label: {
-                    Label(tr("Skopiuj komendę"), systemImage: "doc.on.doc")
+                    Label(tr("Skopiuj polecenie"), systemImage: "doc.on.doc")
                 }
                 .controlSize(.small)
 
                 Button {
-                    openInTerminal(TouchIDSudoConfigurator.manualEnableTerminalCommand)
+                    openInTerminal(command)
                 } label: {
                     Label(tr("Otwórz w Terminalu"), systemImage: "terminal")
                 }
@@ -483,14 +516,15 @@ extension InfoView {
                 Button(tr("Sprawdź ponownie")) {
                     cardHints[.touchID] = nil
                     touchIDController.refresh()
+                    Task { await touchIDController.refreshDisableOffer() }
                 }
                 .controlSize(.small)
             }
         }
     }
 
-    private func openInTerminal(_: String) {
-        touchIDController.openManualFallback()
+    private func openInTerminal(_ command: TouchIDManualCommand) {
+        touchIDController.openInTerminal(command)
     }
 
     // MARK: - Self-update (Wega dogfooding its own GitHub releases)

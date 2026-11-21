@@ -16,10 +16,13 @@ set -euo pipefail
 #                            ticket is stapled (spctl accepts them offline),
 #   6. publisher pin       — the signature belongs to WEGA's Team ID, not merely to *an* Apple
 #                            developer (SEC-04: notarization proves "some developer", never
-#                            "this one").
+#                            "this one"),
+#   7. XPC requirements    — with a Developer ID, the app satisfies the requirement the helper
+#                            demands of every client and the helper the one the app demands of
+#                            it (RC2-4), so a release can never cut its users off the helper.
 #
 # Signing is OPTIONAL for LOCAL/TEST builds: ad-hoc/unsigned dev builds pass 1–4 and report
-# steps 5–6 as skipped (like verify-catalog.sh's "not configured" exit).
+# steps 5–7 as skipped (like verify-catalog.sh's "not configured" exit).
 #
 # For a STABLE RELEASE it is not optional. `REQUIRE_SIGNED=1` turns the skips into failures:
 # the artifacts must be Developer-ID-signed, notarized, stapled and carry the expected Team ID
@@ -60,6 +63,13 @@ esac
 
 TEAM_ID_SOURCE="Sources/WegaHelperKit/WegaHelperProtocol.swift"
 EXPECTED_TEAM_ID="${EXPECTED_TEAM_ID:-$(sed -n 's/.*static let teamIdentifier = "\(.*\)".*/\1/p' "$TEAM_ID_SOURCE")}"
+
+# The code requirements the app and the helper pin each other with over XPC: exactly what
+# `WegaHelper.clientRequirement()` and `WegaHelper.helperRequirement()` in $TEAM_ID_SOURCE
+# return (PrivilegedHelperSecurityTests pins both lines). Literals, so the gate never has to
+# compile Swift to learn them.
+CLIENT_REQUIREMENT='anchor apple generic and identifier "com.wega.WegaMacUpdater" and certificate 1[field.1.2.840.113635.100.6.2.6] and certificate leaf[field.1.2.840.113635.100.6.1.13] and certificate leaf[subject.OU] = "6B8FYSZFJK"'
+HELPER_REQUIREMENT='anchor apple generic and identifier "com.wega.WegaMacUpdater.helper" and certificate 1[field.1.2.840.113635.100.6.2.6] and certificate leaf[field.1.2.840.113635.100.6.1.13] and certificate leaf[subject.OU] = "6B8FYSZFJK"'
 
 note() { echo "::notice::$*"; }
 bad()  { echo "  ✗ $*" >&2; fail=$((fail + 1)); }
@@ -243,6 +253,28 @@ else
             bad "Team ID $found ≠ $EXPECTED_TEAM_ID: $label"
         fi
     done
+fi
+
+# --- 7. XPC code requirements (RC2-4) ---------------------------------------
+# Unit tests run on ad-hoc builds, where `anchor apple generic` cannot hold, so they only prove
+# that both requirements compile. Only the signed files can show that a v8 helper will accept
+# the genuine app and that the app will trust the genuine helper; a slip in either string would
+# break every helper verb for every user until they reinstall by hand.
+# `-R "=…"`, never `-R="=…"`: codesign reads the latter as the text "=…" — a syntax error.
+echo "→ 7. Wymagania XPC (aplikacja ↔ pomocnik)"
+if [[ "$SIGNED_DEVELOPER_ID" -ne 1 ]]; then
+    note "Pominięto: wymagania XPC da się sprawdzić tylko na podpisie Developer ID."
+else
+    if codesign --verify -R "=$CLIENT_REQUIREMENT" "$APP_BUNDLE" >/dev/null 2>&1; then
+        ok "wymaganie XPC spełnione: $(basename "$APP_BUNDLE")"
+    else
+        bad "nie spełnia wymagania XPC clientRequirement() — pomocnik odrzuci jej połączenia: $(basename "$APP_BUNDLE")"
+    fi
+    if codesign --verify -R "=$HELPER_REQUIREMENT" "$HELPER" >/dev/null 2>&1; then
+        ok "wymaganie XPC spełnione: $(basename "$HELPER")"
+    else
+        bad "nie spełnia wymagania XPC helperRequirement() — aplikacja mu nie zaufa: $(basename "$HELPER")"
+    fi
 fi
 
 echo

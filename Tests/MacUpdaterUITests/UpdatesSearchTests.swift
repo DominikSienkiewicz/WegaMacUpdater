@@ -32,6 +32,31 @@ struct UpdatesSearchTests {
         #expect(UpdatesSearch.answer(query: "spot", rows: [], hiddenByRules: [rule], inventory: [], inventoryIsStale: false, checks: [:], policies: [:], now: now)
                 == .hiddenByRule(name: "Spotify"))
     }
+    /// The owner's choice: the answer that says Wega knows no source for an app carries
+    /// „Zgłoś aplikację ›”, Inventory's own report button, for the app Inventory read. The single
+    /// answer row stays; nothing is filtered.
+    @Test func aNoSourceAnswerOffersTheCatalogReport() throws {
+        let spotify = application("Spotify", version: "1.2.3")
+        let other = application("Spotlight Helper", version: "1")
+        let noSource = UpdatesSearchAnswer.notChecked(name: "Spotify", reason: .noSource)
+        #expect(UpdatesSearch.links(for: noSource) == [.report, .inventory])
+        #expect(UpdatesSearch.links(for: .fromStaleInventory(noSource)) == [.report, .inventory])
+        for reason in [UpdatesSearchAnswer.NotCheckedReason.checkFailed, .noCurrentResult] {
+            #expect(!UpdatesSearch.links(for: .notChecked(name: "Spotify", reason: reason)).contains(.report), "\(reason)")
+        }
+        #expect(UpdatesSearch.reportTarget(for: noSource, query: "spotify", inventory: [other, spotify]) == spotify)
+        #expect(UpdatesSearch.reportTarget(for: .fromStaleInventory(noSource), query: "spotify", inventory: [spotify]) == spotify)
+        #expect(UpdatesSearch.reportTarget(for: .notChecked(name: "Spotify", reason: .checkFailed), query: "spotify", inventory: [spotify]) == nil)
+        #expect(UpdatesSearch.reportTarget(for: .notFound(query: "spotify"), query: "spotify", inventory: [spotify]) == nil)
+        #expect(UpdatesSearch.reportTarget(for: noSource, query: "spotify", inventory: nil) == nil)
+
+        let row = try source("Sources/MacUpdater/UpdatesSearch.swift")
+        #expect(row.contains("if links.contains(.report), let reportTarget {"))
+        #expect(row.contains("ReportAppButton(app: reportTarget, style: .link)"))
+        let screen = try source("Sources/MacUpdater/UpdateView.swift")
+        #expect(screen.contains("reportTarget: UpdatesSearch.reportTarget(for: answer, query: searchQuery, inventory: inventory.apps)"))
+        withLanguage(.en) { #expect(tr("Zgłoś aplikację ›") == "Report app ›") }
+    }
     @Test func withoutAnInventoryWegaSaysSheHasNotLooked() {
         #expect(UpdatesSearch.answer(query: "spotify", rows: [], hiddenByRules: [], inventory: nil, inventoryIsStale: false, checks: [:], policies: [:], now: now)
                 == .inventoryNotRead(query: "spotify"))
@@ -161,6 +186,8 @@ struct UpdatesSearchTests {
             .onList([row("c:a", long), row("c:b", long + " Helper"), row("c:c", long + " Preview")], more: true),
             .upToDate(name: long, version: "10.13.2 (2045)", checkedAt: now, sources: ["Homebrew", "Microsoft AutoUpdate"]),
             .notChecked(name: long, reason: .noCurrentResult),
+            .notChecked(name: long, reason: .noSource),
+            .fromStaleInventory(.notChecked(name: long, reason: .noSource)),
             .hiddenByRule(name: long),
             .inventoryNotRead(query: long),
             .notFound(query: long),
@@ -175,7 +202,8 @@ struct UpdatesSearchTests {
                 let longestProblem = everySource.map { ScanSourceFailure(source: $0, message: "") }.scanErrorMessage
                 for answer in answers {
                     for problem in [nil, longestProblem] {
-                        let view = UpdatesSearchAnswerRow(answer: answer, inventoryReadAt: now, inventoryProblem: problem,
+                        let reported = UpdatesSearch.links(for: answer).contains(.report) ? application(long, version: "1") : nil
+                        let view = UpdatesSearchAnswerRow(answer: answer, inventoryReadAt: now, inventoryProblem: problem, reportTarget: reported,
                                                           onShow: { _ in }, onShowRules: {}, onOpenInventory: {})
                         let fitted = NSHostingController(rootView: view).sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude))
                         #expect(fitted.width <= width, "\(language) \(answer): needs \(fitted.width) pt")

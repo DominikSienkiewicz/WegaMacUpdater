@@ -98,8 +98,9 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         return .stale
     }
 
-    /// One bounded handshake (the handshake deadline) before Uninstall promises the helper, so a
-    /// stale or dead helper is found before Wega quits anything.
+    /// One bounded handshake (the handshake deadline, and at most one retry after a dropped
+    /// connection) before Uninstall promises the helper, so a stale or dead helper is found before
+    /// Wega quits anything.
     public func uninstallAvailabilityAfterHandshake() async -> UninstallHelperAvailability {
         do {
             try await performHandshake(for: .stageApplicationBundleForTrash)
@@ -176,8 +177,8 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         try Self.acceptedVersion(reported: try await helperVersion(), for: verb)
     }
 
-    /// One bounded handshake for `verb`, so a screen can offer the verb only when the running
-    /// helper will take it.
+    /// One bounded handshake for `verb` (at most one retry after a dropped connection), so a screen
+    /// can offer the verb only when the running helper will take it.
     public func availabilityAfterHandshake(for verb: WegaHelperVerb) async -> HelperVerbAvailability {
         do {
             try await performHandshake(for: verb)
@@ -193,21 +194,55 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         return .stale
     }
 
-    // MARK: - Whitelisted operations (XPC)
+    /// Whether a call failed because its connection dropped: the client's interruption or
+    /// invalidation handler (`.connectionFailed`), or the proxy's raw XPC error, whichever came first.
+    static func isDroppedConnection(_ error: Error) -> Bool {
+        if case .connectionFailed = error as? HelperError { return true }
+        let raw = error as NSError
+        return raw.domain == NSCocoaErrorDomain
+            && (raw.code == NSXPCConnectionInterrupted || raw.code == NSXPCConnectionInvalid)
+    }
 
-    public func helperVersion() async throws -> String {
-        try await call(deadline: Deadline.handshake) { (proxy, done: @escaping @Sendable (sending Result<String, Error>) -> Void) in
-            proxy.helperVersion { version in done(.success(version)) }
+    /// RC2-3: runs `attempt` once more when its connection dropped, and never again after that.
+    /// Only for the version probe: a helper idle for a minute may be exiting just as the first
+    /// connection reaches it, and asking its version twice changes nothing. A verb may already have
+    /// run on the helper, so no verb is ever sent twice.
+    static func retryingOnceOnConnectionFailure<T>(_ attempt: () async throws -> T) async throws -> T {
+        do {
+            return try await attempt()
+        } catch where isDroppedConnection(error) {
+            return try await attempt()
         }
     }
 
-    public func enableTouchIDForSudo() async throws {
-        try await performHandshake(for: .enableTouchIDForSudo)
-        _ = try await call(deadline: Deadline.enableTouchID) { (proxy, done: @escaping @Sendable (sending Result<Bool, Error>) -> Void) in
-            proxy.enableTouchIDForSudo { ok, message in
-                done(ok ? .success(true) : .failure(HelperError.operationFailed(message ?? "enableTouchIDForSudo failed")))
+    // MARK: - Whitelisted operations (XPC)
+
+    public func helperVersion() async throws -> String {
+        try await Self.retryingOnceOnConnectionFailure {
+            try await call(deadline: Deadline.handshake) { (proxy, done: @escaping @Sendable (sending Result<String, Error>) -> Void) in
+                proxy.helperVersion { version in done(.success(version)) }
             }
         }
+    }
+
+    /// Turns Touch ID for `sudo` on as root. A transport error or an unknown reply means the outcome
+    /// is not known, and the caller reads the file again.
+    public func enableTouchIDForSudo() async throws -> TouchIDSudoEnableResult {
+        try await performHandshake(for: .enableTouchIDForSudo)
+        return try await call(deadline: Deadline.enableTouchID) { (proxy, done: @escaping @Sendable (sending Result<TouchIDSudoEnableResult, Error>) -> Void) in
+            proxy.enableTouchIDForSudoChecked { code, detail in
+                done(Self.enableReply(code: code, detail: detail))
+            }
+        }
+    }
+
+    /// An unknown code, a detail on a code other than −21, or −21 with a path outside the policy
+    /// directory is an operation failure that carries only the code: the detail is never passed on.
+    static func enableReply(code: Int, detail: String?) -> Result<TouchIDSudoEnableResult, Error> {
+        guard let result = TouchIDSudoEnableResult(wireCode: code, detail: detail) else {
+            return .failure(HelperError.operationFailed("enableTouchIDForSudo failed (\(code))"))
+        }
+        return .success(result)
     }
 
     /// Removes the exact Touch ID directive from `sudo_local` as root. A transport error or an

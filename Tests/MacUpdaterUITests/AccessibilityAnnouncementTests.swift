@@ -66,7 +66,7 @@ struct AccessibilityAnnouncementTests {
         LocalizedStrings.withScopedLanguage(.pl) {
             #expect(AnnouncementCopy.scanFinished(updates: 2, complete: true) == "Skan zakończony: 2 aktualizacje.")
             #expect(AnnouncementCopy.scanFinished(updates: 0, complete: false)
-                    == "Skan zakończony: 0 aktualizacji. Sprawdzanie niepełne.")
+                    == "Skan zakończony: 0 aktualizacji. Skan niepełny.")
             #expect(AnnouncementCopy.uninstallFinished(removed: 1) == "Odinstalowano 1 aplikację.")
             #expect(AnnouncementCopy.uninstallFinished(removed: 22) == "Odinstalowano 22 aplikacje.")
             #expect(AnnouncementCopy.uninstallFinished(removed: 12) == "Odinstalowano 12 aplikacji.")

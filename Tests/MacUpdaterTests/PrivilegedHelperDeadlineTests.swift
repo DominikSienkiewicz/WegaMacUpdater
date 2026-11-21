@@ -59,9 +59,10 @@ struct PrivilegedHelperDeadlineTests {
 
     // MARK: - Version handshake (per verb, RC3)
 
+    /// The four verbs whose minimum stays at 6, so rollback, self-update and the Trash keep working
+    /// through a helper that is still v6 or v7 after the app updated.
     private let oldVerbs: [WegaHelperVerb] = [
-        .enableTouchIDForSudo, .beginPackageInstallation, .packageInstallationStatus, .replaceBundle,
-        .stageApplicationBundleForTrash,
+        .beginPackageInstallation, .packageInstallationStatus, .replaceBundle, .stageApplicationBundleForTrash,
     ]
 
     @Test func handshakeAcceptsMatchingVersion() {
@@ -82,37 +83,56 @@ struct PrivilegedHelperDeadlineTests {
     }
 
     @Test func eachVerbHasItsOwnMinimumHelperVersion() {
-        #expect(WegaHelper.version == "7")
+        #expect(WegaHelper.version == "8")
         #expect(Dictionary(uniqueKeysWithValues: WegaHelperVerb.allCases.map { ($0, WegaHelper.minimumHelperVersion(for: $0)) }) == [
-            .enableTouchIDForSudo: 6, .beginPackageInstallation: 6, .packageInstallationStatus: 6, .replaceBundle: 6,
+            .enableTouchIDForSudo: 8, .beginPackageInstallation: 6, .packageInstallationStatus: 6, .replaceBundle: 6,
             .stageApplicationBundleForTrash: 6, .disableTouchIDForSudo: 7,
         ])
     }
 
-    /// A v6 helper still running after the app updated keeps serving the five old verbs; only
-    /// turning Touch ID off needs v7, and is refused before anything is sent.
-    @Test func aVersionSixHelperServesTheOldVerbsButNotTheNewOne() throws {
+    /// A v6 helper still running after the app updated keeps serving the four verbs whose minimum
+    /// is 6; turning Touch ID off needs v7 and on needs v8, and both are refused before anything is sent.
+    @Test func aVersionSixHelperServesTheOldVerbsButNeitherTouchIDVerb() throws {
         for verb in oldVerbs {
             #expect(PrivilegedHelperClient.handshakeOutcome(reported: "6", for: verb) == .compatible, "\(verb)")
             #expect(try PrivilegedHelperClient.acceptedVersion(reported: "6", for: verb) == "6", "\(verb)")
         }
         #expect(PrivilegedHelperClient.handshakeOutcome(reported: "6", for: .disableTouchIDForSudo)
-                == .mismatch(reported: "6", expected: "7…7"))
+                == .mismatch(reported: "6", expected: "7…8"))
+        #expect(PrivilegedHelperClient.handshakeOutcome(reported: "6", for: .enableTouchIDForSudo)
+                == .mismatch(reported: "6", expected: "8…8"))
         do {
             _ = try PrivilegedHelperClient.acceptedVersion(reported: "6", for: .disableTouchIDForSudo)
-            Issue.record("a v6 helper must not be sent the new verb")
+            Issue.record("a v6 helper must not be sent the v7 verb")
         } catch PrivilegedHelperClient.HelperError.versionMismatch(let helper, let expected) {
-            #expect(helper == "6" && expected == "7…7")
+            #expect(helper == "6" && expected == "7…8")
+        }
+    }
+
+    /// Review focus 2: right after the app update the running helper is still v7. Turning Touch ID
+    /// off, rollback, self-update and the Trash keep working; only turning it on is refused, before
+    /// anything is sent, because v7 replies to it in another shape.
+    @Test func aV7HelperTakesEveryVerbButEnable() throws {
+        for verb in WegaHelperVerb.allCases where verb != .enableTouchIDForSudo {
+            #expect(PrivilegedHelperClient.handshakeOutcome(reported: "7", for: verb) == .compatible, "\(verb)")
+        }
+        #expect(PrivilegedHelperClient.handshakeOutcome(reported: "7", for: .enableTouchIDForSudo)
+                == .mismatch(reported: "7", expected: "8…8"))
+        do {
+            _ = try PrivilegedHelperClient.acceptedVersion(reported: "7", for: .enableTouchIDForSudo)
+            Issue.record("a v7 helper must not be sent the v8 enable verb")
+        } catch PrivilegedHelperClient.HelperError.versionMismatch(let helper, let expected) {
+            #expect(helper == "7" && expected == "8…8")
         }
         for verb in WegaHelperVerb.allCases {
-            #expect(PrivilegedHelperClient.handshakeOutcome(reported: "7", for: verb) == .compatible, "\(verb)")
+            #expect(PrivilegedHelperClient.handshakeOutcome(reported: "8", for: verb) == .compatible, "\(verb)")
         }
     }
 
     /// Only 1–4 ASCII digits in the accepted range: `Int("+7")` is 7, and a newer helper than the
     /// app is never driven.
     @Test func anythingButADigitStringInRangeIsAMismatch() {
-        for reported in ["8", "x", "", "+7", " 7", "7 ", "-1", "7-old", "0x7", "00007", "٧", "5"] {
+        for reported in ["9", "x", "", "+7", " 7", "7 ", "-1", "7-old", "0x7", "00007", "٧", "5"] {
             for verb in WegaHelperVerb.allCases {
                 guard case .mismatch(let echoed, _) = PrivilegedHelperClient.handshakeOutcome(reported: reported, for: verb) else {
                     Issue.record("\(reported.debugDescription) must not be compatible for \(verb)")
@@ -161,6 +181,35 @@ struct PrivilegedHelperDeadlineTests {
         for item in cases {
             #expect(PrivilegedHelperClient.verbAvailability(handshakeFailure: item.error) == item.expected, "\(item.error)")
         }
+    }
+
+    // MARK: - Turning Touch ID for sudo on
+
+    @Test func theEnableReplyDecodesKnownCodesOnly() throws {
+        let backup = "/etc/pam.d/.sudo_local.wega-backup-0A1B2C3D"
+        #expect(try PrivilegedHelperClient.enableReply(code: 1, detail: nil).get() == .enabled)
+        #expect(try PrivilegedHelperClient.enableReply(code: 0, detail: nil).get() == .alreadyEnabled)
+        #expect(try PrivilegedHelperClient.enableReply(code: -3, detail: nil).get() == .refused(.callerNotAdministrator))
+        #expect(try PrivilegedHelperClient.enableReply(code: -20, detail: nil).get() == .restoredAfterFailure)
+        #expect(try PrivilegedHelperClient.enableReply(code: -21, detail: nil).get() == .rollbackFailed(backupPath: nil))
+        #expect(try PrivilegedHelperClient.enableReply(code: -21, detail: backup).get() == .rollbackFailed(backupPath: backup))
+        for (code, detail) in [(-99, nil), (-21, "/tmp/x"), (-8, nil), (2, nil), (1, "/tmp/x"), (0, "/tmp/x")] as [(Int, String?)] {
+            guard case .failure(let error) = PrivilegedHelperClient.enableReply(code: code, detail: detail),
+                  case .operationFailed(let message) = error as? PrivilegedHelperClient.HelperError else {
+                Issue.record("\(code) \(String(describing: detail)) must be an operation failure")
+                continue
+            }
+            #expect(message == "enableTouchIDForSudo failed (\(code))", "only the code is passed on, never the path")
+        }
+    }
+
+    /// RC2-1: the v8 reply has its own selector, and the client sends only that one.
+    @Test func theClientSendsOnlyTheCheckedEnableSelector() throws {
+        let body = try functionBody("public func enableTouchIDForSudo(", in: "Sources/MacUpdaterCore/PrivilegedHelper/PrivilegedHelperClient.swift")
+        #expect(body.contains("public func enableTouchIDForSudo() async throws -> TouchIDSudoEnableResult"))
+        #expect(body.contains("proxy.enableTouchIDForSudoChecked { code, detail in"))
+        #expect(body.contains("done(Self.enableReply(code: code, detail: detail))"))
+        #expect(!body.contains("proxy.enableTouchIDForSudo {"))
     }
 
     // MARK: - Turning Touch ID for sudo off

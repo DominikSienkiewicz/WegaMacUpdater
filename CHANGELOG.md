@@ -25,15 +25,39 @@ them verbatim under the new version heading, so that step is never done by hand 
   or *won't start*; Homebrew formulae and the App Store say *in progress* once on the group,
   and updates the vendor finishes say *with the vendor*.
 - **Turn Touch ID for sudo off from Settings.** With the Wega helper installed, the Touch ID
-  card has **Turn Off Touch ID for sudo**. The helper removes only Wega's line from
-  `/etc/pam.d/sudo_local`, swaps the new file in atomically, checks it and puts the old file
+  card has **Turn Off Touch ID for sudo**. The helper removes only the exact
+  `auth       sufficient     pam_tid.so` directive from `/etc/pam.d/sudo_local`, whoever wrote it, swaps the new file in atomically, checks it and puts the old file
   back if anything fails. It refuses a file that someone other than root can change, and the guide
-  says how to inspect and repair that safely. An older helper keeps working; the
-  Touch ID card asks you to reinstall it before turning Touch ID off.
+  says how to inspect and repair that safely. An older helper keeps its other work; the
+  Touch ID card says it is out of date and asks you to reinstall it or restart your Mac, and can
+  show the command that turns Touch ID off without the helper.
+- **Turning Touch ID for sudo on is checked like turning it off.** Through the helper it now
+  needs an administrator signed in at the Mac, and refuses an unsafe `/etc/pam.d`,
+  `sudo_local` or, when there is no `sudo_local`, `sudo_local.template` (someone other than root can change it, it is not a
+  regular file, it is over 64 KiB or it is not plain text) instead of replacing it with
+  Apple's template as before. It writes nothing when `sudo_local` already has the line and
+  checks the result before the card says it worked. The card explains each refusal and no
+  longer offers the Terminal command after one; for an unsafe policy it says to repair it
+  from recoveryOS. This is helper protocol v8. A helper still running from an earlier Wega keeps rollback,
+  self-update and moving apps to the Trash working; for turning Touch ID on or off the card says
+  it is out of date, and can offer the Terminal command instead, until you restart your Mac or
+  reinstall the helper.
+- **Turn Touch ID for sudo off without the helper.** When the helper is missing or out of date,
+  the Touch ID card shows a command to copy (**Copy command**) or run in Terminal (**Open in
+  Terminal**) next to the guide link, but only when Touch ID is on, the settings `sudo` reads
+  are safe, no later policy file would take over and Wega's own read of `sudo_local` shows the
+  exact directive can be removed. The command removes only that line and changes nothing, and
+  says why, when the file has a backslash, other settings, a NUL byte or text that is not UTF-8,
+  is too large, or when a later policy path or a linked `/usr/local` directory exists.
+- **The helper exits when idle.** From protocol v8 the helper exits after a minute with no
+  connection and no work in progress (a background installation counts as work), and macOS
+  starts it again from the installed Wega for the next request, so after a Wega update the new
+  helper runs within about a minute of idle. The app retries the version check once after a
+  dropped connection.
 - **Find an app on Updates.** **⌘F** shows one answer row above the list instead of
   narrowing it: where the app is on the list, what Inventory knows when it is not (up to
-  date, no known source, the check failed, hidden by one of your rules with **Show Rules**,
-  or not on this Mac), with **Show Rules** beside an answer about your rules and **Open Inventory**
+  date, no known source with **Report app ›** to suggest it for the catalog as in Inventory,
+  the check failed, hidden by one of your rules with **Show Rules**, or not on this Mac), with **Show Rules** beside an answer about your rules and **Open Inventory**
   beside the others, and says when the Inventory read may have changed or was incomplete.
 - **The menu knows when the window is checking.** While a check from the Wega window runs, the
   menu-bar menu says **Checking for updates in the Wega window…**, and its check button and
@@ -86,6 +110,25 @@ them verbatim under the new version heading, so that step is never done by hand 
   remove Wega and every root-owned leftover, and a safe way to turn Touch ID for `sudo` off
   again; Uninstall and the Touch ID card link to them. Under the update list, **Can't see an
   app?** opens Inventory, since a missing app is not proof it is up to date.
+
+### Security
+- **No sudo route while the settings sudo reads are unsafe or unproven.** When `sudo_local` is
+  not a regular file, `sudo_local` or `/etc/pam.d` can be changed by someone other than root
+  (whether Wega saw it or the helper reported it), `/etc/pam.d/sudo` is unsafe, or Wega cannot
+  establish that they are safe, the Touch ID card shows no button and no command and says to
+  repair it from recoveryOS and to type no password into `sudo` meanwhile, even when Wega asks
+  for one during an update. The guide no longer offers an `osascript` administrator-prompt
+  repair; recoveryOS is the only route.
+- **The manual command to turn Touch ID on is safer.** It runs through `/usr/bin/sudo` in the C
+  locale, refuses an existing `sudo_local` that is a link, is not a regular file, is not owned
+  by root, is writable by group or others or has an ACL, refuses an unsafe `sudo_local.template`
+  (a link, not root's, writable by group or others, or with an ACL; a missing one is fine), and ends an unterminated last line before adding
+  the directive.
+- **The helper and the app pin each other to a Developer ID signature.** Both XPC code
+  requirements now demand a Developer ID certificate chain (the intermediate and leaf markers),
+  besides the Team ID and the identifier, so a signature from the same team that is not
+  Developer ID no longer qualifies. The release artifact check verifies the signed app and helper
+  against both requirements.
 
 ### Fixed
 - **Inventory knows about installs and undos.** It marks its read **the list may have
@@ -146,7 +189,8 @@ them verbatim under the new version heading, so that step is never done by hand 
 
 ### Changed
 - **Shorter, plainer wording.** The note for a scan that could not reach every source is
-  shorter in Polish and reads **check incomplete** in English, the group that waits for you is
+  shorter in Polish (**skan niepełny**, now also in Inventory, the menu bar and the VoiceOver
+  announcement) and reads **check incomplete** in English, the group that waits for you is
   **Needs your action**, the fourth source is **vendors**, and the messages about a changed
   signature now say **developer signature** instead of Team ID.
 - **The band names your queue.** It reads **4 queued · 2 to finish with the developer**

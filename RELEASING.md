@@ -117,7 +117,8 @@ The tag triggers [`release.yml`](.github/workflows/release.yml):
 3. **Build** — `./scripts/build-pkg.sh` produces a universal `.pkg` and `.dmg`.
 4. **Notarize & staple** — only when both a Developer ID and a notary key are configured.
 5. **Artifact gate** — `./scripts/verify-bundle.sh` checks bundle layout, helper signature,
-   notarization, stapling, the publisher **Team ID** and required resources. A broken bundle
+   notarization, stapling, the publisher **Team ID**, that the signed app and helper satisfy
+   the XPC code requirements they pin each other with, and required resources. A broken bundle
    blocks the publish. For a stable release it runs with `REQUIRE_SIGNED=1`, which turns every
    "skipped because unsigned" note into a failure.
 6. **Publish** — `gh release create` uploads both artifacts and uses your changelog section

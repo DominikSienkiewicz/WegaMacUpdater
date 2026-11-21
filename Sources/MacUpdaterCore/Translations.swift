@@ -26,6 +26,7 @@ public enum Translations {
         .merging(uxReviewRest) { first, _ in first }
         .merging(uxNextBatch) { first, _ in first }
         .merging(touchIDDisable) { first, _ in first }
+        .merging(uxFollowup) { first, _ in first }
 }
 
 extension Translations {
@@ -79,10 +80,8 @@ extension Translations {
         "Brak potwierdzenia": "Not confirmed",
         "Sprawdzona — aktualna": "Checked — up to date",
         "Dostępna aktualizacja": "Update available",
-        "Sprawdzenie niepełne": "Check incomplete",
         "Brak rozpoznanego źródła": "No recognized source",
         "Wynik nieaktualny": "Stale result",
-        "Aktualizacja; sprawdzenie niepełne": "Update available; check incomplete",
         "Źródła i czas ostatniego sprawdzenia": "Sources and last check time",
         "Ostatnia próba: %@": "Last attempt: %@",
         "Ostatnie pełne sprawdzenie: %@": "Last complete check: %@",
@@ -688,7 +687,6 @@ extension Translations {
         "Dostępne": "Available",
         "macOS zablokował zapis do /etc/pam.d/sudo_local z poziomu Wegi (TCC). Uruchom poniższą komendę w Terminalu — wystarczy raz:": "macOS blocked writing to /etc/pam.d/sudo_local from within Wega (TCC). Run the command below in Terminal — just once:",
         "Bezpieczny zapis PAM wymaga podpisanego helpera. Jeśli jest niedostępny, uruchom poniższą transakcyjną komendę w Terminalu — wystarczy raz:": "A safe PAM write requires the signed helper. If it is unavailable, run the transactional command below in Terminal — just once:",
-        "Skopiuj komendę": "Copy command",
         "Otwórz w Terminalu": "Open in Terminal",
         "Touch ID podpięty pod sudo.": "Touch ID is now wired up to sudo.",
         "macOS zablokował zapis — wklej komendę do Terminala.": "macOS blocked the write — paste the command into Terminal.",

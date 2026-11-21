@@ -14,7 +14,9 @@ protocol SudoLocalFileManaging {
 struct SudoLocalTransactionalWriter {
     enum WriteError: Error, Equatable, LocalizedError {
         case verificationFailed
-        case rollbackFailed
+        /// The write failed and could not be undone. `backupPath` is the copy of the previous file,
+        /// kept for manual recovery, or `nil` when there was no previous file.
+        case rollbackFailed(backupPath: String?)
 
         var errorDescription: String? {
             switch self {
@@ -31,14 +33,15 @@ struct SudoLocalTransactionalWriter {
 
     init(
         fileSystem: SudoLocalFileManaging = SystemSudoLocalFileManager(),
-        makeBackupURL: @escaping (URL) -> URL = { target in
-            target.deletingLastPathComponent().appendingPathComponent(
-                ".sudo_local.wega-backup-\(UUID().uuidString)"
-            )
-        }
+        makeBackupURL: @escaping (URL) -> URL = Self.backupURL(for:)
     ) {
         self.fileSystem = fileSystem
         self.makeBackupURL = makeBackupURL
+    }
+
+    /// The live backup: a fresh name beside `target`, under the helper's own prefix.
+    static func backupURL(for target: URL) -> URL {
+        target.deletingLastPathComponent().appendingPathComponent(".sudo_local.wega-backup-\(UUID().uuidString)")
     }
 
     func writeAtomically(_ expected: Data, to target: URL) throws {
@@ -75,7 +78,7 @@ struct SudoLocalTransactionalWriter {
                 shouldRemoveBackup = true
             } catch {
                 // Preserve the backup for manual recovery when automatic rollback fails.
-                throw WriteError.rollbackFailed
+                throw WriteError.rollbackFailed(backupPath: backupCreated ? backup.path : nil)
             }
             throw originalError
         }
@@ -98,7 +101,7 @@ struct SudoLocalTransactionalWriter {
             try fileSystem.writeAtomically(original, to: target)
             try fileSystem.restoreAttributes(originalAttributes, at: target)
             guard try fileSystem.readData(at: target) == original else {
-                throw WriteError.rollbackFailed
+                throw WriteError.rollbackFailed(backupPath: backup.path)
             }
         } else if fileSystem.fileExists(at: target) {
             try fileSystem.removeItem(at: target)

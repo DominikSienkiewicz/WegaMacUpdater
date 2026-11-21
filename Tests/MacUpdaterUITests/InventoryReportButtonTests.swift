@@ -18,14 +18,22 @@ final class InventoryReportButtonTests: XCTestCase {
         XCTAssertTrue(inventory.contains("ReportAppButton(app: app)"))
     }
 
+    /// The button lives in its own file since ⌘F's no-source answer reuses it as a link; the icon
+    /// form Inventory draws and the report flow are unchanged.
     func testReportButtonInvokesCatalogIssueBuilderAndOpensPrefilledIssue() throws {
+        let button = try source("Sources/MacUpdater/ReportAppButton.swift")
+        XCTAssertTrue(button.contains("struct ReportAppButton: View"))
+        XCTAssertTrue(button.contains("Button(action: report)"))
+        XCTAssertTrue(button.contains("Image(systemName: \"plus.bubble\")"))
+        XCTAssertTrue(button.contains(".help(tr(\"Zgłoś tę aplikację do katalogu\"))"))
+        XCTAssertTrue(button.contains("Button(tr(\"Zgłoś aplikację ›\"), action: report)"))
+        XCTAssertTrue(button.contains("CatalogReporting.issueBuilder(for: app)"))
+        XCTAssertTrue(button.contains("newIssueEndpoint: AppEndpoints.shared.projectNewIssueURL"))
+        XCTAssertTrue(button.contains("NSWorkspace.shared.open(url)"))
+        XCTAssertEqual(button.components(separatedBy: ".accessibilityLabel(tr(\"Zgłoś aplikację\"))").count - 1, 2,
+                       "both forms carry the same VoiceOver label")
         let inventory = try source("Sources/MacUpdater/InventoryView.swift")
-        XCTAssertTrue(inventory.contains("private struct ReportAppButton: View"))
-        XCTAssertTrue(inventory.contains("Button(action: report)"))
-        XCTAssertTrue(inventory.contains("CatalogReporting.issueBuilder(for: app)"))
-        XCTAssertTrue(inventory.contains("newIssueEndpoint: AppEndpoints.shared.projectNewIssueURL"))
-        XCTAssertTrue(inventory.contains("NSWorkspace.shared.open(url)"))
-        XCTAssertTrue(inventory.contains(".accessibilityLabel(tr(\"Zgłoś aplikację\"))"))
+        XCTAssertFalse(inventory.contains("struct ReportAppButton"), "one definition, in its own file")
     }
 
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {
