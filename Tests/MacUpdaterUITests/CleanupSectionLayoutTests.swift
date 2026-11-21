@@ -130,6 +130,13 @@ final class CleanupSectionLayoutTests: XCTestCase {
     private typealias Group = CleanupPresentation.ToolGroup
     private typealias Origin = Row.Origin
 
+    private func keepRow(tool: String?, title: String, keep: CleanupPresentation.KeepControl) -> Row {
+        Row(
+            findingID: title, groupHeader: tool, bucket: .excluded, status: "oczekiwana", title: title, detail: "",
+            sizeText: nil, button: nil, note: "zostaje", keep: keep, isActionable: false, origin: nil
+        )
+    }
+
     private func row(tool: String?, title: String, origin: Origin? = nil, actionable: Bool = false, detail: String = "") -> Row {
         Row(
             findingID: title, groupHeader: tool, bucket: .excluded, status: "oczekiwana", title: title, detail: detail,
@@ -209,6 +216,7 @@ final class CleanupSectionLayoutTests: XCTestCase {
             XCTAssertEqual(quiet.headerNote, "nic do zrobienia")
             XCTAssertEqual(empty.quiet, [])
             XCTAssertNil(empty.quietTitle)
+            XCTAssertNil(empty.headerNote)
         }
     }
 
@@ -292,6 +300,38 @@ final class CleanupSectionLayoutTests: XCTestCase {
         }
     }
 
+    func testAToolWithAKeepChoiceStaysAmongTheShownOnes() throws {
+        let gh = [row(tool: "gh", title: "/opt/homebrew/bin/gh", actionable: true)]
+        let keeping = [
+            keepRow(tool: "python3", title: "/usr/bin/python3", keep: .kept),
+            keepRow(tool: nil, title: "/usr/local/bin/python3", keep: .notKept),
+        ]
+
+        try withLanguage(.pl) {
+            let layout = try XCTUnwrap(CleanupPresentation.layout(of: section(gh + keeping), search: ""))
+
+            XCTAssertEqual(layout.shown.map(\.name), ["gh", "python3"])
+            XCTAssertEqual(layout.quiet, [])
+            XCTAssertNil(layout.quietTitle)
+            XCTAssertEqual(layout.actionCount, 1)
+            XCTAssertEqual(layout.headerNote, "1 do zrobienia")
+        }
+    }
+
+    func testBrokenLinkWithACopyableUnlinkIsActionable() throws {
+        let link = finding(Sample(
+            path: "/usr/local/bin/old", source: .standalone, status: .brokenLink,
+            action: .command("unlink /usr/local/bin/old")
+        ))
+
+        try withLanguage(.pl) {
+            let duplicates = try rows(of: [link], kind: .duplicates)
+
+            XCTAssertEqual(duplicates.map(\.isActionable), [true])
+            XCTAssertEqual(duplicates.first?.note, "unlink /usr/local/bin/old")
+        }
+    }
+
     func testLayoutTextsAreTranslated() throws {
         let rows = [row(tool: "gh", title: "/opt/homebrew/bin/gh", actionable: true)] + ["java", "javac"].flatMap(javaTool)
 
@@ -303,7 +343,8 @@ final class CleanupSectionLayoutTests: XCTestCase {
             XCTAssertEqual(line.title, "2 commands · \(mise) · \(installs)")
             XCTAssertEqual(line.companions?.hasPrefix("also: "), true)
             XCTAssertEqual(
-                try XCTUnwrap(CleanupPresentation.layout(of: section([]), search: "")).headerNote, "nothing to do"
+                try XCTUnwrap(CleanupPresentation.layout(of: section([row(tool: "git", title: "/usr/bin/git")]), search: "")).headerNote,
+                "nothing to do"
             )
         }
     }

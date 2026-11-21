@@ -12,6 +12,10 @@ extension CleanupPresentation {
 
         var isActionable: Bool { rows.contains(where: \.isActionable) }
 
+        /// A keep radio stays in sight even when the choice leaves nothing to do, so a click on it
+        /// does not move the tool out from under the pointer.
+        var staysShown: Bool { isActionable || rows.contains { $0.keep != nil } }
+
         fileprivate func matches(_ query: String) -> Bool {
             name?.localizedStandardContains(query) == true
                 || rows.contains { $0.title.localizedStandardContains(query) || $0.detail.localizedStandardContains(query) }
@@ -38,7 +42,8 @@ extension CleanupPresentation {
         /// What the collapsed "Bez akcji" group holds; empty while searching.
         let quiet: [QuietItem]
         let actionCount: Int
-        let headerNote: String
+        /// Nil for a section with no rows, whose notes speak alone.
+        let headerNote: String?
         /// The collapsed group's title; nil when there is nothing quiet to collapse.
         let quietTitle: String?
     }
@@ -48,16 +53,17 @@ extension CleanupPresentation {
     static func layout(of section: Section, search: String) -> SectionLayout? {
         let groups = toolGroups(of: section.rows)
         let actionCount = groups.filter(\.isActionable).count
-        let headerNote = actionCount == 0 ? tr("nic do zrobienia") : trf("%@ do zrobienia", "\(actionCount)")
+        let headerNote: String? = section.rows.isEmpty
+            ? nil : actionCount == 0 ? tr("nic do zrobienia") : trf("%@ do zrobienia", "\(actionCount)")
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
         if !query.isEmpty {
             let matching = groups.filter { $0.matches(query) }
             guard !matching.isEmpty else { return nil }
             return SectionLayout(shown: matching, quiet: [], actionCount: actionCount, headerNote: headerNote, quietTitle: nil)
         }
-        let quietGroups = groups.filter { !$0.isActionable }
+        let quietGroups = groups.filter { !$0.staysShown }
         return SectionLayout(
-            shown: groups.filter(\.isActionable), quiet: quietItems(of: quietGroups), actionCount: actionCount,
+            shown: groups.filter(\.staysShown), quiet: quietItems(of: quietGroups), actionCount: actionCount,
             headerNote: headerNote,
             quietTitle: quietTitle(count: quietGroups.count, namesTools: section.rows.contains { $0.groupHeader != nil })
         )
@@ -77,7 +83,7 @@ extension CleanupPresentation {
 
     private static func quietTitle(count: Int, namesTools: Bool) -> String? {
         guard count > 0 else { return nil }
-        return trp(namesTools ? "Bez akcji: %@ narzędzi" : "Bez akcji: %@ pozycji", count)
+        return namesTools ? trp("Bez akcji: %@ narzędzi", count) : trp("Bez akcji: %@ pozycji", count)
     }
 
     private static func quietItems(of groups: [ToolGroup]) -> [QuietItem] {
