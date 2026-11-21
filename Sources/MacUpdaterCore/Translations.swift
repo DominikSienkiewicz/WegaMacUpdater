@@ -261,12 +261,12 @@ extension Translations {
         "Mhm… nowa wersja?": "Mhm… a new version?",
         "Ten cask wymaga odświeżenia": "This cask needs refreshing",
         "Wszystko aktualne": "Everything up to date",
-        // M4 — nagłówek nazywa obie połowy licznika; przycisk obiecuje tylko instalowalne.
+        // Nagłówek wyników i pasmo: świeży wynik podaje godzinę sprawdzenia.
         "Sprawdzono %@": "Checked %@",
         // M2 — stara lista mówi wprost, kiedy powstała.
         "Znaleziono %@": "Found %@",
         // Ciche odświeżenie po starcie: lista zostaje na ekranie, nagłówek mówi, że trwa skan.
-        // Nakładka nad listą na czas cichego odświeżenia — lista jest wtedy raportem, nie menu.
+        // Nagłówek listy mówi wtedy, czemu wierszy nie da się zaznaczyć — lista jest raportem, nie menu.
         "Zaznaczanie wróci, gdy skan się skończy.": "Selecting comes back when the scan finishes.",
         "Trwa skanowanie": "Scan in progress",
         "Najpierw skończę skanowanie — lista zaraz się zmieni.":
@@ -632,7 +632,6 @@ extension Translations {
         "Przepnij pod Brew": "Reattach to Brew",
         "Pełny obchód": "Full sweep",
         "O aplikacji": "About the app",
-        // M3(a) — chip mówi, co naprawdę zwraca SMAppService, nie co byłoby miło zobaczyć.
         // M3(d) — wyjaśniamy się zanim macOS pokaże swój jednorazowy dialog.
         "Powiadamiać o nowych aktualizacjach?": "Notify you about new updates?",
         "Wega sprawdza w tle i może dać znać, gdy pojawi się coś nowego. macOS zapyta o zgodę tylko raz.":

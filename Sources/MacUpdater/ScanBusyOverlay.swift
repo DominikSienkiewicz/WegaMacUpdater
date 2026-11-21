@@ -27,9 +27,9 @@ enum ScanSelectionGate {
         allowsSelection(isRefreshing: isRefreshing) && allowsScreenInteraction(isUpdating: isUpdating)
     }
 
-    /// Whether the in-place scan's overlay covers the list. It stands rows down, so it covers
-    /// rows only: over an empty state its material just veiled Wega and her tricks for the
-    /// whole scan, with nothing on screen to protect.
+    /// Whether an in-place scan is running over rows, so the list header says why they cannot
+    /// be selected (`ListHeaderGroupingSlot`). Nothing covers the rows; an empty state has none
+    /// to stand down, so it gets no note.
     static func coversList(isRefreshing: Bool, showsRows: Bool) -> Bool {
         isRefreshing && showsRows
     }
