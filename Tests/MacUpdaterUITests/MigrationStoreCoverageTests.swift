@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import MacUpdaterCore
 import Testing
@@ -436,6 +437,29 @@ struct MigrationStoreCoverageTests {
         #expect(notStarted.duplicateBusyKey == nil)
     }
 
+    /// Final review (Task 9) — Show in Logs on a failed duplicate removal lands on the line that
+    /// says why it failed, as a failed manual install does, not only on „nieudane (kod 1)”.
+    @Test func aFailedDuplicateRemovalLogsWhyItFailed() async {
+        let token = "dup-\(UUID().uuidString)"
+        let duplicate = NpmBrewDuplicate(npmPackage: "@example/\(token)", brewToken: token)
+        let store = MigrationStore(dependencies: inertDependencies())
+        store.npmBrewDuplicates = [duplicate]
+        let output = "==> Uninstalling \(token)\nError: Refusing to uninstall \(token) because it is required by example\n"
+
+        let entry = await firstLogEntry(containing: "brew:\(token)") {
+            await store.removeDuplicate(
+                DuplicateRemoval(dup: duplicate, side: .brew),
+                model: model(runner: MigrationCoverageRunner(eventExitCode: 1, eventOutput: output)),
+                onWegaState: nil
+            )
+        }
+
+        #expect(entry.level == .error)
+        #expect(entry.message == "Usuwanie duplikatu brew:\(token) nieudane (kod 1): "
+            + "Error: Refusing to uninstall \(token) because it is required by example")
+        #expect(store.banner?.action == .openLogs)
+    }
+
     /// UXP-30 (final review I1) — a migration or a duplicate removal can end with the window
     /// closed; the store counts each one that ran Homebrew or npm, so the inventory reads again.
     @Test func aMigrationOrDuplicateRemovalThatRanMakesTheNextInventoryEntryReadAgain() async throws {
@@ -590,6 +614,39 @@ struct MigrationStoreCoverageTests {
             ),
             root
         )
+    }
+}
+
+/// The first `LogStore` entry whose message holds `marker`, once `action` has run. `WegaLog`
+/// appends on the main actor after the call returns, so this waits for that append on the
+/// store's own publisher rather than on a clock.
+@MainActor
+private func firstLogEntry(containing marker: String, during action: () async -> Void) async -> LogEntry {
+    let waiter = LogEntryWaiter(marker: marker)
+    let watch = LogStore.shared.$entries.sink { waiter.offer($0) }
+    defer { watch.cancel() }
+    await action()
+    return await waiter.entry()
+}
+
+@MainActor
+private final class LogEntryWaiter {
+    private let marker: String
+    private var found: LogEntry?
+    private var waiting: CheckedContinuation<LogEntry, Never>?
+
+    init(marker: String) { self.marker = marker }
+
+    func offer(_ entries: [LogEntry]) {
+        guard found == nil, let entry = entries.last(where: { $0.message.contains(marker) }) else { return }
+        found = entry
+        waiting?.resume(returning: entry)
+        waiting = nil
+    }
+
+    func entry() async -> LogEntry {
+        if let found { return found }
+        return await withCheckedContinuation { waiting = $0 }
     }
 }
 

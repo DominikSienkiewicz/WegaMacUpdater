@@ -676,7 +676,8 @@ final class MigrationStore: ObservableObject {
                 line: tr("Duplikat zniknął. PATH ma już tylko jedną wersję.")
             ))
         } else {
-            WegaLog.error(.homebrew, "Usuwanie duplikatu \(removal.busyKey) nieudane (kod \(exitCode))")
+            let reason = ScanLog.brewErrorReason(from: logLines).map { ": \($0)" } ?? ""
+            WegaLog.error(.homebrew, "Usuwanie duplikatu \(removal.busyKey) nieudane (kod \(exitCode))\(reason)")
             banner = BannerData(
                 variant: .danger,
                 title: tr("Nie udało się usunąć duplikatu"),
