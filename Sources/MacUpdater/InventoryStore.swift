@@ -155,6 +155,7 @@ final class InventoryStore: ObservableObject {
     /// When the last successful read finished, partial reads included. `nil` until then;
     /// a cancelled or failed read leaves it alone.
     @Published private(set) var lastReadAt: Date?
+    @Published private(set) var isStale = false
 
     private let operations: OperationCoordinator
     private let now: @MainActor () -> Date
@@ -166,7 +167,7 @@ final class InventoryStore: ObservableObject {
 
     /// True until the first read has landed. The store outlives the view, so a second visit
     /// to the screen reuses the result instead of reading every folder again.
-    var needsInitialRead: Bool { lastReadAt == nil && !isScanning }
+    var needsInitialRead: Bool { (lastReadAt == nil || isStale) && !isScanning }
 
     func scan(
         model: AppViewModel,
@@ -178,6 +179,10 @@ final class InventoryStore: ObservableObject {
         )
     }
 
+    /// The app set changed behind the list (update, uninstall, removal, migration). The list
+    /// stays on screen, but it no longer claims to be current and the next entry reads again.
+    func markStale() { isStale = true }
+
     func scan(
         using loader: any InventorySnapshotLoading,
         onWegaState: (@MainActor (WegaState) -> Void)?
@@ -185,6 +190,9 @@ final class InventoryStore: ObservableObject {
         guard !isScanning else { return }
         isScanning = true
         errorMessage = nil
+        // A change that lands while this read runs sets the flag again and survives it.
+        let wasStale = isStale
+        isStale = false
         defer { isScanning = false }
         onWegaState?(WegaState(pose: .sniff, line: tr("Obchód wszystkich kątów…")))
 
@@ -201,8 +209,10 @@ final class InventoryStore: ObservableObject {
                 line: trp("Obchód skończony — %@ aplikacji pod opieką.", apps.count)
             ))
         } catch is CancellationError {
+            isStale = isStale || wasStale
             return
         } catch {
+            isStale = isStale || wasStale
             errorMessage = error.localizedDescription
         }
     }

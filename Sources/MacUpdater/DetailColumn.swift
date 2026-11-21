@@ -223,7 +223,7 @@ struct DetailColumn: View {
                 case .migration:
                     MigrationView(onWegaState: { wegaState = $0 })
                 case .inventory:
-                    InventoryView(onWegaState: { wegaState = $0 })
+                    InventoryView(onWegaState: { wegaState = $0 }, onNavigate: onNavigate)
                 case .rollback:
                     RollbackView(onNavigate: navigate(fromBanner:))
                 case .logs:

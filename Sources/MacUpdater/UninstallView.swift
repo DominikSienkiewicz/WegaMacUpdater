@@ -17,6 +17,8 @@ struct UninstallView: View {
     @State private var selected:       Set<String>       = []
     @State private var search:         String            = ""
     @StateObject private var operations = UninstallCoordinator()
+    /// What the uninstall changes is what the inventory lists; it is told once the run ends.
+    @EnvironmentObject private var inventory: InventoryStore
     private let announcer: any AccessibilityAnnouncing = LiveAccessibilityAnnouncer()
     @State private var showDialog:     Bool              = false
     /// UX-01: the exact visible installations named by the confirmation. Execution
@@ -495,6 +497,7 @@ struct UninstallView: View {
             skipped: skipped,
             using: model.brewService
         )
+        inventory.markStale()
         let succeeded = Set(targets.map(\.id).filter { outcome.results[$0]?.isRemoved == true })
         selected.subtract(succeeded)
         await scan()

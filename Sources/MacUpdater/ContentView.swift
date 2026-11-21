@@ -186,6 +186,7 @@ struct ContentView: View {
         // Deliberately no `.background(...)`. An opaque window background would leave every
         // glass surface beneath it refracting a solid rectangle, and the material would vanish.
         .frame(minWidth: WegaLayout.windowMinWidth, minHeight: WegaLayout.windowMinHeight)
+        .overlay(alignment: .topLeading) { InventoryStalenessWatcher() }
         .onChange(of: selection) { _, new in wegaState = .forTab(new.tab) }
         .task { migrateLegacyTab() }
         // I1 — a second registration beside `MenuBarLabel`'s, so a notification click can

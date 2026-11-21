@@ -171,7 +171,7 @@ struct UpdateView: View {
             // scan hooks regardless of which destination is on screen; the menu itself gates
             // ⌘⏎ to the Updates destination.
             .focusedSceneValue(\.startCheckAction, WegaMenuAction(
-                isEnabled: scan.status != .checking && !scan.isRefreshing && !scan.updating,
+                isEnabled: scan.canStartCheck,
                 run: { scan.startCheck() }
             ))
             .focusedSceneValue(\.runUpdateAction, WegaMenuAction(

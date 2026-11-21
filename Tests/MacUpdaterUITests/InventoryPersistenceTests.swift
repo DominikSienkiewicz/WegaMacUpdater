@@ -12,6 +12,43 @@ struct InventoryPersistenceTests {
         #expect(store.lastReadAt == Date(timeIntervalSince1970: 100) && !store.needsInitialRead)
     }
 
+    @Test func aSecondVisitWithoutChangesReusesTheResultButAStaleOneRescans() async {
+        let loader = CountingLoader()
+        let store = InventoryStore(operations: OperationCoordinator())
+        func visit() async { if store.needsInitialRead { await store.scan(using: loader, onWegaState: nil) } }
+
+        await visit()
+        await visit()
+        #expect(await loader.loads == 1, "no change in between: the result is reused")
+
+        store.markStale()
+        #expect(!store.apps.isEmpty, "the list stays on screen while stale")
+        #expect(store.isStale && store.needsInitialRead)
+        await visit()
+        #expect(await loader.loads == 2 && !store.isStale && !store.needsInitialRead)
+    }
+
+    @Test func aChangeDuringAReadIsNotForgotten() async {
+        let store = InventoryStore(operations: OperationCoordinator())
+        let loader = CountingLoader { store.markStale() }
+        await store.scan(using: loader, onWegaState: nil)
+        #expect(store.isStale && store.needsInitialRead)
+    }
+
+    @Test func everyAppSetChangeMarksTheInventoryStaleAndTheChecksShareOneGuard() throws {
+        let content = try source("Sources/MacUpdater/ContentView.swift")
+        #expect(content.contains("InventoryStalenessWatcher()"))
+        let watcher = try source("Sources/MacUpdater/InventoryStalenessWatcher.swift")
+        for literal in ["scan.updating", "cleanup.phase", "migration.migrating", "migration.duplicateBusyKey", "inventory.markStale()"] {
+            #expect(watcher.contains(literal), "\(literal)")
+        }
+        let uninstall = try source("Sources/MacUpdater/UninstallView.swift")
+        #expect(uninstall.contains("@EnvironmentObject private var inventory: InventoryStore") && uninstall.contains("inventory.markStale()"))
+        #expect(try source("Sources/MacUpdater/UpdateView.swift").contains("isEnabled: scan.canStartCheck,"))
+        let view = try source("Sources/MacUpdater/InventoryView.swift")
+        #expect(view.contains("Button { scanStore.startCheck(); onNavigate?(.updates(.all)) }"))
+    }
+
     @Test func aPartialReadStillCountsAsRead() async {
         let store = InventoryStore(operations: OperationCoordinator(), now: { Date(timeIntervalSince1970: 7) })
         let failure = ScanSourceFailure(source: .homebrew, message: "boom")
@@ -53,7 +90,7 @@ struct InventoryPersistenceTests {
         #expect(view.contains("@EnvironmentObject private var inventory: InventoryStore"))
         #expect(!view.contains("@StateObject private var inventory"))
         #expect(view.contains("if inventory.needsInitialRead { await scan() }"))
-        #expect(view.contains("Button { scanStore.startCheck() }") && view.contains(".disabled(!scanStore.canStartCheck)"))
+        #expect(view.contains("scanStore.startCheck()") && view.contains(".disabled(!scanStore.canStartCheck)"))
         #expect(view.contains(".help(tr(\"Nie sprawdza nowych wersji\"))"))
         #expect(view.contains("@ObservedObject private var clock = DayClock.shared"))
     }
@@ -76,6 +113,27 @@ struct InventoryPersistenceTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+}
+
+private actor LoadCounter {
+    var loads = 0
+    func bump() { loads += 1 }
+}
+
+private struct CountingLoader: InventorySnapshotLoading {
+    private let counter = LoadCounter()
+    private let duringLoad: (@MainActor @Sendable () -> Void)?
+    init(duringLoad: (@MainActor @Sendable () -> Void)? = nil) { self.duringLoad = duringLoad }
+    var loads: Int { get async { await counter.loads } }
+    func load() async -> InventorySnapshot {
+        await counter.bump()
+        if let duringLoad { await duringLoad() }
+        let app = ApplicationInfo(
+            path: URL(fileURLWithPath: "/Applications/Slack.app"), name: "Slack", bundleIdentifier: "uxp30.slack",
+            version: "1", installDate: nil, updateDate: nil, isManagedByBrew: false
+        )
+        return InventorySnapshot(apps: [app], npmGlobals: [])
     }
 }
 

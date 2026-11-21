@@ -198,6 +198,7 @@ extension Translations {
         "Usuń regułę dla %@": "Remove rule for %@",
         "Przywróć %@": "Restore %@",
         "Odczytano %@": "Read %@",
+        "Odczytano %@ — spis mógł się zmienić": "Read %@ — the list may have changed",
         "Odśwież spis": "Refresh Inventory",
         "Nie sprawdza nowych wersji": "Does not check for new versions",
         "Żadna aplikacja nie pasuje do tych filtrów.": "No apps match these filters.",

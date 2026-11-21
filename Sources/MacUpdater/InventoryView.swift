@@ -10,6 +10,8 @@ private enum SourceFilter: String, CaseIterable {
 
 struct InventoryView: View {
     var onWegaState: ((WegaState) -> Void)?
+    /// „Sprawdź aktualizacje” takes the user to Updates, where the scan shows and can be stopped.
+    var onNavigate: ((SidebarSelection) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
     @EnvironmentObject private var scanStore: ScanStore
@@ -131,13 +133,22 @@ struct InventoryView: View {
                 .fixedSize()
                 .disabled(isScanning || (apps.isEmpty && npmGlobals.isEmpty))
                 .help(tr("Zapisz spis aplikacji jako Brewfile lub CSV"))
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
 
+            // The read time and the two scan buttons get a line of their own: beside the filters
+            // they would not fit the 740 pt detail column at the window's minimum width.
+            HStack(spacing: 10) {
                 if let read = inventory.lastReadAt {
-                    Text(trf("Odczytano %@", CheckedAtCopy.day(read, now: clock.now)))
+                    let when = CheckedAtCopy.day(read, now: clock.now)
+                    Text(inventory.isStale ? trf("Odczytano %@ — spis mógł się zmienić", when) : trf("Odczytano %@", when))
                         .font(.wega(.subheadline))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
-
+                Spacer(minLength: 8)
                 Button { Task { await scan() } } label: {
                     Label(tr("Odśwież spis"), systemImage: "arrow.clockwise")
                 }
@@ -146,7 +157,7 @@ struct InventoryView: View {
                 .help(tr("Nie sprawdza nowych wersji"))
 
                 // The only scan button on this screen: the toolbar one is hidden here.
-                Button { scanStore.startCheck() } label: {
+                Button { scanStore.startCheck(); onNavigate?(.updates(.all)) } label: {
                     Label(tr("Sprawdź aktualizacje"), systemImage: "arrow.triangle.2.circlepath")
                 }
                 .controlSize(.small)
