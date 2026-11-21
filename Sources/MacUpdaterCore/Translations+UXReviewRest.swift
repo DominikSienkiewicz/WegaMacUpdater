@@ -190,10 +190,12 @@ extension Translations {
         "w kolejce": "queued",
         "poza kolejką": "not queued",
         "Spacja dodaje do kolejki, Return pokazuje szczegóły.": "Space adds to the queue, Return shows details.",
+        "Spacja usuwa z kolejki, Return pokazuje szczegóły.": "Space removes from the queue, Return shows details.",
         "Kolejka: %@": "Queue: %@",
         "Więcej działań dla %@": "More actions for %@",
         "Aktualizacje: %@": "Updates: %@",
-        "Aktualizacje: %@, w tym %@ z możliwą poprawką bezp.": "Updates: %@, %@ may fix security issues",
+        "Aktualizacje: %@, w tym %@ z możliwą poprawką bezpieczeństwa": "Updates: %@, %@ may fix security issues",
         "Usuń regułę dla %@": "Remove rule for %@",
+        "Przywróć %@": "Restore %@",
     ]
 }

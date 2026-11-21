@@ -110,6 +110,7 @@ struct UpdateGroupingMenu: View {
             .fixedSize()
             .help(tr("Grupuj"))
             .accessibilityLabel(tr("Grupuj"))
+            .accessibilityValue(selection.title)
         }
     }
 

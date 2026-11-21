@@ -46,14 +46,17 @@ final class ListHeaderScanNoteLayoutTests: XCTestCase {
         }
     }
 
-    /// At the 420 pt detail column the idle header used to be 415 of 360 pt wide.
-    func testTheIdleHeaderFitsTheNarrowestColumn() {
-        let width = Self.headerWidths[0]
-        for language in [AppLanguage.pl, .en] {
-            let idle = withLanguage(language) { frames(scanning: false, width: width) }
-            guard let scope = idle["scope"], let slot = idle["slot"] else { return XCTFail("\(language): not measured") }
-            XCTAssertLessThanOrEqual(scope.maxX, slot.minX + 0.5, "\(language): the grouping menu overlaps the scope bar")
-            XCTAssertLessThanOrEqual(slot.maxX, width + 0.5, "\(language): the header is wider than its column")
+    /// At the 420 pt detail column the idle header used to be 415 of 360 pt wide; no width may
+    /// overflow now, including those where the scope bar turns segmented.
+    func testTheIdleHeaderFitsEveryColumn() {
+        for width in Self.headerWidths {
+            for language in [AppLanguage.pl, .en] {
+                let idle = withLanguage(language) { frames(scanning: false, width: width) }
+                let context = "\(language), \(width) pt"
+                guard let scope = idle["scope"], let slot = idle["slot"] else { return XCTFail("\(context): not measured") }
+                XCTAssertLessThanOrEqual(scope.maxX, slot.minX + 0.5, "\(context): the grouping menu overlaps the scope bar")
+                XCTAssertLessThanOrEqual(slot.maxX, width + 0.5, "\(context): the header is wider than its column")
+            }
         }
     }
 

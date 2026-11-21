@@ -314,7 +314,7 @@ struct UpdateSection: View {
                         source:         showsSource ? (item.kind == .cask ? "Homebrew" : item.kind.sourceLabel) : nil,
                         rollbackUnavailableReason: showsSource ? UpdateView.rollbackCaption(for: item.kind) : nil,
                         onToggle:       { toggle(item.key) },
-                        onSelect:       { onInspect?(item) },
+                        onSelect:       { focus(item.key); onInspect?(item) },
                         onIgnore:       { onIgnore?(item) },
                         onPin:          { onPin?(item) },
                         onSkip:         skipAction(for: item),
@@ -335,14 +335,19 @@ struct UpdateSection: View {
             }
         }
         .focusSection()
-        .onChange(of: focusedKey) { _, key in if let key { tabStop = key } }
+        .onChange(of: focusedKey) { _, key in if let key { focus(key) } }
     }
 
     private func move(from key: String, in keys: [String], _ direction: RowMoveDirection) -> Bool {
         guard let next = UpdateRowFocus.neighbour(of: key, in: keys, direction: direction) else { return false }
-        tabStop = next
-        focusedKey = next
+        focus(next)
         return true
+    }
+
+    /// Makes `key` the group's Tab stop and focuses it — by arrow, by click, or when Tab arrives.
+    private func focus(_ key: String) {
+        tabStop = key
+        focusedKey = key
     }
 
     private func toggle(_ key: String) {
@@ -578,7 +583,7 @@ struct ManualUpdateSection: View {
                 }
                 .queueRowSelection(isInspected)
                 .contentShape(Rectangle())
-                .gesture(TapGesture().onEnded { onInspect?(item) })
+                .gesture(TapGesture().onEnded { focus(key); onInspect?(item) })
                 .focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop))
                 .focused($focusedKey, equals: key)
                 .onKeyPress(.return) {
@@ -615,14 +620,19 @@ struct ManualUpdateSection: View {
             }
         }
         .focusSection()
-        .onChange(of: focusedKey) { _, key in if let key { tabStop = key } }
+        .onChange(of: focusedKey) { _, key in if let key { focus(key) } }
     }
 
     private func move(from key: String, in keys: [String], _ direction: RowMoveDirection) -> Bool {
         guard let next = UpdateRowFocus.neighbour(of: key, in: keys, direction: direction) else { return false }
-        tabStop = next
-        focusedKey = next
+        focus(next)
         return true
+    }
+
+    /// Makes `key` the group's Tab stop and focuses it — by arrow, by click, or when Tab arrives.
+    private func focus(_ key: String) {
+        tabStop = key
+        focusedKey = key
     }
 }
 

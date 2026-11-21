@@ -165,12 +165,14 @@ enum RowMoveDirection { case up, down }
 /// UXP-21 — what VoiceOver says for an update row: one sentence in the row's reading order,
 /// instead of a string of separate texts, a checkbox and a menu to step through.
 enum PackageRowAccessibility {
-    /// The parts the row shows, joined by ", ": the name, the token line when it differs from the
-    /// name, the versions in their short form, the source, the rollback verdict and the queue.
+    /// The parts the row shows, joined by ", ": the name, the token line when it adds something to
+    /// the name, the versions in their short form, the source, the rollback verdict (or the shield
+    /// of a source that keeps no previous version, `rollbackUnavailable`) and the queue.
     static func label(name: String, token: String? = nil, from: String?, to: String?, source: String? = nil,
-                      rollback: RollbackProtection.Verdict? = nil, isQueued: Bool) -> String {
+                      rollback: RollbackProtection.Verdict? = nil, rollbackUnavailable: Bool = false,
+                      isQueued: Bool) -> String {
         var parts = [name]
-        if let token { parts.append(token) }
+        if let token, spoken(token) != spoken(name) { parts.append(token) }
         if let from, let to {
             let shown = VersionDisplay.pair(from: from, to: to)
             parts.append(trf("aktualizacja %@ do %@", shown.from, shown.to))
@@ -179,13 +181,21 @@ enum PackageRowAccessibility {
         switch rollback {
         case .protected:   parts.append(tr("z automatycznym cofnięciem"))
         case .unprotected: parts.append(tr("bez automatycznego cofnięcia"))
-        case nil:          break
+        case nil:          if rollbackUnavailable { parts.append(tr("bez automatycznego cofnięcia")) }
         }
         parts.append(isQueued ? tr("w kolejce") : tr("poza kolejką"))
         return parts.joined(separator: ", ")
     }
 
-    static var hint: String { tr("Spacja dodaje do kolejki, Return pokazuje szczegóły.") }
+    /// What Space does to this row right now, and what Return does.
+    static func hint(isQueued: Bool) -> String {
+        isQueued ? tr("Spacja usuwa z kolejki, Return pokazuje szczegóły.") : tr("Spacja dodaje do kolejki, Return pokazuje szczegóły.")
+    }
+
+    /// "Google Chrome" and "google-chrome" read the same; "firefox@beta" does not read as "Firefox".
+    private static func spoken(_ text: String) -> String {
+        text.lowercased().filter { !" -_".contains($0) }
+    }
 }
 
 /// UXP-21 — roving focus inside one group of update rows: Tab reaches the group once, and the
@@ -216,6 +226,6 @@ enum SidebarBadgeCopy {
     static func updatesLabel(count: Int, security: Int) -> String {
         guard count > 0 else { return tr("Aktualizacje") }
         guard security > 0 else { return trf("Aktualizacje: %@", "\(count)") }
-        return trf("Aktualizacje: %@, w tym %@ z możliwą poprawką bezp.", "\(count)", "\(security)")
+        return trf("Aktualizacje: %@, w tym %@ z możliwą poprawką bezpieczeństwa", "\(count)", "\(security)")
     }
 }

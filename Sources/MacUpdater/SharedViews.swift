@@ -442,6 +442,8 @@ struct PackageRow: View {
     var onMove: ((RowMoveDirection) -> Bool)? = nil
 
     @Environment(\.isEnabled) private var isEnabled
+    /// Space on a focused ⋯ opens its menu; reaching the row, it would queue the update.
+    @FocusState private var menuFocused: Bool
 
     var body: some View {
         HStack(spacing: WegaLayout.checkboxSpacing) {
@@ -488,6 +490,7 @@ struct PackageRow: View {
                 .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
                 .focusable(isTabStop)
+                .focused($menuFocused)
                 .accessibilityLabel(trf("Więcej działań dla %@", name))
             }
         }
@@ -505,7 +508,8 @@ struct PackageRow: View {
             ) ? .handled : .ignored
         }
         .onKeyPress(.space) {
-            PackageRowKeyboardBehavior.handle(
+            guard !menuFocused else { return .ignored }
+            return PackageRowKeyboardBehavior.handle(
                 .toggleSelection,
                 onSelect: onSelect,
                 onToggle: onToggle
@@ -515,8 +519,9 @@ struct PackageRow: View {
         .onKeyPress(.downArrow) { onMove?(.down) == true ? .handled : .ignored }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(PackageRowAccessibility.label(name: name, token: shownToken, from: currentVersion, to: latestVersion,
-                                                          source: source, rollback: rollback, isQueued: isSelected))
-        .accessibilityHint(PackageRowAccessibility.hint)
+                                                          source: source, rollback: rollback,
+                                                          rollbackUnavailable: rollbackUnavailableReason != nil, isQueued: isSelected))
+        .accessibilityHint(PackageRowAccessibility.hint(isQueued: isSelected))
         .accessibilityActions {
             if isEnabled {
                 if let onSelect { Button(tr("Pokaż szczegóły"), action: onSelect) }

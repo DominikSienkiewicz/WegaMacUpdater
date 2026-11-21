@@ -17,14 +17,16 @@ struct RowAccessibilityTests {
                     == "wget, aktualizacja 1.24 do 1.25, poza kolejką")
             #expect(PackageRowAccessibility.label(name: "Foo", from: nil, to: "2", source: nil, rollback: .unprotected(.noAppBundle), isQueued: false)
                     == "Foo, bez automatycznego cofnięcia, poza kolejką")
-            #expect(PackageRowAccessibility.hint == "Spacja dodaje do kolejki, Return pokazuje szczegóły.")
+            #expect(PackageRowAccessibility.hint(isQueued: false) == "Spacja dodaje do kolejki, Return pokazuje szczegóły.")
+            #expect(PackageRowAccessibility.hint(isQueued: true) == "Spacja usuwa z kolejki, Return pokazuje szczegóły.")
         }
         withLanguage(.en) {
             #expect(PackageRowAccessibility.label(name: "Slack", from: "4.47", to: "4.48", source: "Homebrew", rollback: .protected, isQueued: true)
                     == "Slack, update 4.47 to 4.48, Homebrew, can be undone automatically, queued")
             #expect(PackageRowAccessibility.label(name: "Foo", from: nil, to: "2", source: nil, rollback: .unprotected(.noAppBundle), isQueued: false)
                     == "Foo, can't be undone automatically, not queued")
-            #expect(PackageRowAccessibility.hint == "Space adds to the queue, Return shows details.")
+            #expect(PackageRowAccessibility.hint(isQueued: false) == "Space adds to the queue, Return shows details.")
+            #expect(PackageRowAccessibility.hint(isQueued: true) == "Space removes from the queue, Return shows details.")
             #expect(trf("Kolejka: %@", "Slack") == "Queue: Slack" && trf("Więcej działań dla %@", "Slack") == "More actions for Slack")
         }
     }
@@ -44,6 +46,33 @@ struct RowAccessibilityTests {
         }
     }
 
+    /// A row whose source keeps no previous version says so with a shield; the sentence says it too,
+    /// unless the row already carries a rollback verdict of its own.
+    @Test func theShieldIsSpokenToo() {
+        withLanguage(.pl) {
+            #expect(PackageRowAccessibility.label(name: "wget", from: "1", to: "2", source: "Homebrew", rollbackUnavailable: true, isQueued: false)
+                    == "wget, aktualizacja 1 do 2, Homebrew, bez automatycznego cofnięcia, poza kolejką")
+            #expect(PackageRowAccessibility.label(name: "Slack", from: "1", to: "2", rollback: .protected, rollbackUnavailable: true, isQueued: false)
+                    == "Slack, aktualizacja 1 do 2, z automatycznym cofnięciem, poza kolejką")
+        }
+        withLanguage(.en) {
+            #expect(PackageRowAccessibility.label(name: "wget", from: "1", to: "2", rollbackUnavailable: true, isQueued: true)
+                    == "wget, update 1 to 2, can't be undone automatically, queued")
+        }
+    }
+
+    /// The token is read only when it says something the name does not: case and the separators
+    /// space, "-" and "_" are not news, a channel such as "@beta" is.
+    @Test func theTokenIsReadOnlyWhenItAddsSomething() {
+        withLanguage(.pl) {
+            for (name, token) in [("Firefox", "firefox"), ("Google Chrome", "google-chrome"), ("Visual Studio Code", "visual_studio_code")] {
+                #expect(PackageRowAccessibility.label(name: name, token: token, from: nil, to: nil, isQueued: false) == "\(name), poza kolejką")
+            }
+            #expect(PackageRowAccessibility.label(name: "Firefox", token: "firefox@beta", from: nil, to: nil, isQueued: false)
+                    == "Firefox, firefox@beta, poza kolejką")
+        }
+    }
+
     @Test func focusRovesInsideAGroup() {
         let keys = ["a", "b", "c"]
         #expect(UpdateRowFocus.isTabStop("a", in: keys, focused: nil))
@@ -60,13 +89,13 @@ struct RowAccessibilityTests {
     @Test func theSidebarSaysWhatTheRedBadgeMeans() {
         #expect(SidebarBadgeCopy.text(count: 3, isDanger: true) == "⚠︎ 3" && SidebarBadgeCopy.text(count: 3, isDanger: false) == "3")
         withLanguage(.pl) {
-            #expect(SidebarBadgeCopy.updatesLabel(count: 5, security: 1) == "Aktualizacje: 5, w tym 1 z możliwą poprawką bezp.")
+            #expect(SidebarBadgeCopy.updatesLabel(count: 5, security: 1) == "Aktualizacje: 5, w tym 1 z możliwą poprawką bezpieczeństwa")
             #expect(SidebarBadgeCopy.updatesLabel(count: 0, security: 0) == "Aktualizacje", "no badge, no count")
         }
         withLanguage(.en) {
             #expect(SidebarBadgeCopy.updatesLabel(count: 5, security: 2) == "Updates: 5, 2 may fix security issues")
             #expect(SidebarBadgeCopy.updatesLabel(count: 5, security: 0) == "Updates: 5")
-            #expect(trf("Usuń regułę dla %@", "Zoom") == "Remove rule for Zoom")
+            #expect(trf("Usuń regułę dla %@", "Zoom") == "Remove rule for Zoom" && trf("Przywróć %@", "Zoom") == "Restore Zoom")
         }
     }
 
@@ -75,11 +104,11 @@ struct RowAccessibilityTests {
         let row = try #require(shared.range(of: "struct PackageRow: View")).lowerBound
         let end = try #require(shared.range(of: "// MARK: - Rollback badge")).lowerBound
         let body = shared[row..<end]
-        for literal in [".accessibilityElement(children: .contain)", ".accessibilityHint(PackageRowAccessibility.hint)",
+        for literal in [".accessibilityElement(children: .contain)", ".accessibilityHint(PackageRowAccessibility.hint(isQueued: isSelected))",
                         ".accessibilityActions {", ".onKeyPress(.downArrow)", ".onKeyPress(.upArrow)",
                         ".focusable(onSelect != nil && isTabStop)", "trf(\"Kolejka: %@\", name)", "trf(\"Więcej działań dla %@\", name)",
                         ".frame(width: 28, height: 28)", ".focusable(false)", ".focusable(isTabStop)",
-                        "PackageRowAccessibility.label(name: name, token: shownToken"] {
+                        "PackageRowAccessibility.label(name: name, token: shownToken", "rollbackUnavailable: rollbackUnavailableReason != nil"] {
             #expect(body.contains(literal), "\(literal)")
         }
         #expect(!body.contains("trf(\"W kolejce: %@\", name)"))
@@ -93,7 +122,38 @@ struct RowAccessibilityTests {
         #expect(support.components(separatedBy: ".focusSection()").count == 3, "one focus section per group")
         #expect(support.components(separatedBy: ".onChange(of: focusedKey)").count == 3,
                 "the stop stays on the row focus left, not on whatever focusedKey reads once focus moves on")
-        #expect(try source("Sources/MacUpdater/PolicyRules.swift").contains(".accessibilityLabel(trf(\"Usuń regułę dla %@\", entry.displayName))"))
+        #expect(try source("Sources/MacUpdater/PolicyRules.swift").contains(".accessibilityLabel(trf(\"Przywróć %@\", entry.displayName))"),
+                "the spoken name starts with the visible word, so Voice Control's \"click Restore\" finds it")
+    }
+
+    /// Space on a focused ⋯ opens the menu; it must not bubble to the row and queue it.
+    @Test func spaceOnTheMenuNeverQueuesTheRow() throws {
+        let shared = try source("Sources/MacUpdater/SharedViews.swift")
+        let row = try #require(shared.range(of: "struct PackageRow: View")).lowerBound
+        let end = try #require(shared.range(of: "// MARK: - Rollback badge")).lowerBound
+        let body = shared[row..<end]
+        #expect(body.contains("@FocusState private var menuFocused: Bool"))
+        #expect(body.contains(".focusable(isTabStop)\n                .focused($menuFocused)"))
+        let space = try #require(body.range(of: ".onKeyPress(.space) {")).upperBound
+        #expect(body[space...].prefix(120).contains("guard !menuFocused else { return .ignored }"))
+    }
+
+    /// Only the Tab stop is focusable, so a click has to move the stop and focus with it: otherwise
+    /// Space and the arrows would still act on the row the stop was on before.
+    @Test func aClickMovesTheStopAndFocus() throws {
+        let support = try source("Sources/MacUpdater/UpdateViewSupport.swift")
+        #expect(support.components(separatedBy: "private func focus(_ key: String) {\n        tabStop = key\n        focusedKey = key\n    }").count == 3)
+        #expect(support.components(separatedBy: ".onChange(of: focusedKey) { _, key in if let key { focus(key) } }").count == 3)
+        #expect(support.components(separatedBy: "focus(next)").count == 3, "move goes through focus(_:)")
+        let section = try #require(support.range(of: "struct UpdateSection: View")).upperBound
+        let sectionEnd = try #require(support.range(of: "private struct UpdatePolicyMenu: View")).lowerBound
+        let update = support[section..<sectionEnd]
+        for literal in ["onSelect:       { focus(item.key); onInspect?(item) }",
+                        "isTabStop:      UpdateRowFocus.isTabStop(item.key, in: keys, focused: tabStop)",
+                        "onMove:         { move(from: item.key, in: keys, $0) }"] {
+            #expect(update.contains(literal), "\(literal)")
+        }
+        #expect(support.contains(".gesture(TapGesture().onEnded { focus(key); onInspect?(item) })"))
     }
 
     /// The manual rows keep their own hint (Return and Space both open the inspector) and move
@@ -116,6 +176,9 @@ struct RowAccessibilityTests {
         #expect(sidebar.contains(".accessibilityLabel(SidebarBadgeCopy.updatesLabel(count: appsBadge + cliBadge, security: securityBadge))"))
         let rules = try source("Sources/MacUpdater/PolicyRules.swift")
         #expect(rules.contains(".help(trf(\"Usuń regułę dla %@\", entry.displayName))"))
+        let grouping = try source("Sources/MacUpdater/UpdateScopeBar.swift")
+        let icon = try #require(grouping.range(of: "Image(systemName: \"list.bullet.indent\")")).upperBound
+        #expect(grouping[icon...].prefix(250).contains(".accessibilityValue(selection.title)"), "the icon says which grouping is on")
     }
 
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {
