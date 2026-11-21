@@ -113,7 +113,7 @@ struct UpdateView: View {
                 }
                 Button(tr("Anuluj"), role: .cancel) { pendingUpdateTargets = [] }
             } message: {
-                Text(pendingUpdateTargets.map(updateTargetDescription).joined(separator: "\n"))
+                Text(updateTargetLines(pendingUpdateTargets))
             }
             .onChange(of: showUpdateConfirmation) { _, isPresented in
                 if !isPresented { pendingUpdateTargets = [] }
@@ -635,10 +635,18 @@ struct UpdateView: View {
         showUpdateConfirmation = true
     }
 
-    private func updateTargetDescription(_ item: OutdatedItem) -> String {
+    private func updateTargetLines(_ items: [OutdatedItem]) -> String {
+        let casks = items.filter { $0.kind == .cask }
+        let labels = Dictionary(
+            zip(casks.map(\.name), CaskDisplayName.labels(for: casks.map { ($0.name, scan.caskIconPaths[$0.name]) })),
+            uniquingKeysWith: { first, _ in first })
+        return items.map { updateTargetDescription($0, caskLabel: labels[$0.name]) }.joined(separator: "\n")
+    }
+
+    private func updateTargetDescription(_ item: OutdatedItem, caskLabel: String?) -> String {
         switch item.kind {
         case .formula:  return "\(tr("Narzędzia Homebrew")): \(item.name)"
-        case .cask:     return "\(tr("Aplikacje Homebrew")): \(CaskDisplayName.name(token: item.name, appPath: scan.caskIconPaths[item.name]))"
+        case .cask:     return "\(tr("Aplikacje Homebrew")): \(caskLabel ?? item.name)"
         case .appStore: return "\(tr("Mac App Store")): \(item.name)"
         case .npm:      return "npm: \(item.name)"
         }

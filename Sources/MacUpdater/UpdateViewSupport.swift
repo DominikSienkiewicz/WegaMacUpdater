@@ -438,9 +438,11 @@ struct UndoUpdateSection: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(CaskDisplayName.name(token: item.token, appPath: URL(fileURLWithPath: item.appPath)))
                             .fontWeight(.medium)
-                        Text(item.token)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
+                        if item.token != CaskDisplayName.name(token: item.token, appPath: URL(fileURLWithPath: item.appPath)) {
+                            Text(item.token)
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
                         Text(subtitle(for: item))
                             .font(.wega(.subheadline))
                             .foregroundStyle(.tertiary)

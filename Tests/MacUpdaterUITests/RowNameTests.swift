@@ -20,7 +20,7 @@ struct RowNameTests {
 
     @Test func theDialogTheInspectorAndUndoSpeakNamesButThePlanKeepsTokens() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
-        #expect(view.contains("CaskDisplayName.name(token: item.name, appPath: scan.caskIconPaths[item.name])"))
+        #expect(view.contains("CaskDisplayName.labels(for: casks.map { ($0.name, scan.caskIconPaths[$0.name]) })"))
         #expect(!view.contains("private struct PlanPreviewCaskRow"))
         #expect(try source("Sources/MacUpdater/PlanPreviewCaskRow.swift").contains("Text(token)"))
         #expect(try source("Sources/MacUpdater/InspectorPane.swift").contains("CaskDisplayName.name(token: item.name, appPath: iconPath)"))
@@ -28,19 +28,37 @@ struct RowNameTests {
         #expect(try source("Sources/MacUpdater/RollbackView.swift").contains("CaskDisplayName.name(token: $0.token, appPath: URL(fileURLWithPath: $0.appPath))"))
     }
 
-    @Test func theNameAndTokenRowKeepsItsTokenLineAtTheNarrowestDetailWidth() {
+    @Test func theTokenLineIsNeverCutAtTheNarrowestDetailWidth() {
+        let captionLine = NSLayoutManager().defaultLineHeight(for: NSFont.preferredFont(forTextStyle: .caption1))
         for language in [AppLanguage.pl, AppLanguage.en] {
             withLanguage(language) {
-                let name = "Visual Studio Code Insiders Edition Extended"
-                let token = "visual-studio-code-insiders-extended"
-                let oneLine = rowHeight(name: name, token: nil, source: "Homebrew")
-                let withToken = rowHeight(name: name, token: token, source: "Homebrew")
-                let tokenOnly = rowHeight(name: name, token: token, source: nil)
-                #expect(withToken >= oneLine, "\(language): token + source is at least the source-only row")
-                #expect(withToken <= oneLine + 20, "\(language): token + source adds at most one wrapped line, got \(withToken) vs \(oneLine)")
-                #expect(tokenOnly > 0)
+                let name = "Visual Studio Code"
+                let token = "visual-studio-code-insiders-extended-edition-with-a-very-long-token-name"
+                let without = rowHeight(name: name, token: nil, source: nil)
+                let short = rowHeight(name: name, token: "vscode", source: nil)
+                let with = rowHeight(name: name, token: token, source: nil)
+                #expect(short >= without + captionLine,
+                        "\(language): the token line adds at least one caption line (\(short) vs \(without))")
+                #expect(with >= short + captionLine,
+                        "\(language): a long token wraps instead of being cut (\(with) vs \(short))")
             }
         }
+    }
+
+    @Test func undoNamesTheTokenOnlyWhenItDiffersFromTheAppName() {
+        func height(appPath: String) -> CGFloat {
+            let update = UndoableUpdate(operationID: UUID(), token: "slack", appPath: appPath,
+                                        restoredVersion: "1", updatedAt: Date(), expiresAt: Date().addingTimeInterval(60))
+            let section = UndoUpdateSection(items: [update], busyToken: nil, onUndo: { _ in }).frame(width: 520)
+            return NSHostingView(rootView: section).fittingSize.height
+        }
+        #expect(height(appPath: "/Applications/Slack Beta.app") > height(appPath: "/Applications/slack.app"))
+    }
+
+    @Test func twoCasksWithOneAppNameAreToldApartByToken() {
+        let beta = URL(fileURLWithPath: "/Applications/Firefox.app")
+        let labels = CaskDisplayName.labels(for: [("firefox", beta), ("firefox@beta", beta), ("slack", nil)])
+        #expect(labels == ["Firefox (firefox)", "Firefox (firefox@beta)", "slack"])
     }
 
     private func rowHeight(name: String, token: String?, source: String?) -> CGFloat {

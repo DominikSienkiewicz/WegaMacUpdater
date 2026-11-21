@@ -512,6 +512,7 @@ struct PackageRow: View {
                 Text(source.map { "\(token) · \($0)" } ?? token)
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             } else if let source {
                 Text(source)
                     .font(.wega(.footnote))
