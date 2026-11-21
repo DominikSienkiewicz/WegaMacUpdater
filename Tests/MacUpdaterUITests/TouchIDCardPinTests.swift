@@ -90,7 +90,7 @@ struct TouchIDCardPinTests {
 
     /// I1: the app's own look covers the template, through the same no-follow lookup as `sudo_local`.
     @Test func theLivePreflightLooksAtTheTemplate() throws {
-        let preflight = try source("Sources/MacUpdater/TouchIDDisablePreflight.swift")
+        let preflight = try source("Sources/MacUpdaterCore/TouchIDDisablePreflight.swift")
         let live = try slice(preflight, from: "static func live() -> TouchIDDisablePreflight {", to: "static func readSudoLocal(")
         #expect(live.contains("template: policyFile(at: SystemPaths.pamPolicyDirectory + \"/sudo_local.template\"),"))
     }

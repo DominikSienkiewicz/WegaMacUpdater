@@ -1,6 +1,6 @@
 import Darwin
 import Foundation
-import MacUpdaterCore
+@testable import MacUpdaterCore
 import Testing
 
 @testable import WegaMacUpdater
