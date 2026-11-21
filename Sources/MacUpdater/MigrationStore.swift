@@ -686,11 +686,6 @@ final class MigrationStore: ObservableObject {
     }
 }
 
-/// Why a migration's post-upgrade check failed, as a pure mapping — `nil` means it passed.
-///
-/// Outside `MigrationStore` on purpose: the store holds the flow's state, and this holds only
-/// the wording, so the message for a verdict can be read (and reasoned about) without the
-/// surrounding actor.
 /// M3 — what Wega says when a migration fails, calmly and in the first person (owner's Q4). A
 /// failed check after the install reads as after a manual install; an install that put nothing
 /// new on disk names the app instead.
@@ -705,6 +700,11 @@ private enum MigrationWegaLine {
     }
 }
 
+/// Why a migration's post-upgrade check failed, as a pure mapping — `nil` means it passed.
+///
+/// Outside `MigrationStore` on purpose: the store holds the flow's state, and this holds only
+/// the wording, so the message for a verdict can be read (and reasoned about) without the
+/// surrounding actor.
 private enum MigrationVerificationMessage {
     static func text(for verdict: CaskValidationVerdict, token: String) -> String? {
         switch verdict {
