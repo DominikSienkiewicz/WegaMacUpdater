@@ -118,7 +118,7 @@ extension ScanStore {
             return
         case .publisherRejected(let old, let new):
             UpdateDiagnostics.record("adoption.deferred", fields: ["token": token, "reason": "publisherRejected", "previousTeamID": old, "currentTeamID": new ?? "unknown"])
-            let message = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
+            let message = trf("%@: zmienił się podpis producenta (%@ → %@). Zaufaj nowemu podpisowi tylko wtedy, gdy producent zmienił konto.",
                               "\(token)", "\(old)", "\(new ?? "—")")
             brewLog.append("⏸ " + message)
             showBanner(BannerData(variant: .danger, title: tr("Zmienił się podpis producenta"), message: message,
@@ -242,12 +242,12 @@ extension ScanStore {
             )
         case .publisherChanged(let old, let new):
             title = tr("Zmienił się podpis producenta")
-            message = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
+            message = trf("%@: zmienił się podpis producenta (%@ → %@). Zaufaj nowemu podpisowi tylko wtedy, gdy producent zmienił konto.",
                           "\(token)", "\(old)", "\(new ?? "—")")
             action = .trustPublisher(token: token, teamID: new)
         case .publisherChangedAndRolledBack(let old, let new):
             title = tr("Zmienił się podpis producenta")
-            message = trf("%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
+            message = trf("%@: zmienił się podpis producenta (%@ → %@). Przywróciłam poprzednią zaufaną wersję.",
                           "\(token)", "\(old)", "\(new ?? "—")")
         case .notUpgraded:
             title = tr("Nic nie zainstalowano")

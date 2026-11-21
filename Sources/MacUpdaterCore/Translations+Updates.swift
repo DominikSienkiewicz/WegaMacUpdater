@@ -22,8 +22,6 @@ extension Translations {
             "Possible security fixes",
         "Wega rozpoznała je po notatkach wydania. Szczegóły są w inspektorze.":
             "Wega spotted these in the release notes. The details are in the inspector.",
-        "Wymaga Twojego ruchu":
-            "Needs your move",
         "Te aktualizacje kończy producent albo Ty. Przy każdej Wega podpowiada, jak.":
             "The vendor or you finish these updates. Wega shows how on each one.",
         "W tej kategorii nie ma teraz aktualizacji. Przełącz kategorię nad listą.":

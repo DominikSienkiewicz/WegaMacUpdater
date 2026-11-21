@@ -334,7 +334,7 @@ struct UpdateView: View {
             freshness:      scan.freshness() ?? .fresh,
             sources:        UpdateBandPresentation.SourceChip.chips(from: scan.sourceReports),
             wegaLine:       wegaLine,
-            incompleteNote: scan.lastScanComplete ? nil : tr("sprawdzenie niepełne"),
+            incompleteNote: scan.lastScanComplete ? nil : tr("skan niepełny"),
             handOffCount:   scan.handOffCount(for: updateFilter),
             catalogAgeMinutes: scan.catalogAgeMinutes
         )
@@ -819,7 +819,7 @@ extension UpdateView {
                 title: tr("Aplikacje Homebrew"),
                 tint: .wegaToffee,
                 subtitle: tr("samoaktualizujące się"),
-                caption: tr("Homebrew nie pilnuje wersji tych apek (auto_updates) — robią to same. Wega sprawdza je u źródła."),
+                caption: tr("Homebrew nie pilnuje wersji tych aplikacji (auto_updates) — robią to same. Wega sprawdza je u źródła."),
                 inspectedKey: scan.inspectedKey,
                 onIgnore: scan.ignoreManual,
                 onPin: requestPinManual,
@@ -890,7 +890,7 @@ extension UpdateView {
             ManualUpdateSection(
                 items: groups.needsYou, busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
-                title: tr("Wymaga Twojego ruchu"),
+                title: tr("Wymaga Twojego działania"),
                 tint: .wegaToffee, ordinal: groups.ordinal(of: .needsYou),
                 caption: tr("Te aktualizacje kończy producent albo Ty. Przy każdej Wega podpowiada, jak."),
                 inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,

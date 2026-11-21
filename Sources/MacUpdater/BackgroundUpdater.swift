@@ -618,7 +618,7 @@ final class BackgroundUpdater {
                                "\(rollbackFailed.joined(separator: ", "))"))
         }
         if !publisherChanged.isEmpty {
-            clauses.append(trf("%@ zmieniło wydawcę (Team ID) — zweryfikuj.",
+            clauses.append(trf("Zmienił się podpis producenta: %@. Sprawdź to w Wedze.",
                                "\(publisherChanged.joined(separator: ", "))"))
         }
         if !failed.isEmpty {

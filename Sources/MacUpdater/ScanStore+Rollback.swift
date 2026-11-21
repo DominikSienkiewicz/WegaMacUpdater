@@ -161,7 +161,7 @@ extension ScanStore {
             case .healthy, .publisherChanged:
                 continue
             case .publisherChangedAndRolledBack:
-                brewLog.append("⚠️ " + trf("%@: zmienił się Team ID wydawcy — przywrócono poprzednią zaufaną wersję.", "\(token)"))
+                brewLog.append("⚠️ " + trf("%@: zmienił się podpis producenta — przywróciłam poprzednią zaufaną wersję.", "\(token)"))
                 emitWegaState(WegaState(pose: .alert,
                                         line: trf("Cofnęłam %@ — zmienił się wydawca.", "\(token)")))
             case .rolledBack:

@@ -52,6 +52,7 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
     enum Deadline {
         static let handshake: Duration = .seconds(10)
         static let enableTouchID: Duration = .seconds(60)
+        static let disableTouchID: Duration = .seconds(1)
         static let installationStatus: Duration = .seconds(10)
         static let replaceBundle: Duration = .seconds(600)
         /// The helper hands over every item of the bundle under one lock, so a large app takes
@@ -135,6 +136,31 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         case mismatch(reported: String, expected: String)
     }
 
+    static func handshakeOutcome(
+        reported: String, for verb: WegaHelperVerb, current: String = WegaHelper.version
+    ) -> HandshakeOutcome {
+        handshakeOutcome(reported: reported, expected: current)
+    }
+
+    static func acceptedVersion(
+        reported: String, for verb: WegaHelperVerb, current: String = WegaHelper.version
+    ) throws -> String {
+        reported
+    }
+
+    @discardableResult
+    public func performHandshake(for verb: WegaHelperVerb) async throws -> String {
+        try await performHandshake()
+    }
+
+    public func availabilityAfterHandshake(for verb: WegaHelperVerb) async -> HelperVerbAvailability {
+        .enabled
+    }
+
+    static func verbAvailability(handshakeFailure: Error) -> HelperVerbAvailability {
+        .enabled
+    }
+
     /// Probes the running daemon's protocol version (bounded by the handshake
     /// deadline) and verifies it matches the version this app expects. A stale
     /// helper throws `.versionMismatch`; a dead one throws `.timedOut`. Exposed so
@@ -166,6 +192,14 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
                 done(ok ? .success(true) : .failure(HelperError.operationFailed(message ?? "enableTouchIDForSudo failed")))
             }
         }
+    }
+
+    public func disableTouchIDForSudo() async throws -> TouchIDSudoDisableResult {
+        throw HelperError.operationFailed("disableTouchIDForSudo failed")
+    }
+
+    static func disableReply(code: Int, detail: String?) -> Result<TouchIDSudoDisableResult, Error> {
+        .failure(HelperError.operationFailed("disableTouchIDForSudo failed"))
     }
 
     public func installVerifiedPackage(at path: String, version: String) async throws {
@@ -312,6 +346,15 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
             }
         })
     }
+}
+
+/// Whether a privileged verb may be sent to the running helper, after one bounded handshake.
+public enum HelperVerbAvailability: Equatable, Sendable {
+    case enabled
+    /// The helper is not registered or not approved.
+    case off
+    /// The helper predates the verb, postdates the app, or did not answer.
+    case stale
 }
 
 /// Wraps a non-Sendable `NSXPCConnection` so escaping `@Sendable` XPC handlers

@@ -72,7 +72,7 @@ final class UpdateBandViewTests: XCTestCase {
             lastCheck: Date(timeIntervalSince1970: 1_800_000_000), freshness: .stale,
             sources: [
                 .init(token: "brew", isVerified: true), .init(token: "mas", isVerified: true),
-                .init(token: "npm", isVerified: false), .init(token: "apki", isVerified: true),
+                .init(token: "npm", isVerified: false), .init(token: "producenci", isVerified: true),
             ],
             wegaLine: "Mam kilka rzeczy do zaktualizowania, a jedna z nich jest naprawdę pilna i wymaga uwagi"
         )
@@ -191,7 +191,7 @@ final class UpdateBandViewTests: XCTestCase {
                 for run in [runFixture, runStoppingFixture] {
                     let height = withLanguage(language) {
                         let band = UpdateBand(
-                            presentation: presentation(count: 22, note: tr("sprawdzenie niepełne")),
+                            presentation: presentation(count: 22, note: tr("skan niepełny")),
                             scan: nil, run: run, planLinkEnabled: false, onShowPlan: {},
                             action: { layout in
                                 Color.clear.frame(width: layout.buttonDiameter, height: layout.buttonDiameter)
@@ -465,10 +465,12 @@ final class UpdateBandViewTests: XCTestCase {
 
     /// M3 — with both nuances present the headline used to end in the incomplete-check note,
     /// the first thing truncation cuts. Everything up to and including that note — the count
-    /// and „sprawdzenie niepełne”, plus the ellipsis truncation puts after it while the security
+    /// and „skan niepełny”, plus the ellipsis truncation puts after it while the security
     /// part follows — must fit in the headline's line limit at each layout's narrowest width.
     /// Red before the reorder: the narrow Polish headline needed 65 pt of 43. Red before F1:
-    /// compact and regular allowed one `.title` line (26 pt) and needed two (52 pt).
+    /// compact and regular allowed one `.title` line (26 pt) and needed two (52 pt). The note is
+    /// short („skan niepełny”) by the owner's decision: „sprawdzenie niepełne…” needed 235 pt of
+    /// the compact band's 220 pt column at 480–494 pt.
     func testTheCountAndTheIncompleteNoteAreNeverTruncated() {
         for bandWidth in Self.narrowestBandWidths {
             let layout = UpdateBandLayout.style(forWidth: bandWidth)
@@ -480,28 +482,17 @@ final class UpdateBandViewTests: XCTestCase {
             for language in [AppLanguage.pl, .en] {
                 for count in [12, 22] {
                     let visible = withLanguage(language) {
-                        let note = tr("sprawdzenie niepełne")
+                        let note = tr("skan niepełny")
                         let headline = presentation(count: count, note: note).headline
                         let end = headline.range(of: note)?.upperBound ?? headline.endIndex
                         return String(headline[..<end]) + (end < headline.endIndex ? "…" : "")
                     }
                     let needed = NSHostingView(rootView: Text(verbatim: visible).font(font)
                         .frame(width: column).fixedSize(horizontal: false, vertical: true)).fittingSize.height
-                    let check = {
-                        XCTAssertLessThanOrEqual(
-                            needed, allowed,
-                            "M3: \(language), \(count), band \(bandWidth) pt (\(layout)): \"\(visible)\" needs \(needed) pt of \(allowed)"
-                        )
-                    }
-                    if language == .pl && layout == .compact {
-                        // Known gap, reported to the owner: in a 220 pt column "sprawdzenie
-                        // niepełne" fits (218 pt) but not with the ellipsis truncation adds while
-                        // the security part follows (235 pt), so two lines still cut "niepełne"
-                        // for compact bands of 480–494 pt. Strict: it fails once this is fixed.
-                        XCTExpectFailure("F1: Polish compact band at 480 pt still truncates the note", strict: true, failingBlock: check)
-                    } else {
-                        check()
-                    }
+                    XCTAssertLessThanOrEqual(
+                        needed, allowed,
+                        "M3: \(language), \(count), band \(bandWidth) pt (\(layout)): \"\(visible)\" needs \(needed) pt of \(allowed)"
+                    )
                 }
             }
         }
@@ -526,7 +517,7 @@ final class UpdateBandViewTests: XCTestCase {
                 for scan in [nil, scanFixture, scanNoteFixture] {
                     let height = withLanguage(language) {
                         let band = UpdateBand(
-                            presentation: presentation(count: 22, note: tr("sprawdzenie niepełne")),
+                            presentation: presentation(count: 22, note: tr("skan niepełny")),
                             scan: scan, planLinkEnabled: true, onShowPlan: {},
                             action: { layout in
                                 Color.clear.frame(width: layout.buttonDiameter, height: layout.buttonDiameter)

@@ -473,7 +473,7 @@ final class MigrationStore: ObservableObject {
             return
         case .publisherRejected(let old, let new):
             errorMessage = trf(
-                "%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
+                "%@: zmienił się podpis producenta (%@ → %@). Zaufaj nowemu podpisowi tylko wtedy, gdy producent zmienił konto.",
                 "\(token)",
                 "\(old)",
                 "\(new ?? "—")"
@@ -727,14 +727,14 @@ private enum MigrationVerificationMessage {
             )
         case .publisherChanged(let old, let new):
             return trf(
-                "%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
+                "%@: zmienił się podpis producenta (%@ → %@). Zaufaj nowemu podpisowi tylko wtedy, gdy producent zmienił konto.",
                 "\(token)",
                 "\(old)",
                 "\(new ?? "—")"
             )
         case .publisherChangedAndRolledBack(let old, let new):
             return trf(
-                "%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
+                "%@: zmienił się podpis producenta (%@ → %@). Przywróciłam poprzednią zaufaną wersję.",
                 "\(token)",
                 "\(old)",
                 "\(new ?? "—")"

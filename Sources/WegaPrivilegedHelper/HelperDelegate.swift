@@ -73,6 +73,10 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
         }
     }
 
+    func disableTouchIDForSudo(withReply reply: @escaping @Sendable (Int, String?) -> Void) {
+        reply(0, nil)
+    }
+
     func beginPackageInstallation(
         atPath path: String, operationID: String, expectedVersion: String, withReply reply: @escaping @Sendable (Data?, String?) -> Void
     ) {

@@ -123,7 +123,7 @@ struct MigrationView: View {
             SniffingScene(
                 caption: tr("Trop! Wega wącha każdy folder w /Applications…"),
                 thoughts: [
-                    tr("Czy ta apka żyje poza brew?"),
+                    tr("Czy ta aplikacja żyje poza Homebrew?"),
                     tr("Sniff sniff… kandydat na migrację"),
                     tr("Hmm, kto cię tu postawił?"),
                     tr("Pachnie ręczną instalacją"),

@@ -283,13 +283,13 @@ extension ScanStore {
             case .publisherChanged(let previous, let current):
                 old = previous
                 new = current
-                message = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
+                message = trf("%@: zmienił się podpis producenta (%@ → %@). Zaufaj nowemu podpisowi tylko wtedy, gdy producent zmienił konto.",
                               "\(outcome.name)", "\(old)", "\(new ?? "—")")
                 action = trustPublisherAction(for: outcome, teamID: new)
             case .publisherChangedAndRolledBack(let previous, let current):
                 old = previous
                 new = current
-                message = trf("%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
+                message = trf("%@: zmienił się podpis producenta (%@ → %@). Przywróciłam poprzednią zaufaną wersję.",
                               "\(outcome.name)", "\(old)", "\(new ?? "—")")
             case .publisherMismatchBeforeUpgrade(let previous, let current):
                 old = previous
