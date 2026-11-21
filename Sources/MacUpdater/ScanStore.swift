@@ -51,8 +51,9 @@ struct ScanStoreDependencies {
     var reportVendorCheck: (ManualOutdatedApp, ManualOutdatedApp?, InstallationCheck?, Int, String) -> Void = { _, _, _, _, _ in
         /* only the live dependencies have a menu-bar agent to report to */
     }
+    /// The Team ID "Zaufaj nowemu podpisowi" may accept: validated, never the signature's bare claim.
     var teamIDOfApp: @Sendable (URL) async -> String? = { appURL in
-        await Task.detached { CodeSignatureVerifier.teamID(ofAppAt: appURL) }.value
+        await Task.detached { CodeSignatureVerifier.validatedTeamID(ofAppAt: appURL) }.value
     }
     var bundleIdentifierOfApp: (URL) -> String? = { CaskReplacementArtifactIdentity.bundleIdentifier(at: $0) }
     var stopDocker: @Sendable (URL) async -> DockerDesktopStopResult = {

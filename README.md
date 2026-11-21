@@ -142,6 +142,10 @@ Docker mutation checks run in sequential XCTest suites, separately from Swift Te
 that share the update mutex. Source guards also check the protected reinstall call chain,
 the smoke-test opt-out before launch, generic restart detection, publisher-veto reporting
 before mutation, and token-aware manual rollback before journaling and version pinning.
+Signature tests sign a throwaway bundle ad hoc with a borrowed Team ID and check that the
+post-upgrade publisher read finds no Team ID in it and that **Trust the New Signature** refuses it;
+one test expects at least one of the three Developer ID apps in `/Applications` with the smallest
+resource seal to keep its Team ID, and is skipped where none is installed.
 Standalone-source tests cover channel identity, Mozilla beta ordering, GitHub macOS assets,
 unknown/error evidence and updater completion.
 Scanner regression tests also cover already-listed casks, independent vendor results and
