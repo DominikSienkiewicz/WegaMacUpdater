@@ -147,14 +147,21 @@ struct TouchIDSetupControllerGateTests {
     @Test func theEnableCommandRestsOnAFreshPreflight() async {
         var unproven = TouchIDDisablePreflight.clear
         unproven.commandsAreSafe = false
-        let paths: [(String, Bool, @MainActor @Sendable () async throws -> TouchIDSudoEnableResult)] = [
-            ("no helper", false, { .enabled }),
-            ("an outdated helper", true, { throw PrivilegedHelperClient.HelperError.versionMismatch(helper: "7", expected: "8…8") }),
+        struct Path {
+            let name: String
+            let helperIsEnabled: Bool
+            let enable: @MainActor @Sendable () async throws -> TouchIDSudoEnableResult
+        }
+        let paths = [
+            Path(name: "no helper", helperIsEnabled: false, enable: { .enabled }),
+            Path(name: "an outdated helper", helperIsEnabled: true,
+                 enable: { throw PrivilegedHelperClient.HelperError.versionMismatch(helper: "7", expected: "8…8") }),
         ]
-        for (name, helperIsEnabled, enable) in paths {
+        for path in paths {
+            let name = path.name, helperIsEnabled = path.helperIsEnabled
             let observed = GateBox(TouchIDDisablePreflight.clear)
             let controller = TouchIDSetupController(dependencies: .init(
-                currentState: { .available }, helperIsEnabled: { helperIsEnabled }, enableWithHelper: enable,
+                currentState: { .available }, helperIsEnabled: { helperIsEnabled }, enableWithHelper: path.enable,
                 authorizeFallback: { .permissionDenied }, openInTerminal: { _ in }, preflight: { observed.value },
                 logHelperCode: { _, _ in }
             ))
