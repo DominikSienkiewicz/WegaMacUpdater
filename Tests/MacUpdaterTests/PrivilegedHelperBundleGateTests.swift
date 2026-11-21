@@ -58,6 +58,22 @@ struct PrivilegedHelperBundleGateTests {
         #expect(registration.registerCalls == 0)
     }
 
+    /// Final security review, finding 2: the trust is kept only so status polls survive a pkg install;
+    /// registering checks the bundle again, so a bundle replaced by a user-owned copy while Wega runs
+    /// is not registered on an old answer.
+    @Test func registeringChecksTheBundleAgain() {
+        let registration = Registration(status: .notRegistered)
+        let answers = Answers([.trusted, .refused(Self.refusal)])
+        let client = Self.client(registration: registration, trust: answers)
+        #expect(client.bundleTrust == .trusted)
+
+        #expect(throws: HelperError.self) { try client.register() }
+
+        #expect(registration.registerCalls == 0)
+        #expect(answers.calls == 2)
+        #expect(client.bundleTrust == .trusted, "calls and isEnabled keep the answer they had")
+    }
+
     @Test func aTrustedBundleRegisters() throws {
         let registration = Registration(status: .notRegistered)
         let client = Self.client(registration: registration, trust: Answers([.trusted]))

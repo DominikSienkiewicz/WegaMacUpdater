@@ -153,9 +153,10 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
 
     /// Registers the daemon. May leave the service in `.requiresApproval` until
     /// the user toggles it on in System Settings. A bundle that fails `HelperBundleGate` is never
-    /// registered: launchd would run the helper as root from files the user can replace.
+    /// registered: launchd would run the helper as root from files the user can replace. The bundle is
+    /// checked again here, not read from the kept answer, which exists only for calls during a pkg install.
     public func register() throws {
-        if case .refused(let refusal) = bundleTrust { throw HelperError.bundleNotTrusted(refusal) }
+        if case .refused(let refusal) = trustCache.evaluateAgain() { throw HelperError.bundleNotTrusted(refusal) }
         try registration.register()
     }
 
@@ -492,6 +493,13 @@ final class HelperBundleTrustCache: @unchecked Sendable {
         let answer = evaluate()
         trusted = answer == .trusted
         return answer
+    }
+
+    /// A fresh answer that leaves the kept one alone, for a decision that must not rest on it.
+    func evaluateAgain() -> HelperBundleTrust {
+        lock.lock()
+        defer { lock.unlock() }
+        return evaluate()
     }
 }
 
