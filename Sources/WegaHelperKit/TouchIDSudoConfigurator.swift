@@ -191,6 +191,10 @@ public enum TouchIDSudoConfigurator {
     /// The script behind `manualEnableTerminalCommand`, with its paths, the owner `sudo_local` must
     /// have and the owner it gives the result as parameters, so tests run it on temporary files
     /// without `sudo` (`ownership: nil` leaves out `chown`). The paths go in as plain words.
+    ///
+    /// A trap removes its backup, staged and check files on every exit (M2). The one exception is the
+    /// backup once the original was replaced: if putting it back fails too, it is the only copy of the
+    /// previous `sudo_local`, so it stays and the command names it.
     static func manualEnableShellScript(
         target: String, stagingDirectory: String, template: String, requiredOwnerUID: UInt32, ownership: String?
     ) -> String {
@@ -211,9 +215,13 @@ public enum TouchIDSudoConfigurator {
             #"if [ "$towner" -ne \#(requiredOwnerUID) ] || [ $(( 0$tmode & 022 )) -ne 0 ]"#,
             #"|| /bin/ls -lde "$template" | /usr/bin/grep -q "^ [0-9][0-9]*: "; then"#,
             #"echo "Wega: someone other than root can change sudo_local.template; nothing changed." >&2; exit 1; fi; fi;"#,
+            #"had=0; keep=0; backup=""; staged=""; check="";"#,
+            #"cleanup() { /bin/rm -f "$staged" "$check"; if [ "$keep" -eq 0 ]; then /bin/rm -f "$backup";"#,
+            #"elif [ -e "$backup" ]; then echo "Wega: the previous sudo_local is kept in $backup." >&2; fi; };"#,
+            #"trap cleanup EXIT;"#,
             #"backup=$(/usr/bin/mktemp \#(temporary)backup.XXXXXX);"#,
             #"staged=$(/usr/bin/mktemp \#(temporary)new.XXXXXX);"#,
-            #"check=$(/usr/bin/mktemp \#(temporary)check.XXXXXX); had=0;"#,
+            #"check=$(/usr/bin/mktemp \#(temporary)check.XXXXXX);"#,
             #"if [ -e "$target" ]; then /bin/cp -p "$target" "$backup";"#,
             #"/bin/cat "$target" > "$staged"; had=1;"#,
             #"elif [ -f "$template" ] && [ ! -L "$template" ]; then"#,
@@ -226,7 +234,7 @@ public enum TouchIDSudoConfigurator {
             #"/bin/cp "$staged" "$check"; rollback() {"#,
             #"if [ "$had" -eq 1 ]; then /bin/mv -f "$backup" "$target";"#,
             #"else /bin/rm -f "$target"; fi; /bin/rm -f "$staged" "$check"; };"#,
-            #"if ! /bin/mv -f "$staged" "$target"; then rollback; exit 1; fi;"#,
+            #"if ! /bin/mv -f "$staged" "$target"; then rollback; exit 1; fi; keep=$had;"#,
             #"if ! /usr/bin/cmp -s "$target" "$check"; then rollback; exit 1; fi;"#,
             #"/bin/rm -f "$backup" "$check""#,
         ].joined(separator: " ")

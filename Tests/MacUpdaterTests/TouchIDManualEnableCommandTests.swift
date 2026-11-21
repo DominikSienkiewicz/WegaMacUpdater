@@ -29,10 +29,34 @@ struct TouchIDManualEnableCommandTests {
                   template: nil, expected: Array("# c\n".utf8) + directive.dropLast()),
     ]
 
-    static func script(in sandbox: PolicyShellSandbox, requiredOwnerUID: UInt32 = getuid()) -> String {
+    static func script(in sandbox: PolicyShellSandbox, requiredOwnerUID: UInt32 = getuid(), ownership: String? = nil) -> String {
         TouchIDSudoConfigurator.manualEnableShellScript(
             target: sandbox.sudoLocal, stagingDirectory: sandbox.policyDirectory, template: sandbox.template,
-            requiredOwnerUID: requiredOwnerUID, ownership: nil)
+            requiredOwnerUID: requiredOwnerUID, ownership: ownership)
+    }
+
+    /// M2: a step after the three temporary files were made fails (`chown` to root, as a user). The
+    /// file stays as it was, or is still missing, and the trap removes the backup, the staged copy and
+    /// the check copy, so no `.sudo_local.wega-*` name is left in the policy directory.
+    @Test(arguments: [true, false], ShellLocale.allCases)
+    func aFailureAfterStagingLeavesTheFileAndNoTemporaryFiles(_ hadSudoLocal: Bool, _ locale: ShellLocale) async throws {
+        try #require(getuid() != 0, "the test needs chown to fail")
+        let sandbox = try PolicyShellSandbox()
+        defer { sandbox.remove() }
+        let original = Array("# a\n".utf8)
+        if hadSudoLocal { try sandbox.write(original, to: sandbox.sudoLocal) }
+        try sandbox.write(Self.template, to: sandbox.template, permissions: 0o444)
+
+        let run = try await PolicyShell.run(Self.script(in: sandbox, ownership: "root:wheel"), in: locale)
+
+        #expect(run.status != 0, "\(run.output)")
+        if hadSudoLocal {
+            #expect(try sandbox.contents(of: sandbox.sudoLocal) == Data(original))
+        } else {
+            #expect(!sandbox.exists(sandbox.sudoLocal))
+        }
+        let leftovers = try sandbox.leftovers()
+        #expect(leftovers.isEmpty, "\(leftovers)")
     }
 
     @Test(arguments: writeCases, ShellLocale.allCases)
@@ -180,6 +204,8 @@ struct TouchIDManualEnableCommandTests {
             "template=/etc/pam.d/sudo_local.template;", "/usr/bin/stat -f %u \"$template\"", "/usr/bin/stat -f %Lp \"$template\"",
             "[ \"$towner\" -ne 0 ]", "/bin/ls -lde \"$template\" | /usr/bin/grep -q \"^ [0-9][0-9]*: \"",
             "/bin/ls -lde \"$target\" | /usr/bin/grep -q \"^ [0-9][0-9]*: \"",
+            "cleanup() { /bin/rm -f \"$staged\" \"$check\"; if [ \"$keep\" -eq 0 ]; then /bin/rm -f \"$backup\";",
+            "if ! /bin/mv -f \"$staged\" \"$target\"; then rollback; exit 1; fi; keep=$had;",
         ] {
             #expect(command.contains(piece), "\(piece)")
         }
@@ -190,6 +216,8 @@ struct TouchIDManualEnableCommandTests {
         let everyRefusal = script.ranges(of: "nothing changed.")
         #expect(everyRefusal.count == 4, "sudo_local and the template, two refusals each")
         #expect(everyRefusal.allSatisfy { $0.upperBound < firstTemporary.lowerBound }, "every refusal comes before anything is created")
+        let trap = try #require(script.range(of: "trap cleanup EXIT;"))
+        #expect(trap.upperBound < firstTemporary.lowerBound, "M2: the trap is set before anything is created")
         #expect(!script.contains("'"))
         #expect(try await PolicyShell.run(script, in: .c, arguments: ["-n"]).status == 0, "valid shell")
     }
