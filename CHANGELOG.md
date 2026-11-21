@@ -178,7 +178,9 @@ them verbatim under the new version heading, so that step is never done by hand 
   helpers must carry Wega's Developer ID signature, and every architecture and nested program
   must match it, the root helper included. Before, the check read only the slice this Mac runs,
   did not check the contents of the nested programs, and also accepted the same team's
-  development certificate.
+  development certificate. The release check now runs the same check on the signed app,
+  askpass, the sudo shim, the `.dmg`, and the app and both askpass helpers inside the `.pkg`,
+  so a release that Wega would refuse to install is never published.
 
 ### Fixed
 - **Inventory knows about installs and undos.** It marks its read **the list may have

@@ -118,8 +118,11 @@ The tag triggers [`release.yml`](.github/workflows/release.yml):
 4. **Notarize & staple** — only when both a Developer ID and a notary key are configured.
 5. **Artifact gate** — `./scripts/verify-bundle.sh` checks bundle layout, helper signature,
    notarization, stapling, the publisher **Team ID**, that the signed app and helper satisfy
-   the XPC code requirements they pin each other with, and required resources. A broken bundle
-   blocks the publish. For a stable release it runs with `REQUIRE_SIGNED=1`, which turns every
+   the XPC code requirements they pin each other with, and required resources. It also checks
+   Wega's own code the way the app does before a self-update or a `sudo` run: the app, askpass,
+   the sudo shim, the `.dmg`, and the app and both authorization programs inside the `.pkg` need
+   a Developer ID signature of Wega's Team ID that holds in every architecture and nested
+   program. A broken bundle blocks the publish. For a stable release it runs with `REQUIRE_SIGNED=1`, which turns every
    "skipped because unsigned" note into a failure.
 6. **Publish** — `gh release create` uploads both artifacts and uses your changelog section
    as the release description. A build that is not fully signed + notarized + stapled +

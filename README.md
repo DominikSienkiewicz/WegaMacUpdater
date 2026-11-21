@@ -149,6 +149,10 @@ resource seal to keep its Team ID, and is skipped where none is installed.
 The check of Wega's own code is tried on a clone of such an app with one byte flipped in the
 slice this Mac does not run, then in a nested executable; both copies must be refused, the
 untouched app must pass, and the tests are skipped where no universal app with nested code is installed.
+A source test keeps the release gate on the same check: the requirements `scripts/verify-bundle.sh`
+uses must equal the ones the app builds, and its codesign options must match the app's validation
+flags. `scripts/test-verify-bundle-guard.sh` checks with stubbed tools that the gate refuses and names
+a mis-signed app, askpass, sudo shim, `.dmg` or `.pkg` payload.
 Standalone-source tests cover channel identity, Mozilla beta ordering, GitHub macOS assets,
 unknown/error evidence and updater completion.
 Scanner regression tests also cover already-listed casks, independent vendor results and
