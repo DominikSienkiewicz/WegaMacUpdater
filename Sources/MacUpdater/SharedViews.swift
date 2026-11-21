@@ -726,7 +726,9 @@ enum BannerAction: Equatable {
     case reinstallCask(token: String)
     /// Accepts the cask's new publisher Team ID after the user confirms it. `teamID` is the ID
     /// the warning showed, so a bundle re-signed since then is refused rather than trusted.
-    case trustPublisher(token: String, teamID: String?)
+    /// `appURL` is the bundle the warning is about, when the raiser has it (the bundle the run
+    /// prepared); without it the trust looks the app up on the list.
+    case trustPublisher(token: String, teamID: String?, appURL: URL? = nil)
 }
 
 struct BannerData: Equatable {

@@ -18,10 +18,18 @@ extension ScanStore {
     }
 
     /// The action a publisher warning about `entry` offers: for a cask whose new or current
-    /// publisher differs, never for a rolled-back change or anything but a cask.
+    /// publisher differs, never for a rolled-back change or anything but a cask. It names the
+    /// bundle the run prepared, because the check after the run keeps the paths of the casks
+    /// still outdated only, and the list may no longer know where this one lives.
     func trustPublisherAction(for entry: UpdateRunReportEntry) -> BannerAction? {
         guard entry.offersPublisherTrust else { return nil }
-        return .trustPublisher(token: entry.name, teamID: entry.reportedTeamID)
+        return .trustPublisher(token: entry.name, teamID: entry.reportedTeamID, appURL: entry.appPath)
+    }
+
+    /// "Zaufaj nowemu podpisowi" on a banner: checks the bundle the banner names, if any.
+    func trustNewPublisher(for action: BannerAction) async {
+        guard case .trustPublisher(let token, let teamID, let appURL) = action else { return }
+        await trustNewPublisher(token: token, reportedTeamID: teamID, appURL: appURL)
     }
 
     /// `appURL` is the bundle the run prepared for the cask, when the caller has it; without it
