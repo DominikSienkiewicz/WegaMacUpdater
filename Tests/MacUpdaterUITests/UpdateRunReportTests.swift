@@ -216,6 +216,50 @@ struct UpdateRunReportTests {
         }
     }
 
+    /// Wega's line in the summary is the run's, worded from its status: the three lines
+    /// `report(run:)` says when the run ends, and nothing a later click or check says.
+    @Test func aFinishedRunSaysItIsDone() {
+        withLanguage(.pl) {
+            let planned = [item("alpha", .cask), item("beta", .formula), item("gamma", .npm)]
+            let finished = report(planned, planned.map { outcome($0, .succeeded) })
+            #expect(finished.status == .finished)
+            #expect(finished.wegaLine == trp("Gotowe! %@ pakietów odświeżonych.", 3))
+        }
+    }
+
+    @Test func anIncompleteRunSaysSomePackagesDidNotUpdate() {
+        withLanguage(.pl) {
+            let planned = [item("alpha", .cask), item("beta", .formula)]
+            let incomplete = report(planned, [outcome(planned[0], .succeeded), outcome(planned[1], .executionFailed)])
+            #expect(incomplete.status == .incomplete)
+            #expect(incomplete.wegaLine == "Część pakietów się nie zaktualizowała.")
+        }
+    }
+
+    @Test func aStoppedRunSaysWegaStoppedIt() {
+        withLanguage(.pl) {
+            let planned = [item("alpha", .cask), item("beta", .formula)]
+            let stopped = report(planned, [outcome(planned[0], .succeeded)], skipped: [planned[1].key], wasStopped: true)
+            #expect(stopped.status == .stopped)
+            #expect(stopped.wegaLine == "Przerwałam aktualizację.")
+        }
+    }
+
+    @Test func wegasLineFollowsTheLanguageAfterTheReportIsBuilt() {
+        let planned = [item("alpha", .cask), item("beta", .formula)]
+        let finished = withLanguage(.pl) { report(planned, planned.map { outcome($0, .succeeded) }) }
+        let incomplete = withLanguage(.pl) { report(planned, [outcome(planned[0], .succeeded)]) }
+        let stopped = withLanguage(.pl) { report(planned, [], skipped: Set(planned.map(\.key)), wasStopped: true) }
+        let polishDone = withLanguage(.pl) { trp("Gotowe! %@ pakietów odświeżonych.", 2) }
+
+        withLanguage(.en) {
+            #expect(finished.wegaLine == trp("Gotowe! %@ pakietów odświeżonych.", 2))
+            #expect(finished.wegaLine != polishDone, "re-worded")
+            #expect(incomplete.wegaLine == "Some packages didn't update.")
+            #expect(stopped.wegaLine == "I stopped the update.")
+        }
+    }
+
     @Test func notesFollowTheLanguageAfterTheReportIsBuilt() {
         let failed = item("beta", .formula)
         let built = withLanguage(.pl) { report([failed], [outcome(failed, .executionFailed)]) }

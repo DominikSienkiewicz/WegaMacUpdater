@@ -212,6 +212,17 @@ struct UpdateRunReport: Equatable, Sendable {
         }
     }
 
+    /// Wega's line for the run, worded from its status when read: the three lines `report(run:)`
+    /// says when the run ends. The summary shows this one, not Wega's current line, which a
+    /// sidebar click or the check after an undo replaces while the summary stays open.
+    var wegaLine: String {
+        switch status {
+        case .finished:   return trp("Gotowe! %@ pakietów odświeżonych.", updatedCount)
+        case .incomplete: return tr("Część pakietów się nie zaktualizowała.")
+        case .stopped:    return tr("Przerwałam aktualizację.")
+        }
+    }
+
     var plannedCount: Int { entries.count }
     var updatedCount: Int { count(.updated) }
 

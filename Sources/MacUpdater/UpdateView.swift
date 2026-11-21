@@ -374,7 +374,7 @@ struct UpdateView: View {
     /// under it: the check's completeness, the hand-offs and this run's undos.
     private func summaryPresentation(_ report: UpdateRunReport) -> UpdateBandSummaryPresentation {
         UpdateBandSummaryPresentation(
-            report: report, wegaLine: wegaLine, scanComplete: scan.lastScanComplete,
+            report: report, scanComplete: scan.lastScanComplete,
             handOffCount: scan.handOffCount(for: .all),
             undoExpiry: UpdateBandSummaryPresentation.earliestUndoExpiry(of: report, in: scan.undoableUpdates)
         )

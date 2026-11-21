@@ -78,8 +78,34 @@ struct UpdateBandSummaryTests {
 
     private func summary(_ report: UpdateRunReport, scanComplete: Bool = true, handOffs: Int = 0,
                          undoExpiry: Date? = nil) -> UpdateBandSummaryPresentation {
-        UpdateBandSummaryPresentation(report: report, wegaLine: "Część pakietów się nie zaktualizowała.",
-                                      scanComplete: scanComplete, handOffCount: handOffs, undoExpiry: undoExpiry)
+        UpdateBandSummaryPresentation(report: report, scanComplete: scanComplete, handOffCount: handOffs, undoExpiry: undoExpiry)
+    }
+
+    /// Wega's companion line changes under an open summary — a sidebar click, an undo and its
+    /// check ("Wszystko aktualne. Idę się zdrzemnąć."), a language switch. The summary keeps
+    /// the run's own line, worded from the report when read.
+    @Test func theSummaryKeepsTheRunsOwnLine() throws {
+        let planned = [item("alpha", .cask), item("beta", .formula)]
+        let finished = report(planned.map { ($0, .succeeded) })
+        let stopped = withLanguage(.pl) {
+            UpdateRunReport.make(planned: planned, summary: UpdateRunSummary(items: [], diagnostics: [], needsSudoPassword: false),
+                                 skippedKeys: Set(planned.map(\.key)), wasStopped: true, finishedAt: Self.finishedAt,
+                                 stillOutdatedKeys: [], confirmedKinds: [.formula, .cask, .appStore, .npm])
+        }
+        withLanguage(.pl) {
+            #expect(summary(mixedReport).line == "Część pakietów się nie zaktualizowała.")
+            #expect(summary(finished).line == trp("Gotowe! %@ pakietów odświeżonych.", 2))
+            #expect(summary(stopped).line == "Przerwałam aktualizację.")
+            for report in [mixedReport, finished, stopped] {
+                #expect(summary(report).line == report.wegaLine)
+            }
+        }
+        withLanguage(.en) {
+            #expect(summary(mixedReport).line == "Some packages didn't update.", "re-worded after a language switch")
+        }
+        let presentation = try source("Sources/MacUpdater/UpdateBandSummaryPresentation.swift")
+        #expect(!presentation.contains("let wegaLine"), "no companion line can reach the summary")
+        #expect(presentation.contains("var line: String { report.wegaLine }"))
     }
 
     @Test func theSummaryHeadlineNeverHidesAnIncompleteCheck() {
@@ -227,11 +253,13 @@ struct UpdateBandSummaryTests {
         let scanBuilder = view[scanState...].prefix(500).replacingOccurrences(of: " +", with: " ", options: .regularExpression)
         #expect(scanBuilder.contains("checksRunResult: scan.updating"), "a scan during a run is the run's check")
         let summaryState = try #require(view.range(of: "private func summaryPresentation(_ report: UpdateRunReport)")).upperBound
-        let builder = view[summaryState...].prefix(500)
-        for input in ["wegaLine", "scan.lastScanComplete", "scan.handOffCount(for: .all)",
+        let builderEnd = try #require(view.range(of: "private var runPresentation: UpdateBandRunPresentation", range: summaryState..<view.endIndex))
+        let builder = view[summaryState..<builderEnd.lowerBound]
+        for input in ["scan.lastScanComplete", "scan.handOffCount(for: .all)",
                       "UpdateBandSummaryPresentation.earliestUndoExpiry(of: report, in: scan.undoableUpdates)"] {
             #expect(builder.contains(input), "\(input)")
         }
+        #expect(!builder.contains("wegaLine"), "the summary's line is the report's, not Wega's companion line")
     }
 
     /// Spec R18 — Wega's ball waited for the danger banners the summary replaces; it now also

@@ -691,7 +691,7 @@ extension UpdateBandViewTests {
             stillOutdatedKeys: [], confirmedKinds: [.formula, .cask, .appStore, .npm]
         )
         return UpdateBandSummaryPresentation(
-            report: report, wegaLine: tr("Część pakietów się nie zaktualizowała."), scanComplete: false,
+            report: report, scanComplete: false,
             handOffCount: clean ? 0 : 10, undoExpiry: finishedAt.addingTimeInterval(7 * 86_400)
         )
     }

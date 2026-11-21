@@ -2,14 +2,12 @@ import Foundation
 import MacUpdaterCore
 
 /// C2 stage 4 — what the band says once a run has been checked: the run's status and time
-/// range, how many planned items were updated, Wega's line, and one count per result that
-/// happened. It keeps the report and words it when read, so a language switch re-words it.
+/// range, how many planned items were updated, the run's own line, and one count per result
+/// that happened. It keeps the report and words it when read, so a language switch re-words it.
 ///
 /// Counts use "Etykieta: N", so no plural forms are needed; only non-zero ones are shown.
 struct UpdateBandSummaryPresentation: Equatable {
     let report: UpdateRunReport
-    /// Wega's line from the run's report („Gotowe!…”, „Część pakietów…”, „Przerwałam…”).
-    let wegaLine: String
     /// `false` when a source of the check did not answer; the headline then says so.
     let scanComplete: Bool
     /// The current list's updates finished with the developer — not part of the run.
@@ -33,7 +31,9 @@ struct UpdateBandSummaryPresentation: Equatable {
         scanComplete ? ringValue : ringValue + " · " + tr("skan niepełny")
     }
 
-    var line: String { wegaLine }
+    /// The run's line from its report („Gotowe!…”, „Część pakietów…”, „Przerwałam…”), never
+    /// Wega's current one: that changes under an open summary.
+    var line: String { report.wegaLine }
 
     /// One line per non-zero count, in the result order; the updated line names its backup.
     var countLines: [String] {
