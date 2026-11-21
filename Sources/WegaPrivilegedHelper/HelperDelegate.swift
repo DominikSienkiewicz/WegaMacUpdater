@@ -37,7 +37,7 @@ final class HelperListenerDelegate: NSObject, NSXPCListenerDelegate, @unchecked 
         }
         // Refused before the connection counts as activity, so the idle exit still ends the process.
         guard case .trusted = bundleTrust else {
-            HelperAuditLog.logger.error("Odrzucono połączenie XPC: pakiet pomocnika może zmienić ktoś inny niż root (\(self.bundleTrust.token, privacy: .public)).")
+            HelperAuditLog.logger.error("Odrzucono połączenie XPC: pakiet, z którego działa pomocnik, nie przeszedł sprawdzenia (\(self.bundleTrust.token, privacy: .public)).")
             return false
         }
         // R2-4: an accepted connection keeps the helper alive until it is invalidated.

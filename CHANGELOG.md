@@ -124,7 +124,7 @@ them verbatim under the new version heading, so that step is never done by hand 
   checks the bundle it was started from as well and refuses every connection when it fails. The
   package build checks that it installs such a bundle, and the diagnostics report shows the
   result. This is helper protocol v9: Wega sends every action only to a v9 helper, so a helper
-  still running from an earlier Wega (every released Wega has v6) is out of date for restoring
+  still running from an earlier Wega (released Wega has v6, or v5 up to 0.6.0) is out of date for restoring
   apps, self-updates through the helper, the Trash and Touch ID until you restart your Mac or
   remove and reinstall the helper; a self-update it started is still settled through it.
 - **No sudo route while the settings sudo reads are unsafe or unproven.** When `sudo_local` is

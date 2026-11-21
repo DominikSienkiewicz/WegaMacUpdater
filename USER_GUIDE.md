@@ -742,7 +742,7 @@ Helper**.
 
 **After updating from Wega 0.8.0 or earlier.** Wega sends every action only to a helper of
 protocol 9 or later, the one that checks its own bundle. An older helper still running after the
-update (every released Wega until now has protocol 6, which never stops by itself) reads as out
+update (released Wega has protocol 6, or 5 up to 0.6.0, and neither stops by itself) reads as out
 of date for restoring an app, a self-update through the helper, moving an app to the Trash and
 Touch ID until you restart your Mac or remove and reinstall the helper. A self-update that older
 helper started is still settled through it.
