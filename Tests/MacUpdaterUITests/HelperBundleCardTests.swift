@@ -57,6 +57,27 @@ struct HelperBundleCardTests {
         }
     }
 
+    /// Note 6 of the security review: an owner on a mounted volume, or on one that ignores ownership,
+    /// proves nothing, so the card names the volume instead of claiming an owner or a mode.
+    @Test func aRefusedVolumeIsNamedInBothLanguages() throws {
+        let volume = "Część plików Wegi (%@) leży na innym woluminie niż folder /Applications albo na woluminie, który pomija właścicieli plików."
+        let english = "Some of Wega's files (%@) are on a different volume from the /Applications folder, or on one that ignores file ownership."
+        let changeable = try presentation(.notOwnedByRoot(.bundle)).explanation
+        let cases: [(HelperBundleRefusal, String)] = [
+            (.otherVolume(.contents), "Contents"),
+            (.otherVolume(.launchdPlist), "Contents/Library/LaunchDaemons/\(WegaHelper.plistName)"),
+            (.ownershipIgnored(.bundle), Self.bundleName),
+        ]
+        for (refusal, name) in cases {
+            #expect(try presentation(refusal).reason == volume.replacingOccurrences(of: "%@", with: name), "\(refusal)")
+            #expect(try presentation(refusal).explanation == changeable, "\(refusal)")
+            try withLanguage(.en) {
+                let card = try presentation(refusal)
+                #expect(card.reason == english.replacingOccurrences(of: "%@", with: name), "\(refusal)")
+            }
+        }
+    }
+
     /// Review R6: a disk image is read-only and a folder inside /Applications is still /Applications,
     /// so the location case does not claim the user's account can change the bundle.
     @Test func theExplanationFitsTheCase() throws {

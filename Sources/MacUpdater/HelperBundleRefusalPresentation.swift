@@ -39,10 +39,21 @@ struct HelperBundleRefusalPresentation: Equatable {
             return tr("Wega nie działa z folderu /Applications (na przykład z Pobranych albo z obrazu dysku).")
         case .notOwnedByRoot:
             return tr("Pliki Wegi nie należą do roota, tak jak po przeciągnięciu aplikacji z obrazu .dmg.")
+        case .otherVolume(let entry), .ownershipIgnored(let entry):
+            return trf(
+                "Część plików Wegi (%@) leży na innym woluminie niż folder /Applications albo na woluminie, który pomija właścicieli plików.",
+                name(of: entry, bundleName: bundleName)
+            )
         case .unreadable(let entry), .symbolicLink(let entry), .unexpectedKind(let entry),
              .writableByGroupOrOthers(let entry), .accessControlList(let entry):
-            let name = entry.relativePath.isEmpty ? bundleName : entry.relativePath
-            return trf("Część plików Wegi (%@) może zmienić ktoś inny niż root albo nie da się tego sprawdzić.", name)
+            return trf(
+                "Część plików Wegi (%@) może zmienić ktoś inny niż root albo nie da się tego sprawdzić.",
+                name(of: entry, bundleName: bundleName)
+            )
         }
+    }
+
+    private static func name(of entry: HelperBundleEntry, bundleName: String) -> String {
+        entry.relativePath.isEmpty ? bundleName : entry.relativePath
     }
 }

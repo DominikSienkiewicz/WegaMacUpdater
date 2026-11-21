@@ -40,6 +40,8 @@ struct HelperBundleSelfCheckTests {
         #expect(HelperBundleRefusal.unreadable(.helperExecutable).token == "unreadable(Contents/MacOS/WegaPrivilegedHelper)")
         #expect(HelperBundleRefusal.symbolicLink(.contents).token == "symbolicLink(Contents)")
         #expect(HelperBundleRefusal.unexpectedKind(.library).token == "unexpectedKind(Contents/Library)")
+        #expect(HelperBundleRefusal.otherVolume(.contents).token == "otherVolume(Contents)")
+        #expect(HelperBundleRefusal.ownershipIgnored(.bundle).token == "ownershipIgnored(bundle)")
         #expect(HelperBundleRefusal.writableByGroupOrOthers(.macOS).token == "writableByGroupOrOthers(Contents/MacOS)")
         #expect(HelperBundleRefusal.accessControlList(.launchDaemons).token == "accessControlList(Contents/Library/LaunchDaemons)")
         #expect(HelperBundleTrust.trusted.token == "trusted")
