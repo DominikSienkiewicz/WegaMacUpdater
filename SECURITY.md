@@ -57,11 +57,17 @@ Security-relevant areas most worth a look include:
   Because launchd runs the helper as root from that bundle, Wega neither registers nor uses it
   unless the app runs directly from `/Applications` and every entry launchd runs the helper from
   (the bundle, `Contents`, `Contents/MacOS`, the helper, `Contents/Library`,
-  `Contents/Library/LaunchDaemons`, the launchd plist) belongs to root, is not a link and cannot be
-  written by its group, by others or through an ACL (`HelperBundleGate`, read through descriptors).
+  `Contents/Library/LaunchDaemons`, the launchd plist) belongs to root, is not a link, lies on the
+  device of `/Applications` and cannot be written by its group, by others or through an ACL
+  (`HelperBundleGate`, read through descriptors). A file system mounted into the bundle could show
+  root as the owner of entries its mounter controls, and on a volume mounted with
+  `MNT_IGNORE_OWNERSHIP` root and the user read different owners, so both are refused (the bundle's
+  volume flags come from `fstatfs` on its descriptor).
   The `.pkg` installs it so; a drag-installed bundle belongs to the user, who could swap the helper
   for another binary. The helper checks the bundle it was started from and refuses every
   connection when that check fails, and from protocol 9 every acting verb needs such a helper. A
+  refused copy cannot reach the helper to check an installation whose outcome is unknown, so
+  changes stay blocked there and it sends the user to the `.pkg` copy in `/Applications`. A
   registration left from a refused copy is removed at launch when no copy LaunchServices knows
   passes the check, and the package build verifies that its payload passes it. Known limits:
   `/Applications` is writable by the `admin` group, so code running as an administrator — on most

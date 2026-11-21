@@ -31,4 +31,17 @@ enum SelfUpdatePresentation {
         case .failed:      return tr("Nie udało się pobrać aktualizacji — otwieram stronę wydania.")
         }
     }
+
+    /// The line under "Nie potwierdzono zakończenia instalacji". A copy that fails the bundle gate
+    /// (Z14) gets no helper, so it can neither check the installation nor settle it, and the line
+    /// sends the user to the copy installed from the .pkg.
+    static func uncertainInstallationDetail(fromRefusedCopy: Bool) -> String {
+        fromRefusedCopy
+            ? openInstalledCopy
+            : tr("Instalator może nadal działać. Dalsze zmiany są zablokowane; nie uruchamiaj drugiego instalatora.")
+    }
+
+    static var openInstalledCopy: String {
+        tr("Ta kopia Wegi nie może używać pomocnika, więc nie sprawdzi tej instalacji. Zakończ ją i otwórz Wegę zainstalowaną z pakietu .pkg w folderze /Applications. Do tego czasu dalsze zmiany są zablokowane.")
+    }
 }

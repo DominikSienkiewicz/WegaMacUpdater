@@ -36,6 +36,17 @@ struct HelperLeftoverRegistrationTests {
         ))
     }
 
+    /// A file system mounted into a copy is not something a pkg install passes through, so a copy
+    /// refused for its volume decides, like a dragged one.
+    @Test func aCopyRefusedForItsVolumeDecides() {
+        for refusal in [HelperBundleRefusal.otherVolume(.contents), .ownershipIgnored(.bundle)] {
+            #expect(HelperLeftoverRegistration.shouldUnregister(status: .enabled, ownTrust: .refused(refusal), copies: []))
+            #expect(HelperLeftoverRegistration.shouldUnregister(
+                status: .enabled, ownTrust: Self.refused, copies: [.refused(refusal)]
+            ))
+        }
+    }
+
     @Test func aTrustedRunningCopyNeverRemovesIt() {
         #expect(!HelperLeftoverRegistration.shouldUnregister(status: .enabled, ownTrust: .trusted, copies: []))
     }

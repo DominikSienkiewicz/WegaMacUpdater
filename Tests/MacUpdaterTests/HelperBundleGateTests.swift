@@ -14,7 +14,8 @@ struct HelperBundleGateTests {
             kind: entry.isDirectory ? .directory : .regularFile,
             ownerUID: 0,
             permissions: entry.isDirectory ? 0o755 : 0o644,
-            accessControl: .absent
+            accessControl: .absent,
+            volume: .applications
         )
     }
 
@@ -156,6 +157,29 @@ struct HelperBundleGateTests {
             let trust = Self.trust(changing: entry) { $0.accessControl = state }
 
             #expect(trust == .refused(.accessControlList(entry)), "\(entry) \(state)")
+        }
+    }
+
+    /// A file system mounted at the bundle or inside it can show root as the owner of entries its
+    /// mounter controls, so an entry on another device is refused whoever owns it, and the refusal
+    /// names the volume rather than the owner.
+    @Test(arguments: HelperBundleEntry.allCases)
+    func anEntryOnAnotherVolumeIsRefusedWhoeverOwnsIt(entry: HelperBundleEntry) {
+        for owner: UInt32 in [0, 501] {
+            let trust = Self.trust(changing: entry) { $0.volume = .other; $0.ownerUID = owner }
+
+            #expect(trust == .refused(.otherVolume(entry)), "\(entry) owned by \(owner)")
+        }
+    }
+
+    /// On a volume that ignores ownership root reads the owners on disk and the user reads their own
+    /// uid, so the app and the helper would decide differently. Both refuse it, the same way.
+    @Test(arguments: HelperBundleEntry.allCases)
+    func anEntryOnAVolumeThatIgnoresOwnershipIsRefusedWhoeverItSeemsToBelongTo(entry: HelperBundleEntry) {
+        for owner: UInt32 in [0, 501] {
+            let trust = Self.trust(changing: entry) { $0.volume = .ignoresOwnership; $0.ownerUID = owner }
+
+            #expect(trust == .refused(.ownershipIgnored(entry)), "\(entry) owned by \(owner)")
         }
     }
 

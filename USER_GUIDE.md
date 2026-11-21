@@ -749,7 +749,8 @@ the new helper runs within about a minute of idle.
 app bundle. Wega installs and uses it only when it runs directly from `/Applications` and the
 bundle, `Contents`, `Contents/MacOS`, the helper, `Contents/Library`,
 `Contents/Library/LaunchDaemons` and the helper's launchd file all belong to root and nobody else
-can change them (no write access for the group or others, no ACL, no links). The `.pkg` installs
+can change them (no write access for the group or others, no ACL, no links, and nothing on a
+volume other than the one `/Applications` is on or on one that ignores ownership). The `.pkg` installs
 Wega exactly so. A copy dragged from the `.dmg`, or one started from Downloads or a disk image,
 belongs to your account or is not in `/Applications`, and any program running as you could
 replace the helper inside it. On such a copy the card shows **Unavailable**, the reason and the
@@ -760,7 +761,9 @@ the helper: restoring an app, its own update (**Download and open the installer*
 for `sudo` take their usual routes without it, and Uninstall says that a root-owned app needs
 Wega installed from the `.pkg`. The
 helper checks the bundle it was started from as well, and refuses every connection when that
-bundle fails the same check.
+bundle fails the same check. If such a copy finds an installation whose result Wega could not
+confirm, it cannot check it without the helper: changes stay blocked, and **Settings → General**
+says to quit this copy and open the Wega installed from the `.pkg` in `/Applications`, which can.
 
 If you installed the helper from a dragged copy before this change, Wega removes that
 registration when it starts, unless another copy of Wega on this Mac passes the check, and says

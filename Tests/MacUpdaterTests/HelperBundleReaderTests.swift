@@ -146,7 +146,97 @@ struct HelperBundleReaderTests {
         #expect(reader.facts(of: .helperExecutable) == nil)
     }
 
+    // MARK: - The volume
+
+    @Test func aLayoutOnTheDeviceOfApplicationsReadsAsOnItsVolume() throws {
+        let layout = try Layout()
+        let reader = HelperBundleReader(bundlePath: layout.bundle, volumeProbe: Self.probe(applicationsDevice: layout.device))
+
+        for entry in HelperBundleEntry.allCases {
+            #expect(reader.facts(of: entry)?.volume == .applications, "\(entry)")
+        }
+    }
+
+    /// Note 6 of the Z14 security review: a file system mounted at the bundle or inside it is on
+    /// another device. No test can mount one, so the probe puts `/Applications` on another device
+    /// instead, and every entry, read through its folders, is then on another volume.
+    @Test(arguments: HelperBundleEntry.allCases)
+    func anEntryOnAnotherDeviceThanApplicationsIsOnAnotherVolume(entry: HelperBundleEntry) throws {
+        let layout = try Layout()
+        let reader = HelperBundleReader(bundlePath: layout.bundle, volumeProbe: Self.probe(applicationsDevice: layout.device &+ 1))
+
+        #expect(Self.read(entry, with: reader)?.volume == .other)
+    }
+
+    /// The flags come from `fstatfs` on the bundle's own descriptor: the stand-in reports a volume
+    /// that ignores ownership only for a descriptor of the bundle.
+    @Test func aBundleOnAVolumeThatIgnoresOwnershipReadsAsSuch() throws {
+        let layout = try Layout()
+        let bundleInode = try layout.inode(of: .bundle)
+        let reader = HelperBundleReader(bundlePath: layout.bundle, volumeProbe: Self.probe(applicationsDevice: layout.device) { descriptor in
+            var status = stat()
+            guard fstat(descriptor, &status) == 0, status.st_ino == bundleInode else { return 0 }
+            return UInt32(MNT_IGNORE_OWNERSHIP)
+        })
+
+        #expect(reader.facts(of: .bundle)?.volume == .ignoresOwnership)
+    }
+
+    /// Nothing proves the volume without the device of `/Applications` or the bundle's flags, so the
+    /// bundle has no facts and nothing below it is read.
+    @Test func withoutTheVolumeFactsTheBundleHasNoFacts() throws {
+        let layout = try Layout()
+        let device = layout.device
+        let readers = [
+            HelperBundleReader(bundlePath: layout.bundle, volumeProbe: HelperBundleVolumeProbe(applicationsDevice: { nil }, mountFlags: { _ in 0 })),
+            HelperBundleReader(bundlePath: layout.bundle, volumeProbe: HelperBundleVolumeProbe(applicationsDevice: { device }, mountFlags: { _ in nil })),
+        ]
+
+        for reader in readers {
+            #expect(reader.facts(of: .bundle) == nil)
+            #expect(reader.facts(of: .contents) == nil)
+        }
+    }
+
+    @Test func theLiveProbeReadsTheDeviceOfApplicationsAndTheFlagsOfADescriptor() throws {
+        var applications = stat()
+        #expect(lstat("/Applications", &applications) == 0)
+        #expect(HelperBundleVolumeProbe.live.applicationsDevice() == applications.st_dev)
+        let layout = try Layout()
+        let descriptor = open(layout.bundle, O_RDONLY | O_DIRECTORY)
+        #expect(descriptor >= 0)
+        defer { close(descriptor) }
+
+        let flags = try #require(HelperBundleVolumeProbe.live.mountFlags(descriptor))
+
+        #expect(flags & UInt32(MNT_LOCAL) != 0, "the flags of the temporary folder's local volume")
+        #expect(flags & UInt32(MNT_IGNORE_OWNERSHIP) == 0)
+    }
+
+    /// The genuine pkg install, where this Mac has one: on the volume of `/Applications`, owners
+    /// honoured, so the volume check refuses nothing a root-owned install is.
+    @Test(.enabled(if: HelperBundleReaderTests.aRootOwnedInstallIsPresent))
+    func aRootOwnedInstallInApplicationsIsTrusted() {
+        #expect(HelperBundleGate.live(bundlePath: Self.installedBundle) == .trusted)
+    }
+
     // MARK: - Helpers
+
+    private static let installedBundle = "/Applications/WegaMacUpdater.app"
+
+    static var aRootOwnedInstallIsPresent: Bool {
+        var status = stat()
+        return lstat(installedBundle, &status) == 0 && status.st_uid == 0
+            && FileManager.default.fileExists(atPath: installedBundle + "/" + HelperBundleEntry.launchdPlist.relativePath)
+    }
+
+    /// `/Applications` on `applicationsDevice`, and the flags `mountFlags` reports for a descriptor:
+    /// none by default, a volume that honours ownership.
+    private static func probe(
+        applicationsDevice: dev_t, mountFlags: @escaping @Sendable (Int32) -> UInt32? = { _ in 0 }
+    ) -> HelperBundleVolumeProbe {
+        HelperBundleVolumeProbe(applicationsDevice: { applicationsDevice }, mountFlags: mountFlags)
+    }
 
     /// Reads every folder above `entry` first, as the gate does, then `entry`.
     private static func read(_ entry: HelperBundleEntry, with reader: HelperBundleReader) -> HelperBundleEntryFacts? {
@@ -192,6 +282,18 @@ struct HelperBundleReaderTests {
 
         func path(of entry: HelperBundleEntry) -> String {
             bundle + (entry.relativePath.isEmpty ? "" : "/" + entry.relativePath)
+        }
+
+        /// The device the layout is on.
+        var device: dev_t {
+            var status = stat()
+            return lstat(bundle, &status) == 0 ? status.st_dev : 0
+        }
+
+        func inode(of entry: HelperBundleEntry) throws -> ino_t {
+            var status = stat()
+            guard lstat(path(of: entry), &status) == 0 else { throw POSIXError(.EIO) }
+            return status.st_ino
         }
 
         func chmod(_ entry: HelperBundleEntry, _ mode: mode_t) throws {

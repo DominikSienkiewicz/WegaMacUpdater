@@ -46,17 +46,31 @@ public enum HelperBundleEntry: CaseIterable, Sendable {
 public struct HelperBundleEntryFacts: Equatable, Sendable {
     public enum Kind: Equatable, Sendable { case directory, regularFile, symbolicLink, other }
 
+    /// The volume the entry lies on, measured against the one `/Applications` is on.
+    public enum Volume: Equatable, Sendable {
+        /// The volume `/Applications` is on, which honours ownership.
+        case applications
+        /// Another device: a file system is mounted at the bundle or inside it, so its owners say
+        /// nothing about who can change it.
+        case other
+        /// A volume that ignores ownership, where root reads the owners on disk and the user reads
+        /// their own uid, so the app and the helper would disagree.
+        case ignoresOwnership
+    }
+
     public var kind: Kind
     public var ownerUID: UInt32
     /// `st_mode & 0o7777`.
     public var permissions: UInt16
     public var accessControl: PAMAccessControlState
+    public var volume: Volume
 
-    public init(kind: Kind, ownerUID: UInt32, permissions: UInt16, accessControl: PAMAccessControlState) {
+    public init(kind: Kind, ownerUID: UInt32, permissions: UInt16, accessControl: PAMAccessControlState, volume: Volume) {
         self.kind = kind
         self.ownerUID = ownerUID
         self.permissions = permissions
         self.accessControl = accessControl
+        self.volume = volume
     }
 }
 
@@ -67,6 +81,10 @@ public enum HelperBundleRefusal: Equatable, Sendable {
     case unreadable(HelperBundleEntry)
     case symbolicLink(HelperBundleEntry)
     case unexpectedKind(HelperBundleEntry)
+    /// The entry is on another device than `/Applications`.
+    case otherVolume(HelperBundleEntry)
+    /// The entry is on a volume mounted with `MNT_IGNORE_OWNERSHIP`.
+    case ownershipIgnored(HelperBundleEntry)
     case notOwnedByRoot(HelperBundleEntry)
     case writableByGroupOrOthers(HelperBundleEntry)
     /// An extended ACL is present, or could not be read.
@@ -84,7 +102,8 @@ public enum HelperBundleTrust: Equatable, Sendable {
 /// helper binary or its launchd plist, and launchd would start the replacement as root. The app
 /// neither registers nor uses the helper, and the helper serves no one, unless the bundle is
 /// directly in `/Applications` and every entry launchd runs the helper from belongs to root, is not
-/// a link, is of its expected kind and cannot be changed by its group, by others or through an ACL.
+/// a link, is of its expected kind, lies on the volume of `/Applications`, which must honour
+/// ownership, and cannot be changed by its group, by others or through an ACL.
 public enum HelperBundleGate {
     static let helperExecutableName = "WegaPrivilegedHelper"
 
@@ -127,6 +146,11 @@ public enum HelperBundleGate {
     private static func refusal(of facts: HelperBundleEntryFacts, as entry: HelperBundleEntry) -> HelperBundleRefusal? {
         if facts.kind == .symbolicLink { return .symbolicLink(entry) }
         if facts.kind != (entry.isDirectory ? .directory : .regularFile) { return .unexpectedKind(entry) }
+        switch facts.volume {
+        case .applications: break
+        case .other: return .otherVolume(entry)
+        case .ignoresOwnership: return .ownershipIgnored(entry)
+        }
         if facts.ownerUID != 0 { return .notOwnedByRoot(entry) }
         if facts.permissions & groupOrOthersWrite != 0 { return .writableByGroupOrOthers(entry) }
         if facts.accessControl != .absent { return .accessControlList(entry) }
@@ -145,14 +169,20 @@ public enum HelperBundleGate {
 /// opened in its folder's descriptor with `O_NOFOLLOW`. The opened descriptor must show the device
 /// and inode the name pointed at, and the ACL is read from it, where only `ENOENT` means none
 /// (`PAMAccessControlState`). A link, a FIFO or any other kind is reported without being opened, and
-/// only a folder's descriptor is kept, so nothing below a link or a file is ever read. Ask for an
-/// entry only after its folder, as the gate does; `nil` means missing, unreadable or changed.
+/// only a folder's descriptor is kept, so nothing below a link or a file is ever read. Each entry's
+/// device is compared with the device of `/Applications`, and the bundle's volume flags are read
+/// with `fstatfs` on its descriptor (`HelperBundleVolumeProbe`). Ask for an entry only after its
+/// folder, as the gate does; `nil` means missing, unreadable, changed or on a volume that cannot be
+/// proven.
 public final class HelperBundleReader {
     private let bundlePath: String
+    private let volumeProbe: HelperBundleVolumeProbe
+    private lazy var applicationsDevice: dev_t? = volumeProbe.applicationsDevice()
     private var folders: [HelperBundleEntry: Int32] = [:]
 
-    public init(bundlePath: String) {
+    public init(bundlePath: String, volumeProbe: HelperBundleVolumeProbe = .live) {
         self.bundlePath = bundlePath
+        self.volumeProbe = volumeProbe
     }
 
     deinit {
@@ -169,24 +199,38 @@ public final class HelperBundleReader {
         }
         let kind = Self.kind(of: named)
         guard kind == .directory || kind == .regularFile else {
-            return Self.facts(named, kind: kind, accessControl: .unreadable)
+            guard let volume = volume(of: named, descriptor: nil) else { return nil }
+            return Self.facts(named, kind: kind, accessControl: .unreadable, volume: volume)
         }
         let flags = O_RDONLY | O_CLOEXEC | (kind == .directory ? O_DIRECTORY : O_NONBLOCK)
         let descriptor = folder.map { openat($0, entry.name, flags | O_NOFOLLOW) }
             ?? open(bundlePath, flags | O_NOFOLLOW_ANY)
         guard descriptor >= 0 else { return nil }
         var opened = stat()
-        guard fstat(descriptor, &opened) == 0, Self.isSameEntry(opened, named) else {
+        guard fstat(descriptor, &opened) == 0, Self.isSameEntry(opened, named),
+              let volume = volume(of: opened, descriptor: entry.parent == nil ? descriptor : nil) else {
             close(descriptor)
             return nil
         }
-        let facts = Self.facts(opened, kind: kind, accessControl: SystemPAMPolicyDirectory.accessControl(of: descriptor))
+        let facts = Self.facts(
+            opened, kind: kind, accessControl: SystemPAMPolicyDirectory.accessControl(of: descriptor), volume: volume
+        )
         if kind == .directory {
             folders[entry] = descriptor
         } else {
             close(descriptor)
         }
         return facts
+    }
+
+    /// The entry's volume, and for the bundle (`bundleDescriptor`) whether its volume ignores
+    /// ownership; `nil` when the device of `/Applications` or the bundle's flags cannot be read.
+    private func volume(of status: stat, descriptor bundleDescriptor: Int32?) -> HelperBundleEntryFacts.Volume? {
+        guard let applicationsDevice else { return nil }
+        guard status.st_dev == applicationsDevice else { return .other }
+        guard let bundleDescriptor else { return .applications }
+        guard let mountFlags = volumeProbe.mountFlags(bundleDescriptor) else { return nil }
+        return mountFlags & UInt32(MNT_IGNORE_OWNERSHIP) == 0 ? .applications : .ignoresOwnership
     }
 
     private static func kind(of status: stat) -> HelperBundleEntryFacts.Kind {
@@ -203,12 +247,39 @@ public final class HelperBundleReader {
     }
 
     private static func facts(
-        _ status: stat, kind: HelperBundleEntryFacts.Kind, accessControl: PAMAccessControlState
+        _ status: stat, kind: HelperBundleEntryFacts.Kind, accessControl: PAMAccessControlState,
+        volume: HelperBundleEntryFacts.Volume
     ) -> HelperBundleEntryFacts {
         HelperBundleEntryFacts(
-            kind: kind, ownerUID: status.st_uid, permissions: UInt16(status.st_mode & 0o7777), accessControl: accessControl
+            kind: kind, ownerUID: status.st_uid, permissions: UInt16(status.st_mode & 0o7777), accessControl: accessControl,
+            volume: volume
         )
     }
+}
+
+/// The volume facts `HelperBundleReader` measures each entry against: real system calls, unless a
+/// test stands in for a volume it cannot mount.
+public struct HelperBundleVolumeProbe: Sendable {
+    /// The device `/Applications` is on, from `lstat`; `nil` when it cannot be read.
+    public var applicationsDevice: @Sendable () -> dev_t?
+    /// `f_flags` of the volume an open descriptor lies on, from `fstatfs`; `nil` when it cannot be read.
+    public var mountFlags: @Sendable (Int32) -> UInt32?
+
+    public init(applicationsDevice: @escaping @Sendable () -> dev_t?, mountFlags: @escaping @Sendable (Int32) -> UInt32?) {
+        self.applicationsDevice = applicationsDevice
+        self.mountFlags = mountFlags
+    }
+
+    public static let live = HelperBundleVolumeProbe(
+        applicationsDevice: {
+            var status = stat()
+            return lstat("/Applications", &status) == 0 ? status.st_dev : nil
+        },
+        mountFlags: { descriptor in
+            var volume = statfs()
+            return fstatfs(descriptor, &volume) == 0 ? volume.f_flags : nil
+        }
+    )
 }
 
 extension HelperBundleGate {
@@ -255,6 +326,8 @@ extension HelperBundleRefusal {
         case .unreadable(let entry): "unreadable(\(entry.token))"
         case .symbolicLink(let entry): "symbolicLink(\(entry.token))"
         case .unexpectedKind(let entry): "unexpectedKind(\(entry.token))"
+        case .otherVolume(let entry): "otherVolume(\(entry.token))"
+        case .ownershipIgnored(let entry): "ownershipIgnored(\(entry.token))"
         case .notOwnedByRoot(let entry): "notOwnedByRoot(\(entry.token))"
         case .writableByGroupOrOthers(let entry): "writableByGroupOrOthers(\(entry.token))"
         case .accessControlList(let entry): "accessControlList(\(entry.token))"
@@ -265,8 +338,9 @@ extension HelperBundleRefusal {
     public var entry: HelperBundleEntry? {
         switch self {
         case .notInApplications: nil
-        case .unreadable(let entry), .symbolicLink(let entry), .unexpectedKind(let entry), .notOwnedByRoot(let entry),
-             .writableByGroupOrOthers(let entry), .accessControlList(let entry): entry
+        case .unreadable(let entry), .symbolicLink(let entry), .unexpectedKind(let entry), .otherVolume(let entry),
+             .ownershipIgnored(let entry), .notOwnedByRoot(let entry), .writableByGroupOrOthers(let entry),
+             .accessControlList(let entry): entry
         }
     }
 }
