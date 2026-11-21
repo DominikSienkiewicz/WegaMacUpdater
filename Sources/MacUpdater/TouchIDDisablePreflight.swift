@@ -39,6 +39,9 @@ struct TouchIDDisablePreflight: Equatable, Sendable {
         var sudoLocal: Lookup<PAMPolicyFileFacts>
         /// `/etc/pam.d/sudo`, the head of the chain: `sudo` reads it first, and it includes `sudo_local`.
         var sudoPolicy: Lookup<PAMPolicyFileFacts>
+        /// `/etc/pam.d/sudo_local.template`: with no `sudo_local`, the base of the file the enable
+        /// command and the helper write (I1). `sudo` itself never reads it. Not looked at proves nothing.
+        var template: Lookup<PAMPolicyFileFacts> = .unknown
         /// What the app itself read from `sudo_local` (Z4); `nil` when it read nothing.
         var sudoLocalBytes: Data?
         var localDirectories: [LocalDirectory]
@@ -56,8 +59,9 @@ struct TouchIDDisablePreflight: Equatable, Sendable {
     var fallbackPath: String?
     /// RC2-6: positive evidence that what `sudo` reads first is root's alone, so the card may show a
     /// `sudo` command or the helper's button: `/etc/pam.d` looked at, safe and with no ACL;
-    /// `sudo_local` missing, or a regular file root's alone with no ACL; `/etc/pam.d/sudo` there, a
-    /// regular file root's alone with no ACL. A fact the app could not establish is no evidence.
+    /// `sudo_local` a regular file root's alone with no ACL, or missing with the template it would be
+    /// made from missing or root's alone with no ACL (I1); `/etc/pam.d/sudo` there, a regular file
+    /// root's alone with no ACL. A fact the app could not establish is no evidence.
     var commandsAreSafe = false
     /// `/etc/pam.d/sudo` is there and the app saw that someone other than root can change it.
     var sudoPolicyIsUnsafe = false
@@ -86,7 +90,7 @@ struct TouchIDDisablePreflight: Equatable, Sendable {
               TouchIDSudoDisabler.refusal(directory: directory) == nil else { return false }
         switch observation.sudoLocal {
         case .found(let file): guard isRootsAlone(file) else { return false }
-        case .missing: break
+        case .missing: guard isSafeBase(observation.template) else { return false }
         case .unknown: return false
         }
         guard case .found(let sudo) = observation.sudoPolicy else { return false }
@@ -98,6 +102,15 @@ struct TouchIDDisablePreflight: Equatable, Sendable {
     private static func isRootsAlone(_ file: PAMPolicyFileFacts) -> Bool {
         let refusal = TouchIDSudoDisabler.refusal(file: file)
         return refusal == nil || refusal == .tooLarge
+    }
+
+    /// I1: with no `sudo_local`, the template becomes root's own file, so it must be missing or root's alone.
+    private static func isSafeBase(_ template: Lookup<PAMPolicyFileFacts>) -> Bool {
+        switch template {
+        case .missing: return true
+        case .found(let file): return isRootsAlone(file)
+        case .unknown: return false
+        }
     }
 
     /// What the app saw is wrong, an ACL it could not read aside.
@@ -136,6 +149,7 @@ extension TouchIDDisablePreflight {
             policyDirectory: policyDirectory(at: SystemPaths.pamPolicyDirectory),
             sudoLocal: sudoLocal,
             sudoPolicy: policyFile(at: SystemPaths.pamPolicyDirectory + "/sudo"),
+            template: policyFile(at: SystemPaths.pamPolicyDirectory + "/sudo_local.template"),
             sudoLocalBytes: sudoLocal.facts.flatMap { readSudoLocal(atPath: sudoLocalPath, identity: $0.identity) },
             localDirectories: localCandidatePaths.map { path in
                 LocalDirectory(path: path, facts: lstatEntry(path).map { localFacts($0.status) })

@@ -114,6 +114,33 @@ struct TouchIDSetupControllerGateTests {
         #expect(!on.offersDisableButton)
     }
 
+    /// I1: with no `sudo_local`, a template that is not root's alone, or that the app could not look
+    /// at, hides the enable command after the helper could not do it, and the card says recoveryOS.
+    @Test func anUnsafeTemplateHidesTheEnableCommand() async {
+        func preflight(template: PAMPolicyFileFacts?) -> TouchIDDisablePreflight {
+            let file = PAMPolicyFileFacts(
+                isRegularFile: true, identity: PAMFileIdentity(device: 1, inode: 2), linkCount: 1, ownerUID: 0, groupID: 0,
+                permissions: 0o444, accessControl: .absent, size: 40, modifiedNanoseconds: 0)
+            return TouchIDDisablePreflight.evaluate(.init(
+                policyDirectory: .found(PAMPolicyDirectoryFacts(isDirectory: true, ownerUID: 0, permissions: 0o755, accessControl: .absent)),
+                sudoLocal: .missing, sudoPolicy: .found(file), template: template.map { .found($0) } ?? .unknown,
+                localDirectories: [], existingFallbackPaths: []))
+        }
+        var writable = PAMPolicyFileFacts(
+            isRegularFile: true, identity: PAMFileIdentity(device: 1, inode: 3), linkCount: 1, ownerUID: 0, groupID: 0,
+            permissions: 0o666, accessControl: .absent, size: 40, modifiedNanoseconds: 0)
+        for (name, unsafe) in [("0666", preflight(template: writable)), ("not looked at", preflight(template: nil))] {
+            let off = controller(state: .available, helper: GateBox(false), preflight: unsafe)
+            await off.enable { _ in }
+            #expect(off.wasPermissionDenied && !off.showsEnableCommand, "\(name)")
+            #expect(off.recoveryOnlyReason == .noProofOfSafety, "\(name)")
+        }
+        writable.permissions = 0o444
+        let safe = controller(state: .available, helper: GateBox(false), preflight: preflight(template: writable))
+        await safe.enable { _ in }
+        #expect(safe.showsEnableCommand, "Apple's root:wheel 0444 template")
+    }
+
     /// M3: "wklej komendę do Terminala" only when the card shows the command. Here the policy turns
     /// unsafe while the helper does not answer, so no command is shown and no line points at one.
     @Test func theTerminalLinePointsAtACommandOnlyWhenOneIsShown() async {

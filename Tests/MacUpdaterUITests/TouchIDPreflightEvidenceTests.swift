@@ -27,11 +27,11 @@ struct TouchIDPreflightEvidenceTests {
 
     private func observed(
         directory: Preflight.Lookup<PAMPolicyDirectoryFacts>? = nil, sudoLocal: Preflight.Lookup<PAMPolicyFileFacts>? = nil,
-        sudo: Preflight.Lookup<PAMPolicyFileFacts>? = nil
+        sudo: Preflight.Lookup<PAMPolicyFileFacts>? = nil, template: Preflight.Lookup<PAMPolicyFileFacts>? = nil
     ) -> Preflight {
         Preflight.evaluate(.init(
             policyDirectory: directory ?? .found(self.directory()), sudoLocal: sudoLocal ?? .found(file(permissions: 0o644)),
-            sudoPolicy: sudo ?? .found(file()), localDirectories: [], existingFallbackPaths: []))
+            sudoPolicy: sudo ?? .found(file()), template: template ?? .found(file()), localDirectories: [], existingFallbackPaths: []))
     }
 
     @Test func rootsAloneEverywhereIsProof() {
@@ -69,6 +69,31 @@ struct TouchIDPreflightEvidenceTests {
         for (name, (preflight, refusal)) in cases {
             #expect(preflight.refusal == refusal && !preflight.commandsAreSafe, "\(name)")
         }
+    }
+
+    /// I1: with no `sudo_local`, the enable command and the helper copy the template into a new
+    /// root-owned file, so the proof needs the template missing, or root's alone with its ACL read as
+    /// absent. Beside an existing `sudo_local` the template is never the base and does not count.
+    @Test func withNoSudoLocalTheTemplateMustBeRootsAloneToo() {
+        #expect(observed(sudoLocal: .missing, template: .missing).commandsAreSafe, "no template: an empty base")
+        #expect(observed(sudoLocal: .missing, template: .found(file())).commandsAreSafe, "Apple's root:wheel 0444 template")
+        #expect(observed(sudoLocal: .missing, template: .found(file(size: 70_000))).commandsAreSafe, "its size is no safety question")
+        let cases: [(String, Preflight.Lookup<PAMPolicyFileFacts>)] = [
+            ("a link", .found(file(isRegular: false))), ("owner 501", .found(file(owner: 501))),
+            ("0664", .found(file(permissions: 0o664))), ("0666", .found(file(permissions: 0o666))),
+            ("an ACL", .found(file(acl: .present))), ("an ACL the app could not read", .found(file(acl: .unreadable))),
+            ("not looked at", .unknown),
+        ]
+        for (name, template) in cases {
+            let preflight = observed(sudoLocal: .missing, template: template)
+            #expect(!preflight.commandsAreSafe, "\(name)")
+            #expect(preflight.refusal == nil && !preflight.sudoPolicyIsUnsafe, "\(name): neither the disable gates nor sudo read it")
+            #expect(observed(template: template).commandsAreSafe, "\(name): beside a sudo_local it is never the base")
+        }
+        let unlooked = Preflight.evaluate(.init(
+            policyDirectory: .found(directory()), sudoLocal: .missing, sudoPolicy: .found(file()), localDirectories: [],
+            existingFallbackPaths: []))
+        #expect(!unlooked.commandsAreSafe, "an observation that names no template proves nothing")
     }
 
     /// `/etc/pam.d/sudo` is a plain data-volume file: someone other than root who can write it can

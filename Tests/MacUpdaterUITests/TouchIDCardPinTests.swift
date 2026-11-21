@@ -5,7 +5,8 @@ import Testing
 @testable import WegaMacUpdater
 
 /// Source pins for the Touch ID card in `InfoView`, which SwiftUI keeps out of reach of a unit test:
-/// which command each part of the card shows and hands to Terminal (RC2-8).
+/// which command each part of the card shows and hands to Terminal (RC2-8), and the live wiring of
+/// the look that gates them.
 @Suite("Touch ID — the card's commands")
 struct TouchIDCardPinTests {
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {
@@ -71,6 +72,13 @@ struct TouchIDCardPinTests {
             #expect(tr("Bez pomocnika Wegi wyłączysz Touch ID dla sudo tym poleceniem w Terminalu. Usuwa tylko dokładną dyrektywę i niczego nie zmienia, jeśli plik wygląda inaczej:")
                     == "Without the Wega helper, you can turn off Touch ID for sudo with this command in Terminal. It removes only the exact directive and changes nothing if the file looks different:")
         }
+    }
+
+    /// I1: the app's own look covers the template, through the same no-follow lookup as `sudo_local`.
+    @Test func theLivePreflightLooksAtTheTemplate() throws {
+        let preflight = try source("Sources/MacUpdater/TouchIDDisablePreflight.swift")
+        let live = try slice(preflight, from: "static func live() -> TouchIDDisablePreflight {", to: "static func readSudoLocal(")
+        #expect(live.contains("template: policyFile(at: SystemPaths.pamPolicyDirectory + \"/sudo_local.template\"),"))
     }
 
     /// The Terminal button opens the command it was given, all the way to the dependency; nothing on
