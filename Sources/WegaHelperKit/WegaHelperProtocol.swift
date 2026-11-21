@@ -493,7 +493,7 @@ extension WegaHelper {
     /// a trailing `/`, after which `lstat` follows a final symlink) and no NUL. Read as UTF-8
     /// bytes, the way the kernel reads it — a split on Swift `Character`s misses a `/` that a
     /// following combining mark fuses into one grapheme.
-    private static func namesEveryComponentPlainly(_ path: String) -> Bool {
+    static func namesEveryComponentPlainly(_ path: String) -> Bool {
         let bytes = Array(path.utf8)
         guard bytes.first == pathSeparator, !bytes.contains(0) else { return false }
         return bytes.dropFirst()
