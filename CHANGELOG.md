@@ -22,8 +22,9 @@ them verbatim under the new version heading, so that step is never done by hand 
   Wega sniffs throughout, and nothing covers the rows: they stay readable, and a note says
   selecting comes back when the scan finishes.
 - **Undo a hidden update at once.** **Don't update** and **Skip this version** hide the row
-  right away and show an **Undo** toast for 8 seconds. Afterwards the line **Hidden by your
-  rules: N · Show** under the list opens your rules, where **Restore** takes one back.
+  right away and show an **Undo** toast for 8 seconds; VoiceOver reads it, and with VoiceOver
+  on it stays until you close it. The line **Hidden by your rules: N · Show** under the list
+  opens your rules, where **Restore** takes one back to the list, never into the queue.
 - **Choose which copy of a tool stays.** In Cleanup, a tool installed more than once now has a
   **keep** choice on each of its copies, so the copy you keep is no longer just the one first on
   `PATH`; the other copies offer their removal, and Wega remembers the choice for later scans.
@@ -74,10 +75,11 @@ them verbatim under the new version heading, so that step is never done by hand 
   vanish behind the same frosted layer. They now stay visible, dimmed, behind the note.
 
 ### Changed
-- **The band names your queue.** It reads **4 queued · 2 to finish with the developer**,
-  says how far an undo reaches (**Undo: 3 of 4**, or **Checking undo availability** while a
-  cask is still being checked), and its button is **Update N**, or **Nothing selected**
-  when the queue is empty.
+- **The band names your queue.** It reads **4 queued · 2 to finish with the developer**
+  (the second half only while something is queued, counted in the category on screen), says
+  how far an undo reaches (**Undo: 3 of 4**, or **Checking undo availability** while a cask is
+  still being checked; a cask Wega could not check counts as not covered), and its button is
+  **Update N**, or **Nothing selected** when the queue is empty.
 - **Every counted noun takes its plural form.** Polish and English texts that count apps,
   packages, casks and leftovers now use the right form for 1, 2, 5, 12 and 22.
 - **Report a problem names what it opens.** **Zgłoś błąd…** in Logs works without selecting
@@ -89,11 +91,11 @@ them verbatim under the new version heading, so that step is never done by hand 
   the sheet before moving an app to Homebrew asks **Move <app> to Homebrew?**, names the
   backup Wega makes and says it is restored if the new version fails its signature check.
 - **A calmer tone when something goes wrong.** Errors are first-person and plain (**I couldn't
-  install <app>**), Wega puts her ball down while any dialog is open, and the Cleanup scan has
-  her sniffing like the others.
-- **One scan button per screen.** **Check now** appears only on Updates, To reattach and Undo
-  updates; **⌘R** still works everywhere. The npm card in Inventory is a counter, no longer a
-  button that did nothing.
+  install <app>**), Wega puts her ball down while an error, an update run or a confirmation is
+  open, and the Cleanup scan has her sniffing like the others.
+- **The scan button only where a scan shows.** **Check now** appears only on Updates, To
+  reattach and Undo updates; **⌘R** still works everywhere. The npm card in Inventory is a
+  counter, no longer a button that did nothing.
 - **"May fix security issues" instead of "urgent".** The band counts the updates that may
   fix security issues, Wega's card says that their release notes mention security, and the
   inspector shows which words were found, because the match is a guess from the notes'

@@ -112,9 +112,11 @@ Wega goes and gets them anyway:
 - The band above the list counts the updates ("N updates") and sums up your queue, for
   example **"4 queued · 2 to finish with the developer"**. Apps Wega installs for you and
   apps whose own updater or store page has to finish the job are counted apart, so the
-  button never promises something Wega can't do. Under it the band says how far an undo
-  reaches (**"Undo: 3 of 4"**, or **"Checking undo availability"** while that is still being
-  worked out). Its button reads **Update N**, or **Nothing selected** while the queue is
+  button never promises something Wega can't do; the second half counts the apps you finish
+  with the developer in the category on screen, and shows only while something is queued. Under
+  it the band says how far an undo reaches (**"Undo: 3 of 4"**, or **"Checking undo
+  availability"** while that is still being worked out; an app Wega could not check counts as
+  not covered). Its button reads **Update N**, or **Nothing selected** while the queue is
   empty.
 - **The window opens with a result, not a blank screen.** Wega restores your last scan
   from disk (or from the background menu-bar check, whichever is newer). If a restored
@@ -479,9 +481,12 @@ the same choices in the context menu — right-click the row):
 - **Skip this version** — hide just that version; the next one is shown.
 - **Pin version…** — *"pin Parallels to 18"*; only updates up to that ceiling are shown.
 
-The row disappears at once, and an **Undo** toast stays for 8 seconds — one click takes the
-change back. After that, the line **"Hidden by your rules: N · Show"** under the list opens
-the rules, where **Restore** removes any of them.
+**Don't update** and **Skip this version** hide the row at once, and an **Undo** toast stays
+for 8 seconds — one click takes the change back. VoiceOver reads the toast out, and while
+VoiceOver is on it stays until you close it. **Pin version…** shows no toast; it hides the row
+when the offered version is above the pin. Any time, the line **"Hidden by your rules: N ·
+Show"** under the list opens the rules, where **Restore** removes any of them. A restored row
+comes back to the list, never into the queue.
 
 Manage these rules any time from the **Settings** window (**⌘,** → *Ignored & pinned*);
 they persist across launches and the menu-bar badge honours them too.

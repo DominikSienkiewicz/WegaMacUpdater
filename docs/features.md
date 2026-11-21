@@ -19,7 +19,8 @@ them, and reports one honest outcome per item afterwards.
 A band above the list carries the flow. It counts the updates (*"N updates"*), sums up the
 queue (*"4 queued · 2 to finish with the developer"*), says how far an undo reaches (*"Undo: 3 of
 4"*, or *"Checking undo availability"* while a cask's verdict is still open — a cask without a
-verdict is never counted as protected), links to the dry-run plan (**Show exactly what I will
+verdict is never counted as protected, and once the check has finished it counts as not covered),
+links to the dry-run plan (**Show exactly what I will
 do**) and holds the screen's one prominent action: **Update N**, or **Nothing selected** while
 nothing is queued. The band keeps one height at every window width. Above the rows a scope bar
 filters by category and the list-wide checkbox ticks the visible rows. Package rows and manually updated apps share one row layout: a row with nothing to
@@ -41,7 +42,7 @@ the speech bubble that appeared over the list. Every minute or so a ball rolls a
 glances after it, runs off the card's edge and comes back carrying it. The full Wega on the
 "everything up to date" screen opens her repertoire of tricks with the same chase. Both are
 offset-only animations that never move the layout, and "Reduce motion" turns them off. The
-ball waits while an error, an update run or any dialog is open. Wega's lines speak for
+ball waits while an error, an update run or a confirmation is open. Wega's lines speak for
 her in the first person and say only what happened: a check that failed reads as *"I couldn't
 install X"*, never as cheer, and her cheerful line appears only after a complete check.
 
@@ -155,8 +156,10 @@ Per cask it also shows:
 #### One count, everywhere
 
 The window header, the sidebar badge, the menu-bar badge and the background notification all
-read the same `UpdatePlanner.unifiedCount`, and the band names the two halves of what you queued — *"4 queued · 2 to finish with the
-developer"* — because they behave differently. The button counts only what Wega installs
+read the same `UpdatePlanner.unifiedCount`. Next to the queue the band names the updates you finish
+with the developer in the category on screen — *"4 queued · 2 to finish with the developer"* —
+because Wega never queues those: she hands them over instead of installing them. With nothing
+queued it says only *"0 queued"*. The button counts only what Wega installs
 itself, so it never promises an upgrade Wega cannot perform. A scan run from the
 window reports its result to the menu-bar agent, which is the single owner of the dock badge.
 
@@ -204,16 +207,21 @@ shortcut are held back while the scan runs, because a batch approved against the
 would otherwise install whatever the scan had settled on by the time the dialog was answered;
 the button's tooltip names the running scan instead of blaming an empty selection.
 
-**One scan button per screen.** The **Check now** button in the toolbar appears only on the
-screens that show a scan's result — Updates, To reattach and Undo updates. Elsewhere it would do
-nothing visible. **⌘R** works on every screen.
+**The scan button only where a scan shows.** The **Check now** button in the toolbar appears only
+on the screens that show a scan's result — Updates, To reattach (which also keeps its own
+**Scan again**) and Undo updates. Elsewhere it would do nothing visible. **⌘R** works on every
+screen.
 
 **Rules that hide updates.** *Don't update*, *Skip this version* and *Pin version…* (the **⋯**
-menu on Homebrew, App Store and npm rows; the context menu on rows the developer finishes) hide
-the row at once, and an **Undo** toast offers the change back for 8 seconds. Afterwards the line
-*"Hidden by your rules: N · Show"* under the list (it also shows under the empty state, so hiding
-the last update never leaves the list without the way back) opens the sheet of rules, where
-**Restore** removes one. A scan's note on a skipped version says the next one will be shown.
+menu on Homebrew, App Store and npm rows; the context menu on rows the developer finishes) each
+write a rule. *Don't update* and *Skip this version* hide the row at once, and an **Undo** toast offers
+the change back for 8 seconds; VoiceOver hears the toast, and while VoiceOver runs it stays until
+it is closed. *Pin version…* has no toast and hides the row when the offer is above the
+pin. A row any rule hides leaves the queue, wherever the rule was made. The line *"Hidden by your
+rules: N · Show"* under the list (it also shows under the empty state, so hiding the last update
+never leaves the list without the way back) opens the sheet of rules, where **Restore** removes
+one; the row comes back to the list, never into the queue. A scan's note on a skipped version
+says the next one will be shown.
 
 #### Running the update
 
@@ -515,10 +523,11 @@ pakietów"* appears only when every item cleared all of them.
 **Use the ⋯ menu on a Homebrew, App Store or npm row** — or right-click any row, which is
 the only way on rows the developer finishes — to choose **Don't update** ("don't update Zoom"),
 **Skip this version** (hide just that version; the next one is shown) or **Pin version…** ("pin
-Parallels to 18" — only updates up to that ceiling are shown). The row disappears at once and an
-**Undo** toast offers the change back for 8 seconds. Afterwards the line **"Hidden by your rules:
-N · Show"** under the list opens the rules, where **Restore** removes one. Rules are also managed
-from the Settings window (⌘,) and persist across launches.
+Parallels to 18" — only updates up to that ceiling are shown). **Don't update** and **Skip this
+version** hide the row at once with an **Undo** toast that offers the change back for 8 seconds;
+**Pin version…** shows no toast. The line **"Hidden by your rules: N · Show"** under the list
+opens the rules, where **Restore** removes one. Rules are also managed from the Settings window
+(⌘,) and persist across launches.
 
 Two colour codings carry meaning:
 
@@ -598,7 +607,7 @@ The **Porządki** sidebar section (⌘6) finds duplicate copies of command-line 
 - **Report export.** *Eksportuj* writes the scan as plain text or JSON with `~` in place of your home folder; process arguments, shell output and environment are never included. The last report and `PATH` snapshot are also kept in `~/Library/Application Support/WegaMacUpdater/`.
 
 ### Migration
-Finds manually-installed apps that have a Homebrew Cask equivalent and offers to migrate them with `brew install --cask`. The **Move** button opens a sheet titled *"Move <app> to Homebrew?"* that names the backup Wega makes first and says the backup is restored if the new version fails the signature check. Runs `mas search` in parallel for apps without a cask match to find App Store equivalents. Running detection covers every matched app: the exact standardized/resolved bundle path wins, with a unique bundle ID as fallback; ambiguous duplicate bundle IDs stop the migration. Wega sends that exact process a normal application **Quit** request and waits for it to stop. Only an app that remains open produces a separate warning about unsaved data; after explicit consent Wega identifies the target again, sends `SIGKILL` only to that PID, and confirms the app stopped. A failed or ambiguous force-quit cancels the migration instead of being ignored. A match too weak to trust (the **"niepewne"** / low confidence level) is refused before anything runs: since `brew install --cask --force` overwrites the app in place, a low-confidence `.app`→cask match could replace it with a *different* program, so Wega blocks the automatic takeover and asks you to verify the token manually (`MigrationAutoTakeover` consuming `CaskMatchConfidence.allowsAutoConfirm` — the confidence score now gates execution, not just the badge). The confidence comes from **how** the match was found (`CaskMatchProvenance`, decided by `CaskMatcher` and carried on the scanned app): an already-installed cask, a curated entry in `customCaskMappings` or an exact token hit is certain; a match on one of a cask's display names is plausible and asks for confirmation; an app tied to no cask at all is the case that stays blocked. A publisher mismatch still overrules all of it. Previously the scorer re-derived this from strings its callers could not supply, so the curated table — whose whole purpose is apps whose name does not normalize to their token — scored lowest and had every one of its entries refused. Before Homebrew replaces an existing `.app`, migration takes the shared upgrade mutex, passes the same hard disk/network/power gate as an upgrade, verifies and preserves the installed publisher baseline, and requires a copy-on-write snapshot. The installed result must pass the shared Gatekeeper/Team-ID canary; otherwise Wega restores the snapshot and reports failure. The manual cask-adoption action in Updates uses this same protected transaction, so neither `brew install --cask --force` entry point can bypass it. A cask that installs **no `.app` at all** — a `pkg` cask such as `zoom` or `google-drive` — is refused up front with "Nie można przejąć", before brew runs: there is no bundle to snapshot, nothing for the Gatekeeper/Team-ID canary to validate, and nothing to restore. Adoption previously ran the force-install on these anyway and then reported the missing app artifact as `.rollbackFailed` ("the new version failed the check and could not be restored"), which described neither a check nor a rollback — both had been skipped. This is the same `RollbackProtection` question the batch upgrade path already asks, now asked by the adoption path too. A successful brew migration ends there: Wega **touches nothing in `~/Library`**. The old "clean leftovers" sheet was removed (SEC-01) — for a migration the app keeps its bundle id, so those "leftovers" are the live Application Support, preferences and container of the app you just adopted, and the sheet offered to delete them permanently with everything preselected. **npm ↔ brew duplicate row** — for CLIs installed via both `npm -g` and Homebrew (e.g. `@openai/codex` + `codex` cask), inline "Usuń z npm" / "Usuń z brew" buttons run the corresponding uninstall (`npm uninstall -g -- <pkg>` via `NpmGlobalService.uninstallEvents`, or `brew uninstall -- <token>`; the `--` terminator is SEC-10) after a confirmation alert; the duplicate disappears from the list on exit 0.
+Finds manually-installed apps that have a Homebrew Cask equivalent and offers to migrate them with `brew install --cask`. The row's **Migrate** button (*Przepnij*) opens a sheet titled *"Move <app> to Homebrew?"* that names the backup Wega makes first and says the backup is restored if the new version fails the signature check; its **Move** button starts the migration. Runs `mas search` in parallel for apps without a cask match to find App Store equivalents. Running detection covers every matched app: the exact standardized/resolved bundle path wins, with a unique bundle ID as fallback; ambiguous duplicate bundle IDs stop the migration. Wega sends that exact process a normal application **Quit** request and waits for it to stop. Only an app that remains open produces a separate warning about unsaved data; after explicit consent Wega identifies the target again, sends `SIGKILL` only to that PID, and confirms the app stopped. A failed or ambiguous force-quit cancels the migration instead of being ignored. A match too weak to trust (the **"niepewne"** / low confidence level) is refused before anything runs: since `brew install --cask --force` overwrites the app in place, a low-confidence `.app`→cask match could replace it with a *different* program, so Wega blocks the automatic takeover and asks you to verify the token manually (`MigrationAutoTakeover` consuming `CaskMatchConfidence.allowsAutoConfirm` — the confidence score now gates execution, not just the badge). The confidence comes from **how** the match was found (`CaskMatchProvenance`, decided by `CaskMatcher` and carried on the scanned app): an already-installed cask, a curated entry in `customCaskMappings` or an exact token hit is certain; a match on one of a cask's display names is plausible and asks for confirmation; an app tied to no cask at all is the case that stays blocked. A publisher mismatch still overrules all of it. Previously the scorer re-derived this from strings its callers could not supply, so the curated table — whose whole purpose is apps whose name does not normalize to their token — scored lowest and had every one of its entries refused. Before Homebrew replaces an existing `.app`, migration takes the shared upgrade mutex, passes the same hard disk/network/power gate as an upgrade, verifies and preserves the installed publisher baseline, and requires a copy-on-write snapshot. The installed result must pass the shared Gatekeeper/Team-ID canary; otherwise Wega restores the snapshot and reports failure. The manual cask-adoption action in Updates uses this same protected transaction, so neither `brew install --cask --force` entry point can bypass it. A cask that installs **no `.app` at all** — a `pkg` cask such as `zoom` or `google-drive` — is refused up front with "Nie można przejąć", before brew runs: there is no bundle to snapshot, nothing for the Gatekeeper/Team-ID canary to validate, and nothing to restore. Adoption previously ran the force-install on these anyway and then reported the missing app artifact as `.rollbackFailed` ("the new version failed the check and could not be restored"), which described neither a check nor a rollback — both had been skipped. This is the same `RollbackProtection` question the batch upgrade path already asks, now asked by the adoption path too. A successful brew migration ends there: Wega **touches nothing in `~/Library`**. The old "clean leftovers" sheet was removed (SEC-01) — for a migration the app keeps its bundle id, so those "leftovers" are the live Application Support, preferences and container of the app you just adopted, and the sheet offered to delete them permanently with everything preselected. **npm ↔ brew duplicate row** — for CLIs installed via both `npm -g` and Homebrew (e.g. `@openai/codex` + `codex` cask), inline "Usuń z npm" / "Usuń z brew" buttons run the corresponding uninstall (`npm uninstall -g -- <pkg>` via `NpmGlobalService.uninstallEvents`, or `brew uninstall -- <token>`; the `--` terminator is SEC-10) after a confirmation alert; the duplicate disappears from the list on exit 0.
 
 Docker migration uses the controlled Desktop shutdown gate instead of generic force
 termination, including when a stale confirmation requests force termination.
