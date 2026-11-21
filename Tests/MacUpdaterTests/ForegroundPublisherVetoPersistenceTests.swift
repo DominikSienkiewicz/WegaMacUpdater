@@ -46,13 +46,13 @@ struct ForegroundPublisherVetoPersistenceTests {
 
         let updateStart = try #require(source.range(of: "func runUpdate(targetKeys: Set<String>) async"))
         let updateEnd = try #require(source.range(
-            of: "func report(run: UpdateRunOutcome)",
+            of: "func report(run: UpdateRunOutcome, planned:",
             range: updateStart.upperBound..<source.endIndex
         ))
         let update = source[updateStart.lowerBound..<updateEnd.lowerBound]
         let blockedCase = try #require(update.range(of: "case .blocked(let publisherVetoes):"))
         let record = try #require(update.range(of: "blockedRun.recordPublisherVetoes("))
-        let report = try #require(update.range(of: "report(run: blockedRun)"))
+        let report = try #require(update.range(of: "report(run: blockedRun, planned: plannedItems)"))
         // ARCH-08 — the mutation phase is the four lanes starting at once; the cask one
         // among them is what reaches brew.
         let brew = try #require(update.range(

@@ -93,6 +93,7 @@ extension ScanStore {
                 version: restoredVersion
             )
         }
+        markRunReportUndone(token: undoable.token, restoredVersion: restoredVersion)
         WegaLog.info(.homebrew, "\(undoable.token): cofnięto aktualizację na życzenie użytkownika (wersja \(restoredVersion ?? "—")), przypięto przywróconą wersję.")
         showBanner(BannerData(
             variant: .success,

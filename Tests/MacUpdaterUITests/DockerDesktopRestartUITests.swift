@@ -62,22 +62,24 @@ final class DockerDesktopRestartUITests: XCTestCase {
         var run = UpdateRunOutcome()
         run.record([item], outcome: BrewUpgradeOutcome(exitCode: 0, failedTokens: [], errorLines: []))
 
-        store.report(run: run)
+        store.report(run: run, planned: [item])
 
-        XCTAssertEqual(store.banner?.variant, .success)
-        XCTAssertEqual(store.banner?.message, tr("Pakiety zainstalowane. Gotowość silnika Docker nie była sprawdzana."))
+        // C2 stage 4 — the summary's Docker row says it, instead of the success banner.
+        XCTAssertEqual(store.runReport?.entries.first?.note(undo: nil),
+                       tr("Pakiety zainstalowane. Gotowość silnika Docker nie była sprawdzana."))
         XCTAssertTrue(calls.urls.isEmpty)
     }
 
-    func testUnrelatedInstallationKeepsExistingSuccessMessage() {
+    func testUnrelatedInstallationKeepsTheOrdinaryNote() {
         let store = makeStore(result: .ready, calls: DockerRestartCallRecorder())
         let item = OutdatedItem(key: "c:example", name: "example", from: "1", to: "2", kind: .cask)
         var run = UpdateRunOutcome()
         run.record([item], outcome: BrewUpgradeOutcome(exitCode: 0, failedTokens: [], errorLines: []))
 
-        store.report(run: run)
+        store.report(run: run, planned: [item])
 
-        XCTAssertEqual(store.banner?.message, tr("Wszystko gotowe."))
+        XCTAssertEqual(store.runReport?.entries.first?.note(undo: nil), tr("bez cofnięcia"))
+        XCTAssertNil(store.banner)
     }
 
     private func prepare(_ store: ScanStore) {

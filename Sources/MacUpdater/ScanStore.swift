@@ -74,6 +74,9 @@ struct ScanStoreDependencies {
     var now: @MainActor () -> Date = { Date() }
     /// Tells the menu bar whether this window is scanning, so its own automatic check stands down.
     var reportWindowScanRunning: @MainActor (Bool) -> Void = { _ in }
+    /// Where a fully updated run records that the readiness card has done its job
+    /// (`ReadinessPresentation.dismissedKey`, which the card reads through `@AppStorage`).
+    var defaults: UserDefaults = .standard
 
     static let live = ScanStoreDependencies(
         operations: .shared,
@@ -213,6 +216,9 @@ final class ScanStore: ObservableObject {
     /// Written only at a row's or a batch's boundary, never per output chunk, and only when
     /// it changes.
     @Published private(set) var runBoard = UpdateRunBoard.idle
+    /// C2 stage 4 — the last window run's result, open as the after-update summary until
+    /// `closeRunReport()`. Written only through `setRunReport(_:)`.
+    @Published private(set) var runReport: UpdateRunReport?
     /// The counter behind `upgradeProgress`. One per run, created by the upgrade and read
     /// by the brew streaming loop — a stored property, so it cannot live in the extension
     /// that uses it.
@@ -350,17 +356,11 @@ final class ScanStore: ObservableObject {
         updateInterruption = UpdateInterruption()
     }
 
-    /// What a stopped run says: how much it managed and how much it left untouched. The
-    /// packages it never reached are not "up to date", so this never reads as a finished run.
+    /// What a stopped run says besides its report: the summary's "Aktualizacja przerwana" and
+    /// "Nie zaczęłam" say how much it managed and what it left untouched (C2 stage 4); this keeps
+    /// Wega's line, the activity and the log line. A stopped run never reads as a finished one.
     func reportInterruptedRun(upgraded: Int) {
         let skipped = updateInterruption.skippedKeys.count
-        showBanner(BannerData(
-            variant: .danger,
-            title: tr("Aktualizacja przerwana"),
-            message: trf("Zatrzymano po bieżącym pakiecie: zaktualizowano %@, pominięto %@. Nic nie zostało przerwane w połowie.",
-                         "\(upgraded)", "\(skipped)"),
-            action: .openLogs
-        ))
         emitActivitySignal(.idle)
         emitWegaState(WegaState(pose: .idle, line: tr("Przerwałam aktualizację.")))
         WegaLog.info(.homebrew, "Aktualizacja przerwana na granicy pakietu: zaktualizowano \(upgraded), pominięto \(skipped)")
@@ -570,6 +570,12 @@ final class ScanStore: ObservableObject {
     func endRunBoard() {
         guard runBoard != .idle else { return }
         runBoard = .idle
+    }
+
+    /// The one setter of `runReport`: `report(run:planned:…)` opens it, and the doors in
+    /// `ScanStore+RunReport` close it (`closeRunReport()`) or mark an undo or a trusted publisher.
+    func setRunReport(_ report: UpdateRunReport?) {
+        runReport = report
     }
 
     /// Stores a vendor report from the scan numbered `generation`, when the rule below allows.
@@ -802,16 +808,18 @@ final class ScanStore: ObservableObject {
         selected.formIntersection(visibleItems(for: filter).map(\.key))
     }
 
+    /// Refused while the after-update summary is open: its rows are not the list's.
     func toggleAll(filter: UpdateFilter) {
+        guard runReport == nil else { return }
         restrictSelection(to: filter)
         selected = UpdatePlanner.toggledAll(selected: selected, allKeys: visibleItems(for: filter).map(\.key))
     }
 
     /// UXP-23 — ⇧⌘A: queues every batch row `filter` shows, never a manual app or a row a rule
     /// hides. Refused, like the select-all checkbox, while no result is on screen, while a
-    /// refresh replaces it and while an update owns it.
+    /// refresh replaces it, while an update owns it and while the after-update summary does.
     func selectAllVisible(filter: UpdateFilter) {
-        guard status == .results,
+        guard status == .results, runReport == nil,
               ScanSelectionGate.allowsListSelection(isRefreshing: isRefreshing, isUpdating: updating) else { return }
         restrictSelection(to: filter)
         selected.formUnion(visibleItems(for: filter).map(\.key))
@@ -856,7 +864,7 @@ final class ScanStore: ObservableObject {
     /// The banner currently on screen, if any.
     var banner: BannerData? { banners.current }
 
-    /// Ordinary notices — a scan result, an upgrade summary. The newest one wins.
+    /// Ordinary notices — a scan result, a failed run's fix. The newest one wins.
     func showBanner(_ banner: BannerData) {
         banners.enqueue(banner, sticky: false)
     }

@@ -22,6 +22,7 @@ extension ScanStore {
     /// to keep (UXP-14); every other caller, "Check now" included, refreshes it.
     func startCheck(quiet: Bool? = nil, refreshesCatalog: Bool = true) {
         guard scanTask == nil else { return }
+        closeRunReport()
         let inPlace = quiet ?? scansInPlace
         scanTask = Task { @MainActor [weak self] in
             await self?.runCheck(quiet: inPlace, refreshesCatalog: refreshesCatalog)

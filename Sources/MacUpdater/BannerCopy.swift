@@ -22,15 +22,4 @@ enum BannerCopy {
         let (short, full) = Self.names(names)
         return FailureText(message: trf(template, short), fullMessage: full.map { trf(template, $0) })
     }
-
-    static func updateFailed(names: [String]) -> FailureText {
-        guard !names.isEmpty else {
-            return FailureText(
-                message: tr("Homebrew zgłosił błąd. Spróbuj jeszcze raz; jeśli to się powtórzy, otwórz Logi."),
-                fullMessage: nil)
-        }
-        let template = "Nie udało się zaktualizować: %@. Spróbuj jeszcze raz; jeśli to się powtórzy, otwórz Logi."
-        let (short, full) = Self.names(names)
-        return FailureText(message: trf(template, short), fullMessage: full.map { trf(template, $0) })
-    }
 }

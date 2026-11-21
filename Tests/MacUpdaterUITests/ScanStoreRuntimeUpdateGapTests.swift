@@ -67,7 +67,7 @@ final class ScanStoreRuntimeUpdateGapTests: XCTestCase {
 
         XCTAssertFalse(harness.store.updating)
         XCTAssertTrue(harness.store.allItems.isEmpty)
-        XCTAssertEqual(harness.store.banner?.variant, .success)
+        XCTAssertEqual(harness.store.runReport?.status, .finished)
         XCTAssertTrue(runner.requests.contains {
             $0.arguments == ["upgrade", "--cask", "--force", "--", token]
         })
@@ -206,6 +206,7 @@ final class ScanStoreRuntimeUpdateGapTests: XCTestCase {
 
         XCTAssertFalse(harness.store.updating)
         XCTAssertEqual(harness.store.banner?.variant, .danger)
+        XCTAssertEqual(harness.store.runReport?.entries.map(\.result), [.failed], "a thrown stream is a failed row")
         // Concurrent lanes interleave, so every streamed line is tagged with the package it
         // came from: the error line now reads "[<source>] error: …".
         XCTAssertTrue(harness.store.brewLog.contains { $0.contains("error:") })

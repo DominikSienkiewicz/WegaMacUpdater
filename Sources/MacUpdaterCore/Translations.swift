@@ -304,7 +304,6 @@ extension Translations {
         "odmowa": "denied",
         "nieustalone": "undetermined",
         "Część pakietów się nie zaktualizowała.": "Some packages didn't update.",
-        "Wszystko gotowe.": "All done.",
         "Ręcznie zainstalowane": "Manually installed",
         "Otwórz aplikację": "Open the application",
         "Aktualizuj przez Brew": "Update via Brew",
@@ -758,8 +757,6 @@ extension Translations {
             "The list is locked until the update finishes. You can stop it — I'll finish the current package and won't start the rest.",
         "Pokaż log": "Show log",
         "Trwa aktualizacja": "Update in progress",
-        "Zatrzymano po bieżącym pakiecie: zaktualizowano %@, pominięto %@. Nic nie zostało przerwane w połowie.":
-            "Stopped after the current package: %@ updated, %@ skipped. Nothing was cut off halfway.",
         "Przerwałam aktualizację.": "I stopped the update.",
         "Zaglądam do notatek…": "Checking my notes…",
         "Ostrzeżenia+": "Warnings+",

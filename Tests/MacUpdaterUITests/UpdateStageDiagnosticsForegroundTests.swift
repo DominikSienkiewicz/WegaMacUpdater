@@ -37,7 +37,7 @@ final class UpdateStageDiagnosticsForegroundTests: XCTestCase {
         }
 
         let events = store.events(runID: run.id)
-        XCTAssertEqual(harness.store.banner?.variant, .success)
+        XCTAssertEqual(harness.store.runReport?.status, .finished)
         XCTAssertEqual(runner.requests.count, 4)
         XCTAssertTrue(events.contains { $0.event == "update.plannedItem" && $0.fields["targetVersion"] == "2" })
         XCTAssertTrue(events.contains { $0.event == "rescan.result" && $0.fields["confirmed"] == "true" })

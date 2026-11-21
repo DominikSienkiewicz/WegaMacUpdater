@@ -40,12 +40,16 @@ final class ScanStoreRuntimeStateGapTests: XCTestCase {
         harness.store.restoreLastScan()
 
         harness.store.dismissBanner()
+        var wegaLines: [String] = []
+        harness.store.bind(ScanSinks(wegaState: { wegaLines.append($0.line) }))
         harness.store.updating = true
         harness.store.cancelUpdate()
         XCTAssertTrue(harness.store.shouldStopUpdate(before: ["first", "second"]))
         harness.store.reportInterruptedRun(upgraded: 1)
 
-        XCTAssertEqual(harness.store.banner?.variant, .danger)
+        // C2 stage 4 — the run's report says "Aktualizacja przerwana"; Wega still says it too.
+        XCTAssertNil(harness.store.banner)
+        XCTAssertEqual(wegaLines.last, tr("Przerwałam aktualizację."))
         XCTAssertTrue(harness.store.updateInterruption.isRequested)
         XCTAssertEqual(harness.store.updateInterruption.skippedKeys, ["first", "second"])
         harness.store.resetUpdateInterruption()
