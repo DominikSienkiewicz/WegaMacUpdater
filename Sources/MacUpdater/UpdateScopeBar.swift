@@ -58,3 +58,30 @@ struct UpdateScopeBar: View {
         .labelsHidden()
     }
 }
+
+/// UXP-13 — the list header's trailing slot: the grouping menu, or while a scan runs in place
+/// over rows, the note that says why they cannot be selected. The menu stays laid out
+/// underneath, so the header keeps its height. The note is wider than the menu, so the slot
+/// yields to the scope bar and the note truncates at the narrowest detail column.
+struct ListHeaderGroupingSlot<Menu: View>: View {
+    let showsScanNote: Bool
+    @ViewBuilder let menu: () -> Menu
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            if showsScanNote {
+                menu()
+                    .opacity(0)
+                    .disabled(true)
+                    .accessibilityHidden(true)
+                Text(tr("Zaznaczanie wróci, gdy skan się skończy."))
+                    .font(.wega(.subheadline))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            } else {
+                menu()
+            }
+        }
+        .layoutPriority(-1)
+    }
+}

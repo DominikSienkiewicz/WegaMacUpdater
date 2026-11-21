@@ -53,10 +53,13 @@ struct BugReportSheet: View {
         return VStack(alignment: .leading, spacing: 14) {
             Text(tr("Opisz, co się stało")).font(.wega(.headline))
             descriptionEditor
+            if let hint = BugReportCopy.entriesHint(entryCount: controller.entries.count) {
+                Text(hint).font(.wega(.footnote)).foregroundStyle(.secondary)
+            }
             channelPicker
             previewHeader(preview)
             previewOrLoading(preview)
-            Text(tr("Zgłoszenie jest redagowane — ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami."))
+            Text(tr("Wykryte dane wrażliwe zastąpiłam. Sprawdź podgląd przed wysłaniem."))
                 .font(.wega(.footnote)).foregroundStyle(.tertiary)
             composerActions(preview)
         }
@@ -68,7 +71,7 @@ struct BugReportSheet: View {
             .frame(height: 90)
             .overlay(alignment: .topLeading) {
                 if controller.userDescription.isEmpty {
-                    Text(tr("Co robiłeś, zanim to się wydarzyło? (opcjonalne)"))
+                    Text(tr("Co się działo tuż przed błędem? (opcjonalne)"))
                         .font(.wega(.body)).foregroundStyle(.tertiary)
                         .padding(.horizontal, 6).padding(.vertical, 8)
                         .allowsHitTesting(false)
@@ -92,7 +95,7 @@ struct BugReportSheet: View {
             Spacer()
             if preview.omittedEntryCount > 0 {
                 Label(
-                    trf("Pominięto %d najstarszych wpisów", preview.omittedEntryCount),
+                    trp("Pominięto %@ najstarszych wpisów", preview.omittedEntryCount),
                     systemImage: "scissors"
                 )
                 .font(.wega(.footnote)).foregroundStyle(Color.wegaToffee)
@@ -123,7 +126,7 @@ struct BugReportSheet: View {
                 .disabled(!controller.isReady)
             Spacer()
             Button(tr("Anuluj"), role: .cancel, action: onClose)
-            Button(tr("Wyślij zgłoszenie")) { controller.send(selectedChannel) }
+            Button(BugReportCopy.openTitle(for: selectedChannel)) { controller.send(selectedChannel) }
                 .keyboardShortcut(.defaultAction)
                 .disabled(!controller.isReady)
         }

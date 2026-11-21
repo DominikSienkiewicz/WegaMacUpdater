@@ -41,7 +41,45 @@ struct PluralRulesTests {
         #expect(pluralize(updatesAvailable, count: 5, language: .en) == "5 updates available")
     }
 
+    /// Final review M4 — the release-notes history's tail counts the releases it leaves out.
+    @Test(arguments: zip([1, 2, 5, 12, 22], ["…i 1 wcześniejsze wydanie", "…i 2 wcześniejsze wydania",
+                                             "…i 5 wcześniejszych wydań", "…i 12 wcześniejszych wydań",
+                                             "…i 22 wcześniejsze wydania"]))
+    func theOmittedReleasesAgree(count: Int, expected: String) {
+        #expect(pluralize("…i %@ wcześniejszych wydań", count: count, language: .pl) == expected)
+    }
+
+    @Test func theOmittedReleasesAgreeInEnglish() {
+        #expect(pluralize("…i %@ wcześniejszych wydań", count: 1, language: .en) == "…and 1 earlier release")
+        #expect(pluralize("…i %@ wcześniejszych wydań", count: 2, language: .en) == "…and 2 earlier releases")
+        #expect(pluralize("…i %@ wcześniejszych wydań", count: 22, language: .en) == "…and 22 earlier releases")
+    }
+
     @Test func unregisteredBaseHasNoPluralForms() {
         #expect(pluralize("Brak wariantów %@", count: 1, language: .pl) == nil)
+    }
+
+    @Test(arguments: zip([1, 2, 5, 12, 22], ["Zaktualizować 1 pozycję?", "Zaktualizować 2 pozycje?",
+          "Zaktualizować 5 pozycji?", "Zaktualizować 12 pozycji?", "Zaktualizować 22 pozycje?"]))
+    func theConfirmationCountsItsItems(count: Int, expected: String) {
+        #expect(pluralize("Zaktualizować %@ pozycji?", count: count, language: .pl) == expected)
+    }
+
+    @Test func everyRoundTwoNounAgrees() {
+        #expect(pluralize("%@ resztek do Kosza", count: 1, language: .pl) == "1 resztka do Kosza")
+        #expect(pluralize("Nie udało się przenieść %@ resztek do Kosza.", count: 1, language: .pl)
+                == "Nie udało się przenieść 1 resztkę do Kosza.")
+        #expect(pluralize("Zaktualizowano %@ pakietów", count: 22, language: .pl) == "Zaktualizowano 22 pakiety")
+        #expect(pluralize("Zaktualizowano %@ pakietów", count: 12, language: .pl) == "Zaktualizowano 12 pakietów")
+        #expect(pluralize("Odinstalować %@ aplikacji?", count: 3, language: .pl) == "Odinstalować 3 aplikacje?")
+        #expect(pluralize("%@ aplikacji nie jest zarządzanych przez Homebrew — trafią do Kosza.", count: 1, language: .pl)
+                == "1 aplikacja nie jest zarządzana przez Homebrew — trafi do Kosza.")
+        #expect(pluralize("Znalazłam %@ rzeczy do uporządkowania.", count: 1, language: .pl)
+                == "Znalazłam 1 rzecz do uporządkowania.")
+        #expect(pluralize("%@ źródeł nie odpowiedziało", count: 2, language: .pl) == "2 źródła nie odpowiedziały")
+        #expect(pluralize("Zaktualizować %@ pozycji?", count: 1, language: .en) == "Update 1 item?")
+        #expect(pluralize("Zaktualizowano %@ pakietów", count: 1, language: .en) == "Updated 1 package")
+        #expect(pluralize("%@ źródeł nie odpowiedziało", count: 1, language: .en) == "1 source didn't respond")
+        #expect(pluralize("Odinstalować %@ aplikacji?", count: 22, language: .en) == "Uninstall 22 apps?")
     }
 }

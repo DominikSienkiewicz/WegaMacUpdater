@@ -57,6 +57,8 @@ struct UpdateView: View {
     /// execution one immutable decision.
     @State private var pendingUpdateTargets: [OutdatedItem] = []
     @State private var showUpdateConfirmation = false
+    /// UXP-11 — the sheet behind "Ukryte przez Twoje reguły".
+    @State private var showsHiddenRules = false
     /// UX-18 — how the list is grouped; by urgency unless the user picks by source.
     @AppStorage(UpdateGrouping.storageKey) private var grouping: UpdateGrouping = .default
 
@@ -94,8 +96,11 @@ struct UpdateView: View {
                 }
             }
             .sheet(isPresented: $scan.showPlanPreview) { planSheet }
+            .sheet(isPresented: $showsHiddenRules) {
+                PolicyRulesSheet(entries: scan.rulesHidingResults, onRestore: { policies.remove(key: $0.key) })
+            }
             .confirmationDialog(
-                trf("Zaktualizować %@ pozycji?", "\(pendingUpdateTargets.count)"),
+                trp("Zaktualizować %@ pozycji?", pendingUpdateTargets.count),
                 isPresented: $showUpdateConfirmation,
                 titleVisibility: .visible
             ) {
@@ -111,6 +116,7 @@ struct UpdateView: View {
             .onChange(of: showUpdateConfirmation) { _, isPresented in
                 if !isPresented { pendingUpdateTargets = [] }
             }
+            .wegaAttention(showUpdateConfirmation || scan.pendingForceRestart != nil)
             // Switching the sidebar category re-filters the list but not the inspector's
             // resolver, so a selection made in one category would otherwise keep showing in
             // the pane after switching away from it. Clear it so the detail pane never
@@ -202,11 +208,10 @@ struct UpdateView: View {
 
     // MARK: Checking
     //
-    // The same scene the quiet launch refresh draws over the list — see `ScanProgressScene`,
-    // which owns its own sizing and padding so this screen and that overlay cannot be given
-    // different ones.
+    // The first scan's scene — see `ScanProgressScene`, which owns its own sizing and padding.
+    // A scan over a result draws no scene: the band and the list header report it (UXP-13).
     private var checkingView: some View {
-        ScanProgressScene(progress: scan.progress)
+        ScanProgressScene(progress: scan.progress, catalogRefreshing: scan.isRefreshingCatalog)
     }
 
     // MARK: Results
@@ -262,7 +267,7 @@ struct UpdateView: View {
             }
             scopeBar
             Spacer(minLength: 0)
-            groupingMenu
+            groupingControl
         }
     }
 
@@ -272,7 +277,7 @@ struct UpdateView: View {
         let presentation = bandPresentation
         return UpdateBand(
             presentation: presentation,
-            refreshProgress: scan.isRefreshing ? scan.progress : nil,
+            scan: scan.isRefreshing ? scanPresentation : nil,
             planLinkEnabled: ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating),
             onShowPlan: { scan.showPlanPreview = true },
             action: { layout in
@@ -295,7 +300,8 @@ struct UpdateView: View {
             selectedCount: selectedVisibleCount,
             visibleCount:  visibleItems.count,
             targets:       updateTargets,
-            protection:    scan.caskProtection
+            protection:    scan.caskProtection,
+            resolved:      scan.caskProtectionResolved
         )
         return UpdateBandPresentation(
             totalCount:     counts.all,
@@ -306,13 +312,25 @@ struct UpdateView: View {
             freshness:      scan.freshness() ?? .fresh,
             sources:        UpdateBandPresentation.SourceChip.chips(from: scan.sourceReports),
             wegaLine:       wegaLine,
-            incompleteNote: scan.lastScanComplete ? nil : tr("sprawdzenie niepełne")
+            incompleteNote: scan.lastScanComplete ? nil : tr("sprawdzenie niepełne"),
+            handOffCount:   scan.handOffCount(for: updateFilter)
+        )
+    }
+
+    /// UXP-13 — the band's scan state, from what the store knows about the scan running now.
+    private var scanPresentation: UpdateBandScanPresentation {
+        UpdateBandScanPresentation(
+            progress:          scan.progress,
+            catalogRefreshing: scan.isRefreshingCatalog,
+            startedAt:         scan.scanStartedAt,
+            manual:            scan.manualScanProgress,
+            foundSoFar:        scan.scopeCounts.all
         )
     }
 
     private var resultsHeading: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(headline)
+            Text(tr("Wszystko aktualne"))
                 .font(.wega(.largeTitle, weight: .semibold))
                 .fixedSize(horizontal: false, vertical: true)
             if let date = scan.lastCheck {
@@ -322,11 +340,18 @@ struct UpdateView: View {
                          ? trf("Znaleziono %@", "\(date.formatted(date: .abbreviated, time: .shortened))")
                          : trf("Sprawdzono %@", "\(date.formatted(date: .omitted, time: .shortened))"))
                     // UX-19 — while a scan runs in place, the header shows each source's
-                    // phase instead of the stamp naming the sources of the result below.
+                    // phase instead of the stamp naming the sources of the result below, and
+                    // with no band to carry her, Wega sniffs beside it (UXP-13). One height
+                    // for both, so the heading never jumps.
                     if scan.isRefreshing {
-                        ScanPhaseStrip(progress: scan.progress)
+                        HStack(spacing: 8) {
+                            WegaHead(pose: .sniff, size: 28).sniffing(true).accessibilityHidden(true)
+                            ScanPhaseStrip(progress: scan.progress)
+                        }
+                        .frame(minHeight: 28, alignment: .leading)
                     } else {
                         Text(sourceStamp)
+                            .frame(minHeight: 28, alignment: .leading)
                     }
                 }
                 .font(.wega(.subheadline))
@@ -359,6 +384,13 @@ struct UpdateView: View {
         VStack(spacing: 0) {
             ScanBannerHost(onNavigate: onNavigate)
 
+            // UXP-11 — in the column above the list, so it never lies on a row.
+            if let notice = scan.ruleUndo {
+                RuleUndoToast(notice: notice, onUndo: { scan.undoRuleChange() }, onClose: { scan.dismissRuleUndo(id: notice.id) })
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
+
             staleCaskCard
 
             PasswordPromptCallout(queuedNeedingPassword: updateTargets.filter {
@@ -366,19 +398,12 @@ struct UpdateView: View {
             }.map(\.name))
 
             // The rows on screen are the ones the scan is in the middle of replacing, so for
-            // its duration they are a report, not a menu: inert, and with the scan drawn over
-            // them behind a material that stands them down. Without this the only sign of a
-            // launch refresh was a line of small print in the header, over a list that looked
-            // exactly like a finished one.
+            // its duration they are a report, not a menu: inert. Nothing is drawn over them
+            // (UXP-13) — the band and the list header say a scan is running and why the rows
+            // cannot be selected, and every row stays readable.
             listColumn
                 .frame(maxWidth: .infinity)
                 .disabled(!ScanSelectionGate.allowsSelection(isRefreshing: scan.isRefreshing))
-                .overlay {
-                    if ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows) {
-                        ScanBusyOverlay(progress: scan.progress)
-                    }
-                }
-                .animation(.easeInOut(duration: 0.2), value: scan.isRefreshing)
         }
     }
 
@@ -389,6 +414,14 @@ struct UpdateView: View {
         let counts = scan.scopeCounts
         if counts.all > 0 || updateFilter != .all {
             UpdateScopeBar(filter: updateFilter, counts: counts) { onScopeChange?($0) }
+        }
+    }
+
+    /// UX-18's grouping menu, or while a scan runs in place over rows, the note that says why
+    /// they cannot be selected — see `ListHeaderGroupingSlot`.
+    private var groupingControl: some View {
+        ListHeaderGroupingSlot(showsScanNote: ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows)) {
+            groupingMenu
         }
     }
 
@@ -421,24 +454,32 @@ struct UpdateView: View {
     }
 
     /// Whether the list shows rows rather than one of its empty states — the one answer
-    /// `listColumn` and the scan overlay over it both read.
+    /// `listColumn` and the list header's scan note both read.
     private var showsRows: Bool {
         hasResults && (filterHasContent(updateFilter) || !scan.restartCandidates.isEmpty)
     }
 
     @ViewBuilder
     private var listColumn: some View {
+        let hiddenRuleCount = scan.rulesHidingResults.count
         if !hasResults {
-            // REL-09 — an empty list only means "up to date" when the scan behind it heard
-            // from every source. After a restart with the network down it used to mean
-            // nothing at all, and said the most reassuring thing on the screen anyway.
-            if scan.lastScanComplete {
-                EmptyHero(pose: .sleep, title: tr("Wszystko aktualne"), message: tr("Wega się zdrzemnie. Zajrzymy znowu za jakiś czas."), compact: true, playful: true)
-            } else {
-                EmptyHero(pose: .sad,
-                          title: tr("Nie wiem, czy wszystko aktualne"),
-                          message: tr("Ostatni skan nie dostał odpowiedzi od wszystkich źródeł — pusta lista nic tu nie znaczy. Odśwież, gdy wróci połączenie."),
-                          compact: true)
+            VStack(spacing: 0) {
+                // REL-09 — an empty list only means "up to date" when the scan behind it heard
+                // from every source. After a restart with the network down it used to mean
+                // nothing at all, and said the most reassuring thing on the screen anyway.
+                if scan.lastScanComplete {
+                    EmptyHero(pose: .sleep, title: tr("Wszystko aktualne"), message: tr("Wega się zdrzemnie. Zajrzymy znowu za jakiś czas."), compact: true, playful: true)
+                } else {
+                    EmptyHero(pose: .sad,
+                              title: tr("Nie wiem, czy wszystko aktualne"),
+                              message: tr("Ostatni skan nie dostał odpowiedzi od wszystkich źródeł — pusta lista nic tu nie znaczy. Odśwież, gdy wróci połączenie."),
+                              compact: true)
+                }
+                // UXP-11 — hiding the last update must not strand the way back.
+                if hiddenRuleCount > 0 {
+                    HiddenByRulesRow(count: hiddenRuleCount) { showsHiddenRules = true }
+                        .padding(.bottom, WegaLayout.listGutter)
+                }
             }
         } else if showsRows {
             ScrollView {
@@ -446,6 +487,9 @@ struct UpdateView: View {
                     switch grouping {
                     case .urgency: urgencyGroupedSections
                     case .source:  sourceGroupedSections
+                    }
+                    if hiddenRuleCount > 0 {
+                        HiddenByRulesRow(count: hiddenRuleCount) { showsHiddenRules = true }
                     }
                     if !scan.restartCandidates.isEmpty {
                         RestartSection(
@@ -468,12 +512,18 @@ struct UpdateView: View {
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
         } else {
-            EmptyHero(
-                pose: .idle,
-                title: tr("Nic w tej kategorii"),
-                message: tr("W tej kategorii nie ma teraz aktualizacji. Przełącz kategorię nad listą."),
-                compact: true
-            )
+            VStack(spacing: 0) {
+                EmptyHero(
+                    pose: .idle,
+                    title: tr("Nic w tej kategorii"),
+                    message: tr("W tej kategorii nie ma teraz aktualizacji. Przełącz kategorię nad listą."),
+                    compact: true
+                )
+                if hiddenRuleCount > 0 {
+                    HiddenByRulesRow(count: hiddenRuleCount) { showsHiddenRules = true }
+                        .padding(.bottom, WegaLayout.listGutter)
+                }
+            }
         }
     }
 
@@ -541,7 +591,7 @@ struct UpdateView: View {
             // in the detail, unclipped, because they are what the button acts on.
             WegaCallout(
                 .info,
-                title: trf("%@ casków bez aplikacji", "\(scan.staleCasks.count)"),
+                title: trp("%@ casków bez aplikacji", scan.staleCasks.count),
                 symbol: "trash.fill"
             ) {
                 Text(trf("Homebrew wciąż śledzi: %@. Aplikacji nie ma na dysku — możesz je wyrejestrować.", "\(scan.staleCasks.joined(separator: ", "))"))
@@ -556,20 +606,6 @@ struct UpdateView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
         }
-    }
-
-    /// M4 — the header names both halves of the count, because they behave differently:
-    /// the installable ones are what the button below will actually upgrade.
-    private var headline: String {
-        let count = scan.updateCount
-        if count.isEmpty { return tr("Wszystko aktualne") }
-        if count.manual == 0 {
-            return trf("%@ aktualizacji do zainstalowania", "\(count.installable)")
-        }
-        if count.installable == 0 {
-            return trf("%@ do ręcznej aktualizacji", "\(count.manual)")
-        }
-        return trf("%@ do zainstalowania + %@ ręcznych", "\(count.installable)", "\(count.manual)")
     }
 
     /// UX-06 — the monospaced stamp naming the sources behind the result on screen, built
@@ -718,37 +754,6 @@ private struct PlanPreviewCaskRow: View {
                 RollbackScopeNotice(scope: RollbackProtection.scope(token: token))
             }
         }
-    }
-}
-
-/// UX-14 — what the selection says: its text, and how much of it the rollback net covers
-/// (the band reads `protectionText`).
-struct UpdateActionBarSummary: Equatable {
-    let selectedCount: Int
-    let visibleCount: Int
-    let protectedCount: Int
-
-    init(
-        selectedCount: Int,
-        visibleCount: Int,
-        targets: [OutdatedItem],
-        protection: [String: RollbackProtection.Verdict]
-    ) {
-        self.selectedCount = selectedCount
-        self.visibleCount = visibleCount
-        self.protectedCount = targets.filter { $0.kind == .cask && protection[$0.name] == .protected }.count
-    }
-
-    /// An empty selection says what is missing instead of offering a dead button silently.
-    var selectionText: String {
-        selectedCount == 0
-            ? tr("Zaznacz, co mam zaktualizować")
-            : trf("%@ z %@ zaznaczonych", "\(selectedCount)", "\(visibleCount)")
-    }
-
-    /// Only casks the rollback net covers count; the band says nothing rather than zero.
-    var protectionText: String? {
-        protectedCount == 0 ? nil : trf("%@ z automatycznym cofnięciem", "\(protectedCount)")
     }
 }
 

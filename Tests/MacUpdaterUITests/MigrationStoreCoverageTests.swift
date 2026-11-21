@@ -352,6 +352,50 @@ struct MigrationStoreCoverageTests {
         }
     }
 
+    /// M3 (owner's Q4) — a failed migration is spoken calmly in Wega's first person: an install
+    /// that never completed names the app, a failed check says what Wega did about it. „Błąd
+    /// podczas migracji” was a log line, not Wega speaking.
+    private struct FailedMigration {
+        let verdict: CaskValidationVerdict
+        var eventThrows = false
+        let line: String
+    }
+
+    @Test func aFailedMigrationIsSpokenCalmlyInTheFirstPerson() async throws {
+        let candidate = app("Figma", token: "figma", provenance: .token)
+        let notInstalled = trf("Nie udało mi się zainstalować %@ przez Homebrew.", "Figma")
+        let cases = [
+            FailedMigration(verdict: .healthy, eventThrows: true, line: notInstalled),
+            FailedMigration(verdict: .notUpgraded, line: notInstalled),
+        ] + [CaskValidationVerdict.rolledBack, .rollbackFailed, .publisherChanged(old: "OLD", new: "NEW"),
+             .publisherChangedAndRolledBack(old: "OLD", new: nil), .replacedByAppUpdater(version: "2")].map {
+            FailedMigration(verdict: $0, line: ManualInstallWegaLine.text(for: $0, token: "figma") ?? "")
+        }
+
+        for expected in cases {
+            let fixture = try preparation(for: candidate)
+            defer { try? FileManager.default.removeItem(at: fixture.root) }
+            var dependencies = inertDependencies()
+            dependencies.prepareReplacement = { _, _, _ in .ready(fixture.value) }
+            dependencies.resolveInstalledAppURL = { _, _ in candidate.path }
+            dependencies.verifyReplacement = { _, _ in expected.verdict }
+            let store = MigrationStore(publisherCorrelator: unknownPublisherCorrelator(), dependencies: dependencies)
+            var lines: [String] = []
+
+            await store.migrate(
+                candidate,
+                model: model(runner: expected.eventThrows ? MigrationCoverageRunner(eventThrows: true) : MigrationCoverageRunner(eventExitCode: 0)),
+                onWegaState: { lines.append($0.line) }
+            )
+
+            #expect(lines.last == expected.line, "\(expected.verdict)")
+            for word in ["Ups", "Hau", "Błąd"] { #expect(lines.last?.contains(word) == false, "\(expected.verdict): \(word)") }
+        }
+        withLanguage(.en) {
+            #expect(trf("Nie udało mi się zainstalować %@ przez Homebrew.", "Figma") == "I couldn't install Figma through Homebrew.")
+        }
+    }
+
     @Test func duplicateRemovalCoversBothPackageManagersAndFailureOutcomes() async {
         let duplicate = NpmBrewDuplicate(npmPackage: "@openai/codex", brewToken: "codex")
         for side in [DuplicateRemoval.Side.npm, .brew] {

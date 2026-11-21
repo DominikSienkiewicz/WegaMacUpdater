@@ -41,9 +41,36 @@ struct BallChaseTests {
             encoding: .utf8
         )
 
-        #expect(card.contains("playsWithBall: true"), "the live card plays")
+        // UXP-27 — the live card plays unless an error, a run or a dialog holds the user's attention.
+        #expect(card.contains("playsWithBall: !attentionHeld"), "the live card plays")
+        #expect(card.contains("var attentionHeld = false"), "and nothing holds it unless told so")
         #expect(card.contains("guard playsWithBall, !asksForNotifications"))
         #expect(card.contains("ContinuousMotion.loopsIdleAnimations(reduceMotion: reduceMotion)"),
                 "Reduce Motion keeps her still, like every idle animation")
+    }
+
+    /// UXP-27 — an error, a run or a dialog restarts the card's loop. A cancelled chase wakes at
+    /// once; if it then moved the stage after its successor had reset it, Wega's head stayed
+    /// off the card for as long as the dialog was open.
+    @Test func aCancelledChaseStopsAtItsNextPause() async {
+        let cancelled = Task { await BallChase.pause(for: 60) }
+        cancelled.cancel()
+        #expect(await cancelled.value == false)
+        #expect(await BallChase.pause(for: 0))
+    }
+
+    @Test func theCardsChaseChecksForCancellationAfterEveryPause() throws {
+        let card = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Sources/MacUpdater/WegaCompanionCard.swift"),
+            encoding: .utf8
+        )
+        let start = try #require(card.range(of: "private func chase() async {"))
+        let end = try #require(card.range(of: "private func resetStage()"))
+        let chase = card[start.upperBound..<end.lowerBound]
+
+        #expect(!chase.contains("Task.sleep"), "every pause of the chase goes through BallChase.pause")
+        #expect(chase.components(separatedBy: "guard await BallChase.pause(for: ").count - 1 == 4)
     }
 }

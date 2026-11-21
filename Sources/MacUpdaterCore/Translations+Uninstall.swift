@@ -17,7 +17,6 @@ extension Translations {
         "została w katalogu tymczasowym: %@": "left in a staging folder: %@",
         "nie udało się jej usunąć.": "could not be removed.",
         "Odinstalowanie niepełne — nie usunięto: %@. Powody poniżej.": "Uninstall incomplete — not removed: %@. Reasons below.",
-        "Pominięto %@ aplikacji — powody poniżej.": "Skipped %@ app(s) — reasons below.",
         "Ukryj wynik": "Hide result",
         "%@: %@": "%@: %@",
         "wymaga pomocnika Wega — włącz go w ustawieniach.": "needs Wega's helper — turn it on in Settings.",

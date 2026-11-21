@@ -136,15 +136,14 @@ struct WegaCompanionCardContent: View {
         let chase = BallChase(direction: 1, span: stageWidth)
         withAnimation(nil) { ballX = -12; ballAngle = 0; ballVisible = true }
         withAnimation(.linear(duration: BallChase.ballFlight)) { ballX = stageWidth + 12; ballAngle = chase.ballSpin }
-        try? await Task.sleep(for: .seconds(BallChase.glanceDelay))
+        guard await BallChase.pause(for: BallChase.glanceDelay) else { return }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { iconRotation = chase.glanceRotation }
-        try? await Task.sleep(for: .seconds(BallChase.glanceHold))
+        guard await BallChase.pause(for: BallChase.glanceHold) else { return }
         withAnimation(.easeIn(duration: BallChase.run)) { iconOffset = chase.runOut }
-        try? await Task.sleep(for: .seconds(BallChase.run))
-        guard !Task.isCancelled else { return }
+        guard await BallChase.pause(for: BallChase.run) else { return }
         withAnimation(nil) { ballVisible = false; iconOffset = chase.reentry; iconRotation = 0; carriesBall = true }
         withAnimation(.easeOut(duration: BallChase.comeBack)) { iconOffset = 0 }
-        try? await Task.sleep(for: .seconds(BallChase.comeBack + BallChase.proud))
+        guard await BallChase.pause(for: BallChase.comeBack + BallChase.proud) else { return }
         withAnimation(.easeOut(duration: 0.3)) { carriesBall = false }
     }
 
@@ -168,6 +167,8 @@ struct WegaCompanionCard: View {
     let state: WegaState
     let lastCheck: Date?
     let quip: String?
+    /// UXP-27 — an error, a run or an open confirmation has the user's attention; the ball waits.
+    var attentionHeld = false
 
     @ObservedObject private var agent = MenuBarAgent.shared
 
@@ -177,7 +178,7 @@ struct WegaCompanionCard: View {
             asksForNotifications: agent.needsNotificationExplanation,
             onDecline: { agent.declineNotifications() },
             onAgree: { Task { await agent.agreeToNotifications() } },
-            playsWithBall: true
+            playsWithBall: !attentionHeld
         )
         .animation(.easeInOut(duration: 0.2), value: quip)
     }

@@ -42,7 +42,66 @@ struct UpdateActionBarTests {
         )
 
         #expect(summary.protectedCount == 1)
-        #expect(summary.protectionText == trf("%@ z automatycznym cofnięciem", "1"))
+        #expect(summary.protectionText == trf("Cofnięcie: %@ z %@", "1", "3"))
+    }
+
+    private var firefox: OutdatedItem { OutdatedItem(key: "c:firefox", name: "firefox", from: "1", to: "2", kind: .cask) }
+    private var raycast: OutdatedItem { OutdatedItem(key: "c:raycast", name: "raycast", from: "1", to: "2", kind: .cask) }
+    private var slack: OutdatedItem { OutdatedItem(key: "c:slack", name: "slack", from: "1", to: "2", kind: .cask) }
+    private var wget: OutdatedItem { OutdatedItem(key: "f:wget", name: "wget", from: "1", to: "2", kind: .formula) }
+
+    @Test func undoCoverageIsCountedAgainstTheWholeQueue() {
+        let s = UpdateActionBarSummary(selectedCount: 3, visibleCount: 3, targets: [firefox, raycast, wget],
+                                       protection: ["firefox": .protected, "raycast": .unprotected(.noAppBundle), "wget": .protected])
+        #expect(s.protectionText == trf("Cofnięcie: %@ z %@", "1", "3"))
+        withLanguage(.en) { #expect(s.protectionText == "Undo: 1 of 3") }
+    }
+
+    @Test func aCaskWithoutAVerdictIsNeverShownAsProtected() {
+        let s = UpdateActionBarSummary(selectedCount: 2, visibleCount: 2, targets: [firefox, slack],
+                                       protection: ["firefox": .protected])
+        #expect(s.protectionText == tr("Sprawdzam możliwość cofnięcia"))
+    }
+
+    /// M2 — once the check has finished, a cask it found no verdict for is not covered: the band
+    /// stops saying it is still checking, and never counts that cask as protected.
+    @Test func aCaskTheFinishedCheckFoundNoVerdictForIsNotProtected() {
+        let s = UpdateActionBarSummary(selectedCount: 2, visibleCount: 2, targets: [firefox, slack],
+                                       protection: ["firefox": .protected], resolved: ["firefox", "slack"])
+        #expect(s.protectionText == trf("Cofnięcie: %@ z %@", "1", "2"))
+        let unchecked = UpdateActionBarSummary(selectedCount: 2, visibleCount: 2, targets: [firefox, slack],
+                                               protection: ["firefox": .protected], resolved: ["firefox"])
+        #expect(unchecked.protectionText == tr("Sprawdzam możliwość cofnięcia"), "a cask the check has not reached")
+    }
+
+    /// M2 — `brew info --cask` failing, or answering without one of the casks, used to leave the
+    /// band saying "Sprawdzam możliwość cofnięcia" for good. The check records what it asked
+    /// about, so those casks settle as not covered.
+    @Test(arguments: [false, true])
+    func aCheckThatFailsOrMissesACaskSettlesAsNotProtected(infoFails: Bool) async throws {
+        let token = "m2-cask-\(UUID().uuidString)"
+        let runner = ScanStoreRuntimeProcessRunner { request in
+            guard request.arguments.starts(with: ["info", "--cask"]) else { throw StubError.unexpected(request.arguments) }
+            if infoFails { throw StubError.unexpected(request.arguments) }
+            return ProcessResult(exitCode: 0, stdout: #"{"casks":[]}"#, stderr: "")
+        }
+        let store = makeScanStoreRuntimeHarness(runner: runner).store
+        store.brewOutdated = BrewOutdated(formulae: [], casks: [BrewOutdatedItem(name: token, installedVersions: ["1"], currentVersion: "2")])
+
+        await store.resolveRollbackProtection()
+
+        #expect(store.caskProtection[token] == nil)
+        #expect(store.caskProtectionResolved == [token])
+        let cask = OutdatedItem(key: "c:\(token)", name: token, from: "1", to: "2", kind: .cask)
+        let summary = UpdateActionBarSummary(selectedCount: 1, visibleCount: 1, targets: [cask],
+                                             protection: store.caskProtection, resolved: store.caskProtectionResolved)
+        #expect(summary.protectionText == trf("Cofnięcie: %@ z %@", "0", "1"))
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        #expect(view.contains("resolved:      scan.caskProtectionResolved"))
+    }
+
+    private enum StubError: Error {
+        case unexpected([String])
     }
 
     @Test func theUpdateButtonLivesInTheBand() throws {

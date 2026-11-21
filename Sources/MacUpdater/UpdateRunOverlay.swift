@@ -7,9 +7,9 @@ import MacUpdaterCore
 /// and the manual "install" buttons used to stay live. Each of them either changes a selection
 /// the run has already committed to, or starts a second package-manager operation that
 /// `UpgradeMutex` would refuse with a danger banner mid-run. The screen now belongs to the run
-/// until it lands: the content below is disabled, the veil a scan in place uses
-/// (`ScanBusyOverlay.scrimOpacity`) stands it down, and a note says why. A material blurred the
-/// rows into an empty column, so the veil keeps them readable instead.
+/// until it lands: the content below is disabled, a veil of the window's own background
+/// (`scrimOpacity`) stands it down, and a note says why. A material blurred the rows into an
+/// empty column, so the veil keeps them readable instead.
 ///
 /// UX-20 — the run itself takes a bar at the bottom of the list (the shared
 /// `wegaBottomBar()` chrome) instead of a card in the middle of the screen: progress, the log
@@ -32,6 +32,11 @@ struct UpdateRunOverlay<Progress: View>: View {
     let onHideLog: () -> Void
     @ViewBuilder let progress: () -> Progress
 
+    /// How much of the window's background lies over the screen: enough to read as stood down,
+    /// little enough that every row stays legible. It was the scan's veil; UXP-13 removed the
+    /// scan's overlay, so the run owns it now. Computed, because a generic type cannot store it.
+    static var scrimOpacity: Double { 0.5 }
+
     var body: some View {
         VStack(spacing: 12) {
             Text(UpdateRunCopy.note(isStopping: isStopping))
@@ -51,7 +56,7 @@ struct UpdateRunOverlay<Progress: View>: View {
             runBar
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor).opacity(ScanBusyOverlay.scrimOpacity))
+        .background(Color(nsColor: .windowBackgroundColor).opacity(Self.scrimOpacity))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(tr("Trwa aktualizacja"))
     }

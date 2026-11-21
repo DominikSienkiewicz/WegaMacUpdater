@@ -36,6 +36,17 @@ struct ZedManualScanTests {
         #expect(!evidence.sources.contains { $0.source == "Cask" && $0.outcome == .outdated })
     }
 
+    /// UXP-13 — the band counts vendor apps as their checks come back. The Zed branch leaves its
+    /// iteration early, and its one check must still count.
+    @Test func theVendorCountFollowsAnAppWhoseBranchEndsEarly() async throws {
+        let fixture = try ZedScanFixture(bundleID: "dev.zed.Zed")
+        defer { fixture.remove() }
+        let log = ProgressLog()
+        _ = await fixture.scanner().scanReport(brewOutdatedCasks: []) { await log.append($0) }
+        #expect(await log.values == [ManualScanProgress(checkedApps: 0, totalApps: 1),
+                                     ManualScanProgress(checkedApps: 1, totalApps: 1)])
+    }
+
     @Test func unknownChannelIsNeverDeclaredCurrentFromTheStableCask() async throws {
         let fixture = try ZedScanFixture(bundleID: "dev.zed.Zed-Nightly")
         defer { fixture.remove() }
@@ -58,6 +69,11 @@ struct ZedManualScanTests {
         #expect(evidence.sources.contains { $0.source == "Zed" && $0.outcome == .failed })
         #expect(evidence.lastSuccessfulCheck == nil)
     }
+}
+
+private actor ProgressLog {
+    private(set) var values: [ManualScanProgress] = []
+    func append(_ progress: ManualScanProgress) { values.append(progress) }
 }
 
 private struct ZedScanFixture {

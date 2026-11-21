@@ -94,7 +94,9 @@ struct InventoryView: View {
                 InventoryStatCard(label: "Homebrew",  value: brewCount,        sublabel: tr("cask + formula"), color: .wegaHoney,  active: filter == .brew)      { setFilter(.brew) }
                 InventoryStatCard(label: "App Store", value: masCount,         sublabel: tr("ze sklepu"),      color: .wegaInfo,   active: filter == .appStore)   { setFilter(.appStore) }
                 InventoryStatCard(label: tr("Ręcznie"),   value: manualCount,      sublabel: tr("poza brew/mas"),  color: .wegaDanger, active: filter == .manual)     { setFilter(.manual) }
-                InventoryStatCard(label: "npm -g",    value: npmGlobals.count, sublabel: "CLI",            color: .wegaInfo,   active: false)                 { /* npm globals are informational only — not a filter target, so tapping is a deliberate no-op */ }
+                InventoryStatCard(label: "npm -g",    value: npmGlobals.count, sublabel: "CLI",            color: .wegaInfo,   active: false,           onTap: nil)
+                    .accessibilityLabel(trf("Globalne pakiety npm: %@", "\(npmGlobals.count)"))
+                    .help(trf("Globalne pakiety npm: %@", "\(npmGlobals.count)"))
                 InventoryStatCard(label: tr("Razem"),     value: apps.count,       sublabel: tr("wszystkie"),      color: .primary,    active: filter == .all)        { setFilter(.all) }
             }
             .padding(.horizontal, 16)
@@ -352,42 +354,48 @@ private struct InventoryStatCard: View {
     let sublabel: String
     let color:    Color
     let active:   Bool
-    let onTap:    () -> Void
+    let onTap:    (() -> Void)?
 
     @State private var hovered = false
 
     var body: some View {
-        Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.wega(.footnote, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-                    .textCase(.uppercase)
-                    .tracking(0.8)
-                Text("\(value)")
-                    .font(.wega(.largeTitle, weight: .bold))
-                    .foregroundStyle(active ? color : .primary)
-                Text(sublabel)
-                    .font(.wega(.footnote))
-                    .foregroundStyle(.tertiary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(active ? color.opacity(0.06) : Color(NSColor.controlBackgroundColor))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(active ? color.opacity(0.30) : Color.wegaHairline, lineWidth: 1))
-            )
-            .overlay(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(color)
-                    .opacity(active ? 1 : 0.4)
-                    .frame(width: 3)
-                    .padding(.vertical, 8)
-            }
+        if let onTap {
+            Button(action: onTap) { card }
+                .buttonStyle(.plain)
+                .onHover { hovered = $0 }
+        } else {
+            card.accessibilityElement(children: .ignore)
         }
-        .buttonStyle(.plain)
-        .onHover { hovered = $0 }
+    }
+
+    private var card: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.wega(.footnote, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .textCase(.uppercase)
+                .tracking(0.8)
+            Text("\(value)")
+                .font(.wega(.largeTitle, weight: .bold))
+                .foregroundStyle(active ? color : .primary)
+            Text(sublabel)
+                .font(.wega(.footnote))
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(active ? color.opacity(0.06) : Color(NSColor.controlBackgroundColor))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(active ? color.opacity(0.30) : Color.wegaHairline, lineWidth: 1))
+        )
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(color)
+                .opacity(active ? 1 : 0.4)
+                .frame(width: 3)
+                .padding(.vertical, 8)
+        }
     }
 }
 

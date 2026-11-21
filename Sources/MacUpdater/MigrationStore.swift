@@ -367,8 +367,8 @@ final class MigrationStore: ObservableObject {
         onWegaState?(WegaState(
             pose: total > 0 ? .alert : .happy,
             line: total > 0
-                ? trf("Zwęszyłam %@ aplikacji do przepięcia.", "\(total)")
-                : tr("Wszystko porządku. Wega nie znalazła uciekinierów.")
+                ? trp("Zwęszyłam %@ aplikacji do przepięcia.", total)
+                : tr("Wszystko w porządku. Wega nie znalazła uciekinierów.")
         ))
     }
 
@@ -545,10 +545,7 @@ final class MigrationStore: ObservableObject {
 
         if let installError {
             errorMessage = installError.localizedDescription
-            onWegaState?(WegaState(
-                pose: .sad,
-                line: trf("Błąd podczas migracji %@.", "\(app.name)")
-            ))
+            onWegaState?(WegaState(pose: .sad, line: MigrationWegaLine.notInstalled(app)))
         } else if exitCode == 0 {
             migrated.insert(token)
             logLines = []
@@ -569,7 +566,7 @@ final class MigrationStore: ObservableObject {
             )
             onWegaState?(WegaState(
                 pose: .sad,
-                line: trf("Ups. Brew zgłosił problem z %@.", "\(app.name)")
+                line: trf("Nie udało mi się zainstalować %@. Spróbuj jeszcze raz.", "\(app.name)")
             ))
         }
     }
@@ -585,10 +582,7 @@ final class MigrationStore: ObservableObject {
         }
         errorMessage = message
         logLines.append("⚠️ " + message)
-        onWegaState?(WegaState(
-            pose: .alert,
-            line: trf("Błąd podczas migracji %@.", "\(app.name)")
-        ))
+        onWegaState?(WegaState(pose: .alert, line: MigrationWegaLine.text(for: verdict, app: app, token: token)))
         return false
     }
 
@@ -689,6 +683,20 @@ final class MigrationStore: ObservableObject {
         operation: @MainActor @Sendable () async -> Void
     ) async {
         await UpgradeCoordinator.shared.performWrite(flow, operation: operation)
+    }
+}
+
+/// M3 — what Wega says when a migration fails, calmly and in the first person (owner's Q4). A
+/// failed check after the install reads as after a manual install; an install that put nothing
+/// new on disk names the app instead.
+private enum MigrationWegaLine {
+    static func notInstalled(_ app: ApplicationInfo) -> String {
+        trf("Nie udało mi się zainstalować %@ przez Homebrew.", app.name)
+    }
+
+    static func text(for verdict: CaskValidationVerdict, app: ApplicationInfo, token: String) -> String {
+        if case .notUpgraded = verdict { return notInstalled(app) }
+        return ManualInstallWegaLine.text(for: verdict, token: token) ?? notInstalled(app)
     }
 }
 

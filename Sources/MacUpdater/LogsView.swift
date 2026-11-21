@@ -44,6 +44,9 @@ struct LogsView: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
+            DiagnosticsExportStatusRow(controller: diagnosticsExport)
+                .padding(.horizontal, 16)
+                .padding(.vertical, diagnosticsExport.outcome == nil || diagnosticsExport.outcome == .cancelled ? 0 : 6)
             Divider().opacity(0.5)
             if let reason = logEmptyReason(totalCount: store.entries.count, visibleCount: visible.count) {
                 emptyState(reason)
@@ -68,6 +71,8 @@ struct LogsView: View {
         .sheet(item: $reportController) { controller in
             BugReportSheet(controller: controller) { reportController = nil }
         }
+        // UXP-27 — clearing the logs is a removal confirmation: the ball waits while it is open.
+        .wegaAttention(confirmingClear)
     }
 
     private var toolbar: some View {
@@ -91,13 +96,12 @@ struct LogsView: View {
             }
             .buttonStyle(.plain).foregroundStyle(Color.wegaHoney)
             .disabled(diagnosticsExport.isExporting)
-            .help(tr("Zapisuje redagowaną paczkę zip z oboma plikami logów i pełnym kontekstem środowiska."))
+            .help(tr("Zapisuje paczkę zip z oboma plikami logów i kontekstem środowiska. Wykryte dane wrażliwe zastępuję znacznikami."))
             Button { startReport() } label: {
                 Label(tr("Zgłoś błąd…"), systemImage: "exclamationmark.bubble")
             }
             .buttonStyle(.plain).foregroundStyle(Color.wegaHoney)
-            .disabled(selection.isEmpty)
-            .help(tr("Zaznacz wpisy w logu, żeby zgłosić błąd"))
+            .help(tr("Zaznacz wpisy w logu, jeśli chcesz je dołączyć."))
             Button { confirmingClear = true } label: { Label(tr("Wyczyść"), systemImage: "trash") }
                 .buttonStyle(.plain).foregroundStyle(Color.wegaDanger)
                 .confirmationDialog(tr("Wyczyścić logi?"), isPresented: $confirmingClear) {
@@ -156,7 +160,7 @@ struct LogsView: View {
 
     /// Czyszczenie logu zabiera ze sobą zaznaczenie — ta sama zasada, co przy zmianie
     /// filtra: zaznaczone może być wyłącznie to, co użytkownik nadal widzi. Bez tego
-    /// „Zgłoś błąd…" zostaje aktywny nad wpisami, których już nie ma.
+    /// zgłoszenie dołączyłoby wpisy, których już nie ma.
     private func clearLog() {
         store.clear()
         selection.removeAll()
@@ -165,7 +169,6 @@ struct LogsView: View {
     private func startReport() {
         let selected = visible.filter { selection.contains($0.id) }
                               .sorted { $0.date < $1.date }
-        guard !selected.isEmpty else { return }
         reportController = BugReportController(entries: selected)
     }
 }

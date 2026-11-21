@@ -28,8 +28,6 @@ extension Translations {
         "Raport tekstowy…": "Text report…",
         "Raport JSON…": "JSON report…",
         "Zapisz raport jako tekst lub JSON, ze ścieżkami w postaci ~": "Save the report as text or JSON, with paths written as ~",
-        "Przeglądam katalogi z PATH, katalogi wersji i stan powłok. Niczego nie zmieniam.":
-            "Looking through the PATH directories, version directories and shell state. Nothing is changed.",
         "Wega sprawdzi, które narzędzia masz w kilku kopiach i co zostało po aktualizacjach. Nic nie zniknie bez Twojego potwierdzenia.":
             "Wega checks which tools you have in several copies and what updates left behind. Nothing disappears without your confirmation.",
         "Węszę po katalogach z narzędziami…": "Sniffing through the tool directories…",

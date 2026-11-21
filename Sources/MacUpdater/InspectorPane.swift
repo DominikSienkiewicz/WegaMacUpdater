@@ -285,7 +285,7 @@ struct InspectorPane: View {
                     ReleaseNoteView(note: note, bodyFont: .wega(.callout))
                 }
                 if notes.history.omitted > 0 {
-                    Text(trf("…i %@ wcześniejszych wydań", String(notes.history.omitted)))
+                    Text(trp("…i %@ wcześniejszych wydań", notes.history.omitted))
                         .font(.wega(.subheadline))
                         .foregroundStyle(.tertiary)
                 }

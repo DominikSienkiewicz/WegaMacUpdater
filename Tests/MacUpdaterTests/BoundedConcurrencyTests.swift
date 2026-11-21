@@ -52,4 +52,12 @@ struct BoundedConcurrencyTests {
         let results = await runBounded(limit: 100, work)
         #expect(Set(results) == Set(0..<3))
     }
+
+    /// UXP-13 — the scan reports each finished check as it lands, so the band can count
+    /// vendor apps while the rest are still in flight.
+    @Test func everyResultReachesOnEachExactlyOnce() async {
+        var seen: [Int] = []
+        let results = await runBounded(limit: 3, (0..<20).map { i in { i } }) { seen.append($0) }
+        #expect(seen.sorted() == Array(0..<20) && results.sorted() == Array(0..<20))
+    }
 }

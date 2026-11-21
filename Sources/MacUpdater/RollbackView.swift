@@ -46,6 +46,7 @@ struct RollbackView: View {
                     Text(confirmationMessage(for: undoTarget))
                 }
             }
+            .wegaAttention(showUndoConfirmation)
             // The retention sweep can drop a snapshot between the last refresh and the
             // moment this destination is opened, so the list is re-read on arrival rather
             // than trusted from whenever the Updates tab last looked.

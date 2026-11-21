@@ -27,9 +27,9 @@ enum ScanSelectionGate {
         allowsSelection(isRefreshing: isRefreshing) && allowsScreenInteraction(isUpdating: isUpdating)
     }
 
-    /// Whether the in-place scan's overlay covers the list. It stands rows down, so it covers
-    /// rows only: over an empty state its material just veiled Wega and her tricks for the
-    /// whole scan, with nothing on screen to protect.
+    /// Whether an in-place scan is running over rows, so the list header says why they cannot
+    /// be selected (`ListHeaderGroupingSlot`). Nothing covers the rows; an empty state has none
+    /// to stand down, so it gets no note.
     static func coversList(isRefreshing: Bool, showsRows: Bool) -> Bool {
         isRefreshing && showsRows
     }
@@ -62,24 +62,22 @@ struct ScanBusyPresentation: Equatable {
         phaseLabel = phase.commandLabel
     }
 
-    /// What VoiceOver reads for the overlay: the phase, or just that something is running.
+    /// What VoiceOver reads for the phase strip: the phase, or just that something is running.
     var accessibilityValue: String {
         phaseLabel ?? tr("Trwa skanowanie")
     }
 }
 
-/// A running scan, drawn the same way wherever it is running.
+/// The first scan, drawn full-screen while there is no result to keep on screen.
 ///
-/// There are two of those places and they must not diverge: the full-screen scan the user
-/// started, and the quiet launch refresh that runs underneath the restored list. They report
-/// the identical thing, so they get the identical view — at the identical size. Scaling it
-/// down for the overlay was tried and is exactly what made them look like two different
-/// screens: Wega shrank, and the binary stream was clipped mid-character by the card holding
-/// it. There is no size knob now, so there is nothing to set differently in one of the places.
-///
-/// The padding belongs to the scene rather than to its callers, for the same reason.
+/// A scan over a result used to draw this scene too, over the list; scaling it down for that
+/// overlay is what once made the two look like different screens, so the scene has no size
+/// knob and owns its padding. UXP-13 took the overlay away — the band and the list header
+/// report a scan in place — so this is the scan's only full scene. Its caption names the step
+/// the scan is on, from the same `ScanPhaseCopy` as the band's headline.
 struct ScanProgressScene: View {
     let progress: ScanProgress?
+    var catalogRefreshing: Bool = false
 
     private var presentation: ScanBusyPresentation { ScanBusyPresentation(progress: progress) }
 
@@ -95,13 +93,11 @@ struct ScanProgressScene: View {
                 // upper bound — propagates up and pushes the detail column wide enough to
                 // shove the sidebar off-screen. Pin it elastic (0…∞) so it fills, not forces.
                 .frame(minWidth: 0, maxWidth: .infinity)
-            if let phaseLabel = presentation.phaseLabel {
-                Text(phaseLabel)
-                    .font(.wega(.subheadline, monospaced: true))
-                    .foregroundStyle(.tertiary)
-            }
+                // The command behind the phase is for the curious; VoiceOver still hears it
+                // through `ScanBusyPresentation.phaseLabel`.
+                .help(presentation.phaseLabel ?? "")
             SniffingScene(
-                caption: tr("Wega węszy po Homebrew…"),
+                caption: ScanPhaseCopy.caption(progress: progress, catalogRefreshing: catalogRefreshing),
                 thoughts: Self.scanThoughts
             )
             .frame(maxWidth: .infinity)
@@ -118,65 +114,13 @@ struct ScanProgressScene: View {
     static let scanThoughts: [String] = [
         tr("Czy ten cask jest świeży?"),
         tr("Coś tu pachnie aktualizacją"),
-        tr("Sniff sniff… brew outdated"),
-        tr("Hmm, znajomy zapach Sparkle"),
-        tr("SHA256 się zgadza?"),
+        tr("Porównuję wersje…"),
+        tr("Sprawdzam, czy aplikacje same się aktualizują…"),
+        tr("Hau, ta wersja pachnie świeżo!"),
         tr("Łapię trop wersji"),
         "0x4A 0x65 0x6C 0x6C 0x79",
         tr("Mhm… nowa wersja?"),
-        tr("Info.plist… mhm"),
+        tr("Zaglądam do środka aplikacji…"),
         tr("Ten cask wymaga odświeżenia")
     ]
-}
-
-/// The list a scan is replacing, stood down while the scan runs in place (UX-19).
-///
-/// The header reports the scan's phases (`ScanPhaseStrip`); over the list Wega sniffs through
-/// it in the very scene the first scan draws, at the same size. A veil of the window's own
-/// background stands the rows down — one mechanism, not a separate dimming of the list — and
-/// a note says why they cannot be selected. Behind the scene the veil thickens so Wega is not
-/// drawn over row text; below it the veil is translucent, because the whole point of scanning
-/// in place is that the previous result never leaves the window.
-struct ScanBusyOverlay: View {
-    let progress: ScanProgress?
-
-    /// How much of the window's background lies over the rows: enough to read as stood down,
-    /// little enough that every row stays legible. A material was tried and blurred the rows
-    /// into an empty column, so a scan in place looked like a blank, frozen list.
-    static let scrimOpacity: Double = 0.5
-
-    /// The veil behind the scene, laid over `scrimOpacity`. It fades out at the scene's bottom
-    /// edge, so the rows below show through without a seam.
-    static let sceneScrimOpacity: Double = 0.85
-
-    private var presentation: ScanBusyPresentation { ScanBusyPresentation(progress: progress) }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 4) {
-                ScanProgressScene(progress: progress)
-                Text(tr("Zaznaczanie wróci, gdy skan się skończy."))
-                    .font(.wega(.subheadline))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.bottom, 32)
-            }
-            .background {
-                LinearGradient(
-                    stops: [
-                        .init(color: Color(nsColor: .windowBackgroundColor).opacity(Self.sceneScrimOpacity), location: 0),
-                        .init(color: Color(nsColor: .windowBackgroundColor).opacity(Self.sceneScrimOpacity), location: 0.8),
-                        .init(color: Color(nsColor: .windowBackgroundColor).opacity(0), location: 1),
-                    ],
-                    startPoint: .top, endPoint: .bottom
-                )
-            }
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor).opacity(Self.scrimOpacity))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(tr("Odświeżam listę…"))
-        .accessibilityValue(presentation.accessibilityValue)
-    }
 }

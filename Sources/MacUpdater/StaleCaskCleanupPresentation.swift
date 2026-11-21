@@ -23,7 +23,7 @@ enum StaleCaskCleanupPresentation {
         case .success(let removed):
             return BannerData(
                 variant: .success,
-                title: trf("Usunięto %@ nieaktualnych casków", "\(removed)"),
+                title: trp("Usunięto %@ nieaktualnych casków", removed),
                 message: tr("Homebrew nie śledzi już aplikacji, których nie ma na dysku.")
             )
         case .partial(let removed, let failed):
@@ -37,7 +37,7 @@ enum StaleCaskCleanupPresentation {
             return BannerData(
                 variant: .danger,
                 title: tr("Nie udało się usunąć nieaktualnych casków"),
-                message: trf("Homebrew nadal śledzi %@ casków bez aplikacji — szczegóły są w logach.", "\(failed)"),
+                message: trp("Homebrew nadal śledzi %@ casków bez aplikacji — szczegóły są w logach.", failed),
                 action: .openLogs
             )
         }

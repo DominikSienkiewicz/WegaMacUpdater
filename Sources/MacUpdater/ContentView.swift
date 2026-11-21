@@ -18,6 +18,15 @@ enum SidebarTab: String, Identifiable {
 
     var id: String { rawValue }
 
+    /// Only the screens that scan for updates offer the scan button; elsewhere it would do
+    /// nothing visible.
+    var showsScanControl: Bool {
+        switch self {
+        case .update, .migration, .rollback: return true
+        case .uninstall, .cleanup, .inventory, .logs: return false
+        }
+    }
+
     var hint: String {
         switch self {
         case .update:    return tr("Co do odświeżenia")
@@ -71,6 +80,9 @@ struct ContentView: View {
     /// UX-15 — Wega's comment on a scan that just finished: set by `DetailColumn`, which
     /// observes the scan, and shown by the sidebar's card.
     @State private var quip:          String? = nil
+    /// UXP-27 — whether the ball waits: set by `DetailColumn`, which sees the banners, the run
+    /// and the open dialogs, and read by the sidebar's card.
+    @State private var wegaAttentionHeld = false
     @State private var securityBadge: Int   = 0
     @State private var appsBadge:     Int   = 0
     @State private var cliBadge:      Int   = 0
@@ -106,7 +118,8 @@ struct ContentView: View {
                 updateProgress: updateProgress,
                 wegaState:      wegaState,
                 lastCheck:      lastCheck,
-                quip:           quip
+                quip:           quip,
+                wegaAttentionHeld: wegaAttentionHeld
             )
             // Fixed, not a range: with a min/ideal/max the split view re-solved the sidebar
             // width against the detail column's changing content and shifted it left during a
@@ -125,6 +138,7 @@ struct ContentView: View {
                 uninstallPreselection: $uninstallPreselection,
                 lastCheck:         $lastCheck,
                 quip:              $quip,
+                wegaAttentionHeld: $wegaAttentionHeld,
                 securityBadge:     $securityBadge,
                 appsBadge:         $appsBadge,
                 cliBadge:          $cliBadge,
@@ -137,7 +151,7 @@ struct ContentView: View {
             .navigationSubtitle(selection.hint)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    ScanControl(namespace: glassNamespace)
+                    ScanControl(namespace: glassNamespace, isShown: selection.tab.showsScanControl)
                 }
                 ToolbarSpacer(.fixed)
                 ToolbarItem(placement: .primaryAction) {

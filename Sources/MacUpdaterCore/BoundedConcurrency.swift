@@ -14,6 +14,16 @@ public func runBounded<T: Sendable>(
     limit: Int,
     _ work: [@Sendable () async -> T]
 ) async -> [T] {
+    await runBounded(limit: limit, work) { _ in }
+}
+
+/// `runBounded(limit:_:)` that hands each result to `onEach` as it lands, before the next task
+/// is admitted — so a caller can report progress while the rest are still in flight.
+public func runBounded<T: Sendable>(
+    limit: Int,
+    _ work: [@Sendable () async -> T],
+    onEach: (T) async -> Void
+) async -> [T] {
     guard !work.isEmpty else { return [] }
     let cap = limit <= 0 ? work.count : min(limit, work.count)
 
@@ -30,6 +40,7 @@ public func runBounded<T: Sendable>(
         // Each time one finishes, admit the next so the in-flight count stays at the cap.
         for await result in group {
             results.append(result)
+            await onEach(result)
             if next < work.count {
                 group.addTask(operation: work[next])
                 next += 1

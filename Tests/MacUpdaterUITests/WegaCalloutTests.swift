@@ -41,7 +41,8 @@ struct WegaCalloutTests {
         let detail = try source("Sources/MacUpdater/DetailColumn.swift")
         let brew = try slice(detail, from: "private struct BrewInviteCard: View", to: "struct DetailColumn: View")
         let update = try source("Sources/MacUpdater/UpdateView.swift")
-        let stale = try slice(update, from: "private var staleCaskCard: some View", to: "/// M4 —")
+        // Up to the next declaration: the comment it used to end at went with UXP-25.
+        let stale = try slice(update, from: "private var staleCaskCard: some View", to: "private var sourceStamp: String")
         let checksum = try slice(update, from: "private func caskTransparencyNote", to: "/// One cask in the plan preview")
 
         for notice in [banner, error, brew, stale, checksum] {

@@ -53,6 +53,11 @@ final class UpdatePolicyStore: ObservableObject {
         set(UpdatePolicyEntry(key: key, displayName: name, policy: .skipped(version: trimmed)))
     }
 
+    /// UXP-11 — writes back an entry exactly as it was, so undo returns the rule a change replaced.
+    func restore(_ entry: UpdatePolicyEntry) {
+        set(entry)
+    }
+
     func remove(key: String) {
         entries[key] = nil
         persist()

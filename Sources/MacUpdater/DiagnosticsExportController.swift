@@ -16,39 +16,73 @@ import MacUpdaterCore
 @MainActor
 final class DiagnosticsExportController: ObservableObject {
     @Published private(set) var isExporting = false
-    @Published private(set) var lastError: String?
+    /// What the last export ended in, so the UI can say it instead of staying silent.
+    @Published private(set) var outcome: DiagnosticsExportOutcome?
+
     /// The file the user last saved, so the UI can offer "reveal in Finder" instead of
     /// making them go looking for it.
-    @Published private(set) var lastExportURL: URL?
+    var lastExportURL: URL? {
+        guard case .saved(let url) = outcome else { return nil }
+        return url
+    }
 
     private let journal = UpdateRunJournal()
+    private let makePayload: (@MainActor () async -> DiagnosticsExportPayload)?
+    private let chooseDestination: @MainActor (_ suggestedFileName: String) -> URL?
+    private let write: @MainActor (Data, URL) throws -> Void
 
-    /// Builds the bundle and asks the user where to put it. Returns silently when the
-    /// save panel is cancelled — a cancelled export is not an error.
+    init(makePayload: (@MainActor () async -> DiagnosticsExportPayload)? = nil,
+         chooseDestination: @escaping @MainActor (_ suggestedFileName: String) -> URL? = DiagnosticsExportController.runSavePanel,
+         write: @escaping @MainActor (Data, URL) throws -> Void = DiagnosticsExportController.writeAtomically) {
+        self.makePayload = makePayload
+        self.chooseDestination = chooseDestination
+        self.write = write
+    }
+
+    /// Builds the bundle and asks the user where to put it. A cancelled panel ends in
+    /// `.cancelled` — neither a success nor a failure.
     func export() async {
         guard !isExporting else { return }
         isExporting = true
-        lastError = nil
+        outcome = nil
         defer { isExporting = false }
 
-        let snapshot = await snapshot()
-        let data = DiagnosticsBundle.zipData(snapshot)
-
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = DiagnosticsBundle.suggestedFileName(at: snapshot.generatedAt)
-        panel.canCreateDirectories = true
-        panel.isExtensionHidden = false
-        panel.message = tr("Paczka jest redagowana — ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami.")
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let payload = await gatherPayload()
+        guard let url = chooseDestination(payload.suggestedFileName) else {
+            outcome = .cancelled
+            return
+        }
 
         do {
-            try data.write(to: url, options: .atomic)
-            lastExportURL = url
-            WegaLog.info(.app, "Wyeksportowano paczkę diagnostyczną (\(data.count) B).")
+            try write(payload.data, url)
+            outcome = .saved(url)
+            WegaLog.info(.app, "Wyeksportowano paczkę diagnostyczną (\(payload.data.count) B).")
         } catch {
-            lastError = error.localizedDescription
+            outcome = .failed(error.localizedDescription)
             WegaLog.error(.app, "Eksport paczki diagnostycznej nie powiódł się: \(error.localizedDescription)")
         }
+    }
+
+    private func gatherPayload() async -> DiagnosticsExportPayload {
+        if let makePayload { return await makePayload() }
+        let snapshot = await snapshot()
+        return DiagnosticsExportPayload(
+            data: DiagnosticsBundle.zipData(snapshot),
+            suggestedFileName: DiagnosticsBundle.suggestedFileName(at: snapshot.generatedAt)
+        )
+    }
+
+    static func runSavePanel(suggestedFileName: String) -> URL? {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = suggestedFileName
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.message = tr("Wykryte dane wrażliwe zastąpiłam znacznikami.")
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+
+    static func writeAtomically(_ data: Data, to url: URL) throws {
+        try data.write(to: url, options: .atomic)
     }
 
     func revealLastExport() {

@@ -11,6 +11,7 @@ struct UpdateBandPresentationTests {
         total: Int = 3,
         urgent: Int = 0,
         queue: Int = 3,
+        handOff: Int = 0,
         lastCheck: Date? = nil,
         freshness: ScanFreshness = .fresh,
         sources: [UpdateBandPresentation.SourceChip] = []
@@ -18,7 +19,7 @@ struct UpdateBandPresentationTests {
         UpdateBandPresentation(
             totalCount: total, urgentCount: urgent, queueCount: queue,
             protectionText: nil, lastCheck: lastCheck, freshness: freshness,
-            sources: sources, wegaLine: "Wega"
+            sources: sources, wegaLine: "Wega", handOffCount: handOff
         )
     }
 
@@ -78,10 +79,57 @@ struct UpdateBandPresentationTests {
         }
     }
 
+    @Test func theQueueSummaryNamesWhatTheDeveloperFinishes() {
+        withLanguage(.pl) {
+            #expect(presentation(queue: 4, handOff: 2).queueSummary == "4 w kolejce · 2 dokończysz u producenta")
+            #expect(presentation(queue: 4).queueSummary == "4 w kolejce")
+        }
+        withLanguage(.en) {
+            #expect(presentation(queue: 4, handOff: 2).queueSummary == "4 queued · 2 to finish with the developer")
+        }
+    }
+
+    /// M1 — hand-off apps are never queued, so with nothing queued "0 w kolejce · 3 dokończysz"
+    /// read as if the three were. The second half shows only next to a queue.
+    @Test func anEmptyQueueNamesNoHandOffs() {
+        withLanguage(.pl) { #expect(presentation(queue: 0, handOff: 3).queueSummary == "0 w kolejce") }
+        withLanguage(.en) { #expect(presentation(queue: 0, handOff: 3).queueSummary == "0 queued") }
+    }
+
+    /// M1 — the hand-offs the band counts are the ones the category on screen lists: every
+    /// manual row under All and Apps, the security-flagged ones under Security, none under CLI.
+    @MainActor @Test func theHandOffsAreCountedInTheCategoryOnScreen() throws {
+        let harness = makeScanStoreRuntimeHarness(runner: ScanStoreRuntimeProcessRunner { request in
+            throw StubError.unexpected(request.arguments)
+        })
+        let app = ManualOutdatedApp(
+            name: "Hand Off", path: URL(fileURLWithPath: "/Applications/HandOff-\(UUID().uuidString).app"),
+            installedVersion: "1", availableVersion: "2", source: .sparkle,
+            bundleIdentifier: "example.handoff.\(UUID().uuidString)"
+        )
+        harness.store.manualOutdated = [app]
+        #expect(harness.store.handOffCount(for: .all) == 1)
+        #expect(harness.store.handOffCount(for: .apps) == 1)
+        #expect(harness.store.handOffCount(for: .cli) == 0, "no manual app is a CLI tool")
+        #expect(harness.store.handOffCount(for: .security) == 0, "its notes mention no security fix")
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        #expect(view.contains("handOffCount:   scan.handOffCount(for: updateFilter)"))
+    }
+
+    @Test func anEmptyButtonSaysNothingIsSelectedAndVoiceOverReadsTheSame() {
+        withLanguage(.pl) {
+            let empty = presentation(queue: 0)
+            #expect(empty.buttonTitle == "Nic nie zaznaczono")
+            #expect(empty.buttonAccessibilityLabel == empty.buttonTitle)
+            #expect(presentation(queue: 3).buttonAccessibilityLabel == trf("Zaktualizuj wybrane (%@)", "3"))
+        }
+        withLanguage(.en) { #expect(presentation(queue: 0).buttonTitle == "Nothing selected") }
+    }
+
     @Test func anEmptyQueueSaysSo() {
         withLanguage(.pl) {
             let empty = presentation(queue: 0)
-            #expect(empty.buttonTitle == tr("Kolejka pusta"))
+            #expect(empty.buttonTitle == tr("Nic nie zaznaczono"))
             #expect(empty.buttonCount == nil)
             #expect(!empty.showsPlanLink)
             #expect(empty.queueSummary == trf("%@ w kolejce", "0"))
@@ -91,7 +139,7 @@ struct UpdateBandPresentationTests {
             #expect(queued.showsPlanLink)
             #expect(queued.buttonAccessibilityLabel == trf("Zaktualizuj wybrane (%@)", "3"))
             #expect(queued.buttonTitle == "Aktualizuj")
-            #expect(empty.buttonTitle == "Kolejka pusta")
+            #expect(empty.buttonTitle == "Nic nie zaznaczono")
             #expect(queued.queueSummary == "3 w kolejce")
         }
     }
@@ -127,9 +175,19 @@ struct UpdateBandPresentationTests {
             #expect(presentation(total: 2).headline == "2 updates")
             #expect(presentation(total: 5, urgent: 2).headline.hasSuffix("2 may fix security issues"))
             #expect(presentation(queue: 0).queueSummary == "0 queued")
-            #expect(presentation(queue: 0).buttonTitle == "Queue empty")
+            #expect(presentation(queue: 0).buttonTitle == "Nothing selected")
             #expect(presentation(queue: 3).buttonTitle == "Update")
             #expect(presentation(queue: 3).queueSummary == "3 queued")
         }
+    }
+
+    private enum StubError: Error {
+        case unexpected([String])
+    }
+
+    private func source(_ relativePath: String, file: String = #filePath) throws -> String {
+        let root = URL(fileURLWithPath: file)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
     }
 }

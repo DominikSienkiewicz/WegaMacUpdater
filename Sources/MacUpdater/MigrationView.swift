@@ -128,11 +128,9 @@ struct MigrationView: View {
                     tr("Hmm, kto cię tu postawił?"),
                     tr("Pachnie ręczną instalacją"),
                     tr("Czy znajdę cię w bazie casków?"),
-                    tr("Bundle ID… znajomy"),
                     tr("Trop prowadzi do /Applications"),
-                    tr("Mhm… brak _MASReceipt"),
-                    tr("Może by tak pod brew?"),
-                    tr("Łapię zapach Sparkle")
+                    tr("Węszę w App Store…"),
+                    tr("Może by tak pod brew?")
                 ],
                 wegaSize: 130
             )
@@ -148,7 +146,7 @@ struct MigrationView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(tr("Kandydaci do migracji"))
                             .font(.wega(.title2, weight: .semibold))
-                        Text(trf("Zeskanowano /Applications · znalazłam %@ aplikacji poza zarządzaniem", "\(matchable.count + migrated.count + masCandidates.count + unmatched.count)"))
+                        Text(trp("Zeskanowano /Applications · znalazłam %@ aplikacji poza zarządzaniem", matchable.count + migrated.count + masCandidates.count + unmatched.count))
                             .font(.wega(.subheadline))
                             .foregroundStyle(.tertiary)
                     }
@@ -311,6 +309,7 @@ struct MigrationView: View {
                 Task { await migrate(app) }
             }
         }
+        .wegaAttention(confirmingApp != nil || migration.duplicateConfirmation != nil || migration.pendingForceTermination != nil || errorMessage != nil || banner?.variant == .danger)
         .alert(item: binding(\.duplicateConfirmation)) { removal in
             Alert(
                 title: Text(tr("Usunąć duplikat?")),
@@ -525,13 +524,8 @@ private struct MigrationConfirmSheet: View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 12) {
                 AppIcon(path: app.path, size: 40)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(tr("Migracja do Homebrew"))
-                        .font(.wega(.title3, weight: .bold))
-                    Text(app.name)
-                        .font(.wega(.body))
-                        .foregroundStyle(.secondary)
-                }
+                Text(trf("Przenieść %@ do Homebrew?", app.name))
+                    .font(.wega(.title3, weight: .bold))
             }
 
             if let token = app.caskToken {
@@ -547,7 +541,7 @@ private struct MigrationConfirmSheet: View {
                 }
             }
 
-            Text(tr("Homebrew pobierze najnowszą wersję i zastąpi aktualną instalację w /Applications. Zamknij aplikację przed kontynuowaniem."))
+            Text(trf("Zrobię kopię obecnej aplikacji, a Homebrew zainstaluje najnowszą wersję w jej miejscu. Jeśli nowa wersja nie przejdzie sprawdzenia podpisu, przywrócę kopię. Zamknij %@ przed kontynuowaniem.", app.name))
                 .font(.wega(.callout))
                 .foregroundStyle(.secondary)
 
@@ -555,7 +549,7 @@ private struct MigrationConfirmSheet: View {
                 Spacer()
                 Button(tr("Anuluj")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button(tr("Migruj")) {
+                Button(tr("Przenieś")) {
                     onConfirm()
                     dismiss()
                 }

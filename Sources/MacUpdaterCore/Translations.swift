@@ -22,6 +22,7 @@ public enum Translations {
         .merging(MicrosoftAutoUpdateTranslations.english) { first, _ in first }
         .merging(uninstallTexts) { first, _ in first }
         .merging(updatesActionBar.merging(uxReview) { first, _ in first }) { first, _ in first }
+        .merging(uxReviewNext) { first, _ in first }
 }
 
 extension Translations {
@@ -256,24 +257,16 @@ extension Translations {
         "Wega węszy po Homebrew…": "Wega is sniffing around Homebrew…",
         "Czy ten cask jest świeży?": "Is this cask fresh?",
         "Coś tu pachnie aktualizacją": "Something here smells like an update",
-        "Sniff sniff… brew outdated": "Sniff sniff… brew outdated",
-        "Hmm, znajomy zapach Sparkle": "Hmm, the familiar scent of Sparkle",
-        "SHA256 się zgadza?": "Does the SHA256 match?",
         "Łapię trop wersji": "I'm catching the scent of a version",
         "Mhm… nowa wersja?": "Mhm… a new version?",
-        "Info.plist… mhm": "Info.plist… mhm",
         "Ten cask wymaga odświeżenia": "This cask needs refreshing",
         "Wszystko aktualne": "Everything up to date",
-        "%@ aktualizacji do zainstalowania": "%@ updates to install",
-        // M4 — nagłówek nazywa obie połowy licznika; przycisk obiecuje tylko instalowalne.
-        "%@ do zainstalowania + %@ ręcznych": "%@ to install + %@ manual",
-        "%@ do ręcznej aktualizacji": "%@ to update manually",
+        // Nagłówek wyników i pasmo: świeży wynik podaje godzinę sprawdzenia.
         "Sprawdzono %@": "Checked %@",
         // M2 — stara lista mówi wprost, kiedy powstała.
         "Znaleziono %@": "Found %@",
         // Ciche odświeżenie po starcie: lista zostaje na ekranie, nagłówek mówi, że trwa skan.
-        // Nakładka nad listą na czas cichego odświeżenia — lista jest wtedy raportem, nie menu.
-        "Odświeżam listę…": "Refreshing the list…",
+        // Nagłówek listy mówi wtedy, czemu wierszy nie da się zaznaczyć — lista jest raportem, nie menu.
         "Zaznaczanie wróci, gdy skan się skończy.": "Selecting comes back when the scan finishes.",
         "Trwa skanowanie": "Scan in progress",
         "Najpierw skończę skanowanie — lista zaraz się zmieni.":
@@ -285,7 +278,6 @@ extension Translations {
         "Zaznacz przynajmniej jedną pozycję — Wega nie aktualizuje niczego, czego sam nie wskażesz.":
             "Select at least one item — Wega updates nothing you have not pointed at.",
         "Zaznacz całą grupę: %@": "Select the whole group: %@",
-        "Zaktualizować %@ pozycji?": "Update %@ items?",
         "Wega się zdrzemnie. Zajrzymy znowu za jakiś czas.": "Wega will take a nap. We'll check again in a while.",
         "Nic w tej kategorii": "Nothing in this category",
         "Zaznacz wszystko": "Select all",
@@ -310,7 +302,6 @@ extension Translations {
         "Węszę po Homebrew…": "Sniffing around Homebrew…",
         "Błąd Homebrew": "Homebrew error",
         "Wszystko aktualne. Idę się zdrzemnąć.": "Everything up to date. I'm going to take a nap.",
-        "Znalazłam %@ rzeczy do uporządkowania.": "I found %@ things to tidy up.",
         "Nie udało się sprawdzić aktualizacji": "Couldn't check for updates",
         "Część źródeł nie odpowiedziała — sprawdź połączenie z internetem i spróbuj ponownie.": "Some sources didn't respond — check your internet connection and try again.",
         "Nie dowęszyłam się — chyba nie ma internetu.": "I couldn't sniff anything out — looks like there's no internet.",
@@ -318,16 +309,12 @@ extension Translations {
         "Ostatni skan nie dostał odpowiedzi od wszystkich źródeł — odśwież, żeby poznać pełną listę.": "The last scan didn't hear back from every source — refresh to see the full list.",
         "Nie wiem, czy wszystko aktualne": "I can't tell whether everything is up to date",
         "Ostatni skan nie dostał odpowiedzi od wszystkich źródeł — pusta lista nic tu nie znaczy. Odśwież, gdy wróci połączenie.": "The last scan didn't hear back from every source — an empty list means nothing here. Refresh once you're back online.",
-        "Znalazłam %@ aktualizacji, ale %@ źródeł nie odpowiedziało — sprawdź połączenie i odśwież.": "I found %@ updates, but %@ sources didn't respond — check your connection and refresh.",
         "Znalazłam %@, ale część źródeł milczy.": "I found %@, but some sources are silent.",
         "Instaluję %@ przez Brew…": "Installing %@ via Brew…",
         "Zaktualizowano %@": "Updated %@",
         "Teraz zarządzany przez Homebrew.": "Now managed by Homebrew.",
         "%@ zaktualizowany i pod opieką Brew.": "%@ updated and under Brew's care.",
-        "Błąd instalacji %@": "Installation error %@",
         "Sprawdź logi poniżej.": "Check the logs below.",
-        "Coś poszło nie tak z %@.": "Something went wrong with %@.",
-        "Błąd instalacji": "Installation error",
         "Nie udało się dokończyć instalacji — szczegóły w logu.": "The installation could not be completed — see the log for details.",
         "Aktualizuję, chwila…": "Updating, one moment…",
         "Brew zgłosił błąd — sprawdź log poniżej.": "Brew reported an error — check the log below.",
@@ -344,9 +331,7 @@ extension Translations {
         "odmowa": "denied",
         "nieustalone": "undetermined",
         "Część pakietów się nie zaktualizowała.": "Some packages didn't update.",
-        "Zaktualizowano %@ pakietów": "Updated %@ packages",
         "Wszystko gotowe.": "All done.",
-        "Gotowe! %@ pakietów odświeżonych.": "Done! %@ packages refreshed.",
         "Ręcznie zainstalowane": "Manually installed",
         "Otwórz aplikację": "Open the application",
         "Aktualizuj przez Brew": "Update via Brew",
@@ -405,11 +390,8 @@ extension Translations {
         "Czy znajdę cię w bazie casków?": "Will I find you in the cask database?",
         "Bundle ID… znajomy": "Bundle ID… familiar",
         "Trop prowadzi do /Applications": "The trail leads to /Applications",
-        "Mhm… brak _MASReceipt": "Mhm… no _MASReceipt",
         "Może by tak pod brew?": "How about moving it under brew?",
-        "Łapię zapach Sparkle": "I catch the scent of Sparkle",
         "Kandydaci do migracji": "Migration candidates",
-        "Zeskanowano /Applications · znalazłam %@ aplikacji poza zarządzaniem": "Scanned /Applications · found %@ apps outside management",
         "Skanuj ponownie": "Scan again",
         "Można przepiąć pod Homebrew": "Can be moved under Homebrew",
         "Wszystko już przygarnięte. Dobra robota.": "Everything is already taken in. Good job.",
@@ -445,8 +427,6 @@ extension Translations {
         "Dodaj wykluczenie…": "Add exclusion…",
         "Wyklucz ze skanowania": "Exclude from scan",
         "Brak wykluczeń.": "No exclusions.",
-        "Zwęszyłam %@ aplikacji do przepięcia.": "I sniffed out %@ apps to migrate.",
-        "Wszystko porządku. Wega nie znalazła uciekinierów.": "All good. Wega found no runaways.",
         "Instaluję %@ przez Homebrew…": "Installing %@ via Homebrew…",
         "⚠ %@ jest uruchomiony — zamykam przed instalacją…": "⚠ %@ is running — closing it before installation…",
         "Proszę %@ o łagodne zakończenie…": "Asking %@ to quit gracefully…",
@@ -474,8 +454,6 @@ extension Translations {
         "Token: %@": "Token: %@",
         "%@ przejęty! Idziemy dalej.": "%@ taken over! Let's move on.",
         "Instalacja %@ zakończyła się błędem (kod %@). Sprawdź log poniżej.": "Installation of %@ failed (code %@). Check the log below.",
-        "Ups. Brew zgłosił problem z %@.": "Oops. Brew reported a problem with %@.",
-        "Błąd podczas migracji %@.": "Error during migration of %@.",
         "Nie udało się uruchomić": "Failed to start",
         "Usunięto z %@": "Removed from %@",
         "Duplikat zniknął. PATH ma już tylko jedną wersję.": "The duplicate is gone. PATH now has only one version.",
@@ -487,10 +465,7 @@ extension Translations {
         // has to say which app it belongs to.
         "Przepnij %@ do Homebrew": "Adopt %@ into Homebrew",
         "Otwórz %@ w App Store": "Open %@ in the App Store",
-        "Migracja do Homebrew": "Migration to Homebrew",
         "Polecenie:": "Command:",
-        "Homebrew pobierze najnowszą wersję i zastąpi aktualną instalację w /Applications. Zamknij aplikację przed kontynuowaniem.": "Homebrew will download the latest version and replace the current installation in /Applications. Close the app before continuing.",
-        "Migruj": "Migrate",
         "Log migracji": "Migration log",
         "Odinstaluj aplikacje": "Uninstall apps",
         "Brew casks → brew uninstall  ·  pozostałe → Kosz": "Brew casks → brew uninstall  ·  others → Trash",
@@ -498,8 +473,6 @@ extension Translations {
         "Odinstaluj": "Uninstall",
         "Odinstaluj (%@)": "Uninstall (%@)",
         "Dokładne cele": "Exact targets",
-        "%@ aplikacji": "%@ apps",
-        "%@ zaznaczonych z %@": "%@ selected of %@",
         "NAZWA · WERSJA · ŹRÓDŁO": "NAME · VERSION · SOURCE",
         "Skanowanie aplikacji…": "Scanning apps…",
         "Co tu można wynieść?": "What can be hauled off here?",
@@ -540,9 +513,6 @@ extension Translations {
         "Odinstalowanie niepełne — nie usunięto: %@": "Uninstall incomplete — not removed: %@",
         "Nie uruchomiono --force; wybrane usunięcie wraz z resztkami nie zostało po cichu zmienione.":
             "--force was not run; the selected app-and-leftovers removal was not silently changed.",
-        "Odinstalować %@ %@?": "Uninstall %@ %@?",
-        "aplikację": "app",
-        "aplikacji": "apps",
         "%@ przez brew · %@ do Kosza": "%@ via brew · %@ to Trash",
         "Aplikacje trafią do Kosza": "Apps will go to the Trash",
         // REL-16 — cask usuwany po tokenie, nie po ścieżce: przy dwóch kopiach tej samej
@@ -557,9 +527,6 @@ extension Translations {
         "Zabiera też pliki w ~/Library/Preferences, Caches i Application Support.": "Also takes files in ~/Library/Preferences, Caches and Application Support.",
         "Zabiera też pliki w ~/Library/Preferences, Caches i Application Support. Tego nie da się cofnąć.":
             "Also takes files in ~/Library/Preferences, Caches and Application Support. This cannot be undone.",
-        "%@ %@ przez brew — trafi do Kosza.": "%@ %@ by brew — will go to the Trash.",
-        "aplikacja nie jest zarządzana": "app is not managed",
-        "aplikacji nie jest zarządzanych": "apps are not managed",
         "Usuń razem z resztkami": "Remove along with leftovers",
         "Usuń tylko aplikację": "Remove app only",
         "Przenieś do Kosza": "Move to Trash",
@@ -568,8 +535,6 @@ extension Translations {
         "Zaznaczone pliki trafią do Kosza — możesz je stamtąd przywrócić.":
             "Checked files will go to the Trash — you can restore them from there.",
         "Odznacz wszystko": "Deselect all",
-        "%@ resztek do Kosza": "%@ leftovers to Trash",
-        "Nie udało się przenieść %@ resztek do Kosza.": "Could not move %@ leftovers to the Trash.",
         "zalecane": "recommended",
         "cask + formula": "cask + formula",
         "ze sklepu": "from the store",
@@ -600,7 +565,6 @@ extension Translations {
         "Globalne npm pachną odwiecznością": "Global npm smells of ages past",
         "Mhm, jeszcze ten folder": "Mhm, this folder too",
         "Przeczesuję /Applications…": "Combing through /Applications…",
-        "Obchód skończony — %@ aplikacji pod opieką.": "Patrol complete — %@ apps under watch.",
         "instalacje przez `npm i -g`": "installed via `npm i -g`",
         "dzisiaj": "today",
         "wczoraj": "yesterday",
@@ -619,7 +583,6 @@ extension Translations {
         "Uruchom Wegę ponownie": "Restart Wega",
         "Zobacz wydanie": "View release",
         "Brak opublikowanych notatek": "No notes published",
-        "…i %@ wcześniejszych wydań": "…and %@ earlier releases",
         "Nie udało się pobrać notatek wydania": "Couldn't fetch the release notes",
         "Zobacz w logach": "View in logs",
         "Włącz Touch ID": "Enable Touch ID",
@@ -669,10 +632,6 @@ extension Translations {
         "Przepnij pod Brew": "Reattach to Brew",
         "Pełny obchód": "Full sweep",
         "O aplikacji": "About the app",
-        "brew · helper aktywny": "brew · helper active",
-        // M3(a) — chip mówi, co naprawdę zwraca SMAppService, nie co byłoby miło zobaczyć.
-        "brew · helper wymaga zgody": "brew · helper needs approval",
-        "brew · helper nieaktywny": "brew · helper inactive",
         // M3(d) — wyjaśniamy się zanim macOS pokaże swój jednorazowy dialog.
         "Powiadamiać o nowych aktualizacjach?": "Notify you about new updates?",
         "Wega sprawdza w tle i może dać znać, gdy pojawi się coś nowego. macOS zapyta o zgodę tylko raz.":
@@ -680,7 +639,6 @@ extension Translations {
         "Nie teraz": "Not now",
         "Powiadamiaj": "Notify me",
         // M3(b) — „sprawdzenie” nie odinstalowuje niczego po cichu; użytkownik decyduje.
-        "%@ casków bez aplikacji": "%@ casks with no app",
         "Homebrew wciąż śledzi: %@. Aplikacji nie ma na dysku — możesz je wyrejestrować.":
             "Homebrew still tracks: %@. The apps are gone from disk — you can deregister them.",
         "Wyrejestruj": "Deregister",
@@ -760,7 +718,6 @@ extension Translations {
             "Wega works without it — it checks the Mac App Store, Sparkle, vendor feeds and npm. Homebrew adds formulae and casks.",
         "Kopiuj polecenie": "Copy command",
         "Skopiowano": "Copied",
-        "Usunięto %@ nieaktualnych casków": "Removed %@ stale casks",
         "Homebrew nie śledzi już aplikacji, których nie ma na dysku.":
             "Homebrew no longer tracks apps that are gone from disk.",
         // REL-13 — czyszczenie stale-casków rozgałęzia komunikat na sukces/częściowy/porażkę.
@@ -768,8 +725,6 @@ extension Translations {
         "Reszty nie udało się wyrejestrować — szczegóły są w logach.":
             "The rest could not be deregistered — see the log for details.",
         "Nie udało się usunąć nieaktualnych casków": "Could not remove the stale casks",
-        "Homebrew nadal śledzi %@ casków bez aplikacji — szczegóły są w logach.":
-            "Homebrew still tracks %@ casks with no app — see the log for details.",
         "Narzędzia": "Tools",
         // Sidebar taxonomy — update-category filter sections.
         "Do aktualizacji": "To update",
@@ -779,7 +734,6 @@ extension Translations {
         "Poprawki bezp.": "Security fixes",
         "Do przepięcia": "To reattach",
         "Homebrew nie jest zainstalowany": "Homebrew is not installed",
-        "Wega potrzebuje Homebrew, żeby sprawdzać aktualizacje\ni zarządzać aplikacjami. Zainstaluj go i kliknij Sprawdź ponownie.": "Wega needs Homebrew to check for updates\nand manage apps. Install it and click Check again.",
         "Polecenie instalacji (wklej w Terminal):": "Installation command (paste into Terminal):",
         "Otwórz brew.sh": "Open brew.sh",
         "· %@": "· %@",
@@ -820,10 +774,6 @@ extension Translations {
             + "Ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami; nic nie jest nigdzie wysyłane.":
             "Saves a zip with both log files, versions, detected managers, schedule status and update history. "
             + "Paths, tokens and account names are replaced with placeholders; nothing is sent anywhere.",
-        "Zapisuje redagowaną paczkę zip z oboma plikami logów i pełnym kontekstem środowiska.":
-            "Saves a redacted zip with both log files and the full environment context.",
-        "Paczka jest redagowana — ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami.":
-            "The bundle is redacted — paths, tokens and account names are replaced with placeholders.",
         "Katalog aplikacji": "Application catalog",
         "Wega pobiera mapowania aplikacji (repozytoria GitHub, kody IDE JetBrains, feedy Sparkle) z sieci, "
             + "więc nowe aplikacje są obsługiwane bez aktualizacji Wegi. Zmiany zastosują się po ponownym uruchomieniu.":
@@ -850,13 +800,8 @@ extension Translations {
         "Hmm… znajomy zapach": "Hmm… a familiar smell",
         "Czuję starą wersję…": "I smell an old version…",
         "Sniff sniff… Homebrew": "Sniff sniff… Homebrew",
-        "Czy plist mówi prawdę?": "Is the plist telling the truth?",
         "Wąchanie /Applications…": "Sniffing /Applications…",
-        "Trop CFBundleShortVersion": "On the CFBundleShortVersion trail",
         "Pachnie świeżym dmg": "Smells like a fresh dmg",
-        "Ślad prowadzi do Cellar": "The trail leads to Cellar",
-        "Pulę pamięci czuć tu mocno": "The memory pool smells strong here",
-        "Czy to zapach Sparkle?": "Is that the scent of Sparkle?",
         "Mhm… kolejna wersja": "Mhm… another version",
         "Cześć! Co dziś robimy?": "Hi! What are we doing today?",
         "\u{201E}%@\u{201D}": "\u{201C}%@\u{201D}",
@@ -952,7 +897,6 @@ extension Translations {
         "czyszczenie Homebrew": "Homebrew cleanup",
         "migracja %@": "migrating %@",
         "usuwanie duplikatu %@": "removing duplicate %@",
-        "dezinstalacja %@ aplikacji": "uninstalling %@ app(s)",
         // LT-01 — trwały journal operacji: recovery, ręczne cofanie, uczciwość źródeł bez rollbacku.
         "Wega naprawiła przerwaną aktualizację": "Wega repaired an interrupted update",
         "Przerwana aktualizacja: %@ nie udało się naprawić — sprawdź te aplikacje. %@ przywrócono z kopii.":
@@ -1004,28 +948,21 @@ extension Translations {
         // Zgłaszanie błędów z zakładki Logi.
         "Zgłoś błąd…": "Report a problem…",
         "Opisz, co się stało": "Describe what happened",
-        "Co robiłeś, zanim to się wydarzyło? (opcjonalne)":
-            "What were you doing when it happened? (optional)",
         "Podgląd zgłoszenia": "Report preview",
         "Zbieram informacje o środowisku…": "Gathering environment information…",
         "Wyślij e-mailem": "Send by e-mail",
         "Zgłoś na GitHubie": "Report on GitHub",
         "Kopiuj treść": "Copy contents",
         "Kopiuj %@": "Copy %@",
-        "Pominięto %d najstarszych wpisów": "%d oldest entries omitted",
         "Nie znaleziono klienta poczty": "No mail client found",
         "Ta maszyna nie ma skonfigurowanego klienta poczty. Skopiuj poniższe dane i wyślij zgłoszenie ręcznie.":
             "This machine has no mail client configured. Copy the details below and send the report manually.",
         "Adres": "Address",
         "Temat": "Subject",
         "Treść": "Contents",
-        "Zgłoszenie jest redagowane — ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami.":
-            "The report is redacted: paths, tokens and account names are replaced with placeholders.",
-        "Zaznacz wpisy w logu, żeby zgłosić błąd": "Select log entries to report a problem",
         // Fix round 1 — channel picker replaces two send buttons, and the no-handler
         // fallback becomes channel-aware.
         "Kanał": "Channel",
-        "Wyślij zgłoszenie": "Send report",
         "Nie udało się otworzyć zgłoszenia na GitHubie": "Could not open the GitHub issue page",
         "Ta maszyna nie może otworzyć strony zgłoszenia. Skopiuj poniższe dane i utwórz je ręcznie pod tym adresem.":
             "This machine cannot open the issue page. Copy the details below and create it manually at this address.",

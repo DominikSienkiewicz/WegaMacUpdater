@@ -87,19 +87,23 @@ final class ScanInPlaceTests: XCTestCase {
         )
     }
 
-    func testTheHeaderCarriesThePhasesAndWegaSniffsOverTheStoodDownList() throws {
+    /// UXP-13 — the band carries the scan while it runs in place; with no band (nothing to
+    /// update, or restarts only) the heading carries the phases and Wega sniffs beside them.
+    func testTheHeaderCarriesThePhasesAndWegaSniffsBesideTheStoodDownList() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         let overlay = try source("Sources/MacUpdater/ScanBusyOverlay.swift")
-        let overlayView = try XCTUnwrap(overlay.range(of: "struct ScanBusyOverlay: View").map { overlay[$0.lowerBound...] })
 
         XCTAssertTrue(view.contains("ScanPhaseStrip(progress: scan.progress)"))
-        XCTAssertTrue(view.contains("refreshProgress: scan.isRefreshing ? scan.progress : nil"),
+        XCTAssertTrue(view.contains("scan: scan.isRefreshing ? scanPresentation : nil"),
                       "the band carries the phases while a scan runs in place")
         XCTAssertFalse(view.contains("refreshingStamp"), "the phases replace the one-line stamp")
-        XCTAssertTrue(overlayView.contains("ScanProgressScene(progress: progress)"),
-                      "the first scan's animated Wega sniffs over the list too")
-        XCTAssertTrue(overlayView.contains(".background(Color(nsColor: .windowBackgroundColor).opacity(Self.scrimOpacity))"),
-                      "the list stays, stood down")
+        let heading = try XCTUnwrap(view.range(of: "private var resultsHeading: some View")).upperBound
+        let strip = try XCTUnwrap(view.range(of: "ScanPhaseStrip(progress: scan.progress)", range: heading..<view.endIndex))
+        let sniff = try XCTUnwrap(view.range(of: "WegaHead(pose: .sniff, size: 28).sniffing(true)", range: heading..<view.endIndex))
+        XCTAssertLessThan(sniff.lowerBound, strip.lowerBound, "the sniffing head stands before the strip")
+        XCTAssertEqual(view[heading...].components(separatedBy: ".frame(minHeight: 28, alignment: .leading)").count, 3,
+                       "both variants of the second line keep one height, so the heading never jumps")
+        XCTAssertFalse(overlay.contains("struct ScanBusyOverlay"), "nothing is drawn over the list")
     }
 
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {

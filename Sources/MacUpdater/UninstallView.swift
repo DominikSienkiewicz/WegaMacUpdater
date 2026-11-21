@@ -98,10 +98,9 @@ struct UninstallView: View {
                 // Header
                 HStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(tr("Odinstaluj aplikacje")).font(.wega(.title2, weight: .semibold))
                         Text(tr("Brew casks → brew uninstall  ·  pozostałe → Kosz"))
                             .font(.wega(.subheadline, monospaced: true))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary)
                     }
                     Spacer()
                     Button { Task { await refresh() } } label: {
@@ -147,8 +146,8 @@ struct UninstallView: View {
                             trf("%@ z %@ zaznaczonych", "\(targets.count)", "\(selectableCount)")
                         )
                         Text(targets.isEmpty
-                             ? trf("%@ aplikacji", "\(filtered.count)")
-                             : trf("%@ zaznaczonych z %@", "\(targets.count)", "\(selectableCount)"))
+                             ? trp("%@ aplikacji", filtered.count)
+                             : trf("%@ z %@ zaznaczonych", "\(targets.count)", "\(selectableCount)"))
                             .font(.wega(.callout))
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -287,6 +286,7 @@ struct UninstallView: View {
             onDismiss: { answerForceQuit(.cancel) },
             content: { UninstallForceQuitSheet(apps: forceQuitApps, onChoice: answerForceQuit) }
         )
+        .wegaAttention(showDialog || showForceQuit || scanError != nil)
         .onChange(of: search) { _, _ in
             selected.formIntersection(filtered.map(\.id))
         }
@@ -482,7 +482,7 @@ struct UninstallView: View {
         // Application Support) rewrites the Caskroom, and `UpgradeMutex` only covers upgrades.
         // Without a ticket a quit here ends the process between the Caskroom entry and the
         // bundle, which is the half-removed state the guard exists to prevent.
-        let ticket = MutationGuard.shared.begin(trf("dezinstalacja %@ aplikacji", "\(targets.count)"))
+        let ticket = MutationGuard.shared.begin(trp("odinstalowanie %@ aplikacji", targets.count))
         defer { MutationGuard.shared.end(ticket) }
 
         banner = nil; result = nil
@@ -633,7 +633,7 @@ struct UninstallDialog: View {
                         .font(.wega(.title2))
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(trf("Odinstalować %@ %@?", "\(totalCount)", totalCount == 1 ? tr("aplikację") : tr("aplikacji")))
+                    Text(trp("Odinstalować %@ aplikacji?", totalCount))
                         .font(.wega(.title3, weight: .semibold))
                     if hasMixed {
                         Text(trf("%@ przez brew · %@ do Kosza", "\(brewCount)", "\(trashCount)"))
@@ -798,7 +798,7 @@ struct UninstallDialog: View {
                             Image(systemName: "info.circle")
                                 .foregroundStyle(Color.wegaInfo)
                                 .font(.wega(.body))
-                            Text(trf("%@ %@ przez brew — trafi do Kosza.", "\(trashCount)", trashCount == 1 ? tr("aplikacja nie jest zarządzana") : tr("aplikacji nie jest zarządzanych")))
+                            Text(trp("%@ aplikacji nie jest zarządzanych przez Homebrew — trafią do Kosza.", trashCount))
                                 .font(.wega(.callout))
                                 .foregroundStyle(.secondary)
                             Spacer()

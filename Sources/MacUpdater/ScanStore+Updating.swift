@@ -331,10 +331,10 @@ extension ScanStore {
             UserDefaults.standard.set(true, forKey: ReadinessPresentation.dismissedKey)
             let count = summary.upgraded.count
             showBanner(BannerData(variant: .success,
-                                  title: trf("Zaktualizowano %@ pakietów", "\(count)"),
+                                  title: trp("Zaktualizowano %@ pakietów", count),
                                   message: dockerInstallationMessage(in: summary) ?? tr("Wszystko gotowe.")))
             emitActivitySignal(.success)
-            emitWegaState(WegaState(pose: .happy, line: trf("Gotowe! %@ pakietów odświeżonych.", "\(count)")))
+            emitWegaState(WegaState(pose: .happy, line: trp("Gotowe! %@ pakietów odświeżonych.", count)))
             WegaLog.info(.homebrew, "Zaktualizowano \(count) pakietów")
             return
         }

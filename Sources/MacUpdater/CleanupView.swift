@@ -40,6 +40,7 @@ struct CleanupView: View {
         .sheet(item: $confirming) { finding in
             CleanupConfirmationSheet(store: store, finding: finding) { confirming = nil }
         }
+        .wegaAttention(confirming != nil || showsPathWarning || !errorMessages.isEmpty)
         .onChange(of: store.phase) { old, new in announce(from: old, to: new) }
         .onAppear { store.applyTCCMapSetting() }
     }
@@ -113,17 +114,19 @@ struct CleanupView: View {
         .help(tr("Zapisz raport jako tekst lub JSON, ze ścieżkami w postaci ~"))
     }
 
+    /// What went wrong, top to bottom. One list for the banners and for Wega's ball (UXP-27),
+    /// so a new error cannot show without also holding it.
+    private var errorMessages: [String] {
+        [
+            store.lastScanFailed ? tr("Skan nie powiódł się. Poprzedni wynik, jeśli był, zostaje na ekranie.") : nil,
+            CleanupPresentation.pathReadMessage(store.pathReadResult),
+            exportError,
+        ].compactMap { $0 }
+    }
+
     private var messages: some View {
         VStack(spacing: 8) {
-            if store.lastScanFailed {
-                ErrorBanner(message: tr("Skan nie powiódł się. Poprzedni wynik, jeśli był, zostaje na ekranie."))
-            }
-            if let message = CleanupPresentation.pathReadMessage(store.pathReadResult) {
-                ErrorBanner(message: message)
-            }
-            if let exportError {
-                ErrorBanner(message: exportError)
-            }
+            ForEach(errorMessages, id: \.self) { ErrorBanner(message: $0) }
         }
         .padding(.horizontal, 16)
     }
@@ -149,11 +152,10 @@ struct CleanupView: View {
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
         } else if store.phase == .scanning {
-            EmptyHero(
-                pose: .sniff, title: tr("Skanuję…"),
-                message: tr("Przeglądam katalogi z PATH, katalogi wersji i stan powłok. Niczego nie zmieniam."),
-                compact: true
-            )
+            // UXP-27 — Wega sniffs during every scan, this one too.
+            SniffingScene(caption: tr("Przeglądam katalogi z PATH i wersje narzędzi. Niczego nie zmieniam."))
+                .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             EmptyHero(
                 pose: .idle, title: tr("Porządki"),

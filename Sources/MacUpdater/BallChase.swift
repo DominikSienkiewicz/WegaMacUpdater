@@ -37,6 +37,13 @@ struct BallChase: Equatable {
     static let run: Double = 0.6
     static let comeBack: Double = 0.75
     static let proud: Double = 0.9
+
+    /// Waits, then says whether the chase may go on. A cancelled task wakes at once, and moving
+    /// the stage after that would undo the reset its successor has already made.
+    static func pause(for seconds: Double) async -> Bool {
+        try? await Task.sleep(for: .seconds(seconds))
+        return !Task.isCancelled
+    }
 }
 
 // MARK: - Ball

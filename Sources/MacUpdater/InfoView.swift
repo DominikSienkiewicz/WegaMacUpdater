@@ -15,6 +15,7 @@ struct InfoView: View {
     @StateObject var diagnosticsExport = DiagnosticsExportController()
     // SEC-08: opcjonalny token GitHub (Keychain).
     @State private var githubTokenInput: String = ""
+    @State private var reportController: BugReportController?
 
     private var diagnostics: DiagnosticsResult? { operations.diagnostics }
     private var catalogRefreshing: Bool { operations.catalogRefreshing }
@@ -80,6 +81,9 @@ extension InfoView {
             touchIDController.refresh()
             operations.refreshPersistentState()
         }
+        .sheet(item: $reportController) { controller in
+            BugReportSheet(controller: controller) { reportController = nil }
+        }
     }
 
     // MARK: - Language
@@ -123,49 +127,9 @@ extension InfoView {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(14)
                 } else {
-                    ForEach(policies.sortedEntries) { entry in
-                        HStack(spacing: 10) {
-                            Image(systemName: policyIcon(entry.policy))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 18)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(entry.displayName).font(.wega(.body, weight: .medium))
-                                Text(policyDescription(entry.policy))
-                                    .font(.wega(.subheadline))
-                                    .foregroundStyle(.tertiary)
-                            }
-                            Spacer()
-                            Button { policies.remove(key: entry.key) } label: {
-                                Image(systemName: "trash").font(.wega(.callout))
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.secondary)
-                            .help(tr("Usuń regułę"))
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                        if entry.id != policies.sortedEntries.last?.id {
-                            Divider().opacity(0.4).padding(.leading, 42)
-                        }
-                    }
+                    PolicyRulesList(entries: policies.sortedEntries, onRestore: { policies.remove(key: $0.key) })
                 }
             }
-        }
-    }
-
-    private func policyIcon(_ policy: UpdatePolicy) -> String {
-        switch policy {
-        case .ignored: return "bell.slash"
-        case .pinned:  return "pin"
-        case .skipped: return "forward.end"
-        }
-    }
-
-    private func policyDescription(_ policy: UpdatePolicy) -> String {
-        switch policy {
-        case .ignored:              return tr("Ignorowane")
-        case .pinned(let version):  return trf("Przypięte do %@", version)
-        case .skipped(let version): return trf("Pominięta wersja %@", version)
         }
     }
 
@@ -515,7 +479,7 @@ extension InfoView {
                     SelfUpdateNoteDisclosure(note: note)
                 }
                 if history.omitted > 0 {
-                    Text(trf("…i %@ wcześniejszych wydań", String(history.omitted)))
+                    Text(trp("…i %@ wcześniejszych wydań", history.omitted))
                         .font(.wega(.subheadline))
                         .foregroundStyle(.secondary)
                 }
@@ -638,7 +602,8 @@ extension InfoView {
                 HStack(spacing: 16) {
                     Link("GitHub", destination: AppEndpoints.shared.projectRepositoryURL)
                         .font(.wega(.body))
-                    Link(tr("Zgłoś błąd"), destination: AppEndpoints.shared.projectIssuesURL)
+                    Button(tr("Zgłoś błąd")) { reportController = BugReportController(entries: []) }
+                        .buttonStyle(.link)
                         .font(.wega(.body))
                 }
                 .padding(.horizontal, 14)
@@ -707,11 +672,6 @@ extension InfoView {
                     ProgressView().controlSize(.small)
                 }
                 Spacer()
-                if diagnosticsExport.lastExportURL != nil {
-                    Button(tr("Pokaż w Finderze")) { diagnosticsExport.revealLastExport() }
-                        .buttonStyle(.link)
-                        .font(.wega(.subheadline))
-                }
             }
 
             Text(tr("Zapisuje paczkę zip z oboma plikami logów, wersjami, wykrytymi menedżerami, statusem harmonogramu i historią aktualizacji. Ścieżki, tokeny i nazwy użytkownika są zastąpione znacznikami; nic nie jest nigdzie wysyłane."))
@@ -719,12 +679,7 @@ extension InfoView {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if let error = diagnosticsExport.lastError {
-                Text(error)
-                    .font(.wega(.subheadline))
-                    .foregroundStyle(Color.wegaDanger)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            DiagnosticsExportStatusRow(controller: diagnosticsExport)
         }
         .padding(14)
     }

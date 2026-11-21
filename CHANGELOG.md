@@ -15,6 +15,16 @@ them verbatim under the new version heading, so that step is never done by hand 
 ## [Unreleased]
 
 ### Added
+- **A scan shows where it is, in the band.** While Wega checks, the band names the step
+  (**Refreshing the Homebrew catalog…** first, then Homebrew, the App Store, npm and the
+  vendors), counts the time the check has taken and the updates found so far, shows a ring
+  and a chip per source, and once the vendors start counts them (**Vendors: 12 of 31 apps**).
+  Wega sniffs throughout, and nothing covers the rows: they stay readable, and a note says
+  selecting comes back when the scan finishes.
+- **Undo a hidden update at once.** **Don't update** and **Skip this version** hide the row
+  right away and show an **Undo** toast for 8 seconds; VoiceOver reads it, and with VoiceOver
+  on it stays until you close it. The line **Hidden by your rules: N · Show** under the list
+  opens your rules, where **Restore** takes one back to the list, never into the queue.
 - **Choose which copy of a tool stays.** In Cleanup, a tool installed more than once now has a
   **keep** choice on each of its copies, so the copy you keep is no longer just the one first on
   `PATH`; the other copies offer their removal, and Wega remembers the choice for later scans.
@@ -60,12 +70,32 @@ them verbatim under the new version heading, so that step is never done by hand 
   give it the red warning label.
 - **The list stays readable while Wega checks again.** During **Check now** or **⌘R** the
   rows used to vanish behind a frosted layer, so the screen looked empty and frozen. They
-  now stay visible, dimmed, and Wega is back over the top of the list, sniffing through the
-  check as she did before 0.8.0.
+  now stay visible and readable while the check reports itself in the band above the list.
 - **The list stays readable while updates install.** During an update run the rows used to
   vanish behind the same frosted layer. They now stay visible, dimmed, behind the note.
 
 ### Changed
+- **The band names your queue.** It reads **4 queued · 2 to finish with the developer**
+  (the second half only while something is queued, counted in the category on screen), says
+  how far an undo reaches (**Undo: 3 of 4**, or **Checking undo availability** while a cask is
+  still being checked; a cask Wega could not check counts as not covered), and its button is
+  **Update N**, or **Nothing selected** when the queue is empty.
+- **Every counted noun takes its plural form.** Polish and English texts that count apps,
+  packages, casks and leftovers now use the right form for 1, 2, 5, 12 and 22.
+- **Report a problem names what it opens.** **Zgłoś błąd…** in Logs works without selecting
+  entries, the buttons read **Open Email Draft** and **Open Issue on GitHub**, **Zgłoś błąd**
+  in Settings opens the same report sheet, and the sheet says it replaced the sensitive data
+  it found. **Eksportuj diagnostykę** says whether the zip was saved (with **Show in Finder**)
+  or why it was not.
+- **Wega speaks plainly about checks and moves.** Scan lines say what is being looked at, and
+  the sheet before moving an app to Homebrew asks **Move <app> to Homebrew?**, names the
+  backup Wega makes and says it is restored if the new version fails its signature check.
+- **A calmer tone when something goes wrong.** Errors are first-person and plain (**I couldn't
+  install <app>**), Wega puts her ball down while an error, an update run or a confirmation is
+  open, and the Cleanup scan has her sniffing like the others.
+- **The scan button only where a scan shows.** **Check now** appears only on Updates, To
+  reattach and Undo updates; **⌘R** still works everywhere. The npm card in Inventory is a
+  counter, no longer a button that did nothing.
 - **"May fix security issues" instead of "urgent".** The band counts the updates that may
   fix security issues, Wega's card says that their release notes mention security, and the
   inspector shows which words were found, because the match is a guess from the notes'

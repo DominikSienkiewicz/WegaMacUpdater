@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import MacUpdaterCore
 
@@ -37,7 +38,13 @@ struct ScanStoreDependencies {
     var recordUpdateRun: (UpdateJournalEntry) -> Void
     let settleAppManagementPermission: ((Bool) -> Void)?
     let undoableUpdates: () -> [UndoableUpdate]
+    /// A test's stubbed manual scan. Tried first, before `manualScanWithProgress`, so a test that
+    /// copies `.live` and sets this gets its stub rather than the real scanner `.live` carries.
+    /// The app leaves it `nil`.
     var detailedManualScan: ((BrewService, Set<String>) async -> ManualScanReport)? = nil
+    /// UXP-13 — the manual scan that also reports how many vendor apps have answered: the one
+    /// `.live` runs. Tried after `detailedManualScan` and before the legacy `manualScan`.
+    var manualScanWithProgress: ((BrewService, Set<String>, @escaping @Sendable (ManualScanProgress) async -> Void) async -> ManualScanReport)? = nil
     var checkVendorUpdate: @Sendable (ManualOutdatedApp) async throws -> VendorUpdateCompletionResult = {
         try await VendorUpdateCompletionChecker().check($0)
     }
@@ -82,8 +89,8 @@ struct ScanStoreDependencies {
         recordUpdateRun: { UpdateRunJournal().record($0) },
         settleAppManagementPermission: nil,
         undoableUpdates: { UpdateOperationStore.shared.undoableUpdates() },
-        detailedManualScan: { brew, outdated in
-            await ManualUpdateScanner(brewService: brew).scanReport(brewOutdatedCasks: outdated)
+        manualScanWithProgress: { brew, outdated, report in
+            await ManualUpdateScanner(brewService: brew).scanReport(brewOutdatedCasks: outdated, onProgress: report)
         },
         reportVendorCheck: { item, remaining, check, count, fingerprint in
             MenuBarAgent.shared.reportVendorCheck(item: item, remaining: remaining, check: check, count: count, fingerprint: fingerprint)
@@ -138,6 +145,10 @@ final class ScanStore: ObservableObject {
     @Published var cleaningStaleCasks = false
     /// M5 — whether each outdated cask is covered by snapshot → canary → auto-rollback.
     @Published var caskProtection:    [String: RollbackProtection.Verdict] = [:]
+    /// M2 — the casks the last protection check asked brew about. One of them without a verdict
+    /// is one the check found nothing for (brew failed, or left it out): not covered, rather than
+    /// "still checking" for good.
+    @Published var caskProtectionResolved: Set<String> = []
     /// F2 — what each outdated cask installs. Feeds the "may need an admin password" note.
     @Published var caskProfiles:      [String: CaskArtifactProfile] = [:]
     /// F2 — download sizes, probed on demand. `unknown` is a first-class answer: brew's JSON
@@ -156,6 +167,18 @@ final class ScanStore: ObservableObject {
     /// numbers it was meant to correct. In this mode `status` stays `.results` and only the
     /// header and the toolbar say that something is running.
     @Published private(set) var isRefreshing = false
+    /// UXP-13 — true only while `brew update` refreshes Homebrew's catalog, the slow first step
+    /// of a full scan. A caption of its own rather than a fifth `ScanPhase`: the ring counts the
+    /// four sources, and the catalog is not one of them.
+    @Published private(set) var isRefreshingCatalog = false
+    /// UXP-13 — when the running scan started, for the band's elapsed time. `nil` between scans.
+    @Published private(set) var scanStartedAt: Date?
+    /// UXP-13 — how many vendor apps the running scan has heard back from. `nil` outside the
+    /// vendor phase of the current scan.
+    @Published private(set) var manualScanProgress: ManualScanProgress?
+    /// UXP-13 — one number per scan, so a vendor report that arrives after its scan has ended
+    /// cannot land in the next one.
+    private(set) var scanGeneration = 0
     /// How far the running upgrade has got, in whole packages. `nil` when nothing is
     /// installing, which is also what hides the bar.
     @Published var upgradeProgress: UpgradeProgress? {
@@ -186,6 +209,11 @@ final class ScanStore: ObservableObject {
     @Published var undoableUpdates:   [UndoableUpdate] = []
     /// LT-01 — the token whose undo is currently restoring, so the row can spin.
     @Published var undoBusy:          String?
+    /// UXP-11 — the rule a "Nie aktualizuj" or a skip just wrote, offered back as "Cofnij"
+    /// until the toast closes. See `ScanStore+Rules.swift`.
+    @Published var ruleUndo: RuleUndoNotice?
+    /// Keeps `ruleUndo` honest when a rule changes outside this store, e.g. in Settings.
+    private var ruleUndoWatch: AnyCancellable?
 
     /// Rebound on every appearance of the view that owns the backing `@State` — see
     /// `bind(_:)`. Replayed from `replayLastScan()` so a rebuilt tree does not show an
@@ -239,6 +267,12 @@ final class ScanStore: ObservableObject {
         self.resultStore = resultStore
         self.runningApplicationInspector = runningApplicationInspector
         self.dependencies = dependencies
+        ruleUndoWatch = UpdatePolicyStore.shared.$entries.sink { [weak self] entries in
+            MainActor.assumeIsolated {
+                self?.dropRuleUndo(ifStaleIn: entries)
+                self?.deselectRows(hiddenBy: entries)
+            }
+        }
     }
 
     /// Services are owned by the app-level `AppViewModel`; hand them over on first appearance.
@@ -423,6 +457,44 @@ final class ScanStore: ObservableObject {
         isRefreshing = refreshing
     }
 
+    /// UXP-13 — opens a scan's own state: a new generation, the start of its clock and no
+    /// vendor count yet. The three below are `private(set)` for the reason `isRefreshing` is.
+    func beginScanProgress() {
+        scanGeneration += 1
+        scanStartedAt = .now
+        manualScanProgress = nil
+    }
+
+    func setRefreshingCatalog(_ refreshing: Bool) {
+        isRefreshingCatalog = refreshing
+    }
+
+    /// Closes what only a running scan has, on every way out of it: the band goes back to the
+    /// results state instead of a clock and a count that no longer move.
+    func endScanProgress() {
+        isRefreshingCatalog = false
+        scanStartedAt = nil
+        manualScanProgress = nil
+    }
+
+    /// Stores a vendor report from the scan numbered `generation`, when the rule below allows.
+    func acceptManualScanProgress(_ progress: ManualScanProgress, generation: Int) {
+        guard Self.acceptsManualProgress(progress, current: manualScanProgress, generation: generation,
+                                         currentGeneration: scanGeneration, phase: self.progress) else { return }
+        manualScanProgress = progress
+    }
+
+    /// A vendor report counts only for the scan still running, only while it is in its vendor
+    /// phase, and never moves the count backwards.
+    nonisolated static func acceptsManualProgress(
+        _ progress: ManualScanProgress, current: ManualScanProgress?,
+        generation: Int, currentGeneration: Int, phase: ScanProgress?
+    ) -> Bool {
+        guard generation == currentGeneration, phase == .running(.manual) else { return false }
+        guard let current else { return true }
+        return progress.checkedApps > current.checkedApps
+    }
+
     /// REL-09 — says out loud that the result on screen came from a scan that did not
     /// finish asking. Raised on restore, where there is no scan-result banner to carry it
     /// and where the list would otherwise read as an answer rather than a partial one.
@@ -503,17 +575,33 @@ final class ScanStore: ObservableObject {
         )
     }
 
+    /// Every installable row the scan found, before the user's rules.
+    private var itemCandidates: [OutdatedItem] {
+        UpdatePlanner.attachingReleaseNotes(
+            to: reconciledSourceUpdates.items,
+            manual: manualOutdated,
+            caskAppPaths: caskIconPaths
+        )
+    }
+
     // Keys carry a source tag ("f:", "c:", "a:", "n:"); see UpdatePlanner.
     // Items the user has ignored or pinned below the available version are filtered out.
     var allItems: [OutdatedItem] {
-        UpdatePlanner.applyPolicies(
-            UpdatePlanner.attachingReleaseNotes(
-                to: reconciledSourceUpdates.items,
-                manual: manualOutdated,
-                caskAppPaths: caskIconPaths
-            ),
-            policies: UpdatePolicyStore.shared.policiesMap
-        )
+        UpdatePlanner.applyPolicies(itemCandidates, policies: UpdatePolicyStore.shared.policiesMap)
+    }
+
+    /// A row a rule hides leaves the queue with it, wherever the rule was written: a pin from
+    /// the row's sheet or a rule from Settings, not only "Nie aktualizuj" and a skip. Only ever
+    /// removes, so taking a rule back never puts the row into the queue. Fed every change of the
+    /// policy store, before the store holds the new `entries`, so it reads them from here.
+    func deselectRows(hiddenBy entries: [String: UpdatePolicyEntry]) {
+        guard !selected.isEmpty, !entries.isEmpty else { return }
+        let policies = entries.mapValues(\.policy)
+        let hidden = itemCandidates
+            .filter { UpdatePlanner.isSuppressed(key: $0.policyKey, availableVersion: $0.to, policies: policies) }
+            .map(\.key)
+        guard !selected.isDisjoint(with: hidden) else { return }
+        selected.subtract(hidden)
     }
 
     /// The installable rows the active sidebar category actually renders.
@@ -552,12 +640,34 @@ final class ScanStore: ObservableObject {
         }
     }
 
-    /// Manual updates with ignore/pin rules applied.
-    var visibleManual: [ManualOutdatedApp] {
+    /// Every manual update the scan found, before the user's rules.
+    private var manualCandidates: [ManualOutdatedApp] {
         let rows = reconciledSourceUpdates.manual
         let existingPaths = Set(rows.map { InstallationIdentity(path: $0.path) })
         let managed = (dockerManagedUpdates + serviceManagedUpdates).filter { !existingPaths.contains(InstallationIdentity(path: $0.path)) }
-        return UpdatePlanner.applyPolicies((rows + managed).map(DockerDesktopUpdatePolicy.vendorUpdate), policies: UpdatePolicyStore.shared.policiesMap)
+        return (rows + managed).map(DockerDesktopUpdatePolicy.vendorUpdate)
+    }
+
+    /// Manual updates with ignore/pin rules applied.
+    var visibleManual: [ManualOutdatedApp] {
+        UpdatePlanner.applyPolicies(manualCandidates, policies: UpdatePolicyStore.shared.policiesMap)
+    }
+
+    /// UXP-11 — one entry per rule that hides something this scan found, in the order Settings
+    /// lists them. A rule that hides nothing today (a pin the offer stays under) is not here.
+    var rulesHidingResults: [UpdatePolicyEntry] {
+        let policies = UpdatePolicyStore.shared.policiesMap
+        guard !policies.isEmpty else { return [] }
+        let items = itemCandidates.map { (keys: [$0.policyKey], available: $0.to) }
+        // The same two keys `UpdatePlanner.applyPolicies` reads for a manual app.
+        let manual = manualCandidates.map { app in
+            (keys: [app.policyKey] + (app.caskPolicyToken.map { [UpdatePlanner.key(name: $0, kind: .cask)] } ?? []),
+             available: app.availableVersion)
+        }
+        let hiding = Set((items + manual).flatMap { candidate in
+            candidate.keys.filter { UpdatePlanner.isSuppressed(key: $0, availableVersion: candidate.available, policies: policies) }
+        })
+        return UpdatePolicyStore.shared.sortedEntries.filter { hiding.contains($0.key) }
     }
 
     /// The update currently shown in the inspector pane, resolved from `inspectedKey`
@@ -603,25 +713,35 @@ final class ScanStore: ObservableObject {
     }
 
     func ignoreItem(_ item: OutdatedItem) {
+        let previous = UpdatePolicyStore.shared.entries[item.policyKey]
         UpdatePolicyStore.shared.ignore(key: item.policyKey, name: item.name)
         selected.remove(item.key)
+        noteRuleChange(key: item.policyKey, previous: previous, message: trf("Nie będę proponować aktualizacji %@.", item.name))
     }
 
     func ignoreManual(_ app: ManualOutdatedApp) {
+        let previous = UpdatePolicyStore.shared.entries[app.policyKey]
         UpdatePolicyStore.shared.ignore(key: app.policyKey, name: app.name)
+        noteRuleChange(key: app.policyKey, previous: previous, message: trf("Nie będę proponować aktualizacji %@.", app.name))
     }
 
     /// UX-12 — skip just the version currently on offer; a later release surfaces again.
     /// No-op when the source can't name the available version (nothing concrete to skip).
     func skipItem(_ item: OutdatedItem) {
         guard let version = item.to, !version.isEmpty else { return }
+        let previous = UpdatePolicyStore.shared.entries[item.policyKey]
         UpdatePolicyStore.shared.skip(key: item.policyKey, name: item.name, version: version)
         selected.remove(item.key)
+        noteRuleChange(key: item.policyKey, previous: previous,
+                       message: trf("Pominęłam wersję %@ aplikacji %@. Następną pokażę.", version, item.name))
     }
 
     func skipManual(_ app: ManualOutdatedApp) {
         guard let version = app.availableVersion, !version.isEmpty else { return }
+        let previous = UpdatePolicyStore.shared.entries[app.policyKey]
         UpdatePolicyStore.shared.skip(key: app.policyKey, name: app.name, version: version)
+        noteRuleChange(key: app.policyKey, previous: previous,
+                       message: trf("Pominęłam wersję %@ aplikacji %@. Następną pokażę.", version, app.name))
     }
 
     /// The banner currently on screen, if any.
@@ -668,6 +788,17 @@ final class ScanStore: ObservableObject {
         let counts = scopeCounts
         sinks.footerInfo?(lastCheck, counts.security)
         sinks.categoryCounts?(counts.apps, counts.cli)
+    }
+
+    /// M1 — the updates the band says you finish with the developer, counted as the category on
+    /// screen lists them: every manual row under All and Apps, only the security-flagged ones
+    /// under Security, none under CLI.
+    func handOffCount(for filter: UpdateFilter) -> Int {
+        switch filter {
+        case .all, .apps: updateCount.manual
+        case .cli:        0
+        case .security:   visibleManual.filter(isSecurityApp).count
+        }
     }
 
     /// UX-16 — the per-category counts the Updates scope bar shows and the sidebar badge sums.

@@ -61,9 +61,9 @@ struct SelectionRequiredBeforeUpdateTests {
     /// A dead control with no stated reason is its own defect: the screen has to say what is
     /// missing before the user goes looking for a broken button.
     @Test func theDisabledButtonSaysWhatIsMissing() throws {
-        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        let summary = try source("Sources/MacUpdater/UpdateBandPresentation.swift")
 
-        #expect(view.contains("Zaznacz, co mam zaktualizować"),
+        #expect(summary.contains("Zaznacz, co mam zaktualizować"),
                 "the empty-selection state must carry a visible hint, not just a dimmed button")
     }
 

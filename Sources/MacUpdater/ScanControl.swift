@@ -10,6 +10,7 @@ import MacUpdaterCore
 struct ScanControl: View {
     @EnvironmentObject private var scan: ScanStore
     let namespace: Namespace.ID
+    var isShown = true
 
     var body: some View {
         GlassEffectContainer(spacing: 8) {
@@ -36,6 +37,11 @@ struct ScanControl: View {
                 .disabled(scan.updating)
             }
         }
+        // A screen with nothing to scan hides the button but keeps its slot and takes it out of
+        // focus and VoiceOver; removing it would change the toolbar width.
+        .opacity(isShown ? 1 : 0)
+        .disabled(!isShown)
+        .accessibilityHidden(!isShown)
         // Keep the toolbar item's geometry constant while its action changes. A width change
         // here invalidates the window safe area; combined with NavigationSplitView that can
         // make AppKit re-run constraints until it aborts the process.
