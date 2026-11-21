@@ -114,6 +114,19 @@ struct UpdateRunBoardTests {
         #expect(lanes.contains("markRunLane(.appStore, .failed)"))
     }
 
+    /// Stopping Docker Desktop is already the cask's work: a stop request asked while Docker
+    /// quits must not make a row that has passed its gate read „nie zacznę”.
+    @Test func aDockerDesktopCaskReadsInstallingWhileDockerStops() throws {
+        let lanes = compact(try source("Sources/MacUpdater/ScanStore+UpgradeLanes.swift"))
+        #expect(lanes.contains("markRunRow(item.key, .installing) if let failure = await dockerMutationFailure("
+                               + "token: token, bundleURL: appPaths[token]) { markRunRow(item.key, .failed)"))
+        let gate = try #require(lanes.range(of: "private func upgradeCaskGated("))
+        let body = lanes[gate.upperBound...]
+        let stop = try #require(body.range(of: "markRunRow(item.key, .notStarted)"))
+        let start = try #require(body.range(of: "return await upgradeOneCask("))
+        #expect(stop.lowerBound < start.lowerBound, "the stop gate comes first, then the cask's own work")
+    }
+
     /// Once `postCaskUpgrade` has answered, a cask restored to its previous version, one whose
     /// restore failed and one brew never replaced stop reading „zainstalowano — sprawdzam”.
     @Test func aCaskThatFailsItsCheckOrNeverChangedReadsFailed() throws {

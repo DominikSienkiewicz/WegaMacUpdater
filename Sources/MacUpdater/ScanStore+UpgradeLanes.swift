@@ -83,6 +83,9 @@ extension ScanStore {
         operation: UpdateOperationSession
     ) async -> LaneItemResult {
         let token = item.name
+        // Stopping Docker Desktop is already this row's work, so it is installing from here:
+        // a stop asked for while Docker quits must not make it read „nie zacznę”.
+        markRunRow(item.key, .installing)
         if let failure = await dockerMutationFailure(token: token, bundleURL: appPaths[token]) {
             markRunRow(item.key, .failed)
             return LaneItemResult(item: item, outcome: failure)
