@@ -18,7 +18,7 @@ struct SettingsCategoriesTests {
         let expected: [String: [String]] = [
             "general":     ["appCard", "languageCard", "LaunchAtLoginSettingsCard()", "NotificationsSettingsCard()"],
             "checking":    ["policiesCard", "BackgroundUpdateConsentSettingsCard()", "ScanDirectoriesSettingsCard()", "ResourceGateSettingsCard()"],
-            "permissions": ["TrustSettingsCard(appManagement: diagnostics?.appManagement)", "privilegedHelperCard", "touchIDCard"],
+            "permissions": ["TrustSettingsCard(appManagement: diagnostics?.appManagement, touchIDSupported: touchIDState != .notSupported)", "privilegedHelperCard", "touchIDCard"],
             "cleanup":     ["CleanupProjectRootsSettingsCard()", "CleanupTCCMapSettingsCard()"],
             "advanced":    ["LaunchSmokeTestSettingsCard()", "CrashReportingSettingsCard()", "catalogCard", "githubTokenCard",
                             "diagnosticsCard", "environmentCard", "licensesCard"],

@@ -159,7 +159,10 @@ extension Translations {
             "To developers it sends only what a check needs, such as the installed version number.",
         "Łączy się z GitHubem (katalog aplikacji, aktualizacje Wegi), producentami zainstalowanych aplikacji, Homebrew i App Store.":
             "It connects to GitHub (app catalog, Wega updates), the developers of apps you have installed, Homebrew and the App Store.",
-        "Pokaż pełną listę": "Show Full List",
+        "Pokaż stałe adresy": "Show Fixed Addresses",
+        "Do tego adresy aktualizacji zapisane w zainstalowanych aplikacjach, rejestr npm i serwery App Store.":
+            "Plus the update addresses stored in your installed apps, the npm registry and App Store servers.",
+        "Stan: %@": "Status: %@",
         "Wega łączy się z tymi adresami albo otwiera je w przeglądarce, gdy o to poprosisz.":
             "Wega connects to these addresses, or opens them in your browser when you ask it to.",
         "Logi, ostatni wynik skanu i kopie sprzed aktualizacji (do 7 dni) zostają na tym Macu.":

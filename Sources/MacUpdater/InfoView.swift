@@ -96,7 +96,7 @@ extension InfoView {
 
     private var permissionsTab: some View {
         page(.permissions) {
-            TrustSettingsCard(appManagement: diagnostics?.appManagement)
+            TrustSettingsCard(appManagement: diagnostics?.appManagement, touchIDSupported: touchIDState != .notSupported)
                 .id(SettingsCard.trust)
             privilegedHelperCard
             touchIDCard
