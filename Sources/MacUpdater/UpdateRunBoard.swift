@@ -46,6 +46,20 @@ enum UpdateRunLane: Hashable, Sendable, CaseIterable {
     }
 }
 
+extension CaskValidationVerdict {
+    /// Whether a cask the tool reported installed still leaves the run without a new version
+    /// that passed its check: restored to the previous one, failed and not restorable, or
+    /// never replaced on disk. Its row then reads `failed` rather than `installedChecking`.
+    var failsTheRunRow: Bool {
+        switch self {
+        case .rolledBack, .publisherChangedAndRolledBack, .rollbackFailed, .notUpgraded:
+            return true
+        case .healthy, .publisherChanged, .replacedByAppUpdater:
+            return false
+        }
+    }
+}
+
 /// C2 stage 3 — the store's record of a running update: when it started, which rows it is
 /// about, and where each per-row lane and each batch has got to. `.idle` between runs.
 ///

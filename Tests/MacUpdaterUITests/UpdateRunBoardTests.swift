@@ -100,6 +100,22 @@ struct UpdateRunBoardTests {
         #expect(lanes.contains("markRunLane(.appStore, .failed)"))
     }
 
+    /// Once `postCaskUpgrade` has answered, a cask restored to its previous version, one whose
+    /// restore failed and one brew never replaced stop reading „zainstalowano — sprawdzam”.
+    @Test func aCaskThatFailsItsCheckOrNeverChangedReadsFailed() throws {
+        let failing: [CaskValidationVerdict] = [
+            .rolledBack, .publisherChangedAndRolledBack(old: "A", new: "B"), .rollbackFailed, .notUpgraded,
+        ]
+        let passing: [CaskValidationVerdict] = [
+            .healthy, .publisherChanged(old: "A", new: "B"), .replacedByAppUpdater(version: "2"),
+        ]
+        #expect(failing.allSatisfy { $0.failsTheRunRow })
+        #expect(!passing.contains { $0.failsTheRunRow })
+        let lanes = compact(try source("Sources/MacUpdater/ScanStore+UpgradeLanes.swift"))
+        #expect(lanes.contains("operation: operation ) if verdicts[token]?.failsTheRunRow == true { markRunRow(item.key, .failed) } "
+                               + "if outcome.isSuccessful { creditUnit() }"))
+    }
+
     @Test func boundariesThatChangeNothingPublishNothing() {
         let harness = makeScanStoreRuntimeHarness(runner: ScanStoreRuntimeProcessRunner { _ in
             ProcessResult(exitCode: 0, stdout: "", stderr: "")

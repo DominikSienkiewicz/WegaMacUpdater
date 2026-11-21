@@ -148,6 +148,7 @@ extension ScanStore {
         let verdicts = await postCaskUpgrade(
             [token], appPaths: appPaths, snapshots: snapshots, operation: operation
         )
+        if verdicts[token]?.failsTheRunRow == true { markRunRow(item.key, .failed) }
         if outcome.isSuccessful { creditUnit() }
         return LaneItemResult(item: item, outcome: outcome, validation: verdicts[token])
     }
