@@ -36,6 +36,18 @@ struct DiagnosticsExportOutcomeTests {
         }
     }
 
+    /// M8 — most `localizedDescription`s end in a full stop, and the sentence adds its own.
+    @Test func aReasonEndingInAFullStopKeepsOnlyOne() {
+        withLanguage(.en) {
+            #expect(DiagnosticsExportStatusCopy.text(for: .failed("The disk is full."))
+                    == "Couldn't save diagnostics: The disk is full. Try again.")
+        }
+        withLanguage(.pl) {
+            #expect(DiagnosticsExportStatusCopy.text(for: .failed("Dysk jest pełny."))
+                    == "Nie udało się zapisać diagnostyki: Dysk jest pełny. Spróbuj ponownie.")
+        }
+    }
+
     @Test func aCancelledPanelIsNeitherSuccessNorFailure() async {
         let destination = Destination(URL(fileURLWithPath: "/tmp/first.zip"))
         let c = DiagnosticsExportController(makePayload: payload, chooseDestination: { _ in destination.url }, write: { _, _ in })
