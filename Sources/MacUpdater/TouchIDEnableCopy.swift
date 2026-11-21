@@ -3,7 +3,8 @@ import MacUpdaterCore
 
 /// What Wega says after asking the helper to turn Touch ID for sudo on: calm, first person, and always
 /// the next step. `isEnabled` is the state read from the file after the helper answered, not the
-/// helper's claim (RC2-2). The texts both directions share come from `TouchIDDisableCopy`.
+/// helper's claim (RC2-2). −10, −20 and −21 with a path say what `TouchIDDisableCopy` says; the
+/// −4/−5 note lives here, and turning Touch ID off uses it too.
 enum TouchIDEnableCopy {
     static var outdatedHelper: String {
         tr("Pomocnik Wegi jest nieaktualny albo nie odpowiada, więc nie włączy Touch ID dla sudo. Użyj polecenia niżej albo w Ustawieniach usuń pomocnika i zainstaluj go ponownie (albo uruchom Maca ponownie).")
@@ -33,11 +34,12 @@ enum TouchIDEnableCopy {
         }
     }
 
-    /// −4 or −5, whether the helper or the app's own look saw it: what is wrong, then recoveryOS only.
+    /// −4 or −5, in either direction, whether the helper or the app's own look saw it: what is wrong,
+    /// then recoveryOS only.
     static func unsafePolicyNote(_ refusal: TouchIDSudoDisableRefusal) -> String {
         let condition = refusal == .notRegularFile
             ? tr("Plik /etc/pam.d/sudo_local nie jest zwykłym plikiem, więc go nie zmieniłam. sudo może przez niego czytać ustawienia spoza /etc/pam.d.")
-            : TouchIDDisableCopy.line(for: .refused(.unsafeOwnership), stillEnabled: false)
+            : tr("Plik /etc/pam.d/sudo_local albo katalog /etc/pam.d może zmieniać ktoś poza rootem albo wygląda inaczej, niż powinien. To problem bezpieczeństwa: kto może tam pisać, może dostać uprawnienia roota bez hasła. Nie zmieniłam go. Sprawdź go według przewodnika.")
         return condition + " " + recoveryOnly
     }
 

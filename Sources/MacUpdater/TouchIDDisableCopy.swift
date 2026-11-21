@@ -47,10 +47,11 @@ enum TouchIDDisableCopy {
         switch refusal {
         case .noConsoleUser, .callerNotConsoleUser, .callerNotAdministrator:
             return tr("Touch ID dla sudo może wyłączyć tylko administrator zalogowany przy tym Macu.")
-        case .notRegularFile, .tooLarge, .unreadable, .lineContinuation:
+        case .tooLarge, .unreadable, .lineContinuation:
             return tr("Plik /etc/pam.d/sudo_local wygląda inaczej, niż się spodziewam, więc go nie zmieniłam. Wyłączysz Touch ID ręcznie według przewodnika.")
-        case .unsafeOwnership:
-            return tr("Plik /etc/pam.d/sudo_local albo katalog /etc/pam.d może zmieniać ktoś poza rootem albo wygląda inaczej, niż powinien. To problem bezpieczeństwa: kto może tam pisać, może dostać uprawnienia roota bez hasła. Nie zmieniłam go. Sprawdź go według przewodnika.")
+        case .notRegularFile, .unsafeOwnership:
+            // RC2-7: `sudo` reads this file, so the manual route through `sudo` is no advice here.
+            return TouchIDEnableCopy.unsafePolicyNote(refusal)
         case .fallbackPolicyPresent:
             guard let fallbackPath, TouchIDSudoDisabler.fallbackPolicyPaths.contains(fallbackPath) else {
                 return tr("Po usunięciu tej dyrektywy sudo czytałby też inny plik ustawień PAM, więc nic nie zmieniłam. Sprawdź przewodnik.")

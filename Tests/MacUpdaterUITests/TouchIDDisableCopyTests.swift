@@ -21,13 +21,21 @@ struct TouchIDDisableCopyTests {
                 #expect(TouchIDDisableCopy.line(for: .refused(refusal), stillEnabled: true)
                         == "Touch ID dla sudo może wyłączyć tylko administrator zalogowany przy tym Macu.")
             }
-            for refusal in [TouchIDSudoDisableRefusal.notRegularFile, .tooLarge, .unreadable, .lineContinuation] {
+            for refusal in [TouchIDSudoDisableRefusal.tooLarge, .unreadable, .lineContinuation] {
                 #expect(TouchIDDisableCopy.line(for: .refused(refusal), stillEnabled: true)
                         == "Plik /etc/pam.d/sudo_local wygląda inaczej, niż się spodziewam, więc go nie zmieniłam. Wyłączysz Touch ID ręcznie według przewodnika.")
             }
+            // RC2-7: −4 and −5 from the helper give recoveryOS advice only, as on the way in.
+            let recovery = "Nie wpisuj hasła do sudo, dopóki tego nie naprawisz — także gdy Wega poprosi o nie przy aktualizacji: sudo czyta te ustawienia. Napraw je z trybu odzyskiwania według przewodnika."
             let unsafe = TouchIDDisableCopy.line(for: .refused(.unsafeOwnership), stillEnabled: true)
-            #expect(unsafe == "Plik /etc/pam.d/sudo_local albo katalog /etc/pam.d może zmieniać ktoś poza rootem albo wygląda inaczej, niż powinien. To problem bezpieczeństwa: kto może tam pisać, może dostać uprawnienia roota bez hasła. Nie zmieniłam go. Sprawdź go według przewodnika.")
+            #expect(unsafe == "Plik /etc/pam.d/sudo_local albo katalog /etc/pam.d może zmieniać ktoś poza rootem albo wygląda inaczej, niż powinien. To problem bezpieczeństwa: kto może tam pisać, może dostać uprawnienia roota bez hasła. Nie zmieniłam go. Sprawdź go według przewodnika. " + recovery)
             #expect(unsafe.contains("roota bez hasła") && unsafe.contains("przewodnika"))
+            #expect(TouchIDDisableCopy.line(for: .refused(.notRegularFile), stillEnabled: true)
+                    == "Plik /etc/pam.d/sudo_local nie jest zwykłym plikiem, więc go nie zmieniłam. sudo może przez niego czytać ustawienia spoza /etc/pam.d. " + recovery)
+            for refusal in [TouchIDSudoDisableRefusal.notRegularFile, .unsafeOwnership] {
+                #expect(TouchIDDisableCopy.line(for: .refused(refusal), stillEnabled: true) == TouchIDEnableCopy.unsafePolicyNote(refusal),
+                        "\(refusal): the same text in both directions")
+            }
             #expect(TouchIDDisableCopy.line(for: .refused(.fallbackPolicyPresent), stillEnabled: true, fallbackPath: fallback)
                     == "Po usunięciu tej dyrektywy sudo czytałby też plik /usr/local/etc/pam.d/sudo_local — jeśli go nie tworzyłeś, może pozwolić sudo pominąć hasło. Nic nie zmieniłam; sprawdź go według przewodnika.")
             #expect(TouchIDDisableCopy.line(for: .refused(.fallbackPolicyPresent), stillEnabled: true, fallbackPath: nil)
