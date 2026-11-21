@@ -193,11 +193,34 @@ public final class PrivilegedHelperClient: @unchecked Sendable {
         return .stale
     }
 
+    /// Whether a call failed because its connection dropped: the client's interruption or
+    /// invalidation handler (`.connectionFailed`), or the proxy's raw XPC error, whichever came first.
+    static func isDroppedConnection(_ error: Error) -> Bool {
+        if case .connectionFailed = error as? HelperError { return true }
+        let raw = error as NSError
+        return raw.domain == NSCocoaErrorDomain
+            && (raw.code == NSXPCConnectionInterrupted || raw.code == NSXPCConnectionInvalid)
+    }
+
+    /// RC2-3: runs `attempt` once more when its connection dropped, and never again after that.
+    /// Only for the version probe: a helper idle for a minute may be exiting just as the first
+    /// connection reaches it, and asking its version twice changes nothing. A verb may already have
+    /// run on the helper, so no verb is ever sent twice.
+    static func retryingOnceOnConnectionFailure<T>(_ attempt: () async throws -> T) async throws -> T {
+        do {
+            return try await attempt()
+        } catch where isDroppedConnection(error) {
+            return try await attempt()
+        }
+    }
+
     // MARK: - Whitelisted operations (XPC)
 
     public func helperVersion() async throws -> String {
-        try await call(deadline: Deadline.handshake) { (proxy, done: @escaping @Sendable (sending Result<String, Error>) -> Void) in
-            proxy.helperVersion { version in done(.success(version)) }
+        try await Self.retryingOnceOnConnectionFailure {
+            try await call(deadline: Deadline.handshake) { (proxy, done: @escaping @Sendable (sending Result<String, Error>) -> Void) in
+                proxy.helperVersion { version in done(.success(version)) }
+            }
         }
     }
 
