@@ -136,7 +136,15 @@ public enum CodeSignatureVerifier {
     // MARK: - SecStaticCode (apps)
 
     /// Validate a bundle/executable against an `anchor apple generic` + Team ID requirement.
-    public static func verifyStaticCode(at url: URL, expectedTeamID: String, bundleID: String? = nil) throws {
+    ///
+    /// - Parameter flags: `SecStaticCodeCheckValidity` flags; the default checks only the
+    ///   architecture this Mac runs and no nested code.
+    public static func verifyStaticCode(
+        at url: URL,
+        expectedTeamID: String,
+        bundleID: String? = nil,
+        flags: SecCSFlags = []
+    ) throws {
         var code: SecStaticCode?
         let createStatus = SecStaticCodeCreateWithPath(url as CFURL, [], &code)
         guard createStatus == errSecSuccess, let code else { throw VerifyError.unreadable(createStatus) }
@@ -146,7 +154,7 @@ public enum CodeSignatureVerifier {
         guard SecRequirementCreateWithString(reqString as CFString, [], &requirement) == errSecSuccess,
               let requirement else { throw VerifyError.badRequirement }
 
-        let checkStatus = SecStaticCodeCheckValidity(code, [], requirement)
+        let checkStatus = SecStaticCodeCheckValidity(code, flags, requirement)
         guard checkStatus == errSecSuccess else { throw VerifyError.signatureInvalid(checkStatus) }
     }
 
@@ -159,6 +167,34 @@ public enum CodeSignatureVerifier {
         guard SecCodeCopySigningInformation(code, flags, &info) == errSecSuccess,
               let dict = info as? [String: Any] else { return nil }
         return dict[kSecCodeInfoTeamIdentifier as String] as? String
+    }
+
+    /// How a publisher check validates a bundle: every architecture, not only the one this Mac
+    /// runs; nested code (frameworks, helpers, extensions); and the strict rules, the checks of
+    /// `codesign --verify --deep --strict`. Each catches tampering that the default flags miss.
+    static let publisherValidationFlags = SecCSFlags(
+        rawValue: kSecCSCheckAllArchitectures | kSecCSCheckNestedCode | kSecCSStrictValidate
+    )
+
+    /// The Team ID a publisher check may trust: the one `teamID(ofAppAt:)` reads, only when an
+    /// Apple-issued certificate carries it and the whole bundle validates against it.
+    ///
+    /// `teamID(ofAppAt:)` returns what the signature *claims*. An ad-hoc signature can claim any
+    /// Team ID (`codesign -s - --team-identifier …`), and a bundle edited after signing still
+    /// reports its publisher's; neither is that publisher, and both read `nil` here. So does a Mac
+    /// App Store build, whose leaf certificate is Apple's rather than the developer's. Use this
+    /// where a Team ID becomes trust, and `teamID(ofAppAt:)` where it only identifies an app.
+    public static func validatedTeamID(ofAppAt url: URL) -> String? {
+        guard let claimed = teamID(ofAppAt: url), isWellFormedTeamID(claimed) else { return nil }
+        let validates = (try? verifyStaticCode(at: url, expectedTeamID: claimed, flags: publisherValidationFlags)) != nil
+        return validates ? claimed : nil
+    }
+
+    /// Ten upper-case ASCII letters or digits, the shape of every Developer ID Team ID. The claim
+    /// is interpolated into a code requirement, so nothing else, a quote above all, may reach it.
+    static func isWellFormedTeamID(_ teamID: String) -> Bool {
+        let bytes = Array(teamID.utf8)
+        return bytes.count == 10 && bytes.allSatisfy { (0x30...0x39).contains($0) || (0x41...0x5A).contains($0) }
     }
 
     // MARK: - Disk images (SEC-04)
