@@ -102,7 +102,10 @@ extension ScanStore {
         // C2 stage 3 — the board leaves on every exit for the same reason, through its own defer.
         beginRunBoard(planned: plannedItems)
         defer { endRunBoard() }
-        beginPasswordHold(plannedCaskNames: plannedCaskNames, planned: plannedItems)
+        // Held casks take no part in the preparation: their download, disk margin or snapshot
+        // must not block the updates that need no password.
+        let heldCaskNames = beginPasswordHold(plannedCaskNames: plannedCaskNames, planned: plannedItems)
+        let runnableCaskNames = plannedCaskNames.filter { !heldCaskNames.contains($0) }
         // REL-12 — zeroth boundary: stopping here also skips the snapshot/preflight work.
         guard !shouldStopUpdate(before: Array(plannedKeys)) else {
             updating = false
@@ -111,10 +114,10 @@ extension ScanStore {
         }
 
         let caskPreparation: ForegroundCaskPreparation?
-        if plannedCaskNames.isEmpty {
+        if runnableCaskNames.isEmpty {
             caskPreparation = nil
         } else {
-            switch await prepareForegroundCasks(plannedCaskNames, targetKeys: targetKeys) {
+            switch await prepareForegroundCasks(runnableCaskNames, targetKeys: targetKeys.subtracting(heldForPasswordKeys)) {
             case .ready(let prepared):
                 caskPreparation = prepared
                 UpdateStageDiagnostics.recordOperation(prepared.operation)
@@ -139,7 +142,7 @@ extension ScanStore {
         // map is passed only as an override for casks whose process name is atypical.
         let runningApplications = runningApplicationInspector.runningApplications()
         let candidates = RunningCaskDetector.runningApps(
-            tokens: plannedCaskNames,
+            tokens: runnableCaskNames,
             appPaths: caskPreparation?.appPaths ?? [:],
             running: runningApplications,
             overrides: MacUpdaterConstants.restartMap
@@ -223,7 +226,7 @@ extension ScanStore {
         selected.removeAll()
         restartCandidates = candidates
         restartDockerBundleURLs = dockerRestartBundles(
-            tokens: plannedCaskNames, appPaths: caskPreparation?.appPaths ?? [:], running: runningApplications
+            tokens: runnableCaskNames, appPaths: caskPreparation?.appPaths ?? [:], running: runningApplications
         )
         restartDiagnosticOperationIDs.removeAll()
         if let operationID = caskPreparation?.operation.operation.id {
@@ -343,9 +346,11 @@ extension ScanStore {
         let appManagementTemplate = "%@ macOS nie pozwolił Wedze podmienić aplikacji w /Applications. Przyznaj uprawnienie „Zarządzanie aplikacjami” w Ustawieniach systemowych → Prywatność i bezpieczeństwo."
         // Owner decision 2026-11-21 — while the settings sudo reads cannot be trusted, Touch ID is
         // no advice: the card offers no sudo route, and Wega asked for nothing.
-        let sudoTemplate = (passwordHold ?? (summary.needsSudoPassword ? dependencies.sudoPolicyDistrust() : nil)) == nil
-            ? "%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła."
-            : "%@ Cask wymaga hasła administratora, a ustawieniom, które czyta sudo, nie można teraz ufać, więc o nie nie poprosiłam. Co zrobić, mówi karta Touch ID w Ustawieniach."
+        let promptsHeld = (passwordHold ?? (summary.needsSudoPassword ? dependencies.sudoPolicyDistrust() : nil)) != nil
+        let sudoTemplate = promptsHeld
+            ? "%@ Cask wymaga hasła administratora, a ustawieniom, które czyta sudo, nie można teraz ufać, więc o nie nie poprosiłam. Co zrobić, mówi karta Touch ID w Ustawieniach."
+            : "%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła."
+        let sudoAction: BannerAction = promptsHeld ? .openTouchIDCard : .openSettings
         if summary.needsAppManagementPermission {
             showBanner(BannerData(
                 variant: .danger,
@@ -358,7 +363,7 @@ extension ScanStore {
             showBanner(BannerData(variant: .danger,
                                   title: tr("Aktualizacja niekompletna"),
                                   message: trf(sudoTemplate, permission.message),
-                                  action: .openSettings,
+                                  action: sudoAction,
                                   fullMessage: permission.fullMessage.map { trf(sudoTemplate, $0) }))
         }
         emitActivitySignal(.error)
@@ -387,16 +392,19 @@ extension ScanStore {
 
     /// Owner decision 2026-11-21 — right before the run starts, the gate reads the settings `sudo`
     /// reads. While they cannot be trusted, the casks that may ask for the administrator password
-    /// (and those whose profile is unknown) read „pomijam — wymaga hasła” from the start.
-    func beginPasswordHold(plannedCaskNames: [String], planned: [OutdatedItem]) {
+    /// (and those whose profile is unknown) are held from the start: they read „pomijam — może
+    /// wymagać hasła” and the report names them. Returns the held tokens.
+    func beginPasswordHold(plannedCaskNames: [String], planned: [OutdatedItem]) -> Set<String> {
         heldForPasswordKeys = []
         passwordHold = dependencies.sudoPolicyDistrust()
-        guard let passwordHold else { return }
+        guard let passwordHold else { return [] }
         UpdateDiagnostics.record("update.passwordHold", fields: ["distrust": passwordHold.logName])
-        let mayAsk = Set(CaskUpgradeLanes(tokens: plannedCaskNames, profiles: caskProfiles).serial)
-        for item in planned where item.kind == .cask && mayAsk.contains(item.name) {
+        let held = Set(CaskUpgradeLanes(tokens: plannedCaskNames, profiles: caskProfiles).serial)
+        for item in planned where item.kind == .cask && held.contains(item.name) {
+            heldForPasswordKeys.insert(item.key)
             markRunRow(item.key, .heldForPassword)
         }
+        return held
     }
 
     /// Folds one row's lane result into the run.

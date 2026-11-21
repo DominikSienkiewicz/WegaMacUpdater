@@ -34,6 +34,12 @@ enum PasswordPromptNotice {
         probe?.sudoDistrust != nil && !queuedNeedingPassword.isEmpty
     }
 
+    /// The queued casks the run will hold: those that may ask and those whose profile is unknown,
+    /// as `CaskUpgradeLanes` sends them to its serial lane.
+    static func heldTokens(casks: [String], profiles: [String: CaskArtifactProfile]) -> [String] {
+        CaskUpgradeLanes(tokens: casks, profiles: profiles).serial
+    }
+
     static func heldMessage(names: [String]) -> String {
         trf("Dopóki ustawieniom, które czyta sudo, nie można ufać, nie poproszę o hasło administratora, więc pominę %@. Co zrobić, mówi karta Touch ID w Ustawieniach.",
             names.joined(separator: ", "))
@@ -54,6 +60,8 @@ enum PasswordPromptNotice {
 /// settings `sudo` reads cannot be trusted it says instead which of them the run will skip.
 struct PasswordPromptCallout: View {
     let queuedNeedingPassword: [String]
+    /// What the run would hold while the settings `sudo` reads cannot be trusted (`heldTokens`).
+    var queuedHeldWhileUntrusted: [String] = []
 
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openURL) private var openURL
@@ -63,7 +71,7 @@ struct PasswordPromptCallout: View {
         // A stack, not a `Group`: modifiers on a `Group` are applied to its children, and at
         // launch the banner has none — so the probe that would give it one never started.
         VStack(spacing: 0) { banner }
-            .task(id: queuedNeedingPassword) {
+            .task(id: queuedNeedingPassword + queuedHeldWhileUntrusted) {
                 let fresh = await Task.detached {
                     PasswordPromptNotice.Probe(installed: PasswordPromptAvailability.isInstalled(),
                                                touchID: TouchIDSudoConfigurator.currentState(),
@@ -76,8 +84,8 @@ struct PasswordPromptCallout: View {
 
     @ViewBuilder
     private var banner: some View {
-        if PasswordPromptNotice.holdsPrompts(probe: probe, queuedNeedingPassword: queuedNeedingPassword) {
-            WegaCallout(.warning, title: PasswordPromptNotice.heldMessage(names: queuedNeedingPassword)) {
+        if PasswordPromptNotice.holdsPrompts(probe: probe, queuedNeedingPassword: queuedHeldWhileUntrusted) {
+            WegaCallout(.warning, title: PasswordPromptNotice.heldMessage(names: queuedHeldWhileUntrusted)) {
                 Button(tr("Otwórz kartę Touch ID")) { SettingsRoute.shared.open(.touchID, with: openSettings) }
             }
             .padding(.horizontal, 16)

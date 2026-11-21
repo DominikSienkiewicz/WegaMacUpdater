@@ -114,7 +114,11 @@ struct UpdateRunReportEntry: Equatable, Sendable, Identifiable {
     /// The row's sentence, worded now (re-read after a language switch). `undo` is this run's
     /// undo for the item, when one exists.
     func note(undo: UndoableUpdate?) -> String {
-        if wasHeldForPassword, result != .updated { return Self.heldForPasswordNote }
+        if wasHeldForPassword, result != .updated {
+            // The App Store batch did start: `mas` stopped where it would have asked.
+            return verdict == nil ? Self.heldForPasswordNote
+                : tr("nie dokończyłam: App Store potrzebował hasła administratora, a ustawieniom, które czyta sudo, nie można teraz ufać — co zrobić, mówi karta Touch ID w Ustawieniach")
+        }
         guard let verdict else {
             return wasSkipped ? tr("zatrzymano przed startem") : tr("nie uruchomiłam — szczegóły w logu")
         }

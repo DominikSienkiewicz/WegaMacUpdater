@@ -62,14 +62,16 @@ public final class MasService: @unchecked Sendable {
 
     /// UX-01: `mas upgrade` without IDs upgrades every outdated App Store app. The
     /// filtered Updates view must pass the exact IDs it displayed and the user approved.
-    public func upgrade(appStoreIDs: [String]) async throws -> ProcessResult {
+    /// `holdingPasswordPrompts`: the run already holds them (owner decision 2026-11-21), so `mas`
+    /// never primes `sudo`, whatever a fresh read of the settings says.
+    public func upgrade(appStoreIDs: [String], holdingPasswordPrompts: Bool = false) async throws -> ProcessResult {
         guard !appStoreIDs.isEmpty else {
             return ProcessResult(exitCode: 0, stdout: "", stderr: "")
         }
-        return try await runUpgrade(arguments: ["upgrade"] + appStoreIDs)
+        return try await runUpgrade(arguments: ["upgrade"] + appStoreIDs, holdingPasswordPrompts: holdingPasswordPrompts)
     }
 
-    private func runUpgrade(arguments: [String]) async throws -> ProcessResult {
+    private func runUpgrade(arguments: [String], holdingPasswordPrompts: Bool = false) async throws -> ProcessResult {
         let first = try await runMas(arguments, timeouts: .download)
         if first.exitCode == 0 {
             return first
@@ -85,7 +87,9 @@ public final class MasService: @unchecked Sendable {
         }
         // Owner decision 2026-11-21: `sudo` reads its settings before it asks, so while they
         // cannot be trusted no prompt is raised for it, by askpass or by Touch ID.
-        guard passwordPromptsAllowed() else { throw MasServiceError.passwordPromptHeld(arguments: arguments) }
+        guard !holdingPasswordPrompts, passwordPromptsAllowed() else {
+            throw MasServiceError.passwordPromptHeld(arguments: arguments)
+        }
         try await prewarmSudoTimestamp()
         let retry = try await runMas(arguments, timeouts: .download)
         try ensureSuccess(retry, arguments: arguments)

@@ -573,7 +573,8 @@ final class ScanStore: ObservableObject {
     func markCasksThatWillNotRun(_ planned: [OutdatedItem], trusted: [String]) {
         let trusted = Set(trusted)
         var board = runBoard
-        for item in planned where item.kind == .cask && !trusted.contains(item.name) && board.rows[item.key] != nil {
+        for item in planned where item.kind == .cask && !trusted.contains(item.name)
+            && board.rows[item.key] != nil && board.rows[item.key] != .heldForPassword {
             board.rows[item.key] = .notStarted
         }
         guard board != runBoard else { return }

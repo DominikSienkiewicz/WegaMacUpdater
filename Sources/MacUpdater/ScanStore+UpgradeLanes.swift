@@ -261,7 +261,7 @@ extension ScanStore {
             "$ mas upgrade " + appStoreIDs.joined(separator: " "), from: "mas"))
 
         do {
-            let result = try await model.masService.upgrade(appStoreIDs: appStoreIDs)
+            let result = try await model.masService.upgrade(appStoreIDs: appStoreIDs, holdingPasswordPrompts: passwordHold != nil)
             let lines = result.stdout.components(separatedBy: "\n").filter { !$0.isEmpty }
             brewLog.append(contentsOf: UpgradeLogPrefix.lines(lines, from: "mas"))
             markRunLane(.appStore, .installedChecking)

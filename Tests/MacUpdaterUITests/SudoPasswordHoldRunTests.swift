@@ -44,6 +44,37 @@ struct SudoPasswordHoldRunTests {
         #expect(report?.failureLogLinesBeyondTheSummary.contains { $0.hasPrefix("\(pkg): pominięto") } == true)
     }
 
+    /// Review 1: a held cask takes no part in the preparation, so its download, disk margin or
+    /// snapshot can never block the updates that need no password.
+    @Test func aHeldCaskTakesNoPartInThePreparation() async {
+        let plain = "plain-\(UUID().uuidString)"
+        let pkg = "pkg-\(UUID().uuidString)"
+        let cleanup = RunCleanup()
+        defer { cleanup.restore() }
+        let (harness, runner) = Self.harness(serial: [pkg], plain: [plain], distrust: { .noProofOfSafety })
+
+        await harness.store.runUpdate(targetKeys: Self.keys(plain, pkg))
+
+        #expect(runner.requests.contains { $0.arguments.starts(with: ["info", "--cask"]) && $0.arguments.contains(plain) })
+        #expect(!runner.requests.contains { $0.arguments.starts(with: ["info", "--cask"]) && $0.arguments.contains(pkg) })
+        #expect(runner.upgraded(plain))
+        #expect(harness.store.runReport?.entries.first { $0.name == pkg }?.wasHeldForPassword == true)
+    }
+
+    /// Review 6: once the run holds, `mas` primes nothing, even when its own fresh read finds the
+    /// settings safe.
+    @Test func theRunsHoldReachesMas() async {
+        let runner = Self.masRunner()
+        let harness = makeScanStoreRuntimeHarness(runner: runner, sudoPolicyDistrust: { .noProofOfSafety },
+                                                  masPasswordPromptsAllowed: { true })
+        harness.store.masOutdated = [MasOutdatedApp(appStoreID: "123", name: "Example App", installedVersion: "1", currentVersion: "2")]
+
+        await harness.store.runUpdate(targetKeys: Set(harness.store.allItems.map(\.key)))
+
+        #expect(!runner.requests.contains { $0.executableURL.path == "/usr/bin/sudo" })
+        #expect(harness.store.runReport?.entries.first?.wasHeldForPassword == true)
+    }
+
     @Test func settingsThatTurnUnsafeMidRunHoldTheNextCask() async {
         let first = "pkg-a-\(UUID().uuidString)"
         let second = "pkg-b-\(UUID().uuidString)"
@@ -75,7 +106,38 @@ struct SudoPasswordHoldRunTests {
     }
 
     @Test func aClosedGateKeepsMasFromAskingAndSaysWhy() async {
-        let runner = ScanStoreRuntimeProcessRunner(
+        let runner = Self.masRunner()
+        let harness = makeScanStoreRuntimeHarness(runner: runner, sudoPolicyDistrust: { .noProofOfSafety },
+                                                  masPasswordPromptsAllowed: { false })
+        harness.store.masOutdated = [MasOutdatedApp(appStoreID: "123", name: "Example App", installedVersion: "1", currentVersion: "2")]
+        let boards = BoardRecorder(harness.store)
+
+        await harness.store.runUpdate(targetKeys: Set(harness.store.allItems.map(\.key)))
+
+        #expect(!runner.requests.contains { $0.executableURL.path == "/usr/bin/sudo" })
+        #expect(boards.seen.contains { $0.lanes[.appStore] == .heldForPassword })
+        let entry = harness.store.runReport?.entries.first
+        #expect(entry?.wasHeldForPassword == true)
+        // Review 2: mas did start, so the batch did not finish rather than never started.
+        #expect(entry?.result == .failed)
+        #expect(entry?.group == .needsAttention)
+        withLanguage(.pl) {
+            #expect(entry?.note(undo: nil)
+                    == "nie dokończyłam: App Store potrzebował hasła administratora, a ustawieniom, które czyta sudo, nie można teraz ufać — co zrobić, mówi karta Touch ID w Ustawieniach")
+        }
+        withLanguage(.en) {
+            #expect(entry?.note(undo: nil)
+                    == "not finished: the App Store needed the administrator password, and the settings sudo reads can't be trusted right now — the Touch ID card in Settings says what to do")
+        }
+    }
+
+    @Test func theRowSaysItIsSkippedForThePassword() {
+        withLanguage(.pl) { #expect(UpdateRunRowStatus.heldForPassword.title(isStopping: false) == "pomijam — może wymagać hasła") }
+        withLanguage(.en) { #expect(UpdateRunRowStatus.heldForPassword.laneTitle(isStopping: true) == "skipping — may need a password") }
+    }
+
+    private static func masRunner() -> ScanStoreRuntimeProcessRunner {
+        ScanStoreRuntimeProcessRunner(
             run: { request in
                 switch request.arguments {
                 case ["upgrade", "123"]:
@@ -90,23 +152,6 @@ struct SudoPasswordHoldRunTests {
             },
             events: { .failure(StubError.unexpected($0.arguments)) }
         )
-        let harness = makeScanStoreRuntimeHarness(runner: runner, sudoPolicyDistrust: { .noProofOfSafety },
-                                                  masPasswordPromptsAllowed: { false })
-        harness.store.masOutdated = [MasOutdatedApp(appStoreID: "123", name: "Example App", installedVersion: "1", currentVersion: "2")]
-        let boards = BoardRecorder(harness.store)
-
-        await harness.store.runUpdate(targetKeys: Set(harness.store.allItems.map(\.key)))
-
-        #expect(!runner.requests.contains { $0.executableURL.path == "/usr/bin/sudo" })
-        #expect(boards.seen.contains { $0.lanes[.appStore] == .heldForPassword })
-        let entry = harness.store.runReport?.entries.first
-        #expect(entry?.wasHeldForPassword == true)
-        withLanguage(.pl) { #expect(entry?.note(undo: nil) == Self.heldNotePL) }
-    }
-
-    @Test func theRowSaysItIsSkippedForThePassword() {
-        withLanguage(.pl) { #expect(UpdateRunRowStatus.heldForPassword.title(isStopping: false) == "pomijam — wymaga hasła") }
-        withLanguage(.en) { #expect(UpdateRunRowStatus.heldForPassword.laneTitle(isStopping: true) == "skipping — needs a password") }
     }
 
     // MARK: Fixtures

@@ -56,6 +56,19 @@ struct SudoPromptRoutesGateTests {
         #expect(!runner.requests.contains { $0.executableURL.path == "/usr/bin/sudo" })
     }
 
+    @Test func aRunThatHoldsKeepsMasFromPrimingEvenWhenItsOwnReadIsSafe() async throws {
+        let runner = ScriptedMasRunner(responses: [
+            ProcessResult(exitCode: 1, stdout: "", stderr: "sudo: a terminal is required to read the password\n"),
+            ProcessResult(exitCode: 0, stdout: "", stderr: ""),
+        ])
+        let service = MasService(locator: BinaryLocator(masCandidates: [URL(fileURLWithPath: "/usr/bin/true")]),
+                                 runner: runner, passwordPromptsAllowed: { true })
+        await #expect(throws: MasServiceError.passwordPromptHeld(arguments: ["upgrade", "123"])) {
+            _ = try await service.upgrade(appStoreIDs: ["123"], holdingPasswordPrompts: true)
+        }
+        #expect(!runner.requests.contains { $0.executableURL.path == "/usr/bin/sudo" })
+    }
+
     @Test func masAsksTheGateOnlyWhenSudoWouldPrompt() async throws {
         let asked = Asked()
         let runner = ScriptedMasRunner(responses: [ProcessResult(exitCode: 0, stdout: "", stderr: "")])

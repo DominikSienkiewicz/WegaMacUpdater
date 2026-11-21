@@ -33,6 +33,12 @@ struct SudoPasswordHoldCopyTests {
         #expect(!PasswordPromptNotice.holdsPrompts(probe: PasswordPromptNotice.Probe(installed: true, touchID: .enabled),
                                                     queuedNeedingPassword: ["zoom"]))
         #expect(!PasswordPromptNotice.holdsPrompts(probe: nil, queuedNeedingPassword: ["zoom"]), "an unprobed state says nothing")
+        // Review 4: the warning names what the run holds, an unknown profile included.
+        let profiles = [
+            "zoom": CaskArtifactProfile(token: "zoom", artifacts: [CaskArtifact(kind: .pkg)]),
+            "firefox": CaskArtifactProfile(token: "firefox", artifacts: [CaskArtifact(kind: .app, names: ["Firefox.app"])]),
+        ]
+        #expect(PasswordPromptNotice.heldTokens(casks: ["zoom", "firefox", "unknown"], profiles: profiles) == ["zoom", "unknown"])
         withLanguage(.pl) {
             #expect(PasswordPromptNotice.heldMessage(names: ["zoom", "parallels"])
                     == "Dopóki ustawieniom, które czyta sudo, nie można ufać, nie poproszę o hasło administratora, więc pominę zoom, parallels. Co zrobić, mówi karta Touch ID w Ustawieniach.")
@@ -75,7 +81,8 @@ struct SudoPasswordHoldCopyTests {
         }
 
         let banner = harness.store.banner
-        #expect(banner?.action == .openSettings, "the action opens the Touch ID card")
+        // Review 3: the button is the card, not „Włącz Touch ID”.
+        #expect(banner?.action == .openTouchIDCard)
         #expect(banner?.message.contains("nie można teraz ufać") == true)
         #expect(banner?.message.contains("Włącz Touch ID") == false)
         withLanguage(.en) {

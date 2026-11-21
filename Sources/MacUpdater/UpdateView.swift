@@ -440,7 +440,8 @@ struct UpdateView: View {
 
             PasswordPromptCallout(queuedNeedingPassword: updateTargets.filter {
                 $0.kind == .cask && scan.caskProfiles[$0.name]?.mayRequireAdminPassword == true
-            }.map(\.name))
+            }.map(\.name), queuedHeldWhileUntrusted: PasswordPromptNotice.heldTokens(
+                casks: updateTargets.filter { $0.kind == .cask }.map(\.name), profiles: scan.caskProfiles))
 
             // UXP-35 — ⌘F answers above the list and never filters it.
             if let answer = searchAnswer {

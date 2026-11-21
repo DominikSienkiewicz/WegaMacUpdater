@@ -20,7 +20,7 @@ enum UpdateRunRowStatus: Equatable, Sendable {
         case .installedChecking: return tr("zainstalowano, sprawdzam")
         case .failed:            return tr("nie udało się")
         case .notStarted:        return tr("nie zacznę")
-        case .heldForPassword:   return tr("pomijam — wymaga hasła")
+        case .heldForPassword:   return tr("pomijam — może wymagać hasła")
         }
     }
 

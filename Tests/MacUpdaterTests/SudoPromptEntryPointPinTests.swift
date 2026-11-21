@@ -8,7 +8,7 @@ import Testing
 struct SudoPromptEntryPointPinTests {
     /// What makes a file a route to a password prompt, in code rather than comments.
     private static let markers = ["SUDO_ASKPASS", "\"-A\"", "askpassExecutable", "NSSecureTextField",
-                                  "SystemPaths.sudo", "/usr/bin/sudo"]
+                                  "SystemPaths.sudo", "/usr/bin/sudo", "\"sudo\""]
 
     /// Every file with a marker, and why it is not a route of its own.
     private static let notRoutes: [String: String] = [
@@ -29,7 +29,7 @@ struct SudoPromptEntryPointPinTests {
         ],
         "Sources/MacUpdaterCore/MasService.swift": [
             "passwordPromptsAllowed: @escaping @Sendable () -> Bool = { SudoPasswordPromptGate.shared.check() == nil }",
-            "guard passwordPromptsAllowed() else { throw MasServiceError.passwordPromptHeld(arguments: arguments) }\n        try await prewarmSudoTimestamp()",
+            "guard !holdingPasswordPrompts, passwordPromptsAllowed() else {\n            throw MasServiceError.passwordPromptHeld(arguments: arguments)\n        }\n        try await prewarmSudoTimestamp()",
         ],
         "Sources/WegaSudoShim/main.swift": [
             "let promptsAllowed = SudoPasswordPromptGate.liveReason() == nil",
@@ -47,7 +47,7 @@ struct SudoPromptEntryPointPinTests {
             guard Self.markers.contains(where: { code.contains($0) }), Self.notRoutes[path] == nil else { continue }
             let required = try #require(Self.routes[path], "\(path) can reach a password prompt: consult SudoPasswordPromptGate and list it here")
             for line in required {
-                #expect(text.contains(line), "\(path) must keep: \(line)")
+                #expect(code.contains(line), "\(path) must keep, outside a comment: \(line)")
             }
         }
         for path in Self.routes.keys {
@@ -88,6 +88,20 @@ struct SudoPromptEntryPointPinTests {
         let hold = try slice(lanes, from: "func holdsPasswordPrompt(for item: OutdatedItem) -> Bool {", to: "return true")
         #expect(hold.contains("if passwordHold == nil { passwordHold = dependencies.sudoPolicyDistrust() }"))
         #expect(lanes.contains("if case MasServiceError.passwordPromptHeld = error {"))
+        #expect(lanes.contains("model.masService.upgrade(appStoreIDs: appStoreIDs, holdingPasswordPrompts: passwordHold != nil)"))
+        // Review 1: held casks take no part in the preparation, and stay held on the board.
+        #expect(updating.contains("prepareForegroundCasks(runnableCaskNames, targetKeys: targetKeys.subtracting(heldForPasswordKeys))"))
+        #expect(store.contains("board.rows[item.key] != nil && board.rows[item.key] != .heldForPassword"))
+    }
+
+    /// Review 3 and 4: the banner's button is the card, and the warning above the list names what
+    /// the run holds.
+    @Test func theBannerAndTheWarningPointAtTheCard() throws {
+        let views = try source("Sources/MacUpdater/SharedViews.swift")
+        #expect(views.contains("case .openTouchIDCard: return tr(\"Otwórz kartę Touch ID\")"))
+        #expect(try source("Sources/MacUpdater/ScanBannerHost.swift").contains("case .openSettings, .openTouchIDCard:"))
+        #expect(try source("Sources/MacUpdater/UpdateView.swift").contains("PasswordPromptNotice.heldTokens("))
+        #expect(try source("Sources/MacUpdater/ScanStore+Updating.swift").contains("action: sudoAction,"))
     }
 
     /// The Touch ID card shares the app's gate, and its two Terminal commands, which run
@@ -104,10 +118,15 @@ struct SudoPromptEntryPointPinTests {
 
     // MARK: Source access
 
-    /// The text outside `//` comments, so a comment that names a marker is not a route.
+    /// The text outside `//` comments, so a comment that names a marker, or a commented-out gate,
+    /// does not count. A comment is a line that starts with `//` or what follows ` //` on a line;
+    /// `https://` inside a string is neither.
     private func code(_ text: String) -> String {
         text.split(separator: "\n", omittingEmptySubsequences: false)
-            .map { line in line.range(of: "//").map { String(line[..<$0.lowerBound]) } ?? String(line) }
+            .map { line -> String in
+                if line.trimmingCharacters(in: .whitespaces).hasPrefix("//") { return "" }
+                return line.range(of: " //").map { String(line[..<$0.lowerBound]) } ?? String(line)
+            }
             .joined(separator: "\n")
     }
 
