@@ -89,6 +89,33 @@ struct UpdateBandPresentationTests {
         }
     }
 
+    /// M1 — hand-off apps are never queued, so with nothing queued "0 w kolejce · 3 dokończysz"
+    /// read as if the three were. The second half shows only next to a queue.
+    @Test func anEmptyQueueNamesNoHandOffs() {
+        withLanguage(.pl) { #expect(presentation(queue: 0, handOff: 3).queueSummary == "0 w kolejce") }
+        withLanguage(.en) { #expect(presentation(queue: 0, handOff: 3).queueSummary == "0 queued") }
+    }
+
+    /// M1 — the hand-offs the band counts are the ones the category on screen lists: every
+    /// manual row under All and Apps, the security-flagged ones under Security, none under CLI.
+    @MainActor @Test func theHandOffsAreCountedInTheCategoryOnScreen() throws {
+        let harness = makeScanStoreRuntimeHarness(runner: ScanStoreRuntimeProcessRunner { request in
+            throw StubError.unexpected(request.arguments)
+        })
+        let app = ManualOutdatedApp(
+            name: "Hand Off", path: URL(fileURLWithPath: "/Applications/HandOff-\(UUID().uuidString).app"),
+            installedVersion: "1", availableVersion: "2", source: .sparkle,
+            bundleIdentifier: "example.handoff.\(UUID().uuidString)"
+        )
+        harness.store.manualOutdated = [app]
+        #expect(harness.store.handOffCount(for: .all) == 1)
+        #expect(harness.store.handOffCount(for: .apps) == 1)
+        #expect(harness.store.handOffCount(for: .cli) == 0, "no manual app is a CLI tool")
+        #expect(harness.store.handOffCount(for: .security) == 0, "its notes mention no security fix")
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        #expect(view.contains("handOffCount:   scan.handOffCount(for: updateFilter)"))
+    }
+
     @Test func anEmptyButtonSaysNothingIsSelectedAndVoiceOverReadsTheSame() {
         withLanguage(.pl) {
             let empty = presentation(queue: 0)
@@ -152,5 +179,15 @@ struct UpdateBandPresentationTests {
             #expect(presentation(queue: 3).buttonTitle == "Update")
             #expect(presentation(queue: 3).queueSummary == "3 queued")
         }
+    }
+
+    private enum StubError: Error {
+        case unexpected([String])
+    }
+
+    private func source(_ relativePath: String, file: String = #filePath) throws -> String {
+        let root = URL(fileURLWithPath: file)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
     }
 }

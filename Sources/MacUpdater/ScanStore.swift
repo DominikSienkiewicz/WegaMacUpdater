@@ -783,6 +783,17 @@ final class ScanStore: ObservableObject {
         sinks.categoryCounts?(counts.apps, counts.cli)
     }
 
+    /// M1 — the updates the band says you finish with the developer, counted as the category on
+    /// screen lists them: every manual row under All and Apps, only the security-flagged ones
+    /// under Security, none under CLI.
+    func handOffCount(for filter: UpdateFilter) -> Int {
+        switch filter {
+        case .all, .apps: updateCount.manual
+        case .cli:        0
+        case .security:   visibleManual.filter(isSecurityApp).count
+        }
+    }
+
     /// UX-16 — the per-category counts the Updates scope bar shows and the sidebar badge sums.
     var scopeCounts: UpdateScopeCounts {
         UpdateScopeCounts(

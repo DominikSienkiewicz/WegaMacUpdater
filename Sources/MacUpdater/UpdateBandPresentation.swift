@@ -14,7 +14,8 @@ struct UpdateBandPresentation: Equatable {
     let wegaLine: String
     /// Set when a source stayed quiet, so the headline never reads as the whole story.
     var incompleteNote: String? = nil
-    /// Queued manual apps: the band hands them to their developer instead of installing them.
+    /// Manual apps in the category on screen: the band hands them to their developer instead of
+    /// installing them, so they are never part of the queue.
     var handOffCount: Int = 0
 
     /// Today's results-heading rule: only a stale snapshot names its date ("Znaleziono"); the
@@ -44,9 +45,10 @@ struct UpdateBandPresentation: Equatable {
 
     var line: String { wegaLine }
 
-    /// The queue, and when manual apps are in it, how many of them the developer finishes.
+    /// The queue, and next to a queue, how many updates the developer finishes. Alone, the
+    /// second half read as if those were queued.
     var queueSummary: String {
-        handOffCount == 0
+        queueCount == 0 || handOffCount == 0
             ? trf("%@ w kolejce", "\(queueCount)")
             : trf("%@ w kolejce · %@ dokończysz u producenta", "\(queueCount)", "\(handOffCount)")
     }
