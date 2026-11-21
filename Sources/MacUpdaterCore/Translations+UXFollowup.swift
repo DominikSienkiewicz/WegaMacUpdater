@@ -6,5 +6,6 @@ extension Translations {
         "Skan niepełny": "Check incomplete",
         "Aktualizacja; skan niepełny": "Update available; check incomplete",
         "Skan niepełny.": "Check incomplete.",
+        "Zgłoś aplikację ›": "Report app ›",
     ]
 }

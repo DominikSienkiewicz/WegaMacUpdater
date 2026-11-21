@@ -92,15 +92,25 @@ enum UpdatesSearch {
     }
 
     /// Where an answer leads besides its own text.
-    enum Link: Equatable { case rules, inventory }
+    enum Link: Equatable { case rules, inventory, report }
 
-    /// The rules for an app a rule hides; Inventory for whatever Inventory said or could not say,
-    /// and for anything read from an Inventory that may have changed.
+    /// The app „Zgłoś aplikację ›” reports: the Inventory app the answer was read from (the first
+    /// match, as for the answer itself), and only for an answer that says Wega knows no source.
+    static func reportTarget(for answer: UpdatesSearchAnswer, query: String, inventory: [ApplicationInfo]?) -> ApplicationInfo? {
+        guard links(for: answer).contains(.report), let inventory,
+              let index = matches(query, in: inventory.map(\.name)).first else { return nil }
+        return inventory[index]
+    }
+
+    /// The rules for an app a rule hides; the catalog report for an app Wega knows no source for;
+    /// Inventory for whatever Inventory said or could not say, and for anything read from an
+    /// Inventory that may have changed.
     static func links(for answer: UpdatesSearchAnswer) -> [Link] {
         switch answer {
         case .onList: []
         case .hiddenByRule: [.rules]
         case .fromStaleInventory(let read): links(for: read).filter { $0 != .inventory } + [.inventory]
+        case .notChecked(_, .noSource): [.report, .inventory]
         case .upToDate, .notChecked, .inventoryNotRead, .notFound: [.inventory]
         }
     }
@@ -220,6 +230,8 @@ struct UpdatesSearchAnswerRow: View {
     let inventoryReadAt: Date?
     /// The Inventory screen's banner when its last read left sources out.
     var inventoryProblem: String? = nil
+    /// The app „Zgłoś aplikację ›” reports (`UpdatesSearch.reportTarget`); nil draws no link.
+    var reportTarget: ApplicationInfo? = nil
     let onShow: (UpdatesSearch.Row) -> Void
     let onShowRules: () -> Void
     let onOpenInventory: () -> Void
@@ -267,6 +279,9 @@ struct UpdatesSearchAnswerRow: View {
             if links.contains(.rules) {
                 Button(tr("Pokaż reguły"), action: onShowRules)
                     .buttonStyle(.link)
+            }
+            if links.contains(.report), let reportTarget {
+                ReportAppButton(app: reportTarget, style: .link)
             }
             if inventoryLinkHere, links.contains(.inventory) {
                 inventoryLink

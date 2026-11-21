@@ -424,6 +424,7 @@ struct UpdateView: View {
             // UXP-35 — ⌘F answers above the list and never filters it.
             if let answer = searchAnswer {
                 UpdatesSearchAnswerRow(answer: answer, inventoryReadAt: inventory.lastReadAt, inventoryProblem: inventory.errorMessage,
+                                       reportTarget: UpdatesSearch.reportTarget(for: answer, query: searchQuery, inventory: inventory.apps),
                                        onShow: showSearchMatch, onShowRules: { showRules(for: answer) },
                                        onOpenInventory: { onNavigate?(.inventory) })
                     .padding(.horizontal, 16)
