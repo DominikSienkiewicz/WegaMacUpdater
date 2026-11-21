@@ -15,7 +15,9 @@ struct TouchIDSudoDisableSourceTests {
     @Test func theHelperGathersOnlyWhatOnlyRootKnowsAndRepliesOnce() throws {
         let helper = try source("Sources/WegaPrivilegedHelper/HelperDelegate.swift")
         let compact = helper.filter { !$0.isWhitespace }
-        #expect(compact.contains("funcdisableTouchIDForSudo(withReplyreply:@escaping@Sendable(Int,String?)->Void){Self.pamLock.lock()"))
+        #expect(compact.contains("funcdisableTouchIDForSudo(withReplyreply:@escaping@Sendable(Int,String?)->Void){"
+            + "letactivity=HelperIdle.monitor.begin()defer{activity.end()}Self.pamLock.lock()"),
+                "the lock comes first, after only the idle-exit activity")
         #expect(compact.contains(
             "TouchIDSudoDisabler.runLive(caller:.init(uid:callerUID,consoleUserUID:Self.consoleUserUID(),"
                 + "isAdministrator:AdministratorGroup.contains(uid:callerUID)))"))
@@ -52,7 +54,9 @@ struct TouchIDSudoDisableSourceTests {
     @Test func theHelperGathersTheSameCallerFactsToEnableAndRepliesOnce() throws {
         let helper = try source("Sources/WegaPrivilegedHelper/HelperDelegate.swift")
         let compact = helper.filter { !$0.isWhitespace }
-        #expect(compact.contains("funcenableTouchIDForSudoChecked(withReplyreply:@escaping@Sendable(Int,String?)->Void){Self.pamLock.lock()"))
+        #expect(compact.contains("funcenableTouchIDForSudoChecked(withReplyreply:@escaping@Sendable(Int,String?)->Void){"
+            + "letactivity=HelperIdle.monitor.begin()defer{activity.end()}Self.pamLock.lock()"),
+                "the lock comes first, after only the idle-exit activity")
         #expect(compact.contains(
             "TouchIDSudoEnabler.runLive(caller:.init(uid:callerUID,consoleUserUID:Self.consoleUserUID(),"
                 + "isAdministrator:AdministratorGroup.contains(uid:callerUID)))"))
