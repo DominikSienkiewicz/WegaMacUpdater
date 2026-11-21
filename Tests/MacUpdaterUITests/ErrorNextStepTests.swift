@@ -112,10 +112,12 @@ struct ErrorNextStepTests {
             #expect(tr("Pokaż w logach") == "Show in Logs" && tr("Pokaż wszystkie") == "Show All")
         }
         // C2 stage 4 — the summary shows every other failure; the sudo hint keeps its banner,
-        // and its button opens Settings, where Touch ID is turned on.
+        // and its button opens Settings on the Touch ID card: „Włącz Touch ID”, or, while the
+        // settings sudo reads cannot be trusted, „Otwórz kartę Touch ID” (owner decision 2026-11-21).
         let updating = try source("Sources/MacUpdater/ScanStore+Updating.swift")
         let sudo = try #require(updating.range(of: "} else if summary.needsSudoPassword {"))
-        #expect(updating[sudo.upperBound...].prefix(400).contains("action: .openSettings"))
+        #expect(updating[sudo.upperBound...].prefix(400).contains("action: sudoAction,"))
+        #expect(updating.contains("let sudoAction: BannerAction = promptsHeld ? .openTouchIDCard : .openSettings"))
         #expect(updating.contains("BannerCopy.permissionNeeded(names: failedNames)"))
     }
 }
