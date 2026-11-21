@@ -69,69 +69,10 @@ struct RestartSection: View {
     }
 }
 
-/// The upgrade's progress, in whole packages finished out of the batch the run planned.
-///
-/// There is no percentage to show: piped brew runs curl with `--silent`, so the bytes are
-/// invisible from here (see `INSTALL_PROGRESS_DESIGN.md`). What the bar reports is finished
-/// work — the rule the scan's bar already follows — and the line under it names the phase,
-/// plus the package whenever the run can honestly name one: brew announces its own, npm's
-/// loop already knows it, and the App Store's one opaque call names nothing.
-struct UpgradeProgressBar: View {
-    let progress: UpgradeProgress
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            bar
-                .tint(Color.wegaHoney)
-                // A linear ProgressView reports a nonzero intrinsic width, which — with no
-                // upper bound — propagates up and pushes the detail column wide enough to
-                // shove the sidebar off-screen. Pin it elastic (0…∞) so it fills, not forces.
-                .frame(minWidth: 0, maxWidth: .infinity)
-            Text(label)
-                .font(.wega(.subheadline, monospaced: true))
-                .foregroundStyle(.secondary)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(tr("Postęp aktualizacji"))
-        // `label` already ends with the counter, so it is the whole sentence a sighted
-        // user reads — the combined children would otherwise be replaced by a bare count.
-        .accessibilityValue(label)
-    }
-
-    @ViewBuilder
-    private var bar: some View {
-        if progress.stage == .preparing {
-            // Nothing has been counted yet, so the bar declines to claim a value.
-            ProgressView().progressViewStyle(.linear)
-        } else {
-            ProgressView(value: progress.fractionCompleted).progressViewStyle(.linear)
-        }
-    }
-
-    private var counter: String {
-        trf("%@ z %@", "\(progress.completedUnits)", "\(progress.totalUnits)")
-    }
-
-    private var label: String {
-        switch progress.stage {
-        case .preparing:
-            return tr("Przygotowuję kopie zapasowe…")
-        case .downloading(let token?):
-            return trf("Pobieram %@ — %@", "\(token)", "\(counter)")
-        case .downloading:
-            return trf("Pobieram pakiety — %@", "\(counter)")
-        case .installing(let token?):
-            return trf("Instaluję %@ — %@", "\(token)", "\(counter)")
-        case .installing:
-            return trf("Instaluję pakiety — %@", "\(counter)")
-        }
-    }
-}
-
 struct BrewLogPanel: View {
     let lines:   [String]
     /// Answers Homebrew's tap-trust warning with buttons above the log. `nil` where a click
-    /// could not run anyway — the run overlay, while the update holds the brew mutex.
+    /// could not run anyway — the run's log, while the update holds the brew mutex.
     var tapTrust: TapTrustActions? = nil
     let onClose: () -> Void
 
@@ -280,6 +221,11 @@ struct UpdateSection: View {
 
     @FocusState private var focusedKey: String?
     @Environment(\.updatesOnScreen) private var onScreen
+    /// C2 §4.6 — the running update, when there is one: row statuses and the batches' notes.
+    @Environment(\.updateRun) private var run
+    /// False while a run or a scan in place disables the list. `.disabled` alone was never shown
+    /// to keep a focusable row out of the Tab loop, so the rows lose their Tab stops with it.
+    @Environment(\.isEnabled) private var isEnabled
     /// UXP-21 — the row Tab lands on. Kept apart from `focusedKey`, which empties once focus
     /// leaves the rows themselves (another group, or this row's ⋯ when it takes focus), so the
     /// stop stays where the user left it.
@@ -299,7 +245,7 @@ struct UpdateSection: View {
     var body: some View {
         WegaCard {
             UpdateGroupHeader(title: title, tint: tint, ordinal: ordinal, count: items.count,
-                              note: subtitle, caption: rollbackCaption,
+                              note: subtitle, runNote: run?.laneNote(for: Set(items.map(\.kind))), caption: rollbackCaption,
                               selection: SelectionCheckbox(
                                   state: groupState,
                                   accessibilityLabel: trf("Zaznacz całą grupę: %@", title),
@@ -325,21 +271,26 @@ struct UpdateSection: View {
                         rollback:       rollbackProtection[item.name],
                         source:         showsSource ? (item.kind == .cask ? "Homebrew" : item.kind.sourceLabel) : nil,
                         rollbackUnavailableReason: showsSource ? UpdateView.rollbackCaption(for: item.kind) : nil,
+                        runStatus: run?.rowStatus(for: item),
+                        runIsStopping: run?.isStopping ?? false,
                         onToggle:       { toggle(item.key) },
                         onSelect:       { focus(item.key); onInspect?(item) },
                         onIgnore:       { onIgnore?(item) },
                         onPin:          { onPin?(item) },
                         onSkip:         skipAction(for: item),
                         backgroundUpdateToken: item.kind == .cask ? item.name : nil,
-                        isTabStop:      UpdateRowFocus.isTabStop(item.key, in: keys, focused: tabStop, onScreen: onScreen),
+                        isTabStop:      UpdateRowFocus.isTabStop(item.key, in: keys, focused: tabStop, onScreen: onScreen && isEnabled),
                         onMove:         { move(from: item.key, in: keys, $0) }
                     )
                     .focused($focusedKey, equals: item.key)
                     // UX-14 — F1's release notes live in the inspector only: unfolding them
                     // here gave every row a different height and repeated the inspector.
                 }
+                .opacity(run?.isDimmed(item.key) == true ? 0.55 : 1)
                 .contextMenu {
-                    UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) }, onSkip: skipAction(for: item))
+                    if isEnabled {
+                        UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) }, onSkip: skipAction(for: item))
+                    }
                 }
                 .overlay(alignment: .bottom) {
                     if item.id != items.last?.id { Divider().opacity(0.4).padding(.leading, 54) }
@@ -533,6 +484,10 @@ struct ManualUpdateSection: View {
 
     @FocusState private var focusedKey: String?
     @Environment(\.updatesOnScreen) private var onScreen
+    /// See `UpdateSection.isEnabled`.
+    @Environment(\.isEnabled) private var isEnabled
+    /// C2 §4.6 — a hand-off row is never part of a run; the group header says so.
+    @Environment(\.updateRun) private var run
     /// UXP-21 — the row Tab lands on; see `UpdateSection.tabStop`.
     @State private var tabStop: String?
 
@@ -545,7 +500,7 @@ struct ManualUpdateSection: View {
     var body: some View {
         WegaCard {
             UpdateGroupHeader(title: title, tint: tint, ordinal: ordinal, count: items.count,
-                              note: subtitle, caption: caption)
+                              note: run != nil ? tr("u producenta") : subtitle, caption: caption)
 
             let keys = items.map { "m:" + $0.path.path }
             ForEach(items, id: \.path) { item in
@@ -595,19 +550,22 @@ struct ManualUpdateSection: View {
                 .padding(.vertical, WegaLayout.updateRowPadding)
                 }
                 .queueRowSelection(isInspected)
+                .opacity(run != nil ? 0.55 : 1)
                 .contentShape(Rectangle())
                 .gesture(TapGesture().onEnded { focus(key); onInspect?(item) })
-                .focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop, onScreen: onScreen))
+                .focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop, onScreen: onScreen && isEnabled))
                 .focused($focusedKey, equals: key)
                 .onKeyPress(.return) {
-                    ManualUpdateRowKeyboardBehavior.handle(
+                    guard isEnabled else { return .ignored }
+                    return ManualUpdateRowKeyboardBehavior.handle(
                         .returnKey,
                         item: item,
                         onInspect: onInspect
                     ) ? .handled : .ignored
                 }
                 .onKeyPress(.space) {
-                    ManualUpdateRowKeyboardBehavior.handle(
+                    guard isEnabled else { return .ignored }
+                    return ManualUpdateRowKeyboardBehavior.handle(
                         .spaceKey,
                         item: item,
                         onInspect: onInspect
@@ -625,7 +583,9 @@ struct ManualUpdateSection: View {
                     onInspect?(item)
                 }
                 .contextMenu {
-                    UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) }, onSkip: skipAction(for: item))
+                    if isEnabled {
+                        UpdatePolicyMenu(onIgnore: { onIgnore?(item) }, onPin: { onPin?(item) }, onSkip: skipAction(for: item))
+                    }
                 }
                 .overlay(alignment: .bottom) {
                     if item.path != items.last?.path { Divider().opacity(0.4).padding(.leading, 54) }

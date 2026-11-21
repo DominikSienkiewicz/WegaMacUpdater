@@ -34,6 +34,7 @@ struct InfoView: View {
     private var downloadingUpdate: Bool { selfUpdateController.isDownloading }
     private var touchIDState: TouchIDSudoConfigurator.State { touchIDController.touchIDState }
     private var enablingTouchID: Bool { touchIDController.isEnabling }
+    private var disablingTouchID: Bool { touchIDController.isDisabling }
     private var touchIDError: String? { touchIDController.errorMessage }
     private var touchIDPermissionDenied: Bool { touchIDController.wasPermissionDenied }
 }
@@ -67,6 +68,7 @@ extension InfoView {
                 Task { await checkSelfUpdate() }
             }
             touchIDController.refresh()
+            Task { await touchIDController.refreshDisableOffer() }
             operations.refreshPersistentState()
         }
         .sheet(item: $reportController) { controller in
@@ -234,6 +236,38 @@ extension InfoView {
                             }
                             .disabled(enablingTouchID)
                             .controlSize(.small)
+                        } else if touchIDState == .enabled {
+                            switch touchIDController.disableOffer {
+                            case .available:
+                                Button {
+                                    Task { await disableTouchID() }
+                                } label: {
+                                    if disablingTouchID {
+                                        ProgressView().controlSize(.small)
+                                    } else {
+                                        Label(tr("Wyłącz Touch ID dla sudo"), systemImage: "touchid")
+                                    }
+                                }
+                                .disabled(disablingTouchID)
+                                .controlSize(.small)
+                                if let path = touchIDController.preflight.unsafeLocalDirectory {
+                                    touchIDNote(TouchIDDisableCopy.localDirectoryWarning(path: path))
+                                }
+                            case .helperOutdated:
+                                touchIDNote(TouchIDDisableCopy.outdatedHelper)
+                            case .blocked(let refusal):
+                                touchIDNote(TouchIDDisableCopy.line(for: .refused(refusal), stillEnabled: true), isWarning: true)
+                            case .helperMissing:
+                                touchIDNote(tr("Bez pomocnika Wegi wyłączysz je ręcznie."))
+                            case .unknown:
+                                EmptyView()
+                            }
+                            Link(tr("Jak wyłączyć Touch ID dla sudo"), destination: AppEndpoints.shared.touchIDGuideURL)
+                                .font(.wega(.subheadline))
+                        }
+
+                        if touchIDState != .enabled, touchIDController.disableOffer == .blocked(.unsafeOwnership) {
+                            touchIDNote(TouchIDDisableCopy.line(for: .refused(.unsafeOwnership), stillEnabled: false), isWarning: true)
                         }
 
                         SettingsCardHint(text: cardHints[.touchID])
@@ -243,6 +277,13 @@ extension InfoView {
             }
             .id(SettingsCard.touchID)
         }
+    }
+
+    private func touchIDNote(_ text: String, isWarning: Bool = false) -> some View {
+        Text(text)
+            .font(.wega(.subheadline))
+            .foregroundStyle(isWarning ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: - GitHub token (SEC-08)
@@ -300,7 +341,7 @@ extension InfoView {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(tr("Pomocnik Wegi działa jako root i umie tylko cztery rzeczy: zainstalować zweryfikowany pakiet Wegi, włączyć Touch ID dla sudo, przywrócić kopię aplikacji sprzed aktualizacji, przenieść do Kosza aplikację należącą do roota. Przy każdym połączeniu sprawdza podpis Wegi. Jest opcjonalny."))
+                    Text(tr("Pomocnik Wegi działa jako root i umie tylko cztery rzeczy: zainstalować zweryfikowany pakiet Wegi, włączyć albo wyłączyć Touch ID dla sudo, przywrócić kopię aplikacji sprzed aktualizacji, przenieść do Kosza aplikację należącą do roota. Przy każdym połączeniu sprawdza podpis Wegi. Jest opcjonalny."))
                         .font(.wega(.callout))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -581,6 +622,11 @@ extension InfoView {
 
     private func enableTouchID() async {
         await touchIDController.enable(onWegaState: relay(.touchID))
+        await touchIDController.refreshDisableOffer()
+    }
+
+    private func disableTouchID() async {
+        await touchIDController.disable(onWegaState: relay(.touchID))
     }
 
     // MARK: - Unverified endpoints overlay (SEC-08)

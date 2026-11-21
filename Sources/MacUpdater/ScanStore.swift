@@ -72,6 +72,8 @@ struct ScanStoreDependencies {
     var catalogStamp: BrewCatalogStamp = .none
     /// The scan's clock: the launch decision, the catalog's age and the stamp it writes.
     var now: @MainActor () -> Date = { Date() }
+    /// Tells the menu bar whether this window is scanning, so its own automatic check stands down.
+    var reportWindowScanRunning: @MainActor (Bool) -> Void = { _ in }
 
     static let live = ScanStoreDependencies(
         operations: .shared,
@@ -99,7 +101,8 @@ struct ScanStoreDependencies {
         reportVendorCheck: { item, remaining, check, count, fingerprint in
             MenuBarAgent.shared.reportVendorCheck(item: item, remaining: remaining, check: check, count: count, fingerprint: fingerprint)
         },
-        catalogStamp: .defaults(.standard)
+        catalogStamp: .defaults(.standard),
+        reportWindowScanRunning: { MenuBarAgent.shared.setWindowScanRunning($0) }
     )
 }
 
@@ -135,6 +138,10 @@ final class ScanStore: ObservableObject {
     /// UXP-30 — update runs that reached their rescan, so the inventory knows the app set may
     /// have changed, whether or not a window watched the run end.
     @Published private(set) var completedRunCount = 0
+    /// Manual installs and reinstalls whose brew process ran, and undos whose restore ran: each
+    /// can change the installed apps without a scan, so the inventory counts them too.
+    @Published private(set) var completedManualInstallCount = 0
+    @Published private(set) var completedUndoCount = 0
     @Published var errorMessage:      String?
     @Published var installationChecks: [InstallationCheck] = []
     @Published var lastCheck:         Date?
@@ -198,10 +205,14 @@ final class ScanStore: ObservableObject {
     /// cannot land in the next one.
     private(set) var scanGeneration = 0
     /// How far the running upgrade has got, in whole packages. `nil` when nothing is
-    /// installing, which is also what hides the bar.
+    /// installing; the band's run ring and stage read it.
     @Published var upgradeProgress: UpgradeProgress? {
         didSet { publishWindowRun() }
     }
+    /// C2 stage 3 — what the running update knows about each planned row and each batch.
+    /// Written only at a row's or a batch's boundary, never per output chunk, and only when
+    /// it changes.
+    @Published private(set) var runBoard = UpdateRunBoard.idle
     /// The counter behind `upgradeProgress`. One per run, created by the upgrade and read
     /// by the brew streaming loop — a stored property, so it cannot live in the extension
     /// that uses it.
@@ -209,7 +220,7 @@ final class ScanStore: ObservableObject {
     /// How many planned rows have a process running right now.
     ///
     /// Not `@Published`: nothing renders the number itself. It decides only whether the
-    /// progress bar may name the package it is installing — with several processes out, any
+    /// run's stage may name the package it is installing — with several processes out, any
     /// single name is a claim about the other two as well.
     var inFlightItemCount = 0
     /// F4 — tools the user has not installed. An invitation to install them, not an error.
@@ -315,7 +326,7 @@ final class ScanStore: ObservableObject {
     }
 
     /// UXP-09 — hands the menu bar what it shows of the run: done/total and whether a stop was
-    /// asked for, whichever path asked (⌘., the run bar, the menu itself). The brew loop sets
+    /// asked for, whichever path asked (⌘., the band's stop, the menu itself). The brew loop sets
     /// `upgradeProgress` on every output chunk, and every assignment to the agent's
     /// `@Published` property re-evaluates the `App` body, so only a change is assigned.
     private func publishWindowRun() {
@@ -487,6 +498,7 @@ final class ScanStore: ObservableObject {
         scanGeneration += 1
         scanStartedAt = dependencies.now()
         manualScanProgress = nil
+        dependencies.reportWindowScanRunning(true)
     }
 
     func setCatalogAgeMinutes(_ minutes: Int?) {
@@ -501,12 +513,63 @@ final class ScanStore: ObservableObject {
         completedRunCount += 1
     }
 
+    func countManualInstall() {
+        completedManualInstallCount += 1
+    }
+
+    func countUndo() {
+        completedUndoCount += 1
+    }
+
     /// Closes what only a running scan has, on every way out of it: the band goes back to the
     /// results state instead of a clock and a count that no longer move.
     func endScanProgress() {
         isRefreshingCatalog = false
         scanStartedAt = nil
         manualScanProgress = nil
+        dependencies.reportWindowScanRunning(false)
+    }
+
+    /// C2 stage 3 — opens the run's board: every planned cask and npm row, and each batch the
+    /// plan has, starts out waiting.
+    func beginRunBoard(planned: [OutdatedItem]) {
+        var board = UpdateRunBoard(startedAt: dependencies.now(), planned: Set(planned.map(\.key)))
+        for item in planned where item.kind == .cask || item.kind == .npm {
+            board.rows[item.key] = .waiting
+        }
+        for lane in UpdateRunLane.allCases where planned.contains(where: { $0.kind == lane.kind }) {
+            board.lanes[lane] = .waiting
+        }
+        runBoard = board
+    }
+
+    /// Ignores a key the board has no row for, and a status the row already has: the lanes
+    /// run side by side, and a republished board rebuilds every row that reads it.
+    func markRunRow(_ key: String, _ status: UpdateRunRowStatus) {
+        guard let current = runBoard.rows[key], current != status else { return }
+        runBoard.rows[key] = status
+    }
+
+    func markRunLane(_ lane: UpdateRunLane, _ status: UpdateRunRowStatus) {
+        guard let current = runBoard.lanes[lane], current != status else { return }
+        runBoard.lanes[lane] = status
+    }
+
+    /// Planned casks outside `trusted` — vetoed by the publisher check, or left without a
+    /// preparation to run on — that the cask lane will never start. One publish for all.
+    func markCasksThatWillNotRun(_ planned: [OutdatedItem], trusted: [String]) {
+        let trusted = Set(trusted)
+        var board = runBoard
+        for item in planned where item.kind == .cask && !trusted.contains(item.name) && board.rows[item.key] != nil {
+            board.rows[item.key] = .notStarted
+        }
+        guard board != runBoard else { return }
+        runBoard = board
+    }
+
+    func endRunBoard() {
+        guard runBoard != .idle else { return }
+        runBoard = .idle
     }
 
     /// Stores a vendor report from the scan numbered `generation`, when the rule below allows.
@@ -754,7 +817,10 @@ final class ScanStore: ObservableObject {
         selected.formUnion(visibleItems(for: filter).map(\.key))
     }
 
+    /// Refused while an update runs: the rule would take a row the run may still be installing
+    /// out of its queue. The list offers no menu then; this also covers every other caller.
     func ignoreItem(_ item: OutdatedItem) {
+        guard !updating else { return }
         let previous = UpdatePolicyStore.shared.entries[item.policyKey]
         UpdatePolicyStore.shared.ignore(key: item.policyKey, name: item.name)
         selected.remove(item.key)
@@ -768,9 +834,10 @@ final class ScanStore: ObservableObject {
     }
 
     /// UX-12 — skip just the version currently on offer; a later release surfaces again.
-    /// No-op when the source can't name the available version (nothing concrete to skip).
+    /// No-op when the source can't name the available version (nothing concrete to skip), and
+    /// refused while an update runs, like `ignoreItem`.
     func skipItem(_ item: OutdatedItem) {
-        guard let version = item.to, !version.isEmpty else { return }
+        guard !updating, let version = item.to, !version.isEmpty else { return }
         let previous = UpdatePolicyStore.shared.entries[item.policyKey]
         UpdatePolicyStore.shared.skip(key: item.policyKey, name: item.name, version: version)
         selected.remove(item.key)

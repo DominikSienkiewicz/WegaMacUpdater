@@ -106,7 +106,7 @@ struct UpdateActionBarTests {
 
     @Test func theUpdateButtonLivesInTheBand() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
-        let results = try slice(view, from: "private var resultsHeading: some View", to: "private var updateRunOverlay")
+        let results = try slice(view, from: "private var resultsHeading: some View", to: "private var screenBody: some View")
         let band = try slice(view, from: "private var resultsBand: some View", to: "private var resultsHeading: some View")
 
         #expect(!results.contains("requestUpdate"), "the heading reports the scan; it no longer acts")

@@ -24,7 +24,7 @@ enum SourceCommunication {
         case .homebrew: return "brew"
         case .appStore: return "mas"
         case .npm:      return "npm"
-        case .manual:   return tr("apki")
+        case .manual:   return tr("producenci")
         }
     }
 

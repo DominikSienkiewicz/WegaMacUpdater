@@ -24,6 +24,16 @@ import Foundation
     /// password dialog, because the helper is already root.
     func enableTouchIDForSudo(withReply reply: @escaping @Sendable (Bool, String?) -> Void)
 
+    /// Removes the exact directive `auth       sufficient     pam_tid.so` (Apple's template line without its `#`)
+    /// from `/etc/pam.d/sudo_local`, and only when nothing but blank and comment lines would remain.
+    /// Takes no arguments: the paths are fixed in the helper. `code` > 0: that many lines were removed and the
+    /// result was verified. 0: no file, or no exact directive; nothing was written. −1…−9 and −11: a
+    /// `TouchIDSudoDisableRefusal`; nothing was written. −10: `sudo_local` changed while the helper worked; this can
+    /// follow a swap, and the previous file may then be left under the swap name. −20: a step failed and
+    /// `sudo_local` is the original file again. −21: swapping back failed or could not be decided; `detail` is the
+    /// path that holds the previous file.
+    func disableTouchIDForSudo(withReply reply: @escaping @Sendable (Int, String?) -> Void)
+
     /// Reserves a durable operation before starting the verified installer on a worker queue.
     /// Replies carry JSON-encoded `PackageInstallationStatus`; a transport error is not a result.
     func beginPackageInstallation(atPath path: String, operationID: String, expectedVersion: String, withReply reply: @escaping @Sendable (Data?, String?) -> Void)
@@ -51,6 +61,13 @@ import Foundation
     func stageApplicationBundleForTrash(atPath path: String, expectedBundleID: String, withReply reply: @escaping @Sendable (String?, String?) -> Void)
 }
 
+/// The privileged verbs of `WegaPrivilegedOps`, each checked against its own minimum helper
+/// version before the app sends it (`WegaHelper.minimumHelperVersion(for:)`).
+public enum WegaHelperVerb: String, CaseIterable, Sendable {
+    case enableTouchIDForSudo, beginPackageInstallation, packageInstallationStatus, replaceBundle,
+         stageApplicationBundleForTrash, disableTouchIDForSudo
+}
+
 /// Identity & code-requirement constants shared by client and helper.
 ///
 /// 🔑 `teamIdentifier` is the **single source of truth** for the Team ID across
@@ -68,8 +85,24 @@ public enum WegaHelper {
     public static let sudoShimSigningID = "com.wega.WegaMacUpdater.sudo-shim"
     /// Main app bundle identifier.
     public static let appBundleID = AppMetadata.bundleIdentifier
-    /// Helper protocol version (bump on breaking interface changes).
-    public static let version = "6"
+    /// Helper protocol version. Bumped with every new verb and every change to a verb's
+    /// arguments, reply or semantics; see `minimumHelperVersion(for:)`.
+    public static let version = "7"
+
+    /// The oldest helper protocol version whose behaviour for `verb` this app relies on.
+    ///
+    /// Rule: adding a verb bumps `version` and sets the new verb's minimum to it. Changing a verb's
+    /// arguments, reply or semantics bumps `version` and raises THAT verb's minimum to it. A change
+    /// that makes older helpers unsafe for every verb raises every minimum.
+    public static func minimumHelperVersion(for verb: WegaHelperVerb) -> Int {
+        switch verb {
+        case .enableTouchIDForSudo, .beginPackageInstallation, .packageInstallationStatus, .replaceBundle,
+             .stageApplicationBundleForTrash:
+            return 6
+        case .disableTouchIDForSudo:
+            return 7
+        }
+    }
 
     /// Apple Developer Team ID — pinned by XPC (both directions) and self-update
     /// verification. Must match the Developer ID certificate the app is signed with.

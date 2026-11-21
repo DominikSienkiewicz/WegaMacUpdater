@@ -47,17 +47,17 @@ extension ScanStore {
             dropRowsSettledByPublisherTrust(token: token)
             WegaLog.warning(.homebrew, "\(token): użytkownik zaakceptował nowego wydawcę (\(previous ?? "—") → \(new)).")
             showBanner(BannerData(variant: .success, title: tr("Zaufano nowemu podpisowi"),
-                                  message: trf("%@: Team ID %@ jest teraz zaufanym wydawcą.", "\(token)", "\(new)")))
+                                  message: trf("%@: ufam teraz nowemu podpisowi producenta (%@).", "\(token)", "\(new)")))
         case .alreadyTrusted:
             showBanner(BannerData(variant: .success, title: tr("Ten podpis już jest zaufany"),
-                                  message: trf("%@: zainstalowana aplikacja jest podpisana zaufanym Team ID.", "\(token)")))
+                                  message: trf("%@: zainstalowana aplikacja ma zaufany podpis producenta.", "\(token)")))
         case .signatureUnreadable:
             showBanner(BannerData(variant: .danger, title: tr("Nie zmieniono zaufania"),
                                   message: trf("%@: nie udało się odczytać podpisu zainstalowanej aplikacji.", "\(token)"), action: .openLogs))
         case .installedDiffersFromReport(let reported, let installed):
             WegaLog.error(.homebrew, "\(token): podpis zmienił się od ostrzeżenia (\(reported) → \(installed)) — nie zmieniono zaufania.")
             showStickyBanner(BannerData(variant: .danger, title: tr("Zmienił się podpis producenta"),
-                                        message: trf("%@: aplikację podpisano ponownie innym Team ID (%@ zamiast %@). Nie zmieniono zaufania.",
+                                        message: trf("%@: aplikację podpisano ponownie innym podpisem producenta (%@ zamiast %@). Zaufania nie zmieniłam.",
                                                      "\(token)", "\(installed)", "\(reported)"), action: .openLogs))
         }
     }
@@ -93,7 +93,7 @@ enum PublisherChangeAlert {
         alert.alertStyle = .critical
         alert.messageText = trf("Zaufać nowemu podpisowi aplikacji %@?", "\(prompt.token)")
         alert.informativeText = trf(
-            "Teraz podpisuje ją Team ID %@ zamiast zaufanego %@. Potwierdź tylko, jeśli wiesz, że producent zmienił konto deweloperskie.",
+            "Teraz podpisuje ją identyfikator zespołu %@ zamiast zaufanego %@. Potwierdź tylko, jeśli wiesz, że producent zmienił konto deweloperskie.",
             "\(prompt.newTeamID)", "\(prompt.previousTeamID ?? "—")"
         )
         alert.addButton(withTitle: tr("Anuluj"))

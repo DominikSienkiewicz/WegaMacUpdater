@@ -81,6 +81,8 @@ struct DetailColumn: View {
     @State private var dialogOpen = false
     /// The same, from the inspector, which draws the list's update controls (Docker's confirmation too).
     @State private var inspectorDialogOpen = false
+    /// ⌘F's query on Updates (UXP-35). `UpdatesSearchField` empties it when Updates goes off screen.
+    @State private var updatesSearch = ""
 
     private var holdsBall: Bool {
         WegaAttention.holdsBall(bannerVariant: scan.banner?.variant, isUpdating: scan.updating, dialogOpen: dialogOpen || inspectorDialogOpen)
@@ -199,6 +201,7 @@ struct DetailColumn: View {
                 onCategoryCounts: { appsBadge = $0; cliBadge = $1 },
                 onUndoableCount:  { rollbackBadge = $0 },
                 onScopeChange:    { onNavigate(.updates($0)) },
+                searchQuery: updatesSearch,
                 wegaLine: quip ?? wegaState.line
             )
             .opacity(selection.tab == .update ? 1 : 0)
@@ -207,6 +210,12 @@ struct DetailColumn: View {
             // None of the three above keeps keyboard focus out; this does, for the rows and the
             // controls only — the menu commands the view publishes stay live (final review M6).
             .environment(\.updatesOnScreen, selection.tab == .update)
+
+            // Beside UpdateView, not on it: UpdateView stays mounted on every screen, and a field
+            // on it would follow it into every screen's toolbar.
+            if selection.tab == .update {
+                UpdatesSearchField(search: $updatesSearch)
+            }
 
             if selection.tab != .update {
                 switch selection {
@@ -227,7 +236,7 @@ struct DetailColumn: View {
                         }
                     )
                 case .migration:
-                    MigrationView(onWegaState: { wegaState = $0 })
+                    MigrationView(onWegaState: { wegaState = $0 }, onNavigate: navigate(fromBanner:))
                 case .inventory:
                     InventoryView(onWegaState: { wegaState = $0 }, onNavigate: onNavigate)
                 case .rollback:

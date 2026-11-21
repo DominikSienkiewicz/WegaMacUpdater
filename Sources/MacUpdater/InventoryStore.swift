@@ -147,7 +147,7 @@ struct LiveInventorySnapshotLoader: InventorySnapshotLoading {
 
 /// UXP-30 — how many of the actions that change the installed apps have finished: update runs,
 /// migrations (duplicate removals included), Cleanup removals and background rounds that
-/// installed something. Each count lives on the store that runs the action, and those stores
+/// installed something, manual installs, reinstalls and undos. Each count lives on the store that runs the action, and those stores
 /// live in the app rather than in the window, so an action that finishes while the window is
 /// closed still counts. The inventory keeps the counts its last read started from.
 struct InventoryChangeStamp: Equatable, Sendable {
@@ -155,6 +155,24 @@ struct InventoryChangeStamp: Equatable, Sendable {
     var migrations = 0
     var cleanupRemovals = 0
     var backgroundInstalls = 0
+    var manualInstalls = 0
+    var undos = 0
+}
+
+extension InventoryChangeStamp {
+    /// The counts now, read off the stores that run each action. The Inventory screen and the
+    /// Updates search ask the same question of the same read, so both build the stamp here.
+    @MainActor
+    static func current(scan: ScanStore, migration: MigrationStore, cleanup: CleanupStore, menuBar: MenuBarAgent) -> Self {
+        InventoryChangeStamp(
+            updateRuns: scan.completedRunCount,
+            migrations: migration.completedCount,
+            cleanupRemovals: cleanup.removalCount,
+            backgroundInstalls: menuBar.installedRoundCount,
+            manualInstalls: scan.completedManualInstallCount,
+            undos: scan.completedUndoCount
+        )
+    }
 }
 
 @MainActor

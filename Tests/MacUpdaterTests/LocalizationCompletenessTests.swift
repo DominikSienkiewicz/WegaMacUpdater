@@ -89,8 +89,28 @@ struct LocalizationCompletenessTests {
         #expect(repeated.isEmpty, "M9: Translations+UXReviewRest.swift repeats \(repeated)")
     }
 
+    /// M9 — the next batch's section repeats no key of any other section.
+    @Test func theNextBatchSectionRepeatsNoKeyOfAnotherSection() {
+        let others = Self.sectionsBeforeUXReview + [Translations.uxReview, Translations.uxReviewNext, Translations.uxReviewRest]
+        let elsewhere = others.reduce(into: Set<String>()) { $0.formUnion($1.keys) }
+        let repeated = Set(Translations.uxNextBatch.keys).intersection(elsewhere).sorted()
+        #expect(repeated.isEmpty, "M9: Translations+UXNextBatch.swift repeats \(repeated)")
+    }
+
+    /// M9 — the Touch ID turn-off section repeats no key of any other section.
+    @Test func theTouchIDDisableSectionRepeatsNoKeyOfAnotherSection() {
+        let others = Self.sectionsBeforeUXReview + [
+            Translations.uxReview, Translations.uxReviewNext, Translations.uxReviewRest, Translations.uxNextBatch,
+        ]
+        let elsewhere = others.reduce(into: Set<String>()) { $0.formUnion($1.keys) }
+        let repeated = Set(Translations.touchIDDisable.keys).intersection(elsewhere).sorted()
+        #expect(repeated.isEmpty, "M9: Translations+TouchIDDisable.swift repeats \(repeated)")
+    }
+
     /// UXP-24 — one name per concept. These keys were replaced; nothing may use or translate them.
     static let retiredKeys: Set<String> = [
+        "Pomocnik Wegi działa jako root i umie tylko cztery rzeczy: zainstalować zweryfikowany pakiet Wegi, włączyć Touch ID dla sudo, przywrócić kopię aplikacji sprzed aktualizacji, przenieść do Kosza aplikację należącą do roota. Przy każdym połączeniu sprawdza podpis Wegi. Jest opcjonalny.",
+        "Zastępuje hasło administratora odciskiem palca w poleceniach sudo, także w Terminalu. Bez niego wpisujesz hasło. Jak je wyłączyć, opisuje przewodnik.",
         "Komponent uprzywilejowany",
         "Zainstaluj komponent",
         "Usuń komponent",
@@ -140,6 +160,20 @@ struct LocalizationCompletenessTests {
         "Zobacz u wydawcy",
         "%@: Team ID już różnił się od zaufanego baseline (%@ → %@). Aktualizację zablokowano przed uruchomieniem.",
         "Bez automatycznego cofnięcia — poprzednią wersję pobierzesz od wydawcy.",
+        "sprawdzenie niepełne",
+        "Wymaga Twojego ruchu",
+        "apki",
+        "Homebrew nie pilnuje wersji tych apek (auto_updates) — robią to same. Wega sprawdza je u źródła.",
+        "Czy ta apka żyje poza brew?",
+        "%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
+        "%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
+        "%@: zmienił się Team ID wydawcy — przywrócono poprzednią zaufaną wersję.",
+        "%@ zmieniło wydawcę (Team ID) — zweryfikuj.",
+        "Teraz podpisuje ją Team ID %@ zamiast zaufanego %@. Potwierdź tylko, jeśli wiesz, że producent zmienił konto deweloperskie.",
+        "%@: aplikację podpisano ponownie innym Team ID (%@ zamiast %@). Nie zmieniono zaufania.",
+        "%@: Team ID %@ jest teraz zaufanym wydawcą.",
+        "%@: zainstalowana aplikacja jest podpisana zaufanym Team ID.",
+        "Uwaga: wydawca %@ zmienił Team ID (%@ → %@). Zweryfikuj, zanim zaufasz.",
     ]
 
     /// Fragments of the retired families. Every key that carried one was replaced.
@@ -165,6 +199,23 @@ struct LocalizationCompletenessTests {
         #expect(Translations.en["Pomocnik Wegi"] == "Wega helper")
         #expect(Translations.en["Wstrzymane aktualizacje"] == "Paused updates")
         #expect(Translations.en["Do Homebrew"] == "To Homebrew")
+    }
+
+    @Test func theGlossaryLeftoversAreGone() throws {
+        let used = try usedKeys(functions: ["tr", "trf", "trp"])
+        #expect(used.filter { $0.contains("Team ID") } == ["Brak skonfigurowanego Team ID — helper zadziała dopiero w podpisanym buildzie."],
+                "Team ID only in the developer-build message; people read 'podpis producenta'")
+        for fragment in ["apki", "apek", "apka", "Twojego ruchu", "zaufanym wydawcą"] {
+            #expect(!used.contains { $0.contains(fragment) }, "\(fragment)")
+        }
+        let english = Translations.en.values.filter { $0.contains("Team ID") }
+        #expect(english == ["No Team ID configured — the helper works only in a signed build."])
+        for variant in ["Needs your move", "trusted publisher", "changed publisher"] {
+            #expect(!Translations.en.values.contains { $0.contains(variant) }, "\(variant)")
+        }
+        #expect(Translations.en["skan niepełny"] == "check incomplete")
+        #expect(Translations.en["Wymaga Twojego działania"] == "Needs your action")
+        #expect(Translations.en["producenci"] == "vendors")
     }
 
     private func packageRoot(file: String = #filePath) -> URL {

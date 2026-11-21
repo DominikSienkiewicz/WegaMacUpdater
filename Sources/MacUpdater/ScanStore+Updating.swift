@@ -54,7 +54,8 @@ extension ScanStore {
         emitActivitySignal(.updating)
         brewLog = []
         showLog = true
-        emitWegaState(WegaState(pose: .sniff, line: tr("Aktualizuję, chwila…")))
+        // C2 — Wega stands still for a run; she sniffs only while a scan runs.
+        emitWegaState(WegaState(pose: .idle, line: tr("Aktualizuję, chwila…")))
 
         let plan          = UpdatePlanner.plan(selectedKeys: targetKeys)
         // The rows this run is about, captured before anything changes: the post-upgrade
@@ -77,7 +78,7 @@ extension ScanStore {
         let plannedCaskNames = plan.caskNames
         let npmNames      = plan.npmNames
         let masAppStoreIDs = plan.masAppStoreIDs
-        // The bar counts whole planned rows. Only the tokens this run asked brew for may be
+        // The run's counter counts whole planned rows. Only the tokens this run asked brew for may be
         // credited: `brew upgrade <names…>` also upgrades outdated dependents nobody
         // selected and announces them identically. npm and the App Store advance explicitly,
         // so they are not brew tokens. A run with a single package is the one case where a
@@ -89,12 +90,16 @@ extension ScanStore {
         )
         upgradeTracker = tracker
         upgradeProgress = tracker.progress
-        // Every later exit — the stop switch, a publisher veto, a thrown error — must leave
-        // the bar gone, so clearing is a defer rather than a line each return remembers.
+        // Every later exit — the stop switch, a publisher veto, a thrown error — must take
+        // the progress out of the band, so clearing is a defer rather than a line each return
+        // remembers.
         defer {
             upgradeProgress = nil
             upgradeTracker = nil
         }
+        // C2 stage 3 — the board leaves on every exit for the same reason, through its own defer.
+        beginRunBoard(planned: plannedItems)
+        defer { endRunBoard() }
         // REL-12 — zeroth boundary: stopping here also skips the snapshot/preflight work.
         guard !shouldStopUpdate(before: Array(plannedKeys)) else {
             updating = false
@@ -155,6 +160,7 @@ extension ScanStore {
         let caskLanePreparation = caskArgs != nil && caskPreparation?.trustedCaskNames.isEmpty == false
             ? caskPreparation
             : nil
+        markCasksThatWillNotRun(plannedItems, trusted: caskLanePreparation?.trustedCaskNames ?? [])
 
         // The four lanes overlap. They drive four different tools over four different sets
         // of paths, so nothing one of them touches is anything another one can reach — and
@@ -225,8 +231,8 @@ extension ScanStore {
         // If a cask failed (e.g. "App source not there"), it will still appear here.
         // Suppress its icon signal — the upgrade outcome below sets the final state.
         // M2(d) — lightweight: no second `brew update`, no second stale-cask sweep. The
-        // rescan is not a stage of this bar: `runCheck` replaces the results view with the
-        // scan's own screen, so the two bars hand over to each other.
+        // rescan is not a stage of the run's progress: `runCheck` replaces the results view,
+        // band included, with the scan's own screen, so the two hand over to each other.
         UpdateDiagnostics.record("rescan.started", fields: ["lightweight": "true"])
         await runCheck(emitActivity: false, lightweight: true, operationLease: operationLease)
         UpdateDiagnostics.record("rescan.result", fields: [
@@ -277,13 +283,13 @@ extension ScanStore {
             case .publisherChanged(let previous, let current):
                 old = previous
                 new = current
-                message = trf("%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
+                message = trf("%@: zmienił się podpis producenta (%@ → %@). Zaufaj nowemu podpisowi tylko wtedy, gdy producent zmienił konto.",
                               "\(outcome.name)", "\(old)", "\(new ?? "—")")
                 action = trustPublisherAction(for: outcome, teamID: new)
             case .publisherChangedAndRolledBack(let previous, let current):
                 old = previous
                 new = current
-                message = trf("%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
+                message = trf("%@: zmienił się podpis producenta (%@ → %@). Przywróciłam poprzednią zaufaną wersję.",
                               "\(outcome.name)", "\(old)", "\(new ?? "—")")
             case .publisherMismatchBeforeUpgrade(let previous, let current):
                 old = previous

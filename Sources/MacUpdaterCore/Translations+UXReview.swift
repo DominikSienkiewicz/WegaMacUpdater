@@ -21,15 +21,12 @@ extension Translations {
         "Później": "Later",
         "Wszystko jasne": "Got it",
         "Co robi pomocnik?": "What does the helper do?",
-        "Pomocnik Wegi działa jako root i umie tylko cztery rzeczy: zainstalować zweryfikowany pakiet Wegi, włączyć Touch ID dla sudo, przywrócić kopię aplikacji sprzed aktualizacji, przenieść do Kosza aplikację należącą do roota. Przy każdym połączeniu sprawdza podpis Wegi. Jest opcjonalny.":
-            "The Wega helper runs as root and can do only four things: install a verified Wega package, turn on Touch ID for sudo, restore an app's pre-update copy, and move a root-owned app to the Trash. It checks Wega's signature on every connection. It is optional.",
         "Nie włączaj powiadomień": "Keep Notifications Off",
         "Możesz je włączyć później w Ustawieniach Wegi.": "You can turn them on later in Wega Settings.",
         "Powiadomienia": "Notifications",
         "Powiadamiaj o nowych aktualizacjach": "Notify me about new updates",
         "Otwórz ustawienia powiadomień": "Open Notification Settings",
         "sprawdzanie niepełne": "check incomplete",
-        "sprawdzenie niepełne": "check incomplete",
         "Część źródeł milczy — nie wiem, czy to wszystko.":
             "Some sources stayed quiet — I can't tell if that's everything.",
         "Nie mogę cofnąć aktualizacji": "I can't undo the update",

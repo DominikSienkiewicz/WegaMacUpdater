@@ -473,7 +473,7 @@ final class MigrationStore: ObservableObject {
             return
         case .publisherRejected(let old, let new):
             errorMessage = trf(
-                "%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
+                "%@: zmienił się podpis producenta (%@ → %@). Zaufaj nowemu podpisowi tylko wtedy, gdy producent zmienił konto.",
                 "\(token)",
                 "\(old)",
                 "\(new ?? "—")"
@@ -636,10 +636,12 @@ final class MigrationStore: ObservableObject {
                 )
             }
         } catch {
+            WegaLog.error(.homebrew, "Usuwanie duplikatu \(removal.busyKey): nie udało się uruchomić — \(error.localizedDescription)")
             banner = BannerData(
                 variant: .danger,
                 title: tr("Nie udało się uruchomić"),
-                message: error.localizedDescription
+                message: error.localizedDescription,
+                action: .openLogs
             )
             duplicateBusyKey = nil
             return
@@ -674,10 +676,13 @@ final class MigrationStore: ObservableObject {
                 line: tr("Duplikat zniknął. PATH ma już tylko jedną wersję.")
             ))
         } else {
+            let reason = ScanLog.brewErrorReason(from: logLines).map { ": \($0)" } ?? ""
+            WegaLog.error(.homebrew, "Usuwanie duplikatu \(removal.busyKey) nieudane (kod \(exitCode))\(reason)")
             banner = BannerData(
                 variant: .danger,
                 title: tr("Nie udało się usunąć duplikatu"),
-                message: tr("Szczegóły w logu poniżej.")
+                message: tr("Szczegóły w logu poniżej."),
+                action: .openLogs
             )
         }
         duplicateBusyKey = nil
@@ -727,14 +732,14 @@ private enum MigrationVerificationMessage {
             )
         case .publisherChanged(let old, let new):
             return trf(
-                "%@: Team ID zmienił się (%@ → %@). Zweryfikuj.",
+                "%@: zmienił się podpis producenta (%@ → %@). Zaufaj nowemu podpisowi tylko wtedy, gdy producent zmienił konto.",
                 "\(token)",
                 "\(old)",
                 "\(new ?? "—")"
             )
         case .publisherChangedAndRolledBack(let old, let new):
             return trf(
-                "%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.",
+                "%@: zmienił się podpis producenta (%@ → %@). Przywróciłam poprzednią zaufaną wersję.",
                 "\(token)",
                 "\(old)",
                 "\(new ?? "—")"

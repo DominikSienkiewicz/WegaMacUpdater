@@ -112,7 +112,7 @@ Wega goes and gets them anyway:
 
 - The list shows every app with an available update, grouped by what to do next:
   **Possible security fixes** first, then **Apps** and **CLI tools** Wega can update for you,
-  then **Needs your move** for updates the vendor or you finish. Each row carries the app's
+  then **Needs your action** for updates the vendor or you finish. Each row carries the app's
   name, with the Homebrew token — the name Homebrew knows it by, such as `visual-studio-code`
   — in small type under it when the token says something the name does not, and its source.
   Pick **Group › by source** next to the categories to group by where each app came from
@@ -132,6 +132,17 @@ Wega goes and gets them anyway:
   result is stale it says so — e.g. *"Found 12 Jul, 21:14"* in a warning tint — rather than
   passing an old result off as fresh.
 
+**Finding an app.** Press **⌘F** on **Updates** and type a name; the field is **Find an app**.
+The list does not narrow. One answer row appears above it instead. When the app is among the
+updates, the row says so (**On the update list:**) and links to the matching rows. When it is not, the row says what Wega knows about it: that it is
+up to date and how that was checked, that Wega does not know where to update it from, that the
+check failed or that Wega has no current result and will check it next scan, or that one of
+your rules hides it, with **Show Rules** to open them. When Inventory has never been read, the
+row says so; searching never starts that read itself. **Show Rules** comes with an answer
+about your rules, **Open Inventory** with the others. An answer from an Inventory read that may
+have changed, or that was incomplete, says so. When the
+name matches nothing on this Mac, the row says it can't see the app among the apps here.
+
 Updates that your own rules (**Don't update**, **Skip this version**, a pin) hide from the
 list are not lost: a line at the bottom reads **"Hidden by your rules: N · Show"** and opens
 them.
@@ -148,7 +159,8 @@ read **Ukryte przez politykę** (Hidden by policy); the check itself still ran.
 Inventory keeps its last read while you move between screens, and says when it was made —
 **"Read today, 08:12"**. After something changes the installed apps (an update run, a background
 update, a Cleanup removal, a move to Homebrew, an uninstall — also while the window was closed),
-the line turns to **"Read today, 08:12 — the list may have changed"**. Two buttons sit beside it and do different things: **Refresh Inventory** only
+the line turns to **"Read today, 08:12 — the list may have changed"**. An install
+from the list through Homebrew, a reinstall and an undo count the same way. Two buttons sit beside it and do different things: **Refresh Inventory** only
 reads the disk again and does not look for new versions (its tooltip says so), while **Check for
 updates** starts the same scan as **Check now** (**⌘R**) and takes you to Updates, where it can
 be stopped. When the filters hide every app, the list says **"No apps match these filters."**
@@ -304,7 +316,9 @@ such as **and 3 more apps**, with the versions when they are known (**Slack 4.47
 security fix. Clicking a row opens Wega on the Updates screen with that update's details
 showing. Under the status, the dropdown dates the last check in words — **"Checked yesterday,
 21:14"** — and, while automatic checks are on, says when the next one is due: **"Next attempt:
-today, 15:00, while Wega is running. Closing the window doesn't quit the app."** While an update you started in the main
+today, 15:00, while Wega is running. Closing the window doesn't quit the app."** While a check you started in the main window
+runs, the menu says **Checking for updates in the Wega window…**, its check button waits, and
+the agent's own scheduled attempt waits for that check. While an update you started in the main
 window runs, it shows how far the run has got ("Updating 2 of 5…") with a **Stop After
 Active Installs** button, even with the window closed; once clicked, the button reads
 **Finishing active installs, not starting new ones**. Updates the agent installs in the
@@ -371,27 +385,35 @@ Until your first update finishes with everything installed, a card above the lis
 
 ### Watching an update run
 
-While an update installs, a veil stands the rest of the screen down and its progress takes
-the bottom of the list. With **Reduce Transparency** on in System Settings → Accessibility →
-Display, the veil is not drawn at all, so the rows stay as bright as they were; the list is
-locked all the same, and the note saying why sits on a solid background. It counts **whole
-packages**, and the line under it names what the run is doing: preparing backups,
-downloading, or installing. It names the package too — "Installing firefox — 3 of 7" — but
-only while that package is the only one installing; once several are running at once the
-line reads "Installing packages — 3 of 7" instead, because naming one of three would
-misdescribe the other two. When the last package is done, Wega re-checks the list and the
-scan's own progress bar takes over.
+The run happens in the band above the list, and nothing covers the rows. The band's small
+heading reads **"UPDATING · SINCE 08:14"** — when the run started, never a guess at when it
+will end — and under it a line names what the run is doing: preparing backups, downloading, or
+installing. It names the package too — "Installing firefox — 3 of 7" — but only while that
+package is the only one installing; once several are running at once the line reads
+"Installing packages — 3 of 7" instead, because naming one of three would misdescribe the
+other two. A ring beside it shows **3/7**, and the band holds **Stop After Active Installs**;
+the log opens by itself under the list when the run starts, and **Show log** appears in the band
+only after you close it. It counts **whole packages**. When the last package is done, Wega re-checks
+the list and the scan's band takes over.
+
+The list stays readable but locked, and its header says **"The list stays locked until the
+update ends."** Casks and npm packages say what is happening to them on their own row:
+*waiting*, *installing…*, *installed, checking*, *failed*, or *won't start* for a row the run
+will not begin after a stop request or a vendor's changed signature. Formulae and App Store
+updates run as one batch each, so their state stands once in the group's header rather than on
+every row. An update the vendor finishes says *with the vendor*. There is nothing for
+**Reduce Transparency** to turn off: no veil is drawn, so the rows are as bright as they were.
 
 There is no download percentage, and that is deliberate. Homebrew silences its download
 meter whenever it is not printing to a terminal, so the bytes are genuinely invisible to
 Wega; showing a percentage would mean inventing one. A single large app therefore holds the
-bar at the same place while it downloads — the label keeps saying what is happening.
+ring at the same place while it downloads — the line keeps saying what is happening.
 
 A run that fails part-way stops short of the end: six of seven packages upgraded leaves the
-bar at 6/7, and the banner explains the rest.
+ring at 6/7, and the banner explains the rest.
 
-While the run works, a **log panel** opens under the list and streams what the package
-managers are printing. Because several packages install at once, **every line is prefixed
+The **log panel** under the list opens by itself when a run starts, and **Show log** in the band
+brings it back after you close it. It streams what the package managers are printing. Because several packages install at once, **every line is prefixed
 with the package it came from** — `[figma] ==> Downloading…`, `[mas] error: …` — so three
 interleaved downloads stay tellable apart. That prefix is the package's own token and is
 never translated, whatever language the interface is in: it is the name Homebrew, `mas` or
@@ -400,13 +422,15 @@ npm uses, so a log you paste into a bug report stays searchable by it.
 ### Stopping an update
 
 While an update runs, the Updates screen belongs to it: the list, its checkboxes, banner
-actions and manual installs stay visible but greyed out, with a note saying why, and the
-bar at the bottom shows the progress, the package being installed, **Show log** and **Stop
-After Active Installs**. The sidebar and the menu-bar dropdown show the run too, so you can
-leave this screen and still see how far it has got. Nothing can be selected or started until the run lands. Stopping is the one
-control the run keeps. Wega stops at the **next package boundary** — the installs already running are
+actions and manual installs stay visible but greyed out, and the list header says why. The
+band shows the progress, the package being installed and **Stop After Active Installs**, plus
+**Show log** once you have closed the log that opens with the run. The sidebar and the menu-bar dropdown show the run too, so you can leave this
+screen and still see how far it has got. Nothing can be selected or started until the run
+lands. Stopping is the one control the run keeps; **⌘.** and the menu-bar dropdown's button do
+the same. Wega stops at the **next package boundary** — the installs already running are
 allowed to finish (up to three at a time), because a package manager killed halfway through a download or an app
-replacement is exactly how a broken app happens. Nothing new is started and everything still
+replacement is exactly how a broken app happens. Once you ask, the button reads **Finishing
+active installs, not starting new ones**. Nothing new is started and everything still
 queued is skipped, and the summary says how many packages were updated and how many were
 left untouched, so a stopped run is never reported as a finished one. An update still
 waiting for another operation to release the system is dropped immediately, since it has
@@ -519,7 +543,7 @@ opens this guide.
 | **⌘.** | **Cancel Scan**, or, while an update runs, **Stop After Active Installs**. |
 | **⇧⌘A** | **Select All Visible** rows — only on **Updates**. |
 | **⌥⌘I** | **Show Inspector** — opens or closes the details panel. |
-| **⌘F** | **Find on This Screen** — focuses the search field on **Logs**, **Uninstall** and **Inventory**; disabled on the other screens, which have none. |
+| **⌘F** | **Find on This Screen** — focuses the search field on **Updates** (**Find an app**), **Logs**, **Uninstall** and **Inventory**; disabled on the other screens, which have none. |
 | **⇧⌘F** | **Find in inventory** — goes to **Inventory** and focuses its search field, from any screen. |
 | **⌘1** to **⌘7** | Go to a section of the sidebar. |
 
@@ -531,8 +555,9 @@ entry that explains the failure; a permission
 failure leads with the permission instead (for example **macOS needs your permission**, with
 **Open privacy settings**) and never sends you to Logs for it. When a banner names many apps or
 packages it shows the first few and a **Show All** button that expands the rest; a new banner
-replacing an old one starts collapsed again. The error banners on **Inventory**, **Cleanup**,
-**Uninstall** and **To Homebrew** name the failure but have no button.
+replacing an old one starts collapsed again. The red banners on **To Homebrew** that report a failed duplicate removal also have **Show in
+Logs**. The other error banners on **To Homebrew**, and those on **Inventory**, **Cleanup** and
+**Uninstall**, name the failure but have no button.
 
 ### Skip or pin updates
 
@@ -683,7 +708,7 @@ GitHub.
 The helper is an **optional** component. Without it, everything in this guide still works;
 with it, Wega can finish a few things that need administrator rights without asking you to
 type a password. It runs as root and can do only four things: install a verified Wega
-package, turn on Touch ID for `sudo`, restore an app's pre-update copy, and move a
+package, turn Touch ID for `sudo` on or off, restore an app's pre-update copy, and move a
 root-owned app to the Trash. It checks Wega's signature on every connection.
 
 To switch it on, open **Settings** (**⌘,**) → **Permissions & Privacy** and use the **Wega
@@ -699,7 +724,12 @@ your Mac, in Terminal too, not only to Wega. Turn it on with **Use Touch ID Inst
 the **Touch ID for administrator commands** card (**Settings → Permissions & Privacy**); it
 needs administrator rights once, to write `/etc/pam.d/sudo_local`. With the helper installed,
 Wega does that for you. Without it, the card shows a one-line command to copy and paste into
-Terminal. **What Wega does** links to
+Terminal.
+
+To turn it off again, use **Turn Off Touch ID for sudo** on the same card; it appears when the
+Wega helper is installed. Without the helper the card points to the manual steps (unless it is showing a security note, below). If the
+helper is out of date, the card says so and asks you to remove and reinstall it or restart your
+Mac. **What Wega does** links to
 [Turning off Touch ID for sudo](#turning-off-touch-id-for-sudo) below.
 
 ### Settings diagnostics
@@ -869,8 +899,9 @@ Wega does not delete anything for you: you stay in control of every command.
 1. **Turn off Launch at login.** Settings → **General** → **Launch at login**.
 2. **Remove the helper**, if you installed it. Settings → **Permissions & Privacy** →
    **Wega helper** → **Remove Helper**.
-3. **Turn off Touch ID for `sudo`** (optional), if Wega turned it on. Follow
-   [Turning off Touch ID for sudo](#turning-off-touch-id-for-sudo) below. It also works on
+3. **Turn off Touch ID for `sudo`** (optional), if Wega turned it on. Use **Turn Off Touch ID
+   for sudo** on the Touch ID card, or follow the manual steps in
+   [Turning off Touch ID for sudo](#turning-off-touch-id-for-sudo) below. Either also works on
    its own, while Wega stays installed.
 4. **Quit Wega.** Use **Quit Wega** in the menu-bar menu. Closing the window does not quit the
    app.
@@ -926,9 +957,23 @@ one if you might still need it.
 
 Wega turns on Touch ID for `sudo` by adding one line to `/etc/pam.d/sudo_local`. The main
 `sudo` configuration includes that file, so a half-deleted line can break **every** `sudo`,
-including the one you would need to repair it. Follow the steps in this order. The change
-applies to all of `sudo` on your Mac, not only to Wega: afterwards every `sudo` prompt asks
-for your password again.
+including the one you would need to repair it. The change applies to all of `sudo` on your Mac,
+not only to Wega: afterwards every `sudo` prompt asks for your password again.
+
+**In Wega.** With the Wega helper installed (and up to date), open **Settings → Permissions &
+Privacy → Touch ID for administrator commands** and click **Turn Off Touch ID for sudo**. The
+helper removes only the line `auth       sufficient     pam_tid.so` from
+`/etc/pam.d/sudo_local` and leaves Apple's template in place. It swaps the new file in
+atomically, checks it, and puts the old file back if anything goes wrong; no backup stays
+behind unless something fails, including the last cleanup step. Then open a new Terminal
+window and run `sudo -k; sudo true`; it should ask for your password. Wega will not touch the
+file when it holds other settings, a line written differently, or anything else it did not
+expect; it says so, and you use the manual steps below. If the card instead shows a red note
+that someone other than root can change the file or directory, or that the file looks different
+from what it should, read the repair advice below; that note can appear even
+without the helper.
+
+**By hand.** Follow these steps in this order.
 
 1. Open a root shell with `sudo -s` and **keep it open until the end**.
 2. Back up the file: `cp /etc/pam.d/sudo_local /etc/pam.d/sudo_local.bak`
@@ -941,6 +986,70 @@ for your password again.
    `cp /etc/pam.d/sudo_local.bak /etc/pam.d/sudo_local`. Then close the shell with `exit`.
 6. If it worked, close the root shell with `exit` as well. You may then delete the backup,
    `/etc/pam.d/sudo_local.bak`; it is no longer needed.
+
+**When Wega refuses because someone other than root can change the file.** If the card says
+that `/etc/pam.d/sudo_local` or the `/etc/pam.d` directory can be changed by someone other than
+root, take it seriously: whoever can write there can get root without a password. Wega changed
+nothing. Look first, as you, without `sudo`:
+
+```
+ls -leO@ /etc/pam.d/sudo_local
+ls -ldeO@ /etc/pam.d
+cat /etc/pam.d/sudo_local
+```
+
+Look for write permission for a group or for everyone, an owner other than `root`, an ACL entry
+or a flag you did not set, and any line in the file that you did not add. Do not repair it by
+typing your password into `sudo`: `sudo` reads that very file, so a tampered file is not a safe
+place to type it. Use one of two other ways.
+
+*Through an administrator prompt (only when the file is the problem and the `/etc/pam.d`
+directory is fine).* `osascript` asks macOS itself for the password, and macOS's authorization
+service does not read `sudo_local`, so a tampered file never sees that password. That service is
+driven by `/etc/pam.d/authorization`, which lives in the same directory, so when someone other
+than root can change the directory itself this way is not safe either; use recoveryOS then:
+
+```
+osascript -e 'do shell script "chown root:wheel /etc/pam.d/sudo_local; chmod go-w /etc/pam.d/sudo_local; chmod -N /etc/pam.d/sudo_local" with administrator privileges'
+```
+
+*From recoveryOS.* Restart into recoveryOS, unlock your disk in Disk Utility first if it uses
+FileVault and mount your Data volume, then open Terminal. There `/etc/pam.d` is recoveryOS's
+own, not your Mac's; your files are under the mounted Data volume, for example
+`/Volumes/Macintosh HD - Data/private/etc/pam.d/sudo_local` (the volume's name may differ):
+
+```
+chown root:wheel "/Volumes/Macintosh HD - Data/private/etc/pam.d/sudo_local"
+chmod go-w "/Volumes/Macintosh HD - Data/private/etc/pam.d/sudo_local"
+chmod -N "/Volumes/Macintosh HD - Data/private/etc/pam.d/sudo_local"
+```
+
+The last command removes the ACL. When the directory is the problem, only recoveryOS is safe:
+run the same commands for the directory, `/Volumes/<name> - Data/private/etc/pam.d` (for example
+`/Volumes/Macintosh HD - Data/private/etc/pam.d`), without the `-N` one, and check
+`ls -ldeO@` on that path again afterwards.
+
+**When Wega names another policy file or directory.** Wega also stops when, once its line is
+gone, `sudo` would read another PAM file: `/etc/pam.conf`, `/usr/local/etc/pam.conf`,
+`/usr/local/etc/pam.d/sudo_local` or `/usr/share/pam.d/sudo_local`. It also warns when any
+existing directory on the chain `/usr/local`, `/usr/local/etc`, `/usr/local/etc/pam.d` can be
+changed by someone other than root. Read the
+file with `cat`; if you did not create it, treat it like the case above. Wega does not edit
+those files.
+
+**When the write and its restore both failed.** Wega names a file such as
+`/etc/pam.d/.sudo_local.wega-swap-<UUID>` that holds the previous `sudo_local`. Inspect both
+files with `cat /etc/pam.d/.sudo_local.wega-swap-<UUID>` and `cat /etc/pam.d/sudo_local` (use the
+real name from the message; `ls -a /etc/pam.d` lists it). If `sudo_local` is damaged or missing,
+put the saved one back with `mv /etc/pam.d/.sudo_local.wega-swap-<UUID> /etc/pam.d/sudo_local`,
+under the same rule: `osascript` with administrator privileges (wrap the `mv` as above; only
+when the `/etc/pam.d` directory itself is fine) or recoveryOS (with the Data volume's path
+`/Volumes/<name> - Data/private/etc/pam.d/` in place of `/etc/pam.d/`), not a password typed
+into `sudo`.
+
+**After "the file changed while I was working".** A `.sudo_local.wega-swap-*` file may be left
+in `/etc/pam.d`. Check it the same way. Once `sudo_local` is confirmed correct, the leftover
+file can be removed.
 
 ### Cleanup: what each action does
 

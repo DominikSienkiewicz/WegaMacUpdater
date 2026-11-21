@@ -12,16 +12,19 @@ struct UpdateGroupHeader: View {
     let ordinal: Int?
     let count: Int
     let note: String?
+    /// C2 stage 3 — what a running update's batch is doing, in place of `note` while it runs.
+    let runNote: String?
     let caption: String?
     let selection: SelectionCheckbox?
 
-    init(title: String, tint: Color, ordinal: Int? = nil, count: Int, note: String? = nil,
+    init(title: String, tint: Color, ordinal: Int? = nil, count: Int, note: String? = nil, runNote: String? = nil,
          caption: String? = nil, selection: SelectionCheckbox? = nil) {
         self.title = title
         self.tint = tint
         self.ordinal = ordinal
         self.count = count
         self.note = note
+        self.runNote = runNote
         self.caption = caption
         self.selection = selection
     }
@@ -65,10 +68,18 @@ struct UpdateGroupHeader: View {
                 // The number is visual ordering only; VoiceOver reads the plain title.
                 .accessibilityLabel(title)
                 .accessibilityAddTraits(.isHeader)
+                .layoutPriority(1)
             Text("\(count)")
                 .font(.wega(.callout, monospaced: true))
                 .foregroundStyle(.tertiary)
-            if let note {
+                .layoutPriority(1)
+            if let runNote {
+                // State text, so `.secondary` (UXP-22). One line that gives way to the title: the
+                // batch changes state mid-run, and a header that wrapped would move every row below it.
+                Text(runNote).font(.wega(.subheadline)).foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .help(runNote)
+            } else if let note {
                 Text(note).font(.wega(.subheadline)).foregroundStyle(.tertiary)
             }
             Spacer()

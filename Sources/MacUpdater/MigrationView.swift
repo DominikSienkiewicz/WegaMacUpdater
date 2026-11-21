@@ -3,12 +3,14 @@ import MacUpdaterCore
 
 struct MigrationView: View {
     var onWegaState: ((WegaState) -> Void)?
+    var onNavigate: ((SidebarTab) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
     @EnvironmentObject private var migration: MigrationStore
 
-    init(onWegaState: ((WegaState) -> Void)? = nil) {
+    init(onWegaState: ((WegaState) -> Void)? = nil, onNavigate: ((SidebarTab) -> Void)? = nil) {
         self.onWegaState = onWegaState
+        self.onNavigate = onNavigate
     }
 
     private var status: MigrationStatus {
@@ -123,7 +125,7 @@ struct MigrationView: View {
             SniffingScene(
                 caption: tr("Trop! Wega wącha każdy folder w /Applications…"),
                 thoughts: [
-                    tr("Czy ta apka żyje poza brew?"),
+                    tr("Czy ta aplikacja żyje poza Homebrew?"),
                     tr("Sniff sniff… kandydat na migrację"),
                     tr("Hmm, kto cię tu postawił?"),
                     tr("Pachnie ręczną instalacją"),
@@ -157,7 +159,7 @@ struct MigrationView: View {
                 }
 
                 if let err = errorMessage { ErrorBanner(message: err) }
-                if let b = banner { BannerView(data: b) { banner = nil } }
+                if let b = banner { BannerView(data: b, onAction: { if case .openLogs = $0 { onNavigate?(.logs) } }, onClose: { banner = nil }) }
 
                 // Matchable section
                 WegaCard(padded: false) {

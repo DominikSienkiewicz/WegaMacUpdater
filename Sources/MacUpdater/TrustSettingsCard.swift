@@ -17,12 +17,12 @@ struct PermissionExplanation: Equatable, Identifiable {
             PermissionExplanation(
                 kind: .helper,
                 title: tr("Pomocnik Wegi"),
-                text: tr("Pomocnik Wegi działa jako root i umie tylko cztery rzeczy: zainstalować zweryfikowany pakiet Wegi, włączyć Touch ID dla sudo, przywrócić kopię aplikacji sprzed aktualizacji, przenieść do Kosza aplikację należącą do roota. Przy każdym połączeniu sprawdza podpis Wegi. Jest opcjonalny.")
+                text: tr("Pomocnik Wegi działa jako root i umie tylko cztery rzeczy: zainstalować zweryfikowany pakiet Wegi, włączyć albo wyłączyć Touch ID dla sudo, przywrócić kopię aplikacji sprzed aktualizacji, przenieść do Kosza aplikację należącą do roota. Przy każdym połączeniu sprawdza podpis Wegi. Jest opcjonalny.")
                     + " " + tr("Bez niego Wega poprosi o hasło. Wyłączysz go przyciskiem „Usuń pomocnika”.")),
             PermissionExplanation(
                 kind: .touchID,
                 title: tr("Touch ID dla poleceń administratora"),
-                text: tr("Zastępuje hasło administratora odciskiem palca w poleceniach sudo, także w Terminalu. Bez niego wpisujesz hasło. Jak je wyłączyć, opisuje przewodnik.")),
+                text: tr("Zastępuje hasło administratora odciskiem palca w poleceniach sudo, także w Terminalu. Bez niego wpisujesz hasło. Wyłączysz je w karcie Touch ID, gdy pomocnik Wegi jest zainstalowany, albo ręcznie według przewodnika.")),
             PermissionExplanation(
                 kind: .appManagement,
                 title: tr("Zarządzanie aplikacjami"),

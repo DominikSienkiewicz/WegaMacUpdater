@@ -6,15 +6,15 @@ import Testing
 
 /// UXP-22 — what a state says was drawn in `.tertiary`, below the 4.5:1 a sentence needs; the run's
 /// veil ignored Reduce Transparency; the banner's close and the plan link were smaller than the
-/// 28×28 pt macOS asks for; and the log scrolled with an animation under Reduce Motion.
+/// 28×28 pt macOS asks for; and the log scrolled with an animation under Reduce Motion. C2 stage 3
+/// took the veil away: the run lives in the band and nothing is drawn over the rows.
 ///
 /// `.secondary` is a system style, so its contrast is the system's: these tests pin the styles.
 @Suite("Contrast, transparency and targets") @MainActor
 struct ContrastAndTargetsTests {
     @Test func stateTextIsSecondaryNotTertiary() throws {
-        let support = try source("Sources/MacUpdater/UpdateViewSupport.swift")
-        let bar = try #require(support.range(of: "struct UpgradeProgressBar: View")).upperBound
-        #expect(!support[bar...].prefix(700).contains(".foregroundStyle(.tertiary)"))
+        let runViews = try source("Sources/MacUpdater/UpdateBandRunViews.swift")
+        #expect(!runViews.contains(".tertiary"), "the run's stage, note and stop")
         let trust = try source("Sources/MacUpdater/TrustPanel.swift")
         for label in ["Weryfikowanie…", "Weryfikacja niedostępna", "pierwsze sprawdzenie podpisu", "podpis bez zmian"] {
             let at = try #require(trust.range(of: "tr(\"\(label)\")"), "\(label)").upperBound
@@ -25,28 +25,33 @@ struct ContrastAndTargetsTests {
             .contains("Text(tr(\"Sprawdzam rozmiary pobrań…\")).font(.wega(.subheadline)).foregroundStyle(.secondary)"))
     }
 
-    @Test func reduceTransparencyRemovesTheVeilInsteadOfHidingTheRows() throws {
-        #expect(UpdateRunOverlay<EmptyView>.scrim(reduceTransparency: false) == 0.5)
-        #expect(UpdateRunOverlay<EmptyView>.scrim(reduceTransparency: true) == 0)
-        let overlay = try source("Sources/MacUpdater/UpdateRunOverlay.swift")
-        #expect(overlay.contains("@Environment(\\.accessibilityReduceTransparency) private var reduceTransparency"))
-        #expect(overlay.contains(".opacity(Self.scrim(reduceTransparency: reduceTransparency))"))
-        #expect(overlay.contains(".background(Color.wegaRecessedSurface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))"),
-                "the note keeps a surface of its own without glass")
+    /// With Reduce Transparency on, the veil used to be dropped so the rows stayed readable. Now
+    /// there is no veil to drop: the run draws in the band, which has no glass or material.
+    @Test func reduceTransparencyHasNoVeilToRemove() throws {
+        let overlay = packageRoot().appending(path: "Sources/MacUpdater/UpdateRunOverlay.swift", directoryHint: .notDirectory)
+        #expect(!FileManager.default.fileExists(atPath: overlay.path), "the run's veil is gone")
+        for file in ["UpdateBand.swift", "UpdateBandRunViews.swift", "UpdateBandRunPresentation.swift"] {
+            let text = try source("Sources/MacUpdater/\(file)")
+            #expect(!text.contains(".glassEffect("), "\(file)")
+            #expect(!text.contains("Material"), "\(file)")
+        }
     }
 
-    /// With no veil drawn, nothing about the run's lock may depend on drawing it: the screen is
-    /// disabled by the run itself, the overlay still takes the clicks the veil took, and the
-    /// selection refuses every change the run did not start.
+    /// With no veil, nothing about the run's lock may depend on drawing one: the screen is
+    /// disabled by the run itself, nothing lies on the rows, VoiceOver's row actions follow the
+    /// lock, and the selection refuses every change the run did not start.
     @Test func theRunLocksTheListWithoutTheVeil() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         #expect(view.contains("screenBody\n                .disabled(!ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating))"))
         #expect(!view.contains("reduceTransparency"), "the lock never asks how the veil is drawn")
-        let overlay = try source("Sources/MacUpdater/UpdateRunOverlay.swift")
-        let body = try #require(overlay.range(of: "var body: some View")).upperBound
-        let veil = try #require(overlay.range(of: ".opacity(Self.scrim(reduceTransparency: reduceTransparency))", range: body..<overlay.endIndex))
-        #expect(overlay[veil.upperBound...].prefix(120).contains(".contentShape(Rectangle())"),
-                "a transparent veil still takes the clicks")
+        let results = try #require(view.range(of: "private var resultsView: some View")).lowerBound
+        let header = try #require(view.range(of: "private var listHeader: some View", range: results..<view.endIndex)).lowerBound
+        #expect(!view[results..<header].contains(".overlay"), "nothing is drawn over the rows to take their clicks")
+        let shared = try source("Sources/MacUpdater/SharedViews.swift")
+        let row = try #require(shared.range(of: "struct PackageRow: View")).lowerBound
+        let rowEnd = try #require(shared.range(of: "// MARK: - Rollback badge", range: row..<shared.endIndex)).lowerBound
+        #expect(shared[row..<rowEnd].contains(".accessibilityActions {\n            if isEnabled {"),
+                "VoiceOver's row actions follow the disabled screen")
         #expect(!ScanSelectionGate.allowsScreenInteraction(isUpdating: true))
         #expect(!ScanSelectionGate.allowsListSelection(isRefreshing: false, isUpdating: true))
     }
@@ -86,11 +91,14 @@ struct ContrastAndTargetsTests {
         }
     }
 
-    private func source(_ relativePath: String, file: String = #filePath) throws -> String {
-        let root = URL(filePath: file, directoryHint: .notDirectory)
+    private func packageRoot(file: String = #filePath) -> URL {
+        URL(filePath: file, directoryHint: .notDirectory)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        return try String(contentsOf: root.appending(path: relativePath, directoryHint: .notDirectory), encoding: .utf8)
+    }
+
+    private func source(_ relativePath: String) throws -> String {
+        try String(contentsOf: packageRoot().appending(path: relativePath, directoryHint: .notDirectory), encoding: .utf8)
     }
 }

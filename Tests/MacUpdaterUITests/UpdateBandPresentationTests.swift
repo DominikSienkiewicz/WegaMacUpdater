@@ -35,10 +35,15 @@ struct UpdateBandPresentationTests {
     @Test func anIncompleteScanSaysSoInTheHeadline() {
         withLanguage(.pl) {
             var p = presentation(total: 3, urgent: 1)
-            p.incompleteNote = tr("sprawdzenie niepełne")
+            p.incompleteNote = tr("skan niepełny")
             // M3 — the note follows the count, so truncation never takes it first.
-            #expect(p.headline == "3 aktualizacje · sprawdzenie niepełne · 1 z możliwą poprawką bezp.")
+            #expect(p.headline == "3 aktualizacje · skan niepełny · 1 z możliwą poprawką bezp.")
         }
+    }
+
+    @Test func theManualSourceIsCalledVendors() {
+        withLanguage(.en) { #expect(SourceCommunication.stampToken(.manual) == "vendors") }
+        withLanguage(.pl) { #expect(SourceCommunication.stampToken(.manual) == "producenci") }
     }
 
     @Test func headlinePluralises() {

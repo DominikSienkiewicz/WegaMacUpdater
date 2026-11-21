@@ -103,6 +103,17 @@ struct SEC05AuthorizationHardeningTests {
         #expect(source.contains("verifyReadback"))
         #expect(source.contains("rollback"))
         #expect(source.contains(#"^[[:space:]]*auth[[:space:]]+sufficient"#))
+
+        // Turning Touch ID off never rewrites in place: a new file is created beside the original,
+        // flushed, and swapped in atomically, with the original swapped back on any failure.
+        let disable = try contents(of: "Sources/WegaHelperKit/TouchIDSudoDisable.swift")
+            + contents(of: "Sources/WegaHelperKit/TouchIDSudoDisabler.swift")
+            + contents(of: "Sources/WegaHelperKit/PAMPolicyDirectory.swift")
+        for marker in ["contentsDisablingTouchID", "readbackIsAcceptable", "swapBack", "renameatx_np(", "RENAME_SWAP",
+                       "O_EXCL", "F_FULLFSYNC"] {
+            #expect(disable.contains(marker), "missing from the disable transaction: \(marker)")
+        }
+        #expect(!disable.contains("writeAtomically"), "the disable path never goes through Data.write(.atomic)")
     }
 
     @Test func transactionalTerminalFallbackIsValidShellSyntax() throws {

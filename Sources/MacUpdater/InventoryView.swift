@@ -34,10 +34,7 @@ struct InventoryView: View {
     @FocusState private var searchFocused: Bool
 
     private var checksByPath: [InstallationIdentity: InstallationCheck] {
-        let background = menuBar.lastResult
-        let checks = (background?.scannedAt ?? .distantPast) > (scanStore.lastCheck ?? .distantPast)
-            ? background?.installationChecks ?? [] : scanStore.installationChecks
-        return Dictionary(checks.map { (InstallationIdentity(path: $0.path), $0) }, uniquingKeysWith: { _, last in last })
+        InventoryCheckSource.checksByPath(scan: scanStore.installationChecks, scanCheckedAt: scanStore.lastCheck, background: menuBar.lastResult)
     }
 
     private func presentation(for app: ApplicationInfo, checks: [InstallationIdentity: InstallationCheck], now: Date) -> InventoryCheckPresentation {
@@ -47,12 +44,7 @@ struct InventoryView: View {
     /// What has finished since launch that changes the installed apps. The stores keep counting
     /// while the window is closed, so the next entry still sees what happened.
     private var changes: InventoryChangeStamp {
-        InventoryChangeStamp(
-            updateRuns: scanStore.completedRunCount,
-            migrations: migration.completedCount,
-            cleanupRemovals: cleanup.removalCount,
-            backgroundInstalls: menuBar.installedRoundCount
-        )
+        InventoryChangeStamp.current(scan: scanStore, migration: migration, cleanup: cleanup, menuBar: menuBar)
     }
 
     private var apps: [ApplicationInfo] { inventory.apps }

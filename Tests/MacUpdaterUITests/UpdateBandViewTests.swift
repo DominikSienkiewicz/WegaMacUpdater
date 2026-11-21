@@ -44,6 +44,14 @@ final class UpdateBandViewTests: XCTestCase {
         }
     }
 
+    /// C2 stage 3 — while an update runs its ring takes the button's place, at the button's size.
+    func testTheRunRingIsExactlyTheButtonsDiameter() {
+        for diameter in [WegaLayout.bandButtonSize, WegaLayout.bandButtonCompactSize, WegaLayout.bandButtonNarrowSize] {
+            let ring = UpdateBandRunRing(completed: 12, total: 40, diameter: diameter, accessibilityValue: "x")
+            XCTAssertEqual(NSHostingView(rootView: ring).fittingSize, CGSize(width: diameter, height: diameter), "diameter \(diameter)")
+        }
+    }
+
     func testTheButtonDrawsItsStateFromIsEnabled() throws {
         let text = try source("Sources/MacUpdater/UpdateBandButton.swift")
         for literal in [
@@ -64,7 +72,7 @@ final class UpdateBandViewTests: XCTestCase {
             lastCheck: Date(timeIntervalSince1970: 1_800_000_000), freshness: .stale,
             sources: [
                 .init(token: "brew", isVerified: true), .init(token: "mas", isVerified: true),
-                .init(token: "npm", isVerified: false), .init(token: "apki", isVerified: true),
+                .init(token: "npm", isVerified: false), .init(token: "producenci", isVerified: true),
             ],
             wegaLine: "Mam kilka rzeczy do zaktualizowania, a jedna z nich jest naprawdę pilna i wymaga uwagi"
         )
@@ -84,6 +92,18 @@ final class UpdateBandViewTests: XCTestCase {
             progress: .running(.npm), catalogRefreshing: false, startedAt: Date(timeIntervalSince1970: 0),
             manual: nil, foundSoFar: 22
         )
+    }
+
+    /// The run state with its longest stage: a long cask token and a two-digit counter.
+    private var runFixture: UpdateBandRunPresentation {
+        UpdateBandRunPresentation(progress: UpgradeProgress(completedUnits: 12, totalUnits: 40, stage: .installing(token: "com.microsoft.edgemac")),
+                                  startedAt: Date(timeIntervalSince1970: 0), isStopping: false, logShown: false)
+    }
+
+    /// The run once a stop is requested: the longer stop label.
+    private var runStoppingFixture: UpdateBandRunPresentation {
+        UpdateBandRunPresentation(progress: UpgradeProgress(completedUnits: 12, totalUnits: 40, stage: .downloading(token: "microsoft-teams")),
+                                  startedAt: Date(timeIntervalSince1970: 0), isStopping: true, logShown: false)
     }
 
     func testTheLayoutRuleSwitchesAtTheBreakpoint() {
@@ -141,6 +161,111 @@ final class UpdateBandViewTests: XCTestCase {
                 }
             }
         }
+    }
+
+    /// C2 stage 3 — the run moved into the band; the band keeps its height in every layout.
+    func testTheRunNeverChangesTheBandsHeight() {
+        for language in [AppLanguage.pl, .en] {
+            for run in [runFixture, runStoppingFixture] {
+                for width in [240, 368, 380, 388, 480, 520, 700, 819, 820, 1100] as [CGFloat] {
+                    let height = withLanguage(language) {
+                        let band = UpdateBand(
+                            presentation: fullPresentation, scan: nil, run: run, planLinkEnabled: false, onShowPlan: {},
+                            action: { _ in Color.clear.frame(width: 96, height: 96) }
+                        )
+                        .frame(width: width)
+                        return NSHostingView(rootView: band).fittingSize.height
+                    }
+                    XCTAssertEqual(height, WegaLayout.bandHeight, "\(language), width \(width), stopping \(run.isStopping)")
+                }
+            }
+        }
+    }
+
+    /// The frame always reports the band's height, so this measures what it has to hold: the
+    /// eyebrow, the headline, the longest stage, the stop and „Pokaż log”.
+    func testTheTallestRunStillFitsTheBand() {
+        for bandWidth in Self.runBandWidths {
+            let layout = UpdateBandLayout.style(forWidth: bandWidth)
+            for language in [AppLanguage.pl, .en] {
+                for run in [runFixture, runStoppingFixture] {
+                    let height = withLanguage(language) {
+                        let band = UpdateBand(
+                            presentation: presentation(count: 22, note: tr("skan niepełny")),
+                            scan: nil, run: run, planLinkEnabled: false, onShowPlan: {},
+                            action: { layout in
+                                Color.clear.frame(width: layout.buttonDiameter, height: layout.buttonDiameter)
+                            }
+                        )
+                        return NSHostingView(rootView: band.naturalContent(width: bandWidth)).fittingSize.height
+                    }
+                    XCTAssertLessThanOrEqual(
+                        height, WegaLayout.bandHeight,
+                        "\(language), band \(bandWidth) pt (\(layout)), stopping \(run.isStopping): content is \(height) pt"
+                    )
+                }
+            }
+        }
+    }
+
+    func testTheNarrowRunFitsTheInspectorOpenWindow() {
+        for language in [AppLanguage.pl, .en] {
+            for run in [runFixture, runStoppingFixture] {
+                let size = withLanguage(language) {
+                    let band = UpdateBand(
+                        presentation: fullPresentation, scan: nil, run: run, planLinkEnabled: false, onShowPlan: {},
+                        action: { _ in Color.clear.frame(width: WegaLayout.bandButtonNarrowSize, height: WegaLayout.bandButtonNarrowSize) }
+                    )
+                    .frame(width: 368)
+                    return NSHostingView(rootView: band).fittingSize
+                }
+                XCTAssertLessThanOrEqual(size.width, 368, "\(language), stopping \(run.isStopping)")
+                XCTAssertEqual(size.height, WegaLayout.bandHeight, "\(language), stopping \(run.isStopping)")
+            }
+        }
+    }
+
+    /// Cut, the stop label stops saying that it waits for the installs already running, and the
+    /// stage stops naming the package. Each must fit its line limit in the column the band draws
+    /// it in, at each layout's narrowest width and with the inspector open; the eyebrow must fit
+    /// one line.
+    func testTheStopLabelAndTheStageAreNeverTruncated() {
+        for bandWidth in Self.runBandWidths {
+            let layout = UpdateBandLayout.style(forWidth: bandWidth)
+            let column = headlineColumnWidth(bandWidth: bandWidth)
+            let stopColumn = layout == .regular ? WegaLayout.bandSummaryWidth : column
+            let stopFont = Font.wega(.callout, weight: .semibold)
+            let lineFont = Font.wega(.callout)
+            let eyebrowFont = Font.wega(.caption, weight: .semibold, monospaced: true)
+            let allowedStop = height(of: "Ag\nAg", font: stopFont, width: stopColumn)
+            let allowedLine = height(of: Array(repeating: "Ag", count: layout.scanLineLimit).joined(separator: "\n"), font: lineFont, width: column)
+            for language in [AppLanguage.pl, .en] {
+                for run in [runFixture, runStoppingFixture] {
+                    let (stop, line, eyebrow) = withLanguage(language) { (run.stopLabel, run.line, run.eyebrow) }
+                    let context = "\(language), band \(bandWidth) pt (\(layout)), stopping \(run.isStopping)"
+                    let neededStop = height(of: stop, font: stopFont, width: stopColumn)
+                    XCTAssertLessThanOrEqual(neededStop, allowedStop, "\(context): \"\(stop)\" needs \(neededStop) pt of \(allowedStop)")
+                    // The link-styled button itself wraps the label the way the text does.
+                    let stopOnly = UpdateBandRunPresentation(progress: run.progress, startedAt: run.startedAt,
+                                                             isStopping: run.isStopping, logShown: true)
+                    let drawn = withLanguage(language) {
+                        NSHostingView(rootView: UpdateBandRunControls(run: stopOnly, showsNote: false, onStop: {}, onShowLog: {})
+                            .frame(width: stopColumn).fixedSize(horizontal: false, vertical: true)).fittingSize.height
+                    }
+                    XCTAssertEqual(drawn, neededStop, accuracy: 1, "\(context): the stop button draws \(drawn) pt for \(neededStop) pt of text")
+                    let neededLine = height(of: line, font: lineFont, width: column)
+                    XCTAssertLessThanOrEqual(neededLine, allowedLine, "\(context): \"\(line)\" needs \(neededLine) pt of \(allowedLine)")
+                    let eyebrowWidth = NSHostingView(rootView: Text(verbatim: eyebrow).font(eyebrowFont)
+                        .tracking(0.8).textCase(.uppercase).fixedSize()).fittingSize.width
+                    XCTAssertLessThanOrEqual(eyebrowWidth, column, "\(context): \"\(eyebrow)\" needs \(eyebrowWidth) pt")
+                }
+            }
+        }
+    }
+
+    private func height(of text: String, font: Font, width: CGFloat) -> CGFloat {
+        NSHostingView(rootView: Text(verbatim: text).font(font).frame(width: width).fixedSize(horizontal: false, vertical: true))
+            .fittingSize.height
     }
 
     func testTheScanningEyebrowNeverWidensOrGrowsTheBand() throws {
@@ -220,9 +345,11 @@ final class UpdateBandViewTests: XCTestCase {
         }
         XCTAssertEqual(heads, 2, "the regular and compact layouts draw Wega; the narrow one does not")
         let scanViews = try source("Sources/MacUpdater/UpdateBandScanViews.swift")
+        let runViews = try source("Sources/MacUpdater/UpdateBandRunViews.swift")
         for forbidden in [".glassEffect(", "Color.wegaToffee", "Color.wegaSuccess", "Color.wegaHoney"] {
             XCTAssertFalse(text.contains(forbidden), forbidden)
             XCTAssertFalse(scanViews.contains(forbidden), "UpdateBandScanViews.swift: \(forbidden)")
+            XCTAssertFalse(runViews.contains(forbidden), "UpdateBandRunViews.swift: \(forbidden)")
         }
         // The round element is the last thing in every layout, so VoiceOver reads the ring last.
         let lower = try XCTUnwrap(text.range(of: "private func content(")).upperBound
@@ -238,7 +365,11 @@ final class UpdateBandViewTests: XCTestCase {
         XCTAssertTrue(text[round...].prefix(400).contains(
             "UpdateBandScanRing(completed: scan.completedSources, total: scan.totalSources, diameter: layout.buttonDiameter, showsWega: layout == .narrow)"
         ))
+        XCTAssertTrue(text[round...].prefix(600).contains(
+            "UpdateBandRunRing(completed: run.completed, total: run.total, diameter: layout.buttonDiameter, accessibilityValue: run.line)"
+        ))
         XCTAssertTrue(scanViews.contains(".accessibilityLabel(tr(\"Postęp skanowania\"))"))
+        XCTAssertTrue(runViews.contains(".accessibilityLabel(tr(\"Postęp aktualizacji\"))"))
     }
 
     /// UXP-13 — Wega sniffs during every scan, in every layout: her head in the regular and
@@ -319,6 +450,10 @@ final class UpdateBandViewTests: XCTestCase {
         420 - 2 * WegaLayout.listGutter, WegaLayout.bandNarrowBreakpoint, WegaLayout.bandCompactBreakpoint,
     ]
 
+    /// The run is measured at those widths and at the band a 980 pt window leaves with the
+    /// inspector open, 368 pt, where the narrow text column is 244 pt.
+    private static let runBandWidths: [CGFloat] = [368] + narrowestBandWidths
+
     private func presentation(count: Int, note: String) -> UpdateBandPresentation {
         let base = fullPresentation
         return UpdateBandPresentation(
@@ -330,10 +465,12 @@ final class UpdateBandViewTests: XCTestCase {
 
     /// M3 — with both nuances present the headline used to end in the incomplete-check note,
     /// the first thing truncation cuts. Everything up to and including that note — the count
-    /// and „sprawdzenie niepełne”, plus the ellipsis truncation puts after it while the security
+    /// and „skan niepełny”, plus the ellipsis truncation puts after it while the security
     /// part follows — must fit in the headline's line limit at each layout's narrowest width.
     /// Red before the reorder: the narrow Polish headline needed 65 pt of 43. Red before F1:
-    /// compact and regular allowed one `.title` line (26 pt) and needed two (52 pt).
+    /// compact and regular allowed one `.title` line (26 pt) and needed two (52 pt). The note is
+    /// short („skan niepełny”) by the owner's decision: „sprawdzenie niepełne…” needed 235 pt of
+    /// the compact band's 220 pt column at 480–494 pt.
     func testTheCountAndTheIncompleteNoteAreNeverTruncated() {
         for bandWidth in Self.narrowestBandWidths {
             let layout = UpdateBandLayout.style(forWidth: bandWidth)
@@ -345,28 +482,17 @@ final class UpdateBandViewTests: XCTestCase {
             for language in [AppLanguage.pl, .en] {
                 for count in [12, 22] {
                     let visible = withLanguage(language) {
-                        let note = tr("sprawdzenie niepełne")
+                        let note = tr("skan niepełny")
                         let headline = presentation(count: count, note: note).headline
                         let end = headline.range(of: note)?.upperBound ?? headline.endIndex
                         return String(headline[..<end]) + (end < headline.endIndex ? "…" : "")
                     }
                     let needed = NSHostingView(rootView: Text(verbatim: visible).font(font)
                         .frame(width: column).fixedSize(horizontal: false, vertical: true)).fittingSize.height
-                    let check = {
-                        XCTAssertLessThanOrEqual(
-                            needed, allowed,
-                            "M3: \(language), \(count), band \(bandWidth) pt (\(layout)): \"\(visible)\" needs \(needed) pt of \(allowed)"
-                        )
-                    }
-                    if language == .pl && layout == .compact {
-                        // Known gap, reported to the owner: in a 220 pt column "sprawdzenie
-                        // niepełne" fits (218 pt) but not with the ellipsis truncation adds while
-                        // the security part follows (235 pt), so two lines still cut "niepełne"
-                        // for compact bands of 480–494 pt. Strict: it fails once this is fixed.
-                        XCTExpectFailure("F1: Polish compact band at 480 pt still truncates the note", strict: true, failingBlock: check)
-                    } else {
-                        check()
-                    }
+                    XCTAssertLessThanOrEqual(
+                        needed, allowed,
+                        "M3: \(language), \(count), band \(bandWidth) pt (\(layout)): \"\(visible)\" needs \(needed) pt of \(allowed)"
+                    )
                 }
             }
         }
@@ -391,7 +517,7 @@ final class UpdateBandViewTests: XCTestCase {
                 for scan in [nil, scanFixture, scanNoteFixture] {
                     let height = withLanguage(language) {
                         let band = UpdateBand(
-                            presentation: presentation(count: 22, note: tr("sprawdzenie niepełne")),
+                            presentation: presentation(count: 22, note: tr("skan niepełny")),
                             scan: scan, planLinkEnabled: true, onShowPlan: {},
                             action: { layout in
                                 Color.clear.frame(width: layout.buttonDiameter, height: layout.buttonDiameter)
@@ -452,7 +578,7 @@ final class UpdateBandViewTests: XCTestCase {
             }
         }
         let text = try source("Sources/MacUpdater/UpdateBand.swift")
-        XCTAssertTrue(text.contains(".lineLimit(scan == nil ? (layout == .regular ? 2 : 1) : layout.scanLineLimit)"),
+        XCTAssertTrue(text.contains(".lineLimit(scan == nil && run == nil ? (layout == .regular ? 2 : 1) : layout.scanLineLimit)"),
                       "the band draws the line at the limit measured here")
     }
 

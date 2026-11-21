@@ -27,12 +27,13 @@ enum SidebarTab: String, Identifiable {
         }
     }
 
-    /// The screens with a `.searchable` field of their own, which ⌘F focuses. Elsewhere ⌘F is
-    /// greyed out rather than taking the user somewhere they did not ask to go.
+    /// The screens with a `.searchable` field of their own, which ⌘F focuses — on Updates the one
+    /// `UpdatesSearchField` carries. Elsewhere ⌘F is greyed out rather than taking the user
+    /// somewhere they did not ask to go.
     var hasSearchField: Bool {
         switch self {
-        case .logs, .uninstall, .inventory: return true
-        case .update, .rollback, .cleanup, .migration: return false
+        case .update, .logs, .uninstall, .inventory: return true
+        case .rollback, .cleanup, .migration: return false
         }
     }
 

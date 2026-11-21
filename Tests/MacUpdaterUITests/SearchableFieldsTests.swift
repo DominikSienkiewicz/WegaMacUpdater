@@ -12,6 +12,7 @@ final class SearchableFieldsTests: XCTestCase {
         "Sources/MacUpdater/InventoryView.swift",
         "Sources/MacUpdater/LogsView.swift",
         "Sources/MacUpdater/UninstallView.swift",
+        "Sources/MacUpdater/UpdatesSearch.swift",
     ]
 
     func testSearchViewsAdoptSearchableModifier() throws {

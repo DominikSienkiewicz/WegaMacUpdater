@@ -14,8 +14,18 @@ final class TouchIDSetupController: ObservableObject {
   enum State: Equatable {
     case idle(TouchIDSudoConfigurator.State)
     case enabling(TouchIDSudoConfigurator.State)
+    case disabling(TouchIDSudoConfigurator.State)
     case permissionDenied(TouchIDSudoConfigurator.State)
     case failed(TouchIDSudoConfigurator.State, String)
+  }
+
+  /// What the card offers for turning Touch ID off, from what the app observed.
+  enum DisableOffer: Equatable {
+    case unknown
+    case available
+    case helperMissing
+    case helperOutdated
+    case blocked(TouchIDSudoDisableRefusal)
   }
 
   struct Dependencies: Sendable {
@@ -24,6 +34,9 @@ final class TouchIDSetupController: ObservableObject {
     var enableWithHelper: @MainActor @Sendable () async throws -> Void
     var authorizeFallback: @Sendable () async -> AuthorizationOutcome
     var openInTerminal: @Sendable (String) -> Void
+    var disableWithHelper: @MainActor @Sendable () async throws -> TouchIDSudoDisableResult = { .nothingToRemove }
+    var disableAvailability: @MainActor @Sendable () async -> HelperVerbAvailability = { .enabled }
+    var preflight: @Sendable () -> TouchIDDisablePreflight = { .clear }
 
     static let live = Dependencies(
       currentState: { TouchIDSudoConfigurator.currentState() },
@@ -45,28 +58,41 @@ final class TouchIDSetupController: ObservableObject {
         task.currentDirectoryURL = ProcessRunner.childWorkingDirectory
         task.arguments = ["-e", script]
         try? task.run()
-      }
+      },
+      disableWithHelper: { try await PrivilegedHelperClient.shared.disableTouchIDForSudo() },
+      disableAvailability: {
+        await PrivilegedHelperClient.shared.availabilityAfterHandshake(for: .disableTouchIDForSudo)
+      },
+      preflight: { TouchIDDisablePreflight.live() }
     )
   }
 
   @Published private(set) var state: State
+  @Published private(set) var disableOffer = DisableOffer.unknown
+  private(set) var preflight = TouchIDDisablePreflight.clear
 
   private let dependencies: Dependencies
 
   init(dependencies: Dependencies = .live) {
     self.dependencies = dependencies
     state = .idle(dependencies.currentState())
+    preflight = dependencies.preflight()
   }
 
   var touchIDState: TouchIDSudoConfigurator.State {
     switch state {
-    case .idle(let value), .enabling(let value), .permissionDenied(let value): return value
+    case .idle(let value), .enabling(let value), .disabling(let value), .permissionDenied(let value): return value
     case .failed(let value, _): return value
     }
   }
 
   var isEnabling: Bool {
     if case .enabling = state { return true }
+    return false
+  }
+
+  var isDisabling: Bool {
+    if case .disabling = state { return true }
     return false
   }
 
@@ -86,6 +112,7 @@ final class TouchIDSetupController: ObservableObject {
     // rebuilds it and a freshly enabled Touch ID is respected immediately.
     HomebrewEnvironment.invalidateCache()
     state = .idle(dependencies.currentState())
+    preflight = dependencies.preflight()
   }
 
   func openManualFallback() {
@@ -128,4 +155,68 @@ final class TouchIDSetupController: ObservableObject {
     }
   }
 
+  /// One bounded handshake, and only when Touch ID is on and nothing the app observed already
+  /// rules the helper out, so the button appears only for a helper that will take the request.
+  func refreshDisableOffer() async {
+    if let refusal = preflight.refusal {
+      disableOffer = .blocked(refusal)
+      return
+    }
+    guard touchIDState == .enabled else {
+      disableOffer = .unknown
+      return
+    }
+    guard dependencies.helperIsEnabled() else {
+      disableOffer = .helperMissing
+      return
+    }
+    switch await dependencies.disableAvailability() {
+    case .enabled: disableOffer = .available
+    case .off: disableOffer = .helperMissing
+    case .stale: disableOffer = .helperOutdated
+    }
+  }
+
+  func disable(onWegaState: @MainActor (WegaState) -> Void) async {
+    guard !isEnabling, !isDisabling else { return }
+    guard dependencies.helperIsEnabled() else {
+      state = .idle(touchIDState)
+      disableOffer = .helperMissing
+      return
+    }
+    state = .disabling(touchIDState)
+    if disableOffer == .unknown { await refreshDisableOffer() }
+    guard disableOffer == .available else {
+      state = .idle(touchIDState)
+      if disableOffer == .helperOutdated { onWegaState(Self.outdatedHelperState) }
+      return
+    }
+
+    do {
+      let result = try await dependencies.disableWithHelper()
+      let observed = preflight
+      refresh()
+      let stillEnabled = touchIDState == .enabled
+      var line = TouchIDDisableCopy.line(for: result, stillEnabled: stillEnabled, fallbackPath: observed.fallbackPath)
+      if case .removed = result, !stillEnabled, let path = observed.unsafeLocalDirectory {
+        line += " " + TouchIDDisableCopy.localDirectoryWarning(path: path)
+      }
+      if case .rollbackFailed = result { state = .failed(touchIDState, line) }
+      onWegaState(WegaState(pose: .idle, line: line))
+    } catch {
+      WegaLog.error(.helper, "Helper disableTouchIDForSudo nie powiódł się: \(error.localizedDescription)")
+      refresh()
+      if case .versionMismatch = error as? PrivilegedHelperClient.HelperError {
+        disableOffer = .helperOutdated
+        onWegaState(Self.outdatedHelperState)
+        return
+      }
+      onWegaState(WegaState(pose: .idle, line: TouchIDDisableCopy.afterHelperError(stillEnabled: touchIDState == .enabled)))
+    }
+    await refreshDisableOffer()
+  }
+
+  private static var outdatedHelperState: WegaState {
+    WegaState(pose: .idle, line: TouchIDDisableCopy.outdatedHelper)
+  }
 }

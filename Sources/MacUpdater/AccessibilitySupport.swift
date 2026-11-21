@@ -170,7 +170,7 @@ enum PackageRowAccessibility {
     /// of a source that keeps no previous version, `rollbackUnavailable`) and the queue.
     static func label(name: String, token: String? = nil, from: String?, to: String?, source: String? = nil,
                       rollback: RollbackProtection.Verdict? = nil, rollbackUnavailable: Bool = false,
-                      isQueued: Bool) -> String {
+                      run: String? = nil, isQueued: Bool) -> String {
         var parts = [name]
         if let token, spoken(token) != spoken(name) { parts.append(token) }
         if let from, let to {
@@ -183,6 +183,7 @@ enum PackageRowAccessibility {
         case .unprotected: parts.append(tr("bez automatycznego cofnięcia"))
         case nil:          if rollbackUnavailable { parts.append(tr("bez automatycznego cofnięcia")) }
         }
+        if let run { parts.append(run) }
         parts.append(isQueued ? tr("w kolejce") : tr("poza kolejką"))
         return parts.joined(separator: ", ")
     }
@@ -203,7 +204,8 @@ enum PackageRowAccessibility {
 enum UpdateRowFocus {
     /// One Tab stop per group: the row focus is on or last left, or the group's first row when
     /// there is none or that row has left the list. None at all while another destination covers
-    /// the Updates screen (`updatesOnScreen`).
+    /// the Updates screen (`updatesOnScreen`) or a run or a scan in place disables the list —
+    /// the sections pass both in `onScreen`.
     static func isTabStop(_ key: String, in keys: [String], focused: String?, onScreen: Bool) -> Bool {
         guard onScreen else { return false }
         let stop = focused.flatMap { keys.contains($0) ? $0 : nil } ?? keys.first

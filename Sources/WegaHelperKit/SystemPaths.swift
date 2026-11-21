@@ -106,4 +106,20 @@ public enum SystemPaths {
     /// Apple-shipped template for `sudo_local` (Sonoma+); seed content when the
     /// drop-in file doesn't exist yet.
     public static let sudoLocalTemplate = "/etc/pam.d/sudo_local.template"
+
+    /// The PAM policy directory as the root helper opens it: `/etc` is a link to `private/etc`,
+    /// and the directory is opened with no link allowed in any component.
+    public static let pamPolicyDirectory = "/private/etc/pam.d"
+
+    /// The PAM policy directory as the user knows it, in paths the app shows.
+    public static let pamPolicyDisplayDirectory = "/etc/pam.d"
+
+    /// The policy files OpenPAM goes on to read for `sudo`, in its order, once `sudo_local` holds
+    /// no active line.
+    public static let pamFallbackPolicyPaths = [
+        "/etc/pam.conf",
+        "/usr/local/etc/pam.d/sudo_local",
+        "/usr/local/etc/pam.conf",
+        "/usr/share/pam.d/sudo_local",
+    ]
 }

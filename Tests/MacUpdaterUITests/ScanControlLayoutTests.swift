@@ -41,7 +41,18 @@ final class ScanControlLayoutTests: XCTestCase {
             .completed,
             "The layout regression app did not finish within \(timeout) seconds"
         )
-        XCTAssertEqual(process.terminationReason, .exit)
-        XCTAssertEqual(process.terminationStatus, 0)
+        XCTAssertEqual(
+            process.terminationReason,
+            .exit,
+            "The app died on a signal: an uncaught AppKit exception, such as two search fields on one "
+                + "screen (NSToolbar refuses the duplicate item)"
+        )
+        XCTAssertEqual(
+            process.terminationStatus,
+            0,
+            "3: Updates does not have exactly one toolbar search field; "
+                + "4: Logs does not have exactly one (the probe cannot see it, or the fields are duplicated); "
+                + "5: another Wega is running — quit it and run the test again"
+        )
     }
 }

@@ -43,15 +43,21 @@ struct InventoryPersistenceTests {
         // every change that finished while the window was closed.
         #expect(!(try source("Sources/MacUpdater/ContentView.swift")).contains("InventoryStalenessWatcher"))
         #expect(throws: (any Error).self) { try source("Sources/MacUpdater/InventoryStalenessWatcher.swift") }
-        let screen = try source("Sources/MacUpdater/InventoryView.swift")
-        #expect(screen.contains("""
+        // One stamp for every reader: the Inventory screen and the Updates search ask the same question.
+        #expect(try source("Sources/MacUpdater/InventoryStore.swift").contains("""
             InventoryChangeStamp(
-                updateRuns: scanStore.completedRunCount,
+                updateRuns: scan.completedRunCount,
                 migrations: migration.completedCount,
                 cleanupRemovals: cleanup.removalCount,
-                backgroundInstalls: menuBar.installedRoundCount
+                backgroundInstalls: menuBar.installedRoundCount,
+                manualInstalls: scan.completedManualInstallCount,
+                undos: scan.completedUndoCount
             )
     """))
+        let screen = try source("Sources/MacUpdater/InventoryView.swift")
+        #expect(screen.contains("InventoryChangeStamp.current(scan: scanStore, migration: migration, cleanup: cleanup, menuBar: menuBar)"))
+        #expect(try source("Sources/MacUpdater/UpdateView.swift")
+            .contains("InventoryChangeStamp.current(scan: scan, migration: migration, cleanup: cleanup, menuBar: MenuBarAgent.shared)"))
         for literal in ["inventory.isStale(given: changes)", "inventory.scan(model: model, changes: changes)"] {
             #expect(screen.contains(literal), "\(literal)")
         }

@@ -24,6 +24,8 @@ public enum Translations {
         .merging(updatesActionBar.merging(uxReview) { first, _ in first }) { first, _ in first }
         .merging(uxReviewNext) { first, _ in first }
         .merging(uxReviewRest) { first, _ in first }
+        .merging(uxNextBatch) { first, _ in first }
+        .merging(touchIDDisable) { first, _ in first }
 }
 
 extension Translations {
@@ -129,7 +131,6 @@ extension Translations {
         "Nie udało się zapisać tokenu": "Failed to save the token",
         "Token usunięty": "Token removed",
         // FEAT-04 — watchdog ciągłości Team ID.
-        "Uwaga: wydawca %@ zmienił Team ID (%@ → %@). Zweryfikuj, zanim zaufasz.": "Warning: %@'s publisher changed Team ID (%@ → %@). Verify before trusting.",
         "Zmienił się wydawca aplikacji — sprawdź.": "The app's publisher changed — review.",
         "instalacja %@": "install %@",
         // UX-01 — ujawnienie zakresu Touch ID dla sudo.
@@ -138,7 +139,6 @@ extension Translations {
         "Homebrew zainstaluje bez sprawdzenia sumy: %@": "Homebrew will install without checking the checksum: %@",
         // UX-06 — komunikaty generowane z aktywnych źródeł + rozdzielone stany operacji.
         "aplikacje sprawdzane ręcznie": "manually-checked apps",
-        "apki": "apps",
         "Wega zajrzy do %@ i powie, co warto odświeżyć.": "Wega will look through %@ and tell you what's worth refreshing.",
         "%@ oraz %@": "%@ and %@",
         "Pobierz i otwórz instalator": "Download and open the installer",
@@ -199,9 +199,6 @@ extension Translations {
         // REL-02 — nieudany rollback to czerwony baner sticky, nie wpis w zwijanym logu.
         "%@: nowa wersja nie przeszła kontroli, a przywrócenie poprzedniej nie powiodło się. Sprawdź aplikację przed użyciem.": "%@: the new version failed the check and the previous one could not be restored. Check the app before using it.",
         // FEAT-04 — watchdog (upgrade).
-        "%@: Team ID zmienił się (%@ → %@). Zweryfikuj.": "%@: Team ID changed (%@ → %@). Verify.",
-        "%@: Team ID zmienił się (%@ → %@). Przywrócono poprzednią zaufaną wersję.": "%@: Team ID changed (%@ → %@). Restored the previous trusted version.",
-        "%@: zmienił się Team ID wydawcy — przywrócono poprzednią zaufaną wersję.": "%@: the publisher's Team ID changed — restored the previous trusted version.",
         "Cofnęłam %@ — zmienił się wydawca.": "Rolled back %@ — the publisher changed.",
         // FEAT-06 — AI triage (self-update).
         "możliwa poprawka bezpieczeństwa": "possible security fix",
@@ -272,7 +269,6 @@ extension Translations {
         "narzędzia CLI": "CLI tools",
         "aplikacje .app": ".app applications",
         "samoaktualizujące się": "self-updating",
-        "Homebrew nie pilnuje wersji tych apek (auto_updates) — robią to same. Wega sprawdza je u źródła.": "Homebrew doesn't track these apps' versions (auto_updates) — they update themselves. Wega checks them at the source.",
         "Mac App Store": "Mac App Store",
         "via mas-cli": "via mas-cli",
         "npm globalne": "npm global",
@@ -328,13 +324,9 @@ extension Translations {
         "Zaufaj definicji formuły": "Trust formula definition",
         "Homebrew wymaga tej definicji przy odpinaniu tapu. Zaufanie pozostanie zapisane; potem ponów odpięcie.":
             "Homebrew requires this definition when untapping. Trust will remain saved; retry untapping afterwards.",
-        "%@: Team ID %@ jest teraz zaufanym wydawcą.": "%@: Team ID %@ is now the trusted publisher.",
-        "%@: zainstalowana aplikacja jest podpisana zaufanym Team ID.": "%@: the installed app is signed by the trusted Team ID.",
         "Nie zmieniono zaufania": "Trust not changed",
         "%@: nie znaleziono zainstalowanej aplikacji.": "%@: the installed app could not be found.",
         "%@: nie udało się odczytać podpisu zainstalowanej aplikacji.": "%@: couldn't read the installed app's signature.",
-        "%@: aplikację podpisano ponownie innym Team ID (%@ zamiast %@). Nie zmieniono zaufania.": "%@: the app was re-signed by a different Team ID (%@ instead of %@). Trust not changed.",
-        "Teraz podpisuje ją Team ID %@ zamiast zaufanego %@. Potwierdź tylko, jeśli wiesz, że producent zmienił konto deweloperskie.": "It is now signed by Team ID %@ instead of the trusted %@. Confirm only if you know the vendor changed its developer account.",
         // REL-07 — label on a cask a prior auto-rollback reverted (kept visible for a retry).
         "cofnięto — ponów próbę": "rolled back — retry",
         "zaktualizuj w App Store": "update in the App Store",
@@ -351,7 +343,6 @@ extension Translations {
         "Skanuj /Applications": "Scan /Applications",
         "Skanowanie /Applications": "Scanning /Applications",
         "Trop! Wega wącha każdy folder w /Applications…": "On the trail! Wega is sniffing every folder in /Applications…",
-        "Czy ta apka żyje poza brew?": "Does this app live outside brew?",
         "Sniff sniff… kandydat na migrację": "Sniff sniff… a migration candidate",
         "Hmm, kto cię tu postawił?": "Hmm, who put you here?",
         "Pachnie ręczną instalacją": "Smells like a manual install",
@@ -643,7 +634,6 @@ extension Translations {
         "Aktualizacje w tle — wymagają uwagi": "Background updates — need your attention",
         "%@ cofnięto po nieudanym teście.": "%@ rolled back after a failed check.",
         "%@ nie przeszło testu i nie udało się przywrócić — sprawdź je.": "%@ failed its check and could not be restored — check it.",
-        "%@ zmieniło wydawcę (Team ID) — zweryfikuj.": "%@ changed publisher (Team ID) — verify.",
         "%@ nie udało się zaktualizować.": "%@ could not be updated.",
         "Aktualizacja w toku": "Update in progress",
         "Wega właśnie aktualizuje coś w tle. Spróbuj za chwilę.": "Wega is updating something in the background. Try again in a moment.",
@@ -873,7 +863,7 @@ extension Translations {
             "No automatic undo — the App Store does not allow going back to a previous version.",
         "Bez automatycznego cofnięcia — npm nie zachowuje poprzednich wersji pakietów.":
             "No automatic undo — npm does not keep previous package versions.",
-        // INSTALL_PROGRESS — the upgrade's progress bar.
+        // INSTALL_PROGRESS — the run's stage and ring in the band.
         "Postęp aktualizacji": "Update progress",
         "Przygotowuję kopie zapasowe…": "Preparing backups…",
         "Pobieram %@ — %@": "Downloading %@ — %@",

@@ -17,6 +17,11 @@ extension ScanStore {
     @MainActor
     func runLayoutRegressionScenarioIfRequested() async -> Bool {
         guard Self.layoutRegressionScenarioRequested else { return false }
+        // The test's own `HOME` does not reach `UserDefaults`: cfprefsd keeps this executable's
+        // domain under the real home, so a destination left by an earlier run or a `swift run`
+        // would otherwise be the one measured. Start on Updates; put the old one back on the way out.
+        let previousSelection = UserDefaults.standard.string(forKey: SidebarSelection.storageKey)
+        UserDefaults.standard.set(SidebarSelection.initial.rawValue, forKey: SidebarSelection.storageKey)
 
         try? await Task.sleep(for: .milliseconds(250))
         status = .checking
@@ -65,9 +70,32 @@ extension ScanStore {
         progress = .finished
         replayLastScan()
 
-        try? await Task.sleep(for: .seconds(2))
+        // ⌘F's field rides on a hidden view mounted only on Updates, because `UpdateView` stays
+        // mounted everywhere: one toolbar field on Updates, and still one on Logs.
+        try? await Task.sleep(for: .seconds(1))
+        let onUpdates = Self.toolbarSearchFieldCount()
+        UserDefaults.standard.set(SidebarSelection.logs.rawValue, forKey: SidebarSelection.storageKey)
+        try? await Task.sleep(for: .seconds(1))
+        let onLogs = Self.toolbarSearchFieldCount()
+        UserDefaults.standard.set(previousSelection, forKey: SidebarSelection.storageKey)
+        UserDefaults.standard.synchronize()
+        if onUpdates != 1 { exit(3) }
+        if onLogs != 1 { exit(4) }
         NSApplication.shared.terminate(nil)
         return true
+    }
+
+    /// The search fields in the windows' toolbars, however SwiftUI wraps `.searchable`'s field.
+    private static func toolbarSearchFieldCount() -> Int {
+        NSApplication.shared.windows
+            .compactMap(\.toolbar)
+            .flatMap(\.items)
+            .filter { $0 is NSSearchToolbarItem || $0.view.map(containsSearchField) == true }
+            .count
+    }
+
+    private static func containsSearchField(_ view: NSView) -> Bool {
+        view is NSSearchField || view.subviews.contains(where: containsSearchField)
     }
 }
 #endif

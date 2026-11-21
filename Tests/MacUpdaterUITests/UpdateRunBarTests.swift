@@ -3,10 +3,9 @@ import Testing
 @testable import WegaMacUpdater
 
 /// UX-20 — a running update put a dialog-like card in the middle of the screen while the action
-/// bar it came from disappeared under the material. The run now takes the action bar's place
-/// and shape at the bottom: the same chrome, carrying the progress, the log and the stop. It
-/// stays part of `UpdateRunOverlay`, the one live layer above the disabled screen (REL-12), so
-/// the stop button can never be greyed out with what it covers.
+/// bar it came from disappeared under the material; the run then took a bar at the bottom of
+/// the list. C2 stage 3 moved it into the band above the list (`UpdateRunInBandTests`), so no
+/// bottom bar is left. The stop keeps REL-12's words before and after it is requested.
 @Suite("Update run bar")
 @MainActor
 struct UpdateRunBarTests {
@@ -22,14 +21,12 @@ struct UpdateRunBarTests {
                 == tr("Przerywam po bieżącym pakiecie — kolejne nie wystartują."))
     }
 
-    @Test func theRunBarKeepsTheSharedBottomChrome() throws {
+    @Test func theRunHasNoBottomBarLeft() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
-        let overlay = try source("Sources/MacUpdater/UpdateRunOverlay.swift")
 
-        #expect(overlay.contains(".wegaBottomBar()"), "the run bar draws through the shared chrome")
-        #expect(view.contains("struct WegaBottomBar: ViewModifier"))
+        #expect(!view.contains("struct WegaBottomBar"), "the run moved into the band; nothing uses the bottom chrome")
+        #expect(!view.contains("wegaBottomBar()"))
         #expect(!view.contains("private var actionBar"), "the action bar it once matched is gone")
-        #expect(!overlay.contains(".frame(maxWidth: 560)"), "no dialog card in the middle of the screen")
     }
 
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {

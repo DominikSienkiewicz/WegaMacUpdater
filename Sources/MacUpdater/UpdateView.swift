@@ -41,6 +41,9 @@ struct UpdateView: View {
     var onUndoableCount:  ((Int) -> Void)? = nil
     /// UX-16 — the scope bar picks a category; the selection that carries it is the window's.
     var onScopeChange:    ((UpdateFilter) -> Void)? = nil
+    /// UXP-35 — ⌘F's query, typed in the field `DetailColumn` mounts beside this view. It never
+    /// filters the list; the row above the list answers it.
+    var searchQuery: String = ""
     /// Wega's current line — a quip or her state's line — which the band above the list
     /// speaks.
     let wegaLine: String
@@ -50,8 +53,14 @@ struct UpdateView: View {
     /// Scan results and the tasks that produce them live above the language re-key,
     /// so switching language mid-scan neither loses the list nor orphans the task.
     @EnvironmentObject private var scan: ScanStore
+    /// Read, never started, by the search's answer: the read asks the network for the cask catalog.
+    @EnvironmentObject private var inventory: InventoryStore
+    /// With `cleanup`, the counts that say whether that read may no longer match the disk.
+    @EnvironmentObject private var migration: MigrationStore
+    @EnvironmentObject private var cleanup: CleanupStore
     /// False while another destination covers this screen; see `EnvironmentValues.updatesOnScreen`.
     @Environment(\.updatesOnScreen) private var onScreen
+    @Environment(\.openSettings) private var openSettings
 
     /// Purely transient: a modal that no background task writes to, so it may die
     /// with the view tree.
@@ -233,8 +242,8 @@ struct UpdateView: View {
     // MARK: Results
     private var resultsView: some View {
         VStack(spacing: 0) {
-            // The band reports the scan and carries the update button; with nothing to update
-            // the plain heading does. The list header carries select-all next to the categories.
+            // The band reports the scan or the run and carries the update button; with nothing to
+            // update the plain heading does. The list header carries select-all next to the categories.
             if hasUpdates {
                 resultsBand
                     .padding(.horizontal, WegaLayout.listGutter)
@@ -251,17 +260,16 @@ struct UpdateView: View {
             .padding(.vertical, WegaLayout.sectionSpacing)
 
             // Everything below the header is what a running update could be raced by, so for
-            // the run's duration it is inert and covered by the run itself — see
-            // `UpdateRunOverlay`. The overlay sits outside `.disabled`, so its stop button
-            // stays live.
+            // the run's duration `.disabled` makes it inert. Nothing is drawn over the rows (C2):
+            // the band above carries the run and its stop, and the run's log below the list
+            // stays live with it, both outside the disabled screen.
             screenBody
                 .disabled(!ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating))
-                .overlay {
-                    if scan.updating {
-                        updateRunOverlay
-                    }
-                }
-                .animation(.easeInOut(duration: 0.2), value: scan.updating)
+            if scan.updating && scan.showLog {
+                BrewLogPanel(lines: scan.brewLog, onClose: { scan.showLog = false })
+                    .padding(.horizontal, WegaLayout.listGutter)
+                    .padding(.bottom, WegaLayout.listGutter)
+            }
         }
     }
 
@@ -289,13 +297,20 @@ struct UpdateView: View {
 
     /// The dusk band: what the scan found, the queue, and the round update button. It is the
     /// whole path to an update — the button takes today's gate, help text and confirmation.
+    ///
+    /// REL-12 — while the update runs the band carries its stop. It does not kill the package
+    /// manager mid-install; it stops the run at the next package boundary, which is the only
+    /// safe place to stop.
     private var resultsBand: some View {
         let presentation = bandPresentation
         return UpdateBand(
             presentation: presentation,
             scan: scan.isRefreshing ? scanPresentation : nil,
+            run: scan.updating ? runPresentation : nil,
             planLinkEnabled: ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating),
             onShowPlan: { scan.showPlanPreview = true },
+            onStop: { scan.cancelUpdate() },
+            onShowLog: { scan.showLog = true },
             action: { layout in
                 UpdateBandButton(
                     title: presentation.buttonTitle,
@@ -328,7 +343,7 @@ struct UpdateView: View {
             freshness:      scan.freshness() ?? .fresh,
             sources:        UpdateBandPresentation.SourceChip.chips(from: scan.sourceReports),
             wegaLine:       wegaLine,
-            incompleteNote: scan.lastScanComplete ? nil : tr("sprawdzenie niepełne"),
+            incompleteNote: scan.lastScanComplete ? nil : tr("skan niepełny"),
             handOffCount:   scan.handOffCount(for: updateFilter),
             catalogAgeMinutes: scan.catalogAgeMinutes
         )
@@ -342,6 +357,16 @@ struct UpdateView: View {
             startedAt:         scan.scanStartedAt,
             manual:            scan.manualScanProgress,
             foundSoFar:        scan.scopeCounts.all
+        )
+    }
+
+    /// C2 stage 3 — the band's run state, from what the store knows about the run going now.
+    private var runPresentation: UpdateBandRunPresentation {
+        UpdateBandRunPresentation(
+            progress:   scan.upgradeProgress,
+            startedAt:  scan.runBoard.startedAt,
+            isStopping: scan.updateInterruption.isRequested,
+            logShown:   scan.showLog
         )
     }
 
@@ -378,24 +403,6 @@ struct UpdateView: View {
         }
     }
 
-    /// REL-12 — the longest operation in the app has a stop button. It does not kill the
-    /// package manager mid-install; it stops the run at the next package boundary, which is
-    /// the only safe place to stop.
-    private var updateRunOverlay: some View {
-        UpdateRunOverlay(
-            isStopping: scan.updateInterruption.isRequested,
-            logLines:   scan.showLog ? scan.brewLog : nil,
-            onCancel:   { scan.cancelUpdate() },
-            onShowLog:  { scan.showLog = true },
-            onHideLog:  { scan.showLog = false },
-            progress:   {
-                if scan.updating, let progress = scan.upgradeProgress {
-                    UpgradeProgressBar(progress: progress)
-                }
-            }
-        )
-    }
-
     @ViewBuilder
     private var screenBody: some View {
         VStack(spacing: 0) {
@@ -414,6 +421,15 @@ struct UpdateView: View {
                 $0.kind == .cask && scan.caskProfiles[$0.name]?.mayRequireAdminPassword == true
             }.map(\.name))
 
+            // UXP-35 — ⌘F answers above the list and never filters it.
+            if let answer = searchAnswer {
+                UpdatesSearchAnswerRow(answer: answer, inventoryReadAt: inventory.lastReadAt, inventoryProblem: inventory.errorMessage,
+                                       onShow: showSearchMatch, onShowRules: { showRules(for: answer) },
+                                       onOpenInventory: { onNavigate?(.inventory) })
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
+
             // The rows on screen are the ones the scan is in the middle of replacing, so for
             // its duration they are a report, not a menu: inert. Nothing is drawn over them
             // (UXP-13) — the band and the list header say a scan is running and why the rows
@@ -421,6 +437,47 @@ struct UpdateView: View {
             listColumn
                 .frame(maxWidth: .infinity)
                 .disabled(!ScanSelectionGate.allowsSelection(isRefreshing: scan.isRefreshing))
+                .environment(\.updateRun, runListState)
+        }
+    }
+
+    /// What the locked list says about the run: each row's status, which rows step back, and
+    /// the batches' notes on their group headers.
+    private var runListState: UpdateRunListState? {
+        scan.updating ? UpdateRunListState(board: scan.runBoard, isStopping: scan.updateInterruption.isRequested) : nil
+    }
+
+    /// The list's matches, or what Inventory already knows; nil while nothing is typed.
+    private var searchAnswer: UpdatesSearchAnswer? {
+        guard UpdatesSearch.normalized(searchQuery) != nil else { return nil }
+        return UpdatesSearch.answer(
+            query: searchQuery, rows: searchRows, hiddenByRules: scan.rulesHidingResults,
+            inventory: inventory.lastReadAt == nil ? nil : inventory.apps,
+            // A read that left sources out is no complete one either (REL-14).
+            inventoryIsStale: inventory.isStale(given: InventoryChangeStamp.current(scan: scan, migration: migration, cleanup: cleanup, menuBar: MenuBarAgent.shared)) || inventory.errorMessage != nil,
+            checks: InventoryCheckSource.checksByPath(scan: scan.installationChecks, scanCheckedAt: scan.lastCheck,
+                                                      background: MenuBarAgent.shared.lastResult),
+            policies: policies.policiesMap, now: Date()
+        )
+    }
+
+    private var searchRows: [UpdatesSearch.Row] {
+        UpdatesSearch.rows(items: allItems, visibleKeys: Set(visibleItems.map(\.key)), caskAppPaths: scan.caskIconPaths,
+                           manual: visibleManual, filter: updateFilter, isSecurity: scan.isSecurityApp)
+    }
+
+    /// Opens a match in the inspector. One the category on screen hides brings back „Wszystkie”
+    /// first, which keeps the inspection (`UpdateFilterInteraction`).
+    private func showSearchMatch(_ row: UpdatesSearch.Row) {
+        if !row.inCurrentScope { onScopeChange?(.all) }
+        scan.inspectedKey = row.key
+    }
+
+    /// The rules sheet when it lists the rule the answer names; Settings → Paused updates otherwise.
+    private func showRules(for answer: UpdatesSearchAnswer) {
+        switch UpdatesSearch.rulesDestination(for: answer, hiddenByRules: scan.rulesHidingResults) {
+        case .sheet: showsHiddenRules = true
+        case .settings: SettingsRoute.shared.open(.policies, with: openSettings)
         }
     }
 
@@ -434,10 +491,10 @@ struct UpdateView: View {
         }
     }
 
-    /// UX-18's grouping menu, or while a scan runs in place over rows, the note that says why
-    /// they cannot be selected — see `ListHeaderGroupingSlot`.
+    /// UX-18's grouping menu, or the note that says why the rows cannot be selected: while a
+    /// scan runs in place over them, or while an update holds them — see `ListHeaderGroupingSlot`.
     private var groupingControl: some View {
-        ListHeaderGroupingSlot(showsScanNote: ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows)) {
+        ListHeaderGroupingSlot(showsScanNote: ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows), showsRunNote: scan.updating && showsRows, isStopping: scan.updateInterruption.isRequested) {
             groupingMenu
         }
     }
@@ -517,8 +574,8 @@ struct UpdateView: View {
                             onDismissForcePrompt: { info in scan.dismissForceRestartPrompt(info) }
                         )
                     }
-                    // During a run the log lives in `UpdateRunOverlay`; a second copy
-                    // under it would only be covered.
+                    // During a run the log sits under the list instead, outside the disabled
+                    // screen (`resultsView`), without tap-trust buttons the busy mutex would refuse.
                     if scan.showLog && !scan.updating {
                         BrewLogPanel(lines: scan.brewLog, tapTrust: scan.tapTrustActions) { scan.showLog = false }
                     }
@@ -814,7 +871,7 @@ extension UpdateView {
                 title: tr("Aplikacje Homebrew"),
                 tint: .wegaToffee,
                 subtitle: tr("samoaktualizujące się"),
-                caption: tr("Homebrew nie pilnuje wersji tych apek (auto_updates) — robią to same. Wega sprawdza je u źródła."),
+                caption: tr("Homebrew nie pilnuje wersji tych aplikacji (auto_updates) — robią to same. Wega sprawdza je u źródła."),
                 inspectedKey: scan.inspectedKey,
                 onIgnore: scan.ignoreManual,
                 onPin: requestPinManual,
@@ -885,7 +942,7 @@ extension UpdateView {
             ManualUpdateSection(
                 items: groups.needsYou, busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
-                title: tr("Wymaga Twojego ruchu"),
+                title: tr("Wymaga Twojego działania"),
                 tint: .wegaToffee, ordinal: groups.ordinal(of: .needsYou),
                 caption: tr("Te aktualizacje kończy producent albo Ty. Przy każdej Wega podpowiada, jak."),
                 inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,
@@ -916,31 +973,4 @@ extension UpdateView {
         case .cask:     return nil
         }
     }
-}
-
-// MARK: - Bottom bar chrome (UX-20)
-
-/// The chrome of the bar at the bottom of the Updates list. Until stage 3 only the running
-/// update (`UpdateRunOverlay`) uses it; the action bar it was shared with became the band.
-///
-/// Its content is padded from the column edge by `selectionColumnInset`, so the bar lines up
-/// with the column every group header and package row uses, while the glass behind it is
-/// inset by the list gutter.
-struct WegaBottomBar: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .padding(.leading, WegaLayout.selectionColumnInset)
-            .padding(.trailing, WegaLayout.listGutter + WegaLayout.actionBarInnerPadding)
-            .padding(.vertical, WegaLayout.actionBarInnerPadding)
-            .background {
-                Color.clear
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .padding(.horizontal, WegaLayout.listGutter)
-            }
-            .padding(.bottom, WegaLayout.listGutter)
-    }
-}
-
-extension View {
-    func wegaBottomBar() -> some View { modifier(WegaBottomBar()) }
 }
