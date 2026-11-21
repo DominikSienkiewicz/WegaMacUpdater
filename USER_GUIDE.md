@@ -573,7 +573,7 @@ opens this guide.
 | **⌘.** | **Cancel Scan**, or, while an update runs, **Stop After Active Installs**. |
 | **⇧⌘A** | **Select All Visible** rows — only on **Updates**. |
 | **⌥⌘I** | **Show Inspector** — opens or closes the details panel. |
-| **⌘F** | **Find on This Screen** — focuses the search field on **Updates** (**Find an app**), **Logs**, **Uninstall** and **Inventory**; disabled on the other screens, which have none. |
+| **⌘F** | **Find on This Screen** — focuses the search field on **Updates** (**Find an app**), **Logs**, **Uninstall**, **Inventory** and **Cleanup** (tools and paths); disabled on the other screens, which have none. |
 | **⇧⌘F** | **Find in inventory** — goes to **Inventory** and focuses its search field, from any screen. |
 | **⌘1** to **⌘7** | Go to a section of the sidebar. |
 
@@ -1188,6 +1188,8 @@ in `/etc/pam.d`. Check it the same way. Once `sudo_local` is confirmed correct, 
 file can be removed.
 
 ### Cleanup: what each action does
+
+Each **Cleanup** section lists the tools that need a decision first; the rest is under **No action**, collapsed. **⌘F** searches tools and paths across the whole report and shows every match expanded.
 
 In **Cleanup**, the confirmation sheet for a finding says, under the question, what the action
 does and whether Wega can take it back:

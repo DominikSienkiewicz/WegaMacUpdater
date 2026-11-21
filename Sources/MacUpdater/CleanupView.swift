@@ -245,9 +245,12 @@ private struct CleanupSectionCard: View {
                         .padding(.horizontal, WegaLayout.cardPadding)
                         .padding(.vertical, 6)
                 }
-                groups(layout.shown)
+                rows(of: layout.shown)
                 if let quietTitle = layout.quietTitle {
-                    WegaDisclosure(isExpanded: $quietExpanded) {
+                    if !layout.shown.isEmpty {
+                        Divider().opacity(0.3)
+                    }
+                    WegaDisclosure(isExpanded: $quietExpanded, leadingInset: WegaLayout.cardPadding) {
                         ForEach(layout.quiet.indices, id: \.self) { index in
                             Divider().opacity(0.3)
                             quietItem(layout.quiet[index])
@@ -255,7 +258,7 @@ private struct CleanupSectionCard: View {
                     } label: {
                         Text(quietTitle)
                             .font(.wega(.callout, weight: .semibold))
-                            .padding(.horizontal, WegaLayout.cardPadding)
+                            .padding(.trailing, WegaLayout.cardPadding)
                             .padding(.vertical, 8)
                     }
                 }
@@ -268,16 +271,17 @@ private struct CleanupSectionCard: View {
     private func quietItem(_ item: CleanupPresentation.QuietItem) -> some View {
         switch item {
         case .tool(let group):
-            groups([group])
+            rows(of: [group])
         case .origin(let line):
-            WegaDisclosure(isExpanded: originBinding(line.origin)) {
-                groups(line.tools)
+            WegaDisclosure(isExpanded: originBinding(line.origin), leadingInset: WegaLayout.cardPadding + Self.originIndent) {
+                rows(of: line.tools).padding(.leading, Self.originIndent)
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(line.title)
                         .font(.wega(.callout, monospaced: true))
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .help(line.title)
                     if let companions = line.companions {
                         Text(companions)
                             .font(.wega(.subheadline))
@@ -285,11 +289,13 @@ private struct CleanupSectionCard: View {
                             .lineLimit(2)
                     }
                 }
-                .padding(.horizontal, WegaLayout.cardPadding)
+                .padding(.trailing, WegaLayout.cardPadding)
                 .padding(.vertical, 6)
             }
         }
     }
+
+    private static let originIndent: CGFloat = 16
 
     private func originBinding(_ origin: CleanupPresentation.Row.Origin) -> Binding<Bool> {
         let key = origin.directory + origin.source
@@ -301,9 +307,9 @@ private struct CleanupSectionCard: View {
         )
     }
 
-    private func groups(_ groups: [CleanupPresentation.ToolGroup]) -> some View {
-        ForEach(groups.indices, id: \.self) { groupIndex in
-            let group = groups[groupIndex]
+    private func rows(of toolGroups: [CleanupPresentation.ToolGroup]) -> some View {
+        ForEach(toolGroups.indices, id: \.self) { groupIndex in
+            let group = toolGroups[groupIndex]
             if groupIndex > 0 {
                 Divider().opacity(0.3)
             }
