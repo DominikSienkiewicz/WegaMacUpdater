@@ -153,6 +153,10 @@ extension AppEndpoints {
     /// branch, derived from `projectRepository` so an overlay that moves the repository moves it too.
     public var userGuideURL: URL { projectRepositoryURL.appending(path: "blob/main/USER_GUIDE.md") }
 
+    /// Z14 — the newest release's page, where the helper card sends a copy that must be reinstalled
+    /// from the .pkg.
+    public var latestReleaseURL: URL { projectRepositoryURL.appending(path: "releases/latest") }
+
     /// UXP-34 — the guide's "Uninstalling Wega" section: removing Wega, her helper and Touch ID for `sudo`.
     public var uninstallGuideURL: URL { userGuideURL(fragment: "uninstalling-wega") }
 

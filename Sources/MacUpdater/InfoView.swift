@@ -373,7 +373,11 @@ extension InfoView {
         WegaCard {
             VStack(alignment: .leading, spacing: 0) {
                 WegaCardHeader(icon: "lock.shield", title: tr("Pomocnik Wegi")) {
-                    helperStatusBadge
+                    if helperBundleRefusal != nil {
+                        WegaBadge(label: HelperBundleRefusalPresentation.badge, variant: .manual)
+                    } else {
+                        helperStatusBadge
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -389,13 +393,51 @@ extension InfoView {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    helperActions
+                    if let helperBundleRefusal { helperBundleRefusalSection(helperBundleRefusal) } else { helperActions }
                     SettingsCardHint(text: cardHints[.helper])
                 }
                 .padding(14)
             }
         }
         .id(SettingsCard.helper)
+    }
+
+    /// Z14: set while this copy of Wega may not use the helper; the card then replaces its actions.
+    private var helperBundleRefusal: HelperBundleRefusalPresentation? {
+        HelperBundleRefusalPresentation(trust: operations.helperBundleTrust, status: helperStatus, bundleName: InfoOperationsController.bundleName)
+    }
+
+    private func helperBundleRefusalSection(_ refusal: HelperBundleRefusalPresentation) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(refusal.headline + " " + refusal.reason)
+                .font(.wega(.callout, weight: .medium))
+                .fixedSize(horizontal: false, vertical: true)
+            Text(refusal.explanation)
+                .font(.wega(.subheadline))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(refusal.howTo)
+                .font(.wega(.subheadline))
+                .fixedSize(horizontal: false, vertical: true)
+            if let note = refusal.registrationNote {
+                Text(note)
+                    .font(.wega(.subheadline))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 8) {
+                Link(HelperBundleRefusalPresentation.releasesButton, destination: AppEndpoints.shared.latestReleaseURL)
+                    .font(.wega(.callout))
+                if refusal.offersRemoval {
+                    Button(role: .destructive) {
+                        Task { await removeHelper() }
+                    } label: { Label(tr("Usuń pomocnika"), systemImage: "trash") }
+                        .controlSize(.small)
+                        .disabled(helperBusy)
+                }
+                Spacer()
+            }
+        }
     }
 
     private var helperStatusBadge: some View {

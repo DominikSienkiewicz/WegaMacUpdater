@@ -200,6 +200,7 @@ private final class Harness {
 private func dependencies(_ harness: Harness) -> InfoOperationsController.Dependencies {
     InfoOperationsController.Dependencies(
         helperStatus: { harness.helperStatus },
+        helperBundleTrust: { .trusted },
         hasGitHubToken: { harness.hasToken },
         setGitHubToken: { token in
             harness.savedToken = token
