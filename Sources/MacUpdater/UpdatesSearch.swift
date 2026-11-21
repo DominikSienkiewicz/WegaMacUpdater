@@ -105,11 +105,30 @@ enum UpdatesSearch {
         }
     }
 
-    /// The Inventory screen's own „Odczytano … — spis mógł się zmienić” under an answer read from
-    /// an Inventory that may have changed since; nil for every other answer.
-    static func caveat(for answer: UpdatesSearchAnswer, inventoryReadAt: Date?, now: Date) -> String? {
+    /// The Inventory screen's own words under an answer read from an Inventory that may not match
+    /// the disk: its banner when the read left sources out (`inventoryProblem`), otherwise
+    /// „Odczytano … — spis mógł się zmienić”; nil for every other answer.
+    static func caveat(for answer: UpdatesSearchAnswer, inventoryReadAt: Date?, inventoryProblem: String? = nil, now: Date) -> String? {
         guard case .fromStaleInventory = answer, let inventoryReadAt else { return nil }
+        if let inventoryProblem { return inventoryProblem }
         return trf("Odczytano %@ — spis mógł się zmienić", CheckedAtCopy.day(inventoryReadAt, now: now))
+    }
+
+    /// Where „Pokaż reguły” leads.
+    enum RulesDestination: Equatable { case sheet, settings }
+
+    /// The sheet of rules hiding this scan's results only when it lists the rule the answer names.
+    /// A rule only Inventory knows about leads to Settings, which lists every rule, never to an
+    /// empty sheet.
+    static func rulesDestination(for answer: UpdatesSearchAnswer, hiddenByRules: [UpdatePolicyEntry]) -> RulesDestination {
+        switch answer {
+        case .hiddenByRule(let name):
+            hiddenByRules.contains { $0.displayName == name } ? .sheet : .settings
+        case .fromStaleInventory(let read):
+            rulesDestination(for: read, hiddenByRules: hiddenByRules)
+        case .onList, .upToDate, .notChecked, .inventoryNotRead, .notFound:
+            .settings
+        }
     }
 
     /// A version read before an update may be the one the update replaced.
@@ -187,7 +206,8 @@ enum UpdatesSearchAnswer: Equatable {
     case inventoryNotRead(query: String)
     case notFound(query: String)
     /// An answer read from an Inventory that something has changed since (an update run, a
-    /// migration, a removal, an install, an undo); an up-to-date answer leaves its version out.
+    /// migration, a removal, an install, an undo), or whose read left sources out; an up-to-date
+    /// answer leaves its version out.
     indirect case fromStaleInventory(UpdatesSearchAnswer)
 }
 
@@ -198,12 +218,14 @@ struct UpdatesSearchAnswerRow: View {
     let answer: UpdatesSearchAnswer
     /// When the Inventory behind the answer was read; nil before the first read.
     let inventoryReadAt: Date?
+    /// The Inventory screen's banner when its last read left sources out.
+    var inventoryProblem: String? = nil
     let onShow: (UpdatesSearch.Row) -> Void
     let onShowRules: () -> Void
     let onOpenInventory: () -> Void
 
     var body: some View {
-        let caveat = UpdatesSearch.caveat(for: answer, inventoryReadAt: inventoryReadAt, now: Date())
+        let caveat = UpdatesSearch.caveat(for: answer, inventoryReadAt: inventoryReadAt, inventoryProblem: inventoryProblem, now: Date())
         VStack(alignment: .leading, spacing: 4) {
             line { primary(inventoryLinkHere: caveat == nil) }
             if let caveat {

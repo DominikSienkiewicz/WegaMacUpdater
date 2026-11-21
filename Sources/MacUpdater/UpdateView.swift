@@ -60,6 +60,7 @@ struct UpdateView: View {
     @EnvironmentObject private var cleanup: CleanupStore
     /// False while another destination covers this screen; see `EnvironmentValues.updatesOnScreen`.
     @Environment(\.updatesOnScreen) private var onScreen
+    @Environment(\.openSettings) private var openSettings
 
     /// Purely transient: a modal that no background task writes to, so it may die
     /// with the view tree.
@@ -422,7 +423,8 @@ struct UpdateView: View {
 
             // UXP-35 — ⌘F answers above the list and never filters it.
             if let answer = searchAnswer {
-                UpdatesSearchAnswerRow(answer: answer, inventoryReadAt: inventory.lastReadAt, onShow: showSearchMatch, onShowRules: { showsHiddenRules = true },
+                UpdatesSearchAnswerRow(answer: answer, inventoryReadAt: inventory.lastReadAt, inventoryProblem: inventory.errorMessage,
+                                       onShow: showSearchMatch, onShowRules: { showRules(for: answer) },
                                        onOpenInventory: { onNavigate?(.inventory) })
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
@@ -451,7 +453,8 @@ struct UpdateView: View {
         return UpdatesSearch.answer(
             query: searchQuery, rows: searchRows, hiddenByRules: scan.rulesHidingResults,
             inventory: inventory.lastReadAt == nil ? nil : inventory.apps,
-            inventoryIsStale: inventory.isStale(given: InventoryChangeStamp.current(scan: scan, migration: migration, cleanup: cleanup, menuBar: MenuBarAgent.shared)),
+            // A read that left sources out is no complete one either (REL-14).
+            inventoryIsStale: inventory.isStale(given: InventoryChangeStamp.current(scan: scan, migration: migration, cleanup: cleanup, menuBar: MenuBarAgent.shared)) || inventory.errorMessage != nil,
             checks: InventoryCheckSource.checksByPath(scan: scan.installationChecks, scanCheckedAt: scan.lastCheck,
                                                       background: MenuBarAgent.shared.lastResult),
             policies: policies.policiesMap, now: Date()
@@ -468,6 +471,14 @@ struct UpdateView: View {
     private func showSearchMatch(_ row: UpdatesSearch.Row) {
         if !row.inCurrentScope { onScopeChange?(.all) }
         scan.inspectedKey = row.key
+    }
+
+    /// The rules sheet when it lists the rule the answer names; Settings → Paused updates otherwise.
+    private func showRules(for answer: UpdatesSearchAnswer) {
+        switch UpdatesSearch.rulesDestination(for: answer, hiddenByRules: scan.rulesHidingResults) {
+        case .sheet: showsHiddenRules = true
+        case .settings: SettingsRoute.shared.open(.policies, with: openSettings)
+        }
     }
 
     /// UX-16 — shown once there is something to filter, and kept while a scope is applied so

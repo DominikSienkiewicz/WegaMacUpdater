@@ -168,17 +168,23 @@ struct UpdatesSearchTests {
             .fromStaleInventory(.hiddenByRule(name: long)),
             .fromStaleInventory(.notFound(query: long)),
         ]
+        let everySource: [ScanFailureSource] = [.homebrew, .caskCatalog, .applications, .appStore, .npm]
         for language in [AppLanguage.pl, .en] {
             withLanguage(language) {
+                // The longest banner a read that left sources out can raise.
+                let longestProblem = everySource.map { ScanSourceFailure(source: $0, message: "") }.scanErrorMessage
                 for answer in answers {
-                    let view = UpdatesSearchAnswerRow(answer: answer, inventoryReadAt: now, onShow: { _ in }, onShowRules: {}, onOpenInventory: {})
-                    let fitted = NSHostingController(rootView: view).sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude))
-                    #expect(fitted.width <= width, "\(language) \(answer): needs \(fitted.width) pt")
-                    let caveat = UpdatesSearch.caveat(for: answer, inventoryReadAt: now, now: Date())
-                    for text in [UpdatesSearch.text(for: answer, now: Date()), caveat].compactMap({ $0 }) {
-                        let needed = NSHostingController(rootView: Text(verbatim: text).font(.wega(.callout)))
-                            .sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height
-                        #expect(fitted.height + 0.5 >= needed, "\(language) \(answer): \(fitted.height) pt tall, the text needs \(needed) pt")
+                    for problem in [nil, longestProblem] {
+                        let view = UpdatesSearchAnswerRow(answer: answer, inventoryReadAt: now, inventoryProblem: problem,
+                                                          onShow: { _ in }, onShowRules: {}, onOpenInventory: {})
+                        let fitted = NSHostingController(rootView: view).sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude))
+                        #expect(fitted.width <= width, "\(language) \(answer): needs \(fitted.width) pt")
+                        let caveat = UpdatesSearch.caveat(for: answer, inventoryReadAt: now, inventoryProblem: problem, now: Date())
+                        for text in [UpdatesSearch.text(for: answer, now: Date()), caveat].compactMap({ $0 }) {
+                            let needed = NSHostingController(rootView: Text(verbatim: text).font(.wega(.callout)))
+                                .sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height
+                            #expect(fitted.height + 0.5 >= needed, "\(language) \(answer): \(fitted.height) pt tall, the text needs \(needed) pt")
+                        }
                     }
                 }
             }
@@ -225,6 +231,61 @@ struct UpdatesSearchTests {
         }
         #expect(UpdatesSearch.links(for: .hiddenByRule(name: "Spotify")) == [.rules])
         #expect(UpdatesSearch.links(for: .notFound(query: "x")) == [.inventory] && UpdatesSearch.links(for: .onList([], more: false)).isEmpty)
+    }
+
+    /// Final review M-a — an Inventory read that left sources out is not a complete one (REL-14).
+    /// What ⌘F reads from it is qualified like what it reads from a changed Inventory, in the
+    /// Inventory screen's own words: its banner, „Część źródeł skanu zawiodła (…) — lista może
+    /// być niekompletna.”, under the answer, next to Open Inventory. No new text.
+    @Test func aPartlyFailedInventoryReadQualifiesWhatItSays() throws {
+        let readAt = now.addingTimeInterval(-3_600)
+        let gone = UpdatesSearchAnswer.fromStaleInventory(.notFound(query: "nothing-like-it"))
+        let failures = [ScanSourceFailure(source: .homebrew, message: "brew list failed")]
+        withLanguage(.pl) {
+            let problem = failures.scanErrorMessage
+            #expect(problem == "Część źródeł skanu zawiodła (Homebrew) — lista może być niekompletna.")
+            #expect(UpdatesSearch.caveat(for: gone, inventoryReadAt: readAt, inventoryProblem: problem, now: now) == problem)
+            #expect(UpdatesSearch.caveat(for: gone, inventoryReadAt: readAt, inventoryProblem: nil, now: now)
+                    == "Odczytano \(CheckedAtCopy.day(readAt, now: now)) — spis mógł się zmienić", "a changed Inventory reads as before")
+            #expect(UpdatesSearch.caveat(for: .notFound(query: "x"), inventoryReadAt: readAt, inventoryProblem: problem, now: now) == nil,
+                    "only a qualified answer carries a caveat")
+            #expect(UpdatesSearch.links(for: gone) == [.inventory])
+        }
+        withLanguage(.en) {
+            let problem = failures.scanErrorMessage
+            #expect(UpdatesSearch.caveat(for: gone, inventoryReadAt: readAt, inventoryProblem: problem, now: now) == problem)
+            #expect(problem?.contains("incomplete") == true)
+        }
+
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        let screen = try slice(view, from: "private var screenBody: some View", to: "private var scopeBar: some View")
+        #expect(screen.contains("cleanup: cleanup, menuBar: MenuBarAgent.shared)) || inventory.errorMessage != nil,"),
+                "a read that left sources out is qualified like a changed one")
+        #expect(screen.contains("UpdatesSearchAnswerRow(answer: answer, inventoryReadAt: inventory.lastReadAt, inventoryProblem: inventory.errorMessage,"))
+        let row = try source("Sources/MacUpdater/UpdatesSearch.swift")
+        #expect(row.contains("UpdatesSearch.caveat(for: answer, inventoryReadAt: inventoryReadAt, inventoryProblem: inventoryProblem, now: Date())"))
+    }
+
+    /// Final review M-b — „Pokaż reguły” opened the sheet of rules hiding this scan's results even
+    /// for a rule only Inventory knew, so the sheet could open empty. It opens the sheet only when
+    /// the sheet lists the rule the answer names, and Settings → Paused updates otherwise.
+    @Test func showRulesNeverOpensASheetWithoutTheRule() throws {
+        let spotify = UpdatePolicyEntry(key: "c:spotify", displayName: "Spotify", policy: .ignored)
+        #expect(UpdatesSearch.rulesDestination(for: .hiddenByRule(name: "Spotify"), hiddenByRules: [spotify]) == .sheet)
+        #expect(UpdatesSearch.rulesDestination(for: .fromStaleInventory(.hiddenByRule(name: "Spotify")), hiddenByRules: [spotify]) == .sheet)
+        #expect(UpdatesSearch.rulesDestination(for: .hiddenByRule(name: "Zoom"), hiddenByRules: [spotify]) == .settings,
+                "a rule from Inventory that this scan's sheet does not list")
+        #expect(UpdatesSearch.rulesDestination(for: .hiddenByRule(name: "Spotify"), hiddenByRules: []) == .settings, "never an empty sheet")
+        #expect(UpdatesSearch.rulesDestination(for: .fromStaleInventory(.hiddenByRule(name: "Zoom")), hiddenByRules: [spotify]) == .settings)
+        let fromRules = try #require(UpdatesSearch.answer(query: "spot", rows: [], hiddenByRules: [spotify], inventory: [], inventoryIsStale: false))
+        #expect(UpdatesSearch.rulesDestination(for: fromRules, hiddenByRules: [spotify]) == .sheet, "an answer from the rules names a listed one")
+
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        let screen = try slice(view, from: "private var screenBody: some View", to: "private var scopeBar: some View")
+        #expect(screen.contains("onShowRules: { showRules(for: answer) }"))
+        #expect(screen.contains("switch UpdatesSearch.rulesDestination(for: answer, hiddenByRules: scan.rulesHidingResults) {"))
+        #expect(screen.contains("case .settings: SettingsRoute.shared.open(.policies, with: openSettings)"))
+        #expect(view.contains("@Environment(\\.openSettings) private var openSettings"))
     }
 
     // MARK: - Helpers
