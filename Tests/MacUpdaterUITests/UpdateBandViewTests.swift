@@ -324,7 +324,7 @@ final class UpdateBandViewTests: XCTestCase {
         return UpdateBandPresentation(
             totalCount: count, urgentCount: count, queueCount: 12,
             protectionText: tr("Sprawdzam możliwość cofnięcia"), lastCheck: base.lastCheck, freshness: base.freshness,
-            sources: base.sources, wegaLine: base.wegaLine, incompleteNote: note, handOffCount: 10
+            sources: base.sources, wegaLine: base.wegaLine, incompleteNote: note, handOffCount: 10, catalogAgeMinutes: 30
         )
     }
 
@@ -370,6 +370,14 @@ final class UpdateBandViewTests: XCTestCase {
                 }
             }
         }
+    }
+
+    func testTheCatalogChipGivesWayBeforeTheCheckTime() throws {
+        let text = try source("Sources/MacUpdater/UpdateBand.swift")
+        let start = try XCTUnwrap(text.range(of: "private func eyebrow(")).upperBound
+        let eyebrow = text[start...].prefix(700)
+        XCTAssertEqual(eyebrow.components(separatedBy: "catalogChip").count - 1, 2, "only in the first two alternatives")
+        XCTAssertTrue(eyebrow.contains("} else if layout == .narrow {\n            freshnessLabel"))
     }
 
     /// F1 — a two-line headline must still fit the band's fixed height. The frame always

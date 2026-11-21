@@ -81,6 +81,14 @@ struct LocalizationCompletenessTests {
         #expect(repeated.isEmpty, "M9: Translations+UXReviewNext.swift repeats \(repeated)")
     }
 
+    /// M9 — this round's section repeats no key of any other section.
+    @Test func theRestUXReviewSectionRepeatsNoKeyOfAnotherSection() {
+        let others = Self.sectionsBeforeUXReview + [Translations.uxReview, Translations.uxReviewNext]
+        let elsewhere = others.reduce(into: Set<String>()) { $0.formUnion($1.keys) }
+        let repeated = Set(Translations.uxReviewRest.keys).intersection(elsewhere).sorted()
+        #expect(repeated.isEmpty, "M9: Translations+UXReviewRest.swift repeats \(repeated)")
+    }
+
     private func packageRoot(file: String = #filePath) -> URL {
         // <root>/Tests/MacUpdaterTests/<thisFile>.swift → up 3 = <root>
         URL(fileURLWithPath: file)

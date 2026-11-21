@@ -313,7 +313,8 @@ struct UpdateView: View {
             sources:        UpdateBandPresentation.SourceChip.chips(from: scan.sourceReports),
             wegaLine:       wegaLine,
             incompleteNote: scan.lastScanComplete ? nil : tr("sprawdzenie niepełne"),
-            handOffCount:   scan.handOffCount(for: updateFilter)
+            handOffCount:   scan.handOffCount(for: updateFilter),
+            catalogAgeMinutes: scan.catalogAgeMinutes
         )
     }
 

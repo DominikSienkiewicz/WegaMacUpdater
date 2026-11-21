@@ -17,6 +17,12 @@ struct UpdateBandPresentation: Equatable {
     /// Manual apps in the category on screen: the band hands them to their developer instead of
     /// installing them, so they are never part of the queue.
     var handOffCount: Int = 0
+    /// Set when the scan reused the Homebrew catalog instead of refreshing it (UXP-14).
+    var catalogAgeMinutes: Int? = nil
+
+    var catalogNote: String? {
+        catalogAgeMinutes.map { trf("katalog Homebrew sprzed %@ min", "\($0)") }
+    }
 
     /// Today's results-heading rule: only a stale snapshot names its date ("Znaleziono"); the
     /// rest say "Sprawdzono" and a time. `freshnessIsExplicit` still colours anything older

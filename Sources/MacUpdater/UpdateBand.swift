@@ -169,7 +169,12 @@ struct UpdateBand<Action: View>: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 8) {
                     freshnessLabel
+                    catalogChip
                     sourceChips
+                }
+                HStack(spacing: 8) {
+                    freshnessLabel
+                    catalogChip
                 }
                 freshnessLabel
             }
@@ -185,6 +190,21 @@ struct UpdateBand<Action: View>: View {
                 .textCase(.uppercase)
                 .foregroundStyle(presentation.freshnessIsExplicit ? Color.wegaBandAccentText : Color.wegaBandSecondaryText)
                 .lineLimit(1)
+        }
+    }
+
+    /// UXP-14 — says the scan kept Homebrew's catalog instead of refreshing it, and how old it is.
+    @ViewBuilder
+    private var catalogChip: some View {
+        if let note = presentation.catalogNote {
+            Text(note)
+                .font(.wega(.caption2, weight: .semibold, monospaced: true))
+                .foregroundStyle(Color.wegaBandSecondaryText)
+                .lineLimit(1)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Color.wegaBandText.opacity(0.08)))
+                .help(note)
         }
     }
 
