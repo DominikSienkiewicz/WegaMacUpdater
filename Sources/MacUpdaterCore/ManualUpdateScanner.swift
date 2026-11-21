@@ -237,6 +237,15 @@ public struct ManualUpdateScanner: Sendable {
     }
 
     public func scanReport(brewOutdatedCasks: Set<String> = []) async -> ManualScanReport {
+        await scanReport(brewOutdatedCasks: brewOutdatedCasks) { _ in }
+    }
+
+    /// `scanReport(brewOutdatedCasks:)` that also says how many apps have heard back from every
+    /// one of their checks (UXP-13). The first report, before any check runs, names the total.
+    public func scanReport(
+        brewOutdatedCasks: Set<String> = [],
+        onProgress: @Sendable (ManualScanProgress) async -> Void = { _ in }
+    ) async -> ManualScanReport {
         var uncheckedSources: [String] = []
         var brewAvailable = true
         func read<Value: Sendable>(source: String, fallback: Value, _ load: () async throws -> Value) async -> Value {
@@ -350,16 +359,17 @@ public struct ManualUpdateScanner: Sendable {
         let latestCaskVersions = await brewService.caskLatestVersions(tokens: Array(Set(candidateTokens)))
 
         var work: [@Sendable () async -> ManualCheckObservation] = []
+        var checksPerApp: [InstallationIdentity: Int] = [:]
         for runtime in javaRuntimesToCheck where brewAvailable && needsCaskVersionCheck(runtime) {
-            if let check = Self.caskVersionCheck(
-                app: runtime,
-                brewTrackedVersion: runtime.caskToken.flatMap { brewCaskVersions[$0] },
-                latestCaskVersions: latestCaskVersions
-            ) {
-                work.append(check)
-            }
+            guard let check = Self.caskVersionCheck(app: runtime, brewTrackedVersion: runtime.caskToken.flatMap { brewCaskVersions[$0] },
+                                                    latestCaskVersions: latestCaskVersions) else { continue }
+            work.append(check)
+            checksPerApp[InstallationIdentity(path: runtime.path), default: 0] += 1
         }
         for app in appsToCheck where ServiceVendorUpdateProfile.profile(for: app) == nil {
+            // Counted on the way out, because the Zed branch leaves the iteration early.
+            let before = work.count
+            defer { checksPerApp[InstallationIdentity(path: app.path), default: 0] += work.count - before }
             if let check = zedObservation(for: app) {
                 work.append(check)
                 continue
@@ -401,7 +411,7 @@ public struct ManualUpdateScanner: Sendable {
             work.append(Self.observed("Sparkle", app, checker: sparkleChecker))
         }
 
-        var observations = await runBounded(limit: maxConcurrentChecks, work)
+        var observations = await runChecks(work, checksPerApp: checksPerApp, onProgress: onProgress)
         let selfResult = await selfUpdateChecker.check()
         let selfApp = Self.runningApplication(in: allInstallations)
         let selfUpdate = Self.selfUpdateApp(from: selfResult, appPath: selfApp.path,
@@ -447,6 +457,22 @@ public struct ManualUpdateScanner: Sendable {
             brewOwnership: BrewOwnership(paths: ownershipPaths.merging(javaAttribution.managedPaths) { direct, _ in direct }, tracked: brewTrackedTokens.union(brewOutdatedCasks), available: brewAvailable, unconfirmedCandidates: packageOwnership.unconfirmedCandidates),
             uncheckedSources: uncheckedSources
         ), applications: allInstallations)
+    }
+
+    /// Runs the per-app checks under the concurrency cap and reports each app whose last check
+    /// has come back, after a first report that names the total (UXP-13).
+    private func runChecks(
+        _ work: [@Sendable () async -> ManualCheckObservation],
+        checksPerApp: [InstallationIdentity: Int],
+        onProgress: @Sendable (ManualScanProgress) async -> Void
+    ) async -> [ManualCheckObservation] {
+        var tracker = ManualScanProgressTracker(checksPerApp: checksPerApp)
+        await onProgress(tracker.progress)
+        return await runBounded(limit: maxConcurrentChecks, work) { observation in
+            if tracker.finish(InstallationIdentity(path: observation.app.path)) {
+                await onProgress(tracker.progress)
+            }
+        }
     }
 
     private func applyingMicrosoftEvidence(to report: ManualScanReport, applications: [ApplicationInfo]) async -> ManualScanReport {
