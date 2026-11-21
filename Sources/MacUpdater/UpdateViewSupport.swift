@@ -245,7 +245,7 @@ struct UpdateSection: View {
     var body: some View {
         WegaCard {
             UpdateGroupHeader(title: title, tint: tint, ordinal: ordinal, count: items.count,
-                              note: run?.laneNote(for: Set(items.map(\.kind))) ?? subtitle, caption: rollbackCaption,
+                              note: subtitle, runNote: run?.laneNote(for: Set(items.map(\.kind))), caption: rollbackCaption,
                               selection: SelectionCheckbox(
                                   state: groupState,
                                   accessibilityLabel: trf("Zaznacz całą grupę: %@", title),

@@ -38,6 +38,40 @@ struct UpdateRunRowsTests {
         }
     }
 
+    /// A batch's state on its group header is state text: `.secondary`, one line, the full text
+    /// in the tooltip, so the header keeps its height and the rows under it never move mid-run.
+    @Test func aLaneNoteKeepsTheGroupHeaderHeight() {
+        let headers = [
+            HeaderSample(title: "Narzędzia CLI", ordinal: 3), HeaderSample(title: "Aplikacje", ordinal: 2),
+            HeaderSample(title: "Narzędzia Homebrew", subtitle: "narzędzia CLI"),
+            HeaderSample(title: "Mac App Store", subtitle: "via mas-cli"),
+        ]
+        for language in [AppLanguage.pl, .en] {
+            withLanguage(language) {
+                let notes = laneNotes()
+                for width in [368, 420] as [CGFloat] {
+                    for header in headers {
+                        let idle = headerHeight(header, runNote: nil, width: width)
+                        for note in notes {
+                            let running = headerHeight(header, runNote: note, width: width)
+                            #expect(running == idle, "\(language) \(width) pt \(header.title) „\(note)”: \(running) pt, idle \(idle) pt")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test func theLaneNoteIsSecondaryOnOneLineWithTheWholeTextInItsTooltip() throws {
+        let header = try source("Sources/MacUpdater/UpdateGroupHeader.swift")
+        let row = try slice(header, from: "private var headerRow: some View", to: "Spacer()")
+        let note = try slice(row, from: "if let runNote {", to: "} else if let note {")
+        #expect(note.contains(".foregroundStyle(.secondary)"))
+        #expect(note.contains(".lineLimit(1)"))
+        #expect(note.contains(".help(runNote)"))
+        #expect(!note.contains(".tertiary"))
+    }
+
     @Test func theRowSpeaksItsRunStatusOnceInItsLabel() {
         withLanguage(.en) {
             let label = PackageRowAccessibility.label(name: "Slack", from: "1", to: "2", run: "installing…", isQueued: true)
@@ -62,7 +96,7 @@ struct UpdateRunRowsTests {
         let support = try source("Sources/MacUpdater/UpdateViewSupport.swift")
         let section = try slice(support, from: "struct UpdateSection: View", to: "private struct UpdatePolicyMenu: View")
         #expect(section.contains("@Environment(\\.updateRun) private var run"))
-        #expect(section.contains("note: run?.laneNote(for: Set(items.map(\\.kind))) ?? subtitle"))
+        #expect(section.contains("note: subtitle, runNote: run?.laneNote(for: Set(items.map(\\.kind)))"))
         #expect(section.contains("runStatus: run?.rowStatus(for: item)"))
         #expect(section.contains(".opacity(run?.isDimmed(item.key) == true ? 0.55 : 1)"))
         let manual = try slice(support, from: "struct ManualUpdateSection: View", to: "struct ManualUpdateActionView: View")
@@ -77,6 +111,37 @@ struct UpdateRunRowsTests {
         #expect(chip.contains("@Environment(\\.accessibilityReduceMotion) private var reduceMotion"))
         let spinner = try #require(chip.range(of: "ProgressView()"))
         #expect(chip[chip.startIndex..<spinner.lowerBound].suffix(160).contains("reduceMotion"))
+    }
+
+    /// Every note a header can show for both batches at once, the longest there is, and for
+    /// each batch alone.
+    private func laneNotes() -> [String] {
+        var notes: [String] = []
+        for status in statuses {
+            for stopping in [false, true] {
+                let state = UpdateRunListState(
+                    board: UpdateRunBoard(startedAt: Date(timeIntervalSince1970: 0), lanes: [.formulae: status, .appStore: status]),
+                    isStopping: stopping
+                )
+                notes += [[.formula, .appStore], [.formula, .npm], [.cask, .appStore]].compactMap { state.laneNote(for: $0) }
+            }
+        }
+        return notes
+    }
+
+    private struct HeaderSample {
+        var title: String
+        var ordinal: Int?
+        var subtitle: String?
+    }
+
+    private func headerHeight(_ header: HeaderSample, runNote: String?, width: CGFloat) -> CGFloat {
+        let view = UpdateGroupHeader(
+            title: tr(header.title), tint: .wegaInfo, ordinal: header.ordinal, count: 12,
+            note: header.subtitle.map { tr($0) }, runNote: runNote,
+            selection: SelectionCheckbox(state: .partial, accessibilityLabel: "", accessibilityValue: "", toggle: {})
+        )
+        return NSHostingView(rootView: view.frame(width: width)).fittingSize.height
     }
 
     private func row(_ status: UpdateRunRowStatus?) -> PackageRow {
