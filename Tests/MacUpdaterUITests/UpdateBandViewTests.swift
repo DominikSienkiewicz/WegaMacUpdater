@@ -185,7 +185,7 @@ final class UpdateBandViewTests: XCTestCase {
     /// The frame always reports the band's height, so this measures what it has to hold: the
     /// eyebrow, the headline, the longest stage, the stop and „Pokaż log”.
     func testTheTallestRunStillFitsTheBand() {
-        for bandWidth in Self.narrowestBandWidths {
+        for bandWidth in Self.runBandWidths {
             let layout = UpdateBandLayout.style(forWidth: bandWidth)
             for language in [AppLanguage.pl, .en] {
                 for run in [runFixture, runStoppingFixture] {
@@ -227,9 +227,10 @@ final class UpdateBandViewTests: XCTestCase {
 
     /// Cut, the stop label stops saying that it waits for the installs already running, and the
     /// stage stops naming the package. Each must fit its line limit in the column the band draws
-    /// it in, at each layout's narrowest width; the eyebrow must fit one line.
+    /// it in, at each layout's narrowest width and with the inspector open; the eyebrow must fit
+    /// one line.
     func testTheStopLabelAndTheStageAreNeverTruncated() {
-        for bandWidth in Self.narrowestBandWidths {
+        for bandWidth in Self.runBandWidths {
             let layout = UpdateBandLayout.style(forWidth: bandWidth)
             let column = headlineColumnWidth(bandWidth: bandWidth)
             let stopColumn = layout == .regular ? WegaLayout.bandSummaryWidth : column
@@ -448,6 +449,10 @@ final class UpdateBandViewTests: XCTestCase {
     private static let narrowestBandWidths: [CGFloat] = [
         420 - 2 * WegaLayout.listGutter, WegaLayout.bandNarrowBreakpoint, WegaLayout.bandCompactBreakpoint,
     ]
+
+    /// The run is measured at those widths and at the band a 980 pt window leaves with the
+    /// inspector open, 368 pt, where the narrow text column is 244 pt.
+    private static let runBandWidths: [CGFloat] = [368] + narrowestBandWidths
 
     private func presentation(count: Int, note: String) -> UpdateBandPresentation {
         let base = fullPresentation
