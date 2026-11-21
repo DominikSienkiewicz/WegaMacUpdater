@@ -181,7 +181,7 @@ extension Translations {
         "jutro, %@": "tomorrow, %@",
         "Kolejna próba: %@, gdy Wega jest uruchomiona. Zamknięcie okna nie kończy aplikacji.":
             "Next attempt: %@, while Wega is running. Closing the window doesn't quit the app.",
-        "Sprawdź i zaktualizuj w tle (%@)": "Check and Update in Background (%@)",
+        "Sprawdź i zaktualizuj w tle (%@)": "Check and update in background (%@)",
         "Otwórz Wegę": "Open Wega",
         "Zakończ Wegę": "Quit Wega",
     ]

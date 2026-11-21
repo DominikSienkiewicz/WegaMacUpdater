@@ -27,8 +27,11 @@ struct WegaCompanionCardTests {
         #expect(WegaCompanionPresentation(state: state, quip: nil, lastCheck: date, now: date).freshness
                 == trf("Sprawdzono %@", date.formatted(date: .omitted, time: .shortened)))
         let nextDay = date.addingTimeInterval(86_400)
-        #expect(WegaCompanionPresentation(state: state, quip: nil, lastCheck: date, now: nextDay).freshness
-                == CheckedAtCopy.checked(at: date, now: nextDay), "UXP-17: the card names the day as the menu does")
+        withLanguage(.pl) {
+            #expect(WegaCompanionPresentation(state: state, quip: nil, lastCheck: date, now: nextDay).freshness
+                    == "Sprawdzono wczoraj, \(date.formatted(date: .omitted, time: .shortened))",
+                    "UXP-17: the card names the day as the menu does")
+        }
     }
 
     /// The quip comments on the result, and a pending security fix wins over the count.

@@ -70,7 +70,7 @@ struct MenuBarMenuTests {
             #expect(MenuBarMenuCopy.checkTitle(isChecking: false, consentCount: 2) == "Sprawdź i zaktualizuj w tle (2)")
             #expect(MenuBarMenuCopy.checkTitle(isChecking: true, consentCount: 2) == tr("Sprawdzam…"))
         }
-        withLanguage(.en) { #expect(MenuBarMenuCopy.checkTitle(isChecking: false, consentCount: 1) == "Check and Update in Background (1)") }
+        withLanguage(.en) { #expect(MenuBarMenuCopy.checkTitle(isChecking: false, consentCount: 1) == "Check and update in background (1)") }
     }
 
     @Test func aRowNamesTheVersionsAndFlagsAPossibleFix() {
