@@ -69,7 +69,12 @@ struct UpdateScopeBar: View {
 struct ListHeaderGroupingSlot<Menu: View>: View {
     let showsScanNote: Bool
     var showsRunNote = false
+    /// Whether the run's stop was requested; the run note's tooltip then says so.
+    var isStopping = false
     @ViewBuilder let menu: () -> Menu
+
+    /// The run note's tooltip: the run can be stopped, or, once asked, nothing queued starts.
+    var runNoteHelp: String { UpdateRunCopy.note(isStopping: isStopping) }
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -90,7 +95,7 @@ struct ListHeaderGroupingSlot<Menu: View>: View {
     private var note: some View {
         if showsRunNote {
             noteText(UpdateRunCopy.lockNote)
-                .help(UpdateRunCopy.note(isStopping: false))
+                .help(runNoteHelp)
         } else {
             noteText(tr("Zaznaczanie wróci, gdy skan się skończy."))
         }

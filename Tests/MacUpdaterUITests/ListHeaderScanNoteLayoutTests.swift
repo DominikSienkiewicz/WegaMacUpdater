@@ -72,9 +72,21 @@ final class ListHeaderScanNoteLayoutTests: XCTestCase {
         XCTAssertTrue(header.contains("HStack(spacing: WegaLayout.checkboxSpacing) {"))
         XCTAssertTrue(header.contains("scopeBar\n            Spacer(minLength: 0)\n            groupingControl"))
         XCTAssertTrue(view.contains(
-            "ListHeaderGroupingSlot(showsScanNote: ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows), showsRunNote: scan.updating && showsRows)"
+            "ListHeaderGroupingSlot(showsScanNote: ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows), "
+                + "showsRunNote: scan.updating && showsRows, isStopping: scan.updateInterruption.isRequested)"
         ))
         XCTAssertTrue(view.contains("UpdateGroupingMenu(selection: $grouping)"))
+    }
+
+    /// The run note's tooltip says what the stop has done: before it, that the run can be
+    /// stopped; once asked, that nothing queued will start.
+    func testTheRunNoteTooltipFollowsTheStopRequest() throws {
+        for isStopping in [false, true] {
+            let slot = ListHeaderGroupingSlot(showsScanNote: false, showsRunNote: true, isStopping: isStopping) { EmptyView() }
+            XCTAssertEqual(slot.runNoteHelp, UpdateRunCopy.note(isStopping: isStopping), "stopping \(isStopping)")
+        }
+        let scope = try source("Sources/MacUpdater/UpdateScopeBar.swift")
+        XCTAssertTrue(scope.contains("noteText(UpdateRunCopy.lockNote)\n                .help(runNoteHelp)"))
     }
 
     // MARK: - Helpers

@@ -435,7 +435,7 @@ struct UpdateView: View {
     /// UX-18's grouping menu, or the note that says why the rows cannot be selected: while a
     /// scan runs in place over them, or while an update holds them — see `ListHeaderGroupingSlot`.
     private var groupingControl: some View {
-        ListHeaderGroupingSlot(showsScanNote: ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows), showsRunNote: scan.updating && showsRows) {
+        ListHeaderGroupingSlot(showsScanNote: ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows), showsRunNote: scan.updating && showsRows, isStopping: scan.updateInterruption.isRequested) {
             groupingMenu
         }
     }
