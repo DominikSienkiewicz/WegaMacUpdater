@@ -7,8 +7,8 @@ import MacUpdaterCore
 
 /// UXP-27 — the ball waits while something needs the user's attention: a `.danger` banner, a
 /// running update (its password and publisher prompts come from the run) or an open
-/// confirmation on one of the five screens that raise one. Errors are spoken calmly, in the
-/// first person, and Cleanup sniffs while it scans like every other scan.
+/// confirmation on one of the screens that raise one, Logs' "Wyczyścić logi?" included. Errors
+/// are spoken calmly, in the first person, and Cleanup sniffs while it scans like every other scan.
 @Suite("Wega's attention") @MainActor
 struct WegaAttentionTests {
     @Test func theBallWaitsForErrorsRunsAndDialogs() {
@@ -44,6 +44,8 @@ struct WegaAttentionTests {
         ("UninstallView", ".wegaAttention(showDialog || showForceQuit || scanError != nil)"),
         ("CleanupView", ".wegaAttention(confirming != nil || showsPathWarning || !errorMessages.isEmpty)"),
         ("MigrationView", ".wegaAttention(confirmingApp != nil || migration.duplicateConfirmation != nil || migration.pendingForceTermination != nil || errorMessage != nil || banner?.variant == .danger)"),
+        // Final review I2 — clearing the logs is a removal confirmation (owner's Q4).
+        ("LogsView", ".wegaAttention(confirmingClear)"),
     ]
 
     @Test func everyScreenReportsWhatIsOpenOnIt() throws {

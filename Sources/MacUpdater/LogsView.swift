@@ -71,6 +71,8 @@ struct LogsView: View {
         .sheet(item: $reportController) { controller in
             BugReportSheet(controller: controller) { reportController = nil }
         }
+        // UXP-27 — clearing the logs is a removal confirmation: the ball waits while it is open.
+        .wegaAttention(confirmingClear)
     }
 
     private var toolbar: some View {
