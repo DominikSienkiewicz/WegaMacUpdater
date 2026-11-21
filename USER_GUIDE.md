@@ -462,7 +462,10 @@ section headers.
 > **Signature-change safety.** If the app's code-signing identity changes to an unexpected
 > developer signature, Wega blocks the upgrade and raises a sticky security alert rather than
 > silently trusting it. **Trust the New Signature** is there for the rare case where the
-> developer really did change accounts; it asks for your confirmation first.
+> developer really did change accounts; it asks for your confirmation first. It offers nothing
+> to confirm for an app whose signature doesn't check out (one changed after it was signed, or
+> one that merely names a developer no Apple certificate vouches for); Wega then says it couldn't
+> read the app's signature and changes nothing.
 
 Those checks say what the new file *is*; they don't say whether it starts. So after they
 pass, Wega **launches the updated app hidden in the background and watches it for five

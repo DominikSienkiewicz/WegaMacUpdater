@@ -350,6 +350,17 @@ and `~/Applications` is ambiguous rather than resolved by preferring one directo
 After a publisher mismatch, the original snapshot remains available even after a
 successful rollback. A bundle-identity mismatch preserves it in the same way.
 
+A Team ID read from a signature is only that signature's claim: an ad-hoc signature can claim
+any Team ID, and a bundle edited after signing still reports its publisher's. Where a Team ID
+becomes trust, Wega counts it only when an Apple-issued certificate carries it and the whole
+bundle validates against it, in every architecture, including nested code and under the
+strict rules (`CodeSignatureVerifier.validatedTeamID`). That covers the check after an upgrade
+and **Trust the New Signature**. A bundle that fails validation reads as having no Team ID:
+against a baseline the check after an upgrade rolls it back, and trust is refused. The check
+before an upgrade, the Trust panel, Uninstall's leftovers and migration still read the claim,
+so a Mac App Store build keeps its Team ID there (its leaf certificate is Apple's) and an
+installed app whose own signature broke does not block the update that replaces it.
+
 #### When the package manager installed nothing
 
 Homebrew exits 0 without touching the disk whenever its own Caskroom record already names the

@@ -44,9 +44,11 @@ enum CaskRollbackGuard {
 
         static let live = Dependencies(
             teamIDBeforeMutation: { CodeSignatureVerifier.teamID(ofAppAt: $0) },
+            // Before the upgrade the claim identifies the installed app; after it, the Team ID is
+            // what the baseline trusts, so only a validated signature may supply it.
             teamIDAfterMutation: { appURL in
                 await Task.detached {
-                    CodeSignatureVerifier.teamID(ofAppAt: appURL)
+                    CodeSignatureVerifier.validatedTeamID(ofAppAt: appURL)
                 }.value
             },
             recordTeamID: { TeamIDLedger.shared.record(bundleID: $0, teamID: $1) },
@@ -407,7 +409,7 @@ enum CaskRollbackGuard {
 
         func liveInstalledTeamID() async -> String? {
             let installedTeamID = await Task.detached {
-                CodeSignatureVerifier.teamID(ofAppAt: validationURL)
+                CodeSignatureVerifier.validatedTeamID(ofAppAt: validationURL)
             }.value
             return installedTeamID
         }
