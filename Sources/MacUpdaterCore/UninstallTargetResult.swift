@@ -6,6 +6,9 @@ public enum UninstallBlock: Equatable, Sendable {
     /// The helper is registered but older than this app, or did not answer before the request
     /// was sent. Only a call to the helper finds this; no route predicts it.
     case helperNeedsReinstall
+    /// Z14: this copy of Wega runs from a bundle someone other than root can change, so it does not
+    /// use the helper; Wega installed from the .pkg can.
+    case helperNeedsPackageInstall
     case needsAdministratorAccount
     case needsAdministratorRights
     case needsAppManagement

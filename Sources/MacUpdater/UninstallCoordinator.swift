@@ -532,8 +532,10 @@ final class UninstallCoordinator: ObservableObject {
     }
 
     /// A helper that is not registered needs turning on. One that is stale, or did not answer
-    /// before the request was sent, must be reinstalled: nothing happened to the app. No answer
-    /// after the request was sent is not a plain failure, because the app may already be gone.
+    /// before the request was sent, must be reinstalled: nothing happened to the app. A copy of Wega
+    /// whose bundle may not host the helper is refused before anything is sent, and needs Wega from
+    /// the .pkg. No answer after the request was sent is not a plain failure, because the app may
+    /// already be gone.
     static func helperFailure(_ error: Error, requestSent: Bool) -> UninstallTargetResult {
         switch error as? PrivilegedHelperClient.HelperError {
         case .notEnabled:
@@ -542,7 +544,9 @@ final class UninstallCoordinator: ObservableObject {
             return .blocked(.helperNeedsReinstall)
         case .operationFailed(let message):
             return .failed(message)
-        case .teamIDNotConfigured, .bundleNotTrusted:
+        case .bundleNotTrusted:
+            return .blocked(.helperNeedsPackageInstall)
+        case .teamIDNotConfigured:
             return .failed(error.localizedDescription)
         case .timedOut, .connectionFailed, nil:
             guard requestSent else { return .blocked(.helperNeedsReinstall) }
