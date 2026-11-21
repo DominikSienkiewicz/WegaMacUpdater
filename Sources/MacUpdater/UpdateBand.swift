@@ -303,8 +303,8 @@ struct UpdateBand<Action: View>: View {
     private var planLink: some View {
         if presentation.showsPlanLink {
             Button(tr("Pokaż, co dokładnie zrobię"), action: onShowPlan)
-                .buttonStyle(.plain)
-                .font(.wega(.caption, weight: .semibold))
+                .buttonStyle(.link)
+                .font(.wega(.callout, weight: .semibold))
                 .foregroundStyle(planLinkEnabled ? Color.wegaBandAccentText : Color.wegaBandSecondaryText.opacity(0.5))
                 .lineLimit(1)
                 .disabled(!planLinkEnabled)

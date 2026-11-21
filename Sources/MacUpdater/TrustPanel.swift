@@ -46,7 +46,7 @@ struct TrustPanel: View {
                         .controlSize(.small)
                     Text(tr("Weryfikowanie…"))
                         .font(.wega(.subheadline))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                 }
             case .loaded(let result):
                 loadedContent(result)
@@ -148,7 +148,7 @@ struct TrustPanel: View {
         case .unavailable:
             Label(tr("Weryfikacja niedostępna"), systemImage: "questionmark.circle")
                 .font(.wega(.callout, weight: .medium))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -164,11 +164,11 @@ struct TrustPanel: View {
             case .firstSeen:
                 Text(tr("pierwsze sprawdzenie podpisu"))
                     .font(.wega(.footnote))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
             case .unchanged:
                 Text(tr("podpis bez zmian"))
                     .font(.wega(.footnote))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
             }
         }
     }

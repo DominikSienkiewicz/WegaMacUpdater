@@ -18,9 +18,6 @@ struct InventoryView: View {
     @ObservedObject private var menuBar = MenuBarAgent.shared
     @ObservedObject private var policies = UpdatePolicyStore.shared
     @State private var needsCheckingOnly = false
-    /// UX-10 — ⌘F ("Znajdź w spisie aplikacji") asks, through here, for the `.searchable`
-    /// field to take focus.
-    @EnvironmentObject private var commandCenter: WegaCommandCenter
 
     @EnvironmentObject private var inventory: InventoryStore
     /// The „dziś”/„wczoraj” of „Odczytano …” moves at midnight, after wake and on a clock change.
@@ -31,6 +28,7 @@ struct InventoryView: View {
     @State private var sortAsc:      Bool              = true
     /// UX-11f — set when a chosen export destination cannot be written; shown as a banner.
     @State private var exportError:  String?           = nil
+    /// ⌘F and ⇧⌘F („Znajdź w spisie aplikacji”) focus the search field below.
     @FocusState private var searchFocused: Bool
 
     private var checksByPath: [InstallationIdentity: InstallationCheck] {
@@ -249,11 +247,10 @@ struct InventoryView: View {
         // `.searchFocused` keeps UX-10's ⌘F able to move focus into it.
         .searchable(text: $search, prompt: tr("Szukaj po nazwie lub bundle ID…"))
         .searchFocused($searchFocused)
+        // ⇧⌘F pressed from another destination navigates here first, so its request is
+        // consumed on arrival rather than by `.onChange`.
+        .receivesSearchFocusRequests(on: .inventory) { searchFocused = true }
         .task { scanStore.restoreLastScan(); if inventory.needsInitialRead { await scan() } }
-        // UX-10 — ⌘F pressed while already here fires `.onChange`; pressed from another
-        // destination it navigates here first, so the request is instead consumed on appear.
-        .onAppear { focusSearchIfRequested() }
-        .onChange(of: commandCenter.inventorySearchFocusRequests) { _, _ in focusSearchIfRequested() }
     }
 
     private func emptyState(_ state: InventoryEmptyState) -> some View {
@@ -273,12 +270,6 @@ struct InventoryView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
-    }
-
-    private func focusSearchIfRequested() {
-        guard commandCenter.consumePendingInventorySearchFocus() else { return }
-        // A field that is only just appearing needs a runloop tick before it accepts focus.
-        Task { @MainActor in searchFocused = true }
     }
 
     private func setFilter(_ f: SourceFilter) { filter = filter == f ? .all : f }

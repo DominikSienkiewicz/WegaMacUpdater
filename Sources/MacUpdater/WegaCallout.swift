@@ -107,10 +107,17 @@ struct WegaCallout<Detail: View, Actions: View>: View {
             Spacer(minLength: 8)
             actions
             if let onClose {
-                Button(action: onClose) { Image(systemName: "xmark") }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.tertiary)
-                    .accessibilityLabel(tr("Zamknij"))
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tertiary)
+                // The 28 pt hit area overhangs the banner's padding: a one-line banner keeps its
+                // height and the cross stays on the title's line.
+                .padding(.vertical, -7)
+                .accessibilityLabel(tr("Zamknij"))
             }
         }
         .padding(.horizontal, 12)

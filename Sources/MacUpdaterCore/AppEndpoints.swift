@@ -148,6 +148,12 @@ public struct AppEndpoints: Decodable, Sendable, Equatable {
     public var masRepositoryURL: URL { URL(string: masRepository)! }
 }
 
+extension AppEndpoints {
+    /// UXP-23 — the user guide the Help menu opens: `USER_GUIDE.md` on the repository's main
+    /// branch, derived from `projectRepository` so an overlay that moves the repository moves it too.
+    public var userGuideURL: URL { projectRepositoryURL.appending(path: "blob/main/USER_GUIDE.md") }
+}
+
 /// Whether a user endpoints overlay is currently shaping these endpoints, and whether it was
 /// cryptographically verified. Surfaced by ``AppEndpoints/overlayStatus`` so the Info card can
 /// show the presence of an *unverified* overlay to the user — SEC-08 requires that this is not

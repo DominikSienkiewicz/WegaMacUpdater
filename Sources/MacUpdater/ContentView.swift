@@ -27,6 +27,15 @@ enum SidebarTab: String, Identifiable {
         }
     }
 
+    /// The screens with a `.searchable` field of their own, which ⌘F focuses. Elsewhere ⌘F is
+    /// greyed out rather than taking the user somewhere they did not ask to go.
+    var hasSearchField: Bool {
+        switch self {
+        case .logs, .uninstall, .inventory: return true
+        case .update, .rollback, .cleanup, .migration: return false
+        }
+    }
+
     var hint: String {
         switch self {
         case .update:    return tr("Co do odświeżenia")
@@ -187,6 +196,8 @@ struct ContentView: View {
         // glass surface beneath it refracting a solid rectangle, and the material would vanish.
         .frame(minWidth: WegaLayout.windowMinWidth, minHeight: WegaLayout.windowMinHeight)
         .overlay(alignment: .topLeading) { InventoryStalenessWatcher() }
+        // UXP-23 — ⌥⌘I, under the toolbar button's own gate.
+        .focusedSceneValue(\.toggleInspectorAction, WegaMenuAction(isEnabled: selection.tab == .update, run: { showInspector.toggle() }))
         .onChange(of: selection) { _, new in wegaState = .forTab(new.tab) }
         .task { migrateLegacyTab() }
         // I1 — a second registration beside `MenuBarLabel`'s, so a notification click can

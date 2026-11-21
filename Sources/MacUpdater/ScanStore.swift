@@ -734,6 +734,16 @@ final class ScanStore: ObservableObject {
         selected = UpdatePlanner.toggledAll(selected: selected, allKeys: visibleItems(for: filter).map(\.key))
     }
 
+    /// UXP-23 — ⇧⌘A: queues every batch row `filter` shows, never a manual app or a row a rule
+    /// hides. Refused, like the select-all checkbox, while no result is on screen, while a
+    /// refresh replaces it and while an update owns it.
+    func selectAllVisible(filter: UpdateFilter) {
+        guard status == .results,
+              ScanSelectionGate.allowsListSelection(isRefreshing: isRefreshing, isUpdating: updating) else { return }
+        restrictSelection(to: filter)
+        selected.formUnion(visibleItems(for: filter).map(\.key))
+    }
+
     func ignoreItem(_ item: OutdatedItem) {
         let previous = UpdatePolicyStore.shared.entries[item.policyKey]
         UpdatePolicyStore.shared.ignore(key: item.policyKey, name: item.name)

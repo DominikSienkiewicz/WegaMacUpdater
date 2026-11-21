@@ -37,7 +37,7 @@ struct UpdateRunOverlayTests {
                 "the overlay appears exactly while an update runs")
         #expect(view.contains("onCancel:   { scan.cancelUpdate() }"),
                 "and its stop button is wired to the run's cooperative cancel")
-        #expect(overlay.contains(".background(Color(nsColor: .windowBackgroundColor).opacity(Self.scrimOpacity))"),
+        #expect(overlay.contains(".background(Color(nsColor: .windowBackgroundColor).opacity(Self.scrim(reduceTransparency: reduceTransparency)))"),
                 "the overlay covers the screen it stands down")
         #expect(overlay.contains(".disabled(isStopping)"),
                 "a stop already requested cannot be requested twice")
@@ -53,9 +53,11 @@ struct UpdateRunOverlayTests {
 
         #expect(!overlay.contains("Material"),
                 "a material of any thickness blurs the rows into an empty column")
-        #expect(overlay.contains("opacity(Self.scrimOpacity)"),
+        #expect(overlay.contains("opacity(Self.scrim(reduceTransparency: reduceTransparency))"),
                 "one veil, declared where it is used")
         #expect(UpdateRunOverlay<EmptyView>.scrimOpacity == 0.5, "every row stays legible and still reads as stood down")
+        #expect(UpdateRunOverlay<EmptyView>.scrim(reduceTransparency: false) == UpdateRunOverlay<EmptyView>.scrimOpacity,
+                "without Reduce Transparency the veil is that one value")
     }
 
     /// The overlay is applied after `.disabled`, so it is not itself disabled. Were the order

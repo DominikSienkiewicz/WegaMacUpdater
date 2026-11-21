@@ -178,6 +178,17 @@ struct UpdateView: View {
                 isEnabled: scan.status == .results && allowsUpdateRun,
                 run: { requestUpdate() }
             ))
+            // UXP-23 — ⌘. cancels the store's scan when no update runs; ⇧⌘A asks the select-all
+            // checkbox's gate, and only while the list is the one on screen.
+            .focusedSceneValue(\.cancelScanAction, WegaMenuAction(
+                isEnabled: scan.scanTask != nil && !scan.updating,
+                run: { scan.cancelScan() }
+            ))
+            .focusedSceneValue(\.selectAllVisibleAction, WegaMenuAction(
+                isEnabled: scan.status == .results && !visibleItems.isEmpty
+                    && ScanSelectionGate.allowsListSelection(isRefreshing: scan.isRefreshing, isUpdating: scan.updating),
+                run: { scan.selectAllVisible(filter: updateFilter) }
+            ))
     }
 
     @ViewBuilder
@@ -561,7 +572,7 @@ struct UpdateView: View {
                         if scan.probingSizes {
                             HStack(spacing: 6) {
                                 ProgressView().controlSize(.small)
-                                Text(tr("Sprawdzam rozmiary pobrań…")).font(.wega(.subheadline)).foregroundStyle(.tertiary)
+                                Text(tr("Sprawdzam rozmiary pobrań…")).font(.wega(.subheadline)).foregroundStyle(.secondary)
                             }
                         }
                     }

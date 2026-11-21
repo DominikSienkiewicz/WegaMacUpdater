@@ -5,13 +5,14 @@ import MacUpdaterCore
 //
 // Before UX-10 the app defined no `.commands` at all: the only way to start a scan was the
 // toolbar button, and none of the destinations had a keyboard shortcut. This file adds the
-// menu bar commands and their macOS-conventional shortcuts (⌘R, ⌘⏎, ⌘1…⌘7, ⌘F).
+// menu bar commands and their macOS-conventional shortcuts (⌘R, ⌘⏎, ⌘., ⌘1…⌘7, ⌘F, ⇧⌘F,
+// ⇧⌘A, ⌥⌘I) and the Help menu's user guide.
 //
 // Scan and update actions are published *from the view tree* as `WegaMenuAction`s, so a menu
 // shortcut is greyed out in exactly the situations its on-screen control is (a shortcut that
 // silently no-ops reads as a bug). Navigation writes the same `@AppStorage` selection the
-// sidebar binds to, so ⌘1…⌘7 and a sidebar click are the one code path. ⌘F reaches the
-// inventory's existing search field through `WegaCommandCenter`.
+// sidebar binds to, so ⌘1…⌘7 and a sidebar click are the one code path. ⌘F and ⇧⌘F reach the
+// screens' existing search fields through `WegaCommandCenter`.
 
 /// A menu-invocable action mirrored from the window's view tree. `isEnabled` tracks the
 /// equivalent on-screen control; `run` performs the action. `run` is `@MainActor` because it
@@ -21,9 +22,28 @@ struct WegaMenuAction {
     let run: @MainActor () -> Void
 }
 
+extension WegaMenuAction {
+    /// The first of `actions` that can run now, or `nil` when none can — for one menu item that
+    /// stands for several actions in order of precedence (⌘.).
+    static func firstEnabled(_ actions: WegaMenuAction?...) -> WegaMenuAction? {
+        actions.lazy.compactMap { $0 }.first { $0.isEnabled }
+    }
+}
+
+/// UXP-23 — ⌘. is one item for the two things that can be stopped. A running update comes
+/// first and keeps its own words; otherwise the item cancels the scan.
+enum CancelCommandCopy {
+    static func title(stopsUpdate: Bool) -> String {
+        stopsUpdate ? UpdateRunCopy.stopLabel(isStopping: false) : tr("Anuluj skan")
+    }
+}
+
 private struct StartCheckActionKey: FocusedValueKey { typealias Value = WegaMenuAction }
 private struct RunUpdateActionKey: FocusedValueKey { typealias Value = WegaMenuAction }
 private struct StopUpdateActionKey: FocusedValueKey { typealias Value = WegaMenuAction }
+private struct CancelScanActionKey: FocusedValueKey { typealias Value = WegaMenuAction }
+private struct SelectAllVisibleActionKey: FocusedValueKey { typealias Value = WegaMenuAction }
+private struct ToggleInspectorActionKey: FocusedValueKey { typealias Value = WegaMenuAction }
 
 extension FocusedValues {
     /// ⌘R — the window's "Sprawdź teraz". Published by `UpdateView`, which owns the scan store.
@@ -45,32 +65,88 @@ extension FocusedValues {
         get { self[StopUpdateActionKey.self] }
         set { self[StopUpdateActionKey.self] = newValue }
     }
+
+    /// ⌘. while no update runs — cancels the scan the store is running, like the toolbar's
+    /// "Anuluj". Published by `UpdateView`, which stays mounted on every screen.
+    var cancelScanAction: WegaMenuAction? {
+        get { self[CancelScanActionKey.self] }
+        set { self[CancelScanActionKey.self] = newValue }
+    }
+
+    /// ⇧⌘A — queues every row the Updates list shows, under the list's own selection gate.
+    var selectAllVisibleAction: WegaMenuAction? {
+        get { self[SelectAllVisibleActionKey.self] }
+        set { self[SelectAllVisibleActionKey.self] = newValue }
+    }
+
+    /// ⌥⌘I — the toolbar's inspector button, on the screen where that button is offered.
+    var toggleInspectorAction: WegaMenuAction? {
+        get { self[ToggleInspectorActionKey.self] }
+        set { self[ToggleInspectorActionKey.self] = newValue }
+    }
 }
 
 /// A tiny command bus for menu actions that must reach a view which is not mounted yet.
 ///
-/// Today only ⌘F needs it: from another destination it first navigates to the inventory,
-/// and the inventory's search field — mounting fresh in the same turn — was not in the tree
-/// to hear a direct call. The request is left pending here and consumed on the field's
-/// appearance instead. `lastConsumed` lives on this object (not on the view's `@State`) so it
-/// survives the inventory being torn down and rebuilt on every tab switch.
+/// ⌘F and ⇧⌘F ask a screen's search field for focus. ⇧⌘F first navigates to the inventory,
+/// whose field — mounting fresh in the same turn — was not in the tree to hear a direct call.
+/// The request is left pending here, per screen, and consumed on the field's appearance
+/// instead. `lastConsumed` lives on this object (not on the view's `@State`) so it survives the
+/// screen being torn down and rebuilt on every tab switch.
 @MainActor
 final class WegaCommandCenter: ObservableObject {
-    /// Bumped by ⌘F. Monotonic, so a repeat ⌘F while already on the inventory still trips the
-    /// view's `.onChange`.
-    @Published private(set) var inventorySearchFocusRequests = 0
-    private var lastConsumed = 0
+    /// Bumped per screen by ⌘F and ⇧⌘F. Monotonic, so a repeat request while already on the
+    /// screen still trips the view's `.onChange`.
+    @Published private(set) var searchFocusRequests: [SidebarTab: Int] = [:]
+    private var lastConsumed: [SidebarTab: Int] = [:]
 
-    func requestInventorySearchFocus() {
-        inventorySearchFocusRequests += 1
+    func requestSearchFocus(on tab: SidebarTab) {
+        searchFocusRequests[tab, default: 0] += 1
     }
 
-    /// True exactly once per request — for the on-appearance path, where the view missed the
-    /// `.onChange` because it was not yet in the tree when ⌘F fired.
-    func consumePendingInventorySearchFocus() -> Bool {
-        guard inventorySearchFocusRequests > lastConsumed else { return false }
-        lastConsumed = inventorySearchFocusRequests
+    /// True exactly once per request for `tab` — also on the on-appearance path, where the view
+    /// missed the `.onChange` because it was not yet in the tree when the shortcut fired.
+    func consumePendingSearchFocus(on tab: SidebarTab) -> Bool {
+        let requested = searchFocusRequests[tab, default: 0]
+        guard requested > lastConsumed[tab, default: 0] else { return false }
+        lastConsumed[tab] = requested
         return true
+    }
+
+    func requestInventorySearchFocus() {
+        requestSearchFocus(on: .inventory)
+    }
+
+    func consumePendingInventorySearchFocus() -> Bool {
+        consumePendingSearchFocus(on: .inventory)
+    }
+}
+
+/// Focuses a screen's `.searchable` field whenever ⌘F or ⇧⌘F asks for it: while the screen is
+/// on, through `.onChange`, or on its arrival, for a request made from another screen.
+private struct SearchFocusRequestReceiver: ViewModifier {
+    let tab: SidebarTab
+    let focus: () -> Void
+
+    @EnvironmentObject private var commandCenter: WegaCommandCenter
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear(perform: focusIfRequested)
+            .onChange(of: commandCenter.searchFocusRequests[tab]) { _, _ in focusIfRequested() }
+    }
+
+    private func focusIfRequested() {
+        guard commandCenter.consumePendingSearchFocus(on: tab) else { return }
+        // A field that is only just appearing needs a runloop tick before it accepts focus.
+        Task { @MainActor in focus() }
+    }
+}
+
+extension View {
+    /// See `SearchFocusRequestReceiver`. Attach it to the view that carries `.searchable`.
+    func receivesSearchFocusRequests(on tab: SidebarTab, focus: @escaping () -> Void) -> some View {
+        modifier(SearchFocusRequestReceiver(tab: tab, focus: focus))
     }
 }
 
@@ -93,8 +169,8 @@ enum WegaMenuNavigation {
     ]
 }
 
-/// UX-10 — the app's menu bar commands. Every shortcut the card asks for (⌘R, ⌘⏎, ⌘1…⌘7, ⌘F)
-/// lives in this one `CommandMenu` so it reads as a single, discoverable place.
+/// UX-10 — the app's menu bar commands. Every shortcut of the window (⌘R, ⌘⏎, ⌘., ⌘F, ⇧⌘F,
+/// ⇧⌘A, ⌥⌘I, ⌘1…⌘7) lives in this one `CommandMenu` so it reads as a single, discoverable place.
 struct WegaCommands: Commands {
     let commandCenter: WegaCommandCenter
 
@@ -102,7 +178,11 @@ struct WegaCommands: Commands {
     @FocusedValue(\.startCheckAction) private var startCheck
     @FocusedValue(\.runUpdateAction) private var runUpdate
     @FocusedValue(\.stopUpdateAction) private var stopUpdate
+    @FocusedValue(\.cancelScanAction) private var cancelScan
+    @FocusedValue(\.selectAllVisibleAction) private var selectAllVisible
+    @FocusedValue(\.toggleInspectorAction) private var toggleInspector
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.openURL) private var openURL
 
     // Explicit initializer: the synthesized memberwise one inherits the `private` of the
     // property wrappers above and so cannot be called from `MacUpdaterApp`.
@@ -128,17 +208,32 @@ struct WegaCommands: Commands {
                 // the same conditions under which the "Zaktualizuj…" button is offered.
                 .disabled(!(selection.tab == .update && runUpdate?.isEnabled == true))
 
-            Button(UpdateRunCopy.stopLabel(isStopping: false)) { stopUpdate?.run() }
+            let cancelTarget = WegaMenuAction.firstEnabled(stopUpdate, cancelScan)
+            Button(CancelCommandCopy.title(stopsUpdate: stopUpdate?.isEnabled == true)) { cancelTarget?.run() }
                 .keyboardShortcut(".", modifiers: .command)
-                .disabled(stopUpdate?.isEnabled != true)
+                .disabled(cancelTarget == nil)
 
             Divider()
+
+            Button(tr("Zaznacz wszystkie widoczne")) { selectAllVisible?.run() }
+                .keyboardShortcut("a", modifiers: [.command, .shift])
+                .disabled(!(selection.tab == .update && selectAllVisible?.isEnabled == true))
+
+            Button(tr("Pokaż panel szczegółów")) { toggleInspector?.run() }
+                .keyboardShortcut("i", modifiers: [.command, .option])
+                .disabled(toggleInspector?.isEnabled != true)
+
+            Divider()
+
+            Button(tr("Znajdź na tym ekranie")) { commandCenter.requestSearchFocus(on: selection.tab) }
+                .keyboardShortcut("f", modifiers: .command)
+                .disabled(!selection.tab.hasSearchField)
 
             Button(tr("Znajdź w spisie aplikacji")) {
                 selection = .inventory
                 commandCenter.requestInventorySearchFocus()
             }
-            .keyboardShortcut("f", modifiers: .command)
+            .keyboardShortcut("f", modifiers: [.command, .shift])
 
             Divider()
 
@@ -146,6 +241,11 @@ struct WegaCommands: Commands {
                 Button(item.element.label) { selection = item.element }
                     .keyboardShortcut(Self.numberKey(item.offset + 1), modifiers: .command)
             }
+        }
+
+        // Replaces the default item, which only says that help is not available.
+        CommandGroup(replacing: .help) {
+            Button(tr("Przewodnik po Wedze")) { openURL(AppEndpoints.shared.userGuideURL) }
         }
     }
 

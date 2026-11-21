@@ -205,5 +205,10 @@ extension Translations {
         "Wyczyść filtry": "Clear Filters",
         "Nie znalazłam aplikacji w wybranych folderach. Sprawdź katalogi skanowania albo odśwież spis.":
             "I found no apps in the selected folders. Check the scan folders or refresh the inventory.",
+        "Znajdź na tym ekranie": "Find on This Screen",
+        "Anuluj skan": "Cancel Scan",
+        "Zaznacz wszystkie widoczne": "Select All Visible",
+        "Pokaż panel szczegółów": "Show Inspector",
+        "Przewodnik po Wedze": "Wega User Guide",
     ]
 }

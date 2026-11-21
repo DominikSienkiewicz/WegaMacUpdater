@@ -89,7 +89,7 @@ struct UpgradeProgressBar: View {
                 .frame(minWidth: 0, maxWidth: .infinity)
             Text(label)
                 .font(.wega(.subheadline, monospaced: true))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(tr("Postęp aktualizacji"))
@@ -135,6 +135,7 @@ struct BrewLogPanel: View {
     var tapTrust: TapTrustActions? = nil
     let onClose: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var tapTrustPlan: [TapTrustRemedy] = []
 
     /// Taps named by the warning in the log; the receipts are read again only when these change.
@@ -154,8 +155,12 @@ struct BrewLogPanel: View {
                     Image(systemName: "xmark")
                         .font(.wega(.caption, weight: .semibold))
                         .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // The 28 pt hit area overhangs the header's padding rather than making it taller.
+                .padding(.vertical, -7)
                 .accessibilityLabel(tr("Zamknij"))
             }
             .padding(.horizontal, 14)
@@ -185,7 +190,7 @@ struct BrewLogPanel: View {
                 }
                 .frame(maxHeight: 220)
                 .onChange(of: lines.count) { _, _ in
-                    withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                    withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
             }
         }

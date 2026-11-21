@@ -16,6 +16,8 @@ struct UninstallView: View {
     @State private var protections:    [String: UninstallProtection] = [:]
     @State private var selected:       Set<String>       = []
     @State private var search:         String            = ""
+    /// UXP-23 — ⌘F focuses the search field below.
+    @FocusState private var searchFocused: Bool
     @StateObject private var operations = UninstallCoordinator()
     /// What the uninstall changes is what the inventory lists; it is told once the run ends.
     @EnvironmentObject private var inventory: InventoryStore
@@ -263,6 +265,8 @@ struct UninstallView: View {
         }
         // UX-11c — native `.searchable` in place of the header's hand-built search field.
         .searchable(text: $search, prompt: tr("Szukaj…"))
+        .searchFocused($searchFocused)
+        .receivesSearchFocusRequests(on: .uninstall) { searchFocused = true }
         .sheet(isPresented: $showDialog) {
             UninstallDialog(
                 targets:     pendingUninstallTargets,
