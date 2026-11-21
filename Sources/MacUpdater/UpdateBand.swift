@@ -20,6 +20,11 @@ enum UpdateBandLayout {
     /// compact and refreshing); three would not (193 pt).
     var headlineLineLimit: Int { 2 }
 
+    /// How many lines the sentence under the headline may take while a scan runs. Two in every
+    /// layout: one cut „Zaznaczanie wróci, gdy skan się skończy.” in the compact band's 220 pt
+    /// column. The scan state has no queue summary, so the second line still fits the band.
+    var scanLineLimit: Int { 2 }
+
     /// The round button's diameter in this layout.
     var buttonDiameter: CGFloat {
         switch self {
@@ -142,7 +147,7 @@ struct UpdateBand<Action: View>: View {
             Text(scan?.line ?? presentation.line)
                 .font(.wega(.callout))
                 .foregroundStyle(Color.wegaBandSecondaryText)
-                .lineLimit(layout == .regular ? 2 : 1)
+                .lineLimit(scan == nil ? (layout == .regular ? 2 : 1) : layout.scanLineLimit)
             if layout != .regular {
                 if let scan {
                     scanSummary(scan)

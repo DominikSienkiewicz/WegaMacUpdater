@@ -78,6 +78,14 @@ final class UpdateBandViewTests: XCTestCase {
         )
     }
 
+    /// The scan state before the vendor phase: the line says why selecting waits.
+    private var scanNoteFixture: UpdateBandScanPresentation {
+        UpdateBandScanPresentation(
+            progress: .running(.npm), catalogRefreshing: false, startedAt: Date(timeIntervalSince1970: 0),
+            manual: nil, foundSoFar: 22
+        )
+    }
+
     func testTheLayoutRuleSwitchesAtTheBreakpoint() {
         XCTAssertEqual(UpdateBandLayout.style(forWidth: 479), .narrow)
         XCTAssertEqual(UpdateBandLayout.style(forWidth: 480), .compact)
@@ -119,7 +127,7 @@ final class UpdateBandViewTests: XCTestCase {
 
     func testTheBandNeverChangesHeight() {
         for language in [AppLanguage.pl, .en] {
-            for scan in [nil, scanFixture] {
+            for scan in [nil, scanFixture, scanNoteFixture] {
                 for width in [240, 368, 380, 388, 480, 520, 700, 819, 820, 1100] as [CGFloat] {
                     let height = withLanguage(language) {
                         let band = UpdateBand(
@@ -372,7 +380,7 @@ final class UpdateBandViewTests: XCTestCase {
         for bandWidth in Self.narrowestBandWidths {
             let layout = UpdateBandLayout.style(forWidth: bandWidth)
             for language in [AppLanguage.pl, .en] {
-                for scan in [nil, scanFixture] {
+                for scan in [nil, scanFixture, scanNoteFixture] {
                     let height = withLanguage(language) {
                         let band = UpdateBand(
                             presentation: presentation(count: 22, note: tr("sprawdzenie niepełne")),
@@ -414,6 +422,30 @@ final class UpdateBandViewTests: XCTestCase {
                 }
             }
         }
+    }
+
+    /// UXP-13 — the sentence under the scan's headline: why selecting waits, then the vendor
+    /// count. Cut, the note stops explaining the inert list, so it must fit its line limit at
+    /// each layout's narrowest width.
+    func testTheScanLineIsNeverTruncated() throws {
+        for bandWidth in Self.narrowestBandWidths {
+            let layout = UpdateBandLayout.style(forWidth: bandWidth)
+            let font = Font.wega(.callout)
+            let column = headlineColumnWidth(bandWidth: bandWidth)
+            let lines = Array(repeating: "Ag", count: layout.scanLineLimit).joined(separator: "\n")
+            let allowed = NSHostingView(rootView: Text(verbatim: lines).font(font).frame(width: column)).fittingSize.height
+            for language in [AppLanguage.pl, .en] {
+                for scan in [scanNoteFixture, scanFixture] {
+                    let line = withLanguage(language) { scan.line }
+                    let needed = NSHostingView(rootView: Text(verbatim: line).font(font)
+                        .frame(width: column).fixedSize(horizontal: false, vertical: true)).fittingSize.height
+                    XCTAssertLessThanOrEqual(needed, allowed, "\(language), band \(bandWidth) pt (\(layout)): \"\(line)\" needs \(needed) pt of \(allowed)")
+                }
+            }
+        }
+        let text = try source("Sources/MacUpdater/UpdateBand.swift")
+        XCTAssertTrue(text.contains(".lineLimit(scan == nil ? (layout == .regular ? 2 : 1) : layout.scanLineLimit)"),
+                      "the band draws the line at the limit measured here")
     }
 
     func testTheUndoLineIsNeverTheOneThatGetsDropped() throws {
