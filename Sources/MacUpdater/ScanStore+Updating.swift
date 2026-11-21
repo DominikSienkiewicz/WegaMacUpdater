@@ -54,7 +54,8 @@ extension ScanStore {
         emitActivitySignal(.updating)
         brewLog = []
         showLog = true
-        emitWegaState(WegaState(pose: .sniff, line: tr("Aktualizuję, chwila…")))
+        // C2 — Wega stands still for a run; she sniffs only while a scan runs.
+        emitWegaState(WegaState(pose: .idle, line: tr("Aktualizuję, chwila…")))
 
         let plan          = UpdatePlanner.plan(selectedKeys: targetKeys)
         // The rows this run is about, captured before anything changes: the post-upgrade

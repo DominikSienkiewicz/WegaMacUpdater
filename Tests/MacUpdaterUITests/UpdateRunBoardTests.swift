@@ -64,6 +64,19 @@ struct UpdateRunBoardTests {
         }
     }
 
+    /// Wega stands still for the whole run: she sniffs only while a scan runs, so the state the
+    /// run starts with is calm, and its words stay.
+    @Test func aRunStartsWithWegaStandingStill() async throws {
+        let (harness, keys) = Self.harness(npmFails: false)
+        let recorder = WegaStateRecorder()
+        harness.store.bind(ScanSinks(wegaState: { recorder.states.append($0) }))
+
+        await harness.store.runUpdate(targetKeys: keys.all)
+
+        let start = try #require(recorder.states.first { $0.line == tr("Aktualizuję, chwila…") }, "the run announced itself")
+        #expect(start.pose == .idle)
+    }
+
     @Test func aRunWalksEveryRowAndLaneThroughWhatItKnowsAndClearsTheBoard() async {
         let (harness, keys) = Self.harness(npmFails: false)
         let recorder = BoardRecorder()
@@ -284,6 +297,12 @@ struct UpdateRunBoardTests {
     private func compact(_ source: String) -> String {
         source.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
+}
+
+/// Every Wega state the store emitted, in order.
+@MainActor
+private final class WegaStateRecorder {
+    var states: [WegaState] = []
 }
 
 /// Every board the store published during a run, read back per row or per lane as the
