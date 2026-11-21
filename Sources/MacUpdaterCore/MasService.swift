@@ -5,6 +5,9 @@ public enum MasServiceError: Error, Equatable, LocalizedError {
     case masNotFound
     case incompleteQueryOutput(arguments: [String])
     case commandFailed(arguments: [String], result: ProcessResult)
+    /// `mas` needs `sudo`, and Wega asks for no administrator password while the settings `sudo`
+    /// reads cannot be trusted (owner decision 2026-11-21).
+    case passwordPromptHeld(arguments: [String])
 
     public var errorDescription: String? {
         switch self {
@@ -14,6 +17,8 @@ public enum MasServiceError: Error, Equatable, LocalizedError {
             return "mas \(arguments.joined(separator: " ")) returned diagnostics or unrecognized rows."
         case .commandFailed(let arguments, let result):
             return "mas \(arguments.joined(separator: " ")) failed with exit code \(result.exitCode): \(result.stderr)"
+        case .passwordPromptHeld(let arguments):
+            return "mas \(arguments.joined(separator: " ")) needs the administrator password, and Wega does not ask for it while the settings sudo reads cannot be trusted. The Touch ID card in Settings says what to do."
         }
     }
 }
@@ -24,19 +29,23 @@ public final class MasService: @unchecked Sendable {
     private let parser: MasOutdatedParser
     private let listParser: MasListParser
     private let searchParser: MasSearchParser
+    /// Asked right before `sudo -v` would raise a prompt; the app's gate reads the settings again.
+    private let passwordPromptsAllowed: @Sendable () -> Bool
 
     public init(
         locator: BinaryLocator = BinaryLocator(),
         runner: ProcessRunning = ProcessRunner(),
         parser: MasOutdatedParser = MasOutdatedParser(),
         listParser: MasListParser = MasListParser(),
-        searchParser: MasSearchParser = MasSearchParser()
+        searchParser: MasSearchParser = MasSearchParser(),
+        passwordPromptsAllowed: @escaping @Sendable () -> Bool = { SudoPasswordPromptGate.shared.check() == nil }
     ) {
         self.locator = locator
         self.runner = runner
         self.parser = parser
         self.listParser = listParser
         self.searchParser = searchParser
+        self.passwordPromptsAllowed = passwordPromptsAllowed
     }
 
     public func outdated() async throws -> [MasOutdatedApp] {
@@ -74,6 +83,9 @@ public final class MasService: @unchecked Sendable {
             try ensureSuccess(first, arguments: arguments)
             return first
         }
+        // Owner decision 2026-11-21: `sudo` reads its settings before it asks, so while they
+        // cannot be trusted no prompt is raised for it, by askpass or by Touch ID.
+        guard passwordPromptsAllowed() else { throw MasServiceError.passwordPromptHeld(arguments: arguments) }
         try await prewarmSudoTimestamp()
         let retry = try await runMas(arguments, timeouts: .download)
         try ensureSuccess(retry, arguments: arguments)
