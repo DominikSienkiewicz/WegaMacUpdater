@@ -25,6 +25,8 @@ extension Translations {
         "Otwórz stronę wydań": "Open Releases Page",
         "Część plików Wegi (%@) leży na innym woluminie niż folder /Applications albo na woluminie, który pomija właścicieli plików.":
             "Some of Wega's files (%@) are on a different volume from the /Applications folder, or on one that ignores file ownership.",
+        "Ta kopia Wegi nie może używać pomocnika, więc nie sprawdzi tej instalacji. Zakończ ją i otwórz Wegę zainstalowaną z pakietu .pkg w folderze /Applications. Do tego czasu dalsze zmiany są zablokowane.":
+            "This copy of Wega can't use the helper, so it can't check this installation. Quit it and open the Wega installed from the .pkg in the /Applications folder. Until then, further changes are blocked.",
         "Usunęłam pomocnika Wegi": "I removed the Wega helper",
         "Był zarejestrowany z kopii Wegi, którą może zmienić ktoś inny niż root, a macOS uruchamia go jako root. Jeśli go potrzebujesz, zainstaluj Wegę z pakietu .pkg.":
             "It was registered from a copy of Wega that someone other than root can change, and macOS runs it as root. If you need it, install Wega from the .pkg.",

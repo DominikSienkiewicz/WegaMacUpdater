@@ -34,6 +34,8 @@ final class SelfUpdateController: ObservableObject {
         var installTracked: (@MainActor @Sendable (URL, String) async throws -> Bool)? = nil
         var hasPendingInstallation: @MainActor @Sendable () -> Bool = { false }
         var reconcileInstallation: (@MainActor @Sendable () async throws -> PendingHelperInstallation?)? = nil
+        /// Z14: whether this copy passes the bundle gate. The helper serves no copy that fails it.
+        var bundleTrust: @MainActor @Sendable () -> HelperBundleTrust = { .trusted }
 
         static let live = Dependencies(
             check: { await WegaSelfUpdateChecker().check() },
@@ -87,7 +89,8 @@ final class SelfUpdateController: ObservableObject {
             hasPendingInstallation: { PendingHelperInstallationStore.shared.hasPending },
             reconcileInstallation: {
                 try await PrivilegedHelperClient.shared.reconcilePackageInstallation()
-            }
+            },
+            bundleTrust: { PrivilegedHelperClient.shared.bundleTrust }
         )
     }
 
@@ -115,6 +118,14 @@ final class SelfUpdateController: ObservableObject {
         case .idle, .checking, .installedPendingRestart, .installationUncertain: return nil
         }
     }
+
+    /// Z14, design review R8: an installation whose outcome is unknown, seen from a copy that fails
+    /// the bundle gate. Only the copy installed from the .pkg can check and settle it.
+    var pendingInstallationNeedsInstalledCopy: Bool {
+        state == .installationUncertain && isRefusedCopy
+    }
+
+    private var isRefusedCopy: Bool { dependencies.bundleTrust() != .trusted }
 
     var isChecking: Bool { state == .checking }
 
@@ -175,12 +186,14 @@ final class SelfUpdateController: ObservableObject {
             WegaLog.error(.helper, "Odczyt wyniku instalacji: \(error.localizedDescription)")
             let pending = dependencies.hasPendingInstallation()
             state = pending ? .installationUncertain : .idle
-            onWegaState(WegaState(pose: .alert, line: pending ? Self.uncertainMessage : SelfUpdatePresentation.message(for: .failed)))
+            onWegaState(WegaState(pose: .alert, line: pending ? uncertainMessage : SelfUpdatePresentation.message(for: .failed)))
         }
     }
 
-    private static var uncertainMessage: String {
-        tr("Wynik instalacji jest nieznany. Dalsze zmiany są zablokowane — sprawdź stan instalacji w Ustawieniach.")
+    private var uncertainMessage: String {
+        isRefusedCopy
+            ? SelfUpdatePresentation.openInstalledCopy
+            : tr("Wynik instalacji jest nieznany. Dalsze zmiany są zablokowane — sprawdź stan instalacji w Ustawieniach.")
     }
 
     func apply(
@@ -191,7 +204,7 @@ final class SelfUpdateController: ObservableObject {
         guard !isDownloading else { return }
         guard state != .installationUncertain, !dependencies.hasPendingInstallation() else {
             state = .installationUncertain
-            onWegaState(WegaState(pose: .alert, line: Self.uncertainMessage))
+            onWegaState(WegaState(pose: .alert, line: uncertainMessage))
             return
         }
         let previousResult = result
@@ -248,7 +261,7 @@ final class SelfUpdateController: ObservableObject {
             WegaLog.error(.helper, "Instalacja przez helper nie powiodła się: \(error.localizedDescription)")
             if dependencies.hasPendingInstallation() {
                 finalState = .installationUncertain
-                onWegaState(WegaState(pose: .alert, line: Self.uncertainMessage))
+                onWegaState(WegaState(pose: .alert, line: uncertainMessage))
             } else if await openVerifiedPackage(for: action, at: destination) {
                 onWegaState(WegaState(pose: .happy, line: SelfUpdatePresentation.message(for: .opened)))
             } else {

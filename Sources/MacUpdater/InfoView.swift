@@ -583,7 +583,7 @@ extension InfoView {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(tr("Nie potwierdzono zakończenia instalacji"))
                         .font(.wega(.callout, weight: .semibold))
-                    Text(tr("Instalator może nadal działać. Dalsze zmiany są zablokowane; nie uruchamiaj drugiego instalatora."))
+                    Text(SelfUpdatePresentation.uncertainInstallationDetail(fromRefusedCopy: selfUpdateController.pendingInstallationNeedsInstalledCopy))
                         .font(.wega(.footnote))
                         .fixedSize(horizontal: false, vertical: true)
                 }
