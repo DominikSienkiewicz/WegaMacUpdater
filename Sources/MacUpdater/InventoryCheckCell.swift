@@ -52,6 +52,18 @@ struct InventoryCheckPresentation {
     }
 }
 
+/// Which installation checks Inventory's statuses read: the background round's when it is newer
+/// than the window's scan, the window's otherwise, one per installation.
+enum InventoryCheckSource {
+    static func checksByPath(
+        scan: [InstallationCheck], scanCheckedAt: Date?, background: MenuBarScanResult?
+    ) -> [InstallationIdentity: InstallationCheck] {
+        let checks = (background?.scannedAt ?? .distantPast) > (scanCheckedAt ?? .distantPast)
+            ? background?.installationChecks ?? [] : scan
+        return Dictionary(checks.map { (InstallationIdentity(path: $0.path), $0) }, uniquingKeysWith: { _, last in last })
+    }
+}
+
 struct InventoryCheckCell: View {
     let presentation: InventoryCheckPresentation
     @State private var showsDetails = false

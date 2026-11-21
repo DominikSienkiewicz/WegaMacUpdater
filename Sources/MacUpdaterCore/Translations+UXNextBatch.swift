@@ -40,5 +40,18 @@ extension Translations {
         "%@: zainstalowana aplikacja ma zaufany podpis producenta.":
             "%@: the installed app has the trusted developer signature.",
         "Sprawdzam aktualizacje w oknie Wegi…": "Checking for updates in the Wega window…",
+        "Znajdź aplikację": "Find an app",
+        "Na liście aktualizacji:": "On the update list:",
+        "i więcej — zawęź wyszukiwanie": "and more — narrow the search",
+        "%@ — aktualna (%@, sprawdzono %@ przez %@)": "%@ — up to date (%@, checked %@ via %@)",
+        "%@ — nie wiem, skąd ją aktualizować": "%@ — I don't know where to update it from",
+        "%@ — sprawdzenie się nie udało, spróbuję przy następnym skanie": "%@ — the check failed, I'll try again next scan",
+        "%@ — nie mam aktualnego wyniku, sprawdzę ją przy następnym skanie": "%@ — I have no current result; I'll check it next scan",
+        "%@ — ukryta przez Twoją regułę": "%@ — hidden by your rule",
+        "Pokaż reguły": "Show Rules",
+        "Nie mam jeszcze spisu aplikacji, więc nie wiem, co z „%@”.":
+            "I haven't read the app inventory yet, so I can't tell about “%@”.",
+        "Otwórz Spis": "Open Inventory",
+        "Nie widzę „%@” wśród aplikacji na tym Macu.": "I can't see “%@” among the apps on this Mac.",
     ]
 }

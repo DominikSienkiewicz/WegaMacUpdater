@@ -34,10 +34,7 @@ struct InventoryView: View {
     @FocusState private var searchFocused: Bool
 
     private var checksByPath: [InstallationIdentity: InstallationCheck] {
-        let background = menuBar.lastResult
-        let checks = (background?.scannedAt ?? .distantPast) > (scanStore.lastCheck ?? .distantPast)
-            ? background?.installationChecks ?? [] : scanStore.installationChecks
-        return Dictionary(checks.map { (InstallationIdentity(path: $0.path), $0) }, uniquingKeysWith: { _, last in last })
+        InventoryCheckSource.checksByPath(scan: scanStore.installationChecks, scanCheckedAt: scanStore.lastCheck, background: menuBar.lastResult)
     }
 
     private func presentation(for app: ApplicationInfo, checks: [InstallationIdentity: InstallationCheck], now: Date) -> InventoryCheckPresentation {

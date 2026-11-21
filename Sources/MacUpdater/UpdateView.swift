@@ -41,6 +41,9 @@ struct UpdateView: View {
     var onUndoableCount:  ((Int) -> Void)? = nil
     /// UX-16 — the scope bar picks a category; the selection that carries it is the window's.
     var onScopeChange:    ((UpdateFilter) -> Void)? = nil
+    /// UXP-35 — ⌘F's query, typed in the field `DetailColumn` mounts beside this view. It never
+    /// filters the list; the row above the list answers it.
+    var searchQuery: String = ""
     /// Wega's current line — a quip or her state's line — which the band above the list
     /// speaks.
     let wegaLine: String
@@ -50,6 +53,8 @@ struct UpdateView: View {
     /// Scan results and the tasks that produce them live above the language re-key,
     /// so switching language mid-scan neither loses the list nor orphans the task.
     @EnvironmentObject private var scan: ScanStore
+    /// Read, never started, by the search's answer: the read asks the network for the cask catalog.
+    @EnvironmentObject private var inventory: InventoryStore
     /// False while another destination covers this screen; see `EnvironmentValues.updatesOnScreen`.
     @Environment(\.updatesOnScreen) private var onScreen
 
@@ -412,6 +417,14 @@ struct UpdateView: View {
                 $0.kind == .cask && scan.caskProfiles[$0.name]?.mayRequireAdminPassword == true
             }.map(\.name))
 
+            // UXP-35 — ⌘F answers above the list and never filters it.
+            if let answer = searchAnswer {
+                UpdatesSearchAnswerRow(answer: answer, onShow: showSearchMatch, onShowRules: { showsHiddenRules = true },
+                                       onOpenInventory: { onNavigate?(.inventory) })
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
+
             // The rows on screen are the ones the scan is in the middle of replacing, so for
             // its duration they are a report, not a menu: inert. Nothing is drawn over them
             // (UXP-13) — the band and the list header say a scan is running and why the rows
@@ -427,6 +440,30 @@ struct UpdateView: View {
     /// the batches' notes on their group headers.
     private var runListState: UpdateRunListState? {
         scan.updating ? UpdateRunListState(board: scan.runBoard, isStopping: scan.updateInterruption.isRequested) : nil
+    }
+
+    /// The list's matches, or what Inventory already knows; nil while nothing is typed.
+    private var searchAnswer: UpdatesSearchAnswer? {
+        guard UpdatesSearch.normalized(searchQuery) != nil else { return nil }
+        return UpdatesSearch.answer(
+            query: searchQuery, rows: searchRows, hiddenByRules: scan.rulesHidingResults,
+            inventory: inventory.lastReadAt == nil ? nil : inventory.apps,
+            checks: InventoryCheckSource.checksByPath(scan: scan.installationChecks, scanCheckedAt: scan.lastCheck,
+                                                      background: MenuBarAgent.shared.lastResult),
+            policies: policies.policiesMap, now: Date()
+        )
+    }
+
+    private var searchRows: [UpdatesSearch.Row] {
+        UpdatesSearch.rows(items: allItems, visibleKeys: Set(visibleItems.map(\.key)), caskAppPaths: scan.caskIconPaths,
+                           manual: visibleManual, filter: updateFilter, isSecurity: scan.isSecurityApp)
+    }
+
+    /// Opens a match in the inspector. One the category on screen hides brings back „Wszystkie”
+    /// first, which keeps the inspection (`UpdateFilterInteraction`).
+    private func showSearchMatch(_ row: UpdatesSearch.Row) {
+        if !row.inCurrentScope { onScopeChange?(.all) }
+        scan.inspectedKey = row.key
     }
 
     /// UX-16 — shown once there is something to filter, and kept while a scope is applied so
