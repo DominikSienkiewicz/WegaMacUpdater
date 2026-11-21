@@ -32,8 +32,8 @@ see [`CONTRIBUTING.md`](CONTRIBUTING.md). To report a security problem, see
 You do **not** need to open a terminal for everyday use, and Wega never asks for your Homebrew
 or App Store passwords. Two setups can still send you there: installing Homebrew itself (the
 *"install Homebrew"* card shows the command and a **Copy command** button), and turning on
-Touch ID for `sudo` when the optional Wega helper is not installed (the Touch ID card then
-shows a one-line command to paste into Terminal, to turn it on or off).
+Touch ID for `sudo` on or off when the optional Wega helper is not installed or is out of date
+(the Touch ID card can then show a one-line command to paste into Terminal).
 
 ### Install the app
 
@@ -155,7 +155,7 @@ installed copy, separately from its Brew/App Store/manual origin. Click the stat
 the sources, last attempt and last complete check. **Wymaga sprawdzenia** (Needs checking)
 filters missing evidence, unknown sources, partial failures and stale results, including
 updates found alongside a source failure. Ignored, pinned or skipped available updates
-read **Ukryte przez politykę** (Hidden by policy); the check itself still ran.
+read **Ukryte przez Twoją regułę** (Hidden by your rule); the check itself still ran.
 
 Inventory keeps its last read while you move between screens, and says when it was made —
 **"Read today, 08:12"**. After something changes the installed apps (an update run, a background
@@ -730,21 +730,24 @@ your Mac, in Terminal too, not only to Wega. Turn it on with **Use Touch ID Inst
 the **Touch ID for administrator commands** card (**Settings → Permissions & Privacy**); it
 needs administrator rights once, to write `/etc/pam.d/sudo_local`. With the helper installed,
 Wega does that for you, and only an administrator signed in at this Mac can ask for it. The
-helper checks `/etc/pam.d`, `sudo_local` and Apple's `sudo_local.template` first, and changes
+helper checks `/etc/pam.d`, `sudo_local` and, only when there is no `sudo_local` yet, Apple's
+`sudo_local.template` first, and changes
 nothing when one of them can be changed by someone other than root, is not a regular file,
 is larger than 64 KiB or is not plain text. It writes nothing when `sudo_local` already has
 the line, and reads the file again afterwards; the card shows success only when that file does
 have it. Each refusal is explained on the card, and after a refusal the card does not offer the
-Terminal command, since that command goes through `sudo` too. When the helper is missing, or
-out of date for turning Touch ID on (it needs protocol 8), the card shows a one-line command to copy
-(**Copy command**) or to run in Terminal (**Open in Terminal**). It runs `/usr/bin/sudo`, not
-whatever `sudo` comes first on your `PATH`, and it refuses, changing nothing, an existing
-`sudo_local` that is a link, is not a regular file, is not owned by root or can be written by
-group or others; if the last line of the file has no line break, it ends that line before
+Terminal command, since that command goes through `sudo` too. When you click the button and the helper
+is missing, or out of date for turning Touch ID on (it needs protocol 8), the card shows a one-line
+command to copy (**Copy command**) or to run in Terminal (**Open in Terminal**). It runs
+`/usr/bin/sudo`, not whatever `sudo` comes first on your `PATH`, and it refuses, changing nothing,
+an existing `sudo_local` that is a link, is not a regular file, is not owned by root, can be
+written by group or others or has an ACL, and an existing `sudo_local.template` that is a link,
+is not owned by root, can be written by group or others or has an ACL (a missing template is
+fine); if the last line of the file has no line break, it ends that line before
 adding the directive.
 
 **When the card offers no command and no button.** The card then names the problem, says to
-repair it from recoveryOS and not to type a password into `sudo` until then, even when Wega
+repair it from recoveryOS (macOS Recovery; the card uses that name) and not to type a password into `sudo` until then, even when Wega
 asks for one during an update, because `sudo` reads these settings before it asks for anything.
 That happens when `sudo_local` is not a regular file, when `sudo_local` or `/etc/pam.d` can be
 changed by someone other than root or looks different from what it should (whether Wega saw it
@@ -764,9 +767,10 @@ under the command the card warns when a directory on the `/usr/local` chain can 
 someone other than root. **Check again** reads the state anew. When the command is not shown,
 the card says what Wega found, or, without the helper, that you can turn it off by hand. If the
 helper is out of date, the card says so and asks you to remove and reinstall it or restart your
-Mac; a helper from before protocol 8 can still turn Touch ID off, restore an app, move an app
-to the Trash and finish a self-update, and only turning Touch ID on needs the restart or the
-reinstall. **What Wega does** links to
+Mac. A helper from Wega 0.8.0 or earlier (protocol 6) can still restore an app, move an app to
+the Trash and finish a self-update. Turning Touch ID on or off through it needs the restart or
+the reinstall first; until then the card can offer the Terminal commands described above.
+**What Wega does** links to
 [Turning off Touch ID for sudo](#turning-off-touch-id-for-sudo) below.
 
 ### Settings diagnostics
@@ -1006,12 +1010,16 @@ behind unless something fails, including the last cleanup step. Then open a new 
 window and run `sudo -k; sudo true`; it should ask for your password. Wega will not touch the
 file when it holds other settings, a line written differently, or anything else it did not
 expect; it says so, and you use the manual steps below. Without the helper, or with one that is
-out of date, the card can show a Terminal command that does the same removal; see above. If the card instead shows a red note
-that someone other than root can change the file or directory, or that the file looks different
-from what it should, read the repair advice below; that note can appear even
-without the helper.
+out of date, the card can show a Terminal command that does the same removal; see above. If the
+card instead shows a red note (that `sudo_local` is not a regular file; that someone other than
+root can change it, the `/etc/pam.d` directory or `/etc/pam.d/sudo`; that the file looks different
+from what it should; or that Wega cannot check these settings), do not use the manual steps below.
+Read the repair advice after them. That note can appear even without the helper.
 
-**By hand.** Follow these steps in this order.
+**By hand.** Use these steps only when the Touch ID card shows no red note. If it tells you not
+to type a password into `sudo`, skip them: step 1 runs `sudo`, and `sudo` reads the very
+settings the note is about. Repair them from recoveryOS first, as described below. Otherwise,
+follow these steps in this order.
 
 1. Open a root shell with `sudo -s` and **keep it open until the end**.
 2. Back up the file: `cp /etc/pam.d/sudo_local /etc/pam.d/sudo_local.bak`
@@ -1041,7 +1049,7 @@ or a flag you did not set, and any line in the file that you did not add. Do not
 typing your password into `sudo`: `sudo` reads that very file, so a tampered file is not a safe
 place to type it, and the same goes for an `osascript` administrator prompt: use recoveryOS only.
 
-*From recoveryOS.* Restart into recoveryOS, unlock your disk in Disk Utility first if it uses
+*From recoveryOS (macOS Recovery).* Restart into recoveryOS, unlock your disk in Disk Utility first if it uses
 FileVault and mount your Data volume, then open Terminal. There `/etc/pam.d` is recoveryOS's
 own, not your Mac's; your files are under the mounted Data volume, for example
 `/Volumes/Macintosh HD - Data/private/etc/pam.d/sudo_local` (the volume's name may differ):
@@ -1056,6 +1064,29 @@ The last command removes the ACL. When the directory is the problem, only recove
 run the same commands for the directory, `/Volumes/<name> - Data/private/etc/pam.d` (for example
 `/Volumes/Macintosh HD - Data/private/etc/pam.d`), without the `-N` one, and check
 `ls -ldeO@` on that path again afterwards.
+
+**When `sudo_local` is not a regular file.** From recoveryOS, look at it with
+`ls -leO@ "/Volumes/<name> - Data/private/etc/pam.d/sudo_local"`. If it is a link, a folder or
+anything else that is not a plain file and you did not make it so, move it aside instead of
+editing what it points to:
+`mv "/Volumes/<name> - Data/private/etc/pam.d/sudo_local" "/Volumes/<name> - Data/private/etc/pam.d/sudo_local.suspect"`.
+Touch ID for `sudo` is then off; turn it on again in Wega after you restart.
+
+**When someone other than root can change `/etc/pam.d/sudo`.** `sudo` reads this file first.
+From recoveryOS, read `/Volumes/<name> - Data/private/etc/pam.d/sudo` with `cat`; a line you did
+not add is a reason to stop and restore the file. Then set its owner and mode on that path:
+
+```
+chown root:wheel "/Volumes/Macintosh HD - Data/private/etc/pam.d/sudo"
+chmod 444 "/Volumes/Macintosh HD - Data/private/etc/pam.d/sudo"
+chmod -N "/Volumes/Macintosh HD - Data/private/etc/pam.d/sudo"
+```
+
+**When Wega says it cannot check these settings.** Wega could not read the owner, permissions or
+ACL of `/etc/pam.d`, `sudo_local` or `/etc/pam.d/sudo`, or `/etc/pam.d/sudo` is missing. Look, as
+you, without `sudo`, with `ls -ldeO@ /etc/pam.d` and
+`ls -leO@ /etc/pam.d/sudo /etc/pam.d/sudo_local`; repair anything you cannot explain from
+recoveryOS, as above.
 
 **When Wega names another policy file or directory.** Wega also stops when, once its line is
 gone, `sudo` would read another PAM file: `/etc/pam.conf`, `/usr/local/etc/pam.conf`,

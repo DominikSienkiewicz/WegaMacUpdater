@@ -28,18 +28,20 @@ them verbatim under the new version heading, so that step is never done by hand 
   card has **Turn Off Touch ID for sudo**. The helper removes only the exact
   `auth       sufficient     pam_tid.so` directive from `/etc/pam.d/sudo_local`, whoever wrote it, swaps the new file in atomically, checks it and puts the old file
   back if anything fails. It refuses a file that someone other than root can change, and the guide
-  says how to inspect and repair that safely. An older helper keeps working; the
-  Touch ID card asks you to reinstall it before turning Touch ID off.
+  says how to inspect and repair that safely. An older helper keeps its other work; the
+  Touch ID card says it is out of date and asks you to reinstall it or restart your Mac, and can
+  show the command that turns Touch ID off without the helper.
 - **Turning Touch ID for sudo on is checked like turning it off.** Through the helper it now
   needs an administrator signed in at the Mac, and refuses an unsafe `/etc/pam.d`,
-  `sudo_local` or `sudo_local.template` (someone other than root can change it, it is not a
+  `sudo_local` or, when there is no `sudo_local`, `sudo_local.template` (someone other than root can change it, it is not a
   regular file, it is over 64 KiB or it is not plain text) instead of replacing it with
   Apple's template as before. It writes nothing when `sudo_local` already has the line and
   checks the result before the card says it worked. The card explains each refusal and no
   longer offers the Terminal command after one; for an unsafe policy it says to repair it
-  from recoveryOS. This is helper protocol v8: a running v6 or v7 helper keeps rollback,
-  self-update, Trash and (v7) turning Touch ID off working, and only turning it on says the
-  helper is out of date until you restart your Mac or reinstall the helper.
+  from recoveryOS. This is helper protocol v8. A helper still running from an earlier Wega keeps rollback,
+  self-update and moving apps to the Trash working; for turning Touch ID on or off the card says
+  it is out of date, and can offer the Terminal command instead, until you restart your Mac or
+  reinstall the helper.
 - **Turn Touch ID for sudo off without the helper.** When the helper is missing or out of date,
   the Touch ID card shows a command to copy (**Copy command**) or run in Terminal (**Open in
   Terminal**) next to the guide link, but only when Touch ID is on, the settings `sudo` reads
@@ -119,7 +121,8 @@ them verbatim under the new version heading, so that step is never done by hand 
   repair; recoveryOS is the only route.
 - **The manual command to turn Touch ID on is safer.** It runs through `/usr/bin/sudo` in the C
   locale, refuses an existing `sudo_local` that is a link, is not a regular file, is not owned
-  by root or is writable by group or others, and ends an unterminated last line before adding
+  by root, is writable by group or others or has an ACL, refuses an unsafe `sudo_local.template`
+  (a link, not root's, writable by group or others, or with an ACL; a missing one is fine), and ends an unterminated last line before adding
   the directive.
 - **The helper and the app pin each other to a Developer ID signature.** Both XPC code
   requirements now demand a Developer ID certificate chain (the intermediate and leaf markers),
@@ -128,9 +131,6 @@ them verbatim under the new version heading, so that step is never done by hand 
   against both requirements.
 
 ### Fixed
-- **Open in Terminal opens the command shown beside it.** Before, the code always opened the
-  enable command whatever the card showed; it went unnoticed because only the enable command was
-  ever shown.
 - **Inventory knows about installs and undos.** It marks its read **the list may have
   changed** after an install from the list through Homebrew, a reinstall and an undo of an
   update too, so it no longer shows a stale list as current.
