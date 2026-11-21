@@ -46,6 +46,8 @@ struct TouchIDSudoDisableSourceTests {
         for leak in ["callerUID", "Data(", "String(decoding", "contents"] {
             #expect(!logging.contains(leak), "the disable log must not carry \(leak)")
         }
+        #expect(logging.contains("report.leftBehindIsPreviousFile ? \"poprzedni plik został\" : \"plik zamiany został\""),
+                "the leftover is named by what it holds, so the only copy of the original is never called Wega's temp file")
     }
 
     @Test func thePrimitivesSwapFlushAndFailClosedOnACLs() throws {

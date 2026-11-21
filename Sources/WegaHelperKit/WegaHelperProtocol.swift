@@ -27,9 +27,11 @@ import Foundation
     /// Removes the exact directive `auth       sufficient     pam_tid.so` (Apple's template line without its `#`)
     /// from `/etc/pam.d/sudo_local`, and only when nothing but blank and comment lines would remain.
     /// Takes no arguments: the paths are fixed in the helper. `code` > 0: that many lines were removed and the
-    /// result was verified. 0: no file, or no exact directive; nothing was written. −1…−11: a
-    /// `TouchIDSudoDisableRefusal`; nothing was written. −20: a step failed and `sudo_local` is the original file
-    /// again. −21: swapping back failed; `detail` is the path that holds the previous file.
+    /// result was verified. 0: no file, or no exact directive; nothing was written. −1…−9 and −11: a
+    /// `TouchIDSudoDisableRefusal`; nothing was written. −10: `sudo_local` changed while the helper worked; this can
+    /// follow a swap, and the previous file may then be left under the swap name. −20: a step failed and
+    /// `sudo_local` is the original file again. −21: swapping back failed or could not be decided; `detail` is the
+    /// path that holds the previous file.
     func disableTouchIDForSudo(withReply reply: @escaping @Sendable (Int, String?) -> Void)
 
     /// Reserves a durable operation before starting the verified installer on a worker queue.

@@ -298,6 +298,41 @@ struct TouchIDSudoDisableTransactionTests {
         #expect(!fake.events.contains("remove \(swapName)"))
     }
 
+    /// Final review: when `sudo_local` cannot be looked at before the swap back, its state is
+    /// unknown and nothing is swapped back. That is −21 with the swap name holding the original,
+    /// not "changed while I was working".
+    @Test func aFailedLookBeforeTheSwapBackSaysWhereTheOriginalIs() throws {
+        let fake = enabled()
+        let original = try #require(fake.entries["sudo_local"])
+        fake.after("swap \(swapName) sudo_local") { $0.entries["sudo_local"]?.data = Data("# damaged\n".utf8) }
+        fake.fail("facts sudo_local", occurrence: 2, with: .EIO)
+        #expect(run(fake) == TouchIDSudoDisableReport(result: .rollbackFailed(backupPath: swapPath), failedStep: .swapBack))
+        #expect(fake.entries[swapName] == original, "the swap name holds the original")
+        #expect(fake.events.filter { $0.hasPrefix("swap") }.count == 1, "nothing is swapped back blind")
+        #expect(!fake.events.contains("remove \(swapName)"))
+    }
+
+    /// A swap back the helper refused leaves the original under the swap name, a failed cleanup
+    /// after a removal too; every other leftover is the helper's own new file.
+    @Test func theLeftoverIsNamedByWhatItHolds() throws {
+        let replaced = enabled()
+        replaced.after("swap \(swapName) sudo_local") { $0.replace("sudo_local", with: "# root wrote this\n") }
+        let refusedSwapBack = run(replaced)
+        #expect(refusedSwapBack.leftBehindPath == swapPath)
+        #expect(refusedSwapBack.leftBehindIsPreviousFile)
+
+        let uncleaned = enabled()
+        uncleaned.fail("remove \(swapName)", with: .EIO)
+        #expect(run(uncleaned).leftBehindIsPreviousFile)
+
+        let ownFile = enabled()
+        ownFile.fail("swap \(swapName) sudo_local", with: .EIO)
+        ownFile.fail("remove \(swapName)", with: .EIO)
+        let failedSwap = run(ownFile)
+        #expect(failedSwap.leftBehindPath == swapPath)
+        #expect(!failedSwap.leftBehindIsPreviousFile, "the new file that never went in")
+    }
+
     /// Security re-check: a swap back that finds a file other than the original reports a change,
     /// not a failed rollback.
     @Test func aSwapBackThatFindsAnotherFileIsAChange() {

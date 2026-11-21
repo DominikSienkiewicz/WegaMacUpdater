@@ -309,9 +309,16 @@ private struct SwapTransaction {
 
     /// One swap back, decided by identity. A file other than ours in `sudo_local` means another
     /// root writer replaced it: it stays, and the original stays under the swap name. −21 only
-    /// when the swap back itself fails, so the swap name then holds the file swapped out.
+    /// when `sudo_local` cannot be looked at first or the swap back itself fails, so the swap name
+    /// then holds the file swapped out.
     private func swapBack(after trigger: TouchIDSudoDisableStep) -> Outcome {
-        guard let current = try? directory.facts(named: Self.target), current.identity == created.identity else {
+        let current: PAMPolicyFileFacts?
+        do {
+            current = try directory.facts(named: Self.target)
+        } catch {
+            return Outcome(report: TouchIDSudoDisableReport(result: .rollbackFailed(backupPath: reportedPath), failedStep: .swapBack))
+        }
+        guard let current, current.identity == created.identity else {
             return Outcome(report: TouchIDSudoDisableReport(
                 result: .refused(.changedDuringOperation), failedStep: .swapBack, leftBehindPath: reportedPath
             ))

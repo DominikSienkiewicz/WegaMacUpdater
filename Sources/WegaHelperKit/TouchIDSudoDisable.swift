@@ -1,6 +1,7 @@
 import Foundation
 
-/// Why the root helper would not turn Touch ID for `sudo` off. Nothing was written for any of them.
+/// Why the root helper would not turn Touch ID for `sudo` off. Nothing was written for any of them
+/// except −10, which can follow the swap: the previous file may then be left under the swap name.
 ///
 /// The raw value is the code `WegaPrivilegedOps.disableTouchIDForSudo` replies with.
 public enum TouchIDSudoDisableRefusal: Int, Sendable, CaseIterable {
@@ -23,7 +24,9 @@ public enum TouchIDSudoDisableRefusal: Int, Sendable, CaseIterable {
     case lineContinuation = -8
     /// A later PAM policy file exists, which `sudo` would read once nothing active is left.
     case fallbackPolicyPresent = -9
-    /// `sudo_local` changed while the helper was working on it.
+    /// `sudo_local` changed while the helper was working on it. This can follow the swap; the
+    /// helper never swaps back over another writer's file, so the previous file may then be left
+    /// under the swap name.
     case changedDuringOperation = -10
     /// A line other than the exact directive is active, so removing the directive would change
     /// what the rest of the file means.
@@ -36,7 +39,8 @@ public enum TouchIDSudoDisableResult: Equatable, Sendable {
     case removed(lines: Int)
     /// There is no `sudo_local`, or it holds no exact directive; nothing was written.
     case nothingToRemove
-    /// Nothing was written.
+    /// Nothing was written, except that −10 can follow a swap and leave the previous file under
+    /// the swap name.
     case refused(TouchIDSudoDisableRefusal)
     /// A step failed and `sudo_local` is the original file again; nothing changed.
     case restoredAfterFailure
@@ -143,6 +147,14 @@ public struct TouchIDSudoDisableReport: Equatable, Sendable {
         self.fallbackPolicyPath = fallbackPolicyPath
         self.linkCount = linkCount
         self.leftBehindPath = leftBehindPath
+    }
+
+    /// Whether `leftBehindPath` holds the file that was in `sudo_local` before the swap rather
+    /// than the helper's own new file: after a removal whose cleanup failed, and after a swap back
+    /// the helper refused because `sudo_local` no longer held its new file.
+    public var leftBehindIsPreviousFile: Bool {
+        if case .removed = result { return true }
+        return result == .refused(.changedDuringOperation) && failedStep == .swapBack
     }
 }
 

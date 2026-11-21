@@ -114,7 +114,7 @@ final class PrivilegedOps: NSObject, WegaPrivilegedOps, @unchecked Sendable {
             HelperAuditLog.logger.info("disableTouchIDForSudo: sudo_local ma dowiązań: \(links, privacy: .public)")
         }
         if let leftBehind = report.leftBehindPath {
-            let what = code > 0 ? "poprzedni plik został" : "plik zamiany został"
+            let what = report.leftBehindIsPreviousFile ? "poprzedni plik został" : "plik zamiany został"
             HelperAuditLog.logger.error("disableTouchIDForSudo: \(what, privacy: .public) pod \(leftBehind, privacy: .public)")
         }
     }
