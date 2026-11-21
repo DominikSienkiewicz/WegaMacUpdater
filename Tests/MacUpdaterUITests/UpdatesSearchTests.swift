@@ -165,7 +165,7 @@ struct UpdatesSearchTests {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         let screen = try slice(view, from: "private var screenBody: some View", to: "private var scopeBar: some View")
         let answer = try #require(screen.range(of: "UpdatesSearchAnswerRow("))
-        let list = try #require(screen.range(of: "            listColumn\n"))
+        let list = try #require(screen.range(of: "                listColumn\n"))
         #expect(answer.upperBound < list.lowerBound)
         #expect(view.contains("screenBody\n                .disabled(!ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating))"))
         #expect(screen.contains("if !row.inCurrentScope { onScopeChange?(.all) }\n        scan.inspectedKey = row.key"))

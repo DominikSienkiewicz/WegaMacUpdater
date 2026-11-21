@@ -28,22 +28,33 @@ struct UpdateBandScanPresentation: Equatable {
     let manual: ManualScanProgress?
     /// The updates on the list right now; the scan replaces them source by source.
     let foundSoFar: Int
+    /// C2 stage 4 — the scan is the check that confirms a run (`updating && isRefreshing`). The
+    /// band then says it is checking the result in its own words; the chips and the ring stay.
+    var checksRunResult: Bool = false
 
-    /// "Trwa obchód · 0:07" — counted from the scan's start, not towards an end.
+    /// "Trwa obchód · 0:07" (or "Sprawdzam wynik · 0:07") — counted from the scan's start, not
+    /// towards an end.
     func eyebrow(now: Date) -> String {
-        trf("Trwa obchód · %@", Self.elapsed(from: startedAt ?? now, to: now))
+        let elapsed = Self.elapsed(from: startedAt ?? now, to: now)
+        return checksRunResult ? trf("Sprawdzam wynik · %@", elapsed) : trf("Trwa obchód · %@", elapsed)
     }
 
-    var headline: String { ScanPhaseCopy.caption(progress: progress, catalogRefreshing: catalogRefreshing) }
+    var headline: String {
+        checksRunResult ? tr("Odświeżam listę…") : ScanPhaseCopy.caption(progress: progress, catalogRefreshing: catalogRefreshing)
+    }
 
     /// The vendor count once the vendor phase reports one; until then, or when it has no app to
-    /// ask, why the list is inert.
+    /// ask, why the list is inert. The run's check names the phase instead: the summary, not a
+    /// selection, follows it, so "Zaznaczanie wróci…" would promise the wrong thing.
     var line: String {
+        if checksRunResult { return ScanPhaseCopy.caption(progress: progress, catalogRefreshing: catalogRefreshing) }
         guard let manual, manual.totalApps > 0 else { return tr("Zaznaczanie wróci, gdy skan się skończy.") }
         return trf("Producenci: %@ %@", "\(manual.checkedApps)", trp("z %@ aplikacji", manual.totalApps))
     }
 
-    var summary: String { trp("%@ aktualizacji", foundSoFar) + " " + tr("do tej pory") }
+    var summary: String {
+        checksRunResult ? tr("Wynik pokażę po sprawdzeniu.") : trp("%@ aktualizacji", foundSoFar) + " " + tr("do tej pory")
+    }
 
     /// The strip's own phase rule, so the chips and the ring cannot claim a source the scan
     /// has not reached.

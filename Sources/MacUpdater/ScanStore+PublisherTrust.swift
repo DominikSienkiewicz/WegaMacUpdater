@@ -17,14 +17,17 @@ extension ScanStore {
         let newTeamID: String
     }
 
-    /// The action a publisher warning about `outcome` offers, or `nil` for anything but a cask.
-    func trustPublisherAction(for outcome: ItemUpdateOutcome, teamID: String?) -> BannerAction? {
-        guard outcome.kind == .cask else { return nil }
-        return .trustPublisher(token: outcome.name, teamID: teamID)
+    /// The action a publisher warning about `entry` offers: for a cask whose new or current
+    /// publisher differs, never for a rolled-back change or anything but a cask.
+    func trustPublisherAction(for entry: UpdateRunReportEntry) -> BannerAction? {
+        guard entry.offersPublisherTrust else { return nil }
+        return .trustPublisher(token: entry.name, teamID: entry.reportedTeamID)
     }
 
-    func trustNewPublisher(token: String, reportedTeamID: String?) async {
-        guard let appURL = installedAppURL(forCask: token) else {
+    /// `appURL` is the bundle the run prepared for the cask, when the caller has it; without it
+    /// the app is looked up on the list.
+    func trustNewPublisher(token: String, reportedTeamID: String?, appURL: URL? = nil) async {
+        guard let appURL = appURL ?? installedAppURL(forCask: token) else {
             showBanner(BannerData(variant: .danger, title: tr("Nie zmieniono zaufania"),
                                   message: trf("%@: nie znaleziono zainstalowanej aplikacji.", "\(token)"), action: .openLogs))
             return
@@ -43,12 +46,14 @@ extension ScanStore {
             let prompt = PublisherChangePrompt(token: token, previousTeamID: previous, newTeamID: new)
             guard dependencies.confirmPublisherChange(prompt) else { return }
             ledger.acceptPublisherChange(keys: keys, teamID: new)
+            settleRunReportPublisher(token: token)
             dependencies.rollbackLedger.clear(token: token)
             dropRowsSettledByPublisherTrust(token: token)
             WegaLog.warning(.homebrew, "\(token): użytkownik zaakceptował nowego wydawcę (\(previous ?? "—") → \(new)).")
             showBanner(BannerData(variant: .success, title: tr("Zaufano nowemu podpisowi"),
                                   message: trf("%@: ufam teraz nowemu podpisowi producenta (%@).", "\(token)", "\(new)")))
         case .alreadyTrusted:
+            settleRunReportPublisher(token: token)
             showBanner(BannerData(variant: .success, title: tr("Ten podpis już jest zaufany"),
                                   message: trf("%@: zainstalowana aplikacja ma zaufany podpis producenta.", "\(token)")))
         case .signatureUnreadable:

@@ -104,10 +104,6 @@ extension Translations {
             "Runs a Homebrew command — Wega can't undo it.",
         "Tylko kopiuje polecenie; nic teraz nie usuwa.":
             "Only copies the command; nothing is removed now.",
-        "Nie udało się zaktualizować: %@. Spróbuj jeszcze raz; jeśli to się powtórzy, otwórz Logi.":
-            "Couldn't update: %@. Try again; if it happens again, open Logs.",
-        "Homebrew zgłosił błąd. Spróbuj jeszcze raz; jeśli to się powtórzy, otwórz Logi.":
-            "Homebrew reported an error. Try again; if it happens again, open Logs.",
         "Nie zaktualizowałam: %@ — macOS potrzebuje Twojej zgody.":
             "Couldn't update: %@ — macOS needs your permission.",
         "Nie zaktualizowałam części pakietów — macOS potrzebuje Twojej zgody.":

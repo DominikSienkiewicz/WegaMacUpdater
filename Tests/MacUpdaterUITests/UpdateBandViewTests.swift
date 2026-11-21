@@ -346,11 +346,17 @@ final class UpdateBandViewTests: XCTestCase {
         XCTAssertEqual(heads, 2, "the regular and compact layouts draw Wega; the narrow one does not")
         let scanViews = try source("Sources/MacUpdater/UpdateBandScanViews.swift")
         let runViews = try source("Sources/MacUpdater/UpdateBandRunViews.swift")
+        let summaryViews = try source("Sources/MacUpdater/UpdateBandSummaryViews.swift")
         for forbidden in [".glassEffect(", "Color.wegaToffee", "Color.wegaSuccess", "Color.wegaHoney"] {
             XCTAssertFalse(text.contains(forbidden), forbidden)
             XCTAssertFalse(scanViews.contains(forbidden), "UpdateBandScanViews.swift: \(forbidden)")
             XCTAssertFalse(runViews.contains(forbidden), "UpdateBandRunViews.swift: \(forbidden)")
+            XCTAssertFalse(summaryViews.contains(forbidden), "UpdateBandSummaryViews.swift: \(forbidden)")
         }
+        XCTAssertTrue(summaryViews.contains(".accessibilityLabel(tr(\"Wynik aktualizacji\"))"))
+        XCTAssertTrue(summaryViews.contains(".help(summary.allCounts)") && summaryViews.contains(".accessibilityLabel(summary.allCounts)"),
+                      "the compact counts truncate, so their tooltip and VoiceOver carry every count")
+        XCTAssertFalse(summaryViews.contains(".animation("), "the result ring does not move")
         // The round element is the last thing in every layout, so VoiceOver reads the ring last.
         let lower = try XCTUnwrap(text.range(of: "private func content(")).upperBound
         let upper = try XCTUnwrap(text.range(of: "private func textColumn(")).lowerBound
@@ -406,21 +412,25 @@ final class UpdateBandViewTests: XCTestCase {
         XCTAssertEqual(text.components(separatedBy: "\"✓ \"").count, 2, "the check is drawn in one place only")
     }
 
-    /// The band shows only when there is something to update. A result that only waits for
-    /// restarts keeps today's heading ("Wszystko aktualne"), while the list still shows it.
+    /// The band shows only when there is something to update, or while a run, its check or its
+    /// summary is on screen (C2 stage 4: a run that empties the list keeps its band). A result
+    /// that only waits for restarts keeps today's heading ("Wszystko aktualne"), while the list
+    /// still shows it.
     func testTheBandShowsOnlyWithResults() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         let lower = try XCTUnwrap(view.range(of: "private var resultsView: some View")).lowerBound
         let upper = try XCTUnwrap(view.range(of: "private var listHeader: some View")).lowerBound
         let results = view[lower..<upper]
-        XCTAssertTrue(results.contains("if hasUpdates {"))
+        XCTAssertTrue(results.contains("if showsBand {"))
         XCTAssertTrue(results.contains("resultsBand"))
         XCTAssertFalse(results.contains("hasResults"), "restarts alone do not bring the band")
-        let otherwise = try XCTUnwrap(results.range(of: "if !hasUpdates {"), "no updates keep today's heading")
+        let otherwise = try XCTUnwrap(results.range(of: "if !showsBand {"), "no band keeps today's heading")
         XCTAssertTrue(
             results[otherwise.upperBound...].drop(while: \.isWhitespace).hasPrefix("resultsHeading"),
             "the heading is the band's other branch"
         )
+        XCTAssertTrue(view.contains("private var showsBand: Bool { hasUpdates || scan.updating || scan.runReport != nil }"),
+                      "restarts alone still do not bring the band; a run and its summary do")
         XCTAssertTrue(view.contains("private var hasUpdates: Bool {\n        !(allItems.isEmpty && visibleManual.isEmpty)\n    }"))
         let column = try XCTUnwrap(view.range(of: "private var listColumn: some View")).lowerBound
         XCTAssertTrue(view[column...].prefix(200).contains("if !hasResults"))
@@ -639,5 +649,178 @@ final class UpdateBandViewTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+}
+
+// MARK: - C2 stage 4: the check and the summary
+
+/// In an extension so the class body stays within `type_body_length`; the class's private
+/// helpers (column widths, fixtures, `height(of:font:width:)`) are visible from the same file.
+extension UpdateBandViewTests {
+    /// The run's check with its longest copy: the vendor phase, a two-digit elapsed time.
+    private var checkFixture: UpdateBandScanPresentation {
+        UpdateBandScanPresentation(
+            progress: .running(.manual), catalogRefreshing: false, startedAt: Date(timeIntervalSince1970: 0),
+            manual: ManualScanProgress(checkedApps: 12, totalApps: 31), foundSoFar: 22, checksRunResult: true
+        )
+    }
+
+    /// A summary with all six counts at two digits, the longest status („Aktualizacja
+    /// niekompletna”), an incomplete check and a backup date. Built in the caller's language.
+    private func summaryFixture(clean: Bool = false) -> UpdateBandSummaryPresentation {
+        func items(_ prefix: String, _ count: Int, _ kind: OutdatedItem.Kind, _ verdict: ItemUpdateVerdict?)
+            -> [(OutdatedItem, ItemUpdateVerdict?)] {
+            (0..<count).map { index in
+                let name = "\(prefix)-\(index)"
+                return (OutdatedItem(key: UpdatePlanner.key(name: name, kind: kind), name: name, from: "1", to: "2", kind: kind), verdict)
+            }
+        }
+        let planned = items("updated", 12, .cask, .succeeded) + (clean ? [] :
+            items("failed", 10, .formula, .executionFailed) + items("rolled", 10, .cask, .rolledBack)
+            + items("unconfirmed", 10, .npm, .notVerified) + items("idle", 10, .formula, nil))
+        let finishedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let report = UpdateRunReport.make(
+            planned: planned.map(\.0),
+            summary: UpdateRunSummary(
+                items: planned.compactMap { item, verdict in
+                    verdict.map { ItemUpdateOutcome(key: item.key, name: item.name, kind: item.kind, verdict: $0) }
+                },
+                diagnostics: [], needsSudoPassword: false
+            ),
+            startedAt: finishedAt.addingTimeInterval(-25 * 60), finishedAt: finishedAt,
+            stillOutdatedKeys: [], confirmed: true
+        )
+        return UpdateBandSummaryPresentation(
+            report: report, scanComplete: false,
+            handOffCount: clean ? 0 : 10, undoExpiry: finishedAt.addingTimeInterval(7 * 86_400)
+        )
+    }
+
+    private func eyebrowWidth(_ text: String) -> CGFloat {
+        NSHostingView(rootView: Text(verbatim: text).font(.wega(.caption, weight: .semibold, monospaced: true))
+            .tracking(0.8).textCase(.uppercase).fixedSize()).fittingSize.width
+    }
+
+    private func lineWidth(_ text: String, font: Font) -> CGFloat {
+        NSHostingView(rootView: Text(verbatim: text).font(font).fixedSize()).fittingSize.width
+    }
+
+    /// The frame always reports the band's height, so this measures what the summary has to
+    /// hold, at each layout's narrowest width and with the inspector open: the status and time
+    /// range, the count with „skan niepełny”, Wega's line, all six counts (regular) or the
+    /// compact counts, „Zamknij podsumowanie” and the result ring at the button's diameter.
+    func testTheSummaryFitsTheBandAtEveryWidth() {
+        for bandWidth in Self.runBandWidths {
+            let layout = UpdateBandLayout.style(forWidth: bandWidth)
+            let column = headlineColumnWidth(bandWidth: bandWidth)
+            let summaryColumn = layout == .regular ? WegaLayout.bandSummaryWidth : column
+            let headlineFont = Font.wega(layout.headlineStyle, weight: .semibold)
+            let linkFont = Font.wega(.callout, weight: .semibold)
+            let allowedHeadline = height(of: Array(repeating: "Ag", count: layout.headlineLineLimit).joined(separator: "\n"),
+                                         font: headlineFont, width: column)
+            for language in [AppLanguage.pl, .en] {
+                withLanguage(language) {
+                    let summary = summaryFixture()
+                    let context = "\(language), band \(bandWidth) pt (\(layout))"
+                    XCTAssertEqual(summary.report.status, .incomplete, context)
+                    XCTAssertEqual(summary.countLines.count, 6, context)
+                    let band = UpdateBand(
+                        presentation: presentation(count: 22, note: tr("skan niepełny")), scan: nil, run: nil,
+                        planLinkEnabled: true, onShowPlan: {}, summary: summary,
+                        action: { layout in Color.clear.frame(width: layout.buttonDiameter, height: layout.buttonDiameter) }
+                    )
+                    let content = NSHostingView(rootView: band.naturalContent(width: bandWidth)).fittingSize.height
+                    XCTAssertLessThanOrEqual(content, WegaLayout.bandHeight, "\(context): content is \(content) pt")
+
+                    let ring = UpdateBandResultRing(updated: summary.updated, planned: summary.planned,
+                                                    diameter: layout.buttonDiameter, accessibilityValue: summary.ringValue)
+                    XCTAssertEqual(NSHostingView(rootView: ring).fittingSize,
+                                   CGSize(width: layout.buttonDiameter, height: layout.buttonDiameter), context)
+
+                    let close = tr("Zamknij podsumowanie")
+                    let closeWidth = lineWidth(close, font: linkFont)
+                    XCTAssertLessThanOrEqual(closeWidth, summaryColumn, "\(context): \"\(close)\" needs \(closeWidth) pt")
+                    // The link-styled button draws the label on one line: with only updates the
+                    // compact controls are the link alone, the regular ones one count and the link.
+                    let clean = summaryFixture(clean: true)
+                    let drawn = NSHostingView(rootView: UpdateBandSummaryControls(summary: clean, compact: layout != .regular, onClose: {})
+                        .frame(width: summaryColumn).fixedSize(horizontal: false, vertical: true)).fittingSize.height
+                    let oneLink = height(of: close, font: linkFont, width: summaryColumn)
+                    let expected = layout == .regular ? oneLink + height(of: "Ag", font: .wega(.caption), width: summaryColumn) : oneLink
+                    XCTAssertGreaterThanOrEqual(drawn, expected - 1, "\(context): the controls draw \(drawn) pt for \(expected) pt")
+                    XCTAssertLessThanOrEqual(drawn, expected + 6, "\(context): the controls draw \(drawn) pt for \(expected) pt")
+
+                    if layout == .regular {
+                        for line in summary.countLines {
+                            let width = lineWidth(line, font: .wega(.caption))
+                            XCTAssertLessThanOrEqual(width, summaryColumn, "\(context): \"\(line)\" needs \(width) pt")
+                        }
+                    }
+                    let visible = summary.headline
+                    let neededHeadline = height(of: visible, font: headlineFont, width: column)
+                    XCTAssertLessThanOrEqual(neededHeadline, allowedHeadline, "\(context): \"\(visible)\" needs \(neededHeadline) pt")
+                    // Final review C18 — Wega's line for an incomplete run, at the lines the band
+                    // gives the summary's sentence.
+                    let summaryLineLimit = layout == .regular ? 2 : 1
+                    let allowedLine = height(of: Array(repeating: "Ag", count: summaryLineLimit).joined(separator: "\n"),
+                                             font: .wega(.callout), width: column)
+                    let neededLine = height(of: summary.line, font: .wega(.callout), width: column)
+                    XCTAssertEqual(summary.line, tr("Część pakietów się nie zaktualizowała."), context)
+                    XCTAssertLessThanOrEqual(neededLine, allowedLine, "\(context): \"\(summary.line)\" needs \(neededLine) pt of \(allowedLine)")
+                    // Where the status and its time range do not fit, the status stands alone.
+                    let status = eyebrowWidth(summary.shortEyebrow)
+                    XCTAssertLessThanOrEqual(status, column, "\(context): \"\(summary.shortEyebrow)\" needs \(status) pt")
+                }
+            }
+        }
+    }
+
+    /// The run's check is the scan state with its own words; it holds the band like the scan
+    /// does, its elapsed time and headline are never cut, and its promise of a result fits.
+    func testTheCheckFitsTheBandAtEveryWidth() {
+        let captions: [(ScanProgress, Bool)] = [
+            (.running(.brew), false), (.running(.mas), false), (.running(.npm), false), (.running(.manual), false),
+        ]
+        XCTAssertEqual(UpdateBandMode.resolve(scan: checkFixture, run: runFixture, summary: summaryFixture()), .scan(checkFixture),
+                       "the band measured below draws the check, not the run it confirms")
+        XCTAssertTrue(checkFixture.eyebrow(now: Date(timeIntervalSince1970: 725)).hasPrefix(tr("Sprawdzam wynik · %@").replacingOccurrences(of: "%@", with: "")))
+        for bandWidth in Self.runBandWidths {
+            let layout = UpdateBandLayout.style(forWidth: bandWidth)
+            let column = headlineColumnWidth(bandWidth: bandWidth)
+            let summaryColumn = layout == .regular ? WegaLayout.bandSummaryWidth : column
+            let headlineFont = Font.wega(layout.headlineStyle, weight: .semibold)
+            let allowedHeadline = height(of: Array(repeating: "Ag", count: layout.headlineLineLimit).joined(separator: "\n"),
+                                         font: headlineFont, width: column)
+            let allowedLine = height(of: Array(repeating: "Ag", count: layout.scanLineLimit).joined(separator: "\n"),
+                                     font: .wega(.callout), width: column)
+            for language in [AppLanguage.pl, .en] {
+                withLanguage(language) {
+                    let context = "\(language), band \(bandWidth) pt (\(layout))"
+                    let band = UpdateBand(
+                        presentation: presentation(count: 22, note: tr("skan niepełny")), scan: checkFixture, run: runFixture,
+                        planLinkEnabled: false, onShowPlan: {}, summary: summaryFixture(),
+                        action: { layout in Color.clear.frame(width: layout.buttonDiameter, height: layout.buttonDiameter) }
+                    )
+                    let content = NSHostingView(rootView: band.naturalContent(width: bandWidth)).fittingSize.height
+                    XCTAssertLessThanOrEqual(content, WegaLayout.bandHeight, "\(context): content is \(content) pt")
+                    let eyebrowText = checkFixture.eyebrow(now: Date(timeIntervalSince1970: 725))
+                    let eyebrow = eyebrowWidth(eyebrowText)
+                    XCTAssertLessThanOrEqual(eyebrow, column, "\(context): \"\(eyebrowText)\" needs \(eyebrow) pt")
+                    let headline = height(of: checkFixture.headline, font: headlineFont, width: column)
+                    XCTAssertLessThanOrEqual(headline, allowedHeadline, "\(context): \"\(checkFixture.headline)\"")
+                    for (progress, catalog) in captions {
+                        let line = UpdateBandScanPresentation(progress: progress, catalogRefreshing: catalog, startedAt: nil,
+                                                              manual: nil, foundSoFar: 0, checksRunResult: true).line
+                        let needed = height(of: line, font: .wega(.callout), width: column)
+                        XCTAssertLessThanOrEqual(needed, allowedLine, "\(context): \"\(line)\" needs \(needed) pt")
+                    }
+                    // The promise may take two lines wherever the band draws it.
+                    let promiseFont = Font.wega(.callout, weight: .semibold)
+                    let promise = height(of: checkFixture.summary, font: promiseFont, width: summaryColumn)
+                    let allowedPromise = height(of: "Ag\nAg", font: promiseFont, width: summaryColumn)
+                    XCTAssertLessThanOrEqual(promise, allowedPromise, "\(context): \"\(checkFixture.summary)\" needs \(promise) pt")
+                }
+            }
+        }
     }
 }

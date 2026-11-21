@@ -16,8 +16,9 @@ struct ScanControl: View {
         GlassEffectContainer(spacing: 8) {
             // A quiet launch refresh keeps `status` on `.results` so the list stays put, but
             // it is every bit as cancellable as one the user started — and just as much worth
-            // saying out loud that something is running.
-            if scan.status == .checking || scan.isRefreshing {
+            // saying out loud that something is running. The checks after a run or an undo
+            // are not: `cancelScan()` cannot reach them, so they get no „Anuluj” that does nothing.
+            if scan.canCancelScan {
                 // The progress bar lives in the scan view's centre (`checkingView`), next to
                 // the phase label and the sniffing scene — one bar, not two. The toolbar keeps
                 // only the action: cancelling the scan it started.
@@ -32,9 +33,9 @@ struct ScanControl: View {
                 // action that changes the Mac, "Zaktualizuj wybrane" in the action bar.
                 .buttonStyle(.glass)
                 .glassEffectID("scan", in: namespace)
-                // A rescan during an install would race the upgrade it is meant to describe.
-                // The button this control replaced carried the same guard.
-                .disabled(scan.updating)
+                // A rescan during an install would race the upgrade it is meant to describe, and
+                // a second scan under a check would race that check: one gate for both.
+                .disabled(!scan.canStartCheck)
             }
         }
         // A screen with nothing to scan hides the button but keeps its slot and takes it out of

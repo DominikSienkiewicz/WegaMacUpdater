@@ -47,7 +47,7 @@ struct UpdateRunInBandTests {
         let results = try slice(view, from: "private var resultsView: some View", to: "private var listHeader: some View")
         #expect(!results.contains(".overlay"), "no veil, card or material lies on the rows")
         #expect(!FileManager.default.fileExists(atPath: packageRoot().appendingPathComponent("Sources/MacUpdater/UpdateRunOverlay.swift").path))
-        for file in ["UpdateBand.swift", "UpdateBandRunViews.swift"] {
+        for file in ["UpdateBand.swift", "UpdateBandRunViews.swift", "UpdateBandSummaryViews.swift"] {
             let text = try source("Sources/MacUpdater/\(file)")
             #expect(!text.contains("Material") && !text.contains(".glassEffect("), "\(file)")
         }

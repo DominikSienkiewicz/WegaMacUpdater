@@ -83,23 +83,6 @@ struct ErrorNextStepTests {
         #expect(try source("Sources/MacUpdater/DetailColumn.swift").contains("MigrationView(onWegaState: { wegaState = $0 }, onNavigate: navigate(fromBanner:))"))
     }
 
-    @Test func aFailedUpdateSaysWhatToDoNext() {
-        withLanguage(.pl) {
-            #expect(BannerCopy.updateFailed(names: ["Slack"]) == .init(
-                message: "Nie udało się zaktualizować: Slack. Spróbuj jeszcze raz; jeśli to się powtórzy, otwórz Logi.", fullMessage: nil))
-            #expect(BannerCopy.updateFailed(names: ["Slack", "Zoom", "Figma"]).fullMessage == nil, "three names fit")
-            let six = BannerCopy.updateFailed(names: ["Slack", "Zoom", "A", "B", "C", "D"])
-            #expect(six.message == "Nie udało się zaktualizować: Slack, Zoom i 4 inne. Spróbuj jeszcze raz; jeśli to się powtórzy, otwórz Logi.")
-            #expect(six.fullMessage == "Nie udało się zaktualizować: Slack, Zoom, A, B, C, D. Spróbuj jeszcze raz; jeśli to się powtórzy, otwórz Logi.")
-            #expect(BannerCopy.updateFailed(names: []).message == "Homebrew zgłosił błąd. Spróbuj jeszcze raz; jeśli to się powtórzy, otwórz Logi.")
-        }
-        withLanguage(.en) {
-            #expect(BannerCopy.updateFailed(names: ["Slack", "Zoom", "A", "B", "C", "D"]).message
-                    == "Couldn't update: Slack, Zoom and 4 more. Try again; if it happens again, open Logs.")
-            #expect(tr("Pokaż w logach") == "Show in Logs" && tr("Pokaż wszystkie") == "Show All")
-        }
-    }
-
     @Test func aPermissionFailurePutsThePermissionFirstAndNeverSendsYouToTheLog() {
         withLanguage(.pl) {
             let text = BannerCopy.permissionNeeded(names: ["Slack", "Zoom", "A", "B", "C", "D"])
@@ -125,8 +108,14 @@ struct ErrorNextStepTests {
         let shared = try source("Sources/MacUpdater/SharedViews.swift")
         #expect(shared.contains("fullMessage: data.fullMessage"))
         #expect(shared.contains("case .openLogs:     return tr(\"Pokaż w logach\")"))
+        withLanguage(.en) {
+            #expect(tr("Pokaż w logach") == "Show in Logs" && tr("Pokaż wszystkie") == "Show All")
+        }
+        // C2 stage 4 — the summary shows every other failure; the sudo hint keeps its banner,
+        // and its button opens Settings, where Touch ID is turned on.
         let updating = try source("Sources/MacUpdater/ScanStore+Updating.swift")
-        #expect(updating.contains("action: summary.needsSudoPassword ? .openSettings : .openLogs"))
+        let sudo = try #require(updating.range(of: "} else if summary.needsSudoPassword {"))
+        #expect(updating[sudo.upperBound...].prefix(400).contains("action: .openSettings"))
         #expect(updating.contains("BannerCopy.permissionNeeded(names: failedNames)"))
     }
 }

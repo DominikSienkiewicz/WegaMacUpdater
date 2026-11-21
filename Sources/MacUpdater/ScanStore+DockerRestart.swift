@@ -30,13 +30,6 @@ extension ScanStore {
         return bundles
     }
 
-    func dockerInstallationMessage(in summary: UpdateRunSummary) -> String? {
-        guard summary.upgraded.contains(where: { $0.kind == .cask && DockerDesktopMutationGate.isDocker(token: $0.name) }) else {
-            return nil
-        }
-        return tr("Pakiety zainstalowane. Gotowość silnika Docker nie była sprawdzana.")
-    }
-
     func handleDockerRestart(_ info: RestartInfo, fields: [String: String]) async -> Bool {
         let bundleURL = restartDockerBundleURLs[info.processName]
         let dockerName = [info.appName.lowercased(), info.processName.lowercased()]

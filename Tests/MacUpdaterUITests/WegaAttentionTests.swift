@@ -41,6 +41,8 @@ struct WegaAttentionTests {
         ("UpdateView", ".wegaAttention(showUpdateConfirmation || scan.pendingForceRestart != nil)"),
         ("DockerDesktopUpdateActions", ".wegaAttention(confirmHomebrew)"),
         ("RollbackView", ".wegaAttention(showUndoConfirmation)"),
+        // C2 stage 4 — the summary asks the same undo question as the undo screen.
+        ("UpdateRunSummaryList", ".wegaAttention(showUndoConfirmation)"),
         ("UninstallView", ".wegaAttention(showDialog || showForceQuit || scanError != nil)"),
         ("CleanupView", ".wegaAttention(confirming != nil || showsPathWarning || !errorMessages.isEmpty)"),
         ("MigrationView", ".wegaAttention(confirmingApp != nil || migration.duplicateConfirmation != nil || migration.pendingForceTermination != nil || errorMessage != nil || banner?.variant == .danger)"),

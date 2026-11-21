@@ -23,6 +23,7 @@ public enum Translations {
         .merging(uninstallTexts) { first, _ in first }
         .merging(updatesActionBar.merging(uxReview) { first, _ in first }) { first, _ in first }
         .merging(uxReviewNext) { first, _ in first }
+        .merging(runSummary) { first, _ in first }
         .merging(uxReviewRest) { first, _ in first }
         .merging(uxNextBatch) { first, _ in first }
         .merging(touchIDDisable) { first, _ in first }
@@ -302,7 +303,6 @@ extension Translations {
         "odmowa": "denied",
         "nieustalone": "undetermined",
         "Część pakietów się nie zaktualizowała.": "Some packages didn't update.",
-        "Wszystko gotowe.": "All done.",
         "Ręcznie zainstalowane": "Manually installed",
         "Otwórz aplikację": "Open the application",
         "Aktualizuj przez Brew": "Update via Brew",
@@ -755,8 +755,6 @@ extension Translations {
             "The list is locked until the update finishes. You can stop it — I'll finish the current package and won't start the rest.",
         "Pokaż log": "Show log",
         "Trwa aktualizacja": "Update in progress",
-        "Zatrzymano po bieżącym pakiecie: zaktualizowano %@, pominięto %@. Nic nie zostało przerwane w połowie.":
-            "Stopped after the current package: %@ updated, %@ skipped. Nothing was cut off halfway.",
         "Przerwałam aktualizację.": "I stopped the update.",
         "Zaglądam do notatek…": "Checking my notes…",
         "Ostrzeżenia+": "Warnings+",

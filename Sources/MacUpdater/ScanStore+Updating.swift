@@ -4,8 +4,8 @@ import MacUpdaterCore
 // MARK: - Running an update
 //
 // ARCH-08 — executing a planned update and reporting what it did: the package-manager calls,
-// the per-item outcome, the banner, and the restart offer that follows. The rollback net around
-// it is `ScanStore+Rollback`; deciding *what* to run is `ScanStore+UpdatePlan`.
+// the per-item outcome, the run's report, and the restart offer that follows. The rollback net
+// around it is `ScanStore+Rollback`; deciding *what* to run is `ScanStore+UpdatePlan`.
 extension ScanStore {
     func runUpdate(targetKeys: Set<String>) async {
         let targetKeys = ServiceVendorUpdatePolicy.eligibleKeys(DockerDesktopUpdatePolicy.eligibleKeys(targetKeys))
@@ -50,6 +50,8 @@ extension ScanStore {
             return
         }
         defer { dependencies.upgradeMutex.release() }
+        // C2 stage 4 — the next run closes the previous run's summary, once it holds the lock.
+        closeRunReport()
         updating = true
         emitActivitySignal(.updating)
         brewLog = []
@@ -103,7 +105,7 @@ extension ScanStore {
         // REL-12 — zeroth boundary: stopping here also skips the snapshot/preflight work.
         guard !shouldStopUpdate(before: Array(plannedKeys)) else {
             updating = false
-            report(run: UpdateRunOutcome())
+            report(run: UpdateRunOutcome(), planned: plannedItems)
             return
         }
 
@@ -124,7 +126,7 @@ extension ScanStore {
                     plannedItems.filter { $0.kind == .cask },
                     audits: publisherVetoes
                 )
-                if !blockedRun.summary.isEmpty { report(run: blockedRun) }
+                if !blockedRun.summary.isEmpty { report(run: blockedRun, planned: plannedItems) }
                 updating = false
                 return
             }
@@ -230,11 +232,11 @@ extension ScanStore {
         // Re-query brew/mas so the list reflects reality, not optimistic clearing.
         // If a cask failed (e.g. "App source not there"), it will still appear here.
         // Suppress its icon signal — the upgrade outcome below sets the final state.
-        // M2(d) — lightweight: no second `brew update`, no second stale-cask sweep. The
-        // rescan is not a stage of the run's progress: `runCheck` replaces the results view,
-        // band included, with the scan's own screen, so the two hand over to each other.
+        // M2(d) — lightweight: no second `brew update`, no second stale-cask sweep. C2 stage 4 —
+        // quiet: the check runs in place under the run, so the band, the locked list and the log
+        // stay on screen, and the band reads `updating && isRefreshing` as "Sprawdzam wynik".
         UpdateDiagnostics.record("rescan.started", fields: ["lightweight": "true"])
-        await runCheck(emitActivity: false, lightweight: true, operationLease: operationLease)
+        await runCheck(emitActivity: false, lightweight: true, quiet: true, operationLease: operationLease)
         UpdateDiagnostics.record("rescan.result", fields: [
             "confirmed": String(Set(plannedItems.map(\.kind)).isSubset(of: confirmedSourceKinds)),
             "stillOutdatedKeys": allItems.map(\.key).sorted().joined(separator: ",")
@@ -249,21 +251,33 @@ extension ScanStore {
         run.applyRescan(stillOutdatedKeys: Set(allItems.map(\.key)),
                         confirmed: Set(plannedItems.map(\.kind)).isSubset(of: confirmedSourceKinds))
 
-        report(run: run)
+        report(run: run, planned: plannedItems,
+               caskOperationID: caskPreparation?.operation.operation.id,
+               caskAppPaths: caskPreparation?.appPaths ?? [:])
         // LT-01 — the run's committed snapshots are the undo section's content.
         refreshUndoableUpdates()
     }
 
-    /// Turns the run into what the user sees: the sticky alerts first (a failed rollback and
-    /// a changed publisher are the two things that must not be missable), then the summary
-    /// banner — green only when every item cleared every phase.
-    func report(run: UpdateRunOutcome) {
+    /// Turns the run into what the user sees: the report the after-update summary shows (C2
+    /// stage 4), the sticky alert a failed rollback earns (it must not be missable, so it is a
+    /// row and a banner), and the banners whose button fixes a failure. A changed publisher
+    /// waits in the report; `closeRunReport()` raises its sticky banner if it is still unsettled.
+    func report(run: UpdateRunOutcome, planned: [OutdatedItem], caskOperationID: UUID? = nil,
+                caskAppPaths: [String: URL] = [:]) {
         let summary = run.summary
+        let report = UpdateRunReport.make(
+            planned: planned, summary: summary,
+            skippedKeys: updateInterruption.skippedKeys, wasStopped: updateInterruption.didSkipWork,
+            startedAt: runBoard.startedAt, finishedAt: dependencies.now(),
+            caskOperationID: caskOperationID, caskAppPaths: caskAppPaths,
+            stillOutdatedKeys: Set(allItems.map(\.key)),
+            confirmed: Set(planned.map(\.kind)).isSubset(of: confirmedSourceKinds)
+        )
+        setRunReport(report)
         UpdateStageDiagnostics.recordSummary(summary)
 
-        // OBS-02 — the verdicts below drive banners that vanish with the window. The same
-        // run is also written to the durable journal, so a bug report filed tomorrow can
-        // still say what happened today.
+        // OBS-02 — the summary closes with the window. The same run is also written to the
+        // durable journal, so a bug report filed tomorrow can still say what happened today.
         dependencies.recordUpdateRun(
             UpdateJournalEntry(summary: summary, trigger: .manual, finishedAt: Date())
         )
@@ -273,35 +287,6 @@ extension ScanStore {
                                         title: tr("Nie udało się cofnąć aktualizacji"),
                                         message: trf("%@: nowa wersja nie przeszła kontroli, a przywrócenie poprzedniej nie powiodło się. Sprawdź aplikację przed użyciem.", "\(outcome.name)"),
                                         action: .openLogs))
-        }
-        for outcome in summary.publisherChanges {
-            let old: String
-            let new: String?
-            let message: String
-            var action: BannerAction?
-            switch outcome.verdict {
-            case .publisherChanged(let previous, let current):
-                old = previous
-                new = current
-                message = trf("%@: zmienił się podpis producenta (%@ → %@). Zaufaj nowemu podpisowi tylko wtedy, gdy producent zmienił konto.",
-                              "\(outcome.name)", "\(old)", "\(new ?? "—")")
-                action = trustPublisherAction(for: outcome, teamID: new)
-            case .publisherChangedAndRolledBack(let previous, let current):
-                old = previous
-                new = current
-                message = trf("%@: zmienił się podpis producenta (%@ → %@). Przywróciłam poprzednią zaufaną wersję.",
-                              "\(outcome.name)", "\(old)", "\(new ?? "—")")
-            case .publisherMismatchBeforeUpgrade(let previous, let current):
-                old = previous
-                new = current
-                message = trf("%@: podpis producenta już przed aktualizacją różnił się od zaufanego (%@ → %@). Aktualizację zablokowałam. Zaufaj nowemu podpisowi tylko wtedy, gdy producent zmienił konto.",
-                              "\(outcome.name)", "\(old)", "\(new ?? "—")")
-                action = trustPublisherAction(for: outcome, teamID: new)
-            default:
-                continue
-            }
-            showStickyBanner(BannerData(variant: .danger, title: tr("Zmienił się podpis producenta"),
-                                        message: message, action: action))
         }
 
         // REL-05 — the permission is Wega's, not this run's, so the gate is settled from what
@@ -325,32 +310,34 @@ extension ScanStore {
         let interrupted = updateInterruption.didSkipWork
         if interrupted {
             reportInterruptedRun(upgraded: summary.upgraded.count)
-            announcer.announce(AnnouncementCopy.runStopped(updated: summary.upgraded.count, total: summary.attempted))
+            announcer.announce(AnnouncementCopy.runStopped(updated: report.updatedCount, total: report.plannedCount))
         } else {
             announcer.announce(AnnouncementCopy.runFinished(
-                updated: summary.upgraded.count,
-                total: summary.attempted,
-                needsAttention: summary.notUpgraded.map(\.name)
+                updated: report.updatedCount,
+                total: report.plannedCount,
+                needsAttention: report.namesNeedingAttention
             ))
         }
-        if summary.allItemsUpgraded {
-            guard !interrupted else { return }
-            UserDefaults.standard.set(true, forKey: ReadinessPresentation.dismissedKey)
-            let count = summary.upgraded.count
-            showBanner(BannerData(variant: .success,
-                                  title: trp("Zaktualizowano %@ pakietów", count),
-                                  message: dockerInstallationMessage(in: summary) ?? tr("Wszystko gotowe.")))
+        // Success follows the report: every planned item updated. `summary.allItemsUpgraded`
+        // sees only the items that produced an outcome, so a planned row that never got one
+        // (a journal that failed before its lane) would have read "Gotowe!".
+        if report.status == .finished {
+            dependencies.defaults.set(true, forKey: ReadinessPresentation.dismissedKey)
+            let count = report.updatedCount
             emitActivitySignal(.success)
             emitWegaState(WegaState(pose: .happy, line: trp("Gotowe! %@ pakietów odświeżonych.", count)))
             WegaLog.info(.homebrew, "Zaktualizowano \(count) pakietów")
             return
         }
+        // A stop that left only untouched rows behind is a stop, and `reportInterruptedRun` said so.
+        if interrupted && summary.allItemsUpgraded { return }
 
         let failedNames = summary.notUpgraded.map(\.name)
         let permission = BannerCopy.permissionNeeded(names: failedNames)
         // REL-05 — a missing "App Management" grant outranks the sudo hint: it explains the
         // whole failure, and its `stderr` ("ditto: …: Operation not permitted") is exactly the
-        // line a user cannot act on. One named permission, one button that grants it.
+        // line a user cannot act on. One named permission, one button that grants it. Any other
+        // failure is the summary's to show: a banner only for a failure its button fixes.
         let appManagementTemplate = "%@ macOS nie pozwolił Wedze podmienić aplikacji w /Applications. Przyznaj uprawnienie „Zarządzanie aplikacjami” w Ustawieniach systemowych → Prywatność i bezpieczeństwo."
         let sudoTemplate = "%@ Cask wymaga hasła administratora. Włącz Touch ID, żeby autoryzować aktualizacje odciskiem — bez wpisywania hasła."
         if summary.needsAppManagementPermission {
@@ -361,26 +348,24 @@ extension ScanStore {
                 action: .openAppManagementSettings,
                 fullMessage: permission.fullMessage.map { trf(appManagementTemplate, $0) }
             ))
-        } else {
-            let text = summary.needsSudoPassword
-                ? BannerCopy.FailureText(message: trf(sudoTemplate, permission.message),
-                                         fullMessage: permission.fullMessage.map { trf(sudoTemplate, $0) })
-                : BannerCopy.updateFailed(names: failedNames)
+        } else if summary.needsSudoPassword {
             showBanner(BannerData(variant: .danger,
                                   title: tr("Aktualizacja niekompletna"),
-                                  message: text.message,
-                                  action: summary.needsSudoPassword ? .openSettings : .openLogs,
-                                  fullMessage: text.fullMessage))
+                                  message: trf(sudoTemplate, permission.message),
+                                  action: .openSettings,
+                                  fullMessage: permission.fullMessage.map { trf(sudoTemplate, $0) }))
         }
         emitActivitySignal(.error)
         emitWegaState(WegaState(pose: .alert, line: tr("Część pakietów się nie zaktualizowała.")))
         // Surface *why* each upgrade failed — the brew error block, not just the token
         // name — so the log explains the failure instead of only flagging it. The block
         // rides on the failure entry as one detail rather than as N loose lines, so
-        // selecting that entry for a bug report carries the explanation with it.
+        // selecting that entry for a bug report carries the explanation with it. The headline
+        // and the extra lines name the summary's rows: a row nothing attempted has no outcome
+        // for `summary.notUpgraded` to list, and its note sends the user here.
         WegaLog.error(
             .homebrew,
-            "Aktualizacja niekompletna: \(failedNames.isEmpty ? "Brew zgłosił błąd" : failedNames.joined(separator: ", "))",
+            report.failureLogHeadline,
             detail: LogDetail(
                 stderr: summary.diagnostics.joined(separator: "\n"),
                 source: "cask"
@@ -388,6 +373,9 @@ extension ScanStore {
         )
         for outcome in summary.notUpgraded {
             WegaLog.error(.homebrew, "\(outcome.name): \(outcome.verdict.logDescription)")
+        }
+        for line in report.failureLogLinesBeyondTheSummary {
+            WegaLog.error(.homebrew, line)
         }
     }
 

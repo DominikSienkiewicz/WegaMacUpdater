@@ -394,8 +394,8 @@ package is the only one installing; once several are running at once the line re
 "Installing packages — 3 of 7" instead, because naming one of three would misdescribe the
 other two. A ring beside it shows **3/7**, and the band holds **Stop After Active Installs**;
 the log opens by itself under the list when the run starts, and **Show log** appears in the band
-only after you close it. It counts **whole packages**. When the last package is done, Wega re-checks
-the list and the scan's band takes over.
+only after you close it. It counts **whole packages**. When the last package is done, Wega checks the
+result in the band, with the list still on screen, and then shows the summary (see *Honest results*).
 
 The list stays readable but locked, and its header says **"The list stays locked until the
 update ends."** Casks and npm packages say what is happening to them on their own row:
@@ -411,7 +411,7 @@ Wega; showing a percentage would mean inventing one. A single large app therefor
 ring at the same place while it downloads — the line keeps saying what is happening.
 
 A run that fails part-way stops short of the end: six of seven packages upgraded leaves the
-ring at 6/7, and the banner explains the rest.
+ring at 6/7, and the summary that follows explains the rest.
 
 The **log panel** under the list opens by itself when a run starts, and **Show log** in the band
 brings it back after you close it. It streams what the package managers are printing. Because several packages install at once, **every line is prefixed
@@ -524,13 +524,32 @@ After an upgrade, Wega detects apps that were running and offers a one-click **r
 
 ### Honest results
 
-A green *"Updated N packages"* banner appears **only when every step of every item
-succeeded** — the package manager, the security canary, the rollback net and the follow-up
-re-scan. It fades out on its own after about three seconds: it confirms something finished
-and asks nothing of you. If something didn't make it, Wega says **"Update incomplete"** and
-names what failed — and *that* banner stays until you close it, as does any banner offering
-a button. A failed rollback (new version rejected *and* old one not restored) raises its own
-**red sticky banner** telling you to check that app before using it.
+When the last install finishes, the window does not change. The band says *"Checking the result"*
+while Wega rescans to confirm what really changed; the list stays where it is, locked, and the
+rows of updated apps leave it as each source answers. Then the band and the list sum the run up.
+
+The summary counts an app as **updated only when every step succeeded** — the package manager,
+the security canary, the rollback net and the follow-up re-scan. Every app you chose lands in
+exactly one result, so none can go missing: updated, failed, rolled back, not confirmed (it was
+installed but the check could not confirm it), or not started (you stopped the run first, or it
+could not begin). The band shows how many are updated out of how many were planned, the count of
+each result, and, where the band is wide enough, the time range of the run and how long Wega
+keeps the pre-update copy (the compact and narrow bands show the status alone). A list below it
+groups the apps: *Needs attention* comes first, with a one-line reason for each and a button
+where one helps (**Trust the New Signature** if the developer's signature changed, also offered
+under *Not started* when the mismatch was found before the upgrade; a **Show log** link that
+opens the log), then *Not started*, *To finish with the developer*, and *Updated* (with **Undo**
+while the copy is kept). A cask row shows the app's name with its token beneath it. Nothing in that list can be ticked, so you cannot queue
+an update from it by mistake.
+
+A failed rollback (new version rejected *and* old one not restored) also raises a **red sticky
+banner** telling you to check that app before using it. Errors of the check itself, a missing
+permission and a failed undo stay banners too.
+
+The summary stays until you close it with **Close summary**, or with the link in the list that
+shows how many updates remain. Starting a new check or a new update also closes it. If a changed
+developer signature was still unresolved when you closed it, the warning comes back as a banner
+that stays until you close it.
 
 ### Keyboard shortcuts
 

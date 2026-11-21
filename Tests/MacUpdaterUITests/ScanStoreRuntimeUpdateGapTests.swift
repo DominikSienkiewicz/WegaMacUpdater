@@ -67,7 +67,7 @@ final class ScanStoreRuntimeUpdateGapTests: XCTestCase {
 
         XCTAssertFalse(harness.store.updating)
         XCTAssertTrue(harness.store.allItems.isEmpty)
-        XCTAssertEqual(harness.store.banner?.variant, .success)
+        XCTAssertEqual(harness.store.runReport?.status, .finished)
         XCTAssertTrue(runner.requests.contains {
             $0.arguments == ["upgrade", "--cask", "--force", "--", token]
         })
@@ -201,11 +201,15 @@ final class ScanStoreRuntimeUpdateGapTests: XCTestCase {
         XCTAssertEqual(harness.store.banner?.variant, .danger)
         XCTAssertTrue(runner.requests.isEmpty)
         mutex.release()
+        // The refusal's "Aktualizacja w toku" goes, so nothing below can be satisfied by it.
+        harness.store.dismissBanner()
+        XCTAssertNil(harness.store.banner)
 
         await harness.store.runUpdate(targetKeys: [key])
 
         XCTAssertFalse(harness.store.updating)
-        XCTAssertEqual(harness.store.banner?.variant, .danger)
+        XCTAssertNil(harness.store.banner, "the summary reports the failed row; no result banner")
+        XCTAssertEqual(harness.store.runReport?.entries.map(\.result), [.failed], "a thrown stream is a failed row")
         // Concurrent lanes interleave, so every streamed line is tagged with the package it
         // came from: the error line now reads "[<source>] error: …".
         XCTAssertTrue(harness.store.brewLog.contains { $0.contains("error:") })

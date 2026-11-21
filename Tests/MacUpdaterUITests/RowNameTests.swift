@@ -25,7 +25,9 @@ struct RowNameTests {
         #expect(try source("Sources/MacUpdater/PlanPreviewCaskRow.swift").contains("Text(token)"))
         #expect(try source("Sources/MacUpdater/InspectorPane.swift").contains("CaskDisplayName.name(token: item.name, appPath: iconPath)"))
         #expect(try source("Sources/MacUpdater/UpdateViewSupport.swift").contains("CaskDisplayName.name(token: item.token, appPath: URL(fileURLWithPath: item.appPath))"))
-        #expect(try source("Sources/MacUpdater/RollbackView.swift").contains("CaskDisplayName.name(token: $0.token, appPath: URL(fileURLWithPath: $0.appPath))"))
+        #expect(try source("Sources/MacUpdater/UndoConfirmation.swift").contains("CaskDisplayName.name(token: $0.token, appPath: URL(fileURLWithPath: $0.appPath))"),
+                "the undo question both screens ask names the app")
+        #expect(try source("Sources/MacUpdater/RollbackView.swift").contains(".undoConfirmation(target: $undoTarget, isPresented: $showUndoConfirmation)"))
     }
 
     @Test func theTokenLineIsNeverCutAtTheNarrowestDetailWidth() {

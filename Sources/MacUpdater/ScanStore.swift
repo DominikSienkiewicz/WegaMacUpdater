@@ -74,6 +74,9 @@ struct ScanStoreDependencies {
     var now: @MainActor () -> Date = { Date() }
     /// Tells the menu bar whether this window is scanning, so its own automatic check stands down.
     var reportWindowScanRunning: @MainActor (Bool) -> Void = { _ in }
+    /// Where a fully updated run records that the readiness card has done its job
+    /// (`ReadinessPresentation.dismissedKey`, which the card reads through `@AppStorage`).
+    var defaults: UserDefaults = .standard
 
     static let live = ScanStoreDependencies(
         operations: .shared,
@@ -175,23 +178,26 @@ final class ScanStore: ObservableObject {
     @Published var progress: ScanProgress?
     /// True while a scan is running *underneath* a result that stays on screen.
     ///
-    /// The launch refresh is the reason this exists. A scan normally takes the window over —
-    /// `status` goes to `.checking` and the list is replaced by the scan's own screen — which
-    /// is right when the user asked for it and wrong when the app asked for itself: the
-    /// restored list would flash up and vanish for a minute, which is worse than the stale
-    /// numbers it was meant to correct. In this mode `status` stays `.results` and only the
-    /// header and the toolbar say that something is running.
+    /// The launch refresh is the reason this exists. A scan with nothing on screen takes the
+    /// window over — `status` goes to `.checking` and the scan's own screen replaces the list —
+    /// but over a result the restored list would flash up and vanish for a minute, which is
+    /// worse than the stale numbers it was meant to correct. In this mode `status` stays
+    /// `.results` and only the band, the header and the toolbar say that something is running.
+    /// The checks after a run and after an undo over a result run this way too (C2 stage 4).
     @Published private(set) var isRefreshing = false
     /// UXP-13 — true only while `brew update` refreshes Homebrew's catalog, the slow first step
     /// of a full scan. A caption of its own rather than a fifth `ScanPhase`: the ring counts the
     /// four sources, and the catalog is not one of them.
     @Published private(set) var isRefreshingCatalog = false
     /// Whether a new check may start now: none running, none refreshing underneath a result,
-    /// and no update in flight.
-    var canStartCheck: Bool { status != .checking && !isRefreshing && !updating }
-    /// Whether ⌘. may cancel a scan now: one holds the window or refreshes under the list, as
-    /// the toolbar's „Anuluj” shows, and no update runs — the run's rescan is stopped with the run.
-    var canCancelScan: Bool { (status == .checking || isRefreshing) && !updating }
+    /// and no update or undo in flight. An undo ends in a check of its own, which would hide a
+    /// scan started while it restores the app — and that scan would close the summary.
+    var canStartCheck: Bool { status != .checking && !isRefreshing && !updating && undoBusy == nil }
+    /// Whether ⌘. and the toolbar's „Anuluj” may cancel a scan now: one holds the window or
+    /// refreshes under the list, and neither an update nor an undo runs. The run's and the
+    /// undo's checks run outside `scanTask`, so `cancelScan()` could not stop them; the run's
+    /// is stopped with the run.
+    var canCancelScan: Bool { (status == .checking || isRefreshing) && !updating && undoBusy == nil }
     /// UXP-13 — when the running scan started, for the band's elapsed time. `nil` between scans.
     @Published private(set) var scanStartedAt: Date?
     /// UXP-14 — how old the Homebrew catalog is, in minutes, when the scan on screen reused it
@@ -213,6 +219,9 @@ final class ScanStore: ObservableObject {
     /// Written only at a row's or a batch's boundary, never per output chunk, and only when
     /// it changes.
     @Published private(set) var runBoard = UpdateRunBoard.idle
+    /// C2 stage 4 — the last window run's result, open as the after-update summary until
+    /// `closeRunReport()`. Written only through `setRunReport(_:)`.
+    @Published private(set) var runReport: UpdateRunReport?
     /// The counter behind `upgradeProgress`. One per run, created by the upgrade and read
     /// by the brew streaming loop — a stored property, so it cannot live in the extension
     /// that uses it.
@@ -350,17 +359,11 @@ final class ScanStore: ObservableObject {
         updateInterruption = UpdateInterruption()
     }
 
-    /// What a stopped run says: how much it managed and how much it left untouched. The
-    /// packages it never reached are not "up to date", so this never reads as a finished run.
+    /// What a stopped run says besides its report: the summary's "Aktualizacja przerwana" and
+    /// "Nie zaczęłam" say how much it managed and what it left untouched (C2 stage 4); this keeps
+    /// Wega's line, the activity and the log line. A stopped run never reads as a finished one.
     func reportInterruptedRun(upgraded: Int) {
         let skipped = updateInterruption.skippedKeys.count
-        showBanner(BannerData(
-            variant: .danger,
-            title: tr("Aktualizacja przerwana"),
-            message: trf("Zatrzymano po bieżącym pakiecie: zaktualizowano %@, pominięto %@. Nic nie zostało przerwane w połowie.",
-                         "\(upgraded)", "\(skipped)"),
-            action: .openLogs
-        ))
         emitActivitySignal(.idle)
         emitWegaState(WegaState(pose: .idle, line: tr("Przerwałam aktualizację.")))
         WegaLog.info(.homebrew, "Aktualizacja przerwana na granicy pakietu: zaktualizowano \(upgraded), pominięto \(skipped)")
@@ -570,6 +573,12 @@ final class ScanStore: ObservableObject {
     func endRunBoard() {
         guard runBoard != .idle else { return }
         runBoard = .idle
+    }
+
+    /// The one setter of `runReport`: `report(run:planned:…)` opens it, and the doors in
+    /// `ScanStore+RunReport` close it (`closeRunReport()`) or mark an undo or a trusted publisher.
+    func setRunReport(_ report: UpdateRunReport?) {
+        runReport = report
     }
 
     /// Stores a vendor report from the scan numbered `generation`, when the rule below allows.
@@ -802,16 +811,18 @@ final class ScanStore: ObservableObject {
         selected.formIntersection(visibleItems(for: filter).map(\.key))
     }
 
+    /// Refused while the after-update summary is open: its rows are not the list's.
     func toggleAll(filter: UpdateFilter) {
+        guard runReport == nil else { return }
         restrictSelection(to: filter)
         selected = UpdatePlanner.toggledAll(selected: selected, allKeys: visibleItems(for: filter).map(\.key))
     }
 
     /// UXP-23 — ⇧⌘A: queues every batch row `filter` shows, never a manual app or a row a rule
     /// hides. Refused, like the select-all checkbox, while no result is on screen, while a
-    /// refresh replaces it and while an update owns it.
+    /// refresh replaces it, while an update owns it and while the after-update summary does.
     func selectAllVisible(filter: UpdateFilter) {
-        guard status == .results,
+        guard status == .results, runReport == nil,
               ScanSelectionGate.allowsListSelection(isRefreshing: isRefreshing, isUpdating: updating) else { return }
         restrictSelection(to: filter)
         selected.formUnion(visibleItems(for: filter).map(\.key))
@@ -856,7 +867,7 @@ final class ScanStore: ObservableObject {
     /// The banner currently on screen, if any.
     var banner: BannerData? { banners.current }
 
-    /// Ordinary notices — a scan result, an upgrade summary. The newest one wins.
+    /// Ordinary notices — a scan result, a failed run's fix. The newest one wins.
     func showBanner(_ banner: BannerData) {
         banners.enqueue(banner, sticky: false)
     }

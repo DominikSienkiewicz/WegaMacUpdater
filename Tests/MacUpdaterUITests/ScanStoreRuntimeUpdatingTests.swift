@@ -73,7 +73,9 @@ final class ScanStoreRuntimeUpdatingTests: XCTestCase {
         XCTAssertFalse(harness.store.updating)
         XCTAssertTrue(harness.store.selected.isEmpty)
         XCTAssertTrue(harness.store.allItems.isEmpty)
-        XCTAssertEqual(harness.store.banner?.variant, .success)
+        // C2 stage 4 — the run's result is the report the summary shows, not a green banner.
+        XCTAssertEqual(harness.store.runReport?.status, .finished)
+        XCTAssertEqual(harness.store.runReport?.entries.map(\.result), [.updated, .updated, .updated])
         XCTAssertEqual(harness.store.confirmedSourceKinds, [.formula, .cask, .appStore, .npm])
         XCTAssertEqual(activities, [.updating, .success])
         XCTAssertTrue(harness.store.brewLog.contains { $0.contains("Upgrading \(formula)") })
@@ -83,7 +85,7 @@ final class ScanStoreRuntimeUpdatingTests: XCTestCase {
         XCTAssertTrue(harness.store.undoableUpdates.isEmpty)
     }
 
-    func testFailedFormulaStaysVisibleAndProducesAnIncompleteBannerWithDiagnostics() async {
+    func testFailedFormulaStaysVisibleAndProducesAnIncompleteReportWithDiagnostics() async {
         let formula = "failed-formula-\(UUID().uuidString)"
         let outdatedJSON = #"{"formulae":[{"name":"\#(formula)","installed_versions":["1"],"current_version":"2"}],"casks":[]}"#
         let runner = ScanStoreRuntimeProcessRunner(
@@ -117,8 +119,9 @@ final class ScanStoreRuntimeUpdatingTests: XCTestCase {
 
         XCTAssertFalse(harness.store.updating)
         XCTAssertEqual(harness.store.allItems.map(\.name), [formula])
-        XCTAssertEqual(harness.store.banner?.variant, .danger)
-        XCTAssertTrue(harness.store.banner?.message.contains(formula) == true)
+        XCTAssertEqual(harness.store.runReport?.status, .incomplete)
+        XCTAssertEqual(harness.store.runReport?.entries.map(\.name), [formula])
+        XCTAssertEqual(harness.store.runReport?.entries.map(\.result), [.failed])
         XCTAssertTrue(harness.store.brewLog.contains { $0.contains("archive missing") })
     }
 
@@ -160,7 +163,9 @@ final class ScanStoreRuntimeUpdatingTests: XCTestCase {
 
         XCTAssertFalse(harness.store.updating)
         XCTAssertEqual(Set(harness.store.allItems.map(\.name)), ["Broken App", package])
-        XCTAssertEqual(harness.store.banner?.variant, .danger)
+        XCTAssertEqual(harness.store.runReport?.status, .incomplete)
+        XCTAssertEqual(Set(harness.store.runReport?.entries.filter { $0.result == .failed }.map(\.name) ?? []),
+                       ["Broken App", package])
         // One tagged error line per failed lane — "[<package>] error: …" and "[mas] error: …".
         XCTAssertEqual(harness.store.brewLog.filter { $0.contains("error:") }.count, 2)
     }

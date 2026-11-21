@@ -9,7 +9,8 @@ import MacUpdaterCore
 /// visible only after scrolling past everything else. It gets its own destination, in the
 /// sidebar's *Narzędzia* section next to the other repair tools.
 ///
-/// The list itself is still `UndoUpdateSection`; only its confirmation and its home moved.
+/// The list itself is still `UndoUpdateSection`; only its confirmation and its home moved. The
+/// confirmation is `UndoConfirmation`, the same one the after-update summary asks.
 /// Unlike the other destinations this one takes no `onWegaState`: the window already sets the
 /// mascot from the selection, and the one thing worth saying here — that an undo landed — is
 /// emitted by `ScanStore` itself when it completes.
@@ -29,38 +30,12 @@ struct RollbackView: View {
             content
         }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .confirmationDialog(
-                undoTarget.map { trf("Cofnąć aktualizację: %@?", "\(CaskDisplayName.name(token: $0.token, appPath: URL(fileURLWithPath: $0.appPath)))") } ?? tr("Cofnąć aktualizację?"),
-                isPresented: $showUndoConfirmation,
-                titleVisibility: .visible
-            ) {
-                if let undoTarget {
-                    Button(trf("Przywróć wersję %@", "\(undoTarget.restoredVersion ?? "—")")) {
-                        self.undoTarget = nil
-                        Task { await scan.undoUpdate(undoTarget) }
-                    }
-                }
-                Button(tr("Anuluj"), role: .cancel) { undoTarget = nil }
-            } message: {
-                if let undoTarget {
-                    Text(confirmationMessage(for: undoTarget))
-                }
-            }
+            .undoConfirmation(target: $undoTarget, isPresented: $showUndoConfirmation)
             .wegaAttention(showUndoConfirmation)
             // The retention sweep can drop a snapshot between the last refresh and the
             // moment this destination is opened, so the list is re-read on arrival rather
             // than trusted from whenever the Updates tab last looked.
             .onAppear { scan.refreshUndoableUpdates() }
-    }
-
-    private func confirmationMessage(for update: UndoableUpdate) -> String {
-        let restoration = trf(
-            "%@ zostanie zastąpiona kopią sprzed aktualizacji, a przywrócona wersja zostanie przypięta. Kopia jest trzymana do %@.",
-            update.token,
-            update.expiresAt.formatted(date: .abbreviated, time: .omitted)
-        )
-        guard let notice = RollbackScopePresentation.notice(for: update.rollbackScope) else { return restoration }
-        return "\(restoration)\n\n\(notice.localizedDescription)"
     }
 
     @ViewBuilder

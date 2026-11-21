@@ -93,6 +93,7 @@ extension ScanStore {
                 version: restoredVersion
             )
         }
+        markRunReportUndone(token: undoable.token, restoredVersion: restoredVersion)
         WegaLog.info(.homebrew, "\(undoable.token): cofnięto aktualizację na życzenie użytkownika (wersja \(restoredVersion ?? "—")), przypięto przywróconą wersję.")
         showBanner(BannerData(
             variant: .success,
@@ -104,7 +105,9 @@ extension ScanStore {
             autoDismiss: false
         ))
         emitWegaState(WegaState(pose: .happy, line: trf("Cofnęłam %@ do wersji %@.", "\(undoable.token)", "\(restoredVersion ?? "—")")))
-        await runCheck(emitActivity: false, lightweight: true, operationLease: operationLease)
+        // In place over a result (an undo from the summary keeps the summary on screen); with
+        // nothing on Updates to keep, the check takes that screen as any first scan does.
+        await runCheck(emitActivity: false, lightweight: true, quiet: scansInPlace, operationLease: operationLease)
     }
 
     private enum UndoFailure { case snapshotMissing, appMissing }
