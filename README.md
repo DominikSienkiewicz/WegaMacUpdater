@@ -146,6 +146,9 @@ Signature tests sign a throwaway bundle ad hoc with a borrowed Team ID and check
 post-upgrade publisher read finds no Team ID in it and that **Trust the New Signature** refuses it;
 one test expects at least one of the three Developer ID apps in `/Applications` with the smallest
 resource seal to keep its Team ID, and is skipped where none is installed.
+The check of Wega's own code is tried on a clone of such an app with one byte flipped in the
+slice this Mac does not run, then in a nested executable; both copies must be refused, the
+untouched app must pass, and the tests are skipped where no universal app with nested code is installed.
 Standalone-source tests cover channel identity, Mozilla beta ordering, GitHub macOS assets,
 unknown/error evidence and updater completion.
 Scanner regression tests also cover already-listed casks, independent vendor results and

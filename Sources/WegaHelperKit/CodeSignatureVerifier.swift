@@ -14,8 +14,9 @@ import Security
 /// Coverage by artifact kind (SEC-04 — every kind pins the Team ID; none of them
 /// settles for "Gatekeeper said yes", because Gatekeeper answers *"notarized by some
 /// Apple developer"*, not *"published by Wega"*):
-/// - `.app` → `SecStaticCode` + a code requirement pinning `anchor apple generic`
-///   and the leaf certificate's Team ID.
+/// - `.app` → `SecStaticCode` + a code requirement pinning a Developer ID signature
+///   (`anchor apple generic`, the Developer ID markers) and the leaf certificate's Team ID,
+///   validated in every architecture and nested code under the strict rules.
 /// - `.pkg` → Gatekeeper install assessment **plus** the Team ID parsed from
 ///   `pkgutil --check-signature`, followed by package identity/version and signed
 ///   app payload verification. The expected bundle ID and version are required.
@@ -66,29 +67,29 @@ public enum CodeSignatureVerifier {
 
     // MARK: - Pure helpers (unit-tested without the Security framework)
 
-    /// Designated code requirement pinning the Apple chain + a specific Team ID.
+    /// Designated code requirement for a Developer ID signature of one team: the Apple chain, the
+    /// Developer ID intermediate CA marker (…6.2.6, G1 and G2), the Developer ID Application leaf
+    /// marker (…6.1.13) and the leaf certificate's OU, which carries the Team ID. These are the
+    /// clauses `WegaHelper.clientRequirement()` and `helperRequirement()` pin Wega's own signature
+    /// with. The same team's Apple Development or Apple Distribution certificate, which any team
+    /// member can make, has the OU and an Apple anchor but not the markers.
     /// Pure string construction so it can be unit-tested in isolation.
     public static func teamIDRequirement(teamID: String, bundleID: String? = nil) -> String {
         var parts = ["anchor apple generic"]
         if let bundleID, !bundleID.isEmpty {
             parts.append("identifier \"\(bundleID)\"")
         }
-        // OU of the leaf certificate carries the Team ID for Developer ID signing.
+        parts.append("certificate 1[field.1.2.840.113635.100.6.2.6]")
+        parts.append("certificate leaf[field.1.2.840.113635.100.6.1.13]")
         parts.append("certificate leaf[subject.OU] = \"\(teamID)\"")
         return parts.joined(separator: " and ")
     }
 
-    /// `teamIDRequirement` plus the Developer ID intermediate CA marker (…6.2.6, G1 and G2) and
-    /// the Developer ID Application leaf marker (…6.1.13), the clauses `WegaHelper` pins Wega's
-    /// own signature with. The same team's Apple Development or Apple Distribution certificate,
-    /// which any team member can make, has the OU and an Apple anchor but not these markers.
+    /// `teamIDRequirement` without an identifier, for a publisher's claimed Team ID.
     /// Internal: `teamID` is interpolated unchecked, so callers pass a claim that has cleared
     /// `isWellFormedTeamID` first.
     static func developerIDRequirement(teamID: String) -> String {
-        "anchor apple generic "
-            + "and certificate 1[field.1.2.840.113635.100.6.2.6] "
-            + "and certificate leaf[field.1.2.840.113635.100.6.1.13] "
-            + "and certificate leaf[subject.OU] = \"\(teamID)\""
+        teamIDRequirement(teamID: teamID)
     }
 
     enum Artifact: Equatable { case app, pkg, dmg, other(String) }
@@ -148,12 +149,15 @@ public enum CodeSignatureVerifier {
 
     // MARK: - SecStaticCode (apps)
 
-    /// Validate a bundle/executable against an `anchor apple generic` + Team ID requirement.
+    /// Validate a bundle, executable or disk image of Wega's own against a Developer ID signature of
+    /// `expectedTeamID`, in every architecture and in its nested code. The default flags would
+    /// hash only the slice this Mac runs and none of the nested executables (the root helper,
+    /// askpass, the sudo shim), so a copy changed there after signing would pass.
     public static func verifyStaticCode(at url: URL, expectedTeamID: String, bundleID: String? = nil) throws {
         try checkValidity(
             at: url,
             requirement: teamIDRequirement(teamID: expectedTeamID, bundleID: bundleID),
-            flags: []
+            flags: publisherValidationFlags
         )
     }
 
@@ -181,8 +185,9 @@ public enum CodeSignatureVerifier {
         return dict[kSecCodeInfoTeamIdentifier as String] as? String
     }
 
-    /// How a publisher check validates a bundle: every architecture, not only the one this Mac
-    /// runs; nested code (frameworks, helpers, extensions); and the strict rules, the checks of
+    /// How Wega validates code whose signature it trusts, its own (`verifyStaticCode`) and a
+    /// publisher's (`validatedTeamID`): every architecture, not only the one this Mac runs; nested
+    /// code (frameworks, helpers, extensions); and the strict rules, the checks of
     /// `codesign --verify --deep --strict`. Each catches tampering that the default flags miss.
     static let publisherValidationFlags = SecCSFlags(
         rawValue: kSecCSCheckAllArchitectures | kSecCSCheckNestedCode | kSecCSStrictValidate

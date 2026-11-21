@@ -85,7 +85,8 @@ Security-relevant areas most worth a look include:
 - **Publisher pinning & rollback** — Team ID baseline checks and the
   snapshot → canary → auto-rollback chain that guards cask upgrades.
 - **Self-update identity** — package publisher, product identifier, promised version and
-  signed app payload are checked before installation. The helper repeats verification on
+  signed app payload are checked before installation; the payload needs a Developer ID
+  signature that holds in every architecture and in its nested code. The helper repeats verification on
   its private staged copy; success and recovery require the expected signed app on disk.
 - **Update/action execution** — anywhere Wega decides *what* to run against Homebrew,
   `mas`, npm, or an app's own updater.
