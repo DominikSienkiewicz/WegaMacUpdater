@@ -44,6 +44,16 @@ enum UpdateRunLane: Hashable, Sendable, CaseIterable {
         case .appStore: return .appStore
         }
     }
+
+    /// Whether the lane asks the stop switch before it starts. The App Store batch does; the
+    /// formula batch starts with the run and has no gate of its own, so a stop request never
+    /// makes it read „nie zacznę”.
+    var stopsBeforeStarting: Bool {
+        switch self {
+        case .formulae: return false
+        case .appStore: return true
+        }
+    }
 }
 
 extension CaskValidationVerdict {
@@ -99,7 +109,7 @@ struct UpdateRunListState: Equatable {
     func laneNote(for kinds: Set<OutdatedItem.Kind>) -> String? {
         let notes = UpdateRunLane.allCases.compactMap { lane -> String? in
             guard kinds.contains(lane.kind), let status = board.lanes[lane] else { return nil }
-            return "\(lane.title): \(status.laneTitle(isStopping: isStopping))"
+            return "\(lane.title): \(status.laneTitle(isStopping: isStopping && lane.stopsBeforeStarting))"
         }
         return notes.isEmpty ? nil : notes.joined(separator: " · ")
     }

@@ -50,6 +50,20 @@ struct UpdateRunBoardTests {
         withLanguage(.pl) { #expect(stopping.laneNote(for: [.appStore]) == "Mac App Store: nie zacznę") }
     }
 
+    /// The formula batch has no stop gate of its own: it starts with the run, so a stop
+    /// request must not make it promise „nie zacznę” and then start anyway.
+    @Test func onlyABatchThatAsksTheStopSwitchSaysItWillNotStart() {
+        #expect(!UpdateRunLane.formulae.stopsBeforeStarting)
+        #expect(UpdateRunLane.appStore.stopsBeforeStarting)
+        let queued = UpdateRunBoard(startedAt: .now, planned: ["f:c", "a:1"],
+                                    lanes: [.formulae: .waiting, .appStore: .waiting])
+        let stopping = UpdateRunListState(board: queued, isStopping: true)
+        withLanguage(.pl) {
+            #expect(stopping.laneNote(for: [.formula]) == "Narzędzia Homebrew: czeka")
+            #expect(stopping.laneNote(for: [.appStore]) == "Mac App Store: nie zacznę")
+        }
+    }
+
     @Test func aRunWalksEveryRowAndLaneThroughWhatItKnowsAndClearsTheBoard() async {
         let (harness, keys) = Self.harness(npmFails: false)
         let recorder = BoardRecorder()
