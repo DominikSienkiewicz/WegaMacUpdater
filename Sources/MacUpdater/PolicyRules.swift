@@ -106,7 +106,9 @@ struct HiddenByRulesRow: View {
 
 /// UXP-11 — "Nie aktualizuj" or a skip just hid a row; "Cofnij" takes the change back. The
 /// toast closes itself after `lifetime`, counted on the callout it draws, so the countdown
-/// never hangs on a container that may be empty.
+/// never hangs on a container that may be empty. While VoiceOver runs it waits for the user
+/// instead (WCAG 2.2.1): the store has announced it, and a timeout would take "Cofnij" away
+/// before it can be reached.
 struct RuleUndoToast: View {
     static let lifetime: Duration = .seconds(8)
 
@@ -115,23 +117,32 @@ struct RuleUndoToast: View {
     let onClose: () -> Void
     /// The wait before the toast closes itself; tests pass one that returns at once.
     var sleep: (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverRunning
 
     var body: some View {
         WegaCallout(.info, title: notice.message, onClose: onClose) {
             Button(tr("Cofnij"), action: onUndo)
         }
-        .task(id: notice.id) {
-            await Self.countDown(Self.lifetime, sleep: sleep, then: onClose)
+        .task(id: Countdown(notice: notice.id, voiceOverRunning: voiceOverRunning)) {
+            await Self.countDown(Self.lifetime, voiceOverRunning: voiceOverRunning, sleep: sleep, then: onClose)
         }
     }
 
-    /// Waits out `lifetime`, then closes. A countdown cancelled first — the toast was closed,
-    /// or replaced by the next change's — closes nothing.
+    /// What restarts the countdown: a new toast, or VoiceOver starting or stopping.
+    private struct Countdown: Equatable {
+        let notice: RuleUndoNotice.ID
+        let voiceOverRunning: Bool
+    }
+
+    /// Waits out `lifetime`, then closes; with VoiceOver running it never starts. A countdown
+    /// cancelled first — the toast was closed, or replaced by the next change's — closes nothing.
     static func countDown(
         _ lifetime: Duration,
+        voiceOverRunning: Bool,
         sleep: (Duration) async throws -> Void,
         then expire: () -> Void
     ) async {
+        guard !voiceOverRunning else { return }
         do { try await sleep(lifetime) } catch { return }
         guard !Task.isCancelled else { return }
         expire()

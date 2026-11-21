@@ -17,11 +17,13 @@ struct RuleUndoNotice: Equatable, Identifiable {
 // "Nie aktualizuj" and "Pomiń tę wersję" hide a row at once. The toast that follows takes the
 // change back; it brings the row back to the list and never into the queue.
 extension ScanStore {
-    /// Offers "Cofnij" for the rule just written under `key`. A write that changed nothing
-    /// offers nothing, so the toast never claims a change that did not happen.
+    /// Offers "Cofnij" for the rule just written under `key`, and says the toast's line to
+    /// VoiceOver as it appears. A write that changed nothing offers nothing, so the toast never
+    /// claims a change that did not happen.
     func noteRuleChange(key: String, previous: UpdatePolicyEntry?, message: String) {
         guard let written = UpdatePolicyStore.shared.entries[key], written != previous else { return }
         ruleUndo = RuleUndoNotice(id: UUID(), message: message, key: key, previous: previous, written: written)
+        announcer.announce(message)
     }
 
     /// Puts back the rule the last change replaced (a pin that existed before a skip returns),

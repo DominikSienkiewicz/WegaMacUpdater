@@ -65,7 +65,7 @@ struct HiddenRulesTests {
         #expect(view.contains("RuleUndoToast(notice:"))
         let rules = try source("Sources/MacUpdater/PolicyRules.swift")
         let toast = try #require(rules.range(of: "struct RuleUndoToast: View")).upperBound
-        #expect(rules[toast...].prefix(900).contains(".task(id: notice.id)"))
+        #expect(rules[toast...].prefix(900).contains(".task(id: Countdown(notice: notice.id, voiceOverRunning: voiceOverRunning))"))
         #expect(!rules[toast...].prefix(900).contains("Group {"))
         #expect(RuleUndoToast.lifetime == .seconds(8))
         #expect(try source("Sources/MacUpdater/InfoView.swift").contains("PolicyRulesList("))
@@ -114,11 +114,11 @@ struct HiddenRulesTests {
     @Test func theToastClosesOnlyAfterItsLifetime() async {
         var slept: [Duration] = []
         var closed = 0
-        await RuleUndoToast.countDown(RuleUndoToast.lifetime, sleep: { slept.append($0) }, then: { closed += 1 })
+        await RuleUndoToast.countDown(RuleUndoToast.lifetime, voiceOverRunning: false, sleep: { slept.append($0) }, then: { closed += 1 })
         #expect(slept == [.seconds(8)])
         #expect(closed == 1)
 
-        await RuleUndoToast.countDown(RuleUndoToast.lifetime, sleep: { _ in throw CancellationError() }, then: { closed += 1 })
+        await RuleUndoToast.countDown(RuleUndoToast.lifetime, voiceOverRunning: false, sleep: { _ in throw CancellationError() }, then: { closed += 1 })
         #expect(closed == 1, "a countdown whose sleep was cancelled closes nothing")
     }
 
@@ -127,7 +127,7 @@ struct HiddenRulesTests {
     @Test func aCountdownCancelledBeforeItsSleepEndsClosesNothing() async {
         let closed = Counter()
         let countdown = Task { @MainActor in
-            await RuleUndoToast.countDown(RuleUndoToast.lifetime, sleep: { _ in }, then: { closed.value += 1 })
+            await RuleUndoToast.countDown(RuleUndoToast.lifetime, voiceOverRunning: false, sleep: { _ in }, then: { closed.value += 1 })
         }
         countdown.cancel()
         await countdown.value
@@ -280,6 +280,36 @@ struct HiddenRulesTests {
         UpdatePolicyStore.shared.remove(key: item.policyKey)
         UpdatePolicyStore.shared.remove(key: kept.policyKey)
         #expect(store.selected == [kept.key], "restoring a rule adds nothing to the queue")
+    }
+
+    /// M5 — VoiceOver hears the toast when it appears, through the store's announcer (a silent
+    /// recorder here). A skip that writes nothing shows no toast and says nothing.
+    @Test func theToastIsAnnouncedWhenItAppears() throws {
+        let (store, item) = try storeWithOneFormula()
+        defer { UpdatePolicyStore.shared.remove(key: item.policyKey) }
+        let announcer = try #require(store.announcer as? RecordingAnnouncer)
+        store.skipItem(OutdatedItem(key: "f:no-version-\(UUID().uuidString)", name: "No Version", from: "1", to: nil, kind: .formula))
+        #expect(announcer.texts.isEmpty)
+
+        store.ignoreItem(item)
+        #expect(announcer.texts == [trf("Nie będę proponować aktualizacji %@.", item.name)])
+    }
+
+    /// M5 — WCAG 2.2.1: while VoiceOver runs the toast does not time out; it waits for "Cofnij"
+    /// or its close button. Without VoiceOver the 8 s countdown stays.
+    @Test func theToastWaitsForTheUserWhileVoiceOverRuns() async throws {
+        var slept: [Duration] = []
+        var closed = 0
+        await RuleUndoToast.countDown(RuleUndoToast.lifetime, voiceOverRunning: true, sleep: { slept.append($0) }, then: { closed += 1 })
+        #expect(slept.isEmpty && closed == 0, "no countdown while VoiceOver runs")
+
+        await RuleUndoToast.countDown(RuleUndoToast.lifetime, voiceOverRunning: false, sleep: { slept.append($0) }, then: { closed += 1 })
+        #expect(slept == [RuleUndoToast.lifetime] && closed == 1)
+
+        let rules = try source("Sources/MacUpdater/PolicyRules.swift")
+        let toast = try #require(rules.range(of: "struct RuleUndoToast: View")).upperBound
+        #expect(rules[toast...].contains("@Environment(\\.accessibilityVoiceOverEnabled) private var voiceOverRunning"))
+        #expect(rules[toast...].contains("await Self.countDown(Self.lifetime, voiceOverRunning: voiceOverRunning, sleep: sleep, then: onClose)"))
     }
 
     // MARK: - Helpers
