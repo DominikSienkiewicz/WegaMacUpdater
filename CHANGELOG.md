@@ -130,10 +130,11 @@ them verbatim under the new version heading, so that step is never done by hand 
   Developer ID no longer qualifies. The release artifact check verifies the signed app and helper
   against both requirements.
 - **The publisher check after an update and Trust the New Signature need a valid signature.** A
-  developer's Team ID counts there only when an Apple-issued certificate carries it and the whole
+  developer's Team ID counts there only when a Developer ID certificate carries it and the whole
   app checks out against it, in every architecture and in its nested code. An app changed after
-  it was signed, or one signed ad hoc with another developer's Team ID, reads as having no Team
-  ID: when Wega knows the app's developer, the update is rolled back, and Trust the New
+  it was signed, one signed ad hoc with another developer's Team ID, or one signed with a team
+  member's development certificate, reads as having no Team ID: when Wega knows the app's
+  developer, the update is rolled back, and Trust the New
   Signature changes nothing. The check before an update still reads the Team ID the signature
   names, so an app whose own signature broke can still be updated.
 

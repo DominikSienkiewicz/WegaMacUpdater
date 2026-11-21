@@ -352,9 +352,10 @@ successful rollback. A bundle-identity mismatch preserves it in the same way.
 
 A Team ID read from a signature is only that signature's claim: an ad-hoc signature can claim
 any Team ID, and a bundle edited after signing still reports its publisher's. The check after
-an upgrade and **Trust the New Signature** count a Team ID only when an Apple-issued
-certificate carries it and the whole bundle validates against it, in every architecture,
-including nested code and under the strict rules (`CodeSignatureVerifier.validatedTeamID`). A
+an upgrade and **Trust the New Signature** count a Team ID only when a Developer ID certificate
+carries it and the whole bundle validates against it, in every architecture, including nested
+code and under the strict rules (`CodeSignatureVerifier.validatedTeamID`). The same team's Apple
+Development or Apple Distribution certificate, which any team member can make, does not count. A
 bundle that fails validation reads as having no Team ID there: against a baseline the check
 after an upgrade rolls it back, and trust is refused. Everything else still reads the claim:
 the check before an upgrade (which also records a first-seen baseline), adoption's pre-check,

@@ -35,6 +35,22 @@ struct ValidatedPublisherTeamIDTests {
         #expect(!CodeSignatureVerifier.isWellFormedTeamID(""))
     }
 
+    /// Every test above proves a refusal. A regression that made the read return `nil` for genuine
+    /// apps too would roll back every cask with a baseline as a publisher change while they all stay
+    /// green, so one Developer ID app on this Mac must keep its Team ID. Up to three are tried, so
+    /// one app that broke its own signature does not fail the test. Skipped where none is installed.
+    @Test(.enabled(if: !InstalledDeveloperIDApps.candidates.isEmpty, "needs a Developer ID app in /Applications"))
+    func aGenuineDeveloperIDAppKeepsItsTeamID() async {
+        let candidates = Array(InstalledDeveloperIDApps.candidates.prefix(3))
+
+        let validated = await offTheCooperativePool {
+            candidates.map { CodeSignatureVerifier.validatedTeamID(ofAppAt: $0.url) }
+        }
+
+        #expect(zip(candidates, validated).contains { $0.teamID == $1 },
+                "none of \(candidates.map(\.url.lastPathComponent)) kept its Team ID")
+    }
+
     /// Any member of a team can make an Apple Development certificate in Xcode, and it carries the
     /// team's OU under an Apple anchor; only the account holder can make a Developer ID. So the
     /// requirement also demands the Developer ID intermediate (…6.2.6) and leaf (…6.1.13) markers,
@@ -72,5 +88,51 @@ struct ValidatedPublisherTeamIDTests {
         #expect(CodeSignatureVerifier.publisherValidationFlags == SecCSFlags(
             rawValue: kSecCSCheckAllArchitectures | kSecCSCheckNestedCode | kSecCSStrictValidate
         ))
+    }
+}
+
+/// Developer ID apps in `/Applications`, fewest sealed files first so that validating them is
+/// quick. Choosing them reads each signature's claim and leaf certificate and hashes nothing.
+private enum InstalledDeveloperIDApps {
+    struct Candidate: Sendable {
+        let url: URL
+        let teamID: String
+        let sealSize: Int
+    }
+
+    static let candidates: [Candidate] = {
+        let root = URL(fileURLWithPath: "/Applications", isDirectory: true)
+        let apps = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
+        return apps
+            .filter { $0.pathExtension == "app" }
+            .compactMap(candidate(at:))
+            .sorted { ($0.sealSize, $0.url.path) < ($1.sealSize, $1.url.path) }
+    }()
+
+    private static func candidate(at app: URL) -> Candidate? {
+        guard let teamID = CodeSignatureVerifier.teamID(ofAppAt: app), leafIsDeveloperIDApplication(app) else {
+            return nil
+        }
+        let seal = app.appendingPathComponent("Contents/_CodeSignature/CodeResources")
+        guard let size = (try? seal.resourceValues(forKeys: [.fileSizeKey]))?.fileSize else { return nil }
+        return Candidate(url: app, teamID: teamID, sealSize: size)
+    }
+
+    private static func leafIsDeveloperIDApplication(_ app: URL) -> Bool {
+        var code: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(app as CFURL, [], &code) == errSecSuccess, let code else { return false }
+        var info: CFDictionary?
+        guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+              let certificates = (info as? [String: Any])?[kSecCodeInfoCertificates as String] as? [SecCertificate],
+              let leaf = certificates.first,
+              let summary = SecCertificateCopySubjectSummary(leaf) as String? else { return false }
+        return summary.hasPrefix("Developer ID Application:")
+    }
+}
+
+/// Runs `work` on a thread of its own, so the cooperative pool is not blocked while it hashes.
+private func offTheCooperativePool<T: Sendable>(_ work: @escaping @Sendable () -> T) async -> T {
+    await withCheckedContinuation { continuation in
+        Thread { continuation.resume(returning: work()) }.start()
     }
 }
