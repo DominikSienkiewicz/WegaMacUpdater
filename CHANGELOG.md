@@ -46,8 +46,9 @@ them verbatim under the new version heading, so that step is never done by hand 
   and the check button reads **Check and update in background (N)** when N apps are allowed to
   update in the background.
 - **Inventory keeps its result.** It says when it was read (**Read today, 08:12**), marks the
-  read **the list may have changed** after an update, a Cleanup removal, a move to Homebrew or
-  an uninstall, and no longer reads the disk again every time you open it. **Refresh Inventory**
+  read **the list may have changed** after an update (one installed in the background too), a
+  Cleanup removal, a move to Homebrew or an uninstall, also when the window was closed meanwhile,
+  and no longer reads the disk again every time you open it. **Refresh Inventory**
   only reads; **Check for updates** runs the same scan as **⌘R** and takes you to Updates. A
   filter that hides every app says so and offers **Clear Filters**.
 - **Rows you can use from the keyboard and with VoiceOver.** Each group of rows is one Tab stop,

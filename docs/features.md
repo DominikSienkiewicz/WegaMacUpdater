@@ -667,7 +667,9 @@ Missing per-path evidence (including App Store) stays unconfirmed. See the
 **The read is kept.** Inventory is one store shared with the window, so its last read survives
 moving between screens: the line *"Read today, 08:12"* (the day moves at midnight, after sleep
 and after a clock change) turns to *"Read today, 08:12 — the list may have changed"* when an
-update run, a Cleanup removal, a move to Homebrew or an uninstall finishes. **Refresh Inventory**
+update run, a background round that installed something, a Cleanup removal, a move to Homebrew
+or an uninstall finishes, also while the window is closed (the stores that run them count each
+one, and the inventory compares the counts with those of its last read). **Refresh Inventory**
 only reads the disk again and says so in its tooltip (*"Does not check for new versions"*);
 **Check for updates** starts the same scan as **⌘R** and navigates to Updates. When the filters
 hide every app the list says *"No apps match these filters."* and offers **Clear Filters**; when

@@ -146,9 +146,9 @@ updates found alongside a source failure. Ignored, pinned or skipped available u
 read **Ukryte przez politykę** (Hidden by policy); the check itself still ran.
 
 Inventory keeps its last read while you move between screens, and says when it was made —
-**"Read today, 08:12"**. After something changes the installed apps (an update run, a Cleanup
-removal, a move to Homebrew, an uninstall), the line turns to **"Read today, 08:12 — the list may
-have changed"**. Two buttons sit beside it and do different things: **Refresh Inventory** only
+**"Read today, 08:12"**. After something changes the installed apps (an update run, a background
+update, a Cleanup removal, a move to Homebrew, an uninstall — also while the window was closed),
+the line turns to **"Read today, 08:12 — the list may have changed"**. Two buttons sit beside it and do different things: **Refresh Inventory** only
 reads the disk again and does not look for new versions (its tooltip says so), while **Check for
 updates** starts the same scan as **Check now** (**⌘R**) and takes you to Updates, where it can
 be stopped. When the filters hide every app, the list says **"No apps match these filters."**
