@@ -56,6 +56,17 @@ struct UpdateBandScanPresentationTests {
         }
     }
 
+    /// A vendor phase with no app to ask has nothing to count: "0 z 0 aplikacji" would read as
+    /// a stalled counter, so the line keeps saying why selecting waits.
+    @Test func anEmptyVendorPhaseShowsTheNoteNotAZeroCount() {
+        for language in [AppLanguage.pl, .en] {
+            withLanguage(language) {
+                let empty = p(.running(.manual), manual: .init(checkedApps: 0, totalApps: 0))
+                #expect(empty.line == tr("Zaznaczanie wróci, gdy skan się skończy."), "\(language)")
+            }
+        }
+    }
+
     @Test func theEyebrowShowsElapsedTimeAndTheRingCountsSources() {
         #expect(UpdateBandScanPresentation.elapsed(from: .init(timeIntervalSince1970: 0), to: .init(timeIntervalSince1970: 42)) == "0:42")
         #expect(UpdateBandScanPresentation.elapsed(from: .init(timeIntervalSince1970: 0), to: .init(timeIntervalSince1970: 725)) == "12:05")

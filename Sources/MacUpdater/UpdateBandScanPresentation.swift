@@ -36,9 +36,10 @@ struct UpdateBandScanPresentation: Equatable {
 
     var headline: String { ScanPhaseCopy.caption(progress: progress, catalogRefreshing: catalogRefreshing) }
 
-    /// The vendor count once the vendor phase reports one; until then, why the list is inert.
+    /// The vendor count once the vendor phase reports one; until then, or when it has no app to
+    /// ask, why the list is inert.
     var line: String {
-        guard let manual else { return tr("Zaznaczanie wróci, gdy skan się skończy.") }
+        guard let manual, manual.totalApps > 0 else { return tr("Zaznaczanie wróci, gdy skan się skończy.") }
         return trf("Producenci: %@ %@", "\(manual.checkedApps)", trp("z %@ aplikacji", manual.totalApps))
     }
 
