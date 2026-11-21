@@ -41,10 +41,12 @@ struct ScanAndMigrationCopyTests {
 
     @Test func thePhaseCommandMovesToTheTooltip() throws {
         let scene = try source("Sources/MacUpdater/ScanBusyOverlay.swift")
-        let body = try #require(scene.range(of: "struct ScanProgressScene: View"))
-        // 1300: the scene's own body, which UXP-13's `catalogRefreshing` lengthened.
-        #expect(!scene[body.upperBound...].prefix(1300).contains("Text(phaseLabel)"))
-        #expect(scene[body.upperBound...].prefix(1300).contains(".help(presentation.phaseLabel ?? \"\")"))
+        let start = try #require(scene.range(of: "struct ScanProgressScene: View"))
+        // The scene's own body: up to the thoughts list that follows it.
+        let end = try #require(scene.range(of: "static let scanThoughts: [String] = [", range: start.upperBound..<scene.endIndex))
+        let body = scene[start.upperBound..<end.lowerBound]
+        #expect(!body.contains("Text(phaseLabel)"))
+        #expect(body.contains(".help(presentation.phaseLabel ?? \"\")"))
     }
 
     @Test func theMigrationSheetNamesTheBackupAndTheWayBack() throws {

@@ -38,7 +38,9 @@ struct DeadElementsTests {
         let uninstall = try source("Sources/MacUpdater/UninstallView.swift")
         #expect(!uninstall.contains("Text(tr(\"Odinstaluj aplikacje\"))"), "the window title already says it")
         let effects = try #require(uninstall.range(of: "Brew casks → brew uninstall"))
-        #expect(uninstall[effects.upperBound...].prefix(160).contains(".foregroundStyle(.secondary)"))
+        // The effects line's own modifiers: up to the `Spacer()` that follows it in the header.
+        let effectsEnd = try #require(uninstall.range(of: "Spacer()", range: effects.upperBound..<uninstall.endIndex))
+        #expect(uninstall[effects.upperBound..<effectsEnd.lowerBound].contains(".foregroundStyle(.secondary)"))
     }
 
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {
