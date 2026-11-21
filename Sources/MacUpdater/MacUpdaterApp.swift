@@ -138,6 +138,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return true
         case .anotherInstanceRunning:
             WegaLog.warning(.app, "Druga instancja Wega wykryta — kończę, aby nie mutować brew równolegle.")
+            #if DEBUG
+            // A clean exit here would let the layout test pass without running its scenario.
+            if ScanStore.layoutRegressionScenarioRequested { exit(5) }
+            #endif
             NSApp.terminate(nil)
             return false
         }

@@ -91,6 +91,21 @@ struct REL08MutationCoordinationTests {
         #expect(text.contains("NSApp.terminate("))
     }
 
+    /// Final review X-I1 — the layout test's subprocess used to meet the installed Wega here and
+    /// end with 0, so the test passed without running its scenario. A debug build started for
+    /// that scenario now exits with 5, before it terminates, and the test names that code.
+    @Test func aSecondInstanceStartedForTheLayoutTestSaysSo() throws {
+        let text = try source("Sources/MacUpdater/MacUpdaterApp.swift")
+        let branch = try #require(text.range(of: "case .anotherInstanceRunning:")).upperBound
+        let guardText = String(text[branch...].prefix(400))
+        let debugOnly = try #require(guardText.range(of: "#if DEBUG"))
+        let early = try #require(guardText.range(of: "if ScanStore.layoutRegressionScenarioRequested { exit(5) }"))
+        let terminate = try #require(guardText.range(of: "NSApp.terminate(nil)"))
+        #expect(debugOnly.lowerBound < early.lowerBound && early.upperBound < terminate.lowerBound)
+        let layoutTest = try source("Tests/MacUpdaterUITests/ScanControlLayoutTests.swift")
+        #expect(layoutTest.contains("5: another Wega is running — quit it and run the test again"))
+    }
+
     /// AC5 — the migration execution path must consult the match confidence before it runs
     /// `brew install --cask --force`. This locks the production call-site of
     /// `allowsAutoConfirm`, which had none: the score was computed for a badge and thrown away.
