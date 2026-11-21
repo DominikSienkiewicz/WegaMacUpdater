@@ -61,10 +61,18 @@ struct UpdateRunSummaryListTests {
                     .accessibilityLabel(accessibilitySentence)
                     .accessibilityValue(accessibilityValue)
                     .accessibilityActions {
-                        if let onTrust { Button(tr("Zaufaj nowemu podpisowi"), action: onTrust) }
-                        if let onUndo, !isUndoing { Button(tr("Cofnij"), action: onUndo) }
+                        if isEnabled {
+                            if let onTrust { Button(tr("Zaufaj nowemu podpisowi"), action: onTrust) }
+                            if let onUndo, !isUndoing { Button(tr("Cofnij"), action: onUndo) }
+                        }
                     }
             """), "one element per row, as the list's rows: its buttons are also its named actions")
+        // R-I2 — `.disabled` alone leaves VoiceOver's actions reachable. The row is disabled while
+        // any undo runs and the list while the undo's check runs, so its actions follow the
+        // environment's `isEnabled`, as `PackageRow`'s do.
+        let rowSource = try slice(list, from: "struct UpdateRunResultRow: View", to: "private var icon: some View")
+        #expect(rowSource.contains("@Environment(\\.isEnabled) private var isEnabled"))
+        #expect(rowSource.components(separatedBy: ".accessibilityActions {").count == 2, "one actions block, the gated one")
     }
 
     /// Final review C12 — while its undo restores the app, the row says so to VoiceOver, where the

@@ -143,6 +143,9 @@ struct UpdateRunResultRow: View {
     let isUndoing: Bool
     let onTrust: (() -> Void)?
     let onUndo: (() -> Void)?
+    /// `.disabled` alone leaves VoiceOver's actions reachable (R-I2); the row is disabled while
+    /// any undo runs, and the list while the undo's check runs.
+    @Environment(\.isEnabled) private var isEnabled
 
     /// The report's note without the "{name}: " that a changed publisher's or a failed rollback's
     /// sentence starts with: the row already names the item, and VoiceOver would say it twice.
@@ -198,8 +201,10 @@ struct UpdateRunResultRow: View {
         .accessibilityLabel(accessibilitySentence)
         .accessibilityValue(accessibilityValue)
         .accessibilityActions {
-            if let onTrust { Button(tr("Zaufaj nowemu podpisowi"), action: onTrust) }
-            if let onUndo, !isUndoing { Button(tr("Cofnij"), action: onUndo) }
+            if isEnabled {
+                if let onTrust { Button(tr("Zaufaj nowemu podpisowi"), action: onTrust) }
+                if let onUndo, !isUndoing { Button(tr("Cofnij"), action: onUndo) }
+            }
         }
     }
 
