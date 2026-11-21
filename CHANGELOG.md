@@ -169,11 +169,12 @@ them verbatim under the new version heading, so that step is never done by hand 
   developer, the update is rolled back, and Trust the New
   Signature changes nothing. The check before an update still reads the Team ID the signature
   names, so an app whose own signature broke can still be updated.
-- **Wega checks its own update in full.** The app inside a downloaded `.pkg` or `.dmg`, the app
-  the installer leaves in `/Applications`, and the askpass helpers must carry Wega's Developer ID
-  signature, and every architecture and nested program must match it, the root helper included.
-  Before, the check read only the slice this Mac runs, skipped the nested programs, and also
-  accepted the same team's development certificate.
+- **Wega checks its own update in full.** A downloaded `.dmg` and the app inside it, the app
+  inside a downloaded `.pkg`, the app the installer leaves in `/Applications`, and the askpass
+  helpers must carry Wega's Developer ID signature, and every architecture and nested program
+  must match it, the root helper included. Before, the check read only the slice this Mac runs,
+  did not check the contents of the nested programs, and also accepted the same team's
+  development certificate.
 
 ### Fixed
 - **Inventory knows about installs and undos.** It marks its read **the list may have

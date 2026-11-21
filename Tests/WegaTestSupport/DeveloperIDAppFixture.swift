@@ -15,10 +15,12 @@ public struct DeveloperIDApp: Sendable {
 
     public enum Failure: Error, CustomStringConvertible {
         case unwritable(String)
+        case outsideTheCopy(String)
 
         public var description: String {
             switch self {
             case let .unwritable(path): "could not flip a byte in \(path)"
+            case let .outsideTheCopy(path): "\(path) does not resolve inside the copy, so it was left alone"
             }
         }
     }
@@ -32,12 +34,14 @@ public struct DeveloperIDApp: Sendable {
     private let nestedCodeByte: ByteLocation
 
     /// Every qualifying app, smallest resource seal (`CodeResources`, in bytes) first, as a rough
-    /// proxy for a quick validation.
+    /// proxy for a quick validation. A linked app is left out: its copy would be the link.
     public static let installed: [DeveloperIDApp] = {
         let root = URL(fileURLWithPath: "/Applications", isDirectory: true)
-        let apps = (try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? []
+        let apps = (try? FileManager.default.contentsOfDirectory(
+            at: root, includingPropertiesForKeys: [.isSymbolicLinkKey]
+        )) ?? []
         return apps
-            .filter { $0.pathExtension == "app" }
+            .filter { $0.pathExtension == "app" && !isSymbolicLink($0) }
             .compactMap(DeveloperIDApp.init(app:))
             .sorted { ($0.sealSize, $0.url.path) < ($1.sealSize, $1.url.path) }
     }()
@@ -52,7 +56,7 @@ public struct DeveloperIDApp: Sendable {
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
             try FileManager.default.copyItem(at: url, to: copy.url)
             let byte = tamper == .sliceThisMacDoesNotRun ? foreignSliceByte : nestedCodeByte
-            try Self.flip(byte, in: copy.url)
+            try Self.flip(byte, in: copy.url, within: root)
         } catch {
             copy.remove()
             throw error
@@ -209,8 +213,18 @@ public struct DeveloperIDApp: Sendable {
         bytes[start ..< start + 4].reversed().reduce(0) { $0 << 8 | Int($1) }
     }
 
-    private static func flip(_ byte: ByteLocation, in app: URL) throws {
+    private static func isSymbolicLink(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink ?? true
+    }
+
+    /// Writes only to a regular file that resolves inside `root`, the directory this copy was made
+    /// in, so no link can lead the write back to the installed original.
+    private static func flip(_ byte: ByteLocation, in app: URL, within root: URL) throws {
         let file = app.appendingPathComponent(byte.path)
+        guard !isSymbolicLink(file),
+              file.resolvingSymlinksInPath().path.hasPrefix(root.resolvingSymlinksInPath().path + "/") else {
+            throw Failure.outsideTheCopy(byte.path)
+        }
         let mode = (try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? Int) ?? 0o555
         try FileManager.default.setAttributes([.posixPermissions: mode | 0o200], ofItemAtPath: file.path)
         let handle = try FileHandle(forUpdating: file)
