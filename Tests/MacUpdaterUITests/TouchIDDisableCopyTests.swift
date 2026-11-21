@@ -108,16 +108,18 @@ struct TouchIDDisableCopyTests {
         directory: PAMPolicyDirectoryFacts? = nil, sudoLocal: PAMPolicyFileFacts? = nil,
         local: [TouchIDDisablePreflight.LocalDirectory] = [], fallbacks: [String] = []
     ) -> TouchIDDisablePreflight {
-        TouchIDDisablePreflight.evaluate(
-            policyDirectory: directory ?? self.directory(), sudoLocal: sudoLocal ?? file(), localDirectories: local,
-            existingFallbackPaths: fallbacks)
+        TouchIDDisablePreflight.evaluate(.init(
+            policyDirectory: .found(directory ?? self.directory()), sudoLocal: .found(sudoLocal ?? file()),
+            sudoPolicy: .found(file()), localDirectories: local, existingFallbackPaths: fallbacks))
     }
 
     @Test func aSafePolicyDirectoryAndFileLeaveTheButton() {
         #expect(evaluate() == .clear)
         #expect(evaluate(sudoLocal: nil).refusal == nil)
-        let missing = TouchIDDisablePreflight.evaluate(policyDirectory: nil, sudoLocal: nil, localDirectories: [], existingFallbackPaths: [])
+        let missing = TouchIDDisablePreflight.evaluate(.init(
+            policyDirectory: .unknown, sudoLocal: .unknown, sudoPolicy: .unknown, localDirectories: [], existingFallbackPaths: []))
         #expect(missing.refusal == nil, "what the app cannot see, the helper decides")
+        #expect(!missing.commandsAreSafe, "RC2-6: but it is no proof for a sudo command")
     }
 
     @Test func onlyAnObservedUnsafeConditionHidesTheButton() {
