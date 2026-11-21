@@ -47,9 +47,9 @@ extension Translations {
         "Trwa obchód · %@": "Patrol in progress · %@",
         "do tej pory": "so far",
         "Odświeżam katalog Homebrew…": "Refreshing the Homebrew catalog…",
-        "Wega węszy w App Store…": "Wega is sniffing around the App Store…",
+        "Wega węszy w App Store…": "Wega is sniffing in the App Store…",
         "Wega węszy w npm…": "Wega is sniffing around npm…",
-        "Wega węszy u producentów…": "Wega is sniffing around the developers' sites…",
+        "Wega węszy u producentów…": "Wega is sniffing at the vendors…",
         "Postęp skanowania": "Scan progress",
         "%@ z %@ źródeł": "%@ of %@ sources",
     ]

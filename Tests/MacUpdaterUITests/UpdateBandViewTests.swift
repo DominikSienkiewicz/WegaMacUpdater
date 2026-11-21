@@ -410,18 +410,7 @@ final class UpdateBandViewTests: XCTestCase {
                     let headline = withLanguage(language) { ScanPhaseCopy.caption(progress: progress, catalogRefreshing: catalog) }
                     let needed = NSHostingView(rootView: Text(verbatim: headline).font(font)
                         .frame(width: column).fixedSize(horizontal: false, vertical: true)).fittingSize.height
-                    let check = {
-                        XCTAssertLessThanOrEqual(needed, allowed, "\(language), band \(bandWidth) pt (\(layout)): \"\(headline)\" needs \(needed) pt of \(allowed)")
-                    }
-                    if language == .en && layout == .compact && [.running(.mas), .running(.manual)].contains(progress) {
-                        // Known gap, reported to the owner: the brief's English App Store and
-                        // vendor captions need three `.title` lines in the 220 pt column of a
-                        // 480 pt band (78 of 52 pt); they fit from about 520 pt. Strict: it fails
-                        // once this is fixed.
-                        XCTExpectFailure("UXP-13: English scan headline at a 480 pt compact band", strict: true, failingBlock: check)
-                    } else {
-                        check()
-                    }
+                    XCTAssertLessThanOrEqual(needed, allowed, "\(language), band \(bandWidth) pt (\(layout)): \"\(headline)\" needs \(needed) pt of \(allowed)")
                 }
             }
         }

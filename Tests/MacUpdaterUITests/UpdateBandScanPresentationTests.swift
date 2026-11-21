@@ -23,7 +23,8 @@ struct UpdateBandScanPresentationTests {
         }
         withLanguage(.en) {
             #expect(p(.running(.brew), catalog: true).headline == "Refreshing the Homebrew catalog…")
-            #expect(p(.running(.manual)).headline == "Wega is sniffing around the developers' sites…")
+            #expect(p(.running(.mas)).headline == "Wega is sniffing in the App Store…")
+            #expect(p(.running(.manual)).headline == "Wega is sniffing at the vendors…")
         }
     }
 
