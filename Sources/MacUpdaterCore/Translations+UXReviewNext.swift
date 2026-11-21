@@ -31,6 +31,7 @@ extension Translations {
         "Wszystko w porządku. Wega nie znalazła uciekinierów.": "All good. Wega found no runaways.",
         "Nie udało mi się zainstalować %@": "I couldn't install %@",
         "Nie udało mi się zainstalować %@. Spróbuj jeszcze raz.": "I couldn't install %@. Try again.",
+        "Nie udało mi się zainstalować %@ przez Homebrew.": "I couldn't install %@ through Homebrew.",
         "Przeglądam katalogi z PATH i wersje narzędzi. Niczego nie zmieniam.":
             "Looking through PATH folders and tool versions. I'm not changing anything.",
         "Nowa wersja %@ nie przeszła kontroli, więc przywróciłam poprzednią.":

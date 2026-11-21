@@ -454,7 +454,6 @@ extension Translations {
         "Token: %@": "Token: %@",
         "%@ przejęty! Idziemy dalej.": "%@ taken over! Let's move on.",
         "Instalacja %@ zakończyła się błędem (kod %@). Sprawdź log poniżej.": "Installation of %@ failed (code %@). Check the log below.",
-        "Błąd podczas migracji %@.": "Error during migration of %@.",
         "Nie udało się uruchomić": "Failed to start",
         "Usunięto z %@": "Removed from %@",
         "Duplikat zniknął. PATH ma już tylko jedną wersję.": "The duplicate is gone. PATH now has only one version.",
