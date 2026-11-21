@@ -54,6 +54,9 @@ struct WegaMacUpdaterApp: App {
                     if await scan.runLayoutRegressionScenarioIfRequested() { return }
 #endif
                 }
+                .onReceive(HelperLeftoverRegistrationCleanup.shared.$removedRegistration) { removed in
+                    if removed, HelperLeftoverRegistrationCleanup.shared.consumeNotice() { scan.showStickyBanner(HelperLeftoverRegistrationCleanup.banner) }
+                }
         }
         .windowToolbarStyle(.unified)
         .windowStyle(.titleBar)
@@ -120,6 +123,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await UpdateOperationRecovery.shared.recoverInterruptedOperations()
             MenuBarAgent.shared.start()
         }
+        // Z14: a helper registration left from a copy Wega may not use is removed at launch.
+        Task { @MainActor in await HelperLeftoverRegistrationCleanup.shared.run() }
         refreshAppCatalog()
     }
 

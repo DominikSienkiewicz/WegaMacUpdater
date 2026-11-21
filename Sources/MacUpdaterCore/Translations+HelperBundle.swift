@@ -23,5 +23,8 @@ extension Translations {
             "A helper is still registered. If Wega from the .pkg isn't installed on this Mac, remove it.",
         "Niedostępny": "Unavailable",
         "Otwórz stronę wydań": "Open Releases Page",
+        "Usunęłam pomocnika Wegi": "I removed the Wega helper",
+        "Był zarejestrowany z kopii Wegi, którą może zmienić ktoś inny niż root, a macOS uruchamia go jako root. Jeśli go potrzebujesz, zainstaluj Wegę z pakietu .pkg.":
+            "It was registered from a copy of Wega that someone other than root can change, and macOS runs it as root. If you need it, install Wega from the .pkg.",
     ]
 }

@@ -722,6 +722,8 @@ func selectionToggleBinding(
 
 enum BannerAction: Equatable {
     case openLogs, openSettings, openAppManagementSettings
+    /// Z14: the helper card in Settings.
+    case openHelperSettings
     /// Runs `brew reinstall --cask` for the token through the protected adoption flow.
     case reinstallCask(token: String)
     /// Accepts the cask's new publisher Team ID after the user confirms it. `teamID` is the ID
@@ -827,6 +829,7 @@ struct BannerView: View {
         case .openLogs:     return tr("Pokaż w logach")
         case .openSettings: return tr("Włącz Touch ID")
         case .openAppManagementSettings: return tr("Otwórz ustawienia prywatności")
+        case .openHelperSettings: return tr("Otwórz ustawienia pomocnika")
         case .reinstallCask: return tr("Przeinstaluj przez Brew")
         case .trustPublisher: return tr("Zaufaj nowemu podpisowi")
         }
@@ -836,7 +839,7 @@ struct BannerView: View {
         switch action {
         case .reinstallCask: return "arrow.clockwise.circle"
         case .trustPublisher: return "checkmark.shield"
-        case .openLogs, .openSettings, .openAppManagementSettings: return "info.circle"
+        case .openLogs, .openSettings, .openAppManagementSettings, .openHelperSettings: return "info.circle"
         }
     }
 }
