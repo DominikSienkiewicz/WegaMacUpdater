@@ -293,6 +293,10 @@ them verbatim under the new version heading, so that step is never done by hand 
 - **Cleanup says what each action does.** Under the question, the confirmation says whether the
   action moves to the Trash and can be restored, runs a Homebrew command Wega cannot undo, or only
   copies a command, and its confirm button is red.
+- **Cleanup shows what needs action first.** Each section lists the tools that need
+  action at the top and folds the rest into **Bez akcji** (**No action**), with tools that
+  share a source and folder gathered into one line. The header says how many are left to do,
+  and a search field (**⌘F**) finds a tool or path across the whole report.
 
 ## [0.8.0] — 2026-11-20
 

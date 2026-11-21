@@ -19,6 +19,8 @@ struct CleanupView: View {
     @State private var showsPathWarning = false
     @State private var exportError: String?
     @State private var copiedCommand: String?
+    @State private var search = ""
+    @FocusState private var searchFocused: Bool
 
     private var isIdle: Bool { store.phase == .idle }
 
@@ -43,6 +45,9 @@ struct CleanupView: View {
         .wegaAttention(confirming != nil || showsPathWarning || !errorMessages.isEmpty)
         .onChange(of: store.phase) { old, new in announce(from: old, to: new) }
         .onAppear { store.applyTCCMapSetting() }
+        .searchable(text: $search, prompt: tr("Szukaj narzędzia lub ścieżki…"))
+        .searchFocused($searchFocused)
+        .receivesSearchFocusRequests(on: .cleanup) { searchFocused = true }
     }
 
     // MARK: - Header
@@ -136,19 +141,29 @@ struct CleanupView: View {
     @ViewBuilder
     private var content: some View {
         if let report = store.report {
-            ScrollView {
-                VStack(spacing: 12) {
-                    ForEach(
-                        CleanupPresentation.sections(report, home: store.home, tccMapEnabled: tccMapEnabled), id: \.kind
-                    ) { section in
-                        CleanupSectionCard(
-                            section: section, canRemove: isIdle, copiedCommand: copiedCommand,
-                            onRemove: { id in confirming = report.findings.first { $0.id == id } }, onCopy: copy,
-                            onKeep: { store.keep($0) }, onUninstallApp: onUninstallApp
-                        )
-                    }
+            let cards = CleanupPresentation.sections(report, home: store.home, tccMapEnabled: tccMapEnabled)
+                .compactMap { section in
+                    CleanupPresentation.layout(of: section, search: search).map { (section: section, layout: $0) }
                 }
-                .padding(16)
+            ScrollView {
+                if cards.isEmpty, !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(tr("Nic w raporcie nie pasuje do wyszukiwania."))
+                        .font(.wega(.subheadline))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(32)
+                } else {
+                    VStack(spacing: 12) {
+                        ForEach(cards, id: \.section.kind) { card in
+                            CleanupSectionCard(
+                                section: card.section, layout: card.layout, canRemove: isIdle, copiedCommand: copiedCommand,
+                                onRemove: { id in confirming = report.findings.first { $0.id == id } }, onCopy: copy,
+                                onKeep: { store.keep($0) }, onUninstallApp: onUninstallApp
+                            )
+                        }
+                    }
+                    .padding(16)
+                }
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
         } else if store.phase == .scanning {
@@ -202,9 +217,11 @@ struct CleanupView: View {
     }
 }
 
-/// One section of the report: its notes, then its rows, with a tool's name above its first row.
+/// One section of the report: its notes, the tools that need action, then the rest in a
+/// collapsed "Bez akcji" group. While searching, every match is shown and nothing is collapsed.
 private struct CleanupSectionCard: View {
     let section: CleanupPresentation.Section
+    let layout: CleanupPresentation.SectionLayout
     let canRemove: Bool
     let copiedCommand: String?
     let onRemove: (_ findingID: String) -> Void
@@ -212,9 +229,12 @@ private struct CleanupSectionCard: View {
     let onKeep: (_ findingID: String) -> Void
     let onUninstallApp: (URL) -> Void
 
+    @State private var quietExpanded = false
+    @State private var expandedOrigins: Set<String> = []
+
     var body: some View {
         WegaCard(padded: false) {
-            WegaCardHeader(icon: icon, title: section.title, count: section.rows.isEmpty ? nil : section.rows.count)
+            WegaCardHeader(icon: icon, title: section.title, count: nil, note: layout.headerNote)
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(section.notes.indices, id: \.self) { index in
                     Text(section.notes[index])
@@ -225,24 +245,83 @@ private struct CleanupSectionCard: View {
                         .padding(.horizontal, WegaLayout.cardPadding)
                         .padding(.vertical, 6)
                 }
-                ForEach(section.rows.indices, id: \.self) { index in
-                    let row = section.rows[index]
-                    if let header = row.groupHeader {
-                        Text(header)
+                groups(layout.shown)
+                if let quietTitle = layout.quietTitle {
+                    WegaDisclosure(isExpanded: $quietExpanded) {
+                        ForEach(layout.quiet.indices, id: \.self) { index in
+                            Divider().opacity(0.3)
+                            quietItem(layout.quiet[index])
+                        }
+                    } label: {
+                        Text(quietTitle)
                             .font(.wega(.callout, weight: .semibold))
                             .padding(.horizontal, WegaLayout.cardPadding)
-                            .padding(.top, 10)
-                    }
-                    CleanupFindingRow(
-                        row: row, canRemove: canRemove, copiedCommand: copiedCommand,
-                        onRemove: onRemove, onCopy: onCopy, onKeep: onKeep, onUninstallApp: onUninstallApp
-                    )
-                    if index < section.rows.count - 1 {
-                        Divider().opacity(0.3)
+                            .padding(.vertical, 8)
                     }
                 }
             }
             .padding(.vertical, 6)
+        }
+    }
+
+    @ViewBuilder
+    private func quietItem(_ item: CleanupPresentation.QuietItem) -> some View {
+        switch item {
+        case .tool(let group):
+            groups([group])
+        case .origin(let line):
+            WegaDisclosure(isExpanded: originBinding(line.origin)) {
+                groups(line.tools)
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(line.title)
+                        .font(.wega(.callout, monospaced: true))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if let companions = line.companions {
+                        Text(companions)
+                            .font(.wega(.subheadline))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                .padding(.horizontal, WegaLayout.cardPadding)
+                .padding(.vertical, 6)
+            }
+        }
+    }
+
+    private func originBinding(_ origin: CleanupPresentation.Row.Origin) -> Binding<Bool> {
+        let key = origin.directory + origin.source
+        return Binding(
+            get: { expandedOrigins.contains(key) },
+            set: { open in
+                if open { expandedOrigins.insert(key) } else { expandedOrigins.remove(key) }
+            }
+        )
+    }
+
+    private func groups(_ groups: [CleanupPresentation.ToolGroup]) -> some View {
+        ForEach(groups.indices, id: \.self) { groupIndex in
+            let group = groups[groupIndex]
+            if groupIndex > 0 {
+                Divider().opacity(0.3)
+            }
+            if let name = group.name {
+                Text(name)
+                    .font(.wega(.callout, weight: .semibold))
+                    .padding(.horizontal, WegaLayout.cardPadding)
+                    .padding(.top, 10)
+            }
+            ForEach(group.rows.indices, id: \.self) { index in
+                if index > 0 {
+                    Divider().opacity(0.3)
+                }
+                CleanupFindingRow(
+                    row: group.rows[index], canRemove: canRemove, copiedCommand: copiedCommand,
+                    onRemove: onRemove, onCopy: onCopy, onKeep: onKeep, onUninstallApp: onUninstallApp
+                )
+            }
         }
     }
 

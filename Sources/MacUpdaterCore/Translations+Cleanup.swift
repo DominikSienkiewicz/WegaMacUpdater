@@ -211,5 +211,7 @@ extension Translations {
         "%@ do zrobienia": "%@ to do",
         "nic do zrobienia": "nothing to do",
         "też: %@": "also: %@",
+        "Szukaj narzędzia lub ścieżki…": "Search tools or paths…",
+        "Nic w raporcie nie pasuje do wyszukiwania.": "Nothing in the report matches the search.",
     ]
 }

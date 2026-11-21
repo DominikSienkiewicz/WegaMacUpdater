@@ -32,8 +32,8 @@ enum SidebarTab: String, Identifiable {
     /// somewhere they did not ask to go.
     var hasSearchField: Bool {
         switch self {
-        case .update, .logs, .uninstall, .inventory: return true
-        case .rollback, .cleanup, .migration: return false
+        case .update, .logs, .uninstall, .inventory, .cleanup: return true
+        case .rollback, .migration: return false
         }
     }
 
