@@ -138,7 +138,9 @@ updates, the row says so (**On the update list:**) and links to the matching row
 up to date and how that was checked, that Wega does not know where to update it from, that the
 check failed or that Wega has no current result and will check it next scan, or that one of
 your rules hides it, with **Show Rules** to open them. When Inventory has never been read, the
-row says so and offers **Open Inventory**; searching never starts that read itself. When the
+row says so; searching never starts that read itself. **Open Inventory** comes with every
+answer that comes from Inventory, and **Show Rules** with the answer about your rules. When
+Inventory may have changed since it was read, the answer says so. When the
 name matches nothing on this Mac, the row says it can't see the app among the apps here.
 
 Updates that your own rules (**Don't update**, **Skip this version**, a pin) hide from the
@@ -395,7 +397,7 @@ the list and the scan's band takes over.
 
 The list stays readable but locked, and its header says **"The list stays locked until the
 update ends."** Casks and npm packages say what is happening to them on their own row:
-*waiting*, *installing…*, *installed — checking*, *failed*, or *won't start* for a row the run
+*waiting*, *installing…*, *installed, checking*, *failed*, or *won't start* for a row the run
 will not begin after a stop request or a vendor's changed signature. Formulae and App Store
 updates run as one batch each, so their state stands once in the group's header rather than on
 every row. An update the vendor finishes says *with the vendor*. There is nothing for
@@ -724,7 +726,7 @@ Wega does that for you. Without it, the card shows a one-line command to copy an
 Terminal.
 
 To turn it off again, use **Turn Off Touch ID for sudo** on the same card; it appears when the
-Wega helper is installed. Without the helper the card sends you to the manual steps. If the
+Wega helper is installed. Without the helper the card points to the manual steps (unless it is showing a security note, below). If the
 helper is out of date, the card says so and asks you to remove and reinstall it or restart your
 Mac. **What Wega does** links to
 [Turning off Touch ID for sudo](#turning-off-touch-id-for-sudo) below.
@@ -960,11 +962,14 @@ not only to Wega: afterwards every `sudo` prompt asks for your password again.
 **In Wega.** With the Wega helper installed (and up to date), open **Settings → Permissions &
 Privacy → Touch ID for administrator commands** and click **Turn Off Touch ID for sudo**. The
 helper removes only the line `auth       sufficient     pam_tid.so` from
-`/etc/pam.d/sudo_local` and leaves Apple's template in place. It keeps a backup of the file,
-checks the result, and puts the file back if anything goes wrong. Then open a new Terminal
+`/etc/pam.d/sudo_local` and leaves Apple's template in place. It swaps the new file in
+atomically, checks it, and puts the old file back if anything goes wrong; no backup stays
+behind after a success. Then open a new Terminal
 window and run `sudo -k; sudo true`; it should ask for your password. Wega will not touch the
 file when it holds other settings, a line written differently, or anything else it did not
-expect; it says so, and you use the manual steps below.
+expect; it says so, and you use the manual steps below. If the card instead shows a security
+note about who can change the file, read the repair advice below; that note can appear even
+without the helper.
 
 **By hand.** Follow these steps in this order.
 
@@ -994,22 +999,35 @@ cat /etc/pam.d/sudo_local
 Look for write permission for a group or for everyone, an owner other than `root`, an ACL entry
 or a flag you did not set, and any line in the file that you did not add. Do not repair it by
 typing your password into `sudo`: `sudo` reads that very file, so a tampered file is not a safe
-place to type it. Repair it from recoveryOS, or through an administrator prompt, for example
-Finder's or System Settings' own. Then run:
+place to type it. Use one of two other ways.
+
+*Through an administrator prompt.* `osascript` asks macOS itself for the password, and macOS's
+authorization service does not read `sudo_local`, so a tampered file never sees that password:
 
 ```
-chown root:wheel /etc/pam.d/sudo_local
-chmod go-w /etc/pam.d/sudo_local
-chmod -N /etc/pam.d/sudo_local
+osascript -e 'do shell script "chown root:wheel /etc/pam.d/sudo_local; chmod go-w /etc/pam.d/sudo_local; chmod -N /etc/pam.d/sudo_local" with administrator privileges'
+```
+
+*From recoveryOS.* Restart into recoveryOS, unlock your disk in Disk Utility first if it uses
+FileVault and mount your Data volume, then open Terminal. There `/etc/pam.d` is recoveryOS's
+own, not your Mac's; your files are under the mounted Data volume, for example
+`/Volumes/Macintosh HD - Data/private/etc/pam.d/sudo_local` (the volume's name may differ):
+
+```
+chown root:wheel "/Volumes/Macintosh HD - Data/private/etc/pam.d/sudo_local"
+chmod go-w "/Volumes/Macintosh HD - Data/private/etc/pam.d/sudo_local"
+chmod -N "/Volumes/Macintosh HD - Data/private/etc/pam.d/sudo_local"
 ```
 
 The last command removes the ACL. When the directory is the problem, run the same commands
-for `/etc/pam.d`, without the `-N` one, and check `ls -ldeO@ /etc/pam.d` again afterwards.
+for `/etc/pam.d` (with the volume prefix in recoveryOS), without the `-N` one, and check
+`ls -ldeO@ /etc/pam.d` again afterwards.
 
 **When Wega names another policy file or directory.** Wega also stops when, once its line is
 gone, `sudo` would read another PAM file: `/etc/pam.conf`, `/usr/local/etc/pam.conf`,
 `/usr/local/etc/pam.d/sudo_local` or `/usr/share/pam.d/sudo_local`. It also warns when
-`/usr/local/etc` or `/usr/local/etc/pam.d` can be changed by someone other than root. Read the
+`/usr/local`, `/usr/local/etc` or `/usr/local/etc/pam.d` (the nearest of them that exists)
+can be changed by someone other than root. Read the
 file with `cat`; if you did not create it, treat it like the case above. Wega does not edit
 those files.
 
@@ -1018,7 +1036,8 @@ those files.
 files with `cat /etc/pam.d/.sudo_local.wega-swap-<UUID>` and `cat /etc/pam.d/sudo_local` (use the
 real name from the message; `ls -a /etc/pam.d` lists it). If `sudo_local` is damaged or missing,
 put the saved one back with `mv /etc/pam.d/.sudo_local.wega-swap-<UUID> /etc/pam.d/sudo_local`,
-under the same rule: recoveryOS or an administrator prompt, not a password typed into `sudo`.
+under the same rule: `osascript` with administrator privileges (wrap the `mv` as above) or
+recoveryOS (with the Data volume's path prefix), not a password typed into `sudo`.
 
 **After "the file changed while I was working".** A `.sudo_local.wega-swap-*` file may be left
 in `/etc/pam.d`. Check it the same way. Once `sudo_local` is confirmed correct, the leftover

@@ -25,14 +25,15 @@ them verbatim under the new version heading, so that step is never done by hand 
   and updates the vendor finishes say *with the vendor*.
 - **Turn Touch ID for sudo off from Settings.** With the Wega helper installed, the Touch ID
   card has **Turn Off Touch ID for sudo**. The helper removes only Wega's line from
-  `/etc/pam.d/sudo_local`, keeps a backup, checks the result and puts the file back if
-  anything fails. It refuses a file that someone other than root can change, and the guide
+  `/etc/pam.d/sudo_local`, swaps the new file in atomically, checks it and puts the old file
+  back if anything fails. It refuses a file that someone other than root can change, and the guide
   says how to inspect and repair that safely. The helper now answers at protocol version 7:
   with an older one the card says the helper is out of date.
 - **Find an app on Updates.** **⌘F** shows one answer row above the list instead of
   narrowing it: where the app is on the list, what Inventory knows when it is not (up to
   date, no known source, the check failed, hidden by one of your rules with **Show Rules**,
-  or not on this Mac), and **Open Inventory** when Inventory has never been read.
+  or not on this Mac), with **Open Inventory** beside every answer that comes from Inventory,
+  and says when Inventory may have changed since it was read.
 - **The menu knows when the window is checking.** While a check from the Wega window runs, the
   menu-bar menu says **Checking for updates in the Wega window…**, and its check button and
   the agent's own scheduled attempt wait.

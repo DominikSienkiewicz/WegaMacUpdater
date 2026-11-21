@@ -170,7 +170,16 @@ happened; the banner already explains it.
 The update band draws the counter and the stage while `scan.updating`, from
 `UpdateBandRunPresentation` and `UpgradeProgressCopy`
 ([`Sources/MacUpdater/UpdateBandRunPresentation.swift`](Sources/MacUpdater/UpdateBandRunPresentation.swift));
-the `UpgradeProgressBar` described below no longer exists, and the rules that follow now apply to the band's ring and line:
+the `UpgradeProgressBar` described below no longer exists. The bullets that follow are the
+history of that removed bar, kept for the reasoning behind the label and the counter.
+
+The band's ring (`UpdateBandRunRing`) replaced it. It is the run's only progress; there is no
+linear bar, so the `maxWidth` frame trap does not apply. It draws `completed/total` inside an
+arc that fills by `completed ÷ total`, and while `.preparing` it shows `0/0` with an empty arc
+instead of an indeterminate bar. Its VoiceOver label is `Postęp aktualizacji` and its value is
+the stage line from `UpgradeProgressCopy` (for example `Instaluję firefox — 3 z 7`), which
+already ends with the counter, not a bare `3 z 7`. The stage line is the label below, drawn in
+the band.
 
 - linear `ProgressView` tinted `Color.wegaHoney`, with `.frame(minWidth: 0, maxWidth: .infinity)`.
   That frame is not cosmetic: a linear bar reports a nonzero intrinsic width, and without an
@@ -185,7 +194,8 @@ the `UpgradeProgressBar` described below no longer exists, and the rules that fo
   `Instaluję pakiety — 3 z 7` for the App Store's one opaque call.
 - accessibility: label `Postęp aktualizacji`, value `3 z 7`.
 
-The existing stop button and the button's own spinner stay exactly as they are.
+(Historical: this bar left the stop button and the button's own spinner as they were. Today the
+band holds **Stop After Active Installs** and **Show log** next to the ring.)
 
 ## 7. Scope
 
