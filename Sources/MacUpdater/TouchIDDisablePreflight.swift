@@ -39,6 +39,8 @@ struct TouchIDDisablePreflight: Equatable, Sendable {
         var sudoLocal: Lookup<PAMPolicyFileFacts>
         /// `/etc/pam.d/sudo`, the head of the chain: `sudo` reads it first, and it includes `sudo_local`.
         var sudoPolicy: Lookup<PAMPolicyFileFacts>
+        /// What the app itself read from `sudo_local` (Z4); `nil` when it read nothing.
+        var sudoLocalBytes: Data?
         var localDirectories: [LocalDirectory]
         var existingFallbackPaths: [String]
     }
@@ -59,6 +61,9 @@ struct TouchIDDisablePreflight: Equatable, Sendable {
     var commandsAreSafe = false
     /// `/etc/pam.d/sudo` is there and the app saw that someone other than root can change it.
     var sudoPolicyIsUnsafe = false
+    /// What the helper's own rules make of the bytes the app read from `sudo_local` (E.6); `nil`
+    /// when it read nothing. The disable command is offered only for `.remove`.
+    var removalPlan: TouchIDSudoDisablePlan?
 
     /// Everything looked at and safe, with nothing to name.
     static let clear = TouchIDDisablePreflight(refusal: nil, unsafeLocalDirectory: nil, fallbackPath: nil, commandsAreSafe: true)
@@ -72,7 +77,8 @@ struct TouchIDDisablePreflight: Equatable, Sendable {
             unsafeLocalDirectory: observation.localDirectories.first { isChangeableByOthers($0.facts) }?.path,
             fallbackPath: observation.existingFallbackPaths.first,
             commandsAreSafe: provesSafety(observation),
-            sudoPolicyIsUnsafe: observation.sudoPolicy.facts.map(isSeenUnsafe) ?? false)
+            sudoPolicyIsUnsafe: observation.sudoPolicy.facts.map(isSeenUnsafe) ?? false,
+            removalPlan: observation.sudoLocalBytes.map(TouchIDSudoConfigurator.contentsDisablingTouchID(current:)))
     }
 
     private static func provesSafety(_ observation: Observation) -> Bool {
@@ -124,14 +130,43 @@ struct TouchIDDisablePreflight: Equatable, Sendable {
 extension TouchIDDisablePreflight {
     /// The facts as `lstat` and the extended-ACL call report them, never following a link.
     static func live() -> TouchIDDisablePreflight {
-        evaluate(Observation(
+        let sudoLocalPath = SystemPaths.pamPolicyDirectory + "/sudo_local"
+        let sudoLocal = policyFile(at: sudoLocalPath)
+        return evaluate(Observation(
             policyDirectory: policyDirectory(at: SystemPaths.pamPolicyDirectory),
-            sudoLocal: policyFile(at: SystemPaths.pamPolicyDirectory + "/sudo_local"),
+            sudoLocal: sudoLocal,
             sudoPolicy: policyFile(at: SystemPaths.pamPolicyDirectory + "/sudo"),
+            sudoLocalBytes: sudoLocal.facts.flatMap { readSudoLocal(atPath: sudoLocalPath, identity: $0.identity) },
             localDirectories: localCandidatePaths.map { path in
                 LocalDirectory(path: path, facts: lstatEntry(path).map { localFacts($0.status) })
             },
             existingFallbackPaths: TouchIDSudoDisabler.fallbackPolicyPaths.filter { lstatEntry($0) != nil }))
+    }
+
+    /// Z4: the app's own read of `sudo_local`, as the user. It opens the name without following a
+    /// link and without waiting on a FIFO, reads only a regular file that is still the one `lstat`
+    /// saw, and at most one byte past the helper's limit, so it is bounded on the main actor. `nil`
+    /// when anything differs or fails.
+    static func readSudoLocal(atPath path: String, identity: PAMFileIdentity) -> Data? {
+        let descriptor = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+        guard descriptor >= 0 else { return nil }
+        defer { close(descriptor) }
+        var status = stat()
+        guard fstat(descriptor, &status) == 0, status.st_mode & S_IFMT == S_IFREG,
+              fileFacts(status, .absent).identity == identity else { return nil }
+        let limit = TouchIDSudoDisabler.maximumSize + 1
+        var bytes = [UInt8](repeating: 0, count: limit)
+        var count = 0
+        while count < limit {
+            let read = bytes.withUnsafeMutableBytes { buffer in
+                Darwin.read(descriptor, buffer.baseAddress.map { $0 + count }, limit - count)
+            }
+            if read < 0, errno == EINTR { continue }
+            guard read >= 0 else { return nil }
+            if read == 0 { break }
+            count += read
+        }
+        return Data(bytes[..<count])
     }
 
     static func policyDirectory(at path: String) -> Lookup<PAMPolicyDirectoryFacts> {
