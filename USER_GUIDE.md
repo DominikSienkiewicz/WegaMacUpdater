@@ -13,7 +13,7 @@ see [`CONTRIBUTING.md`](CONTRIBUTING.md). To report a security problem, see
 
 > **Language.** Wega ships in **Polski** and **English**. On first launch it follows your
 > macOS language; you can switch it any time from the **globe** button in the main window's
-> toolbar, or in the **Settings** window (**⌘,** → *Language*). The menu and button names in
+> toolbar, or in the **Settings** window (**⌘,** → **General** → *Interface language*). The menu and button names in
 > this guide are given by what they do — your app may show them in Polish.
 
 ---
@@ -48,7 +48,7 @@ shows a one-line command to paste into Terminal).
 
 Stable releases are notarized, so macOS opens them without a warning.
 
-Once installed, Wega can keep **itself** up to date: the **Settings** window checks for a
+Once installed, Wega can keep **itself** up to date: **Settings → General** checks for a
 newer release. With the optional Wega helper switched on the button reads **Download and
 install**; without it, it reads **Download and open the installer** and the downloaded
 package is handed to you to run yourself (see [The Wega helper](#the-wega-helper)).
@@ -61,8 +61,13 @@ package is handed to you to run yourself (see [The Wega helper](#the-wega-helper
    straight away, and starts refreshing it by itself. That refresh runs in the band above
    the list — the rows stay put and readable, and **Cancel** stops it. On a first launch
    there is nothing to show yet, so the scan takes the window instead, with Wega sniffing.
+   If Homebrew's catalog was refreshed less than 30 minutes ago, this launch scan keeps it
+   instead of running `brew update` again, and the band says so with a chip — **"Homebrew
+   catalog from 12 min ago"**. Anything that does not look at the clock — **Check now**
+   (**⌘R**) included — always refreshes the catalog first. The queue still waits until the
+   scan ends either way.
 2. Press **⌘R** (or **Check now**) whenever you want another scan. **⌘R** works on every
-   screen; the **Check now** button appears only on **Updates**, **To reattach** ("Do przepięcia")
+   screen; the **Check now** button appears only on **Updates**, **To Homebrew** ("Do Homebrew")
    and **Undo updates** ("Cofnij aktualizacje"), the screens that show the result of a scan.
 
 **What a scan shows.** The scan runs in the band, and nothing covers the rows:
@@ -78,9 +83,11 @@ package is handed to you to run yourself (see [The Wega helper](#the-wega-helper
   the scan where it stands.
 
 **A scan never installs, removes or cleans anything.** Checking for updates does not touch
-your apps. It does refresh Homebrew's own catalog (`brew update`), which is why the first
-step is the slowest. An app missing from the list is not proof it is up to date — check its
-status in **Inventory**.
+your apps. It does refresh Homebrew's own catalog (`brew update`) — unless the launch scan
+reuses one refreshed in the last 30 minutes — which is why the first step is the slowest. An app missing from the list is not proof it is up to date — the line
+**"Can't see an app? Missing from the list doesn't mean up to date — check its status in
+Inventory"** under the list (and under its empty states) opens **Inventory**, where each app's
+check status is shown.
 
 ### What Wega checks
 
@@ -105,9 +112,11 @@ Wega goes and gets them anyway:
 
 - The list shows every app with an available update, grouped by what to do next:
   **Possible security fixes** first, then **Apps** and **CLI tools** Wega can update for you,
-  then **Needs your move** for updates the vendor or you finish. Each row names its source.
+  then **Needs your move** for updates the vendor or you finish. Each row carries the app's
+  name, with the Homebrew token — the name Homebrew knows it by, such as `visual-studio-code`
+  — in small type under it when the token says something the name does not, and its source.
   Pick **Group › by source** next to the categories to group by where each app came from
-  (**Homebrew Casks**, **App Store**, **Manually installed**, …) — the same grouping the
+  (**Homebrew apps**, **App Store**, **Manually installed**, …) — the same grouping the
   Inventory window uses.
 - The band above the list counts the updates ("N updates") and sums up your queue, for
   example **"4 queued · 2 to finish with the developer"**. Apps Wega installs for you and
@@ -136,11 +145,21 @@ filters missing evidence, unknown sources, partial failures and stale results, i
 updates found alongside a source failure. Ignored, pinned or skipped available updates
 read **Ukryte przez politykę** (Hidden by policy); the check itself still ran.
 
+Inventory keeps its last read while you move between screens, and says when it was made —
+**"Read today, 08:12"**. After something changes the installed apps (an update run, a Cleanup
+removal, a move to Homebrew, an uninstall), the line turns to **"Read today, 08:12 — the list may
+have changed"**. Two buttons sit beside it and do different things: **Refresh Inventory** only
+reads the disk again and does not look for new versions (its tooltip says so), while **Check for
+updates** starts the same scan as **Check now** (**⌘R**) and takes you to Updates, where it can
+be stopped. When the filters hide every app, the list says **"No apps match these filters."**
+with a **Clear Filters** button; when no app was found in the scan folders, it says so and points
+at **Settings → Checking & Background → Scan directories**.
+
 A result is stale after 24 hours or when a refreshed inventory finds a changed version/build. Moving an
 app or replacing it with another bundle ID requires a new check. Old saved scans without
 per-installation evidence show **Brak potwierdzenia** (Not confirmed), never “current”.
-Refreshing Inventory reads local installations; use **Check now** in Updates (or **⌘R**) for a new
-update check. Opening this status does not add network requests.
+**Refresh Inventory** reads local installations; use **Check for updates** in Inventory or **Check now**
+(**⌘R**) for a new update check. Opening this status does not add network requests.
 
 An App Store receipt alone, a cask name match without a resolved installation path, or a
 missing comparison version cannot prove that a specific copy is current. For App Store
@@ -275,29 +294,35 @@ Wega's head lives in your menu bar, **badged with the number of available update
 drawn as a template image, so it follows the bar — dark on a light bar, light on a dark one,
 and inverted while its menu is open.
 On a schedule you choose (off / hourly / every 6 hours / daily — default every 6 hours) it
-runs a quiet background check and notifies you when new updates appear. The check itself
-only reads; it never runs `brew update` or changes anything. The agent installs an update on
-its own only for an app you opted in to background updates, and only when every safety
-condition holds.
-The dropdown names the apps that have updates. While an update you started in the main
+runs a quiet background check and notifies you when new updates appear. The menu-bar check is
+read-only unless you allowed background updates for specific apps; then the button reads
+**Check and update in background (N)**, with N the number of apps you allowed, because a
+check may then install those apps' updates. The agent installs an update on its own only for
+an app you opted in to background updates, and only when every safety condition holds.
+The dropdown names the apps that have updates, one row each, with the versions when they are
+known (**Slack 4.47 → 4.48**); a **⚠︎** in front of a name means its release notes may describe a
+security fix. Clicking a row opens Wega on the Updates screen with that update's details
+showing. Under the status, the dropdown dates the last check in words — **"Checked yesterday,
+21:14"** — and, while automatic checks are on, says when the next one is due: **"Next attempt:
+today, 15:00, while Wega is running. Closing the window doesn't quit the app."** While an update you started in the main
 window runs, it shows how far the run has got ("Updating 2 of 5…") with a **Stop After
 Active Installs** button, even with the window closed; once clicked, the button reads
 **Finishing active installs, not starting new ones**. Updates the agent installs in the
 background are not shown there.
-Closing the main window keeps this agent running; use **Quit** in its dropdown to stop it.
+Closing the main window keeps this agent running; use **Quit Wega** in its dropdown to stop it.
 
 > The first time the agent has something to announce, Wega asks in her card at the bottom
 > of the sidebar before she ever raises the macOS notification prompt — so a background
 > check never surprises you with a system dialog. If you answer **Keep Notifications Off**,
 > she does not ask again, and you can change your mind any time under
-> **Settings → Notifications**, where **Notify me about new updates** switches them on or off
+> **Settings → General → Notifications**, where **Notify me about new updates** switches them on or off
 > (and **Open Notification Settings** appears if macOS itself has turned them off).
 
 **Clicking a notification takes you to what it is about**, not just to whatever screen Wega
 last showed. If the window is closed, it opens again, and the list already shows the result of
 the check that sent the notification. "Updates available" opens the updates list; the summary of an unattended round
 opens that list too, unless something in the round needs attention — a rollback that failed, a
-publisher that changed — in which case it opens the **Logs** view, because that is where the
+developer signature that changed — in which case it opens the **Logs** view, because that is where the
 reason is written. A report that Wega repaired an interrupted update always opens the log, for
 the same reason. A notification left over from an older version simply brings Wega forward, as
 it always did.
@@ -316,8 +341,8 @@ Until your first update finishes with everything installed, a card above the lis
   refuses, **Open privacy settings** opens the pane that grants it.
 - **Some apps ask for your administrator password when they update.** This is ticked when
   Touch ID for `sudo` is on or Wega was installed from the `.pkg`, which brings the
-  components that ask for the password. **Enable Touch ID** opens Settings when Touch ID can
-  be turned on; **What does the helper do?** explains the optional Wega helper, which does
+  components that ask for the password. **Enable Touch ID** opens Settings on the **Touch ID for
+  administrator commands** card, in the **Permissions & Privacy** tab, when Touch ID can be turned on; **What does the helper do?** explains the optional Wega helper, which does
   not answer these password prompts.
 - **Notify you about new updates?** — only until you answer it.
 
@@ -328,6 +353,12 @@ Until your first update finishes with everything installed, a card above the lis
 - Tick individual apps, a whole group with its header checkbox, or everything with the
   select-all checkbox above the list. Each ticked row joins the queue, which the band above
   the list counts (for example **4 queued**).
+- Each row is **one Tab stop per group**: Tab moves between groups, **↑** and **↓** move
+  between the rows inside one, **Space** adds the focused row to the queue or takes it out,
+  and **Return** shows its details. The **⋯** menu is a Tab stop of its own, and Space on it
+  opens the menu without queueing anything. VoiceOver reads a row as one sentence — the app,
+  the versions, the source, whether an automatic undo is possible and whether it is queued —
+  and offers **Show details**, **Don't update** and **Skip this version** as actions on it.
 - **Show exactly what I will do**, in the band, previews the exact commands. Then choose
   **Update** to run them. The button takes only what you queued; with nothing queued it
   reads **Nothing selected**.
@@ -341,7 +372,9 @@ Until your first update finishes with everything installed, a card above the lis
 ### Watching an update run
 
 While an update installs, a veil stands the rest of the screen down and its progress takes
-the bottom of the list. It counts **whole
+the bottom of the list. With **Reduce Transparency** on in System Settings → Accessibility →
+Display, the veil is not drawn at all, so the rows stay as bright as they were; the list is
+locked all the same, and the note saying why sits on a solid background. It counts **whole
 packages**, and the line under it names what the run is doing: preparing backups,
 downloading, or installing. It names the package too — "Installing firefox — 3 of 7" — but
 only while that package is the only one installing; once several are running at once the
@@ -393,24 +426,25 @@ changes; Brew reporting success alone does not prove that the offered build arri
 ### The rollback shield
 
 Each Homebrew cask row carries a **🛡 shield badge** when Wega can protect the upgrade with
-its snapshot → canary → auto-rollback net: it clones the installed app first, verifies the
-new version's code signature and publisher (Team ID) after Homebrew finishes, and
+its backup → canary → auto-rollback net: it clones the installed app first, verifies the
+new version's code signature and developer signature (Team ID) after Homebrew finishes, and
 **restores the previous version automatically** if the new one fails verification. A cask
 that can't be protected (for example one that installs no `.app`) shows an honest
 **"no protection"** badge instead of a false shield. Sources Wega cannot roll back at
 all — formulae, the Mac App Store, npm and vendor-direct apps — say so under their
 section headers.
 
-> **Publisher-change safety.** If the app's code-signing identity changes to an unexpected
-> publisher, Wega blocks the upgrade and raises a sticky security alert rather than
-> silently trusting it.
+> **Signature-change safety.** If the app's code-signing identity changes to an unexpected
+> developer signature, Wega blocks the upgrade and raises a sticky security alert rather than
+> silently trusting it. **Trust the New Signature** is there for the rare case where the
+> developer really did change accounts; it asks for your confirmation first.
 
 Those checks say what the new file *is*; they don't say whether it starts. So after they
 pass, Wega **launches the updated app hidden in the background and watches it for five
 seconds**. If it crashes straight away — or macOS refuses to start it at all — the previous
-version comes back from the snapshot, the same way any other failed check is undone. An app
+version comes back from the pre-update copy, the same way any other failed check is undone. An app
 you already have open is skipped, never quit to make room, and skipping never undoes an
-update. The check is on by default; you can turn it off under **Settings → Post-update
+update. The check is on by default; you can turn it off under **Settings → Advanced → Post-update
 launch test** if one of your apps takes badly to being started and closed unattended.
 
 ### Undo update
@@ -425,7 +459,8 @@ and the date the copy expires; the badge next to it counts the apps, not the cop
 updated several times inside those 7 days therefore appears once, offering the most recent
 update back; take it, and the step before it becomes the next offer, for as long as its copy
 is still retained. Undoing restores the previous app and **pins that version**, so the update
-you just took back is not offered again until you lift the pin in Settings.
+you just took back is not offered again until you lift the pin in **Settings → Checking &
+Background → Paused updates**.
 That pin also covers vendor-feed and Homebrew metadata-repair offers for the same resolved
 installation. A second copy at another path keeps its own update offers.
 
@@ -433,9 +468,9 @@ Protected cask upgrades write a **journal** before starting the package manager.
 write fails, Wega postpones the update and reports the reason; background updates also
 stop before starting Brew. This applies to adopting and migrating an existing app too.
 At the next launch, the journal helps Wega inspect an interrupted operation and restore
-a missing or rejected app from its snapshot. An unreadable journal, or an older journal
+a missing or rejected app from its pre-update copy. An unreadable journal, or an older journal
 whose recorded phase cannot prove that installation never started, does not authorize
-deleting its snapshots. Those copies remain available for investigation in
+deleting its pre-update copies. Those copies remain available for investigation in
 `~/Library/Application Support/WegaMacUpdater/update-operations/`; check Logs for details.
 
 ### What "updating" means per source
@@ -457,7 +492,7 @@ Wega routes each app through the right updater:
   only thing that can install an Adobe update. If you do not have it, the button opens
   Adobe's page instead.
 - **Java runtimes** — updated through Homebrew like any other cask. A JDK is installed by a
-  package rather than copied into place, so Wega cannot take a snapshot of it first: this
+  package rather than copied into place, so Wega cannot make a pre-update copy of it first: this
   one update runs without the automatic rollback, and the log says so before it starts.
 
 After an upgrade, Wega detects apps that were running and offers a one-click **restart**.
@@ -471,6 +506,31 @@ and asks nothing of you. If something didn't make it, Wega says **"Update incomp
 names what failed — and *that* banner stays until you close it, as does any banner offering
 a button. A failed rollback (new version rejected *and* old one not restored) raises its own
 **red sticky banner** telling you to check that app before using it.
+
+### Keyboard shortcuts
+
+Every shortcut is in the **Updates** menu of the menu bar, and **Help → Wega User Guide**
+opens this guide.
+
+| Shortcut | What it does |
+| --- | --- |
+| **⌘R** | **Check now** — works on every screen. |
+| **⌘↩** | **Update** the queue — only on **Updates**, and only when something is queued. |
+| **⌘.** | **Cancel Scan**, or, while an update runs, **Stop After Active Installs**. |
+| **⇧⌘A** | **Select All Visible** rows — only on **Updates**. |
+| **⌥⌘I** | **Show Inspector** — opens or closes the details panel. |
+| **⌘F** | **Find on This Screen** — focuses the search field on **Logs**, **Uninstall** and **Inventory**; disabled on the other screens, which have none. |
+| **⇧⌘F** | **Find in inventory** — goes to **Inventory** and focuses its search field, from any screen. |
+| **⌘1** to **⌘7** | Go to a section of the sidebar. |
+
+### When something fails
+
+Every error banner says what to do next and has a button for it. Most of them are
+**Show in Logs**, which opens **Logs** with the entry that explains the failure; a permission
+failure leads with the permission instead (for example **macOS needs your permission**, with
+**Open privacy settings**) and never sends you to Logs for it. When a banner names many apps or
+packages it shows the first few and a **Show All** button that expands the rest; a new banner
+replacing an old one starts collapsed again.
 
 ### Skip or pin updates
 
@@ -488,8 +548,10 @@ when the offered version is above the pin. Any time, the line **"Hidden by your 
 Show"** under the list opens the rules, where **Restore** removes any of them. A restored row
 comes back to the list, never into the queue.
 
-Manage these rules any time from the **Settings** window (**⌘,** → *Ignored & pinned*);
-they persist across launches and the menu-bar badge honours them too.
+Manage these rules any time from the **Settings** window (**⌘,** → **Checking & Background** →
+**Paused updates**); they persist across launches and the menu-bar badge honours them too. After
+an undo, Wega pins the restored version and the message names this card as the place to lift
+the pin.
 
 ---
 
@@ -560,7 +622,7 @@ exit code, and the tail of `stderr`. To turn one or more of them into a bug repo
    Expand any disclosure arrow first if you want to see the extra detail before reporting.
 3. Click **"Zgłoś błąd…"** (Report a problem…) in the toolbar. It works with nothing
    selected too; then the report carries only the environment context. **Zgłoś błąd** (Report
-   a bug) in the **Settings** window (**⌘,**) opens the same sheet.
+   a bug) on **Settings → General** opens the same sheet.
 4. Describe briefly what you were doing when it happened — optional, but it helps.
 5. Pick a channel: **"Wyślij e-mailem"** (Send by e-mail) or **"Zgłoś na GitHubie"** (Report
    on GitHub). The preview below switches to match.
@@ -584,6 +646,36 @@ your Mac has no app that can open the channel you picked, the window falls back 
 copyable subject and body, plus — for e-mail, the recipient address; for GitHub, the
 issue-page link — so the report is never a dead end.
 
+### Settings, tab by tab
+
+**Settings** (**⌘,**) has five tabs, so each setting has one place:
+
+| Tab | What lives there |
+| --- | --- |
+| **General** | The app card (version, **Check for Wega updates**, **Report a bug**), **Interface language**, **Launch at login**, **Notifications**. |
+| **Checking & Background** | **Paused updates** (your **Don't update**, **Skip this version** and pin rules), **Background update permissions**, **Scan directories**, and **Update conditions** (the free-space, network, battery and temperature checks before a download). |
+| **Permissions & Privacy** | **What Wega does**, the **Wega helper** and **Touch ID for administrator commands**. |
+| **Cleanup** | **Project folders** and the **Files and Folders map** Cleanup uses. |
+| **Advanced** | **Post-update launch test**, **Crash reporting**, **Application catalog**, **GitHub token (optional)**, **System diagnostics** (including **Export diagnostics**), **Environment** and **External tools**. |
+
+A button that changes something shows its result right under it, on its own card, since
+Settings has no Wega to say it. Anything elsewhere in Wega that needs a setting — the
+readiness card's **Enable Touch ID**, a helper message, the note after an undo — opens Settings
+on the tab and card it means.
+
+**What Wega does** sits at the top of **Permissions & Privacy**. It has three sections.
+**Permissions** explains each permission in the same three things: why Wega asks, what
+happens without it, and how to take it back — the Wega helper, Touch ID for administrator
+commands, App Management (with its current state) and Full Disk Access (needed only by
+Cleanup's Files and Folders map). **Connections** says that checking for updates installs and
+removes nothing (the exception is apps you allowed to update in the background), that Wega
+sends nothing about you — no telemetry and no analytics — and which services it talks to;
+**Show Fixed Addresses** lists the fixed hosts, and a line below says the rest: the update
+addresses stored in your installed apps, the npm registry and App Store servers.
+**Local data and reports** says logs, the last scan result and pre-update copies (kept up to 7
+days) stay on this Mac, and that you can review a problem report before it opens e-mail or
+GitHub.
+
 ### The Wega helper
 
 The helper is an **optional** component. Without it, everything in this guide still works;
@@ -592,8 +684,8 @@ type a password. It runs as root and can do only four things: install a verified
 package, turn on Touch ID for `sudo`, restore an app's pre-update copy, and move a
 root-owned app to the Trash. It checks Wega's signature on every connection.
 
-To switch it on, open **Settings** (**⌘,**) and use the **Wega helper** card:
-**Install Helper**. If macOS asks for approval, the card shows **Open Settings → Login
+To switch it on, open **Settings** (**⌘,**) → **Permissions & Privacy** and use the **Wega
+helper** card: **Install Helper**. If macOS asks for approval, the card shows **Open Settings → Login
 Items** and **Check again**; **Remove Helper** switches it off again. On the Updates
 screen, **What does the helper do?** in the readiness card shows the same explanation.
 
@@ -601,20 +693,23 @@ screen, **What does the helper do?** in the readiness card shows the same explan
 
 Some cask updates run `sudo`. With Touch ID turned on for `sudo`, those prompts show the
 system Touch ID sheet instead of asking for a password. It applies to **all** of `sudo` on
-your Mac, in Terminal too, not only to Wega. Turn it on with **Enable Touch ID for sudo** on
-the **Touch ID for Homebrew** card in Settings; it needs administrator rights once, to write
-`/etc/pam.d/sudo_local`. With the helper installed, Wega does that for you. Without it, the
-card shows a one-line command to copy and paste into Terminal.
+your Mac, in Terminal too, not only to Wega. Turn it on with **Use Touch ID Instead of Your Admin Password** on
+the **Touch ID for administrator commands** card (**Settings → Permissions & Privacy**); it
+needs administrator rights once, to write `/etc/pam.d/sudo_local`. With the helper installed,
+Wega does that for you. Without it, the card shows a one-line command to copy and paste into
+Terminal. **What Wega does** links to
+[Turning off Touch ID for sudo](#turning-off-touch-id-for-sudo) below.
 
 ### Settings diagnostics
 
-The **Settings** window (**⌘,**) shows live diagnostics: Homebrew version, `mas` version,
-the **App Management** permission, Privileged Helper status, macOS version and CPU
-architecture — the first things to check if a source behaves oddly. The App Management row
-is a preflight (see below): it reads `granted`, `denied` or `undetermined`, and offers a
-link straight to the settings pane when the answer is `denied`. It is an indication, not a
+**Settings → Advanced** shows live diagnostics: the **System diagnostics** card lists the
+Homebrew and `mas` versions and the **Environment** card the macOS version and CPU
+architecture — the first things to check if a source behaves oddly. The **App Management**
+permission and the Wega helper's status are on **Permissions & Privacy**. The App
+Management state is a preflight (see below): it reads granted, denied or not yet known, and
+**What Wega does** offers **Open privacy settings** when it is denied. It is an indication, not a
 verdict — an upgrade that actually hits the refusal has the last word.
-It also has an **App catalog** card that refreshes Wega's list of
+**Advanced** also has an **Application catalog** card that refreshes Wega's list of
 supported apps on demand (it also refreshes on launch); a fetched update applies on the
 next launch.
 
@@ -636,7 +731,7 @@ is reported as successful only after checking the expected app and version on di
 
 ### When a self-update cannot be confirmed
 
-If a self-update loses contact with the helper, **Settings** shows **Installation completion
+If a self-update loses contact with the helper, **Settings → General** shows **Installation completion
 is unconfirmed**. The installer may still be running. Wega keeps further changes blocked,
 including after Wega is closed and opened again. Use **Check installation status** to query
 the same operation; this does not start another installer. A confirmed terminal result
@@ -668,14 +763,14 @@ is reported as a failed check.
 
 ### Export diagnostics
 
-**Settings → System diagnostics → Export diagnostics** (also in the **Logs** toolbar)
+**Settings → Advanced → System diagnostics → Export diagnostics** (also in the **Logs** toolbar)
 saves a single `.zip` with everything a bug report needs, so filing one never means
 collecting it by hand:
 
 | In the zip | What it holds |
 | --- | --- |
-| `report.txt` | App version and build, macOS version and CPU, detected package managers and their versions, Privileged Helper status and version, schedule status, the last scan's result per source, free disk space and the signature state. |
-| `update-history.txt` | The last 40 upgrade runs, item by item: update → validation → rollback, including which apps were rolled back and where a publisher's Team ID changed. |
+| `report.txt` | App version and build, macOS version and CPU, detected package managers and their versions, Wega helper status and version, schedule status, the last scan's result per source, free disk space and the signature state. |
+| `update-history.txt` | The last 40 upgrade runs, item by item: update → validation → rollback, including which apps were rolled back and where a developer's Team ID changed. |
 | `logs/wega.log`, `logs/wega.log.1` | **Both** log files — the current one and the rotated one. |
 | `logs/trace-<run-id>.jsonl` | Persistent event traces for update operations: stages, Wega log messages, command output and exit results, HTTP attempts and observed vendor-check outcomes, correlated by run and process identifiers. |
 | `logs/trace-manifest.json` | Trace retention limits, incomplete runs, truncation and recording/read failures, so missing evidence is visible. |
@@ -704,7 +799,7 @@ Two things about this file are deliberate:
   tokens, `Authorization` headers, private keys), e-mail addresses and your account names
   are replaced with `[path]`, `[query]`, `[secret]`, `[email]` and `[user]` before anything
   is written. The failure itself survives; the identity behind it does not. Team ID values
-  are not exported either — the history records *that* a publisher changed, not who.
+  are not exported either — the history records *that* a developer signature changed, not who.
 - **Nothing is sent anywhere.** Wega has no upload, no share sheet and no default
   destination. A save panel asks where to put the file, and the file goes exactly there.
   Attaching it to an issue is your decision, separately.
@@ -722,7 +817,7 @@ you are sharing.
   permitted` or an explicit ownership error saying the terminal does not have App
   Management permissions (for example, when updating Parallels Desktop). Wega recognizes
   both refusals and shows the permission banner. Click **Open privacy settings** on the
-  banner (or the link in Settings diagnostics), enable **Wega** under **Privacy & Security → App
+  banner (or **Open privacy settings** in **Settings → Permissions & Privacy → What Wega does**), enable **Wega** under **Privacy & Security → App
   Management**, then run the update again. If macOS attributes the operation to a terminal
   used to launch Wega, enable that terminal instead. `sudo` does not bypass this permission.
   Until it is granted, background updates pause for 24 hours at a time instead of retrying
@@ -736,7 +831,7 @@ you are sharing.
   saving or reopening them does not make them complete.
 ### Crash reporting (off by default)
 
-The **Crash reporting** card in Settings can collect Wega's own crash and hang reports, so
+The **Crash reporting** card (**Settings → Advanced**) can collect Wega's own crash and hang reports, so
 that if Wega ever dies on you the evidence is already waiting instead of having to be dug out
 of Console. It is **off until you turn it on**, and everything about it is local:
 
@@ -787,28 +882,43 @@ one if you might still need it.
   (the copies of apps made before each update, used by Undo update and the rollback shield)
   and `last-scan.json` (the last scan result).
 - `~/Library/Logs/WegaMacUpdater/` holds the logs.
-- `~/Library/Caches/WegaMacUpdater/` and `~/Library/HTTPStorages/com.wega.WegaMacUpdater`, if
-  they exist, are caches.
+- `~/Library/Caches/WegaMacUpdater/`, `~/Library/Caches/com.wega.WegaMacUpdater/` and
+  `~/Library/HTTPStorages/com.wega.WegaMacUpdater`, if they exist, are caches. The second one
+  holds the downloaded Homebrew cask database (`casks-v4.json`) and Wega's copy of Adobe's
+  product catalog (`adobe-products.json`); both are downloaded again when needed.
 - Settings: `defaults delete com.wega.WegaMacUpdater`.
 - A GitHub token, if you saved one, is in Keychain Access under the service
   `com.wega.WegaMacUpdater.github`. Delete it there, or in Terminal:
   `security delete-generic-password -s com.wega.WegaMacUpdater.github -a github-pat`.
 - Root-owned files. The `.pkg` payload, which a self-update installs also for people who
-  first installed from the DMG, and the helper leave folders owned by root. Check whether
-  they exist with `pkgutil --pkgs | grep com.wega.WegaMacUpdater` and
-  `ls "/Library/Application Support/WegaMacUpdater"`. If so, remove them one by one in
-  Terminal (each needs your password and cannot be undone):
+  first installed from the DMG, and the helper leave folders owned by root. The helper's
+  folders can exist even when no package was ever installed, for example after a DMG
+  install that used the helper, so check each of them on its own:
+
+  ```
+  ls "/Library/Application Support/WegaMacUpdater"
+  ls "/Library/Application Support/com.wega.WegaMacUpdater"
+  ls "/var/db/com.wega.WegaMacUpdater"
+  pkgutil --pkgs | grep com.wega.WegaMacUpdater
+  ```
+
+  Remove only the ones that exist, one by one in Terminal (each needs your password and
+  cannot be undone):
 
   ```
   sudo rm -r "/Library/Application Support/WegaMacUpdater"
   sudo rm -r "/Library/Application Support/com.wega.WegaMacUpdater"
   sudo rm -r "/var/db/com.wega.WegaMacUpdater"
-  sudo pkgutil --forget com.wega.WegaMacUpdater
   ```
 
-  The first holds the authorization helpers, the second the helper's staging folders, the
-  third the helper's installation record, and the last removes the package receipt. A folder
-  that does not exist is not an error you need to act on.
+  The first holds the authorization helpers that the `.pkg` installs, the second the
+  helper's staging folders, and the third the helper's installation record. A folder that
+  does not exist is not an error you need to act on. Run the last command only if the
+  `pkgutil` line above printed `com.wega.WegaMacUpdater`; it removes the package receipt:
+
+  ```
+  sudo pkgutil --forget com.wega.WegaMacUpdater
+  ```
 
 #### Turning off Touch ID for sudo
 
@@ -827,6 +937,22 @@ for your password again.
    password instead of Touch ID.
 5. If that fails, restore the file from the root shell that is still open:
    `cp /etc/pam.d/sudo_local.bak /etc/pam.d/sudo_local`. Then close the shell with `exit`.
+6. If it worked, close the root shell with `exit` as well. You may then delete the backup,
+   `/etc/pam.d/sudo_local.bak`; it is no longer needed.
+
+### Cleanup: what each action does
+
+In **Cleanup**, the confirmation sheet for a finding says, under the question, what the action
+does and whether Wega can take it back:
+
+- **Moves to the Trash — you can restore it until you empty the Trash.** For the actions that
+  trash files or folders.
+- **Runs a Homebrew command — Wega can't undo it.** For the actions that run `brew`.
+- **Only copies the command; nothing is removed now.** For the findings that hand you a
+  command (for example `unlink`) to run yourself.
+
+The confirm button is red. An action that removes nothing, such as one that only explains a
+step or opens **Uninstall apps** with an app selected, shows no such line.
 
 ### Uninstalling apps
 
@@ -854,6 +980,14 @@ items included. Sizes appear a moment after the dialog opens (items in Container
 Containers show "size unknown"). If the app list couldn't be read completely, nothing is
 ticked by default. Ticked items go to the Trash, never a permanent delete; system-wide
 folders are not touched.
+
+An app owned by root, which the Trash will not take without a password, is removed by the
+**Wega helper** when it is switched on (the row says so: it will be moved to the Trash without
+a password). Without the helper, or when the helper is outdated or does not answer, the row
+says what to do — turn it on in **Settings → Permissions & Privacy**, or remove it and install
+it again — instead of asking for a password. The helper is reported as having removed the app
+only when it confirms it; if it does not, the refreshed list shows whether the app is still in
+`/Applications`.
 
 ---
 

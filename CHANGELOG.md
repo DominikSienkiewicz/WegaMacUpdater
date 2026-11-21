@@ -31,6 +31,35 @@ them verbatim under the new version heading, so that step is never done by hand 
   A copy that came with an app offers **Uninstall <app>…**, which opens Uninstall apps with
   that app selected. While `PATH` is only approximate, nothing is chosen for you. A link left
   dangling afterwards gets a copyable **`unlink`** (or **`sudo unlink`** outside your home) command.
+- **Settings in five tabs, and a card that says what Wega does.** Settings is now **General**,
+  **Checking & Background**, **Permissions & Privacy**, **Cleanup** and **Advanced**, so each
+  setting has one place, and a button, a banner or a menu item that needs a setting opens its
+  tab and card. Every card shows the result of its own buttons under them. **What Wega does**
+  tops **Permissions & Privacy**: why each permission is needed, what happens without it and
+  how to take it back; that checking installs nothing, that nothing about you is sent and which
+  fixed addresses Wega contacts (**Show Fixed Addresses**); and what stays on your Mac.
+- **The menu-bar menu is specific.** Each app with an update is a row that opens the update in
+  the window, with its versions and a **⚠︎** when its notes may describe a security fix. The
+  menu says **Checked yesterday, 21:14** and **Next attempt: today, 15:00, while Wega is running**,
+  and the check button reads **Check and update in background (N)** when N apps are allowed to
+  update in the background.
+- **Inventory keeps its result.** It says when it was read (**Read today, 08:12**), marks the
+  read **the list may have changed** after an update, a Cleanup removal, a move to Homebrew or
+  an uninstall, and no longer reads the disk again every time you open it. **Refresh Inventory**
+  only reads; **Check for updates** runs the same scan as **⌘R** and takes you to Updates. A
+  filter that hides every app says so and offers **Clear Filters**.
+- **Rows you can use from the keyboard and with VoiceOver.** Each group of rows is one Tab stop,
+  **↑** and **↓** move within it, **Space** queues the row and **Return** shows its details;
+  VoiceOver reads a row as one sentence with its actions. A row shows the app's name with the
+  Homebrew token under it.
+- **Shortcuts for finding and selecting.** **⌘F** finds on Logs, Uninstall and Inventory,
+  **⇧⌘F** finds in Inventory, **⇧⌘A** selects every visible row on Updates, **⌥⌘I** shows or
+  hides the details panel, **⌘.** cancels a scan as well as stopping an update, and **Help →
+  Wega User Guide** opens the guide.
+- **How to remove Wega, and where to look for a missing app.** The guide has the steps to
+  remove Wega and every root-owned leftover, and a safe way to turn Touch ID for `sudo` off
+  again; Uninstall and the Touch ID card link to them. Under the update list, **Can't see an
+  app?** opens Inventory, since a missing app is not proof it is up to date.
 
 ### Fixed
 - **An incomplete check no longer says everything is up to date.** If some sources did not
@@ -73,6 +102,13 @@ them verbatim under the new version heading, so that step is never done by hand 
   now stay visible and readable while the check reports itself in the band above the list.
 - **The list stays readable while updates install.** During an update run the rows used to
   vanish behind the same frosted layer. They now stay visible, dimmed, behind the note.
+- **Errors say what to do next.** Every error banner has a button — mostly **Show in Logs** —
+  and a permission failure leads with the permission instead of sending you to Logs. A banner
+  naming many apps shows the first few and **Show All**. A failed backup before an update says to
+  check free disk space.
+- **Reduce Transparency no longer hides the rows an update is installing.** The run's veil is not
+  drawn then; the list stays locked and the note says why. State texts are easier to read, and
+  the close buttons of banners and the log are larger targets.
 
 ### Changed
 - **The band names your queue.** It reads **4 queued · 2 to finish with the developer**
@@ -94,7 +130,7 @@ them verbatim under the new version heading, so that step is never done by hand 
   install <app>**), Wega puts her ball down while an error, an update run or a confirmation is
   open, and the Cleanup scan has her sniffing like the others.
 - **The scan button only where a scan shows.** **Check now** appears only on Updates, To
-  reattach and Undo updates; **⌘R** still works everywhere. The npm card in Inventory is a
+  Homebrew and Undo updates; **⌘R** still works everywhere. The npm card in Inventory is a
   counter, no longer a button that did nothing.
 - **"May fix security issues" instead of "urgent".** The band counts the updates that may
   fix security issues, Wega's card says that their release notes mention security, and the
@@ -105,6 +141,18 @@ them verbatim under the new version heading, so that step is never done by hand 
   password), lets you check them or turn on Touch ID, and asks once about notifications.
 - **The .pkg is the recommended download.** The user guide and the release notes explain
   that the .dmg cannot ask for an administrator password.
+- **A young Homebrew catalog is kept at launch.** Opening Wega less than 30 minutes after the
+  last refresh of Homebrew's catalog no longer runs `brew update` again, and the band says
+  **Homebrew catalog from 12 min ago**. **Check now** and **⌘R** always refresh it.
+- **One name for each thing.** The optional component is **Wega helper** (**Install Helper**,
+  **Remove Helper**), ignored and pinned updates are **Paused updates**, the Homebrew screen is
+  **To Homebrew**, apps and tools from Homebrew are **Homebrew apps** and **Homebrew tools**, a
+  changed developer signature is a **signature** that you can **Trust the New Signature**
+  for, and the copy made before an update is a backup. **Update conditions** replaces the
+  resource gate and **Show in Logs** replaces the old log links.
+- **Cleanup says what each action does.** Under the question, the confirmation says whether the
+  action moves to the Trash and can be restored, runs a Homebrew command Wega cannot undo, or only
+  copies a command, and its confirm button is red.
 
 ## [0.8.0] — 2026-11-20
 
