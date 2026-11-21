@@ -205,8 +205,9 @@ note instead of a counter of zero. Wega sniffs through the whole scan. The rows 
 readable, but they stop accepting selections, and a note — *"Selecting comes back when the scan
 finishes."* — says why: in the band, and in the list header where it fits, yielding to the scope
 bar at the narrowest width. Only a scan with nothing to keep on screen — the very first one —
-takes the whole window with the sniffing scene, with the same step caption. The rescans after an
-update or an undo also take the window; the re-check that closes a run still occupies it.
+takes the whole window with the sniffing scene, with the same step caption. The check after an
+update run and the rescan after an undo started from the result summary run in the band as well,
+with the list in place (see *What the summary says* below).
 An empty state — *everything up to date*, or a list the last scan could not confirm — has no rows
 to hold still, and Wega stays clear of it. The band's **Update** and its **⌘⏎**
 shortcut are held back while the scan runs, because a batch approved against the restored rows
@@ -526,20 +527,54 @@ net also covers the most ordinary flow there is: open Wega, tick the list it res
 disk, press **Update**. Banners **queue** rather than overwrite, so a *publisher changed*
 alert is sticky and survives the upgrade summary that used to clobber it.
 
-#### What a green banner means
+#### The check after a run and the summary
 
-**A green banner means every phase succeeded.** An upgrade is one result per item
-(`UpdateRunOutcome`) built from all four phases — the package manager's own verdict, the
-Gatekeeper canary, the rollback, and the post-upgrade rescan — and *"Zaktualizowano N
-pakietów"* appears only when every item cleared all of them.
+When the last install finishes, the window stays as it is: the post-run check runs in the band,
+under *"Checking the result · 0:07"*, with the same phase chips and source ring as a scan, Wega
+sniffing and the line *"I'll show the result after the check."* The list stays locked and the
+rows of updated apps leave it as each source answers; nothing takes over the window. Only then
+does Wega say how the run went. **Update** stays held back while the check runs, **Check now**
+is disabled and there is no **Cancel** for it, because the check cannot be cancelled.
 
-- A `mas upgrade` that failed, a cask the canary rolled back, and an item the fresh scan
-  still lists all read as **"Aktualizacja niekompletna"**, naming what did not make it.
-- An upgrade the rescan could not confirm (its source went silent) says so instead of passing
-  as verified.
+**A package counts as updated only when every phase succeeded.** An upgrade is one result per
+item (`UpdateRunOutcome`) built from all four phases — the package manager's own verdict, the
+Gatekeeper canary, the rollback, and the post-upgrade rescan. The result is then summed up
+once, in an `UpdateRunReport` that places **every item the run planned in exactly one result**:
+updated, failed, rolled back, not confirmed, or not started (stopped before its turn, or never
+run). An item that produced no outcome is never dropped, and a run is never called successful
+just because the items that did report all passed.
+
+- The band's heading reads *"Updated 4 of 5"* (with *"· scan incomplete"* when the check itself
+  could not cover every source), and its eyebrow carries the status and the time range of the
+  run: *Update stopped* when you stopped it, *Update incomplete* when anything is not updated,
+  *Updated N packages* when everything is. A ring shows the share that succeeded. The band lists
+  the non-zero counts (*Updated: 4*, *Failed: 1*, *Rolled back: 1*, *Not confirmed: 1*,
+  *Not started: 1*, *With the developer: 2*) and, while a copy is still kept, *backup until
+  …*. **Close summary** returns to the normal list.
+- The list switches to the result: a group for what needs your attention (failed, rolled back,
+  not confirmed, a changed developer signature), one for what was not started, one for the
+  updates left to finish with the developer, and one for what was updated. Each row says in one
+  line what happened and, where it helps, offers the action — **Undo** on an updated cask whose
+  pre-update copy is still kept (the note then reads *undone to …* afterwards), **Trust the New
+  Signature** on a changed signature, and a link that opens the run's log. Nothing in this list
+  can be selected or queued; a link at the top of the list, with the number of remaining
+  updates, closes the summary and returns to them.
+- A cask whose publisher changed during the run does not count as confirmed until the check
+  agrees: if the check still lists it, or could not answer for it, the summary says so rather
+  than calling it updated. An update Wega never offered is never added to the summary.
 - A **rollback that failed** — the new version rejected *and* the old one not restored —
-  raises its own **red sticky banner** telling you to check that app before using it, rather
-  than a line in the collapsible log under a green headline.
+  still raises its own **red sticky banner** telling you to check that app before using it,
+  in addition to its row in the summary.
+- The summary lives until you close it. It survives switching to another screen and the
+  language change, but not a relaunch. Any check you start (**Check now**, **⌘R**) or the next
+  run closes it; an undo's rescan, a background result and opening Settings do not. While it is
+  open, **⇧⌘A** and **⌘↩** are disabled.
+- If you close the summary while a *publisher changed* warning is still unresolved, that warning
+  comes back as the sticky banner it has always been, so it cannot disappear unnoticed.
+- What stays a banner: errors of the check itself (an incomplete or failed scan, a Homebrew
+  error), a missing App Management permission, the Touch ID hint, a failed undo, and a failed
+  rollback. The old result banners (*Updated N packages*, *Update incomplete*, *Update stopped*)
+  are gone; the summary replaces them.
 
 #### Error banners say what to do next
 

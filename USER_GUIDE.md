@@ -410,7 +410,7 @@ Wega; showing a percentage would mean inventing one. A single large app therefor
 ring at the same place while it downloads — the line keeps saying what is happening.
 
 A run that fails part-way stops short of the end: six of seven packages upgraded leaves the
-ring at 6/7, and the banner explains the rest.
+ring at 6/7, and the summary that follows explains the rest.
 
 The **log panel** under the list opens by itself when a run starts, and **Show log** in the band
 brings it back after you close it. It streams what the package managers are printing. Because several packages install at once, **every line is prefixed
@@ -523,13 +523,30 @@ After an upgrade, Wega detects apps that were running and offers a one-click **r
 
 ### Honest results
 
-A green *"Updated N packages"* banner appears **only when every step of every item
-succeeded** — the package manager, the security canary, the rollback net and the follow-up
-re-scan. It fades out on its own after about three seconds: it confirms something finished
-and asks nothing of you. If something didn't make it, Wega says **"Update incomplete"** and
-names what failed — and *that* banner stays until you close it, as does any banner offering
-a button. A failed rollback (new version rejected *and* old one not restored) raises its own
-**red sticky banner** telling you to check that app before using it.
+When the last install finishes, the window does not change. The band says *"Checking the result"*
+while Wega rescans to confirm what really changed; the list stays where it is, locked, and the
+rows of updated apps leave it as each source answers. Then the band and the list sum the run up.
+
+The summary counts an app as **updated only when every step succeeded** — the package manager,
+the security canary, the rollback net and the follow-up re-scan. Every app you chose lands in
+exactly one result, so none can go missing: updated, failed, rolled back, not confirmed (it was
+installed but the check could not confirm it), or not started (you stopped the run first, or it
+could not begin). The band shows how many are updated out of how many were planned, the count of
+each result, and how long Wega keeps the pre-update copy. A list below it groups the apps: what
+needs your attention comes first, with a one-line reason for each and a button where one helps
+(**Trust the New Signature** if the developer's signature changed; a link that opens the log),
+then what was not started, the updates left to finish with the developer, and what was updated
+(with **Undo** while the copy is kept). Nothing in that list can be ticked, so you cannot queue
+an update from it by mistake.
+
+A failed rollback (new version rejected *and* old one not restored) also raises a **red sticky
+banner** telling you to check that app before using it. Errors of the check itself, a missing
+permission and a failed undo stay banners too.
+
+The summary stays until you close it with **Close summary**, or with the link in the list that
+shows how many updates remain. Starting a new check or a new update also closes it. If a changed
+developer signature was still unresolved when you closed it, the warning comes back as a banner
+that stays until you close it.
 
 ### Keyboard shortcuts
 

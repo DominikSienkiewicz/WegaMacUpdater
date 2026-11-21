@@ -24,7 +24,7 @@ executes strictly in this order:
    tokens left over from an interrupted upgrade;
 4. **npm** — one call per package, in a loop;
 5. **mas** — one `mas upgrade <ids…>` call;
-6. **rescan** — `runCheck(lightweight:)`, which decides what the list says afterwards.
+6. **rescan** — `runCheck(lightweight:)`, which decides what the list says afterwards. It runs quietly, in place: the band reads "Checking the result" and the list stays on screen. The run's result is then summed up in an `UpdateRunReport` shown as the summary in the band and the list.
 
 Every brew and npm call already streams stdout and stderr chunk by chunk through
 `ProcessEventStream.drain`, and the chunk handler already writes them into `brewLog`. That
@@ -149,7 +149,7 @@ public enum BrewProgressEvent: Equatable, Sendable {
 A run that fails part-way ends below 100% — six of seven packages upgraded leaves the bar at
 6/7. Packages the publisher watchdog vetoed during preparation never run, so they never
 complete either: they stay in the total and the bar stops short. The bar reports what
-happened; the banner already explains it.
+happened; the summary that follows already explains it.
 
 ## 5. Wiring (Sources/MacUpdater)
 
