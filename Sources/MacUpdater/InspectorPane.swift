@@ -69,6 +69,7 @@ struct InspectorPane: View {
     private struct HeaderInfo {
         let iconPath: URL?
         let name: String
+        var token: String?
         let from: String
         let to: String
         let emphasis: VersionEmphasisKind
@@ -81,7 +82,10 @@ struct InspectorPane: View {
         case .outdated(let item, let iconPath):
             headerContent(HeaderInfo(
                 iconPath: iconPath,
-                name: item.name,
+                name: item.kind == .cask
+                    ? CaskDisplayName.name(token: item.name, appPath: iconPath)
+                    : item.name,
+                token: item.kind == .cask ? item.name : nil,
                 from: item.from ?? "—",
                 to: item.to ?? "—",
                 emphasis: versionEmphasis(
@@ -119,6 +123,11 @@ struct InspectorPane: View {
             Text(info.name)
                 .font(.wega(.title2, weight: .semibold))
                 .fixedSize(horizontal: false, vertical: true)
+            if let token = info.token, token != info.name {
+                Text(token)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+            }
             VersionArrow(from: info.from, to: info.to, emphasis: info.emphasis, style: .full)
             info.sourceBadge
         }

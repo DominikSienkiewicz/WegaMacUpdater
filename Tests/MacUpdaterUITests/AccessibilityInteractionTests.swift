@@ -175,6 +175,11 @@ final class AccessibilityInteractionTests: XCTestCase {
     func testPackageRowReflowsWithLargeEnvironmentText() {
         let regularHeight = packageRowHeight(font: .body)
         let accessibilityHeight = packageRowHeight(font: .system(size: 32))
+        XCTAssertEqual(
+            packageRowHeight(font: .body, source: "Homebrew"),
+            packageRowHeight(font: .body),
+            "The token and the source share one line under the name (UXP-20)"
+        )
 
         XCTAssertGreaterThan(
             accessibilityHeight,
@@ -236,13 +241,14 @@ final class AccessibilityInteractionTests: XCTestCase {
     }
 
     @MainActor
-    private func packageRowHeight(font: Font) -> CGFloat {
+    private func packageRowHeight(font: Font, source: String? = nil) -> CGFloat {
         let row = PackageRow(
             name: "Accessibility Regression Package",
             token: "accessibility-regression-package",
             currentVersion: "1.0.0",
             latestVersion: "2.0.0",
             isSelected: true,
+            source: source,
             onToggle: {}
         )
         .environment(\.font, font)

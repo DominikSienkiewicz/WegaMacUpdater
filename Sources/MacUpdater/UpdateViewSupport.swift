@@ -294,14 +294,17 @@ struct UpdateSection: View {
             ForEach(items) { item in
                 VStack(spacing: 0) {
                     PackageRow(
-                        name:           item.name,
+                        name:           item.kind == .cask
+                            ? CaskDisplayName.name(token: item.name, appPath: iconPaths[item.name])
+                            : item.name,
+                        token:          item.kind == .cask ? item.name : nil,
                         iconPath:       iconPaths[item.name],
                         currentVersion: item.from,
                         latestVersion:  item.to,
                         isSelected:     selected.contains(item.key),
                         isInspected:    item.key == inspectedKey,
                         rollback:       rollbackProtection[item.name],
-                        source:         showsSource ? item.kind.sourceLabel : nil,
+                        source:         showsSource ? (item.kind == .cask ? "Homebrew" : item.kind.sourceLabel) : nil,
                         rollbackUnavailableReason: showsSource ? UpdateView.rollbackCaption(for: item.kind) : nil,
                         onToggle:       { toggle(item.key) },
                         onSelect:       { onInspect?(item) },
@@ -433,7 +436,11 @@ struct UndoUpdateSection: View {
                 HStack(spacing: 12) {
                     AppIcon(path: URL(fileURLWithPath: item.appPath), size: 28)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(item.token).fontWeight(.medium)
+                        Text(CaskDisplayName.name(token: item.token, appPath: URL(fileURLWithPath: item.appPath)))
+                            .fontWeight(.medium)
+                        Text(item.token)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
                         Text(subtitle(for: item))
                             .font(.wega(.subheadline))
                             .foregroundStyle(.tertiary)

@@ -30,7 +30,7 @@ struct RollbackView: View {
         }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .confirmationDialog(
-                undoTarget.map { trf("Cofnąć aktualizację: %@?", "\($0.token)") } ?? tr("Cofnąć aktualizację?"),
+                undoTarget.map { trf("Cofnąć aktualizację: %@?", "\(CaskDisplayName.name(token: $0.token, appPath: URL(fileURLWithPath: $0.appPath)))") } ?? tr("Cofnąć aktualizację?"),
                 isPresented: $showUndoConfirmation,
                 titleVisibility: .visible
             ) {

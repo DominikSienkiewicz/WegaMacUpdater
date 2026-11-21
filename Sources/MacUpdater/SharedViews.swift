@@ -508,15 +508,14 @@ struct PackageRow: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(name).fontWeight(.semibold)
                 .fixedSize(horizontal: false, vertical: true)
-            if let source {
+            if let token, token != name {
+                Text(source.map { "\(token) · \($0)" } ?? token)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+            } else if let source {
                 Text(source)
                     .font(.wega(.footnote))
                     .foregroundStyle(.secondary)
-            }
-            if let token, token != name {
-                Text(token)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.tertiary)
             }
             if rollback == .protected {
                 RollbackScopeNotice(scope: RollbackProtection.scope(token: token ?? name), compact: true)
