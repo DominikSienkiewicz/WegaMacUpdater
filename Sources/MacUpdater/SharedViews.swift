@@ -571,7 +571,9 @@ struct PackageRow: View {
         if let runStatus {
             ZStack(alignment: .trailing) {
                 versionContent.hidden().accessibilityHidden(true)
+                // The row's label already speaks the status; the chip is for the eye only.
                 UpdateRunStatusChip(status: runStatus, isStopping: runIsStopping)
+                    .accessibilityHidden(true)
             }
         } else {
             versionContent

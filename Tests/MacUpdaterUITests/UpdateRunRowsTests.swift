@@ -106,6 +106,14 @@ struct UpdateRunRowsTests {
         #expect(row.contains("UpdateRunStatusChip(status: runStatus, isStopping: runIsStopping)"))
     }
 
+    /// Final review (Task 4) — the row's one-sentence label already speaks the run status, so the
+    /// chip's text, glyph name or spinner must not be a second VoiceOver child of the row.
+    @Test func theChipIsNotASecondVoiceOverChild() throws {
+        let row = try slice(try source("Sources/MacUpdater/SharedViews.swift"), from: "private var versionDetails: some View", to: "private var versionContent: some View")
+        let chip = try #require(row.range(of: "UpdateRunStatusChip(status: runStatus, isStopping: runIsStopping)"))
+        #expect(row[chip.upperBound...].prefix(80).contains(".accessibilityHidden(true)"))
+    }
+
     @Test func theChipStopsSpinningUnderReduceMotion() throws {
         let chip = try source("Sources/MacUpdater/UpdateRunStatusChip.swift")
         #expect(chip.contains("@Environment(\\.accessibilityReduceMotion) private var reduceMotion"))
