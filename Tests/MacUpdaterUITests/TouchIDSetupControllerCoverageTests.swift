@@ -14,7 +14,10 @@ struct TouchIDSetupControllerCoverageTests {
         let controller = TouchIDSetupController(dependencies: .init(
             currentState: { .enabled },
             helperIsEnabled: { true },
-            enableWithHelper: { await calls.recordHelper() },
+            enableWithHelper: {
+                await calls.recordHelper()
+                return .enabled
+            },
             authorizeFallback: {
                 await calls.recordFallback()
                 return .otherError("fallback must not run")
@@ -57,7 +60,7 @@ struct TouchIDSetupControllerCoverageTests {
         let cancelled = TouchIDSetupController(dependencies: .init(
             currentState: { .available },
             helperIsEnabled: { false },
-            enableWithHelper: {},
+            enableWithHelper: { .enabled },
             authorizeFallback: { .cancelledByUser },
             openInTerminal: { _ in }
         ))
@@ -67,7 +70,7 @@ struct TouchIDSetupControllerCoverageTests {
         let failed = TouchIDSetupController(dependencies: .init(
             currentState: { .notSupported },
             helperIsEnabled: { false },
-            enableWithHelper: {},
+            enableWithHelper: { .enabled },
             authorizeFallback: { .otherError("authorization failed") },
             openInTerminal: { _ in }
         ))
@@ -82,7 +85,7 @@ struct TouchIDSetupControllerCoverageTests {
         let controller = TouchIDSetupController(dependencies: .init(
             currentState: { .available },
             helperIsEnabled: { false },
-            enableWithHelper: {},
+            enableWithHelper: { .enabled },
             authorizeFallback: {
                 await calls.recordFallback()
                 await latch.block()
@@ -107,7 +110,7 @@ struct TouchIDSetupControllerCoverageTests {
         let controller = TouchIDSetupController(dependencies: .init(
             currentState: { state.value },
             helperIsEnabled: { false },
-            enableWithHelper: {},
+            enableWithHelper: { .enabled },
             authorizeFallback: { .cancelledByUser },
             openInTerminal: { command.value = $0 }
         ))
@@ -122,6 +125,167 @@ struct TouchIDSetupControllerCoverageTests {
         #expect(!controller.wasPermissionDenied)
     }
 
+    // MARK: - Turning Touch ID on through the helper (Aneks E.3, E.9)
+
+    private func enablingController(
+        state: TouchIDStateBox, preflight: TouchIDDisablePreflight = .clear, calls: TouchIDCallRecorder,
+        logged: TouchIDLogBox = TouchIDLogBox(),
+        enable: @escaping @MainActor @Sendable () async throws -> TouchIDSudoEnableResult
+    ) -> TouchIDSetupController {
+        TouchIDSetupController(dependencies: .init(
+            currentState: { state.value },
+            helperIsEnabled: { true },
+            enableWithHelper: {
+                await calls.recordHelper()
+                return try await enable()
+            },
+            authorizeFallback: {
+                await calls.recordFallback()
+                return .permissionDenied
+            },
+            openInTerminal: { _ in },
+            preflight: { preflight },
+            logHelperCode: { verb, code in logged.append(verb, code) }
+        ))
+    }
+
+    @Test func aHelperSuccessIsConfirmedByReadingTheFileAgain() async {
+        let state = TouchIDStateBox(.available)
+        let calls = TouchIDCallRecorder()
+        let controller = enablingController(state: state, calls: calls) {
+            state.value = .enabled
+            return .enabled
+        }
+        var states: [WegaState] = []
+        await controller.enable { states.append($0) }
+        #expect(controller.state == .idle(.enabled))
+        #expect(states.last == WegaState(pose: .happy, line: TouchIDEnableCopy.line(for: .enabled, isEnabled: true)))
+        #expect(await calls.fallbackCalls == 0)
+    }
+
+    /// RC2-2: the helper's word alone is not a success; the file read again must say so.
+    @Test func aSuccessTheFileDoesNotConfirmIsNotClaimed() async {
+        for result in [TouchIDSudoEnableResult.enabled, .alreadyEnabled] {
+            let calls = TouchIDCallRecorder()
+            let controller = enablingController(state: TouchIDStateBox(.available), calls: calls) { result }
+            var states: [WegaState] = []
+            await controller.enable { states.append($0) }
+            #expect(states.last == WegaState(pose: .idle, line: TouchIDEnableCopy.line(for: result, isEnabled: false)), "\(result)")
+            #expect(controller.state == .idle(.available) && !controller.showsEnableCommand, "\(result)")
+            #expect(await calls.fallbackCalls == 0, "\(result)")
+        }
+    }
+
+    /// Review focus 3, [O14]: a refusal never falls into the Terminal command, which needs sudo too.
+    @Test func aCallerRefusalShowsNoCommand() async {
+        for refusal in [TouchIDSudoEnableRefusal.noConsoleUser, .callerNotConsoleUser, .callerNotAdministrator] {
+            let calls = TouchIDCallRecorder()
+            let controller = enablingController(state: TouchIDStateBox(.available), calls: calls) { .refused(refusal) }
+            var states: [WegaState] = []
+            await controller.enable { states.append($0) }
+            #expect(!controller.wasPermissionDenied && !controller.showsEnableCommand, "\(refusal)")
+            #expect(states.last?.line == TouchIDEnableCopy.line(for: .refused(refusal), isEnabled: false), "\(refusal)")
+            #expect(controller.state == .idle(.available), "\(refusal)")
+            #expect(await calls.fallbackCalls == 0, "\(refusal)")
+        }
+    }
+
+    @Test func everyOtherHelperRefusalOrFailureShowsItsLineAndNoCommand() async {
+        let backup = "/etc/pam.d/.sudo_local.wega-backup-0A1B"
+        let results: [TouchIDSudoEnableResult] = TouchIDSudoEnableRefusal.allCases.map { .refused($0) }
+            + [.restoredAfterFailure, .rollbackFailed(backupPath: backup), .rollbackFailed(backupPath: nil)]
+        for result in results {
+            let calls = TouchIDCallRecorder()
+            let controller = enablingController(state: TouchIDStateBox(.available), calls: calls) { result }
+            var states: [WegaState] = []
+            await controller.enable { states.append($0) }
+            let line = TouchIDEnableCopy.line(for: result, isEnabled: false)
+            #expect(states.last == WegaState(pose: .idle, line: line), "\(result)")
+            #expect(!controller.wasPermissionDenied && !controller.showsEnableCommand, "\(result)")
+            #expect(await calls.fallbackCalls == 0, "\(result)")
+            if case .rollbackFailed = result {
+                #expect(controller.state == .failed(.available, line), "\(result): the card keeps it in red")
+            } else {
+                #expect(controller.state == .idle(.available), "\(result)")
+            }
+        }
+    }
+
+    /// Review focus 2: right after the app update the helper is still v7, which the handshake
+    /// refuses for this verb; the card says so and offers the Terminal command.
+    @Test func anOutdatedHelperOffersTheManualEnableCommand() async {
+        let calls = TouchIDCallRecorder()
+        let controller = enablingController(state: TouchIDStateBox(.available), calls: calls) {
+            throw PrivilegedHelperClient.HelperError.versionMismatch(helper: "7", expected: "8…8")
+        }
+        var states: [WegaState] = []
+        await controller.enable { states.append($0) }
+        #expect(controller.wasPermissionDenied && controller.showsEnableCommand)
+        #expect(controller.enableHelperOutdated)
+        #expect(states.last == WegaState(pose: .idle, line: TouchIDEnableCopy.outdatedHelper))
+        #expect(await calls.fallbackCalls == 0)
+
+        controller.refresh()
+        #expect(!controller.showsEnableCommand)
+        let unsafe = enablingController(
+            state: TouchIDStateBox(.available),
+            preflight: TouchIDDisablePreflight(refusal: .unsafeOwnership, unsafeLocalDirectory: nil, fallbackPath: nil),
+            calls: TouchIDCallRecorder()
+        ) { throw PrivilegedHelperClient.HelperError.versionMismatch(helper: "7", expected: "8…8") }
+        await unsafe.enable { _ in }
+        #expect(!unsafe.showsEnableCommand, "no sudo command while the app sees an unsafe policy")
+    }
+
+    /// Z13: no answer does not mean nothing changed; the helper may have finished under its lock.
+    @Test func aTransportErrorAfterWhichTheFileIsEnabledIsASuccess() async {
+        let state = TouchIDStateBox(.available)
+        let calls = TouchIDCallRecorder()
+        let controller = enablingController(state: state, calls: calls) {
+            state.value = .enabled
+            throw PrivilegedHelperClient.HelperError.timedOut
+        }
+        var states: [WegaState] = []
+        await controller.enable { states.append($0) }
+        #expect(controller.state == .idle(.enabled))
+        #expect(states.last == WegaState(pose: .happy, line: TouchIDEnableCopy.line(for: .enabled, isEnabled: true)))
+        #expect(await calls.fallbackCalls == 0)
+    }
+
+    @Test func aTransportErrorWithTouchIDStillOffOffersTheManualCommand() async {
+        let calls = TouchIDCallRecorder()
+        let controller = enablingController(state: TouchIDStateBox(.available), calls: calls) {
+            throw PrivilegedHelperClient.HelperError.connectionFailed
+        }
+        await controller.enable { _ in }
+        #expect(await calls.fallbackCalls == 1)
+        #expect(controller.wasPermissionDenied && controller.showsEnableCommand)
+        #expect(!controller.enableHelperOutdated)
+    }
+
+    /// The app logs the helper's code for a refusal or a failure, never the backup path or a byte of
+    /// the file, in both directions.
+    @Test func refusalCodesAreLoggedWithoutTheirDetail() async {
+        let logged = TouchIDLogBox()
+        let state = TouchIDStateBox(.available)
+        let failing = enablingController(state: state, calls: TouchIDCallRecorder(), logged: logged) {
+            .rollbackFailed(backupPath: "/etc/pam.d/.sudo_local.wega-backup-0A1B")
+        }
+        await failing.enable { _ in }
+        let succeeding = enablingController(state: state, calls: TouchIDCallRecorder(), logged: logged) { .enabled }
+        await succeeding.enable { _ in }
+        #expect(logged.entries == [TouchIDLogBox.Entry(verb: .enableTouchIDForSudo, code: -21)])
+
+        let disabling = TouchIDSetupController(dependencies: .init(
+            currentState: { .enabled }, helperIsEnabled: { true }, enableWithHelper: { .enabled },
+            authorizeFallback: { .cancelledByUser }, openInTerminal: { _ in },
+            disableWithHelper: { .refused(.unsafeOwnership) },
+            logHelperCode: { verb, code in logged.append(verb, code) }
+        ))
+        await disabling.disable { _ in }
+        #expect(logged.entries.last == TouchIDLogBox.Entry(verb: .disableTouchIDForSudo, code: -5))
+        #expect(logged.entries.count == 2)
+    }
+
     // MARK: - Turning Touch ID off
 
     private func disablingController(
@@ -132,7 +296,7 @@ struct TouchIDSetupControllerCoverageTests {
         TouchIDSetupController(dependencies: .init(
             currentState: { state.value },
             helperIsEnabled: { helper },
-            enableWithHelper: {},
+            enableWithHelper: { .enabled },
             authorizeFallback: { .cancelledByUser },
             openInTerminal: { _ in },
             disableWithHelper: {
@@ -265,7 +429,7 @@ struct TouchIDSetupControllerCoverageTests {
         let state = TouchIDStateBox(.enabled)
         let observed = TouchIDPreflightBox(.clear)
         let refusing = TouchIDSetupController(dependencies: .init(
-            currentState: { state.value }, helperIsEnabled: { true }, enableWithHelper: {},
+            currentState: { state.value }, helperIsEnabled: { true }, enableWithHelper: { .enabled },
             authorizeFallback: { .cancelledByUser }, openInTerminal: { _ in },
             disableWithHelper: {
                 observed.value = TouchIDDisablePreflight(refusal: .unsafeOwnership, unsafeLocalDirectory: nil, fallbackPath: nil)
@@ -363,6 +527,22 @@ private final class TouchIDStateBox: @unchecked Sendable {
     var value: TouchIDSudoConfigurator.State {
         get { lock.withLock { stored } }
         set { lock.withLock { stored = newValue } }
+    }
+}
+
+private final class TouchIDLogBox: @unchecked Sendable {
+    struct Entry: Equatable {
+        let verb: WegaHelperVerb
+        let code: Int
+    }
+
+    private let lock = NSLock()
+    private var stored: [Entry] = []
+
+    var entries: [Entry] { lock.withLock { stored } }
+
+    func append(_ verb: WegaHelperVerb, _ code: Int) {
+        lock.withLock { stored.append(Entry(verb: verb, code: code)) }
     }
 }
 

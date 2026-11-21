@@ -31,22 +31,21 @@ final class TouchIDSetupController: ObservableObject {
   struct Dependencies: Sendable {
     var currentState: @Sendable () -> TouchIDSudoConfigurator.State
     var helperIsEnabled: @MainActor @Sendable () -> Bool
-    var enableWithHelper: @MainActor @Sendable () async throws -> Void
+    var enableWithHelper: @MainActor @Sendable () async throws -> TouchIDSudoEnableResult
     var authorizeFallback: @Sendable () async -> AuthorizationOutcome
     var openInTerminal: @Sendable (String) -> Void
     var disableWithHelper: @MainActor @Sendable () async throws -> TouchIDSudoDisableResult = { .nothingToRemove }
     var disableAvailability: @MainActor @Sendable () async -> HelperVerbAvailability = { .enabled }
     var preflight: @Sendable () -> TouchIDDisablePreflight = { .clear }
+    /// Takes only the verb and the helper's code, so no path or byte of the file can reach the log.
+    var logHelperCode: @Sendable (WegaHelperVerb, Int) -> Void = { verb, code in
+      WegaLog.error(.helper, "Helper \(verb.rawValue): kod \(code)")
+    }
 
     static let live = Dependencies(
       currentState: { TouchIDSudoConfigurator.currentState() },
       helperIsEnabled: { PrivilegedHelperClient.shared.isEnabled },
-      enableWithHelper: {
-        let result = try await PrivilegedHelperClient.shared.enableTouchIDForSudo()
-        guard result == .enabled || result == .alreadyEnabled else {
-          throw PrivilegedHelperClient.HelperError.operationFailed("enableTouchIDForSudo failed (\(result.wireCode))")
-        }
-      },
+      enableWithHelper: { try await PrivilegedHelperClient.shared.enableTouchIDForSudo() },
       // SEC-05: production never executes an elevated shell string. Without the
       // bounded signed helper the controller exposes the transactional Terminal flow.
       authorizeFallback: { .permissionDenied },
@@ -74,6 +73,7 @@ final class TouchIDSetupController: ObservableObject {
 
   @Published private(set) var state: State
   @Published private(set) var disableOffer = DisableOffer.unknown
+  @Published private(set) var enableHelperOutdated = false
   private(set) var preflight = TouchIDDisablePreflight.clear
 
   private let dependencies: Dependencies
@@ -111,6 +111,10 @@ final class TouchIDSetupController: ObservableObject {
     return false
   }
 
+  /// The manual Terminal command runs through `sudo`, so the card offers it only after the helper
+  /// could not do it and never while the app sees an unsafe policy (RC2-6 tightens this later).
+  var showsEnableCommand: Bool { wasPermissionDenied && preflight.refusal == nil }
+
   func refresh() {
     // ARCH-08a: re-checking Touch ID is the one moment the sudo/askpass wiring can
     // change mid-session, so drop the memoised brew environment. The next spawn then
@@ -118,6 +122,7 @@ final class TouchIDSetupController: ObservableObject {
     HomebrewEnvironment.invalidateCache()
     state = .idle(dependencies.currentState())
     preflight = dependencies.preflight()
+    enableHelperOutdated = false
   }
 
   func openManualFallback() {
@@ -127,25 +132,37 @@ final class TouchIDSetupController: ObservableObject {
   func enable(onWegaState: @MainActor (WegaState) -> Void) async {
     guard !isEnabling else { return }
     state = .enabling(touchIDState)
+    enableHelperOutdated = false
 
     if dependencies.helperIsEnabled() {
       do {
-        try await dependencies.enableWithHelper()
-        refresh()
-        onWegaState(WegaState(pose: .happy, line: tr("Touch ID podpięty pod sudo.")))
+        finishEnabling(with: try await dependencies.enableWithHelper(), onWegaState: onWegaState)
         return
       } catch {
         WegaLog.error(
           .helper,
           "Helper enableTouchIDForSudo nie powiódł się: \(error.localizedDescription)"
         )
+        if case .versionMismatch = error as? PrivilegedHelperClient.HelperError {
+          enableHelperOutdated = true
+          state = .permissionDenied(touchIDState)
+          onWegaState(WegaState(pose: .idle, line: TouchIDEnableCopy.outdatedHelper))
+          return
+        }
+        // Z13: no answer does not mean nothing changed; the helper may have finished under its lock.
+        refresh()
+        if touchIDState == .enabled {
+          onWegaState(Self.enabledState)
+          return
+        }
+        state = .enabling(touchIDState)
       }
     }
 
     switch await dependencies.authorizeFallback() {
     case .success:
       refresh()
-      onWegaState(WegaState(pose: .happy, line: tr("Touch ID podpięty pod sudo.")))
+      onWegaState(Self.enabledState)
     case .cancelledByUser:
       state = .idle(touchIDState)
     case .permissionDenied:
@@ -158,6 +175,30 @@ final class TouchIDSetupController: ObservableObject {
     case .otherError(let message):
       state = .failed(touchIDState, message)
     }
+  }
+
+  /// RC2-2: a success only when the file read again says so. A refusal or a failed write shows its
+  /// line and never falls into the Terminal command, which goes through `sudo` as well [O14].
+  private func finishEnabling(with result: TouchIDSudoEnableResult, onWegaState: @MainActor (WegaState) -> Void) {
+    logHelperCode(.enableTouchIDForSudo, result.wireCode)
+    refresh()
+    let isEnabled = touchIDState == .enabled
+    let line = TouchIDEnableCopy.line(for: result, isEnabled: isEnabled)
+    if isEnabled, result == .enabled || result == .alreadyEnabled {
+      onWegaState(WegaState(pose: .happy, line: line))
+      return
+    }
+    if case .rollbackFailed = result { state = .failed(touchIDState, line) }
+    onWegaState(WegaState(pose: .idle, line: line))
+  }
+
+  private static var enabledState: WegaState {
+    WegaState(pose: .happy, line: TouchIDEnableCopy.line(for: .enabled, isEnabled: true))
+  }
+
+  /// A refusal or a failure is logged by its code alone.
+  private func logHelperCode(_ verb: WegaHelperVerb, _ code: Int) {
+    if code < 0 { dependencies.logHelperCode(verb, code) }
   }
 
   /// One bounded handshake, and only when Touch ID is on and nothing the app observed already
@@ -199,6 +240,7 @@ final class TouchIDSetupController: ObservableObject {
 
     do {
       let result = try await dependencies.disableWithHelper()
+      logHelperCode(.disableTouchIDForSudo, result.wireCode)
       let observed = preflight
       refresh()
       let stillEnabled = touchIDState == .enabled
