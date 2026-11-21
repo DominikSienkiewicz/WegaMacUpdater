@@ -118,16 +118,26 @@ public enum WegaHelper {
     public static let teamIdentifier = "6B8FYSZFJK"
 
     /// Requirement the **app** must satisfy — enforced by the helper on every
-    /// incoming XPC connection. Pins Apple chain + app identifier + Team ID.
+    /// incoming XPC connection. Pins Apple chain + app identifier + a Developer ID
+    /// signature + Team ID. `scripts/verify-bundle.sh` holds this exact text and checks
+    /// the signed release against it.
     public static func clientRequirement() -> String {
-        "anchor apple generic and identifier \"\(appBundleID)\" "
-        + "and certificate leaf[subject.OU] = \"\(teamIdentifier)\""
+        "anchor apple generic and identifier \"\(appBundleID)\" " + developerIDTeamClauses
     }
 
     /// Requirement the **helper** must satisfy — enforced by the app before it
-    /// trusts the daemon it connected to.
+    /// trusts the daemon it connected to. Same shape as `clientRequirement()`; both
+    /// binaries are signed with the same Developer ID Application identity.
     public static func helperRequirement() -> String {
-        "anchor apple generic and identifier \"\(helperSigningID)\" "
+        "anchor apple generic and identifier \"\(helperSigningID)\" " + developerIDTeamClauses
+    }
+
+    /// R2-5: the Developer ID intermediate CA marker (…6.2.6, G1 and G2) and the Developer ID
+    /// Application leaf marker (…6.1.13), then the Team ID. The same team's Apple Development
+    /// or Apple Distribution signature has the OU and an Apple anchor but not these markers.
+    private static var developerIDTeamClauses: String {
+        "and certificate 1[field.1.2.840.113635.100.6.2.6] "
+        + "and certificate leaf[field.1.2.840.113635.100.6.1.13] "
         + "and certificate leaf[subject.OU] = \"\(teamIdentifier)\""
     }
 
