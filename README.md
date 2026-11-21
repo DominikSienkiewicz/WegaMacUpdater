@@ -2,7 +2,7 @@
 
 **Designed and maintained by [Dominik Sienkiewicz](https://www.linkedin.com/in/dominik-sienkiewicz/), built with AI coding agents:** I set the architecture, write the specifications, define the quality gates enforced in CI and review every change.
 
-Native macOS app that keeps every application on your Mac up to date — Homebrew casks, Mac App Store, JetBrains IDEs, GitHub Releases, and Sparkle apps — from a single window. Daily use never needs a terminal; installing Homebrew itself, and turning on Touch ID for `sudo` without the optional Wega helper, are the two things that do.
+Native macOS app that keeps every application on your Mac up to date — Homebrew casks, Mac App Store, JetBrains IDEs, GitHub Releases, and Sparkle apps — from a single window. Daily use never needs a terminal; installing Homebrew itself, and turning Touch ID for `sudo` on or off without the optional Wega helper, are the two things that do.
 
 The Updates screen puts a band above the list — how many updates there are, what is queued, how many of
 those an undo covers, and the one button that starts them — and the rows stay readable while a scan runs.

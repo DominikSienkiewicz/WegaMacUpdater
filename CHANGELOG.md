@@ -40,6 +40,13 @@ them verbatim under the new version heading, so that step is never done by hand 
   from recoveryOS. This is helper protocol v8: a running v6 or v7 helper keeps rollback,
   self-update, Trash and (v7) turning Touch ID off working, and only turning it on says the
   helper is out of date until you restart your Mac or reinstall the helper.
+- **Turn Touch ID for sudo off without the helper.** When the helper is missing or out of date,
+  the Touch ID card shows a command to copy (**Copy command**) or run in Terminal (**Open in
+  Terminal**) next to the guide link, but only when Touch ID is on, the settings `sudo` reads
+  are safe, no later policy file would take over and Wega's own read of `sudo_local` shows the
+  exact directive can be removed. The command removes only that line and changes nothing, and
+  says why, when the file has a backslash, other settings, a NUL byte or text that is not UTF-8,
+  is too large, or when a later policy path or a linked `/usr/local` directory exists.
 - **The helper exits when idle.** From protocol v8 the helper exits after a minute with no
   connection and no work in progress (a background installation counts as work), and macOS
   starts it again from the installed Wega for the next request, so after a Wega update the new
@@ -103,6 +110,17 @@ them verbatim under the new version heading, so that step is never done by hand 
   app?** opens Inventory, since a missing app is not proof it is up to date.
 
 ### Security
+- **No sudo route while the settings sudo reads are unsafe or unproven.** When `sudo_local` is
+  not a regular file, `sudo_local` or `/etc/pam.d` can be changed by someone other than root
+  (whether Wega saw it or the helper reported it), `/etc/pam.d/sudo` is unsafe, or Wega cannot
+  establish that they are safe, the Touch ID card shows no button and no command and says to
+  repair it from recoveryOS and to type no password into `sudo` meanwhile, even when Wega asks
+  for one during an update. The guide no longer offers an `osascript` administrator-prompt
+  repair; recoveryOS is the only route.
+- **The manual command to turn Touch ID on is safer.** It runs through `/usr/bin/sudo` in the C
+  locale, refuses an existing `sudo_local` that is a link, is not a regular file, is not owned
+  by root or is writable by group or others, and ends an unterminated last line before adding
+  the directive.
 - **The helper and the app pin each other to a Developer ID signature.** Both XPC code
   requirements now demand a Developer ID certificate chain (the intermediate and leaf markers),
   besides the Team ID and the identifier, so a signature from the same team that is not
@@ -110,6 +128,9 @@ them verbatim under the new version heading, so that step is never done by hand 
   against both requirements.
 
 ### Fixed
+- **Open in Terminal opens the command shown beside it.** Before, the code always opened the
+  enable command whatever the card showed; it went unnoticed because only the enable command was
+  ever shown.
 - **Inventory knows about installs and undos.** It marks its read **the list may have
   changed** after an install from the list through Homebrew, a reinstall and an undo of an
   update too, so it no longer shows a stale list as current.
