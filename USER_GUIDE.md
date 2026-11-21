@@ -870,7 +870,9 @@ changes when the privileged helper is switched on is only *who finishes the job*
 helper, Wega installs it for you and then asks you to restart; without it, the same file is
 handed to you to run yourself. A release that publishes neither offers no update button at
 all rather than something Wega cannot verify. Before opening or installing a package, Wega
-checks its product identity, promised version and signed app payload. A helper installation
+checks its product identity, promised version and signed app payload. The app must carry
+Wega's Developer ID signature, and Wega checks it for both Apple silicon and Intel and for the
+helper programs inside it, so a copy changed after signing is refused. A helper installation
 is reported as successful only after checking the expected app and version on disk.
 
 ### When a self-update cannot be confirmed
