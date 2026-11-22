@@ -1,0 +1,14 @@
+{
+  "name": "Wega Mac Updater",
+  "kicker": "macOS update manager",
+  "description": "Native macOS app that keeps every application on your Mac up to date from a single window.",
+  "accent": "#C7A378",
+  "stack": [
+    {"icon": "swift", "label": "Swift 6.0", "color": "#F05138"},
+    {"icon": "apple", "label": "SwiftUI, macOS 26+", "color": "#FFFFFF"},
+    {"icon": "homebrew", "label": "Homebrew", "color": "#FBB040"}
+  ],
+  "preview": {"type": "image", "path": "docs/assets/updates-screen.png", "position": "left top"},
+  "previewLabel": "The Updates screen during a scan, in Polish",
+  "authorCaption": "Designed and maintained by"
+}
