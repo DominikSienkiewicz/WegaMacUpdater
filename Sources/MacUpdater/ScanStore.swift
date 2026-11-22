@@ -82,6 +82,13 @@ struct ScanStoreDependencies {
     /// `nil` when they can. A run asks at its start and before each cask that may ask for the
     /// administrator password. A test's store says it outright; `.live` asks the app's gate.
     var sudoPolicyDistrust: @MainActor () -> SudoPolicyDistrust? = { nil }
+    /// Whether a window run may download now: network, battery, heat and disk, the same live
+    /// preflight the background updater asks. The app's store keeps this default. A test's store
+    /// says it outright, so the network of the Mac running the tests cannot postpone a run the
+    /// test expects to finish.
+    var resourceDecision: @MainActor (
+        [String], [String: DownloadSizeProbeResult], [String: URL]
+    ) async -> DownloadGate.Decision = { await DownloadResourcePreflight.decision(tokens: $0, downloadSizes: $1, appPaths: $2) }
 
     static let live = ScanStoreDependencies(
         operations: .shared,

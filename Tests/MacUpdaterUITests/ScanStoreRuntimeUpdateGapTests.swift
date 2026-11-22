@@ -82,7 +82,7 @@ final class ScanStoreRuntimeUpdateGapTests: XCTestCase {
             }
             return ProcessResult(exitCode: 0, stdout: #"{"casks":[]}"#, stderr: "")
         }
-        let harness = makeScanStoreRuntimeHarness(runner: runner)
+        let harness = makeScanStoreRuntimeHarness(runner: runner, resourceDecision: liveScanStoreResourceDecision)
         harness.store.brewOutdated = BrewOutdated(
             formulae: [],
             casks: [BrewOutdatedItem(

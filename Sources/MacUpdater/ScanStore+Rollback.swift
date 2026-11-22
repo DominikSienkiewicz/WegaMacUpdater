@@ -100,11 +100,7 @@ extension ScanStore {
         let sizes = Dictionary(
             uniqueKeysWithValues: caskNames.map { ($0, caskSizes[$0] ?? .unknown) }
         )
-        return await DownloadResourcePreflight.decision(
-            tokens: caskNames,
-            downloadSizes: sizes,
-            appPaths: appPaths
-        )
+        return await dependencies.resourceDecision(caskNames, sizes, appPaths)
     }
 
     // MARK: FEAT-05 (rollback) + FEAT-04 (watchdog Team ID)
