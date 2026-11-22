@@ -117,6 +117,8 @@ struct UpdateBand<Action: View>: View {
     let onShowLog: () -> Void
     let summary: UpdateBandSummaryPresentation?
     let onCloseSummary: () -> Void
+    /// The round scan button, beside the big circle (owner, 2026-11-22, option B).
+    let scanButton: ScanRoundButton
     let action: (UpdateBandLayout) -> Action
 
     @Environment(\.colorScheme) private var colorScheme
@@ -132,6 +134,7 @@ struct UpdateBand<Action: View>: View {
         onShowLog: @escaping () -> Void = {},
         summary: UpdateBandSummaryPresentation? = nil,
         onCloseSummary: @escaping () -> Void = {},
+        scanButton: ScanRoundButton = ScanRoundButton(state: .start(enabled: true), style: .band, onStart: {}, onCancel: {}),
         @ViewBuilder action: @escaping (UpdateBandLayout) -> Action
     ) {
         self.presentation = presentation
@@ -143,6 +146,7 @@ struct UpdateBand<Action: View>: View {
         self.onShowLog = onShowLog
         self.summary = summary
         self.onCloseSummary = onCloseSummary
+        self.scanButton = scanButton
         self.action = action
     }
 
@@ -184,6 +188,7 @@ struct UpdateBand<Action: View>: View {
                 textColumn(layout)
                 regularSummary
                     .frame(width: WegaLayout.bandSummaryWidth, alignment: .leading)
+                scanButton
                 roundElement(layout)
             }
         case .compact:
@@ -192,12 +197,16 @@ struct UpdateBand<Action: View>: View {
                     .sniffing(scan != nil)
                     .accessibilityHidden(true)
                 textColumn(layout)
+                scanButton
                 roundElement(layout)
             }
         case .narrow:
             HStack(spacing: 12) {
                 textColumn(layout)
-                roundElement(layout)
+                VStack(spacing: 8) {
+                    scanButton
+                    roundElement(layout)
+                }
             }
         }
     }

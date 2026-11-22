@@ -43,6 +43,53 @@ struct ScanRoundButtonTests {
         #expect(!text.contains("wegaHoney"), "honey is the update's colour, not the scan's")
     }
 
+    /// Beside the big circle in the regular and compact band, above it in the narrow one; the
+    /// circle stays the last thing VoiceOver reads.
+    @Test func theBandCarriesItBesideTheBigCircle() throws {
+        let band = try source("Sources/MacUpdater/UpdateBand.swift")
+        let lower = try #require(band.range(of: "private func content(")).upperBound
+        let upper = try #require(band.range(of: "private func textColumn(")).lowerBound
+        let content = band[lower..<upper]
+        var placements = 0
+        var rest = content.startIndex..<content.endIndex
+        while let button = content.range(of: "scanButton", range: rest) {
+            let after = content[button.upperBound...].drop(while: \.isWhitespace)
+            #expect(after.hasPrefix("roundElement(layout)"), "the button stands right before the circle")
+            placements += 1
+            rest = button.upperBound..<content.endIndex
+        }
+        #expect(placements == 3, "regular, compact and narrow")
+        #expect(content.contains("VStack(spacing: 8) {"), "narrow stacks it above the circle")
+    }
+
+    @Test func updatesBuildsItFromTheStoresGatesInThreePlaces() throws {
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        #expect(view.contains("state: ScanRoundButtonState.resolve(canStartCheck: scan.canStartCheck, canCancelScan: scan.canCancelScan)"))
+        #expect(view.contains("onStart: { scan.startCheck() }, onCancel: { scan.cancelScan() }"))
+        #expect(view.contains("scanButton: scanRoundButton(style: .band)"), "the band")
+        let heading = try #require(view.range(of: "private var resultsHeading: some View")).upperBound
+        let screen = try #require(view.range(of: "private var screenBody: some View", range: heading..<view.endIndex)).lowerBound
+        #expect(view[heading..<screen].contains("scanRoundButton(style: .window)"), "beside „Wszystko aktualne”")
+        #expect(view.contains("ScanProgressScene(progress: scan.progress, catalogRefreshing: scan.isRefreshingCatalog, accessory: scanRoundButton(style: .window))"),
+                "in the first scan's scene")
+        let scene = try source("Sources/MacUpdater/ScanBusyOverlay.swift")
+        #expect(scene.contains("var accessory: ScanRoundButton? = nil"))
+    }
+
+    /// Do Homebrew has its own „Skanuj /Applications” and Cofnij re-reads its list on arrival, so
+    /// neither carries the updates scan; the toolbar carries none at all.
+    @Test func theToolbarAndTheOtherScreensNoLongerScan() throws {
+        let content = try source("Sources/MacUpdater/ContentView.swift")
+        #expect(!content.contains("ScanControl("))
+        #expect(!content.contains("showsScanControl"))
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("Sources/MacUpdater/ScanControl.swift").path))
+        for screen in ["Sources/MacUpdater/MigrationView.swift", "Sources/MacUpdater/RollbackView.swift"] {
+            #expect(!(try source(screen)).contains("ScanRoundButton"), "\(screen)")
+        }
+    }
+
     private func source(_ path: String) throws -> String {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

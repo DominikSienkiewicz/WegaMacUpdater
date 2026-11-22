@@ -99,8 +99,8 @@ struct ScanBusySelectionGateTests {
         let view = executableSource(try source("Sources/MacUpdater/UpdateView.swift"))
         let overlay = executableSource(try source("Sources/MacUpdater/ScanBusyOverlay.swift"))
 
-        #expect(view.contains("ScanProgressScene(progress: scan.progress, catalogRefreshing: scan.isRefreshingCatalog)"),
-                "the full-screen scan must draw the shared scene")
+        #expect(view.contains("ScanProgressScene(progress: scan.progress, catalogRefreshing: scan.isRefreshingCatalog, accessory: scanRoundButton(style: .window))"),
+                "the full-screen scan must draw the shared scene, with the round scan button as its stop")
         #expect(view.components(separatedBy: "ScanProgressScene(").count == 2,
                 "only checkingView draws the scene; a scan in place draws none over the list")
         #expect(!overlay.contains("ScanProgressScene(progress: progress)"),

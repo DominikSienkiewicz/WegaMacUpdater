@@ -18,15 +18,6 @@ enum SidebarTab: String, Identifiable {
 
     var id: String { rawValue }
 
-    /// Only the screens that scan for updates offer the scan button; elsewhere it would do
-    /// nothing visible.
-    var showsScanControl: Bool {
-        switch self {
-        case .update, .migration, .rollback: return true
-        case .uninstall, .cleanup, .inventory, .logs: return false
-        }
-    }
-
     /// The screens with a `.searchable` field of their own, which ⌘F focuses — on Updates the one
     /// `UpdatesSearchField` carries. Elsewhere ⌘F is greyed out rather than taking the user
     /// somewhere they did not ask to go.
@@ -106,10 +97,6 @@ struct ContentView: View {
     /// a persisted `true` would present the inspector during first layout — see
     /// `showsInspectorAtLaunch`.
     @Binding private var showInspector: Bool
-    /// D5 — one namespace for the toolbar's scan control, so `.glassEffectID` can morph
-    /// glass between its ready and checking states.
-    @Namespace private var glassNamespace
-
     init(showInspector: Binding<Bool>) {
         _showInspector = showInspector
         _brewInstalled = State(initialValue: BinaryLocator().locateBrew() != nil)
@@ -161,10 +148,6 @@ struct ContentView: View {
             .navigationSubtitle(selection.hint)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    ScanControl(namespace: glassNamespace, isShown: selection.tab.showsScanControl)
-                }
-                ToolbarSpacer(.fixed)
-                ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Picker(tr("Język interfejsu"), selection: $localization.language) {
                             ForEach(AppLanguage.allCases) { lang in
@@ -187,7 +170,7 @@ struct ContentView: View {
                     .disabled(selection.tab != .update)
                     // UX-16 — gone, not dimmed, outside Updates. Faded rather than removed so
                     // the toolbar item keeps its width: a toolbar whose geometry changes can
-                    // invalidate the window's safe area (see `ScanControl`).
+                    // invalidate the window's safe area (`ScanControlLayoutTests` replays that crash).
                     .opacity(selection.tab == .update ? 1 : 0)
                     .accessibilityHidden(selection.tab != .update)
                 }

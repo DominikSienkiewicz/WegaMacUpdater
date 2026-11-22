@@ -68,9 +68,10 @@ package is handed to you to run yourself (see [The Wega helper](#the-wega-helper
    catalog from 12 min ago"**. Anything that does not look at the clock — **Check now**
    (**⌘R**) included — always refreshes the catalog first. The queue still waits until the
    scan ends either way.
-2. Press **⌘R** (or **Check now**) whenever you want another scan. **⌘R** works on every
-   screen; the **Check now** button appears only on **Updates**, **To Homebrew** ("Do Homebrew")
-   and **Undo updates** ("Cofnij aktualizacje"), the screens that show the result of a scan.
+2. Press **⌘R** (or the round ↻ **Check now** button) whenever you want another scan. **⌘R**
+   works on every screen. The round button is on **Updates**: beside the band's big **Update**
+   circle, or beside the **"Everything up to date"** heading when there is nothing to update.
+   While a scan runs it turns into ■ **Cancel Scan** (**⌘.**).
 
 **What a scan shows.** The scan runs in the band, and a light scanner lies on the rows:
 

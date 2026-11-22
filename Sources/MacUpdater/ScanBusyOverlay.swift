@@ -79,6 +79,8 @@ struct ScanBusyPresentation: Equatable {
 struct ScanProgressScene: View {
     let progress: ScanProgress?
     var catalogRefreshing: Bool = false
+    /// The round scan button, trailing the bar: the stop for the first scan (owner, 2026-11-22).
+    var accessory: ScanRoundButton? = nil
 
     private var presentation: ScanBusyPresentation { ScanBusyPresentation(progress: progress) }
 
@@ -87,16 +89,21 @@ struct ScanProgressScene: View {
             // M2(c) — this screen used to animate five invented command bars on a timer,
             // regardless of what the scan was doing or how long it would take. The scan is
             // strictly sequential, so the bar reports the phase it is genuinely in.
-            ProgressView(value: presentation.fraction ?? 0)
-                .progressViewStyle(.linear)
-                .tint(Color.wegaHoney)
-                // A linear ProgressView reports a nonzero intrinsic width, which — with no
-                // upper bound — propagates up and pushes the detail column wide enough to
-                // shove the sidebar off-screen. Pin it elastic (0…∞) so it fills, not forces.
-                .frame(minWidth: 0, maxWidth: .infinity)
-                // The command behind the phase is for the curious; VoiceOver still hears it
-                // through `ScanBusyPresentation.phaseLabel`.
-                .help(presentation.phaseLabel ?? "")
+            HStack(spacing: 12) {
+                ProgressView(value: presentation.fraction ?? 0)
+                    .progressViewStyle(.linear)
+                    .tint(Color.wegaHoney)
+                    // A linear ProgressView reports a nonzero intrinsic width, which — with no
+                    // upper bound — propagates up and pushes the detail column wide enough to
+                    // shove the sidebar off-screen. Pin it elastic (0…∞) so it fills, not forces.
+                    .frame(minWidth: 0, maxWidth: .infinity)
+                    // The command behind the phase is for the curious; VoiceOver still hears it
+                    // through `ScanBusyPresentation.phaseLabel`.
+                    .help(presentation.phaseLabel ?? "")
+                if let accessory {
+                    accessory
+                }
+            }
             SniffingScene(
                 caption: ScanPhaseCopy.caption(progress: progress, catalogRefreshing: catalogRefreshing),
                 thoughts: Self.scanThoughts
