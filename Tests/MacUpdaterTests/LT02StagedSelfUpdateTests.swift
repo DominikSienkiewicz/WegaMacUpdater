@@ -147,13 +147,16 @@ struct SquirrelShipItJobTests {
         #expect(runner.removed == ["com.discord.discord.ShipIt"])
     }
 
+    /// The deadline is not what this test measures, so it only has to outlast the scripted polls.
+    /// A five-second one did not: on the v0.10.0 release run (2026-11-22) a starved cooperative
+    /// pool held the 10 ms sleep for over five seconds, and the wait returned after one poll.
     @Test func waitingForTheUpdaterEndsOnceItsJobStopsRunning() async {
         // Given Discord's ShipIt mid-install for two more polls
         let runner = ScriptedLaunchctl(states: ["running", "running", "not running"])
 
         // When the teardown waits for it
         await SquirrelShipItJob.waitUntilFinished(forBundleAt: Self.discord, runner: runner,
-                                                  timeout: 5, pollInterval: 0.01)
+                                                  timeout: 60, pollInterval: 0.01)
 
         // Then it returned only after launchctl reported the job stopped
         #expect(runner.printsServed == 3)

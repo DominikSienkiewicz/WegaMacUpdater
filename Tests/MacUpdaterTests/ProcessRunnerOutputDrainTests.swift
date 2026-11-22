@@ -34,21 +34,26 @@ struct ProcessRunnerOutputDrainTests {
     /// detaching the readers would leave its 128 KiB stuck on a full pipe. The steps are chained
     /// with `&&`, so the marker appears only if every write went through: it proves the job lived
     /// on and was read to the end. The late output is read a second before the marker appears,
-    /// and none of it may be forwarded any more. The writer waits five seconds, ten times the
-    /// drain limit, so the wait has expired before it writes even on a slow CI runner.
+    /// and none of it may be forwarded any more. The writer starts only once `run` has returned,
+    /// so it always writes after the wait expired. A five-second head start was not enough: on the
+    /// v0.10.0 release run (2026-11-22) a starved cooperative pool held the drain's 0.5 s timer
+    /// for over five seconds. A writer never told to start gives up after 30 seconds and leaves
+    /// no marker, so a run that waits for end-of-output fails rather than hangs.
     @Test func aLateWriterIsNotKilledByTheDrain() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appending(path: "wega-output-drain-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let mark = directory.appending(path: "late-writer-finished", directoryHint: .notDirectory)
+        let start = directory.appending(path: "run-returned", directoryHint: .notDirectory)
+        let lateWriter = """
+            i=0; while [ ! -e "$START" ] && [ $i -lt 300 ]; do sleep 0.1; i=$((i + 1)); done; \
+            [ -e "$START" ] && printf late && head -c 131072 /dev/zero && sleep 1 && touch "$MARK"
+            """
         var request = ProcessRequest(
             executableURL: Self.shell,
-            arguments: [
-                "-c",
-                "printf ready; (sleep 5 && printf late && head -c 131072 /dev/zero && sleep 1 && touch \"$MARK\") &",
-            ],
-            environment: ["MARK": mark.path],
+            arguments: ["-c", "printf ready; (\(lateWriter)) &"],
+            environment: ["MARK": mark.path, "START": start.path],
             timeout: 30,
             idleTimeout: 30
         )
@@ -58,6 +63,7 @@ struct ProcessRunnerOutputDrainTests {
         let result = try await Self.isolatedRunner().run(request, onOutput: { event in
             if case .stdout(let chunk) = event { chunkSink.yield(chunk) }
         })
+        try Data().write(to: start)
 
         #expect(result.stdout == "ready")
         #expect(await Self.fileAppears(at: mark, within: .seconds(15)))
