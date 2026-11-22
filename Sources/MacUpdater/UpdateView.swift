@@ -422,6 +422,8 @@ struct UpdateView: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background { ScanCodeBackdrop(isScanning: scan.isRefreshing, lanes: ScanCodeBackdrop.headingLanes) }
     }
 
     @ViewBuilder
