@@ -14,6 +14,21 @@ them verbatim under the new version heading, so that step is never done by hand 
 
 ## [Unreleased]
 
+### Changed
+- **The band stays when everything is up to date.** With nothing to update, the Updates screen
+  used to swap the band for a plain *Everything up to date* heading, so on an up-to-date Mac the
+  band came back only while a scan ran. It now stays and says so itself: Wega asleep, the time of
+  the check and the sources, the round scan button, and a check mark where the **Update** circle
+  stands. After a scan some source did not answer it says *I can't tell whether everything is
+  up to date*, with a question mark.
+
+### Fixed
+- **A scan no longer shows updates it is about to drop.** Homebrew lists every self-updating
+  app whose Homebrew record lags the copy on disk (Chrome, Zed, ChatGPT and the like). Wega drops
+  them once it has checked the apps themselves, but their rows and count were already on screen
+  for the middle of the scan, then vanished. The list now keeps the previous result until the
+  scan has filtered the new one.
+
 ## [0.10.0] — 2026-11-22
 
 Scans on the Updates screen are easier to start, stop and follow. The scan button moved from the

@@ -7,9 +7,9 @@ import Testing
 @testable import WegaMacUpdater
 
 /// Owner, 2026-11-22 (option B): the toolbar's „Sprawdź teraz”/„Anuluj” was hard to find, so the
-/// scan action moved to a round button where the scan is reported: beside the band's big circle,
-/// beside the „Wszystko aktualne” heading, and in the first scan's scene. Do Homebrew and Cofnij
-/// get none; ⌘R and ⌘. still work everywhere.
+/// scan action moved to a round button where the scan is reported: beside the band's big circle
+/// (which since the same day stands over „Wszystko aktualne” too) and in the first scan's scene.
+/// Do Homebrew and Cofnij get none; ⌘R and ⌘. still work everywhere.
 @Suite("The round scan button") @MainActor
 struct ScanRoundButtonTests {
     /// What `cancelScan()` can stop decides the stop; anything else is a start that the store's
@@ -62,14 +62,12 @@ struct ScanRoundButtonTests {
         #expect(content.contains("VStack(spacing: 8) {"), "narrow stacks it above the circle")
     }
 
-    @Test func updatesBuildsItFromTheStoresGatesInThreePlaces() throws {
+    @Test func updatesBuildsItFromTheStoresGatesInTwoPlaces() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         #expect(view.contains("state: ScanRoundButtonState.resolve(canStartCheck: scan.canStartCheck, canCancelScan: scan.canCancelScan)"))
         #expect(view.contains("onStart: { scan.startCheck() }, onCancel: { scan.cancelScan() }"))
-        #expect(view.contains("scanButton: scanRoundButton(style: .band)"), "the band")
-        let heading = try #require(view.range(of: "private var resultsHeading: some View")).upperBound
-        let screen = try #require(view.range(of: "private var screenBody: some View", range: heading..<view.endIndex)).lowerBound
-        #expect(view[heading..<screen].contains("scanRoundButton(style: .window)"), "beside „Wszystko aktualne”")
+        #expect(view.contains("scanButton: scanRoundButton(style: .band)"), "the band, „Wszystko aktualne” included")
+        #expect(view.components(separatedBy: "scanRoundButton(style: .").count == 3, "the band and the first scan's scene, nowhere else")
         #expect(view.contains("ScanProgressScene(progress: scan.progress, catalogRefreshing: scan.isRefreshingCatalog, accessory: scanRoundButton(style: .window))"),
                 "in the first scan's scene")
         let scene = try source("Sources/MacUpdater/ScanBusyOverlay.swift")

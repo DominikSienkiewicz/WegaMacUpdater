@@ -6,8 +6,8 @@ import Testing
 /// Owner, 2026-11-22: during a rescan the screen showed no Wega sniffing binary code, so it was
 /// not clear that the scan was running. UXP-13 had left only the ±2.4° head-bob in the band,
 /// which reads as a still picture. While a scan runs in place, the code Wega sniffs streams
-/// behind her again: across the band, or behind the heading when there is no band. The stream
-/// itself never lies on the rows (the scanner over them is `ScanListVeil`).
+/// behind her again, across the band. The stream itself never lies on the rows (the scanner over
+/// them is `ScanListVeil`).
 @Suite("A scan in place streams the code Wega sniffs")
 struct ScanCodeBackdropTests {
     @Test func theStreamRunsOnlyWhileAScanRuns() {
@@ -43,15 +43,12 @@ struct ScanCodeBackdropTests {
         #expect(stream.lowerBound < clip.lowerBound, "inside the band's rounded clip")
     }
 
-    /// With nothing to update there is no band; the code streams behind the heading instead,
-    /// in fewer lanes, so the heading's few lines do not sit on a wall of digits.
-    @Test func withoutABandTheCodeStreamsBehindTheHeading() throws {
+    /// Owner, 2026-11-22 — every result now carries the band, „Wszystko aktualne” included, so the
+    /// band's stream is the only one: the plain heading that had its own is gone.
+    @Test func theBandCarriesTheStreamOverEveryResult() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
-        let start = try #require(view.range(of: "private var resultsHeading: some View"))
-        let end = try #require(view.range(of: "private var screenBody: some View", range: start.upperBound..<view.endIndex))
-        let heading = view[start.upperBound..<end.lowerBound]
-        #expect(heading.contains(".background { ScanCodeBackdrop(isScanning: scan.isRefreshing, lanes: ScanCodeBackdrop.headingLanes) }"))
-        #expect(ScanCodeBackdrop.headingLanes < ScanCodeBackdrop.bandLanes)
+        #expect(!view.contains("ScanCodeBackdrop("), "no second stream beside the band's")
+        #expect(!view.contains("private var resultsHeading"))
     }
 
     private func source(_ path: String) throws -> String {

@@ -53,9 +53,9 @@ struct SniffingScene: View {
     ]
 }
 
-/// The code Wega sniffs, streaming behind a scan that runs in place: across the band, or behind
-/// the heading when there is no band. The first scan's scene draws the same stream; without it
-/// a rescan showed only a slight head-bob and read as a still screen (owner, 2026-11-22).
+/// The code Wega sniffs, streaming across the band while a scan runs in place. The first scan's
+/// scene draws the same stream; without it a rescan showed only a slight head-bob and read as a
+/// still screen (owner, 2026-11-22).
 ///
 /// It stays off the rows, and Increase Contrast drops it, like the band's glows, so text never
 /// sits on moving digits for someone who asked for a plain ground.
@@ -66,8 +66,6 @@ struct ScanCodeBackdrop: View {
 
     /// The band is as tall as the first scan's scene, so it takes the scene's lane count.
     static let bandLanes = 9
-    /// The heading is half that height; fewer lanes keep its lines off a wall of digits.
-    static let headingLanes = 4
 
     @Environment(\.colorSchemeContrast) private var contrast
 

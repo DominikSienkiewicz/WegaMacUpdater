@@ -224,6 +224,8 @@ struct UpdateBandSummaryTests {
 
             let summed = UpdateBandMode.resolve(scan: nil, run: nil, summary: summarised)
             #expect(summed == .summary(summarised))
+            #expect(UpdateBandMode.resolve(scan: nil, run: nil, summary: summarised, upToDate: true) == summed,
+                    "a run that emptied the list keeps its summary until it is closed")
             #expect(summed.headline(results: results) == summarised.headline)
             #expect(summed.line(results: results) == summarised.line)
             #expect(summed.fixedEyebrow == summarised.eyebrow)
@@ -246,7 +248,8 @@ struct UpdateBandSummaryTests {
 
     @Test func theBandShowsForARunAndItsSummaryEvenWithAnEmptyList() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
-        #expect(view.contains("private var showsBand: Bool { hasUpdates || scan.updating || scan.runReport != nil }"))
+        #expect(!view.contains("showsBand"), "the band stands over every result")
+        #expect(UpdateBandMode.resolve(scan: nil, run: nil, summary: nil, upToDate: true) == .upToDate)
         #expect(view.contains("summary: scan.runReport.map(summaryPresentation)"))
         #expect(view.contains("onCloseSummary: { scan.closeRunReport() }"))
         let scanState = try #require(view.range(of: "private var scanPresentation: UpdateBandScanPresentation {")).upperBound

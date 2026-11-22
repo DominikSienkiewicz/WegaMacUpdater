@@ -19,6 +19,16 @@ struct UpdateBandPresentation: Equatable {
     var handOffCount: Int = 0
     /// Set when the scan reused the Homebrew catalog instead of refreshing it (UXP-14).
     var catalogAgeMinutes: Int? = nil
+    /// Set when the scan left nothing to update (owner, 2026-11-22): the band then says the Mac
+    /// is up to date instead of giving way to a plain heading, so it never comes and goes with
+    /// each scan.
+    var nothingToUpdate: Bool = false
+
+    /// The band's headline when nothing needs updating. REL-09 — only a scan that heard from every
+    /// source may call an empty list up to date.
+    var upToDateHeadline: String {
+        incompleteNote == nil ? tr("Wszystko aktualne") : tr("Nie wiem, czy wszystko aktualne")
+    }
 
     var catalogNote: String? {
         catalogAgeMinutes.map { trf("katalog Homebrew sprzed %@ min", "\($0)") }

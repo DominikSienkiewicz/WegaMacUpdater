@@ -69,9 +69,9 @@ package is handed to you to run yourself (see [The Wega helper](#the-wega-helper
    (**⌘R**) included — always refreshes the catalog first. The queue still waits until the
    scan ends either way.
 2. Press **⌘R** (or the round ↻ **Check now** button) whenever you want another scan. **⌘R**
-   works on every screen. The round button is on **Updates**: beside the band's big **Update**
-   circle, or beside the **"Everything up to date"** heading when there is nothing to update.
-   While a scan runs it turns into ■ **Cancel Scan** (**⌘.**).
+   works on every screen. The round button is on **Updates**, beside the band's big circle —
+   when there is nothing to update too. While a scan runs it turns into ■ **Cancel Scan**
+   (**⌘.**).
 
 **What a scan shows.** The scan runs in the band, and a light scanner lies on the rows:
 
@@ -131,6 +131,10 @@ Wega goes and gets them anyway:
   availability"** while that is still being worked out; an app Wega could not check counts as
   not covered). Its button reads **Update N**, or **Nothing selected** while the queue is
   empty.
+- **With nothing to update the band stays** and says **"Everything up to date"**: Wega asleep,
+  the time of the check and the sources, and a check mark where the button stands. If a source
+  did not answer, it says **"I can't tell whether everything is up to date"** instead, with a
+  question mark — an empty list then proves nothing.
 - **The window opens with a result, not a blank screen.** Wega restores your last scan
   from disk (or from the background menu-bar check, whichever is newer). If a restored
   result is stale it says so — e.g. *"Found 12 Jul, 21:14"* in a warning tint — rather than

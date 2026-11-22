@@ -106,13 +106,11 @@ struct UpdateActionBarTests {
 
     @Test func theUpdateButtonLivesInTheBand() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
-        let results = try slice(view, from: "private var resultsHeading: some View", to: "private var screenBody: some View")
-        let band = try slice(view, from: "private var resultsBand: some View", to: "private var resultsHeading: some View")
+        let band = try slice(view, from: "private var resultsBand: some View", to: "private var screenBody: some View")
 
-        #expect(!results.contains("requestUpdate"), "the heading reports the scan; it no longer acts")
         let screen = try slice(view, from: "private var resultsView: some View", to: "private var listHeader: some View")
         let listHeader = try slice(view, from: "private var listHeader: some View", to: "private var resultsBand: some View")
-        for (name, part) in [("resultsView", screen), ("listHeader", listHeader), ("resultsHeading", results)] {
+        for (name, part) in [("resultsView", screen), ("listHeader", listHeader)] {
             #expect(!part.contains("requestUpdate"), "only the band starts an update, not \(name)")
         }
         #expect(band.contains("UpdateBandButton("))
@@ -134,7 +132,7 @@ struct UpdateActionBarTests {
 
     @Test func thePlanOpensFromTheBandAsASheet() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
-        let band = try slice(view, from: "private var resultsBand: some View", to: "private var resultsHeading: some View")
+        let band = try slice(view, from: "private var resultsBand: some View", to: "private var screenBody: some View")
 
         #expect(band.contains("scan.showPlanPreview = true"))
         #expect(view.contains(".sheet(isPresented: $scan.showPlanPreview)"))

@@ -72,7 +72,7 @@ final class AccessibilityInteractionTests: XCTestCase {
         let selectAllRow = try section(
             in: update,
             startingAt: "// Select-all row",
-            endingAt: "private var resultsHeading: some View"
+            endingAt: "private var screenBody: some View"
         )
 
         // The three-state control itself moved into the shared `SelectionCheckbox` when
@@ -138,7 +138,7 @@ final class AccessibilityInteractionTests: XCTestCase {
         let selectAllRow = try section(
             in: update,
             startingAt: "// Select-all row",
-            endingAt: "private var resultsHeading: some View"
+            endingAt: "private var screenBody: some View"
         )
         XCTAssertTrue(selectAllRow.contains("SelectionCheckbox("))
         XCTAssertTrue(selectAllRow.contains("scan.toggleAll(filter: updateFilter)"))

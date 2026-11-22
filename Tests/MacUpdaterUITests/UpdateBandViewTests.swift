@@ -401,8 +401,8 @@ final class UpdateBandViewTests: XCTestCase {
         }
         XCTAssertEqual(spinners, 1, "the running chip's spinner")
         let view = try source("Sources/MacUpdater/UpdateView.swift")
-        XCTAssertTrue(view.contains("WegaHead(pose: .sniff, size: 28).sniffing(true).accessibilityHidden(true)"),
-                      "with no band, a small sniffing head stands next to the phase strip")
+        XCTAssertFalse(view.contains("WegaHead(pose: .sniff"),
+                       "the band stands over every result, so no second, smaller Wega sniffs beside a heading")
     }
 
     func testOnlyAVerifiedSourceWearsACheck() throws {
@@ -412,26 +412,19 @@ final class UpdateBandViewTests: XCTestCase {
         XCTAssertEqual(text.components(separatedBy: "\"✓ \"").count, 2, "the check is drawn in one place only")
     }
 
-    /// The band shows only when there is something to update, or while a run, its check or its
-    /// summary is on screen (C2 stage 4: a run that empties the list keeps its band). A result
-    /// that only waits for restarts keeps today's heading ("Wszystko aktualne"), while the list
-    /// still shows it.
-    func testTheBandShowsOnlyWithResults() throws {
+    /// The band stands over every result (owner, 2026-11-22). With nothing to update, apps that
+    /// only wait for a restart included, it says so; a run, its check and its summary still take
+    /// it first (C2 stage 4: a run that empties the list keeps its band until the summary closes).
+    func testTheBandStandsOverEveryResult() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         let lower = try XCTUnwrap(view.range(of: "private var resultsView: some View")).lowerBound
         let upper = try XCTUnwrap(view.range(of: "private var listHeader: some View")).lowerBound
         let results = view[lower..<upper]
-        XCTAssertTrue(results.contains("if showsBand {"))
         XCTAssertTrue(results.contains("resultsBand"))
-        XCTAssertFalse(results.contains("hasResults"), "restarts alone do not bring the band")
-        let otherwise = try XCTUnwrap(results.range(of: "if !showsBand {"), "no band keeps today's heading")
-        XCTAssertTrue(
-            results[otherwise.upperBound...].drop(while: \.isWhitespace).hasPrefix("resultsHeading"),
-            "the heading is the band's other branch"
-        )
-        XCTAssertTrue(view.contains("private var showsBand: Bool { hasUpdates || scan.updating || scan.runReport != nil }"),
-                      "restarts alone still do not bring the band; a run and its summary do")
-        XCTAssertTrue(view.contains("private var hasUpdates: Bool {\n        !(allItems.isEmpty && visibleManual.isEmpty)\n    }"))
+        XCTAssertFalse(results.contains("showsBand") || results.contains("resultsHeading"), "no heading to give way to")
+        XCTAssertTrue(view.contains("nothingToUpdate:   !hasUpdates"), "the band hears whether anything needs updating")
+        XCTAssertTrue(view.contains("private var hasUpdates: Bool {\n        !(allItems.isEmpty && visibleManual.isEmpty)\n    }"),
+                      "restarts alone are nothing to update")
         let column = try XCTUnwrap(view.range(of: "private var listColumn: some View")).lowerBound
         XCTAssertTrue(view[column...].prefix(200).contains("if !hasResults"))
         let detail = try source("Sources/MacUpdater/DetailColumn.swift")

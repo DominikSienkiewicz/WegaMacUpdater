@@ -32,8 +32,8 @@ struct ScanInPlaceKeepsRowsVisibleTests {
 
         #expect(view.contains("scan: scan.isRefreshing ? scanPresentation : nil"),
                 "the band carries the scan, Wega included")
-        #expect(view.contains("WegaHead(pose: .sniff, size: 28).sniffing(true).accessibilityHidden(true)"),
-                "with no band, Wega sniffs next to the phase strip")
+        #expect(!view.contains("WegaHead(pose: .sniff"),
+                "the band stands over every result (owner, 2026-11-22), so Wega sniffs in it, never beside a heading")
         #expect(!view.contains("ScanBusyOverlay("))
     }
 

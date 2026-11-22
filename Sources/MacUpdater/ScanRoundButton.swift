@@ -14,7 +14,7 @@ enum ScanRoundButtonState: Equatable {
 }
 
 /// The scan action, where the scan is reported (owner, 2026-11-22, option B): beside the band's
-/// big circle, beside the „Wszystko aktualne” heading, and in the first scan's scene. It replaced
+/// big circle, „Wszystko aktualne” included, and in the first scan's scene. It replaced
 /// the toolbar's „Sprawdź teraz”/„Anuluj”, which was hard to find. ⌘R and ⌘. still work from every
 /// screen. One size in every state, so nothing beside it moves when a scan starts or ends.
 struct ScanRoundButton: View {

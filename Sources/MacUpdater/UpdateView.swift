@@ -241,8 +241,8 @@ struct UpdateView: View {
         ScanProgressScene(progress: scan.progress, catalogRefreshing: scan.isRefreshingCatalog, accessory: scanRoundButton(style: .window))
     }
 
-    /// The round scan button (owner, 2026-11-22, option B). The band, the heading and the first
-    /// scan's scene draw this one, from the store's own gates; the toolbar carries none.
+    /// The round scan button (owner, 2026-11-22, option B). The band and the first scan's scene
+    /// draw this one, from the store's own gates; the toolbar carries none.
     private func scanRoundButton(style: ScanRoundButton.Style) -> ScanRoundButton {
         ScanRoundButton(
             state: ScanRoundButtonState.resolve(canStartCheck: scan.canStartCheck, canCancelScan: scan.canCancelScan),
@@ -255,17 +255,12 @@ struct UpdateView: View {
     private var resultsView: some View {
         VStack(spacing: 0) {
             // The band reports the scan, the run, its check and its summary, and carries the update
-            // button; without any of them the plain heading does. The list header carries select-all,
-            // and gives its row to the summary's header while the summary is open.
-            if showsBand {
-                resultsBand
-                    .padding(.horizontal, WegaLayout.listGutter)
-                    .padding(.top, WegaLayout.sectionSpacing)
-            }
+            // button; with nothing to update it says so (owner, 2026-11-22). The list header carries
+            // select-all, and gives its row to the summary's header while the summary is open.
+            resultsBand
+                .padding(.horizontal, WegaLayout.listGutter)
+                .padding(.top, WegaLayout.sectionSpacing)
             VStack(alignment: .leading, spacing: 12) {
-                if !showsBand {
-                    resultsHeading
-                }
                 if scan.runReport != nil {
                     UpdateRunSummaryHeader(remainingCount: scan.scopeCounts.all, categoryHasRows: showsRows,
                                            onClose: { scan.closeRunReport() }, onShowAll: { onScopeChange?(.all) })
@@ -366,7 +361,8 @@ struct UpdateView: View {
             wegaLine:       wegaLine,
             incompleteNote: scan.lastScanComplete ? nil : tr("skan niepełny"),
             handOffCount:   scan.handOffCount(for: updateFilter),
-            catalogAgeMinutes: scan.catalogAgeMinutes
+            catalogAgeMinutes: scan.catalogAgeMinutes,
+            nothingToUpdate:   !hasUpdates
         )
     }
 
@@ -400,45 +396,6 @@ struct UpdateView: View {
             isStopping: scan.updateInterruption.isRequested,
             logShown:   scan.showLog
         )
-    }
-
-    private var resultsHeading: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 12) {
-                Text(tr("Wszystko aktualne"))
-                    .font(.wega(.largeTitle, weight: .semibold))
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-                scanRoundButton(style: .window)
-            }
-            if let date = scan.lastCheck {
-                let freshness = scan.freshness() ?? .fresh
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(freshness == .stale
-                         ? trf("Znaleziono %@", "\(date.formatted(date: .abbreviated, time: .shortened))")
-                         : trf("Sprawdzono %@", "\(date.formatted(date: .omitted, time: .shortened))"))
-                    // UX-19 — while a scan runs in place, the header shows each source's
-                    // phase instead of the stamp naming the sources of the result below, and
-                    // with no band to carry her, Wega sniffs beside it (UXP-13). One height
-                    // for both, so the heading never jumps.
-                    if scan.isRefreshing {
-                        HStack(spacing: 8) {
-                            WegaHead(pose: .sniff, size: 28).sniffing(true).accessibilityHidden(true)
-                            ScanPhaseStrip(progress: scan.progress)
-                        }
-                        .frame(minHeight: 28, alignment: .leading)
-                    } else {
-                        Text(sourceStamp)
-                            .frame(minHeight: 28, alignment: .leading)
-                    }
-                }
-                .font(.wega(.subheadline))
-                .foregroundStyle(freshness.needsExplicitTimestamp ? AnyShapeStyle(Color.wegaToffee) : AnyShapeStyle(.secondary))
-                .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background { ScanCodeBackdrop(isScanning: scan.isRefreshing, lanes: ScanCodeBackdrop.headingLanes) }
     }
 
     @ViewBuilder
@@ -567,15 +524,12 @@ struct UpdateView: View {
         !(allItems.isEmpty && visibleManual.isEmpty && scan.restartCandidates.isEmpty)
     }
 
-    /// Whether the scan found anything to update — what `showsBand` (band or plain heading)
-    /// reads. Apps that only wait for a restart keep today's "Wszystko aktualne" heading.
+    /// Whether the scan found anything to update. Without it the band says „Wszystko aktualne”,
+    /// apps that only wait for a restart included; a run, its check and its summary still take
+    /// the band first (`UpdateBandMode.resolve`).
     private var hasUpdates: Bool {
         !(allItems.isEmpty && visibleManual.isEmpty)
     }
-
-    /// C2 stage 4 — the band also stays for a run, its check and its summary, even when the run
-    /// emptied the list: its geometry never changes until the summary is closed.
-    private var showsBand: Bool { hasUpdates || scan.updating || scan.runReport != nil }
 
     /// Whether the list shows rows rather than one of its empty states — the one answer
     /// `listColumn`, the list header's scan note and a run's blank area read.
@@ -738,15 +692,6 @@ struct UpdateView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
         }
-    }
-
-    /// UX-06 — the monospaced stamp naming the sources behind the result on screen, built
-    /// from the sources that were actually active in the scan. A detail-less result (a
-    /// background-agent list or a legacy snapshot) has no per-source picture, so it falls
-    /// back to naming every source Wega checks rather than showing nothing.
-    private var sourceStamp: String {
-        let active = ScanSource.active(in: scan.sourceReports)
-        return SourceCommunication.stamp(for: active.isEmpty ? ScanSource.allCases : active)
     }
 
     private var selectAllState: SelectAllState {
