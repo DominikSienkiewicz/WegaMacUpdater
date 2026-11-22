@@ -14,6 +14,12 @@ them verbatim under the new version heading, so that step is never done by hand 
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-11-22
+
+Scans on the Updates screen are easier to start, stop and follow. The scan button moved from the
+toolbar to a round button next to the results, the list says plainly that it is locked while a
+scan runs, and Wega sniffs her binary code again during every rescan.
+
 ### Changed
 - **The scan button moved next to the results.** The toolbar's **Check now** / **Cancel** is
   gone; a small round button on the Updates screen starts a scan (↻) and stops one that can be
@@ -817,7 +823,8 @@ their terms are still theirs.
   what changed in it, because there is no published predecessor to have changed from.
 -->
 
-[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/DominikSienkiewicz/WegaMacUpdater/compare/v0.6.0...v0.7.1
