@@ -119,15 +119,16 @@ struct ScanBusySelectionGateTests {
                 "sizing and padding belong to the scene, not to whoever places it")
     }
 
-    /// UXP-13 — the rows are stood down by `.disabled` alone: no veil, no scene and no second
-    /// dimming lie on them, so every row stays readable for the whole scan.
+    /// The rows are stood down by `.disabled`; the one layer on them is the scanner (owner,
+    /// 2026-11-22), which dims them halfway and blurs nothing, and no second dimming joins it.
     @Test func theOverlayStandsTheRowsDownWithoutASecondDimming() throws {
         let view = executableSource(try source("Sources/MacUpdater/UpdateView.swift"))
         let overlay = executableSource(try source("Sources/MacUpdater/ScanBusyOverlay.swift"))
         let screen = slice(view, from: "private var screenBody: some View", to: "private var scopeBar: some View")
 
         #expect(screen.contains("listColumn"), "sanity: the slice really found screenBody")
-        #expect(!screen.contains(".overlay"), "nothing is drawn over the rows during a scan")
+        #expect(screen.components(separatedBy: ".overlay").count == 2, "only the scanner lies on the rows during a scan")
+        #expect(screen.contains("{ ScanListVeil() }"))
         #expect(screen.contains(".disabled(!ScanSelectionGate.allowsSelection(isRefreshing: scan.isRefreshing))"),
                 "the rows stay inert while the scan replaces them")
         #expect(!overlay.contains("struct ScanBusyOverlay"), "the scan's veil over the list is gone")

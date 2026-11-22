@@ -195,7 +195,7 @@ age counted to the scan's start. **Check now**, **⌘R** and every other scan al
 catalog first, and the queue waits until the scan ends either way.
 
 Every scan that starts with a result on screen — the launch refresh, **Check now** and **⌘R** —
-runs *in the band* rather than replacing the list, and nothing covers the rows. The band says
+runs *in the band* rather than replacing the list. The band says
 what the scan is doing: a line naming the step (*"Refreshing the Homebrew catalog…"* while
 `brew update` runs, then one line per source — Homebrew, App Store, npm, vendors), the time the
 patrol has taken (counted up from the start, never estimated down), what has been found so far,
@@ -203,8 +203,11 @@ and a ring and a chip per source, each done, running or not yet started. Once th
 starts it adds a counter, *"Vendors: 12 of 31 apps"*; a vendor step with no app to ask keeps the
 note instead of a counter of zero. Wega sniffs through the whole scan, with the binary code she
 sniffs streaming behind her across the band (behind the *"Everything up to date"* heading when
-there is no band); Increase Contrast leaves it out and Reduce Motion holds it still. The rows stay fully
-readable, but they stop accepting selections, and a note — *"Selecting comes back when the scan
+there is no band); Increase Contrast leaves it out and Reduce Motion holds it still. The rows stay
+readable but stop accepting selections. The scanner lies on them: the window's background at half
+strength, a honey line sweeping down the visible list, and a lock label, *"The list unlocks when the
+scan finishes"*; nothing is blurred, and the list still scrolls. Reduce Transparency leaves the veil
+out and Reduce Motion stops the line. A note — *"Selecting comes back when the scan
 finishes."* — says why: in the band, and in the list header where it fits, yielding to the scope
 bar at the narrowest width. Only a scan with nothing to keep on screen — the very first one —
 takes the whole window with the sniffing scene, with the same step caption. The check after an

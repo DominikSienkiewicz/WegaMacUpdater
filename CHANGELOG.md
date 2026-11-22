@@ -14,11 +14,18 @@ them verbatim under the new version heading, so that step is never done by hand 
 
 ## [Unreleased]
 
+### Changed
+- **The list shows that it is locked during a scan.** While a scan runs over the rows, a scanner
+  lies on them: the window's background at half strength, a honey line sweeping down the visible
+  list, and a lock label, *The list unlocks when the scan finishes*. Nothing is blurred, so every
+  row stays readable, and the list still scrolls. Reduce Transparency leaves the veil out; Reduce
+  Motion stops the line.
+
 ### Fixed
 - **A rescan shows that it is running.** While a scan runs over results already on screen, the
   binary code Wega sniffs streams across the band behind her again, as it does on the first
-  scan; with nothing to update it streams behind the *Everything up to date* heading. The rows
-  stay uncovered. Increase Contrast leaves the stream out and Reduce Motion holds it still.
+  scan; with nothing to update it streams behind the *Everything up to date* heading. Increase
+  Contrast leaves the stream out and Reduce Motion holds it still.
 
 ## [0.9.0] — 2026-11-21
 
