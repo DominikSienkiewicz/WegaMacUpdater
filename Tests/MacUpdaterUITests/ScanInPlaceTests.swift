@@ -87,22 +87,17 @@ final class ScanInPlaceTests: XCTestCase {
         )
     }
 
-    /// UXP-13 — the band carries the scan while it runs in place; with no band (nothing to
-    /// update, or restarts only) the heading carries the phases and Wega sniffs beside them.
-    func testTheHeaderCarriesThePhasesAndWegaSniffsBesideTheStoodDownList() throws {
+    /// UXP-13 — the band carries the scan while it runs in place. Since the owner's 2026-11-22
+    /// call the band stands over every result, „Wszystko aktualne” included, so there is no
+    /// second heading to carry the phases and nothing is drawn over the list.
+    func testTheBandCarriesThePhasesOverEveryResult() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         let overlay = try source("Sources/MacUpdater/ScanBusyOverlay.swift")
 
-        XCTAssertTrue(view.contains("ScanPhaseStrip(progress: scan.progress)"))
         XCTAssertTrue(view.contains("scan: scan.isRefreshing ? scanPresentation : nil"),
                       "the band carries the phases while a scan runs in place")
         XCTAssertFalse(view.contains("refreshingStamp"), "the phases replace the one-line stamp")
-        let heading = try XCTUnwrap(view.range(of: "private var resultsHeading: some View")).upperBound
-        let strip = try XCTUnwrap(view.range(of: "ScanPhaseStrip(progress: scan.progress)", range: heading..<view.endIndex))
-        let sniff = try XCTUnwrap(view.range(of: "WegaHead(pose: .sniff, size: 28).sniffing(true)", range: heading..<view.endIndex))
-        XCTAssertLessThan(sniff.lowerBound, strip.lowerBound, "the sniffing head stands before the strip")
-        XCTAssertEqual(view[heading...].components(separatedBy: ".frame(minHeight: 28, alignment: .leading)").count, 3,
-                       "both variants of the second line keep one height, so the heading never jumps")
+        XCTAssertFalse(view.contains("private var resultsHeading"), "no heading beside the band")
         XCTAssertFalse(overlay.contains("struct ScanBusyOverlay"), "nothing is drawn over the list")
     }
 

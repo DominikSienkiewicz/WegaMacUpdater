@@ -43,15 +43,29 @@ enum UpdateBandMode: Equatable {
     case run(UpdateBandRunPresentation)
     case summary(UpdateBandSummaryPresentation)
     case results
+    /// The scan left nothing to update (owner, 2026-11-22): the band stays and says so.
+    case upToDate
 
     /// The precedence: a scan (the run's check included) over the run it confirms, the run over
-    /// a summary still open from the previous run, the summary over the results.
+    /// a summary still open from the previous run, the summary over the results, which say the
+    /// Mac is up to date when `upToDate`.
     static func resolve(scan: UpdateBandScanPresentation?, run: UpdateBandRunPresentation?,
-                        summary: UpdateBandSummaryPresentation?) -> UpdateBandMode {
+                        summary: UpdateBandSummaryPresentation?, upToDate: Bool = false) -> UpdateBandMode {
         if let scan { return .scan(scan) }
         if let run { return .run(run) }
         if let summary { return .summary(summary) }
-        return .results
+        return upToDate ? .upToDate : .results
+    }
+
+    /// Whether the band has a summary to show beside the headline. With nothing to update there
+    /// is no queue, no undo coverage and no plan to show.
+    var showsSummary: Bool { self != .upToDate }
+
+    /// How many lines the headline may take. Without a summary the compact band has no row under
+    /// the sentence, so the headline takes that room: „I can't tell whether everything is up to
+    /// date” needs four lines of the compact band's narrowest column (166 pt).
+    func headlineLineLimit(in layout: UpdateBandLayout) -> Int {
+        showsSummary ? layout.headlineLineLimit : 4
     }
 
     func headline(results: UpdateBandPresentation) -> String {
@@ -60,6 +74,7 @@ enum UpdateBandMode: Equatable {
         case .run(let run):         run.headline
         case .summary(let summary): summary.headline
         case .results:              results.headline
+        case .upToDate:             results.upToDateHeadline
         }
     }
 
@@ -68,7 +83,7 @@ enum UpdateBandMode: Equatable {
         case .scan(let scan):       scan.line
         case .run(let run):         run.line
         case .summary(let summary): summary.line
-        case .results:              results.line
+        case .results, .upToDate:   results.line
         }
     }
 
@@ -78,7 +93,7 @@ enum UpdateBandMode: Equatable {
         switch self {
         case .run(let run):         run.eyebrow
         case .summary(let summary): summary.eyebrow
-        case .scan, .results:       nil
+        case .scan, .results, .upToDate: nil
         }
     }
 
@@ -107,6 +122,11 @@ enum UpdateBandMode: Equatable {
 /// C2 stage 4 — after the run the caller passes `summary` until the user closes it: the band
 /// then says how the run ended, counts each result and offers „Zamknij podsumowanie”, and a
 /// result ring stands where the button was. The run's check is a scan (`scan` wins over `run`).
+///
+/// Owner, 2026-11-22 — when the scan leaves nothing to update the band stays: Wega asleep, „Wszystko
+/// aktualne”, the check time and sources, the scan button, and a check mark where the update
+/// button was (`UpdateBandPresentation.nothingToUpdate`). It used to give way to a plain heading,
+/// so on an up-to-date Mac it came and went with every scan.
 struct UpdateBand<Action: View>: View {
     let presentation: UpdateBandPresentation
     let scan: UpdateBandScanPresentation?
@@ -186,8 +206,10 @@ struct UpdateBand<Action: View>: View {
                     .sniffing(scan != nil)
                     .accessibilityHidden(true)
                 textColumn(layout)
-                regularSummary
-                    .frame(width: WegaLayout.bandSummaryWidth, alignment: .leading)
+                if mode.showsSummary {
+                    regularSummary
+                        .frame(width: WegaLayout.bandSummaryWidth, alignment: .leading)
+                }
                 scanButton
                 roundElement(layout)
             }
@@ -211,11 +233,14 @@ struct UpdateBand<Action: View>: View {
         }
     }
 
-    private var mode: UpdateBandMode { .resolve(scan: scan, run: run, summary: summary) }
+    private var mode: UpdateBandMode { .resolve(scan: scan, run: run, summary: summary, upToDate: presentation.nothingToUpdate) }
 
     private var wegaPose: WegaPose {
-        if case .scan = mode { return .sniff }
-        return .idle
+        switch mode {
+        case .scan:     .sniff
+        case .upToDate: presentation.incompleteNote == nil ? .sleep : .sad
+        default:        .idle
+        }
     }
 
     /// The update button, or the ring that counts a scan's sources, a run's packages or the
@@ -231,6 +256,8 @@ struct UpdateBand<Action: View>: View {
             UpdateBandResultRing(updated: summary.updated, planned: summary.planned, diameter: layout.buttonDiameter, accessibilityValue: summary.ringValue)
         case .results:
             action(layout)
+        case .upToDate:
+            UpdateBandUpToDateMark(complete: presentation.incompleteNote == nil, diameter: layout.buttonDiameter)
         }
     }
 
@@ -240,7 +267,7 @@ struct UpdateBand<Action: View>: View {
             Text(mode.headline(results: presentation))
                 .font(.wega(layout.headlineStyle, weight: .semibold))
                 .foregroundStyle(Color.wegaBandText)
-                .lineLimit(layout.headlineLineLimit)
+                .lineLimit(mode.headlineLineLimit(in: layout))
                 .accessibilityAddTraits(.isHeader)
             Text(mode.line(results: presentation))
                 .font(.wega(.callout))
@@ -266,6 +293,8 @@ struct UpdateBand<Action: View>: View {
             UpdateBandSummaryControls(summary: summary, compact: true, onClose: onCloseSummary)
         case .results:
             compactSummary
+        case .upToDate:
+            EmptyView()
         }
     }
 
@@ -391,6 +420,8 @@ struct UpdateBand<Action: View>: View {
             UpdateBandSummaryControls(summary: summary, compact: false, onClose: onCloseSummary)
         case .results:
             summaryColumn
+        case .upToDate:
+            EmptyView()
         }
     }
 
