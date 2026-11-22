@@ -108,6 +108,15 @@ struct ScanStoreRuntimeHarness {
     let reports: ScanStoreRuntimeReportRecorder
 }
 
+/// The app's own gate, for a test whose subject is a postpone the live preflight decides: a
+/// download too large for any disk is postponed on every Mac, whatever its network.
+@MainActor
+func liveScanStoreResourceDecision(
+    _ tokens: [String], _ downloadSizes: [String: DownloadSizeProbeResult], _ appPaths: [String: URL]
+) async -> DownloadGate.Decision {
+    await DownloadResourcePreflight.decision(tokens: tokens, downloadSizes: downloadSizes, appPaths: appPaths)
+}
+
 @MainActor
 func makeScanStoreRuntimeHarness(
     runner: ScanStoreRuntimeProcessRunner,
@@ -119,7 +128,12 @@ func makeScanStoreRuntimeHarness(
     now: @escaping @MainActor () -> Date = { Date() },
     onWindowScanRunning: @escaping @MainActor (Bool) -> Void = { _ in },
     sudoPolicyDistrust: @escaping @MainActor () -> SudoPolicyDistrust? = { nil },
-    masPasswordPromptsAllowed: @escaping @Sendable () -> Bool = { true }
+    masPasswordPromptsAllowed: @escaping @Sendable () -> Bool = { true },
+    // Allowed unless a test says otherwise: the live gate reads this Mac's network and battery,
+    // and a metered Wi-Fi once postponed every harness run in the merge gate.
+    resourceDecision: @escaping @MainActor (
+        [String], [String: DownloadSizeProbeResult], [String: URL]
+    ) async -> DownloadGate.Decision = { _, _, _ in .allow }
 ) -> ScanStoreRuntimeHarness {
     let toolURL = URL(fileURLWithPath: "/bin/echo")
     let locator = BinaryLocator(brewCandidates: [toolURL], masCandidates: [toolURL])
@@ -147,7 +161,8 @@ func makeScanStoreRuntimeHarness(
         upgradeMutex: UpgradeMutex(),
         now: now,
         reportWindowScanRunning: onWindowScanRunning,
-        sudoPolicyDistrust: sudoPolicyDistrust
+        sudoPolicyDistrust: sudoPolicyDistrust,
+        resourceDecision: resourceDecision
     )
     let store = ScanStore(
         resultStore: ScanResultStore(io: snapshots),
