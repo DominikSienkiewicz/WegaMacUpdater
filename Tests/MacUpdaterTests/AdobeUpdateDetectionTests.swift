@@ -201,6 +201,10 @@ struct AdobeUpdateDetectionTests {
 
         let catalogCache = AdobeCatalogCache(fileURL: root.url.appendingPathComponent("adobe.json"))
         try catalogCache.save(AdobeProductCatalog(latestVersions: ["LRCC": "9.5"]))
+        // Homebrew has no Creative Cloud cask, so an empty catalog finds what the live one did,
+        // without the download and the second of decoding it cost the test pool.
+        let caskCache = root.url.appendingPathComponent("casks.json")
+        try CaskDatabaseCache(fileURL: caskCache).save([])
 
         let (defaults, teardown) = TestDefaults.isolated("adobe-scan")
         defer { teardown() }
@@ -211,7 +215,7 @@ struct AdobeUpdateDetectionTests {
                 runner: StubProcessRunner(result: ProcessResult(exitCode: 1, stdout: "", stderr: ""))
             ),
             scanDirectories: [applications, lightroomFolder],
-            caskCacheURL: root.url.appendingPathComponent("casks.json"),
+            caskCacheURL: caskCache,
             maxConcurrentChecks: 1,
             dependencies: .init(
                 selfUpdateChecker: WegaSelfUpdateChecker(

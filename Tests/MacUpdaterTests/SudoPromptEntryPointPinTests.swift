@@ -43,6 +43,8 @@ struct SudoPromptEntryPointPinTests {
 
     @Test func everyFileThatCouldAskIsARouteThatConsultsTheGateOrIsNoRoute() throws {
         for (path, text) in try swiftSources(under: "Sources") {
+            // Stripping comments only removes text, so a file with no marker has none in its code.
+            guard Self.markers.contains(where: { Self.holds(text, $0) }) else { continue }
             let code = code(text)
             guard Self.markers.contains(where: { code.contains($0) }), Self.notRoutes[path] == nil else { continue }
             let required = try #require(Self.routes[path], "\(path) can reach a password prompt: consult SudoPasswordPromptGate and list it here")
@@ -67,8 +69,9 @@ struct SudoPromptEntryPointPinTests {
     @Test func theLegacyScriptWritersStayUnused() throws {
         for (path, text) in try swiftSources(under: "Sources")
         where path != "Sources/MacUpdaterCore/AskpassHelper.swift" && path != "Sources/MacUpdaterCore/SudoShim.swift" {
-            #expect(!code(text).contains("AskpassHelper."), "\(path)")
-            #expect(!code(text).contains("SudoShim."), "\(path)")
+            for writer in ["AskpassHelper.", "SudoShim."] where Self.holds(text, writer) {
+                #expect(!code(text).contains(writer), "\(path)")
+            }
         }
     }
 
@@ -141,6 +144,16 @@ struct SudoPromptEntryPointPinTests {
                 return line.range(of: " //").map { String(line[..<$0.lowerBound]) } ?? String(line)
             }
             .joined(separator: "\n")
+    }
+
+    /// Whether `text` holds `needle` byte for byte, to skip the files that cannot match. Foundation's
+    /// `contains`, which compares canonically equivalent text, took most of a second over `Sources`.
+    private static func holds(_ text: String, _ needle: String) -> Bool {
+        var text = text
+        var needle = needle
+        return text.withUTF8 { haystack in
+            needle.withUTF8 { memmem(haystack.baseAddress, haystack.count, $0.baseAddress, $0.count) != nil }
+        }
     }
 
     private func packageRoot(file: String = #filePath) -> URL {
