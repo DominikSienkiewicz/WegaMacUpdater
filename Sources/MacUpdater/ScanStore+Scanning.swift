@@ -197,18 +197,23 @@ extension ScanStore {
         }
 
         let brewOutcome: SourceCheckOutcome
+        // Homebrew's answer stays here until the vendor phase has said which of its casks are
+        // already current on disk; `brewOutdated` gets it filtered. Published raw, every
+        // self-updating cask whose Caskroom record lags stood in the list and the band for the
+        // scan's middle, then vanished.
+        var brew: BrewOutdated?
 
         do {
             // Stale casks are still reported outdated by brew even though their app is gone
             // — drop them here so the count only ever offers upgrades the user can install.
-            brewOutdated = UpdatePlanner.excludingStaleCasks(
+            brew = UpdatePlanner.excludingStaleCasks(
                 try await model.brewService.outdatedGreedy(),
                 staleTokens: staleCasks
             )
             brewOutcome = .succeeded
         }
-        catch BrewServiceError.brewNotFound { brewOutdated = nil; brewOutcome = .notInstalled }
-        catch { brewOutdated = nil
+        catch BrewServiceError.brewNotFound { brew = nil; brewOutcome = .notInstalled }
+        catch { brew = nil
                 brewOutcome = .failed("brew outdated")
                 // UX-06 — raw error (incl. brew's stderr) to the log, localized copy to the user.
                 WegaLog.error(.homebrew, "brew outdated: \(error.localizedDescription)")
@@ -254,7 +259,7 @@ extension ScanStore {
         if await bailIfCancelled(at: .npm, emitActivity: emitActivity) { return }
 
         progress = .running(.manual)
-        let brewOutdatedCasks = Set(brewOutdated?.casks.map(\.name) ?? [])
+        let brewOutdatedCasks = Set(brew?.casks.map(\.name) ?? [])
         let scan = await scanManualUpdates(brewOutdatedCasks: brewOutdatedCasks)
         manualOutdated = scan.apps
         failed += scan.failedChecks
@@ -276,16 +281,13 @@ extension ScanStore {
         // Resolve icon paths for outdated casks, and drop entries whose real
         // bundle version already matches `current_version` (self-updating apps
         // like Chrome bump their bundle behind brew's back).
-        if let casks = brewOutdated?.casks, !casks.isEmpty {
+        if let casks = brew?.casks, !casks.isEmpty {
             let infos = (try? await model.brewService.caskInstallationInfo(tokens: casks.map(\.name))) ?? []
 
             let drifted = BrewCaskDriftFilter().driftedTokens(
                 outdated: casks, installationInfo: infos, attributedInstallations: scan.installations
             )
-            if !drifted.isEmpty, var updated = brewOutdated {
-                updated.casks.removeAll { drifted.contains($0.name) }
-                brewOutdated = updated
-            }
+            brew?.casks.removeAll { drifted.contains($0.name) }
             // REL-09 — the drop has to leave a trace. A cask hidden here was checked and
             // found current; without a line it reads as never checked at all.
             if let line = ScanLog.driftLine(tokens: drifted) {
@@ -297,10 +299,7 @@ extension ScanStore {
             let staleVendor = ServiceVendorUpdatePolicy.staleVendorTokens(
                 outdated: casks, installationChecks: scan.installations, scanComplete: reports.isComplete
             )
-            if !staleVendor.isEmpty, var updated = brewOutdated {
-                updated.casks.removeAll { staleVendor.contains($0.name) }
-                brewOutdated = updated
-            }
+            brew?.casks.removeAll { staleVendor.contains($0.name) }
             if let line = ScanLog.staleVendorLine(tokens: staleVendor, installationChecks: scan.installations) {
                 WegaLog.info(.scanner, line)
             }
@@ -310,6 +309,7 @@ extension ScanStore {
                 excluding: drifted.union(staleVendor)
             )
         }
+        brewOutdated = brew
 
         // FEAT-03: transparentność pobrania (host + checksum) dla outdated casków.
         if let casks = brewOutdated?.casks, !casks.isEmpty {
