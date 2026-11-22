@@ -24,6 +24,7 @@ public enum Translations {
         .merging(updatesActionBar.merging(uxReview) { first, _ in first }) { first, _ in first }
         .merging(uxReviewNext) { first, _ in first }
         .merging(runSummary) { first, _ in first }
+        .merging(scanListVeil) { first, _ in first }
         .merging(uxReviewRest) { first, _ in first }
         .merging(uxNextBatch) { first, _ in first }
         .merging(touchIDDisable) { first, _ in first }
