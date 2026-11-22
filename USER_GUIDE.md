@@ -72,7 +72,7 @@ package is handed to you to run yourself (see [The Wega helper](#the-wega-helper
    screen; the **Check now** button appears only on **Updates**, **To Homebrew** ("Do Homebrew")
    and **Undo updates** ("Cofnij aktualizacje"), the screens that show the result of a scan.
 
-**What a scan shows.** The scan runs in the band, and nothing covers the rows:
+**What a scan shows.** The scan runs in the band, and a light scanner lies on the rows:
 
 - a line that names the step Wega is on — for example **"Refreshing the Homebrew
   catalog…"** first, then Homebrew, the App Store, npm and the vendors;
@@ -81,8 +81,9 @@ package is handed to you to run yourself (see [The Wega helper](#the-wega-helper
   the note **"Selecting comes back when the scan finishes."**;
 - a ring and a chip per source (Homebrew, App Store, npm, vendors), each done, running or
   not yet started;
-- the rows stay visible, but you cannot tick them until the scan ends, and **Cancel** stops
-  the scan where it stands.
+- the rows stay readable under a half-strength veil with a honey line sweeping down them and
+  the label **"The list unlocks when the scan finishes"**; you cannot tick them until the scan
+  ends, the list still scrolls, and **Cancel** stops the scan where it stands.
 
 **A scan never installs, removes or cleans anything.** Checking for updates does not touch
 your apps. It does refresh Homebrew's own catalog (`brew update`) — unless the launch scan

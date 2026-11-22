@@ -300,6 +300,7 @@ struct UpdateRunSummaryListTests {
                         } else {
                             listColumn
                                 .frame(maxWidth: .infinity)
+                                .overlay { if ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows) { ScanListVeil() } }
                                 .disabled(!ScanSelectionGate.allowsSelection(isRefreshing: scan.isRefreshing))
                                 .environment(\\.updateRun, runListState)
                         }

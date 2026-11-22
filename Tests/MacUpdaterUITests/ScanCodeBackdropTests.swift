@@ -6,8 +6,8 @@ import Testing
 /// Owner, 2026-11-22: during a rescan the screen showed no Wega sniffing binary code, so it was
 /// not clear that the scan was running. UXP-13 had left only the ±2.4° head-bob in the band,
 /// which reads as a still picture. While a scan runs in place, the code Wega sniffs streams
-/// behind her again: across the band, or behind the heading when there is no band. The rows
-/// stay uncovered.
+/// behind her again: across the band, or behind the heading when there is no band. The stream
+/// itself never lies on the rows (the scanner over them is `ScanListVeil`).
 @Suite("A scan in place streams the code Wega sniffs")
 struct ScanCodeBackdropTests {
     @Test func theStreamRunsOnlyWhileAScanRuns() {

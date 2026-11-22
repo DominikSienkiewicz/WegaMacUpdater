@@ -53,6 +53,24 @@ struct ScanListVeilTests {
         #expect(veil.contains(".accessibilityLabel(tr(\"Lista odblokuje się po skanie\"))"))
     }
 
+    /// Only over rows a scan is replacing: not over the empty state, the band, the scope bar or a
+    /// run's summary, which sit outside `listColumn` or replace it.
+    @Test func theVeilLiesOnTheRowsOnlyWhileAScanCoversThem() throws {
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        let start = try #require(view.range(of: "private var screenBody: some View"))
+        let end = try #require(view.range(of: "private var scopeBar: some View", range: start.upperBound..<view.endIndex))
+        let screen = view[start.lowerBound..<end.lowerBound]
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        let indent = "\n" + String(repeating: " ", count: 20)
+        #expect(screen.contains("listColumn"
+            + indent + ".frame(maxWidth: .infinity)"
+            + indent + ".overlay { if ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows) { ScanListVeil() } }"
+            + indent + ".disabled(!ScanSelectionGate.allowsSelection(isRefreshing: scan.isRefreshing))"))
+        #expect(screen.components(separatedBy: ".overlay").count == 2, "the scanner is the one layer on the rows")
+    }
+
     private func source(_ path: String) throws -> String {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

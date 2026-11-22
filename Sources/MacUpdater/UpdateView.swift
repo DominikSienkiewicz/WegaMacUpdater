@@ -459,9 +459,9 @@ struct UpdateView: View {
             // that empties the list, or the category on screen, leaves it blank until then: no
             // hero and no empty category before the result.
             // Otherwise the rows on screen are the ones the scan is in the middle of replacing, so
-            // for its duration they are a report, not a menu: inert. Nothing is drawn over them
-            // (UXP-13) — the band and the list header say a scan is running and why the rows
-            // cannot be selected, and every row stays readable.
+            // for its duration they are a report, not a menu: inert. The scanner lies on them
+            // (owner, 2026-11-22: people clicked rows that could not answer): a half veil, a
+            // sweeping line and a label, with nothing blurred, so every row stays readable.
             if let report = scan.runReport {
                 UpdateRunSummaryList(report: report, onShowLog: { scan.showLog = true }, handOffs: {
                     UpdateRunHandOffGroup(onPinManual: requestPinManual)
@@ -471,6 +471,7 @@ struct UpdateView: View {
             } else {
                 listColumn
                     .frame(maxWidth: .infinity)
+                    .overlay { if ScanSelectionGate.coversList(isRefreshing: scan.isRefreshing, showsRows: showsRows) { ScanListVeil() } }
                     .disabled(!ScanSelectionGate.allowsSelection(isRefreshing: scan.isRefreshing))
                     .environment(\.updateRun, runListState)
             }
