@@ -1,0 +1,14 @@
+{
+  "name": "Wega Mac Updater",
+  "kicker": "macOS update manager",
+  "description": "Native macOS app that updates Homebrew, Mac App Store, JetBrains, GitHub and Sparkle apps in one window.",
+  "accent": "#FF9F43",
+  "stack": [
+    {"icon": "swift", "label": "Swift 6.0", "color": "#F05138"},
+    {"icon": "apple", "label": "SwiftUI, macOS 26+", "color": "#FFFFFF"},
+    {"icon": "homebrew", "label": "Homebrew", "color": "#FBB040"}
+  ],
+  "preview": {"type": "code", "title": "Package.swift", "text": "// swift-tools-version: 6.0\n\nimport PackageDescription\n\nlet package = Package(\n    name: \"WegaMacUpdater\",\n    defaultLocalization: \"en\",\n    platforms: [\n        .macOS(\"26.0\")\n    ],\n    products: ["},
+  "previewLabel": "Swift package manifest of the app",
+  "authorCaption": "Designed and maintained by"
+}
