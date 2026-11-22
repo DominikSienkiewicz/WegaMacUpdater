@@ -201,7 +201,9 @@ what the scan is doing: a line naming the step (*"Refreshing the Homebrew catalo
 patrol has taken (counted up from the start, never estimated down), what has been found so far,
 and a ring and a chip per source, each done, running or not yet started. Once the vendor step
 starts it adds a counter, *"Vendors: 12 of 31 apps"*; a vendor step with no app to ask keeps the
-note instead of a counter of zero. Wega sniffs through the whole scan. The rows stay fully
+note instead of a counter of zero. Wega sniffs through the whole scan, with the binary code she
+sniffs streaming behind her across the band (behind the *"Everything up to date"* heading when
+there is no band); Increase Contrast leaves it out and Reduce Motion holds it still. The rows stay fully
 readable, but they stop accepting selections, and a note — *"Selecting comes back when the scan
 finishes."* — says why: in the band, and in the list header where it fits, yielding to the scope
 bar at the narrowest width. Only a scan with nothing to keep on screen — the very first one —

@@ -456,6 +456,7 @@ struct UpdateBand<Action: View>: View {
                 glow(Color(nsColor: WegaPalette.lavender.dark.nsColor), center: UnitPoint(x: 0.1, y: 0.9))
                 glow(Color(nsColor: WegaPalette.honey.dark.nsColor), center: UnitPoint(x: 0.96, y: 1.1))
             }
+            ScanCodeBackdrop(isScanning: scan != nil, color: .wegaBandAccentText)
         }
         .clipShape(RoundedRectangle(cornerRadius: WegaLayout.bandRadius, style: .continuous))
         .accessibilityHidden(true)
