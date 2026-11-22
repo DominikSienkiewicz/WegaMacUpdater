@@ -5,22 +5,20 @@ import Testing
 
 @Suite("Dead elements") @MainActor
 struct DeadElementsTests {
-    @Test func onlyScreensThatScanForUpdatesOfferTheScanButton() {
-        let shown: Set<SidebarTab> = [.update, .migration, .rollback]
-        for tab in [SidebarTab.update, .rollback, .uninstall, .cleanup, .migration, .inventory, .logs] {
-            #expect(tab.showsScanControl == shown.contains(tab), "\(tab)")
+    /// The scan button lives in the Updates content (owner, 2026-11-22): not in the toolbar, not on
+    /// Do Homebrew (its own „Skanuj /Applications”) and not on Cofnij (it re-reads its list).
+    @Test func onlyUpdatesOffersTheScanButton() throws {
+        #expect(try source("Sources/MacUpdater/UpdateView.swift").contains("ScanRoundButton("))
+        #expect(!(try source("Sources/MacUpdater/ContentView.swift")).contains("ScanControl("))
+        for screen in ["MigrationView", "RollbackView", "UninstallView", "CleanupView", "InventoryView", "LogsView"] {
+            #expect(!(try source("Sources/MacUpdater/\(screen).swift")).contains("ScanRoundButton"), "\(screen)")
         }
     }
 
-    @Test func aHiddenScanButtonKeepsItsSlotButTakesNoFocus() throws {
-        let control = try source("Sources/MacUpdater/ScanControl.swift")
-        for literal in [".opacity(isShown ? 1 : 0)", ".disabled(!isShown)", ".accessibilityHidden(!isShown)", ".frame(width: 135)"] {
-            #expect(control.contains(literal), "\(literal)")
-        }
-        #expect(try source("Sources/MacUpdater/ContentView.swift")
-            .contains("ScanControl(namespace: glassNamespace, isShown: selection.tab.showsScanControl)"))
-        #expect(try source("Sources/MacUpdater/UpdateView.swift").contains(".focusedSceneValue(\\.startCheckAction"),
-                "⌘R stays on every screen")
+    @Test func theShortcutsStayOnEveryScreen() throws {
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        #expect(view.contains(".focusedSceneValue(\\.startCheckAction"), "⌘R stays on every screen")
+        #expect(view.contains(".focusedSceneValue(\\.cancelScanAction"), "and so does ⌘.")
     }
 
     @Test func theNpmCardIsACounterNotAButton() throws {

@@ -229,9 +229,13 @@ answer about your rules, **Open Inventory** the others. It never starts an Inven
 Inventory was never read it says so. An answer from an Inventory read that may have changed, or
 that was incomplete, carries that caveat.
 
-**The scan button only where a scan shows.** The **Check now** button in the toolbar appears only
-on the screens that show a scan's result — Updates, To Homebrew (which also keeps its own
-**Scan again**) and Undo updates. Elsewhere it would do nothing visible. **⌘R** works on every
+**The scan button where the scan shows.** The scan button is a small round button on the Updates
+screen, not in the toolbar: beside the band's big **Update** circle (above it in the narrowest
+band), beside the *"Everything up to date"* heading when there is no band, and beside the first
+scan's progress bar. It shows ↻ **Check now**, and ■ **Cancel Scan** while a scan runs that can
+be cancelled; the check after an update run cannot be, so it shows a greyed-out ↻. It is one size
+in every state, so nothing beside it moves. To Homebrew keeps its own **Scan again** and Undo
+updates re-reads its list on arrival, so neither carries it. **⌘R** and **⌘.** work on every
 screen.
 
 **Rules that hide updates.** *Don't update*, *Skip this version* and *Pin version…* (the **⋯**

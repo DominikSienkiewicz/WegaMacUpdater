@@ -238,7 +238,17 @@ struct UpdateView: View {
     // A scan over a result draws no scene, the check after a run included: the band and the
     // list header report it (UXP-13).
     private var checkingView: some View {
-        ScanProgressScene(progress: scan.progress, catalogRefreshing: scan.isRefreshingCatalog)
+        ScanProgressScene(progress: scan.progress, catalogRefreshing: scan.isRefreshingCatalog, accessory: scanRoundButton(style: .window))
+    }
+
+    /// The round scan button (owner, 2026-11-22, option B). The band, the heading and the first
+    /// scan's scene draw this one, from the store's own gates; the toolbar carries none.
+    private func scanRoundButton(style: ScanRoundButton.Style) -> ScanRoundButton {
+        ScanRoundButton(
+            state: ScanRoundButtonState.resolve(canStartCheck: scan.canStartCheck, canCancelScan: scan.canCancelScan),
+            style: style,
+            onStart: { scan.startCheck() }, onCancel: { scan.cancelScan() }
+        )
     }
 
     // MARK: Results
@@ -321,6 +331,7 @@ struct UpdateView: View {
             onShowLog: { scan.showLog = true },
             summary: scan.runReport.map(summaryPresentation),
             onCloseSummary: { scan.closeRunReport() },
+            scanButton: scanRoundButton(style: .band),
             action: { layout in
                 UpdateBandButton(
                     title: presentation.buttonTitle,
@@ -393,9 +404,13 @@ struct UpdateView: View {
 
     private var resultsHeading: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(tr("Wszystko aktualne"))
-                .font(.wega(.largeTitle, weight: .semibold))
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Text(tr("Wszystko aktualne"))
+                    .font(.wega(.largeTitle, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                scanRoundButton(style: .window)
+            }
             if let date = scan.lastCheck {
                 let freshness = scan.freshness() ?? .fresh
                 VStack(alignment: .leading, spacing: 3) {

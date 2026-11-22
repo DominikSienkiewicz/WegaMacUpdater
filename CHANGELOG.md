@@ -15,6 +15,11 @@ them verbatim under the new version heading, so that step is never done by hand 
 ## [Unreleased]
 
 ### Changed
+- **The scan button moved next to the results.** The toolbar's **Check now** / **Cancel** is
+  gone; a small round button on the Updates screen starts a scan (↻) and stops one that can be
+  cancelled (■). It stands beside the band's big **Update** circle, beside the *Everything up to
+  date* heading when there is nothing to update, and beside the first scan's progress bar. To
+  Homebrew keeps its own **Scan again**; **⌘R** and **⌘.** still work on every screen.
 - **The list shows that it is locked during a scan.** While a scan runs over the rows, a scanner
   lies on them: the window's background at half strength, a honey line sweeping down the visible
   list, and a lock label, *The list unlocks when the scan finishes*. Nothing is blurred, so every

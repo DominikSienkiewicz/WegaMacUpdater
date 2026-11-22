@@ -5,6 +5,10 @@ import XCTest
 /// A scan changes several pieces of window chrome at once. The sidebar must keep the same
 /// geometry throughout that transition; changing its safe-area padding makes NSSplitView
 /// repeatedly solve constraints until AppKit aborts the process.
+///
+/// The toolbar's scan control and its width checks went with the control (owner, 2026-11-22):
+/// the scan button is now `ScanRoundButton` in the content, one size in every state
+/// (`ScanRoundButtonTests.theButtonIsOneSizeInEveryState`), and the toolbar no longer changes.
 final class ScanLayoutTests: XCTestCase {
     @MainActor
     func testSidebarKeepsItsWidthWhenScanActivityChanges() {
@@ -12,14 +16,6 @@ final class ScanLayoutTests: XCTestCase {
         let scanningWidth = fittingWidth(for: .scanning)
 
         XCTAssertEqual(scanningWidth, idleWidth, accuracy: 0.5)
-    }
-
-    @MainActor
-    func testToolbarControlKeepsItsWidthWhenScanStatusChanges() {
-        let readyWidth = toolbarFittingWidth(for: .ready)
-        let checkingWidth = toolbarFittingWidth(for: .checking)
-
-        XCTAssertEqual(checkingWidth, readyWidth, accuracy: 0.5)
     }
 
     @MainActor
@@ -39,44 +35,5 @@ final class ScanLayoutTests: XCTestCase {
         let hostingView = NSHostingView(rootView: view)
 
         return hostingView.fittingSize.width
-    }
-
-    /// The quiet launch refresh is a third way the toolbar shows **Cancel** — with `status`
-    /// left on `.results`, where the two assertions above never look. A control that changes
-    /// width there invalidates the window safe area exactly as one that changes width on
-    /// `.checking` does.
-    @MainActor
-    func testToolbarControlKeepsItsWidthWhenAQuietRefreshStartsAndStops() {
-        let idleWidth = toolbarFittingWidth(for: .results)
-        let refreshingWidth = toolbarFittingWidth(for: .results, refreshing: true)
-
-        XCTAssertEqual(refreshingWidth, idleWidth, accuracy: 0.5)
-    }
-
-    /// UXP-32 — screens with nothing to scan hide the button, not its slot.
-    @MainActor
-    func testToolbarControlKeepsItsWidthWhenHidden() {
-        XCTAssertEqual(toolbarFittingWidth(for: .results, isShown: false), toolbarFittingWidth(for: .results), accuracy: 0.5)
-    }
-
-    @MainActor
-    private func toolbarFittingWidth(for status: UpdateStatus, refreshing: Bool = false, isShown: Bool = true) -> CGFloat {
-        let scan = ScanStore()
-        scan.status = status
-        scan.setRefreshing(refreshing)
-        let hostingView = NSHostingView(
-            rootView: ScanControlHarness(isShown: isShown).environmentObject(scan)
-        )
-
-        return hostingView.fittingSize.width
-    }
-}
-
-private struct ScanControlHarness: View {
-    var isShown = true
-    @Namespace private var namespace
-
-    var body: some View {
-        ScanControl(namespace: namespace, isShown: isShown)
     }
 }

@@ -84,13 +84,15 @@ struct PostRunCheckInPlaceTests {
         #expect(undo.components(separatedBy: "await runCheck(").count == 2, "one check after an undo")
     }
 
-    @Test func theToolbarOffersAnulujOnlyForACancellableScan() throws {
-        let control = try source("Sources/MacUpdater/ScanControl.swift")
-        #expect(control.contains("if scan.canCancelScan {"))
-        #expect(control.contains(".disabled(!scan.canStartCheck)"))
-        #expect(!control.contains("scan.status == .checking || scan.isRefreshing"),
-                "„Anuluj” follows what `cancelScan()` can stop, not every scan on screen")
-        #expect(!control.contains(".disabled(scan.updating)"))
+    /// The round scan button (which replaced the toolbar's) offers a stop only for a scan
+    /// `cancelScan()` can stop; the check after a run shows a greyed-out start instead.
+    @Test func theScanButtonOffersAStopOnlyForACancellableScan() throws {
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        #expect(view.contains("ScanRoundButtonState.resolve(canStartCheck: scan.canStartCheck, canCancelScan: scan.canCancelScan)"))
+        #expect(!view.contains("scan.status == .checking || scan.isRefreshing"),
+                "the stop follows what `cancelScan()` can stop, not every scan on screen")
+        #expect(ScanRoundButtonState.resolve(canStartCheck: false, canCancelScan: false) == .start(enabled: false),
+                "a scan that cannot be cancelled offers no stop")
     }
 
     private func source(_ relativePath: String, file: String = #filePath) throws -> String {
