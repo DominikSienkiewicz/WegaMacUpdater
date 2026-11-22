@@ -17,7 +17,7 @@ them verbatim under the new version heading, so that step is never done by hand 
 ### Fixed
 - **A rescan shows that it is running.** While a scan runs over results already on screen, the
   binary code Wega sniffs streams across the band behind her again, as it does on the first
-  scan; with nothing to update it streams behind the *Everything is up to date* heading. The rows
+  scan; with nothing to update it streams behind the *Everything up to date* heading. The rows
   stay uncovered. Increase Contrast leaves the stream out and Reduce Motion holds it still.
 
 ## [0.9.0] — 2026-11-21
