@@ -15,6 +15,10 @@ Wega's portrait — broad ears with rounded tips, dark brows and muzzle, a white
 
 [![CI](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml/badge.svg)](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml)
 
+![The Updates screen during a scan: the band above the list shows the sources already checked and the updates found so far, and each row shows the installed and the new version](docs/assets/updates-window.png)
+
+*The Updates screen during a scan, in the app's Polish localization.*
+
 ## The Vision: one window, zero terminals
 
 Package managers have proliferated — Homebrew casks, formulae, Mac App Store, Sparkle auto-updaters, JetBrains Toolbox, GitHub Releases. Each lives in a different UI or CLI. Wega centralises all of them: one native SwiftUI window that knows where every app came from and how to update it correctly. No `brew upgrade` in muscle memory, no App Store tab left open, no missed JetBrains IDE because Toolbox uses `auto_updates: true` and `brew outdated` never fires.
