@@ -13,7 +13,7 @@ Wega's portrait — broad ears with rounded tips, dark brows and muzzle, a white
 ![Homebrew](https://img.shields.io/badge/Homebrew-optional-FBB040?style=for-the-badge&logo=homebrew&logoColor=white)
 ![Architecture](https://img.shields.io/badge/Architecture-SPM_Modules-purple?style=for-the-badge)
 
-[![CI](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml/badge.svg)](https://github.com/DominikSienkiewicz/WegaMacUpdater/actions/workflows/ci.yml)
+[![CI](https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/actions/workflows/ci.yml/badge.svg)](https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/actions/workflows/ci.yml)
 
 ![The Updates screen during a scan: the band above the list shows the sources already checked and the updates found so far, and each row shows the installed and the new version](docs/assets/updates-window.png)
 

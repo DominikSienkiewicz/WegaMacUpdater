@@ -96,7 +96,7 @@ struct HelperBundleCardTests {
         #expect(HelperBundleRefusalPresentation.badge == "Niedostępny")
         #expect(HelperBundleRefusalPresentation.releasesButton == "Otwórz stronę wydań")
         #expect(AppEndpoints.shared.latestReleaseURL.absoluteString
-            == "https://github.com/DominikSienkiewicz/WegaMacUpdater/releases/latest")
+            == "https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/releases/latest")
     }
 
     @Test func everyLineHasItsEnglishText() throws {

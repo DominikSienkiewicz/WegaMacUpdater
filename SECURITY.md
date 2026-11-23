@@ -15,7 +15,7 @@ before there is a fix.
 Instead, report privately through GitHub's built-in private vulnerability reporting:
 
 1. Go to the repository's **Security** tab:
-   <https://github.com/DominikSienkiewicz/WegaMacUpdater/security/advisories/new>
+   <https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/security/advisories/new>
 2. Click **Report a vulnerability** and fill in the advisory form.
 
 This opens a private security advisory visible only to you and the maintainers. It
@@ -109,5 +109,5 @@ generally low priority.
 Wega Mac Updater is pre-1.0 and evolving quickly. Security fixes are made against the
 latest release and `main`; there are no long-term maintenance branches yet. Always run
 the newest release from the
-[Releases page](https://github.com/DominikSienkiewicz/WegaMacUpdater/releases) — the app
+[Releases page](https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/releases) — the app
 can also check and update itself from the **Settings** window.

@@ -14,6 +14,8 @@ import Foundation
 /// in. Keeping the literal URIs in JSON (never in Swift) is what lets every
 /// call site read its endpoint from configuration.
 public struct AppEndpoints: Decodable, Sendable, Equatable {
+    public static let projectGitHubRepository = "SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater"
+
     public let jetbrainsReleases: String
     public let chatgptAppcast: String
     /// The appcast of the release ChatGPT (`com.openai.codex`) is served during a staged

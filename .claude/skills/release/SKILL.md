@@ -14,7 +14,7 @@ English, the language of `CHANGELOG.md`.
 You act under the owner's exception in `~/.codex/AGENTS.md` (Persistent boundaries):
 
 > - Release exception (owner's approval, 2026-11-20). For Claude Code's `release` skill in
->   `DominikSienkiewicz/WegaMacUpdater` only: after the user asked for a release and then
+>   `SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater` only: after the user asked for a release and then
 >   explicitly approved, in chat, the version and release notes the agent presented, the agent
 >   may, in the primary checkout on `main`, run
 >   `./scripts/release.sh <X.Y.Z> --notes <file>` (one commit `chore(release): vX.Y.Z` touching
@@ -54,7 +54,7 @@ of the notes file; substitute the literal values every time.
 Stop at the first failed check: tell the owner the reason and the fix, and propose nothing.
 
 ```bash
-pwd -P; git rev-parse --show-toplevel; git worktree list --porcelain | sed -n '1s/^worktree //p'; git branch --show-current; git remote get-url origin
+pwd -P; git rev-parse --show-toplevel; git worktree list --porcelain | sed -n '1s/^worktree //p'; git branch --show-current; git remote get-url --all origin; git remote get-url --push --all origin
 ```
 
 - The three paths must be equal. If the second differs from the third, this session is in a
@@ -62,8 +62,8 @@ pwd -P; git rev-parse --show-toplevel; git worktree list --porcelain | sed -n '1
   repository root (`merge.sh` removes worktrees, and the hook only accepts the push from the
   primary checkout). If only the first differs, the session sits in a subdirectory: stop and
   ask for a session opened in the root.
-- The branch must be `main`, and `origin` must end in `DominikSienkiewicz/WegaMacUpdater`
-  (`.git` optional).
+- The branch must be `main`. The fetch and push URLs for `origin` must name exactly
+  `SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater` on `github.com` via HTTPS or SSH (`.git` optional).
 
 ```bash
 git status --porcelain --untracked-files=no
