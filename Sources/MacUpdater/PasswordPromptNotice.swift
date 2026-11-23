@@ -5,7 +5,7 @@ import MacUpdaterCore
 /// UXP-07 — when a queued cask needs the administrator password and nothing in this
 /// installation can ask for it, the user hears it before the update fails.
 enum PasswordPromptNotice {
-    static let releasesURL = AppEndpoints.shared.githubReleasesPageURL(repo: "DominikSienkiewicz/WegaMacUpdater")
+    static let releasesURL = AppEndpoints.shared.githubReleasesPageURL(repo: AppEndpoints.projectGitHubRepository)
 
     /// Whether anything here can satisfy the `sudo` a cask's installer runs: Touch ID wired into
     /// `sudo_local`, or the askpass the `.pkg` installs (`HomebrewEnvironment` attaches one or

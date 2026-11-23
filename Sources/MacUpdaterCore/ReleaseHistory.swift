@@ -48,7 +48,7 @@ public struct ReleaseHistoryFetcher: Sendable {
     private let client: HTTPClient
 
     public init(
-        repo: String = "DominikSienkiewicz/WegaMacUpdater",
+        repo: String = AppEndpoints.projectGitHubRepository,
         client: HTTPClient = .shared
     ) {
         self.repo = repo

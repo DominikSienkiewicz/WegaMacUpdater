@@ -24,6 +24,9 @@ git push --atomic origin main vX.Y.Z               # the irreversible step
 
 ## 1. Before you start
 
+- Check the fetch and push URLs with `git remote -v`. Both must point to the
+  [WegaMacUpdater organization repository](https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater).
+
 - Be on `main`, with a clean working tree, not behind `origin/main`. The script refuses
   otherwise, and says how to fix it. Being ahead of `origin/main` is fine: the atomic push
   sends those commits together with the tag, and `release.yml` gates that exact commit.

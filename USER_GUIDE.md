@@ -39,7 +39,7 @@ Touch ID for `sudo` on or off when the optional Wega helper is not installed or 
 
 1. Download **WegaMacUpdater.pkg** (recommended — it can ask for your administrator password when
    an update needs it) from the
-   [Releases page](https://github.com/DominikSienkiewicz/WegaMacUpdater/releases). The `.dmg`
+   [Releases page](https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/releases). The `.dmg`
    can't ask for your administrator password, so some updates will fail unless Touch ID is on.
 2. **`.pkg`** — double-click it and follow the installer. The PKG also installs the components
    that ask for your password. The Wega helper is a separate, optional setup, and it works only
@@ -1248,6 +1248,6 @@ only when it confirms it; if it does not, the refreshed list shows whether the a
 ---
 
 Need something this guide doesn't cover? Open a
-[discussion or issue](https://github.com/DominikSienkiewicz/WegaMacUpdater/issues) — but
+[discussion or issue](https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/issues) — but
 for anything security-sensitive, use the private channel in [`SECURITY.md`](SECURITY.md)
 instead of a public issue.
