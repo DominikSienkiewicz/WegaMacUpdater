@@ -11,8 +11,8 @@ Run the release script on a clean `main` with the notes committed under `[Unrele
 ./scripts/release.sh
 ```
 
-The script pushes the release commit and its tag together. GitHub Actions builds and publishes
-the release from the tag.
+Review the commit list and answer `y` to publish. The script pushes the release commit and its
+tag together. GitHub Actions builds and publishes the release from the tag.
 
 The Claude Code `release` skill proposes the version and notes for approval. After approval,
 it cuts the release locally with `WEGA_RELEASE_LOCAL_ONLY=1` and makes the separately approved
@@ -36,10 +36,8 @@ atomic push from the primary checkout.
 
 ## 2. Write the notes
 
-The release notes are written and approved **before** the script runs. The script copies them
-verbatim; it never derives, merges, reorders or rewrites text, and it does not read commits.
-The section becomes the GitHub Release description as it stands, so write it as a user would
-read it.
+Write and approve the release notes **before** cutting the release. The script copies them
+verbatim. The section becomes the GitHub Release description as it stands.
 
 Put the notes in one of two places:
 
@@ -63,7 +61,12 @@ copied byte for byte. Empty notes are refused.
 
 Add `--notes FILE` to publish the contents of a file in place of `[Unreleased]`.
 
-In one step the script bumps `AppMetadata.version`, writes `## [X.Y.Z] — YYYY-MM-DD` into
+The script shows commit hashes and subjects up to the current `main` tip. The range starts
+after the newest version tag on `origin` whose commit is in that history. For a first release,
+the list starts at the beginning of the history. The prompt defaults to cancellation.
+Use `--yes` when a non-interactive invocation already has approval.
+
+After confirmation the script bumps `AppMetadata.version`, writes `## [X.Y.Z] — YYYY-MM-DD` into
 `CHANGELOG.md` with the notes beneath it, commits `chore(release): vX.Y.Z` containing exactly
 those two files, creates the annotated tag `vX.Y.Z`, and atomically pushes the release commit
 and its tag to `origin`. With `--notes`, the script empties `[Unreleased]` and reports how many
@@ -75,7 +78,8 @@ It refuses to run when:
 - the version is not greater than `AppMetadata.version`;
 - the tag already exists, locally or on `origin`;
 - `main` is behind `origin/main`;
-- automatic publication cannot fetch `origin/main` or resolve exactly one push URL for `origin`;
+- automatic publication cannot fetch `origin/main`, read its release tags, or resolve a single
+  push URL for `origin`;
 - `CHANGELOG.md` has no `## [Unreleased]` heading;
 - the notes are empty, contain a line starting with `## `, or the notes file is unreadable.
 
@@ -87,8 +91,8 @@ It refuses to run when:
 ./scripts/release.sh --dry-run
 ```
 
-The preview prints both diffs before you cut a release. It leaves the release files, commit
-history, and tags untouched.
+The preview prints the commit list and both diffs without a confirmation prompt. It leaves
+the release files, commit history, and tags untouched.
 
 ## 5. Retry a failed push
 
@@ -262,10 +266,8 @@ git tag -d v0.1.6
   anyone installed, so *Fixed*, *Changed* and *Removed* would have been measured against a
   version no user ever ran. It is one `### Added` describing what Wega does, with `#### `
   subsections inside it. Every later section is an ordinary Keep a Changelog delta.
-- **The `[0.2.0]` link reference points at its release page** (QA-06). `previous_version()`
-  accepts only a version with a real tag, so no `compare/…` range from the untagged `0.1.0`
-  (which would 404) was generated. `release.sh` copies every older reference forward verbatim,
-  so a dead link written once would never repair itself.
+- **The `[0.2.0]` link reference points at its release page** (QA-06). A comparison link
+  needs a previous tag, and `0.1.0` shipped untagged. `release.sh` preserves older links.
 
 ## 10. Republishing the app catalog
 

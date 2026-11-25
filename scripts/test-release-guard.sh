@@ -2,12 +2,6 @@
 # ---------------------------------------------------------------------------
 # test-release-guard.sh — test regresyjny jednofazowego `release.sh`.
 #
-# Zastępuje dwa dawne guardy: REL-06 (baseline) i REL-07 (nagłówki). REL-06 testował
-# wyszukiwanie „poprzedniego wydania” w historii commitów —
-# funkcję, której już nie ma, bo historię czyta skill, a nie skrypt. Intencja REL-07
-# (nigdy nie zgubić ani nie przekręcić ręcznie napisanego tekstu) przeżyła jako
-# „notatki są kopiowane dosłownie”.
-#
 # Notatki wydania stają się opisem GitHub Release bez żadnej dalszej obróbki, więc
 # skrypt ma je przepisać bajt w bajt (poza obciętymi pustymi liniami na brzegach),
 # odmówić tego, czego przepisać nie może, i atomowo wysłać commit oraz tag.
@@ -134,7 +128,11 @@ check_publication() {
 case "$1" in
     remote) printf '%s\n' 'https://example.invalid/o/r.git' ;;
     fetch) exit "${RELEASE_TEST_FETCH_STATUS:-0}" ;;
-    ls-remote) exit 0 ;;
+    ls-remote)
+        if [ "${!#}" = 'refs/tags/v*' ] && [ -n "${RELEASE_TEST_REMOTE_TAGS-}" ]; then
+            cat "$RELEASE_TEST_REMOTE_TAGS"
+        fi
+        ;;
     push)
         printf '%s\n' "$@" > "$RELEASE_TEST_PUSH_ARGS"
         exit "${RELEASE_TEST_PUSH_STATUS:-0}"
@@ -157,12 +155,13 @@ GIT
         if [ "$name" = explicit ]; then args=(patch); fi
         rm -f "$push_args"
         PATH="$git_bin:$PATH" RELEASE_TEST_PUSH_ARGS="$push_args" WEGA_RELEASE_LOCAL_ONLY=0 \
-            run_release "$repo" ${args[@]+"${args[@]}"}
+            run_release "$repo" ${args[@]+"${args[@]}"} <<< yes
         commit="$(head_of "$repo")"
         tag="$(git -C "$repo" rev-parse --verify 'refs/tags/v0.1.1^{commit}' 2>/dev/null)"
         if [ "$RC" -eq 0 ] && [ "$(version_of "$repo")" = 0.1.1 ] \
            && [ "$commit" != "$old" ] && [ "$tag" = "$commit" ] \
            && [ -f "$push_args" ] \
+           && [[ "$OUT" == *'feat: seed the fixture'*'Publish v0.1.1? [y/N]'*'>> bumped '* ]] \
            && diff "$push_args" <(printf '%s\n' push --atomic --no-follow-tags origin \
                "$commit:refs/heads/main" refs/tags/v0.1.1:refs/tags/v0.1.1); then
             record_pass "$name patch pushes only the release commit and its tag, atomically"
@@ -178,7 +177,9 @@ GIT
     PATH="$git_bin:$PATH" RELEASE_TEST_PUSH_ARGS="$push_args" WEGA_RELEASE_LOCAL_ONLY=0 \
         run_release "$repo" --dry-run
     if [ "$RC" -eq 0 ] && [ "$(snapshot "$repo")" = "$old" ] \
-       && [ ! -e "$push_args" ] && grep -Fq '0.1.0 -> 0.1.1 (patch)' <<<"$OUT"; then
+       && [ ! -e "$push_args" ] \
+       && [[ "$OUT" == *'0.1.0 -> 0.1.1 (patch)'*'feat: seed the fixture'*'>> dry run'* ]] \
+       && [[ "$OUT" != *'Publish v0.1.1?'* ]]; then
         record_pass "dry-run previews the default patch without publishing or changing files"
     else
         record_fail "dry-run (exit $RC): $OUT"
@@ -187,10 +188,11 @@ GIT
     repo="$(make_repo publish-rejected $'### Fixed\n- a')"
     git -C "$repo" update-ref refs/remotes/origin/main "$(head_of "$repo")"
     PATH="$git_bin:$PATH" RELEASE_TEST_PUSH_ARGS="$push_args" RELEASE_TEST_PUSH_STATUS=1 \
-        WEGA_RELEASE_LOCAL_ONLY=0 run_release "$repo" patch
+        WEGA_RELEASE_LOCAL_ONLY=0 run_release "$repo" patch --yes </dev/null
     tag="$(git -C "$repo" rev-parse --verify 'refs/tags/v0.1.1^{commit}' 2>/dev/null)"
     if [ "$RC" -ne 0 ] && [ -f "$push_args" ] && [ "$tag" = "$(head_of "$repo")" ] \
-       && [ -z "$(dirty_of "$repo")" ] && grep -Fq 'Retry the same push' <<<"$OUT"; then
+       && [ -z "$(dirty_of "$repo")" ] && grep -Fq 'Retry the same push' <<<"$OUT" \
+       && [[ "$OUT" != *'Publish v0.1.1?'* ]]; then
         record_pass "failed push keeps the commit and tag for retry without another version bump"
     else
         record_fail "failed push (exit $RC): $OUT"
@@ -235,10 +237,42 @@ GIT
     PATH="$git_bin:$PATH" RELEASE_TEST_PUSH_ARGS="$push_args" \
         run_local_release "$repo" 0.1.1
     if [ "$RC" -eq 0 ] && [ "$(tags_of "$repo")" = v0.1.1 ] \
-       && [ ! -e "$push_args" ] && grep -Fq 'git push --atomic origin main v0.1.1' <<<"$OUT"; then
+       && [ ! -e "$push_args" ] && grep -Fq 'git push --atomic origin main v0.1.1' <<<"$OUT" \
+       && [[ "$OUT" != *'Publish v0.1.1?'* ]]; then
         record_pass "local-only release preserves the separate approved push"
     else
         record_fail "local-only release (exit $RC): $OUT"
+    fi
+
+    repo="$(make_repo publish-preview $'### Fixed\n- a')"
+    local base other remote_tags="$SANDBOX/release-tags"
+    base="$(head_of "$repo")"
+    other="$(git -C "$repo" commit-tree 'HEAD^{tree}' -m 'different branch')"
+    git -C "$repo" commit --allow-empty -qm 'feat: include this already pushed commit'
+    git -C "$repo" tag -a v0.1.0 -m 'Local-only version'
+    git -C "$repo" commit --allow-empty -qm 'fix: include the current tip'
+    git -C "$repo" update-ref refs/remotes/origin/main "$(head_of "$repo")"
+    printf '%s\t%s\n' "$other" refs/tags/v0.9.0 \
+        0000000000000000000000000000000000000000 refs/tags/v0.0.9 \
+        "$base" 'refs/tags/v0.0.9^{}' > "$remote_tags"
+    old="$(snapshot "$repo")"
+    PATH="$git_bin:$PATH" RELEASE_TEST_PUSH_ARGS="$push_args" RELEASE_TEST_REMOTE_TAGS="$remote_tags" \
+        WEGA_RELEASE_LOCAL_ONLY=0 run_release "$repo" patch <<< no
+    if [ "$RC" -eq 0 ] && [ "$(snapshot "$repo")" = "$old" ] && [ ! -e "$push_args" ] \
+       && [[ "$OUT" == *'Commits since v0.0.9'*'fix: include the current tip'*'feat: include this already pushed commit'*'Publish v0.1.1? [y/N]'*'>> release cancelled'* ]] \
+       && [[ "$OUT" != *'feat: seed the fixture'* ]]; then
+        record_pass "the preview uses the reachable origin tag and declining leaves the release untouched"
+    else
+        record_fail "release preview and decline (exit $RC): $OUT"
+    fi
+
+    PATH="$git_bin:$PATH" RELEASE_TEST_PUSH_ARGS="$push_args" RELEASE_TEST_REMOTE_TAGS="$remote_tags" \
+        WEGA_RELEASE_LOCAL_ONLY=0 run_release "$repo" patch </dev/null
+    if [ "$RC" -ne 0 ] && [ "$(snapshot "$repo")" = "$old" ] && [ ! -e "$push_args" ] \
+       && [[ "$OUT" == *'confirmation required'* ]]; then
+        record_pass "missing input cannot approve publication"
+    else
+        record_fail "missing confirmation (exit $RC): $OUT"
     fi
 }
 
@@ -392,7 +426,7 @@ repo="$(make_repo ahead '### Fixed
 printf 'x\n' > "$repo/extra.txt"
 git -C "$repo" add -A
 git -C "$repo" commit -q -m "feat: local only"
-run_release "$repo" 0.2.0
+run_release "$repo" 0.2.0 --yes
 origin="$SANDBOX/ahead.git"
 if [ "$RC" -eq 0 ] && [ "$(git -C "$origin" cat-file -t refs/tags/v0.2.0 2>/dev/null)" = "tag" ] \
    && [ "$(git -C "$origin" rev-parse refs/heads/main)" = "$(head_of "$repo")" ] \

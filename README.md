@@ -266,7 +266,7 @@ release, and Wega's self-update looks only at stable releases.
 
 ```mermaid
 flowchart LR
-    tag["release.sh<br/>version, CHANGELOG, annotated tag"]
+    tag["release.sh<br/>commit preview, confirmation, annotated tag"]
     ci["GitHub Actions<br/>build.yml gate, then release.yml"]
     notary["Apple notary service"]
     rel[("GitHub Release<br/>WegaMacUpdater.pkg and .dmg")]
