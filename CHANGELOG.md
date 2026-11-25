@@ -14,6 +14,8 @@ them verbatim under the new version heading, so that step is never done by hand 
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-11-25
+
 ### Added
 - **Review duplicate application copies.** Cleanup lists separate bundles by path and
   version. Choose one verified copy to uninstall and keep the app's shared data.
@@ -851,7 +853,8 @@ their terms are still theirs.
   what changed in it, because there is no published predecessor to have changed from.
 -->
 
-[Unreleased]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater/compare/v0.7.1...v0.8.0
