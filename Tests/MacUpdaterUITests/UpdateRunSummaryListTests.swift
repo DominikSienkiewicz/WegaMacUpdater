@@ -365,8 +365,8 @@ struct UpdateRunSummaryListTests {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         #expect(view.contains("UpdateRunSummaryList(report: report, onShowLog: { scan.showLog = true }, handOffs: {\n                    UpdateRunHandOffGroup(onPinManual: requestPinManual)\n                })"))
         let group = try source("Sources/MacUpdater/UpdateRunHandOffGroup.swift")
-        #expect(group.contains("items: scan.visibleManual, busyToken: scan.manualBusy,"))
-        #expect(!group.contains("needsYou") && !group.contains("UrgencyGroups"), "every manual row, security-flagged ones included")
+        #expect(group.contains("items: scan.externalManualUpdates, busyToken: scan.manualBusy,"))
+        #expect(!group.contains("needsYou") && !group.contains("UrgencyGroups"), "all hand-offs, including security updates")
         #expect(group.contains("ForEach(scan.unresolvedDockerItems) { item in\n            UnresolvedDockerUpdateRow(item: item) { scan.inspectedKey = item.key }"))
         #expect(group.contains("ForEach(scan.unresolvedServiceItems) { item in\n            UnresolvedServiceUpdateRow(item: item) { scan.inspectedKey = item.key }"))
         #expect(group.contains("title: tr(\"Do dokończenia u producenta\"), tint: .wegaToffee,"))
@@ -379,11 +379,22 @@ struct UpdateRunSummaryListTests {
         #expect(group.contains("onPin: onPinManual,") && urgency.contains("onPin: requestPinManual,"))
 
         let scan = store()
-        scan.manualOutdated = [ManualOutdatedApp(name: "Summary Probe", path: URL(fileURLWithPath: "/TestApplications/Summary Probe.app"),
-                                                 installedVersion: "1", availableVersion: "2", source: .obsidian)]
+        let vendor = ManualOutdatedApp(name: "Summary Probe", path: URL(fileURLWithPath: "/TestApplications/Summary Probe.app"),
+                                        installedVersion: "1", availableVersion: "2", source: .obsidian)
+        let replacement = ManualOutdatedApp(
+            name: "Queued Probe", path: URL(fileURLWithPath: "/Applications/Queued Probe.app"),
+            installedVersion: "1", availableVersion: "2", source: .cask(token: "queued-probe"),
+            bundleIdentifier: "com.example.queued-probe"
+        )
+        scan.manualOutdated = [vendor, replacement]
+        scan.caskProfiles["queued-probe"] = CaskArtifactProfile(token: "queued-probe", homepage: nil, artifacts: [
+            CaskArtifact(kind: .app, names: ["Queued Probe.app"])
+        ])
         scan.brewOutdated = BrewOutdated(formulae: [], casks: [BrewOutdatedItem(name: "docker-desktop", installedVersions: ["1"], currentVersion: "2")])
-        #expect(scan.visibleManual.count == 1 && scan.unresolvedDockerItems.count == 1, "sanity: both kinds of hand-off are present")
-        #expect(scan.handOffCount(for: .all) == scan.visibleManual.count + scan.unresolvedDockerItems.count + scan.unresolvedServiceItems.count,
+        #expect(scan.visibleManual.count == 2 && scan.unresolvedDockerItems.count == 1)
+        #expect(scan.queueableCaskReplacements(for: .all).map(\.app) == [replacement])
+        #expect(scan.externalManualUpdates == [vendor])
+        #expect(scan.handOffCount(for: .all) == scan.externalManualUpdates.count + scan.unresolvedDockerItems.count + scan.unresolvedServiceItems.count,
                 "the band counts what the group draws")
     }
 

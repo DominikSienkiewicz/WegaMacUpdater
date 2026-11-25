@@ -170,7 +170,8 @@ struct UpdateRunBoardTests {
         let updating = compact(try source("Sources/MacUpdater/ScanStore+Updating.swift"))
         #expect(updating.contains("defer { upgradeProgress = nil upgradeTracker = nil }"), "the pinned defer stays as it is")
         #expect(updating.contains("beginRunBoard(planned: plannedItems) defer { endRunBoard() }"))
-        #expect(updating.contains("markCasksThatWillNotRun(plannedItems, trusted: caskLanePreparation?.trustedCaskNames ?? [])"))
+        #expect(updating.contains("markCasksThatWillNotRun(packageItems, trusted: caskLanePreparation?.trustedCaskNames ?? [])"))
+        #expect(updating.contains("runQueuedCaskReplacements(replacements)"))
     }
 
     /// A cask that never reaches `brew` must not keep reading „czeka” or „instaluję…” for the
