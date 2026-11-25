@@ -49,6 +49,8 @@ public protocol CleanupFileSystem: Sendable {
     /// Bytes allocated on disk. A symlink counts as the link itself; a directory is summed
     /// without following the links inside it.
     func allocatedSize(of url: URL) throws -> Int64
+    /// Raw file contents, up to the stated byte limit.
+    func readData(_ url: URL, maxBytes: Int) throws -> Data
     /// UTF-8 contents; throws `.io` instead of truncating a file larger than `maxBytes`.
     func readText(_ url: URL, maxBytes: Int) throws -> String
     /// Creates one directory; its parent must exist.
@@ -56,6 +58,12 @@ public protocol CleanupFileSystem: Sendable {
     func moveItem(_ source: URL, to destination: URL) throws
     /// Moves the item to the Trash.
     func trash(_ url: URL) throws
+}
+
+public extension CleanupFileSystem {
+    func readData(_ url: URL, maxBytes: Int) throws -> Data {
+        Data(try readText(url, maxBytes: maxBytes).utf8)
+    }
 }
 
 /// Physical path resolution shared by the live adapter and the guarded wrapper. Like realpath(3)
@@ -183,7 +191,7 @@ public struct LiveCleanupFileSystem: CleanupFileSystem {
         return try Self.treeAllocatedSize(of: url)
     }
 
-    public func readText(_ url: URL, maxBytes: Int) throws -> String {
+    public func readData(_ url: URL, maxBytes: Int) throws -> Data {
         let data: Data
         do {
             let handle = try FileHandle(forReadingFrom: url)
@@ -195,6 +203,11 @@ public struct LiveCleanupFileSystem: CleanupFileSystem {
         guard data.count <= maxBytes else {
             throw CleanupFileSystemError.io("\(url.path): larger than \(maxBytes) bytes")
         }
+        return data
+    }
+
+    public func readText(_ url: URL, maxBytes: Int) throws -> String {
+        let data = try readData(url, maxBytes: maxBytes)
         guard let text = String(data: data, encoding: .utf8) else {
             throw CleanupFileSystemError.io("\(url.path): not UTF-8 text")
         }
@@ -307,6 +320,11 @@ public struct GuardedCleanupFileSystem: CleanupFileSystem {
     public func allocatedSize(of url: URL) throws -> Int64 {
         try locationGuard.checkSubtree(resolver.locate(url))
         return try base.allocatedSize(of: url)
+    }
+
+    public func readData(_ url: URL, maxBytes: Int) throws -> Data {
+        _ = try resolver.resolve(url)
+        return try base.readData(url, maxBytes: maxBytes)
     }
 
     public func readText(_ url: URL, maxBytes: Int) throws -> String {

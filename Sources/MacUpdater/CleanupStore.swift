@@ -65,7 +65,8 @@ struct CleanupStoreDependencies {
                     projectRoots: projectRoots(), applicationDirectories: applicationDirectories,
                     tccMap: tccMapEnabled()
                         ? CleanupSwitchGatedTCCDatabase(base: SQLiteCleanupTCCDatabase(home: home), isEnabled: tccMapEnabled)
-                        : nil
+                        : nil,
+                    duplicateApplicationScan: ScanConfigurationStore.resolvedConfiguration()
                 ))
             },
             remove: { await remover.execute($0) },

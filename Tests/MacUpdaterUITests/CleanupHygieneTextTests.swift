@@ -87,7 +87,7 @@ private enum ReasonKind: CaseIterable {
     case homebrewKeptVersions, installedOnlyAsDependency, recentlyUpgraded, notRequiredByProjects, requiredByProjects
     case unusedGradleDistribution, unreferencedJDK, systemJDK, ideVersionNotInstalled, ideNotFound, newerThanInstalledIDE
     case missingPathEntry, repeatedPathEntry, samePlaceAs, nestedIn, olderCopyWins, tccEntry, tccEntryFileGone
-    case keptInstead, keptByChoice, noCopyKept
+    case keptInstead, keptByChoice, noCopyKept, duplicateApplication
 
     var sample: CleanupReason {
         switch self {
@@ -126,6 +126,7 @@ private enum ReasonKind: CaseIterable {
         case .keptInstead: .keptInstead(path: "~/bin/x")
         case .keptByChoice: .keptByChoice
         case .noCopyKept: .noCopyKept
+        case .duplicateApplication: .duplicateApplication(bundleIdentifier: "example.app")
         }
     }
 }
@@ -168,6 +169,7 @@ private extension CleanupReason {
         case .keptInstead: .keptInstead
         case .keptByChoice: .keptByChoice
         case .noCopyKept: .noCopyKept
+        case .duplicateApplication: .duplicateApplication
         }
     }
 }

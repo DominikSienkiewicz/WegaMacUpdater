@@ -11,6 +11,7 @@ struct CleanupView: View {
     let onWegaState: (WegaState) -> Void
     /// Opens "Odinstaluj aplikacje" with the app at this bundle preselected.
     var onUninstallApp: (URL) -> Void = { _ in }
+    var onReviewAppCopies: (String) -> Void = { _ in }
 
     @EnvironmentObject private var store: CleanupStore
     /// The Settings switch for the Files and Folders map; the section follows it, not the stored report.
@@ -158,7 +159,8 @@ struct CleanupView: View {
                             CleanupSectionCard(
                                 section: card.section, layout: card.layout, canRemove: isIdle, copiedCommand: copiedCommand,
                                 onRemove: { id in confirming = report.findings.first { $0.id == id } }, onCopy: copy,
-                                onKeep: { store.keep($0) }, onUninstallApp: onUninstallApp
+                                onKeep: { store.keep($0) }, onUninstallApp: onUninstallApp,
+                                onReviewAppCopies: onReviewAppCopies
                             )
                         }
                     }
@@ -228,6 +230,7 @@ private struct CleanupSectionCard: View {
     let onCopy: (String) -> Void
     let onKeep: (_ findingID: String) -> Void
     let onUninstallApp: (URL) -> Void
+    let onReviewAppCopies: (String) -> Void
 
     @State private var quietExpanded = false
     @State private var expandedOrigins: Set<String> = []
@@ -325,7 +328,8 @@ private struct CleanupSectionCard: View {
                 }
                 CleanupFindingRow(
                     row: group.rows[index], canRemove: canRemove, copiedCommand: copiedCommand,
-                    onRemove: onRemove, onCopy: onCopy, onKeep: onKeep, onUninstallApp: onUninstallApp
+                    onRemove: onRemove, onCopy: onCopy, onKeep: onKeep, onUninstallApp: onUninstallApp,
+                    onReviewAppCopies: onReviewAppCopies
                 )
             }
         }
@@ -334,6 +338,7 @@ private struct CleanupSectionCard: View {
     private var icon: String {
         switch section.kind {
         case .duplicates: "square.on.square"
+        case .duplicateApplications: "macwindow.on.rectangle"
         case .homebrew: "mug"
         case .runtimes: "square.stack.3d.up"
         case .gradle: "hammer"
@@ -357,6 +362,7 @@ private struct CleanupFindingRow: View {
     let onCopy: (String) -> Void
     let onKeep: (_ findingID: String) -> Void
     let onUninstallApp: (URL) -> Void
+    let onReviewAppCopies: (String) -> Void
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -416,6 +422,10 @@ private struct CleanupFindingRow: View {
                 case .uninstallApp(_, let bundle):
                     Button(CleanupPresentation.buttonTitle(button)) { onUninstallApp(bundle) }
                         .controlSize(.small)
+                case .reviewAppCopies(let bundleIdentifier):
+                    Button(CleanupPresentation.buttonTitle(button)) { onReviewAppCopies(bundleIdentifier) }
+                        .controlSize(.small)
+                        .disabled(!canRemove)
                 }
             }
         }

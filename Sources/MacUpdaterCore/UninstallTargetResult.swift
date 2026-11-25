@@ -19,6 +19,7 @@ public enum UninstallProtection: Equatable, Sendable {
     case wegaItself
     case systemApplication
     case symlink(destination: String)
+    case unverifiedDuplicateCopy
 }
 
 /// What happened to one uninstall target. Only the `removed*` cases mean the app is gone, so
