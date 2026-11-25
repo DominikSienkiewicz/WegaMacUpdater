@@ -37,6 +37,9 @@ struct UninstallScan: Equatable, Sendable {
 
         var installedCaskTokens: Set<String> = []
         do { installedCaskTokens = try await installedCasks() }
+        catch BrewServiceError.brewNotFound {
+            // The ordinary uninstall routes still work on a Mac without Homebrew.
+        }
         catch is CancellationError {
             // Cancellation is intentionally not recorded as a source failure.
         }
@@ -413,15 +416,16 @@ final class UninstallCoordinator: ObservableObject {
         zap: Bool,
         leftovers: [LeftoverGroup] = [],
         skipped: [String: UninstallTargetResult] = [:],
+        duplicateReview: UninstallDuplicateReview? = nil,
         using brewService: BrewService
     ) async -> Outcome {
         do {
             return try await UpgradeCoordinator.shared.performWrite(.uninstall) {
                 await self.uninstallCoordinated(
                     targets: targets,
-                    zap: zap,
                     leftovers: leftovers,
                     skipped: skipped,
+                    options: UninstallRemovalOptions(zap: zap, duplicateReview: duplicateReview),
                     using: brewService
                 )
             }
@@ -434,9 +438,9 @@ final class UninstallCoordinator: ObservableObject {
 
     private func uninstallCoordinated(
         targets: [ApplicationInfo],
-        zap: Bool,
         leftovers: [LeftoverGroup],
         skipped: [String: UninstallTargetResult],
+        options: UninstallRemovalOptions,
         using brewService: BrewService
     ) async -> Outcome {
         state = .uninstalling
@@ -446,11 +450,14 @@ final class UninstallCoordinator: ObservableObject {
         for app in targets {
             if let protection = dependencies.protection(app) {
                 results[app.id] = .protected(protection)
+            } else if let duplicateReview = options.duplicateReview,
+                      targets.count != 1 || !duplicateReview.stillAllows(app) {
+                results[app.id] = .protected(.unverifiedDuplicateCopy)
             } else if let stillRunning = runningAtRemoval(app) {
                 results[app.id] = stillRunning
             } else if app.isManagedByBrew, let token = app.caskToken {
                 do {
-                    try await dependencies.uninstallCask(brewService, token, zap)
+                    try await dependencies.uninstallCask(brewService, token, options.zap && options.duplicateReview == nil)
                     results[app.id] = .removedByHomebrew
                 } catch {
                     results[app.id] = .failed(error.localizedDescription)
@@ -459,7 +466,9 @@ final class UninstallCoordinator: ObservableObject {
                 results[app.id] = await removeNonBrew(app)
             }
         }
-        let leftoverResult = dependencies.trashLeftovers(Self.releasedLeftovers(leftovers, results: results))
+        let leftoverResult = dependencies.trashLeftovers(
+            options.duplicateReview == nil ? Self.releasedLeftovers(leftovers, results: results) : []
+        )
         return Outcome(
             results: results,
             leftoversTrashed: leftoverResult.removed.count,

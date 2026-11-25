@@ -8,6 +8,8 @@ enum UninstallProtectionPresentation {
             return tr("To jest Wega — nie usuwa samej siebie")
         case .systemApplication:
             return tr("Aplikacja systemowa macOS — chroniona przez system")
+        case .unverifiedDuplicateCopy:
+            return tr("Nie można bezpiecznie ustalić, która kopia zostałaby usunięta.")
         case .symlink(let destination):
             return trf("To tylko dowiązanie do %@", destination)
         }

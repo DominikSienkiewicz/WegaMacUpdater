@@ -483,10 +483,11 @@ struct ManualUpdateSection: View {
     var onInspect: ((ManualOutdatedApp) -> Void)? = nil
 
     @FocusState private var focusedKey: String?
+    @EnvironmentObject private var scan: ScanStore
     @Environment(\.updatesOnScreen) private var onScreen
     /// See `UpdateSection.isEnabled`.
     @Environment(\.isEnabled) private var isEnabled
-    /// C2 §4.6 — a hand-off row is never part of a run; the group header says so.
+    /// C2 §4.6 — the header labels groups made up entirely of hand-offs.
     @Environment(\.updateRun) private var run
     /// UXP-21 — the row Tab lands on; see `UpdateSection.tabStop`.
     @State private var tabStop: String?
@@ -499,20 +500,36 @@ struct ManualUpdateSection: View {
 
     var body: some View {
         WegaCard {
+            let keys = items.map(QueuedCaskReplacement.key(for:))
+            let queueableKeys = Set(scan.queueableCaskReplacements(for: .all).map(\.key))
             UpdateGroupHeader(title: title, tint: tint, ordinal: ordinal, count: items.count,
-                              note: run != nil ? tr("u producenta") : subtitle, caption: caption)
+                              note: run != nil && queueableKeys.isDisjoint(with: keys) ? tr("u producenta") : subtitle, caption: caption)
 
-            let keys = items.map { "m:" + $0.path.path }
             ForEach(items, id: \.path) { item in
-                let key = "m:" + item.path.path
+                let key = QueuedCaskReplacement.key(for: item)
                 let isInspected = key == inspectedKey
+                let isQueueable = queueableKeys.contains(key)
+                let isQueued = scan.selected.contains(key)
+                let runStatus = isQueueable ? run?.board.rows[key] : nil
                 VStack(spacing: 0) {
                 // UX-14 — the same columns as a package row: the hand-off mark holds the
                 // queue column, so this icon lines up with every selectable row's, and the
                 // version in the version column rather than under the name. F1's release notes
                 // are in the inspector.
                 HStack(spacing: WegaLayout.checkboxSpacing) {
-                    QueueHandoffMark()
+                    if isQueueable {
+                        Toggle(isOn: selectionToggleBinding(isOn: isQueued) {
+                            scan.toggleQueuedCaskReplacement(item)
+                        }) {
+                            EmptyView()
+                        }
+                        .toggleStyle(WegaQueueToggleStyle())
+                        .accessibilityLabel(trf("Kolejka: %@", item.name))
+                        .focusable(false)
+                        .disabled(run != nil)
+                    } else {
+                        QueueHandoffMark()
+                    }
                     AppIcon(path: item.path, size: WegaLayout.updateIconSize)
                     let isSecurity = item.releaseNotes.map { ReleaseNotesTriage.heuristic($0.plainText).isLikelySecurityFix } ?? false
                     UpdateRowColumns {
@@ -533,24 +550,28 @@ struct ManualUpdateSection: View {
                             }
                         }
                     } version: {
-                        VersionArrow(
-                            from: item.installedVersion ?? "—",
-                            to: item.availableVersion ?? "—",
-                            emphasis: versionEmphasis(
-                                changeKind: versionChangeKind(from: item.installedVersion ?? "", to: item.availableVersion ?? ""),
-                                isSecurityFix: isSecurity,
-                                // Self-updating rows never go through brew's --force retry, so requiresForce is always false here.
-                                requiresForce: false
+                        if let runStatus {
+                            UpdateRunStatusChip(status: runStatus, isStopping: run?.isStopping == true)
+                                .accessibilityHidden(true)
+                        } else {
+                            VersionArrow(
+                                from: item.installedVersion ?? "—",
+                                to: item.availableVersion ?? "—",
+                                emphasis: versionEmphasis(
+                                    changeKind: versionChangeKind(from: item.installedVersion ?? "", to: item.availableVersion ?? ""),
+                                    isSecurityFix: isSecurity, requiresForce: false
+                                )
                             )
-                        )
+                        }
                     }
-                    ManualUpdateActionView(item: item, busyToken: busyToken, onInstall: onInstall)
+                    ManualUpdateActionView(item: item, busyToken: busyToken, onInstall: onInstall,
+                                           isQueueableInList: isQueueable)
                 }
                 .padding(.horizontal, WegaLayout.cardPadding)
                 .padding(.vertical, WegaLayout.updateRowPadding)
                 }
                 .queueRowSelection(isInspected)
-                .opacity(run != nil ? 0.55 : 1)
+                .opacity(run?.isDimmed(key) == true ? 0.55 : 1)
                 .contentShape(Rectangle())
                 .gesture(TapGesture().onEnded { focus(key); onInspect?(item) })
                 .focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop, onScreen: onScreen && isEnabled))
@@ -565,6 +586,10 @@ struct ManualUpdateSection: View {
                 }
                 .onKeyPress(.space) {
                     guard isEnabled else { return .ignored }
+                    if isQueueable, run == nil {
+                        scan.toggleQueuedCaskReplacement(item)
+                        return .handled
+                    }
                     return ManualUpdateRowKeyboardBehavior.handle(
                         .spaceKey,
                         item: item,
@@ -578,7 +603,9 @@ struct ManualUpdateSection: View {
                 .accessibilityValue(
                     "\(item.installedVersion ?? "—") → \(item.availableVersion ?? "—")"
                 )
-                .accessibilityHint(tr("Naciśnij Return lub spację, aby pokazać szczegóły."))
+                .accessibilityHint(isQueueable
+                    ? tr("Naciśnij Return, aby pokazać szczegóły, lub spację, aby zmienić kolejkę.")
+                    : tr("Naciśnij Return lub spację, aby pokazać szczegóły."))
                 .accessibilityAction(named: tr("Pokaż szczegóły")) {
                     onInspect?(item)
                 }
@@ -622,6 +649,7 @@ struct ManualUpdateActionView: View {
     let item:      ManualOutdatedApp
     let busyToken: String?
     let onInstall: (String) -> Void
+    var isQueueableInList: Bool? = nil
 
     @Environment(\.openSettings) private var openSettings
     @EnvironmentObject private var scan: ScanStore
@@ -712,17 +740,32 @@ struct ManualUpdateActionView: View {
                 .controlSize(.small)
             }
         case .brewInstall(let token):
-            Button {
-                onInstall(token)
-            } label: {
-                if busyToken == token {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Label(tr("Aktualizuj przez Brew"), systemImage: "arrow.down.circle")
+            let isQueueable = isQueueableInList ?? scan.queueableCaskReplacements(for: .all).contains { $0.app == item }
+            if isQueueable {
+                if isQueueableInList == nil {
+                    Button {
+                        scan.toggleQueuedCaskReplacement(item)
+                    } label: {
+                        let queued = scan.selected.contains(QueuedCaskReplacement.key(for: item))
+                        Label(queued ? tr("Usuń z kolejki") : tr("Dodaj do kolejki"),
+                              systemImage: queued ? "minus.circle" : "plus.circle")
+                    }
+                    .controlSize(.small)
+                    .disabled(scan.updating || scan.isRefreshing)
                 }
+            } else {
+                Button {
+                    onInstall(token)
+                } label: {
+                    if busyToken == token {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label(tr("Aktualizuj przez Brew"), systemImage: "arrow.down.circle")
+                    }
+                }
+                .controlSize(.small)
+                .disabled(busyToken != nil || scan.updating || scan.isRefreshing)
             }
-            .controlSize(.small)
-            .disabled(busyToken != nil)
         case .appStore:
             Text(tr("zaktualizuj w App Store"))
                 .font(.wega(.subheadline))

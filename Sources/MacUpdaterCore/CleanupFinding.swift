@@ -11,6 +11,7 @@ public enum CleanupDetectorID: String, Codable, Equatable, Sendable {
     case shellState = "D8"
     case pathHygiene = "D9"
     case tccMap = "D10"
+    case applicationDuplicates = "D11"
 }
 
 public enum CleanupVersionManager: String, Codable, Equatable, Sendable {
@@ -112,6 +113,7 @@ public enum CleanupAction: Codable, Equatable, Sendable {
 }
 
 public enum CleanupReason: Codable, Equatable, Sendable {
+    case duplicateApplication(bundleIdentifier: String)
     case olderVersion(current: String)
     /// A version in a recognised layout that is newer than the current one.
     case newerVersion(current: String)

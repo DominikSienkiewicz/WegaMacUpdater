@@ -30,11 +30,16 @@ extension ScanStore {
         /// same as attempted and failed, and only one of the two may be reported.
         let outcome: BrewUpgradeOutcome?
         let validation: CaskValidationVerdict?
+        let publisherVeto: TeamIDAudit?
+        let operationID: UUID?
 
-        init(item: OutdatedItem, outcome: BrewUpgradeOutcome?, validation: CaskValidationVerdict? = nil) {
+        init(item: OutdatedItem, outcome: BrewUpgradeOutcome?, validation: CaskValidationVerdict? = nil,
+             publisherVeto: TeamIDAudit? = nil, operationID: UUID? = nil) {
             self.item = item
             self.outcome = outcome
             self.validation = validation
+            self.publisherVeto = publisherVeto
+            self.operationID = operationID
         }
     }
 

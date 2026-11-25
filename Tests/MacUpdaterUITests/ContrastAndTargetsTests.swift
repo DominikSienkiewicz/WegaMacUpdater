@@ -6,8 +6,7 @@ import Testing
 
 /// UXP-22 — what a state says was drawn in `.tertiary`, below the 4.5:1 a sentence needs; the run's
 /// veil ignored Reduce Transparency; the banner's close and the plan link were smaller than the
-/// 28×28 pt macOS asks for; and the log scrolled with an animation under Reduce Motion. C2 stage 3
-/// took the veil away: the run lives in the band and nothing is drawn over the rows.
+/// 28×28 pt macOS asks for; and the log scrolled with an animation under Reduce Motion.
 ///
 /// `.secondary` is a system style, so its contrast is the system's: these tests pin the styles.
 @Suite("Contrast, transparency and targets") @MainActor
@@ -25,28 +24,25 @@ struct ContrastAndTargetsTests {
             .contains("Text(tr(\"Sprawdzam rozmiary pobrań…\")).font(.wega(.subheadline)).foregroundStyle(.secondary)"))
     }
 
-    /// With Reduce Transparency on, the veil used to be dropped so the rows stayed readable. Now
-    /// there is no veil to drop: the run draws in the band, which has no glass or material.
-    @Test func reduceTransparencyHasNoVeilToRemove() throws {
-        let overlay = packageRoot().appending(path: "Sources/MacUpdater/UpdateRunOverlay.swift", directoryHint: .notDirectory)
-        #expect(!FileManager.default.fileExists(atPath: overlay.path), "the run's veil is gone")
-        for file in ["UpdateBand.swift", "UpdateBandRunViews.swift", "UpdateBandRunPresentation.swift", "UpdateBandSummaryViews.swift"] {
+    @Test func reduceTransparencyRemovesTheDimming() throws {
+        #expect(ScanListVeil.scrim(reduceTransparency: true) == 0)
+        #expect(ScanListVeil.scrim(reduceTransparency: false) > 0)
+        for file in ["UpdateBand.swift", "UpdateBandRunViews.swift", "UpdateBandRunPresentation.swift",
+                     "UpdateBandSummaryViews.swift", "ScanListVeil.swift"] {
             let text = try source("Sources/MacUpdater/\(file)")
             #expect(!text.contains(".glassEffect("), "\(file)")
             #expect(!text.contains("Material"), "\(file)")
         }
     }
 
-    /// With no veil, nothing about the run's lock may depend on drawing one: the screen is
-    /// disabled by the run itself, nothing lies on the rows, VoiceOver's row actions follow the
-    /// lock, and the selection refuses every change the run did not start.
-    @Test func theRunLocksTheListWithoutTheVeil() throws {
+    @Test func theRunLocksTheListIndependentlyOfTheVeil() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         #expect(view.contains("screenBody\n                .disabled(!ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating))"))
         #expect(!view.contains("reduceTransparency"), "the lock never asks how the veil is drawn")
         let results = try #require(view.range(of: "private var resultsView: some View")).lowerBound
         let header = try #require(view.range(of: "private var listHeader: some View", range: results..<view.endIndex)).lowerBound
-        #expect(!view[results..<header].contains(".overlay"), "nothing is drawn over the rows to take their clicks")
+        #expect(view[results..<header].contains("ScanListVeil(mode: .updating)"))
+        #expect(try source("Sources/MacUpdater/ScanListVeil.swift").contains(".allowsHitTesting(false)"))
         let shared = try source("Sources/MacUpdater/SharedViews.swift")
         let row = try #require(shared.range(of: "struct PackageRow: View")).lowerBound
         let rowEnd = try #require(shared.range(of: "// MARK: - Rollback badge", range: row..<shared.endIndex)).lowerBound

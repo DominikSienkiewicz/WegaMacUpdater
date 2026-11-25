@@ -9,6 +9,7 @@ import MacUpdaterCore
 // but "is this app the cask it looks like" — and REL-08 and LT-03 both live here.
 extension ScanStore {
     func installManual(token: String) async {
+        guard !updating, !isRefreshing, manualBusy == nil else { return }
         let inherited = UpdateDiagnostics.current
         let trace = inherited ?? DiagnosticRun(trigger: "adoption", subjects: [token])
         defer { if inherited == nil { trace.finish() } }
@@ -26,6 +27,7 @@ extension ScanStore {
     /// The banner's repair for a `.notUpgraded` adoption: the same protected transaction, with
     /// `brew reinstall` in place of `install --force`.
     func reinstallManual(token: String) async {
+        guard !updating, !isRefreshing, manualBusy == nil else { return }
         let inherited = UpdateDiagnostics.current
         let trace = inherited ?? DiagnosticRun(trigger: "reinstall", subjects: [token])
         defer { if inherited == nil { trace.finish() } }
@@ -42,7 +44,7 @@ extension ScanStore {
 
     private func installManualCoordinated(token: String, installArgs: [String]) async {
         guard !ServiceVendorUpdatePolicy.requiresVendor(token: token) else { return }
-        guard let model, manualBusy == nil else {
+        guard let model, !updating, !isRefreshing, manualBusy == nil else {
             UpdateDiagnostics.record("adoption.skipped", fields: ["token": token, "reason": "unavailableOrBusy"])
             return
         }

@@ -671,6 +671,19 @@ enum CaskRollbackGuard {
             return .skipped(.privilegedFirstRun)
         }
 
+        let bundleIdentifier = if let dependencies {
+            dependencies.bundleIdentifier(appURL)
+        } else {
+            CaskReplacementArtifactIdentity.bundleIdentifier(at: appURL)
+        }
+        // Discord Stable reinstalled an older build during verification even after ShipIt withdrawal.
+        if bundleIdentifier == "com.hnc.Discord" {
+            let verdict: LaunchSmokeTest.Verdict = .skipped(.selfUpdaterMayDowngrade)
+            UpdateStageDiagnostics.recordSmoke(verdict, token: token)
+            WegaLog.info(.homebrew, "\(token): test startu pominięty — aktualizator Discorda może przywrócić starszą wersję.")
+            return verdict
+        }
+
         let verdict: LaunchSmokeTest.Verdict
         if let dependencies {
             guard dependencies.smokeTestIsEnabled() else {

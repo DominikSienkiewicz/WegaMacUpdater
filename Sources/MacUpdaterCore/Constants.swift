@@ -4,6 +4,7 @@ public enum MacUpdaterConstants {
         "com.google.Chrome.beta": "google-chrome@beta",
         "com.google.Chrome.dev": "google-chrome@dev",
         "com.google.Chrome.canary": "google-chrome@canary",
+        "com.google.GeminiMacOS": "google-gemini",
     ]
 
     public static let customCaskMappings: [String: String] = [

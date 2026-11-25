@@ -250,8 +250,8 @@ struct UpdateBandSummaryTests {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         #expect(!view.contains("showsBand"), "the band stands over every result")
         #expect(UpdateBandMode.resolve(scan: nil, run: nil, summary: nil, upToDate: true) == .upToDate)
-        #expect(view.contains("summary: scan.runReport.map(summaryPresentation)"))
-        #expect(view.contains("onCloseSummary: { scan.closeRunReport() }"))
+        #expect(view.contains("summary: displayedReport.map(summaryPresentation)"))
+        #expect(view.contains("onCloseSummary: { showsRunSummary = false }"))
         let scanState = try #require(view.range(of: "private var scanPresentation: UpdateBandScanPresentation {")).upperBound
         let scanBuilder = view[scanState...].prefix(500).replacingOccurrences(of: " +", with: " ", options: .regularExpression)
         // Final review C11 — so is the undo's check while the summary stays open: it promises the

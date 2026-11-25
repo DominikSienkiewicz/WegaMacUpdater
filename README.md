@@ -5,7 +5,9 @@
 Native macOS app that keeps every application on your Mac up to date — Homebrew casks, Mac App Store, JetBrains IDEs, GitHub Releases, and Sparkle apps — from a single window. Daily use never needs a terminal; installing Homebrew itself, and turning Touch ID for `sudo` on or off without the optional Wega helper, are the two things that do.
 
 The Updates screen puts a band above the list — how many updates there are, what is queued, how many of
-those an undo covers, and the one button that starts them — and the rows stay readable while a scan runs.
+those an undo covers, and the one button that starts them. The rows stay readable during
+scans and updates. After a run, pending updates are ready to act on and the latest result
+is available in a compact summary.
 Wega's portrait — broad ears with rounded tips, dark brows and muzzle, a white chin — is the app icon and the animated mascot.
 
 ![Swift](https://img.shields.io/badge/Swift-6.0-orange?style=for-the-badge&logo=swift&logoColor=white)
@@ -207,7 +209,7 @@ sequenceDiagram
         Brew->>Sudo: sudo -A from the shim, password dialog
     end
     Store->>Guard: verify
-    Note over Guard: Gatekeeper, publisher Team ID,<br/>version arrived, launch smoke test
+    Note over Guard: Gatekeeper, publisher Team ID,<br/>version arrived, launch test when supported
     alt every check passes
         Guard->>Journal: verified, committed
     else the version did not change
@@ -219,8 +221,8 @@ sequenceDiagram
         end
         Guard->>Journal: rolledBack
     end
-    Store->>Store: quiet rescan, run summary in the band
-    Store-->>User: one result per app
+    Store->>Store: verify results with a quiet rescan
+    Store-->>User: pending updates and expandable run results
 ```
 
 Up to three casks upgrade at once; a cask that may ask for an administrator password, or
@@ -290,8 +292,9 @@ finish. The release steps and secrets are in [Distribution](docs/distribution.md
 Homebrew casks, Mac App Store apps, JetBrains IDEs, GitHub Releases, Sparkle apps and
 Microsoft AutoUpdate share one list, with npm globals as a third package manager.
 Package-manager actions expose their commands in a dry-run panel; supported cask replacements
-can restore the previous bundle when replacement fails. Vendor handoffs open the owning
-updater. Details in
+can restore the previous bundle when replacement fails. You can add eligible Homebrew repairs
+and app takeovers individually to the same queue and review them before starting the run.
+Vendor handoffs open the owning updater. Details in
 [Features](docs/features.md).
 
 ## Installation evidence and repair
@@ -306,9 +309,15 @@ JDKs remain in the scan report even when their source is unknown or Homebrew alr
 lists their update. These reporting associations do not extend app-bundle rollback to
 installer packages or Java runtimes.
 
-Cask repair checks version and build changes before recording success. During a launch
-smoke test, an unconfirmed Squirrel/ShipIt withdrawal leaves the app running instead of
-triggering its queued installer by quitting it. Details are in [Features](docs/features.md).
+Cleanup lists distinct copies of an application by bundle identifier, path, and version.
+From there you can review the copies and choose one to uninstall with its shared app data
+preserved. Links to an existing copy count as part of that installation.
+
+Cask repair checks version and build changes before recording success. Homebrew and
+Discord's own updater can both act on the same bundle. Wega verifies Discord Stable on
+disk because an unattended launch can trigger a downgrade. When another app has a
+Squirrel/ShipIt update that Wega cannot confirm it withdrew, the launch test leaves the
+app running. Details are in [Features](docs/features.md).
 
 ## Vendor and App Store update sources
 
@@ -324,6 +333,7 @@ vendor does not state stays incomparable. The same reconciliation controls backg
 Apps already listed by `brew outdated` skip the redundant cask-version lookup while keeping
 their independent vendor checks. Missing versions for other cask candidates remain visible
 as incomplete checks.
+Google Gemini is matched by its bundle identifier to Homebrew's `google-gemini` cask.
 
 WARP and Logi Options+ updates use the vendor's application instead of bulk or background
 Homebrew installation. Inventory also recognizes Bitdefender Antivirus for Mac and shows

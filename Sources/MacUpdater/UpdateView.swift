@@ -69,12 +69,15 @@ struct UpdateView: View {
     /// rows, rather than recomputing after the dialog opens, makes confirmation and
     /// execution one immutable decision.
     @State private var pendingUpdateTargets: [OutdatedItem] = []
+    @State private var pendingCaskReplacements: [QueuedCaskReplacement] = []
     @State private var showUpdateConfirmation = false
     /// UXP-11 — the sheet behind "Ukryte przez Twoje reguły".
     @State private var showsHiddenRules = false
+    @State private var showsRunSummary = false
     /// UX-18 — how the list is grouped; by urgency unless the user picks by source.
     @AppStorage(UpdateGrouping.storageKey) private var grouping: UpdateGrouping = .default
 
+    private var displayedReport: UpdateRunReport? { showsRunSummary ? scan.runReport : nil }
     private var allItems: [OutdatedItem] { scan.allItems }
     private var visibleItems: [OutdatedItem] { scan.visibleItems(for: updateFilter) }
     private var visibleManual: [ManualOutdatedApp] { scan.visibleManual }
@@ -120,15 +123,16 @@ struct UpdateView: View {
             ) {
                 Button(trf("Zaktualizuj wybrane (%@)", "\(pendingUpdateTargets.count)")) {
                     let targetKeys = Set(pendingUpdateTargets.map(\.key))
-                    pendingUpdateTargets = []
-                    Task { await scan.runUpdate(targetKeys: targetKeys) }
+                    let replacements = pendingCaskReplacements
+                    clearPendingUpdate()
+                    Task { await scan.runUpdate(targetKeys: targetKeys, approvedReplacements: replacements) }
                 }
-                Button(tr("Anuluj"), role: .cancel) { pendingUpdateTargets = [] }
+                Button(tr("Anuluj"), role: .cancel, action: clearPendingUpdate)
             } message: {
-                Text(updateTargetLines(pendingUpdateTargets))
+                Text(updateTargetLines(pendingUpdateTargets, replacements: pendingCaskReplacements))
             }
             .onChange(of: showUpdateConfirmation) { _, isPresented in
-                if !isPresented { pendingUpdateTargets = [] }
+                if !isPresented { clearPendingUpdate() }
             }
             .wegaAttention(showUpdateConfirmation || scan.pendingForceRestart != nil)
             .wegaAttention(scan.runReport?.holdsAttention ?? false)
@@ -138,6 +142,12 @@ struct UpdateView: View {
             // describes an item that's no longer in the visible list.
             .onChange(of: updateFilter) { _, filter in
                 UpdateFilterInteraction.apply(filter, to: scan)
+            }
+            .onChange(of: scan.runReport?.finishedAt) { _, finishedAt in
+                showsRunSummary = false
+                if onScreen, finishedAt != nil, scan.scopeCounts.all > 0, !scopeHasUpdates {
+                    onScopeChange?(.all)
+                }
             }
             .onAppear {
                 // The tree this view sits in is rebuilt whenever the language re-keys it
@@ -188,7 +198,7 @@ struct UpdateView: View {
                 run: { scan.startCheck() }
             ))
             .focusedSceneValue(\.runUpdateAction, WegaMenuAction(
-                isEnabled: scan.status == .results && allowsUpdateRun && scan.runReport == nil,
+                isEnabled: scan.status == .results && allowsUpdateRun && displayedReport == nil,
                 run: { requestUpdate() }
             ))
             // UXP-23 — ⌘. cancels the store's scan when no update runs; ⇧⌘A asks the select-all
@@ -199,7 +209,7 @@ struct UpdateView: View {
             ))
             .focusedSceneValue(\.selectAllVisibleAction, WegaMenuAction(
                 isEnabled: scan.status == .results && !visibleItems.isEmpty
-                    && ScanSelectionGate.allowsListSelection(isRefreshing: scan.isRefreshing, isUpdating: scan.updating) && scan.runReport == nil,
+                    && ScanSelectionGate.allowsListSelection(isRefreshing: scan.isRefreshing, isUpdating: scan.updating) && displayedReport == nil,
                 run: { scan.selectAllVisible(filter: updateFilter) }
             ))
     }
@@ -254,30 +264,32 @@ struct UpdateView: View {
     // MARK: Results
     private var resultsView: some View {
         VStack(spacing: 0) {
-            // The band reports the scan, the run, its check and its summary, and carries the update
-            // button; with nothing to update it says so (owner, 2026-11-22). The list header carries
-            // select-all, and gives its row to the summary's header while the summary is open.
             resultsBand
                 .padding(.horizontal, WegaLayout.listGutter)
                 .padding(.top, WegaLayout.sectionSpacing)
             VStack(alignment: .leading, spacing: 12) {
-                if scan.runReport != nil {
-                    UpdateRunSummaryHeader(remainingCount: scan.scopeCounts.all, categoryHasRows: showsRows,
-                                           onClose: { scan.closeRunReport() }, onShowAll: { onScopeChange?(.all) })
+                if displayedReport != nil {
+                    UpdateRunSummaryHeader(remainingCount: scan.scopeCounts.all, categoryHasRows: scopeHasUpdates,
+                                           onClose: { showsRunSummary = false }, onShowAll: { onScopeChange?(.all) })
                 } else {
                     listHeader
+                }
+                if let report = scan.runReport, displayedReport == nil {
+                    UpdateRunRecap(report: report, onShow: { showsRunSummary = true })
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, WegaLayout.selectionColumnInset)
             .padding(.vertical, WegaLayout.sectionSpacing)
 
-            // Everything below the header is what a running update could be raced by, so for
-            // the run's duration `.disabled` makes it inert. Nothing is drawn over the rows (C2):
-            // the band above carries the run and its stop, and the run's log below the list
-            // stays live with it, both outside the disabled screen.
+            // The band and log stay outside the locked screen so their controls remain live.
             screenBody
                 .disabled(!ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating))
+                .overlay {
+                    if scan.updating && (!scan.isRefreshing || !showsRows) {
+                        ScanListVeil(mode: .updating)
+                    }
+                }
             if scan.updating && scan.showLog {
                 BrewLogPanel(lines: scan.brewLog, onClose: { scan.showLog = false })
                     .padding(.horizontal, WegaLayout.listGutter)
@@ -324,8 +336,8 @@ struct UpdateView: View {
             onShowPlan: { scan.showPlanPreview = true },
             onStop: { scan.cancelUpdate() },
             onShowLog: { scan.showLog = true },
-            summary: scan.runReport.map(summaryPresentation),
-            onCloseSummary: { scan.closeRunReport() },
+            summary: displayedReport.map(summaryPresentation),
+            onCloseSummary: { showsRunSummary = false },
             scanButton: scanRoundButton(style: .band),
             action: { layout in
                 UpdateBandButton(
@@ -344,8 +356,8 @@ struct UpdateView: View {
     private var bandPresentation: UpdateBandPresentation {
         let counts = scan.scopeCounts
         let summary = UpdateActionBarSummary(
-            selectedCount: selectedVisibleCount,
-            visibleCount:  visibleItems.count,
+            selectedCount: updateTargets.count,
+            visibleCount:  visibleItems.count + scan.queueableCaskReplacements(for: updateFilter).count,
             targets:       updateTargets,
             protection:    scan.caskProtection,
             resolved:      scan.caskProtectionResolved
@@ -358,7 +370,7 @@ struct UpdateView: View {
             lastCheck:      scan.lastCheck,
             freshness:      scan.freshness() ?? .fresh,
             sources:        UpdateBandPresentation.SourceChip.chips(from: scan.sourceReports),
-            wegaLine:       wegaLine,
+            wegaLine:       scan.runReport == nil ? wegaLine : "",
             incompleteNote: scan.lastScanComplete ? nil : tr("skan niepełny"),
             handOffCount:   scan.handOffCount(for: updateFilter),
             catalogAgeMinutes: scan.catalogAgeMinutes,
@@ -427,14 +439,7 @@ struct UpdateView: View {
                     .padding(.bottom, 8)
             }
 
-            // C2 stage 4 — the run's result takes the rows' place until the summary closes. A run
-            // that empties the list, or the category on screen, leaves it blank until then: no
-            // hero and no empty category before the result.
-            // Otherwise the rows on screen are the ones the scan is in the middle of replacing, so
-            // for its duration they are a report, not a menu: inert. The scanner lies on them
-            // (owner, 2026-11-22: people clicked rows that could not answer): a half veil, a
-            // sweeping line and a label, with nothing blurred, so every row stays readable.
-            if let report = scan.runReport {
+            if let report = displayedReport {
                 UpdateRunSummaryList(report: report, onShowLog: { scan.showLog = true }, handOffs: {
                     UpdateRunHandOffGroup(onPinManual: requestPinManual)
                 })
@@ -531,12 +536,11 @@ struct UpdateView: View {
         !(allItems.isEmpty && visibleManual.isEmpty)
     }
 
-    /// Whether the list shows rows rather than one of its empty states — the one answer
-    /// `listColumn`, the list header's scan note and a run's blank area read.
-    private var showsRows: Bool {
-        hasResults && (Self.filterHasContent(updateFilter, items: allItems, manual: visibleManual, isSecurity: scan.isSecurityApp)
-                       || !scan.restartCandidates.isEmpty)
+    private var scopeHasUpdates: Bool {
+        Self.filterHasContent(updateFilter, items: allItems, manual: visibleManual, isSecurity: scan.isSecurityApp)
     }
+
+    private var showsRows: Bool { scopeHasUpdates || !scan.restartCandidates.isEmpty }
 
     @ViewBuilder
     private var listColumn: some View {
@@ -636,6 +640,14 @@ struct UpdateView: View {
                             .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    let replacements = scan.queueableCaskReplacements(for: updateFilter).filter { updateTargetKeys.contains($0.key) }
+                    if !replacements.isEmpty {
+                        Text(tr("Wega dobierze instalację lub przeinstalowanie po sprawdzeniu wpisu Homebrew."))
+                            .font(.wega(.subheadline))
+                        ForEach(replacements, id: \.key) { replacement in
+                            Text(caskReplacementDescription(replacement)).foregroundStyle(.secondary)
+                        }
+                    }
                     if !scan.plannedCaskTokens(targetKeys: updateTargetKeys).isEmpty {
                         Divider().opacity(0.4)
                         ForEach(scan.plannedCaskTokens(targetKeys: updateTargetKeys), id: \.self) { token in
@@ -706,15 +718,33 @@ struct UpdateView: View {
         let targets = updateTargets
         guard !targets.isEmpty else { return }
         pendingUpdateTargets = targets
+        let targetKeys = Set(targets.map(\.key))
+        pendingCaskReplacements = scan.queueableCaskReplacements(for: updateFilter).filter { targetKeys.contains($0.key) }
         showUpdateConfirmation = true
     }
 
-    private func updateTargetLines(_ items: [OutdatedItem]) -> String {
+    private func clearPendingUpdate() {
+        pendingUpdateTargets = []
+        pendingCaskReplacements = []
+    }
+
+    private func caskReplacementDescription(_ replacement: QueuedCaskReplacement) -> String {
+        let destination = (replacement.app.path.path as NSString).abbreviatingWithTildeInPath
+        return replacement.ownsInstallation
+            ? trf("Zaktualizuj %@ przez Homebrew (%@)", replacement.app.name, destination)
+            : trf("Zaktualizuj %@ i przekaż ją do Homebrew (%@)", replacement.app.name, destination)
+    }
+
+    private func updateTargetLines(_ items: [OutdatedItem], replacements: [QueuedCaskReplacement]) -> String {
         let casks = items.filter { $0.kind == .cask }
         let labels = Dictionary(
             zip(casks.map(\.name), CaskDisplayName.labels(for: casks.map { ($0.name, scan.caskIconPaths[$0.name]) })),
             uniquingKeysWith: { first, _ in first })
-        return items.map { updateTargetDescription($0, caskLabel: labels[$0.name]) }.joined(separator: "\n")
+        let replacementsByKey = Dictionary(uniqueKeysWithValues: replacements.map { ($0.key, $0) })
+        return items.map { item in
+            if let replacement = replacementsByKey[item.key] { return caskReplacementDescription(replacement) }
+            return updateTargetDescription(item, caskLabel: labels[item.name])
+        }.joined(separator: "\n")
     }
 
     private func updateTargetDescription(_ item: OutdatedItem, caskLabel: String?) -> String {
@@ -862,7 +892,8 @@ extension UpdateView {
                 UnresolvedServiceUpdateRow(item: item) { scan.inspectedKey = item.key }
             }
         }
-        let manualGroups = UpdatePlanner.groupManual(visibleManual.filter {
+        queuedCaskSection(scan.queueableCaskReplacements(for: updateFilter))
+        let manualGroups = UpdatePlanner.groupManual(scan.externalManualUpdates.filter {
             !DockerDesktopUpdatePolicy.isDocker($0) && ServiceVendorUpdatePolicy.profile(for: $0) == nil
         })
         let brewManual = updateFilter.isSecurityOnly ? manualGroups.brew.filter(scan.isSecurityApp) : manualGroups.brew
@@ -900,13 +931,30 @@ extension UpdateView {
         }
     }
 
+    @ViewBuilder
+    private func queuedCaskSection(_ replacements: [QueuedCaskReplacement]) -> some View {
+        if !replacements.isEmpty {
+            ManualUpdateSection(
+                items: replacements.map(\.app), busyToken: scan.manualBusy,
+                onInstall: { token in Task { await scan.installManual(token: token) } },
+                title: tr("Aktualizacje przez Homebrew"), tint: .wegaLavender,
+                inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,
+                onPin: requestPinManual, onSkip: scan.skipManual,
+                onInspect: { scan.inspectedKey = QueuedCaskReplacement.key(for: $0) }
+            )
+        }
+    }
+
     /// UX-18 — the list grouped by what the user does next: possible security fixes, then the
     /// apps and the tools Wega updates in a batch, then what the vendor or the user finishes.
     /// A card here mixes sources, so each row names its own source and rollback limit.
     @ViewBuilder
     private var urgencyGroupedSections: some View {
+        let replacements = scan.queueableCaskReplacements(for: updateFilter).filter { !scan.isSecurityApp($0.app) }
+        let replacementKeys = Set(replacements.map(\.key))
+        let handOffsAndSecurity = visibleManual.filter { !replacementKeys.contains(QueuedCaskReplacement.key(for: $0)) }
         let groups = UrgencyGroups.make(
-            items: visibleItems, manual: visibleManual, filter: updateFilter, isSecurity: scan.isSecurityApp
+            items: visibleItems, manual: handOffsAndSecurity, filter: updateFilter, isSecurity: scan.isSecurityApp
         )
         if !groups.security.isEmpty {
             ManualUpdateSection(
@@ -941,6 +989,7 @@ extension UpdateView {
                 onInspect: { scan.inspectedKey = $0.key }
             )
         }
+        queuedCaskSection(replacements)
         if !groups.needsYou.isEmpty {
             ManualUpdateSection(
                 items: groups.needsYou, busyToken: scan.manualBusy,

@@ -172,6 +172,7 @@ struct UpdateRunReport: Equatable, Sendable {
     let wasStopped: Bool
     /// The run's cask operation, which owns this run's undos; `nil` when no cask ran.
     let caskOperationID: UUID?
+    let replacementOperations: [String: UUID]
     private(set) var entries: [UpdateRunReportEntry]
 
     /// One entry per planned key, in plan order. The parameters with a default describe a run
@@ -181,7 +182,7 @@ struct UpdateRunReport: Equatable, Sendable {
                      skippedKeys: Set<String> = [], heldForPasswordKeys: Set<String> = [], wasStopped: Bool = false,
                      startedAt: Date? = nil, finishedAt: Date,
                      caskOperationID: UUID? = nil, caskAppPaths: [String: URL] = [:],
-                     stillOutdatedKeys: Set<String>,
+                     replacementOperations: [String: UUID] = [:], stillOutdatedKeys: Set<String>,
                      confirmed: Bool) -> UpdateRunReport {
         let verdicts = Dictionary(summary.items.map { ($0.key, $0.verdict) }, uniquingKeysWith: { first, _ in first })
         var seen = Set<String>()
@@ -201,7 +202,8 @@ struct UpdateRunReport: Equatable, Sendable {
             )
         }
         return UpdateRunReport(startedAt: startedAt ?? finishedAt, finishedAt: finishedAt, wasStopped: wasStopped,
-                               caskOperationID: caskOperationID, entries: entries)
+                               caskOperationID: caskOperationID, replacementOperations: replacementOperations,
+                               entries: entries)
     }
 
     /// Core's `applyRescan` downgrades only `.succeeded`, so a changed publisher the check
@@ -293,8 +295,9 @@ struct UpdateRunReport: Equatable, Sendable {
     /// This run's undo for `entry`: an undo with the entry's token and `caskOperationID`;
     /// `nil` without an operation, for a non-cask, or once `undoneTo` is set.
     func undo(for entry: UpdateRunReportEntry, in undoables: [UndoableUpdate]) -> UndoableUpdate? {
-        guard let caskOperationID, entry.kind == .cask, entry.undoneTo == nil else { return nil }
-        return undoables.first { $0.operationID == caskOperationID && $0.token == entry.name }
+        guard entry.kind == .cask, entry.undoneTo == nil,
+              let operationID = replacementOperations[entry.key] ?? caskOperationID else { return nil }
+        return undoables.first { $0.operationID == operationID && $0.token == entry.name }
     }
 
     /// Entries with a publisher change (any verdict that raises "Zmienił się podpis

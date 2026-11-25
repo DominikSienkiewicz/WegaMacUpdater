@@ -65,6 +65,28 @@ struct UpdateStageDiagnosticsTests {
         #expect(!fixture.events.contains { $0.event == "rollback.started" })
     }
 
+    @Test func discordRepairKeepsTheInstalledVersionBySkippingUnattendedLaunch() async throws {
+        let fixture = try Fixture(token: "discord", before: "0.0.423", installed: "0.0.424",
+                                  bundleIdentifier: "com.hnc.Discord")
+        defer { fixture.cleanUp() }
+        let actions = StageActionRecorder()
+        var dependencies = dependencies(actions: actions, launch: { url in
+            actions.append("launch")
+            _ = try? Self.bundle(at: url, version: "0.0.423", bundleIdentifier: "com.hnc.Discord")
+            return .survived
+        })
+        dependencies.bundleIdentifier = { CaskReplacementArtifactIdentity.bundleIdentifier(at: $0) }
+
+        let verdict = await fixture.verify(dependencies: dependencies, expectedVersion: "0.0.424")
+
+        #expect(verdict == .healthy)
+        #expect(actions.actions.isEmpty)
+        #expect(UpdateOperationRecoveryPlan.bundleShortVersion(at: fixture.installed) == "0.0.424")
+        let smoke = fixture.events.first { $0.event == "smoke.result" }
+        #expect(smoke?.fields["verdict"] == "skipped")
+        #expect(smoke?.fields["reason"] == "selfUpdaterMayDowngrade")
+    }
+
     @Test func failedSnapshotRecordsOperationAndBundleOnlyScope() throws {
         let fixture = try Fixture(token: "docker-desktop", before: "4.96.0", installed: "4.97.0")
         defer { fixture.cleanUp() }
@@ -187,12 +209,18 @@ struct UpdateStageDiagnosticsTests {
         let installed: URL
         let store: DiagnosticTraceStore
         let run: DiagnosticRun
+        let bundleIdentifier: String
 
-        init(token: String, before: String, installed version: String) throws {
+        init(token: String, before: String, installed version: String, bundleIdentifier: String = "com.example.app") throws {
             root = FileManager.default.temporaryDirectory.appendingPathComponent("stage-diagnostics-\(UUID())")
             self.token = token
-            snapshot = try UpdateStageDiagnosticsTests.bundle(at: root.appendingPathComponent("snapshot.app"), version: before)
-            installed = try UpdateStageDiagnosticsTests.bundle(at: root.appendingPathComponent("installed.app"), version: version)
+            self.bundleIdentifier = bundleIdentifier
+            snapshot = try UpdateStageDiagnosticsTests.bundle(
+                at: root.appendingPathComponent("snapshot.app"), version: before, bundleIdentifier: bundleIdentifier
+            )
+            installed = try UpdateStageDiagnosticsTests.bundle(
+                at: root.appendingPathComponent("installed.app"), version: version, bundleIdentifier: bundleIdentifier
+            )
             store = DiagnosticTraceStore(directory: root.appendingPathComponent("traces"))
             run = DiagnosticRun(trigger: "test", subjects: [token], store: store)
         }
@@ -200,10 +228,13 @@ struct UpdateStageDiagnosticsTests {
         var events: [DiagnosticEvent] { store.events(runID: run.id) }
 
         @MainActor
-        func verify(dependencies: CaskRollbackGuard.Dependencies) async -> CaskValidationVerdict {
+        func verify(
+            dependencies: CaskRollbackGuard.Dependencies,
+            expectedVersion: String = "target"
+        ) async -> CaskValidationVerdict {
             await UpdateDiagnostics.$current.withValue(run) {
                 await CaskRollbackGuard.verify(token: token, snapshotURL: snapshot, validationURL: installed,
-                    expecting: .init(teamID: "TEAM", bundleIdentifier: "com.example.app", version: "target"),
+                    expecting: .init(teamID: "TEAM", bundleIdentifier: bundleIdentifier, version: expectedVersion),
                     dependencies: dependencies)
             }
         }
@@ -215,11 +246,11 @@ struct UpdateStageDiagnosticsTests {
     }
 
     @discardableResult
-    private nonisolated static func bundle(at url: URL, version: String) throws -> URL {
+    private nonisolated static func bundle(at url: URL, version: String, bundleIdentifier: String = "com.example.app") throws -> URL {
         let contents = url.appendingPathComponent("Contents", isDirectory: true)
         try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
         let data = try PropertyListSerialization.data(fromPropertyList: [
-            "CFBundleShortVersionString": version, "CFBundleIdentifier": "com.example.app"
+            "CFBundleShortVersionString": version, "CFBundleIdentifier": bundleIdentifier
         ], format: .xml, options: 0)
         try data.write(to: contents.appendingPathComponent("Info.plist"))
         return url

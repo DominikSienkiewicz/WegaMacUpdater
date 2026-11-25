@@ -185,6 +185,40 @@ final class CleanupScannerTests: XCTestCase {
         brew = RecordingBrew()
     }
 
+    func testReportsOnlyDistinctAppBundlesForTheSameIdentifier() async throws {
+        let stable = try appBundle("Applications/Discord.app", identifier: "com.hnc.Discord", version: "0.0.424")
+        let extra = try appBundle("OtherApplications/Discord Copy.app", identifier: "com.hnc.Discord", version: "0.0.423")
+        _ = try appBundle("Applications/Discord Canary.app", identifier: "com.hnc.DiscordCanary", version: "0.0.424")
+        _ = try appBundle("OtherApplications/Same Name.app", identifier: "com.example.other", version: "1.0")
+        try tmp.symlink("OtherApplications/Discord Alias.app", to: stable.path)
+        let input = context(path: [], space: SpaceSetup(applicationDirectories: ["Applications", "OtherApplications"]))
+
+        let report = try await scan(input).get()
+        let copies = report.findings.filter { $0.tool == "Discord" }
+        XCTAssertEqual(copies.map { $0.path.path }.sorted(), [stable.path, extra.path].sorted())
+        XCTAssertEqual(copies.compactMap(\.version).sorted(), ["0.0.423", "0.0.424"])
+        XCTAssertTrue(reference.mutations.isEmpty)
+    }
+
+    func testIgnoresASingleBundleWithACaskroomSymlink() async throws {
+        let bundle = try appBundle("Applications/Discord.app", identifier: "com.hnc.Discord", version: "0.0.424")
+        try tmp.symlink("Caskroom/discord/0.0.424/Discord.app", to: bundle.path)
+        let input = context(path: [], space: SpaceSetup(applicationDirectories: ["Applications", "Caskroom/discord/0.0.424"]))
+
+        let report = try await scan(input).get()
+        XCTAssertFalse(report.findings.contains { $0.tool == "Discord" })
+    }
+
+    private func appBundle(_ relativePath: String, identifier: String, version: String) throws -> URL {
+        let values: [String: String] = [
+            "CFBundleIdentifier": identifier, "CFBundleName": identifier.hasSuffix("Canary") ? "Discord Canary" : "Discord",
+            "CFBundleShortVersionString": version,
+        ]
+        let plist = try PropertyListSerialization.data(fromPropertyList: values, format: .xml, options: 0)
+        try tmp.file(relativePath + "/Contents/Info.plist", text: String(decoding: plist, as: UTF8.self))
+        return tmp.url(relativePath)
+    }
+
     private var fnmDirectory: URL { tmp.url(".local/state/fnm_multishells") }
     private var staleEntries: [URL] {
         [

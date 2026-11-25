@@ -13,6 +13,7 @@ public struct CleanupContext: Sendable {
     public let projectRoots: [URL]
     /// The folders D7 looks for installed JetBrains IDEs in.
     public let applicationDirectories: [URL]
+    public let duplicateApplicationScan: ScanConfiguration?
     /// The "Files and Folders" database D10 reads; `nil` while the map is switched off, and D10 then does nothing.
     public let tccMap: CleanupTCCDatabaseReading?
     /// The folder holding the system shell files and `paths` that D9 attributes entries to.
@@ -22,7 +23,7 @@ public struct CleanupContext: Sendable {
         home: URL, tmpDirectory: URL, path: CleanupPathSnapshot, fileSystem: CleanupFileSystem,
         inspector: ProcessInspecting, brew: CleanupBrewQuerying, brewPrefix: URL?,
         projectRoots: [URL] = [], applicationDirectories: [URL] = [],
-        tccMap: CleanupTCCDatabaseReading? = nil,
+        tccMap: CleanupTCCDatabaseReading? = nil, duplicateApplicationScan: ScanConfiguration? = nil,
         systemConfigurationDirectory: URL = URL(filePath: "/etc", directoryHint: .isDirectory)
     ) {
         self.home = home
@@ -34,6 +35,7 @@ public struct CleanupContext: Sendable {
         self.brewPrefix = brewPrefix
         self.projectRoots = projectRoots
         self.applicationDirectories = applicationDirectories
+        self.duplicateApplicationScan = duplicateApplicationScan
         self.tccMap = tccMap
         self.systemConfigurationDirectory = systemConfigurationDirectory
     }
@@ -145,7 +147,11 @@ public struct CleanupScanner: Sendable {
         }
 
         try Task.checkCancellation()
-        let findings = duplicates.findings + versionFindings + homebrew.findings + runtimeFindings + gradleFindings
+        let applicationCopies = try CleanupApplicationDuplicates(fileSystem: fileSystem).findings(
+            home: context.home, configuration: context.duplicateApplicationScan, fallbackDirectories: context.applicationDirectories
+        )
+        try Task.checkCancellation()
+        let findings = applicationCopies + duplicates.findings + versionFindings + homebrew.findings + runtimeFindings + gradleFindings
             + jetBrains.findings + shellFindings + hygieneFindings + mapFindings
         return CleanupReport(
             createdAt: now(), path: context.path, findings: findings, notes: notes,

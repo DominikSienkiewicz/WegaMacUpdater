@@ -1,13 +1,25 @@
 import SwiftUI
 import MacUpdaterCore
 
-/// The scanner (owner, 2026-11-22): what lies on the rows while a scan runs over them. A veil dims
-/// them halfway, a honey line sweeps down the visible list, and a label says when the list
-/// unlocks. The rows are locked by `.disabled`, not by this; the veil only shows that they are.
+/// Shows when the disabled list unlocks and dims it without blurring the rows. During
+/// scanning a honey line also sweeps down the visible list.
 ///
 /// Nothing blurs: in 0.8.0 the system's frosted glass over the rows blurred them into an empty
 /// column, and a scan in place looked like a blank, frozen list.
 struct ScanListVeil: View {
+    enum Mode {
+        case scanning, updating
+
+        var message: String {
+            switch self {
+            case .scanning: return tr("Lista odblokuje się po skanie")
+            case .updating: return tr("Lista odblokuje się po aktualizacji")
+            }
+        }
+    }
+
+    var mode: Mode = .scanning
+
     /// How much of the window's background lies over the rows: enough to read as locked, little
     /// enough that every row stays legible.
     static let scrimOpacity: Double = 0.5
@@ -18,8 +30,7 @@ struct ScanListVeil: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
-    /// Under Reduce Transparency no veil is drawn, as the run's veil was not (UXP-22); the label
-    /// still says the list is locked.
+    /// Reduce Transparency removes the scrim. The label still says the list is locked.
     static func scrim(reduceTransparency: Bool) -> Double {
         reduceTransparency ? 0 : scrimOpacity
     }
@@ -41,7 +52,7 @@ struct ScanListVeil: View {
             Color(nsColor: .windowBackgroundColor)
                 .opacity(Self.scrim(reduceTransparency: reduceTransparency))
                 .accessibilityHidden(true)
-            if Self.drawsBeam(reduceMotion: reduceMotion) {
+            if mode == .scanning && Self.drawsBeam(reduceMotion: reduceMotion) {
                 GeometryReader { proxy in
                     TimelineView(.animation) { context in
                         beam.offset(y: Self.beamTop(at: context.date.timeIntervalSinceReferenceDate, height: proxy.size.height))
@@ -70,7 +81,7 @@ struct ScanListVeil: View {
 
     /// On a solid band-coloured capsule, so Reduce Transparency changes nothing for it.
     private var label: some View {
-        Label(tr("Lista odblokuje się po skanie"), systemImage: "lock.fill")
+        Label(mode.message, systemImage: "lock.fill")
             .font(.wega(.callout, weight: .semibold))
             .foregroundStyle(Color.wegaBandText)
             .padding(.horizontal, 14)
@@ -78,6 +89,6 @@ struct ScanListVeil: View {
             .background(Capsule().fill(Color.wegaBandMid))
             .overlay(Capsule().strokeBorder(Color.wegaBandBorder, lineWidth: 1))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(tr("Lista odblokuje się po skanie"))
+            .accessibilityLabel(mode.message)
     }
 }

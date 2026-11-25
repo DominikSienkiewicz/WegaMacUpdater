@@ -720,9 +720,12 @@ final class ScanStore: ObservableObject {
     func deselectRows(hiddenBy entries: [String: UpdatePolicyEntry]) {
         guard !selected.isEmpty, !entries.isEmpty else { return }
         let policies = entries.mapValues(\.policy)
-        let hidden = itemCandidates
+        let hiddenPackages = itemCandidates
             .filter { UpdatePlanner.isSuppressed(key: $0.policyKey, availableVersion: $0.to, policies: policies) }
             .map(\.key)
+        let manualVisibleKeys = Set(UpdatePlanner.applyPolicies(manualCandidates, policies: policies)
+            .map(QueuedCaskReplacement.key(for:)))
+        let hidden = hiddenPackages + selected.filter { $0.hasPrefix("m:") && !manualVisibleKeys.contains($0) }
         guard !selected.isDisjoint(with: hidden) else { return }
         selected.subtract(hidden)
     }
@@ -734,7 +737,8 @@ final class ScanStore: ObservableObject {
 
     /// The exact visible rows the batch button, plan preview and confirmation describe.
     func updateTargets(for filter: UpdateFilter) -> [OutdatedItem] {
-        UpdatePlanner.targets(from: ServiceVendorUpdatePolicy.batchItems(DockerDesktopUpdatePolicy.batchItems(allItems)), selectedKeys: selected, filter: filter)
+        visibleItems(for: filter).filter { selected.contains($0.key) }
+            + queueableCaskReplacements(for: filter).filter { selected.contains($0.key) }.map(\.item)
     }
 
     var dockerManagedUpdates: [ManualOutdatedApp] {
@@ -827,21 +831,23 @@ final class ScanStore: ObservableObject {
     /// Selections cannot survive invisibly across filters. Keeping this invariant in the
     /// store also protects a rebuilt SwiftUI tree whose first `onChange` never fires.
     func restrictSelection(to filter: UpdateFilter) {
-        selected.formIntersection(visibleItems(for: filter).map(\.key))
+        let currentKeys = visibleItems(for: filter).map(\.key) + queueableCaskReplacements(for: filter).map(\.key)
+        selected.formIntersection(currentKeys)
     }
 
-    /// Refused while the after-update summary is open: its rows are not the list's.
+    /// Cask replacements are selected individually because the app may be taken over by Homebrew.
     func toggleAll(filter: UpdateFilter) {
-        guard runReport == nil else { return }
+        guard status == .results,
+              ScanSelectionGate.allowsListSelection(isRefreshing: isRefreshing, isUpdating: updating) else { return }
         restrictSelection(to: filter)
-        selected = UpdatePlanner.toggledAll(selected: selected, allKeys: visibleItems(for: filter).map(\.key))
+        selected = UpdatePlanner.toggledGroup(selected: selected, groupKeys: visibleItems(for: filter).map(\.key))
     }
 
     /// UXP-23 — ⇧⌘A: queues every batch row `filter` shows, never a manual app or a row a rule
-    /// hides. Refused, like the select-all checkbox, while no result is on screen, while a
-    /// refresh replaces it, while an update owns it and while the after-update summary does.
+    /// hides. Refused, like the select-all checkbox, while no result is on screen or while a
+    /// refresh or update owns it.
     func selectAllVisible(filter: UpdateFilter) {
-        guard status == .results, runReport == nil,
+        guard status == .results,
               ScanSelectionGate.allowsListSelection(isRefreshing: isRefreshing, isUpdating: updating) else { return }
         restrictSelection(to: filter)
         selected.formUnion(visibleItems(for: filter).map(\.key))
@@ -915,8 +921,10 @@ final class ScanStore: ObservableObject {
     /// The single count every surface reports (M4): the window header, the sidebar badge,
     /// the menu-bar badge and the notification all read it from here.
     var updateCount: UnifiedUpdateCount {
-        UpdatePlanner.unifiedCount(installable: ServiceVendorUpdatePolicy.batchItems(DockerDesktopUpdatePolicy.batchItems(allItems)).count,
-                                   manual: visibleManual.count + unresolvedDockerItems.count + unresolvedServiceItems.count)
+        UpdatePlanner.unifiedCount(
+            installable: visibleItems(for: .all).count + queueableCaskReplacements(for: .all).count,
+            manual: externalManualUpdates.count + unresolvedDockerItems.count + unresolvedServiceItems.count
+        )
     }
 
     /// Badge, error, footer and category counts — all derived from the current lists,
@@ -929,6 +937,11 @@ final class ScanStore: ObservableObject {
         sinks.categoryCounts?(counts.apps, counts.cli)
     }
 
+    var externalManualUpdates: [ManualOutdatedApp] {
+        let queueableKeys = Set(queueableCaskReplacements(for: .all).map(\.key))
+        return visibleManual.filter { !queueableKeys.contains(QueuedCaskReplacement.key(for: $0)) }
+    }
+
     /// M1 — the updates the band says you finish with the developer, counted as the category on
     /// screen lists them: every manual row under All and Apps, only the security-flagged ones
     /// under Security, none under CLI.
@@ -936,7 +949,7 @@ final class ScanStore: ObservableObject {
         switch filter {
         case .all, .apps: updateCount.manual
         case .cli:        0
-        case .security:   visibleManual.filter(isSecurityApp).count
+        case .security:   externalManualUpdates.filter(isSecurityApp).count
         }
     }
 

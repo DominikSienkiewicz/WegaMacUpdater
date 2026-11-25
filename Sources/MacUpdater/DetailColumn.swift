@@ -58,6 +58,7 @@ struct DetailColumn: View {
     @Binding var logsErrorBadge:    Int
     /// The app bundle a Cleanup row hands to "Odinstaluj aplikacje"; cleared once that tab used it.
     @Binding var uninstallPreselection: URL?
+    @Binding var duplicateReviewBundleIdentifier: String?
     @Binding var lastCheck:         Date?
     /// UX-15 — written here, where the scan is observed, and shown by the sidebar's card.
     @Binding var quip:              String?
@@ -151,6 +152,9 @@ struct DetailColumn: View {
                     quip = nil
                 }
             }
+            .onChange(of: selection) { _, destination in
+                if destination != .uninstall { duplicateReviewBundleIdentifier = nil }
+            }
             .onChange(of: holdsBall, initial: true) { _, held in wegaAttentionHeld = held }
     }
 
@@ -225,13 +229,20 @@ struct DetailColumn: View {
                     UninstallView(
                         onWegaState: { wegaState = $0 },
                         preselection: uninstallPreselection,
-                        onPreselectionUsed: { uninstallPreselection = nil }
+                        onPreselectionUsed: { uninstallPreselection = nil },
+                        duplicateBundleIdentifier: duplicateReviewBundleIdentifier,
+                        onEndDuplicateReview: { duplicateReviewBundleIdentifier = nil }
                     )
                 case .cleanup:
                     CleanupView(
                         onWegaState: { wegaState = $0 },
                         onUninstallApp: { bundle in
                             uninstallPreselection = bundle
+                            onNavigate(.uninstall)
+                        },
+                        onReviewAppCopies: { bundleIdentifier in
+                            uninstallPreselection = nil
+                            duplicateReviewBundleIdentifier = bundleIdentifier
                             onNavigate(.uninstall)
                         }
                     )

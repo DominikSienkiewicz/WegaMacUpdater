@@ -290,10 +290,29 @@ struct UpdateRunSummaryListTests {
         }
     }
 
-    @Test func theScreenShowsTheSummaryInsteadOfTheRows() throws {
+    @Test func aFinishedRunLeavesRemainingUpdatesVisibleAndItsDetailsCollapsed() throws {
+        let view = try source("Sources/MacUpdater/UpdateView.swift")
+        #expect(view.contains("@State private var showsRunSummary = false"))
+
+        let results = try slice(view, from: "private var resultsView: some View", to: "private var listHeader: some View")
+        let pendingHeader = try #require(results.range(of: "listHeader"))
+        let recap = try #require(results.range(of: "UpdateRunRecap("))
+        #expect(pendingHeader.lowerBound < recap.lowerBound)
+        #expect(results.contains("if let report = scan.runReport, displayedReport == nil"))
+
+        let reportView = try slice(view, from: "private var screenBody: some View", to: "private var runListState:")
+        #expect(reportView.contains("if let report = displayedReport"))
+        #expect(reportView.contains("listColumn"))
+        #expect(view.contains(".onChange(of: scan.runReport?.finishedAt)"))
+        #expect(view.contains("if onScreen, finishedAt != nil, scan.scopeCounts.all > 0, !scopeHasUpdates"))
+        #expect(view.contains("wegaLine:       scan.runReport == nil ? wegaLine : \"\""))
+        #expect(view.contains("summary: displayedReport.map(summaryPresentation)"))
+    }
+
+    @Test func explicitlyExpandingTheReportShowsItsDetailedRows() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         let screen = try slice(view, from: "private var screenBody: some View", to: "private var runListState:")
-        let summary = try #require(screen.range(of: "if let report = scan.runReport {\n                UpdateRunSummaryList(report: report, onShowLog: { scan.showLog = true }, handOffs: {"))
+        let summary = try #require(screen.range(of: "if let report = displayedReport {\n                UpdateRunSummaryList(report: report, onShowLog: { scan.showLog = true }, handOffs: {"))
         let rest = try #require(screen.range(of: """
             } else if scan.updating && !showsRows {
                             Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -329,10 +348,11 @@ struct UpdateRunSummaryListTests {
 
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         #expect(view.contains("""
-                private var showsRows: Bool {
-                    hasResults && (Self.filterHasContent(updateFilter, items: allItems, manual: visibleManual, isSecurity: scan.isSecurityApp)
-                                   || !scan.restartCandidates.isEmpty)
+                private var scopeHasUpdates: Bool {
+                    Self.filterHasContent(updateFilter, items: allItems, manual: visibleManual, isSecurity: scan.isSecurityApp)
                 }
+
+                private var showsRows: Bool { scopeHasUpdates || !scan.restartCandidates.isEmpty }
             """), "the same answer listColumn reads; restarts alone keep the list")
         let column = try slice(view, from: "private var listColumn: some View", to: "/// F2 — \"show me exactly what you will do\"")
         #expect(column.contains("} else if showsRows {"), "listColumn's empty category is exactly !showsRows")
@@ -345,8 +365,8 @@ struct UpdateRunSummaryListTests {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         #expect(view.contains("UpdateRunSummaryList(report: report, onShowLog: { scan.showLog = true }, handOffs: {\n                    UpdateRunHandOffGroup(onPinManual: requestPinManual)\n                })"))
         let group = try source("Sources/MacUpdater/UpdateRunHandOffGroup.swift")
-        #expect(group.contains("items: scan.visibleManual, busyToken: scan.manualBusy,"))
-        #expect(!group.contains("needsYou") && !group.contains("UrgencyGroups"), "every manual row, security-flagged ones included")
+        #expect(group.contains("items: scan.externalManualUpdates, busyToken: scan.manualBusy,"))
+        #expect(!group.contains("needsYou") && !group.contains("UrgencyGroups"), "all hand-offs, including security updates")
         #expect(group.contains("ForEach(scan.unresolvedDockerItems) { item in\n            UnresolvedDockerUpdateRow(item: item) { scan.inspectedKey = item.key }"))
         #expect(group.contains("ForEach(scan.unresolvedServiceItems) { item in\n            UnresolvedServiceUpdateRow(item: item) { scan.inspectedKey = item.key }"))
         #expect(group.contains("title: tr(\"Do dokończenia u producenta\"), tint: .wegaToffee,"))
@@ -359,21 +379,32 @@ struct UpdateRunSummaryListTests {
         #expect(group.contains("onPin: onPinManual,") && urgency.contains("onPin: requestPinManual,"))
 
         let scan = store()
-        scan.manualOutdated = [ManualOutdatedApp(name: "Summary Probe", path: URL(fileURLWithPath: "/TestApplications/Summary Probe.app"),
-                                                 installedVersion: "1", availableVersion: "2", source: .obsidian)]
+        let vendor = ManualOutdatedApp(name: "Summary Probe", path: URL(fileURLWithPath: "/TestApplications/Summary Probe.app"),
+                                        installedVersion: "1", availableVersion: "2", source: .obsidian)
+        let replacement = ManualOutdatedApp(
+            name: "Queued Probe", path: URL(fileURLWithPath: "/Applications/Queued Probe.app"),
+            installedVersion: "1", availableVersion: "2", source: .cask(token: "queued-probe"),
+            bundleIdentifier: "com.example.queued-probe"
+        )
+        scan.manualOutdated = [vendor, replacement]
+        scan.caskProfiles["queued-probe"] = CaskArtifactProfile(token: "queued-probe", homepage: nil, artifacts: [
+            CaskArtifact(kind: .app, names: ["Queued Probe.app"])
+        ])
         scan.brewOutdated = BrewOutdated(formulae: [], casks: [BrewOutdatedItem(name: "docker-desktop", installedVersions: ["1"], currentVersion: "2")])
-        #expect(scan.visibleManual.count == 1 && scan.unresolvedDockerItems.count == 1, "sanity: both kinds of hand-off are present")
-        #expect(scan.handOffCount(for: .all) == scan.visibleManual.count + scan.unresolvedDockerItems.count + scan.unresolvedServiceItems.count,
+        #expect(scan.visibleManual.count == 2 && scan.unresolvedDockerItems.count == 1)
+        #expect(scan.queueableCaskReplacements(for: .all).map(\.app) == [replacement])
+        #expect(scan.externalManualUpdates == [vendor])
+        #expect(scan.handOffCount(for: .all) == scan.externalManualUpdates.count + scan.unresolvedDockerItems.count + scan.unresolvedServiceItems.count,
                 "the band counts what the group draws")
     }
 
-    @Test func theSummaryHeaderReplacesTheListHeaderInResultsView() throws {
+    @Test func theSummaryHeaderOnlyReplacesTheListHeaderWhenExpanded() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         let results = try slice(view, from: "private var resultsView: some View", to: "private var listHeader: some View")
         #expect(results.contains("""
-                            if scan.runReport != nil {
-                                UpdateRunSummaryHeader(remainingCount: scan.scopeCounts.all, categoryHasRows: showsRows,
-                                                       onClose: { scan.closeRunReport() }, onShowAll: { onScopeChange?(.all) })
+                            if displayedReport != nil {
+                                UpdateRunSummaryHeader(remainingCount: scan.scopeCounts.all, categoryHasRows: scopeHasUpdates,
+                                                       onClose: { showsRunSummary = false }, onShowAll: { onScopeChange?(.all) })
                             } else {
                                 listHeader
                             }
@@ -405,13 +436,13 @@ struct UpdateRunSummaryListTests {
 
     /// Review Focus 5 — the rows are not on screen, so ⇧⌘A has nothing to select; and a run
     /// stopped at the zeroth boundary keeps its selection, so ⌘⏎ would start rows the summary hides.
-    @Test func selectAllAndUpdateAreOffWhileTheSummaryIsOpen() throws {
+    @Test func selectAllAndUpdateAreOffWhileTheSummaryIsExpanded() throws {
         let view = try source("Sources/MacUpdater/UpdateView.swift")
         let selectAll = try #require(view.range(of: ".focusedSceneValue(\\.selectAllVisibleAction")).upperBound
         #expect(view[selectAll...].prefix(300).contains(
-            "ScanSelectionGate.allowsListSelection(isRefreshing: scan.isRefreshing, isUpdating: scan.updating) && scan.runReport == nil"))
+            "ScanSelectionGate.allowsListSelection(isRefreshing: scan.isRefreshing, isUpdating: scan.updating) && displayedReport == nil"))
         let run = try #require(view.range(of: ".focusedSceneValue(\\.runUpdateAction")).upperBound
-        #expect(view[run...].prefix(200).contains("isEnabled: scan.status == .results && allowsUpdateRun && scan.runReport == nil,"))
+        #expect(view[run...].prefix(200).contains("isEnabled: scan.status == .results && allowsUpdateRun && displayedReport == nil,"))
     }
 
     // MARK: - Helpers

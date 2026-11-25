@@ -73,6 +73,7 @@ struct ContentView: View {
     @State private var logsInitialFilter: LogLevelFilter  = .all
     @State private var logsErrorBadge:    Int             = 0
     @State private var uninstallPreselection: URL?        = nil
+    @State private var duplicateReviewBundleIdentifier: String?
     @State private var updateActivity:    UpdateActivity  = .idle
     @State private var updateProgress:    UpgradeProgress?
     /// F4 — informational, not a gate: drives the "install Homebrew" invitation card.
@@ -133,6 +134,7 @@ struct ContentView: View {
                 logsInitialFilter: $logsInitialFilter,
                 logsErrorBadge:    $logsErrorBadge,
                 uninstallPreselection: $uninstallPreselection,
+                duplicateReviewBundleIdentifier: $duplicateReviewBundleIdentifier,
                 lastCheck:         $lastCheck,
                 quip:              $quip,
                 wegaAttentionHeld: $wegaAttentionHeld,

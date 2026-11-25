@@ -14,7 +14,15 @@ them verbatim under the new version heading, so that step is never done by hand 
 
 ## [Unreleased]
 
+### Added
+- **Review duplicate application copies.** Cleanup lists separate bundles by path and
+  version. Choose one verified copy to uninstall and keep the app's shared data.
+- **Queue eligible Homebrew app replacements.** Select a repair or takeover individually
+  and review the exact app and destination in the batch confirmation.
+
 ### Changed
+- Updates dim the locked list and keep progress, stop and logs accessible. Once the check
+  finishes, Wega shows the remaining updates and a compact summary of the completed run.
 - Wega now checks for its own updates, loads release notes and refreshes its signed app
   catalog directly from the project's GitHub organization.
 - **The band stays when everything is up to date.** With nothing to update, the Updates screen
@@ -25,6 +33,9 @@ them verbatim under the new version heading, so that step is never done by hand 
   up to date*, with a question mark.
 
 ### Fixed
+- Wega verifies Discord Stable on disk after a Homebrew replacement to avoid triggering
+  the app updater during verification.
+- Google Gemini is matched by bundle identifier to the `google-gemini` cask.
 - **A scan no longer shows updates it is about to drop.** Homebrew lists every self-updating
   app whose Homebrew record lags the copy on disk (Chrome, Zed, ChatGPT and the like). Wega drops
   them once it has checked the apps themselves, but their rows and count were already on screen

@@ -378,9 +378,12 @@ Until your first update finishes with everything installed, a card above the lis
 
 ### Choose what to update
 
-- Tick individual apps, a whole group with its header checkbox, or everything with the
-  select-all checkbox above the list. Each ticked row joins the queue, which the band above
+- Tick individual apps, a whole group with its header checkbox, or all visible package-manager
+  updates using the checkbox above the list. Each ticked row joins the queue, which the band above
   the list counts (for example **4 queued**).
+- Select eligible apps in **Updates through Homebrew** individually. The confirmation identifies
+  the app and its path, and says whether Homebrew will repair it or take over its installation.
+  Apps updated in their own updater keep the action shown on their row.
 - Each row is **one Tab stop per group**: Tab moves between groups, **↑** and **↓** move
   between the rows inside one, **Space** adds the focused row to the queue or takes it out,
   and **Return** shows its details. The **⋯** menu is a Tab stop of its own, and Space on it
@@ -399,7 +402,7 @@ Until your first update finishes with everything installed, a card above the lis
 
 ### Watching an update run
 
-The run happens in the band above the list, and nothing covers the rows. The band's small
+The band above the list shows the progress of the run. Its small
 heading reads **"UPDATING · SINCE 08:14"** — when the run started, never a guess at when it
 will end — and under it a line names what the run is doing: preparing backups, downloading, or
 installing. It names the package too — "Installing firefox — 3 of 7" — but only while that
@@ -408,15 +411,15 @@ package is the only one installing; once several are running at once the line re
 other two. A ring beside it shows **3/7**, and the band holds **Stop After Active Installs**;
 the log opens by itself under the list when the run starts, and **Show log** appears in the band
 only after you close it. It counts **whole packages**. When the last package is done, Wega checks the
-result in the band, with the list still on screen, and then shows the summary (see *Honest results*).
+result in the band and returns to the remaining updates (see *Honest results*).
 
-The list stays readable but locked, and its header says **"The list stays locked until the
-update ends."** Casks and npm packages say what is happening to them on their own row:
+The list dims while installation is in progress, and the lock label reads
+**"The list unlocks when the update finishes."** Casks and npm packages show their stages on the row:
 *waiting*, *installing…*, *installed, checking*, *failed*, or *won't start* for a row the run
 will not begin after a stop request or a vendor's changed signature. Formulae and App Store
 updates run as one batch each, so their state stands once in the group's header rather than on
-every row. An update the vendor finishes says *with the vendor*. There is nothing for
-**Reduce Transparency** to turn off: no veil is drawn, so the rows are as bright as they were.
+every row. An update the vendor finishes says *with the vendor*. **Reduce Transparency**
+removes the dimming and keeps the lock label visible.
 
 There is no download percentage, and that is deliberate. Homebrew silences its download
 meter whenever it is not printing to a terminal, so the bytes are genuinely invisible to
@@ -460,6 +463,8 @@ was withdrawn, it leaves the app running and records the skipped teardown in Log
 prevents Wega's own quit from starting an unconfirmed installer. It does not prove that the
 app's updater can never change the bundle later. Repair also checks build and prerelease
 changes; Brew reporting success alone does not prove that the offered build arrived.
+Wega verifies a Homebrew update of Discord Stable on disk. An unattended launch during
+verification can cause Discord's updater to put an older version back over the new one.
 
 ### The rollback shield
 
@@ -540,32 +545,27 @@ After an upgrade, Wega detects apps that were running and offers a one-click **r
 
 ### Honest results
 
-When the last install finishes, the window does not change. The band says *"Checking the result"*
-while Wega rescans to confirm what really changed; the list stays where it is, locked, and the
-rows of updated apps leave it as each source answers. Then the band and the list sum the run up.
+The band says *"Checking the result"* while Wega rescans after the last install. The list
+unlocks when the check finishes, with the remaining updates ready to act on and a compact
+status for the completed run. **Show summary** opens the detailed results.
 
 The summary counts an app as **updated only when every step succeeded** — the package manager,
 the security canary, the rollback net and the follow-up re-scan. Every app you chose lands in
 exactly one result, so none can go missing: updated, failed, rolled back, not confirmed (it was
 installed but the check could not confirm it), or not started (you stopped the run first, or it
-could not begin). The band shows how many are updated out of how many were planned, the count of
-each result, and, where the band is wide enough, the time range of the run and how long Wega
-keeps the pre-update copy (the compact and narrow bands show the status alone). A list below it
-groups the apps: *Needs attention* comes first, with a one-line reason for each and a button
+could not begin). The detailed summary groups the apps. *Needs attention* comes first,
+with a one-line reason for each and a button
 where one helps (**Trust the New Signature** if the developer's signature changed, also offered
 under *Not started* when the mismatch was found before the upgrade; a **Show log** link that
 opens the log), then *Not started*, *To finish with the developer*, and *Updated* (with **Undo**
-while the copy is kept). A cask row shows the app's name with its token beneath it. Nothing in that list can be ticked, so you cannot queue
-an update from it by mistake.
+while the copy is kept). A cask row shows the app's name with its token beneath it.
 
 A failed rollback (new version rejected *and* old one not restored) also raises a **red sticky
 banner** telling you to check that app before using it. Errors of the check itself, a missing
 permission and a failed undo stay banners too.
 
-The summary stays until you close it with **Close summary**, or with the link in the list that
-shows how many updates remain. Starting a new check or a new update also closes it. If a changed
-developer signature was still unresolved when you closed it, the warning comes back as a banner
-that stays until you close it.
+You can reopen the latest summary until you start another check or update. Wega keeps
+unresolved developer signature warnings visible when the details are collapsed.
 
 ### Keyboard shortcuts
 
@@ -1196,6 +1196,12 @@ file can be removed.
 ### Cleanup: what each action does
 
 Each **Cleanup** section lists the tools that need a decision first; the rest is under **No action**, collapsed. **⌘F** searches tools and paths across the whole report and shows every match expanded.
+
+**Apps installed in several locations** shows separate copies with their paths and
+versions. Choose **Review copies…**, select one copy in **Uninstall**, and confirm.
+Wega keeps the shared app data and checks that another verified copy still exists
+before removing the selected one. A Homebrew link to that copy counts as part of
+the same installation.
 
 In **Cleanup**, the confirmation sheet for a finding says, under the question, what the action
 does and whether Wega can take it back:

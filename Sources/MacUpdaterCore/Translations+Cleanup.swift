@@ -37,6 +37,12 @@ extension Translations {
 
         // Sections
         "Wiele kopii tego samego narzędzia": "Several copies of the same tool",
+        "Aplikacje w kilku miejscach": "Apps installed in several locations",
+        "Porównaj ścieżki i wersje, zanim wybierzesz kopię do odinstalowania.": "Compare paths and versions before choosing a copy to uninstall.",
+        "kopia aplikacji": "app copy",
+        "Przejrzyj kopie…": "Review copies…",
+        "ten sam identyfikator aplikacji w kilku lokalizacjach": "the same app identifier in several locations",
+        "aplikacje w kilku miejscach": "apps installed in several locations",
         "Stan powłok": "Shell state",
         "Pominięte lokalizacje chronione": "Skipped protected locations",
         "Wpisy w „Pliki i foldery”": "Entries in “Files and Folders”",
