@@ -39,7 +39,7 @@ Wega's docs are split by audience. **Start with the one that matches what you wa
 | Ship a release | [Distribution](docs/distribution.md) — cutting a release and how the app self-updates |
 | Contribute code | [CONTRIBUTING.md](CONTRIBUTING.md) — build/test setup, CI gates, the catalog-signature gate |
 | Report a vulnerability | [SECURITY.md](SECURITY.md) — the private disclosure channel; please don't use public issues |
-| Follow the release runbook | [RELEASING.md](RELEASING.md) — the single-phase `release.sh` or the `release` skill |
+| Cut a patch release | `./scripts/release.sh` — see [RELEASING.md](RELEASING.md) |
 
 ## Architecture
 
@@ -266,7 +266,7 @@ release, and Wega's self-update looks only at stable releases.
 
 ```mermaid
 flowchart LR
-    tag["release.sh<br/>version, CHANGELOG, annotated tag"]
+    tag["release.sh<br/>commit preview, confirmation, annotated tag"]
     ci["GitHub Actions<br/>build.yml gate, then release.yml"]
     notary["Apple notary service"]
     rel[("GitHub Release<br/>WegaMacUpdater.pkg and .dmg")]
@@ -274,7 +274,7 @@ flowchart LR
     helper["WegaPrivilegedHelper<br/>root"]
     user["User"]
 
-    tag -->|"git push of the v* tag"| ci
+    tag -->|"atomic push of main and the v* tag"| ci
     ci <-->|"notarytool submit, stapler staple"| notary
     ci -->|"gh release create; prerelease unless signed and notarized"| rel
     user -->|"downloads .pkg or .dmg"| rel

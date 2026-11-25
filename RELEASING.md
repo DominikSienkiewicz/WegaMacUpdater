@@ -4,32 +4,27 @@ A release is a pushed `v*` tag. Everything else — building, signing, notarizin
 and publishing — is done by [`.github/workflows/release.yml`](.github/workflows/release.yml)
 in reaction to that tag.
 
-**Primary path.** Ask Claude Code for a release in a session opened in the repository root
-(the `release` skill). It proposes the version and the release notes; on your explicit OK it
-cuts the release with `scripts/release.sh`, pushes the commit and the tag together and watches
-`release.yml`. It pushes only after that approval. A session in a linked worktree is told to
-ask from the repository root instead.
-
-**Manual path.** Write the notes under `[Unreleased]` in `CHANGELOG.md` and commit them (the script refuses a tree with tracked modifications), or put them in a file outside the tree, then:
+Run the release script on a clean `main` with the notes committed under `[Unreleased]` in
+`CHANGELOG.md`. Omit the version to bump the patch number.
 
 ```bash
-./scripts/release.sh minor --dry-run               # every check, both diffs, nothing changed
-./scripts/release.sh minor [--notes FILE]          # bump, write notes, commit, annotated tag
-git push --atomic origin main vX.Y.Z               # the irreversible step
+./scripts/release.sh
 ```
 
-`release.sh` never pushes. Nothing is published until that last line.
+Review the commit list and answer `y` to publish. The script pushes the release commit and its
+tag together. GitHub Actions builds and publishes the release from the tag.
+
+The Claude Code `release` skill proposes the version and notes for approval. After approval,
+it cuts the release locally with `WEGA_RELEASE_LOCAL_ONLY=1` and makes the separately approved
+atomic push from the primary checkout.
 
 ---
 
 ## 1. Before you start
 
-- Check the fetch and push URLs with `git remote -v`. Both must point to the
-  [WegaMacUpdater organization repository](https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater).
-
-- Be on `main`, with a clean working tree, not behind `origin/main`. The script refuses
-  otherwise, and says how to fix it. Being ahead of `origin/main` is fine: the atomic push
-  sends those commits together with the tag, and `release.yml` gates that exact commit.
+- Use a clean `main` up to date with `origin/main`. The `origin` remote should fetch from and
+  push to the [WegaMacUpdater organization repository](https://github.com/SeniorDeveloper-pl-Dominik-Sienkiewicz/WegaMacUpdater).
+  If local `main` is ahead, the atomic push includes those commits.
 - The version lives in exactly one place: `AppMetadata.version` in
   [`Sources/WegaHelperKit/AppMetadata.swift`](Sources/WegaHelperKit/AppMetadata.swift).
   Never edit it by hand — the script owns it, and the workflow refuses any tag that
@@ -41,10 +36,8 @@ git push --atomic origin main vX.Y.Z               # the irreversible step
 
 ## 2. Write the notes
 
-The release notes are written and approved **before** the script runs. The script copies them
-verbatim; it never derives, merges, reorders or rewrites text, and it does not read commits.
-The section becomes the GitHub Release description as it stands, so write it as a user would
-read it.
+Write and approve the release notes **before** cutting the release. The script copies them
+verbatim. The section becomes the GitHub Release description as it stands.
 
 Put the notes in one of two places:
 
@@ -59,19 +52,25 @@ copied byte for byte. Empty notes are refused.
 ## 3. Cut
 
 ```bash
+./scripts/release.sh           # 0.1.5 -> 0.1.6
 ./scripts/release.sh patch      # 0.1.5 -> 0.1.6
 ./scripts/release.sh minor      # 0.1.5 -> 0.2.0
 ./scripts/release.sh major      # 0.1.5 -> 1.0.0
 ./scripts/release.sh 0.2.0      # explicit version
 ```
 
-Add `--notes FILE` to publish a file instead of `[Unreleased]`, and `--dry-run` to run every
-check and print both diffs without touching anything.
+Add `--notes FILE` to publish the contents of a file in place of `[Unreleased]`.
 
-In one step the script bumps `AppMetadata.version`, writes `## [X.Y.Z] — YYYY-MM-DD` into
+The script shows commit hashes and subjects up to the current `main` tip. The range starts
+after the newest version tag on `origin` whose commit is in that history. For a first release,
+the list starts at the beginning of the history. The prompt defaults to cancellation.
+Use `--yes` when a non-interactive invocation already has approval.
+
+After confirmation the script bumps `AppMetadata.version`, writes `## [X.Y.Z] — YYYY-MM-DD` into
 `CHANGELOG.md` with the notes beneath it, commits `chore(release): vX.Y.Z` containing exactly
-those two files, and creates the annotated tag `vX.Y.Z`. With `--notes`, `[Unreleased]` is
-emptied and the number of lines it held is reported.
+those two files, creates the annotated tag `vX.Y.Z`, and atomically pushes the release commit
+and its tag to `origin`. With `--notes`, the script empties `[Unreleased]` and reports how many
+lines it contained.
 
 It refuses to run when:
 
@@ -79,33 +78,27 @@ It refuses to run when:
 - the version is not greater than `AppMetadata.version`;
 - the tag already exists, locally or on `origin`;
 - `main` is behind `origin/main`;
+- automatic publication cannot fetch `origin/main`, read its release tags, or resolve a single
+  push URL for `origin`;
 - `CHANGELOG.md` has no `## [Unreleased]` heading;
 - the notes are empty, contain a line starting with `## `, or the notes file is unreadable.
 
 `--notes` without a value is a usage error, and the old second-phase and abort options are gone.
 
-## 4. Review
-
-Nothing has left your machine yet. Read what was cut:
+## 4. Preview
 
 ```bash
-git show vX.Y.Z
+./scripts/release.sh --dry-run
 ```
 
-Changed your mind? Undo both the commit and the tag:
+The preview prints the commit list and both diffs without a confirmation prompt. It leaves
+the release files, commit history, and tags untouched.
 
-```bash
-git tag -d vX.Y.Z && git reset --hard HEAD~1
-```
+## 5. Retry a failed push
 
-## 5. Publish
-
-```bash
-git push --atomic origin main vX.Y.Z
-```
-
-`--atomic` sends the commit and the tag together, so neither can arrive without the other.
-This is the irreversible step; pushing the tag starts the release.
+If Git reports a push error, the script keeps the release commit and tag locally and prints
+the exact push command. Use that command after resolving the Git error to retry the same
+version. The GitHub Actions run starts when the tag arrives.
 
 ## 6. What happens next
 
@@ -273,10 +266,8 @@ git tag -d v0.1.6
   anyone installed, so *Fixed*, *Changed* and *Removed* would have been measured against a
   version no user ever ran. It is one `### Added` describing what Wega does, with `#### `
   subsections inside it. Every later section is an ordinary Keep a Changelog delta.
-- **The `[0.2.0]` link reference points at its release page** (QA-06). `previous_version()`
-  accepts only a version with a real tag, so no `compare/…` range from the untagged `0.1.0`
-  (which would 404) was generated. `release.sh` copies every older reference forward verbatim,
-  so a dead link written once would never repair itself.
+- **The `[0.2.0]` link reference points at its release page** (QA-06). A comparison link
+  needs a previous tag, and `0.1.0` shipped untagged. `release.sh` preserves older links.
 
 ## 10. Republishing the app catalog
 

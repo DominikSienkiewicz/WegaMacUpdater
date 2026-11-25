@@ -2,16 +2,11 @@
 # ---------------------------------------------------------------------------
 # test-release-guard.sh — test regresyjny jednofazowego `release.sh`.
 #
-# Zastępuje dwa dawne guardy: REL-06 (baseline) i REL-07 (nagłówki). REL-06 testował
-# wyszukiwanie „poprzedniego wydania” w historii commitów —
-# funkcję, której już nie ma, bo historię czyta skill, a nie skrypt. Intencja REL-07
-# (nigdy nie zgubić ani nie przekręcić ręcznie napisanego tekstu) przeżyła jako
-# „notatki są kopiowane dosłownie”.
-#
 # Notatki wydania stają się opisem GitHub Release bez żadnej dalszej obróbki, więc
 # skrypt ma je przepisać bajt w bajt (poza obciętymi pustymi liniami na brzegach),
-# odmówić tego, czego przepisać nie może, i niczego nie wypychać.
+# odmówić tego, czego przepisać nie może, i atomowo wysłać commit oraz tag.
 #
+# `--publication-unit` uruchamia tylko testy publikacji z podstawioną warstwą Git remote.
 # Przypadki 1–16 sprawdzają zachowanie prawdziwego skryptu na jednorazowych repozytoriach.
 # Przypadek 17 czyta skill wydania (.claude/skills/release/SKILL.md) z drzewa repozytorium
 # i pilnuje, żeby wywoływał skrypt i push dokładnie w formie, którą przyjmują release.sh
@@ -82,6 +77,10 @@ run_release() {
     RC=$?
 }
 
+run_local_release() {
+    WEGA_RELEASE_LOCAL_ONLY=1 run_release "$@"
+}
+
 # Obcina puste linie z brzegów; resztę zostawia bez zmian.
 trim_blanks() {
     awk '
@@ -121,6 +120,167 @@ snapshot() { printf '%s|%s|%s' "$(head_of "$1")" "$(tags_of "$1")" "$(dirty_of "
 
 write_notes() { printf '%s\n' "$2" > "$1"; }
 
+check_publication() {
+    local repo old commit tag git_bin="$SANDBOX/bin" push_args="$SANDBOX/push-args"
+    mkdir -p "$git_bin"
+    cat > "$git_bin/git" <<'GIT'
+#!/usr/bin/env bash
+case "$1" in
+    remote) printf '%s\n' 'https://example.invalid/o/r.git' ;;
+    fetch) exit "${RELEASE_TEST_FETCH_STATUS:-0}" ;;
+    ls-remote)
+        if [ "${!#}" = 'refs/tags/v*' ] && [ -n "${RELEASE_TEST_REMOTE_TAGS-}" ]; then
+            cat "$RELEASE_TEST_REMOTE_TAGS"
+        fi
+        ;;
+    push)
+        printf '%s\n' "$@" > "$RELEASE_TEST_PUSH_ARGS"
+        exit "${RELEASE_TEST_PUSH_STATUS:-0}"
+        ;;
+    *) exec "$RELEASE_TEST_GIT" "$@" ;;
+esac
+GIT
+    chmod +x "$git_bin/git"
+    local RELEASE_TEST_GIT
+    RELEASE_TEST_GIT="$(command -v git)"
+    export RELEASE_TEST_GIT
+
+    printf 'automatic release publication\n'
+    local name
+    for name in implicit explicit; do
+        repo="$(make_repo "$name" $'### Fixed\n- a')"
+        old="$(head_of "$repo")"
+        git -C "$repo" update-ref refs/remotes/origin/main "$old"
+        local args=()
+        if [ "$name" = explicit ]; then args=(patch); fi
+        rm -f "$push_args"
+        PATH="$git_bin:$PATH" RELEASE_TEST_PUSH_ARGS="$push_args" WEGA_RELEASE_LOCAL_ONLY=0 \
+            run_release "$repo" ${args[@]+"${args[@]}"} <<< yes
+        commit="$(head_of "$repo")"
+        tag="$(git -C "$repo" rev-parse --verify 'refs/tags/v0.1.1^{commit}' 2>/dev/null)"
+        if [ "$RC" -eq 0 ] && [ "$(version_of "$repo")" = 0.1.1 ] \
+           && [ "$commit" != "$old" ] && [ "$tag" = "$commit" ] \
+           && [ -f "$push_args" ] \
+           && [[ "$OUT" == *'feat: seed the fixture'*'Publish v0.1.1? [y/N]'*'>> bumped '* ]] \
+           && diff "$push_args" <(printf '%s\n' push --atomic --no-follow-tags origin \
+               "$commit:refs/heads/main" refs/tags/v0.1.1:refs/tags/v0.1.1); then
+            record_pass "$name patch pushes only the release commit and its tag, atomically"
+        else
+            record_fail "$name patch (exit $RC): $OUT"
+        fi
+    done
+
+    repo="$(make_repo publish-dry-run $'### Fixed\n- a')"
+    old="$(snapshot "$repo")"
+    git -C "$repo" update-ref refs/remotes/origin/main "$(head_of "$repo")"
+    rm -f "$push_args"
+    PATH="$git_bin:$PATH" RELEASE_TEST_PUSH_ARGS="$push_args" WEGA_RELEASE_LOCAL_ONLY=0 \
+        run_release "$repo" --dry-run
+    if [ "$RC" -eq 0 ] && [ "$(snapshot "$repo")" = "$old" ] \
+       && [ ! -e "$push_args" ] \
+       && [[ "$OUT" == *'0.1.0 -> 0.1.1 (patch)'*'feat: seed the fixture'*'>> dry run'* ]] \
+       && [[ "$OUT" != *'Publish v0.1.1?'* ]]; then
+        record_pass "dry-run previews the default patch without publishing or changing files"
+    else
+        record_fail "dry-run (exit $RC): $OUT"
+    fi
+
+    repo="$(make_repo publish-rejected $'### Fixed\n- a')"
+    git -C "$repo" update-ref refs/remotes/origin/main "$(head_of "$repo")"
+    PATH="$git_bin:$PATH" RELEASE_TEST_PUSH_ARGS="$push_args" RELEASE_TEST_PUSH_STATUS=1 \
+        WEGA_RELEASE_LOCAL_ONLY=0 run_release "$repo" patch --yes </dev/null
+    tag="$(git -C "$repo" rev-parse --verify 'refs/tags/v0.1.1^{commit}' 2>/dev/null)"
+    if [ "$RC" -ne 0 ] && [ -f "$push_args" ] && [ "$tag" = "$(head_of "$repo")" ] \
+       && [ -z "$(dirty_of "$repo")" ] && grep -Fq 'Retry the same push' <<<"$OUT" \
+       && [[ "$OUT" != *'Publish v0.1.1?'* ]]; then
+        record_pass "failed push keeps the commit and tag for retry without another version bump"
+    else
+        record_fail "failed push (exit $RC): $OUT"
+    fi
+
+    repo="$(make_repo fetch-failed $'### Fixed\n- a')"
+    old="$(snapshot "$repo")"
+    rm -f "$push_args"
+    PATH="$git_bin:$PATH" RELEASE_TEST_PUSH_ARGS="$push_args" RELEASE_TEST_FETCH_STATUS=1 \
+        WEGA_RELEASE_LOCAL_ONLY=0 run_release "$repo" patch
+    if [ "$RC" -ne 0 ] && [ "$(snapshot "$repo")" = "$old" ] && [ ! -e "$push_args" ]; then
+        record_pass "failed fetch stops publication before any release changes"
+    else
+        record_fail "failed fetch (exit $RC): $OUT"
+    fi
+
+    repo="$(make_repo explicit-empty $'### Fixed\n- a')"
+    old="$(snapshot "$repo")"
+    PATH="$git_bin:$PATH" RELEASE_TEST_PUSH_ARGS="$push_args" WEGA_RELEASE_LOCAL_ONLY=0 \
+        run_release "$repo" ''
+    if [ "$RC" -eq 2 ] && [ "$(snapshot "$repo")" = "$old" ] && [ ! -e "$push_args" ]; then
+        record_pass "an explicitly empty version is a usage error"
+    else
+        record_fail "empty version (exit $RC): $OUT"
+    fi
+
+    repo="$(make_repo notes-option $'### Fixed\n- a')"
+    write_notes "$repo/--dry-run" $'### Fixed\n- a'
+    old="$(snapshot "$repo")"
+    git -C "$repo" update-ref refs/remotes/origin/main "$(head_of "$repo")"
+    PATH="$git_bin:$PATH" RELEASE_TEST_PUSH_ARGS="$push_args" WEGA_RELEASE_LOCAL_ONLY=0 \
+        run_release "$repo" --notes --dry-run
+    if [ "$RC" -eq 2 ] && [ "$(snapshot "$repo")" = "$old" ] && [ ! -e "$push_args" ]; then
+        record_pass "a missing notes path cannot consume the dry-run option"
+    else
+        record_fail "missing notes path (exit $RC): $OUT"
+    fi
+
+    repo="$(make_repo publish-local-only $'### Fixed\n- a')"
+    git -C "$repo" update-ref refs/remotes/origin/main "$(head_of "$repo")"
+    rm -f "$push_args"
+    PATH="$git_bin:$PATH" RELEASE_TEST_PUSH_ARGS="$push_args" \
+        run_local_release "$repo" 0.1.1
+    if [ "$RC" -eq 0 ] && [ "$(tags_of "$repo")" = v0.1.1 ] \
+       && [ ! -e "$push_args" ] && grep -Fq 'git push --atomic origin main v0.1.1' <<<"$OUT" \
+       && [[ "$OUT" != *'Publish v0.1.1?'* ]]; then
+        record_pass "local-only release preserves the separate approved push"
+    else
+        record_fail "local-only release (exit $RC): $OUT"
+    fi
+
+    repo="$(make_repo publish-preview $'### Fixed\n- a')"
+    local base other remote_tags="$SANDBOX/release-tags"
+    base="$(head_of "$repo")"
+    other="$(git -C "$repo" commit-tree 'HEAD^{tree}' -m 'different branch')"
+    git -C "$repo" commit --allow-empty -qm 'feat: include this already pushed commit'
+    git -C "$repo" tag -a v0.1.0 -m 'Local-only version'
+    git -C "$repo" commit --allow-empty -qm 'fix: include the current tip'
+    git -C "$repo" update-ref refs/remotes/origin/main "$(head_of "$repo")"
+    printf '%s\t%s\n' "$other" refs/tags/v0.9.0 \
+        0000000000000000000000000000000000000000 refs/tags/v0.0.9 \
+        "$base" 'refs/tags/v0.0.9^{}' > "$remote_tags"
+    old="$(snapshot "$repo")"
+    PATH="$git_bin:$PATH" RELEASE_TEST_PUSH_ARGS="$push_args" RELEASE_TEST_REMOTE_TAGS="$remote_tags" \
+        WEGA_RELEASE_LOCAL_ONLY=0 run_release "$repo" patch <<< no
+    if [ "$RC" -eq 0 ] && [ "$(snapshot "$repo")" = "$old" ] && [ ! -e "$push_args" ] \
+       && [[ "$OUT" == *'Commits since v0.0.9'*'fix: include the current tip'*'feat: include this already pushed commit'*'Publish v0.1.1? [y/N]'*'>> release cancelled'* ]] \
+       && [[ "$OUT" != *'feat: seed the fixture'* ]]; then
+        record_pass "the preview uses the reachable origin tag and declining leaves the release untouched"
+    else
+        record_fail "release preview and decline (exit $RC): $OUT"
+    fi
+
+    PATH="$git_bin:$PATH" RELEASE_TEST_PUSH_ARGS="$push_args" RELEASE_TEST_REMOTE_TAGS="$remote_tags" \
+        WEGA_RELEASE_LOCAL_ONLY=0 run_release "$repo" patch </dev/null
+    if [ "$RC" -ne 0 ] && [ "$(snapshot "$repo")" = "$old" ] && [ ! -e "$push_args" ] \
+       && [[ "$OUT" == *'confirmation required'* ]]; then
+        record_pass "missing input cannot approve publication"
+    else
+        record_fail "missing confirmation (exit $RC): $OUT"
+    fi
+}
+
+check_publication
+if [ "${1-}" = "--publication-unit" ]; then
+    exit "$((failures != 0))"
+fi
+
 # --- 1 ------------------------------------------------------------------------
 printf 'notes file published verbatim\n'
 repo="$(make_repo verbatim '')"
@@ -134,7 +294,7 @@ Podsumowanie z $HOME, \1, & oraz 100% i `słowem`.
 ### Known issues
 - c
 NOTES
-run_release "$repo" 0.2.0 --notes "$notes"
+run_local_release "$repo" 0.2.0 --notes "$notes"
 if [ "$RC" -eq 0 ]; then
     if diff <(section "$repo" 0.2.0) <(trim_blanks "$notes") >/dev/null; then
         record_pass "section equals the notes file"
@@ -156,7 +316,7 @@ verbatim_out="$OUT"
 # --- 2 ------------------------------------------------------------------------
 printf '[Unreleased] is the source without --notes\n'
 repo="$(make_repo fromunreleased $'### Fixed\n- a')"
-run_release "$repo" 0.2.0
+run_local_release "$repo" 0.2.0
 if [ "$RC" -eq 0 ] && [ "$(section "$repo" 0.2.0)" = $'### Fixed\n- a' ]; then
     record_pass "section equals the [Unreleased] body"
 else
@@ -173,7 +333,7 @@ printf -- '--notes supersedes [Unreleased]\n'
 repo="$(make_repo supersede $'### Fixed\n- old')"
 notes="$SANDBOX/supersede-notes.md"
 write_notes "$notes" $'### Fixed\n- new'
-run_release "$repo" 0.2.0 --notes "$notes"
+run_local_release "$repo" 0.2.0 --notes "$notes"
 body="$(section "$repo" 0.2.0)"
 if [ "$RC" -eq 0 ] && grep -q -- '- new' <<<"$body" && ! grep -q -- '- old' <<<"$body"; then
     record_pass "section holds the notes, not the old body"
@@ -195,7 +355,7 @@ fi
 printf 'empty notes refused\n'
 repo="$(make_repo emptynotes '')"
 before="$(snapshot "$repo")"
-run_release "$repo" 0.2.0
+run_local_release "$repo" 0.2.0
 if [ "$RC" -eq 1 ] && [ "$(snapshot "$repo")" = "$before" ]; then
     record_pass "empty [Unreleased] refused, nothing changed"
 else
@@ -203,8 +363,8 @@ else
 fi
 notes="$SANDBOX/blank-notes.md"
 printf '   \n\n  \t\n' > "$notes"
-run_release "$repo" 0.2.0 --notes "$notes"
-if [ "$RC" -eq 1 ] && [ "$(snapshot "$repo")" = "$before" ]; then
+run_local_release "$repo" 0.2.0 --notes "$notes"
+if [ "$RC" -eq 1 ] && [ "$(snapshot "$repo")" = "$before" ] && grep -qF 'the release notes are empty' <<<"$OUT"; then
     record_pass "whitespace-only notes refused, nothing changed"
 else
     record_fail "whitespace-only notes (exit $RC) or state changed"
@@ -216,8 +376,9 @@ repo="$(make_repo h2 '')"
 notes="$SANDBOX/h2-notes.md"
 write_notes "$notes" $'### Fixed\n- a\n\n## [0.1.9]\n- b'
 before="$(snapshot "$repo")"
-run_release "$repo" 0.2.0 --notes "$notes"
-if [ "$RC" -eq 1 ] && [ "$(snapshot "$repo")" = "$before" ] && [ "$(version_of "$repo")" = "0.1.0" ]; then
+run_local_release "$repo" 0.2.0 --notes "$notes"
+if [ "$RC" -eq 1 ] && [ "$(snapshot "$repo")" = "$before" ] && [ "$(version_of "$repo")" = "0.1.0" ] \
+   && grep -qF "contain a line starting with '## ':" <<<"$OUT"; then
     record_pass "notes with a '## ' line refused, nothing written"
 else
     record_fail "'## ' line (exit $RC) or state changed"
@@ -265,9 +426,12 @@ repo="$(make_repo ahead '### Fixed
 printf 'x\n' > "$repo/extra.txt"
 git -C "$repo" add -A
 git -C "$repo" commit -q -m "feat: local only"
-run_release "$repo" 0.2.0
-if [ "$RC" -eq 0 ] && [ "$(git -C "$repo" cat-file -t refs/tags/v0.2.0 2>/dev/null)" = "tag" ]; then
-    record_pass "release cut while ahead of origin"
+run_release "$repo" 0.2.0 --yes
+origin="$SANDBOX/ahead.git"
+if [ "$RC" -eq 0 ] && [ "$(git -C "$origin" cat-file -t refs/tags/v0.2.0 2>/dev/null)" = "tag" ] \
+   && [ "$(git -C "$origin" rev-parse refs/heads/main)" = "$(head_of "$repo")" ] \
+   && [ "$(git -C "$origin" rev-parse 'refs/tags/v0.2.0^{commit}')" = "$(head_of "$repo")" ]; then
+    record_pass "release pushed while ahead of origin"
 else
     record_fail "ahead of origin (exit $RC): $OUT"
 fi
@@ -335,7 +499,7 @@ repo="$(make_repo linkstagged '')"
 set_changelog "$repo" "$older"
 git -C "$repo" remote add origin https://example.invalid/o/r.git
 git -C "$repo" tag -a v0.1.0 -m "0.1.0"
-run_release "$repo" 0.2.0
+run_local_release "$repo" 0.2.0
 if [ "$RC" -eq 0 ] \
    && grep -qxF '[0.2.0]: https://example.invalid/o/r/compare/v0.1.0...v0.2.0' "$repo/CHANGELOG.md" \
    && grep -qxF '[Unreleased]: https://example.invalid/o/r/compare/v0.2.0...HEAD' "$repo/CHANGELOG.md"; then
@@ -346,7 +510,7 @@ fi
 repo="$(make_repo linksuntagged '')"
 set_changelog "$repo" "$older"
 git -C "$repo" remote add origin https://example.invalid/o/r.git
-run_release "$repo" 0.2.0
+run_local_release "$repo" 0.2.0
 if [ "$RC" -eq 0 ] \
    && grep -qxF '[0.2.0]: https://example.invalid/o/r/releases/tag/v0.2.0' "$repo/CHANGELOG.md" \
    && grep -qxF '[Unreleased]: https://example.invalid/o/r/compare/v0.2.0...HEAD' "$repo/CHANGELOG.md"; then
@@ -380,7 +544,7 @@ repo="$(make_repo nonewline '')"
 set_changelog "$repo" $'# Changelog\n\n## [Unreleased]\n\n## [0.1.0] — 2026-01-01\n\n### Added\n- first\n'
 notes="$SANDBOX/nonewline-notes.md"
 printf '### Fixed\n- a' > "$notes"
-run_release "$repo" 0.2.0 --notes "$notes"
+run_local_release "$repo" 0.2.0 --notes "$notes"
 last_entry="$(grep -n -x -- '- a' "$repo/CHANGELOG.md" | head -1 | cut -d: -f1)"
 after_entry="$(sed -n "$((${last_entry:-0} + 1))p" "$repo/CHANGELOG.md")"
 after_blank="$(sed -n "$((${last_entry:-0} + 2))p" "$repo/CHANGELOG.md")"
@@ -396,7 +560,7 @@ repo="$(make_repo relative '')"
 write_notes "$repo/notes.md" $'### Fixed\n- rel'
 git -C "$repo" add -A
 git -C "$repo" commit -q -m "docs: notes fixture"
-run_release "$repo/Sources" 0.2.0 --notes ../notes.md
+run_local_release "$repo/Sources" 0.2.0 --notes ../notes.md
 if [ "$RC" -eq 0 ] && diff <(section "$repo" 0.2.0) <(trim_blanks "$repo/notes.md") >/dev/null; then
     record_pass "path resolved against the caller's directory"
 else
@@ -410,8 +574,8 @@ set_changelog "$repo" $'# Changelog\n\n## [0.1.0] — 2026-01-01\n\n### Added\n-
 notes="$SANDBOX/nounreleased-notes.md"
 write_notes "$notes" $'### Fixed\n- a'
 before="$(snapshot "$repo")"
-run_release "$repo" 0.2.0 --notes "$notes"
-if [ "$RC" -eq 1 ] && [ "$(snapshot "$repo")" = "$before" ]; then
+run_local_release "$repo" 0.2.0 --notes "$notes"
+if [ "$RC" -eq 1 ] && [ "$(snapshot "$repo")" = "$before" ] && grep -qF "has no '## [Unreleased]' heading" <<<"$OUT"; then
     record_pass "refused, nothing written"
 else
     record_fail "missing [Unreleased] (exit $RC) or state changed"
@@ -455,11 +619,11 @@ if [ ! -f "$skill" ]; then
     record_fail "SKILL.md missing: $skill"
 else
     absent=""
-    for needle in './scripts/release.sh' '--notes' '--dry-run' 'git push --atomic origin main v'; do
+    for needle in "WEGA_RELEASE_LOCAL_ONLY=1 ./scripts/release.sh X.Y.Z --notes 'NOTES'" '--dry-run' 'git push --atomic origin main v'; do
         grep -qF -- "$needle" "$skill" || absent="$absent '$needle'"
     done
     if [ -z "$absent" ]; then
-        record_pass "names release.sh, --notes, --dry-run and the atomic push"
+        record_pass "cuts the approved release locally before the separate atomic push"
     else
         record_fail "SKILL.md lacks:$absent"
     fi

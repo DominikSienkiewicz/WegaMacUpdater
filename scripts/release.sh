@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 #
-# release.sh — bump the version, publish the approved release notes, and cut the tag.
+# release.sh — cut a release and push its commit and tag to start GitHub Actions.
 #
 # Usage:
-#   ./scripts/release.sh <major|minor|patch|X.Y.Z> [--notes FILE] [--dry-run]
+#   ./scripts/release.sh [major|minor|patch|X.Y.Z] [--notes FILE] [--dry-run] [--yes]
 #
 # One phase. The release notes are written (and approved) BEFORE this script runs, and
 # the script copies them verbatim: it never derives, merges, reorders or rewrites text.
-# It bumps AppMetadata.version, writes CHANGELOG.md, commits `chore(release): vX.Y.Z`
-# with exactly those two files and creates the annotated tag.
+# It shows the commits since the latest reachable version tag on origin and asks for
+# confirmation. It bumps AppMetadata.version, writes CHANGELOG.md, commits `chore(release): vX.Y.Z`
+# with exactly those two files, creates the annotated tag and pushes both together.
 #
 # Notes come from --notes FILE, or, without it, from the [Unreleased] section of
 # CHANGELOG.md. Leading and trailing blank lines are trimmed; everything else is copied
@@ -16,27 +17,24 @@
 # because it would split the section. Empty notes are refused. With --notes,
 # [Unreleased] is emptied and the number of lines it held is reported.
 #
-# NOTHING IS EVER PUSHED. Until you run the printed `git push`, every step is local and
-# reversible. Push the commit and the tag together, so no ref can arrive without the
-# other:
-#
-#   git push --atomic origin main vX.Y.Z
-#
-# Pushing the tag is what starts the release: .github/workflows/release.yml triggers on
+# The atomic push starts .github/workflows/release.yml, which triggers on
 # `v*`, refuses a tag that disagrees with AppMetadata.version, builds, verifies and
-# publishes. See RELEASING.md.
+# publishes. If the push fails, retry the printed push to send the existing commit and
+# tag. The Claude Code release skill uses WEGA_RELEASE_LOCAL_ONLY=1 to keep the push
+# as a separate, approval-gated command. See RELEASING.md.
 #
 # Runs only on `main`, against a clean tree that is not behind origin/main. Being ahead
 # is allowed: the atomic push sends those commits with the tag, and release.yml gates
 # that exact commit anyway.
 #
 # Arguments:
-#   major|minor|patch  bump the current version accordingly (0.1.5 -> 0.2.0 for `minor`)
+#   major|minor|patch  bump the current version accordingly (default: patch)
 #   X.Y.Z              use this version verbatim
 #
 # Options:
 #   --notes FILE       publish the contents of FILE as the release notes
-#   --dry-run          resolve, run every check, print both diffs, change nothing
+#   --dry-run          show commits and both diffs without prompting or cutting a release
+#   --yes              confirm publication for non-interactive use
 #   -h, --help         show this header
 
 set -euo pipefail
@@ -47,9 +45,10 @@ CHANGELOG="CHANGELOG.md"
 SPEC=""
 NOTES_FILE=""
 DRY_RUN=0
+ASSUME_YES=0
 
 usage() {
-  echo "usage: $0 <major|minor|patch|X.Y.Z> [--notes FILE] [--dry-run]" >&2
+  echo "usage: $0 [major|minor|patch|X.Y.Z] [--notes FILE] [--dry-run] [--yes]" >&2
 }
 
 die() { echo "!! $1" >&2; shift; for line in "$@"; do echo "   $line" >&2; done; exit 1; }
@@ -57,18 +56,24 @@ die() { echo "!! $1" >&2; shift; for line in "$@"; do echo "   $line" >&2; done;
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1; shift ;;
+    --yes) ASSUME_YES=1; shift ;;
     --notes)
-      [ $# -ge 2 ] && [ -n "$2" ] || { echo "--notes needs a file" >&2; usage; exit 2; }
+      [ $# -ge 2 ] && [ -n "$2" ] && [[ "$2" != -* ]] || { echo "--notes needs a file" >&2; usage; exit 2; }
       NOTES_FILE="$2"; shift 2 ;;
     -h|--help) awk 'NR==1{next} /^#/{sub(/^# ?/,"");print;next} {exit}' "$0"; exit 0 ;;
     -*) echo "unknown option: $1" >&2; usage; exit 2 ;;
     *)
+      [ -n "$1" ] || { usage; exit 2; }
       if [ -z "$SPEC" ]; then SPEC="$1"; else echo "unexpected extra argument: $1" >&2; exit 2; fi
       shift ;;
   esac
 done
 
-[ -n "$SPEC" ] || { usage; exit 2; }
+SPEC="${SPEC:-patch}"
+AUTO_PUSH=1
+if [ "$DRY_RUN" -eq 1 ] || [ "${WEGA_RELEASE_LOCAL_ONLY:-0}" = 1 ]; then
+  AUTO_PUSH=0
+fi
 
 # The notes path belongs to the caller's directory, and the next line leaves it.
 case "$NOTES_FILE" in
@@ -110,9 +115,27 @@ bump_version() {
 
 tag_exists_locally() { git rev-parse -q --verify "refs/tags/$1" >/dev/null 2>&1; }
 
-tag_exists_on_origin() {
-  git remote get-url origin >/dev/null 2>&1 || return 1
-  [ -n "$(git ls-remote --tags origin "refs/tags/$1" 2>/dev/null)" ]
+remote_release_tags() {
+  git ls-remote --tags --sort=-version:refname origin 'refs/tags/v*' 2>/dev/null |
+    awk '
+      {
+        name = $2
+        sub(/^refs\/tags\//, "", name)
+        peeled = sub(/\^\{\}$/, "", name)
+        if (name !~ /^v[0-9]+\.[0-9]+\.[0-9]+$/) next
+        if (peeled) target[name] = $1
+        else {
+          ordered[++count] = name
+          object[name] = $1
+        }
+      }
+      END {
+        for (i = 1; i <= count; i++) {
+          name = ordered[i]
+          printf "%s\t%s\n", name, (name in target ? target[name] : object[name])
+        }
+      }
+    '
 }
 
 require_main() {
@@ -124,8 +147,19 @@ require_main() {
 }
 
 require_in_sync() {
-  git remote get-url origin >/dev/null 2>&1 || return 0
-  if ! git fetch --quiet origin main 2>/dev/null; then
+  local push_url
+  if ! git remote get-url origin >/dev/null 2>&1; then
+    [ "$AUTO_PUSH" -eq 0 ] || die "origin is required to publish a release"
+    return 0
+  fi
+  if [ "$AUTO_PUSH" -eq 1 ]; then
+    push_url="$(git remote get-url --push --all origin)" || die "cannot resolve the origin push URL"
+    case "$push_url" in
+      ''|*$'\n'*) die "origin must have exactly one push URL for an atomic release" ;;
+    esac
+  fi
+  if ! git fetch --quiet --no-tags origin main 2>/dev/null; then
+    [ "$AUTO_PUSH" -eq 0 ] || die "cannot fetch origin/main — no release was cut"
     echo "   fetch failed (offline?) — continuing against local refs only" >&2
     return 0
   fi
@@ -153,15 +187,12 @@ repo_url() {
   echo "${url%.git}"
 }
 
-# The most recent *released* version already in the changelog, if any. It is used only to
-# build the `compare/vPREV...vNEW` link, and a comparison range against a tag that does not
-# exist is a 404 — so a section heading alone does not qualify. `0.1.0` shipped untagged
-# (QA-06), so it must not become the baseline of the first release's link.
-previous_version() {
+# Preserve local changelog links for offline previews and the local-only cut.
+previous_local_version() {
   local version
   version="$(grep -m1 -o '^## \[[0-9][0-9.]*\]' "$CHANGELOG" 2>/dev/null | tr -d '#[] ' || true)"
   [ -n "$version" ] || return 0
-  tag_exists_locally "v$version" || tag_exists_on_origin "v$version" || return 0
+  tag_exists_locally "v$version" || return 0
   echo "$version"
 }
 
@@ -226,8 +257,6 @@ TAG="v$VERSION"
 ! tag_exists_locally "$TAG" || die "tag $TAG already exists locally" \
   "Re-tagging silently changes what was already released." \
   "  git tag -d $TAG   (only if it was never pushed)"
-! tag_exists_on_origin "$TAG" || die "tag $TAG already exists on origin — $VERSION is published"
-
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo "!! the working tree has uncommitted changes — commit or stash them first" >&2
   git status --short --untracked-files=no >&2
@@ -235,11 +264,35 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
 fi
 
 require_in_sync
+PREVIEW_HEAD="$(git rev-parse HEAD)"
 
 grep -q '^## \[Unreleased\]' "$CHANGELOG" || die "$CHANGELOG has no '## [Unreleased]' heading" \
   "The release section is written above the previous release, under that heading."
 
 echo ">> release $RESOLUTION"
+BASE_TAG=""
+COMMIT_RANGE="$PREVIEW_HEAD"
+if git remote get-url origin >/dev/null 2>&1 && REMOTE_TAGS="$(remote_release_tags)"; then
+  while IFS=$'\t' read -r remote_tag commit; do
+    [ "$remote_tag" != "$TAG" ] || die "tag $TAG already exists on origin"
+    if [ -n "$commit" ] && [ -z "$BASE_TAG" ] && git merge-base --is-ancestor "$commit" "$PREVIEW_HEAD" 2>/dev/null; then
+      BASE_TAG="$remote_tag"
+      COMMIT_RANGE="$commit..$PREVIEW_HEAD"
+    fi
+  done <<< "$REMOTE_TAGS"
+  PREV="${BASE_TAG#v}"
+  if [ -n "$BASE_TAG" ]; then
+    echo ">> Commits since $BASE_TAG on origin:"
+  else
+    echo ">> No release tag on origin in this history. Commits:"
+  fi
+else
+  [ "$AUTO_PUSH" -eq 0 ] || die "cannot read release tags from origin — no release was cut"
+  PREV="$(previous_local_version)"
+  echo ">> Origin tags unavailable. Commits from the beginning:"
+fi
+COMMIT_SUMMARY="$(git --no-pager log --format='%h %s' "$COMMIT_RANGE" --)"
+printf '%s\n\n' "${COMMIT_SUMMARY:-(no commits)}"
 
 TMP="$(mktemp -d -t wega-release)"
 trap 'rm -rf "$TMP"' EXIT
@@ -289,7 +342,6 @@ trim_blanks "$TMP/tail" > "$TMP/tail.trimmed"
 } > "$NEW"
 
 REPO_URL="$(repo_url)"
-PREV="$(previous_version)"
 {
   [ ! -s "$TMP/tail.trimmed" ] || printf '\n'
   if [ -n "$REPO_URL" ]; then
@@ -319,6 +371,20 @@ fi
 
 # ----------------------------------------------------------------------------- apply
 
+if [ "$AUTO_PUSH" -eq 1 ] && [ "$ASSUME_YES" -eq 0 ]; then
+  printf 'Publish %s? [y/N] ' "$TAG" >&2
+  IFS= read -r answer || die "confirmation required — answer at the prompt or pass --yes"
+  case "$answer" in
+    [yY]|[yY][eE][sS]) ;;
+    *) echo ">> release cancelled"; exit 0 ;;
+  esac
+fi
+
+require_main
+if [ "$(git rev-parse HEAD)" != "$PREVIEW_HEAD" ] || [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  die "main or tracked files changed after the preview — run the script again"
+fi
+
 cp "$NEW_VERSION_FILE" "$VERSION_FILE"
 
 # The bump is only real if the expression release.yml uses can read it back. Verifying it
@@ -333,7 +399,6 @@ echo ">> bumped $VERSION_FILE"
 cp "$NEW" "$CHANGELOG"
 echo ">> wrote $CHANGELOG section [$VERSION] - $DATE"
 
-ORIG_HEAD="$(git rev-parse HEAD)"
 git add -- "$VERSION_FILE" "$CHANGELOG"
 git commit -q -m "chore(release): $TAG" -- "$VERSION_FILE" "$CHANGELOG"
 echo ">> committed chore(release): $TAG"
@@ -341,12 +406,13 @@ echo ">> committed chore(release): $TAG"
 # If tagging fails the commit must not survive — a release commit without its tag is a
 # half-cut release that the next run's gates would refuse to clean up for you.
 if ! git tag -a "$TAG" -m "Wega Mac Updater $VERSION"; then
-  git reset --hard "$ORIG_HEAD"
+  git reset --hard "$PREVIEW_HEAD"
   die "could not create tag $TAG — the release commit was rolled back"
 fi
 echo ">> tagged $TAG"
 
-cat <<EOF
+if [ "$AUTO_PUSH" -eq 0 ]; then
+  cat <<EOF
 
    nothing has been published yet.
 
@@ -354,3 +420,15 @@ cat <<EOF
    publish:     git push --atomic origin main $TAG
    undo:        git tag -d $TAG && git reset --hard HEAD~1
 EOF
+  exit 0
+fi
+
+RELEASE_COMMIT="$(git rev-parse "refs/tags/$TAG^{commit}")"
+MAIN_REFSPEC="$RELEASE_COMMIT:refs/heads/main"
+TAG_REFSPEC="refs/tags/$TAG:refs/tags/$TAG"
+if ! git push --atomic --no-follow-tags origin "$MAIN_REFSPEC" "$TAG_REFSPEC"; then
+  die "could not confirm the push of $TAG — the commit and tag are available locally" \
+    "Retry the same push after resolving the Git error:" \
+    "  git push --atomic --no-follow-tags origin $MAIN_REFSPEC $TAG_REFSPEC"
+fi
+echo ">> pushed $TAG and main — GitHub Actions will build and publish the release"

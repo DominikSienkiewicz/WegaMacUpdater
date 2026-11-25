@@ -274,8 +274,11 @@ git fetch origin main && git rev-parse main origin/main && shasum -a 256 'NOTES'
 
 ## 6. Cut
 
+Set `WEGA_RELEASE_LOCAL_ONLY=1` on the cut so the script leaves the push to the separately
+approved Bash call below.
+
 ```bash
-./scripts/release.sh X.Y.Z --notes 'NOTES'
+WEGA_RELEASE_LOCAL_ONLY=1 ./scripts/release.sh X.Y.Z --notes 'NOTES'
 ```
 
 **Exit 0** prints `>> tagged vX.Y.Z` and the publish line `git push --atomic origin main vX.Y.Z`.
@@ -292,7 +295,7 @@ git push --atomic origin main vX.Y.Z
 ```
 
 **Exit 2 with a `usage:` line** is a malformed command line; nothing was checked or written. Run
-it once more in the exact form the dry run used, without `--dry-run`.
+it once more using the cut command above.
 
 **Any other non-zero exit.** Nothing was pushed. Look at the state:
 
