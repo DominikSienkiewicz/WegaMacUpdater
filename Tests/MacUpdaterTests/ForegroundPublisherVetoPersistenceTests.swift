@@ -13,24 +13,20 @@ struct ForegroundPublisherVetoPersistenceTests {
     }
 
     @Test func snapshotFailureStillReportsPublisherVetoBeforeReturning() throws {
-        // The preparation half moved to the Rollback split (file length), the run it
-        // feeds stayed in Actions — the ordering this pins spans both.
         let rollback = try String(
             contentsOf: packageRoot().appendingPathComponent("Sources/MacUpdater/ScanStore+Rollback.swift"),
             encoding: .utf8
         )
-        let actions = try String(
+        let updating = try String(
             contentsOf: packageRoot().appendingPathComponent("Sources/MacUpdater/ScanStore+Updating.swift"),
             encoding: .utf8
         )
-        let source = rollback + "\n" + actions
-
-        let preparationStart = try #require(source.range(of: "func prepareForegroundCasks("))
-        let preparationEnd = try #require(source.range(
+        let preparationStart = try #require(rollback.range(of: "func prepareForegroundCasks("))
+        let preparationEnd = try #require(rollback.range(
             of: "func foregroundResourceDecision(",
-            range: preparationStart.upperBound..<source.endIndex
+            range: preparationStart.upperBound..<rollback.endIndex
         ))
-        let preparation = source[preparationStart.lowerBound..<preparationEnd.lowerBound]
+        let preparation = rollback[preparationStart.lowerBound..<preparationEnd.lowerBound]
         let veto = try #require(preparation.range(
             of: "let publisherVetoes = CaskRollbackGuard.publisherVetoes("))
         let snapshot = try #require(preparation.range(of: "let snapshots = snapshotCasks("))
@@ -44,22 +40,24 @@ struct ForegroundPublisherVetoPersistenceTests {
         #expect(snapshot.lowerBound < missingSnapshot.lowerBound)
         #expect(snapshot.lowerBound < blocked.lowerBound)
 
-        let updateStart = try #require(source.range(of: "func runUpdate(targetKeys: Set<String>) async"))
-        let updateEnd = try #require(source.range(
+        let updateStart = try #require(updating.range(of: "private func runUpdateCoordinated("))
+        let updateEnd = try #require(updating.range(
             of: "func report(run: UpdateRunOutcome, planned:",
-            range: updateStart.upperBound..<source.endIndex
+            range: updateStart.upperBound..<updating.endIndex
         ))
-        let update = source[updateStart.lowerBound..<updateEnd.lowerBound]
+        let update = updating[updateStart.lowerBound..<updateEnd.lowerBound]
         let blockedCase = try #require(update.range(of: "case .blocked(let publisherVetoes):"))
         let record = try #require(update.range(of: "blockedRun.recordPublisherVetoes("))
         let report = try #require(update.range(of: "report(run: blockedRun, planned: plannedItems)"))
+        let earlyReturn = try #require(update.range(of: "\n                return\n", range: blockedCase.upperBound..<update.endIndex))
         // ARCH-08 — the mutation phase is the four lanes starting at once; the cask one
         // among them is what reaches brew.
         let brew = try #require(update.range(
             of: "let laneOutputs = await runBoundedOnMainActor(limit: 0, lanes)"))
         #expect(blockedCase.lowerBound < record.lowerBound)
         #expect(record.lowerBound < report.lowerBound)
-        #expect(report.lowerBound < brew.lowerBound,
+        #expect(report.lowerBound < earlyReturn.lowerBound)
+        #expect(earlyReturn.lowerBound < brew.lowerBound,
                 "SEC-02: the mismatch must be displayed before the mutation phase")
     }
 

@@ -241,8 +241,7 @@ struct RowAccessibilityTests {
         #expect(support.contains(".gesture(TapGesture().onEnded { focus(key); onInspect?(item) })"))
     }
 
-    /// The manual rows keep their own hint (Return and Space both open the inspector) and move
-    /// with the arrows like the package rows.
+    /// Manual rows move with the arrows and announce what Return and Space do for each row.
     @Test func manualRowsRoveToo() throws {
         let support = try source("Sources/MacUpdater/UpdateViewSupport.swift")
         let start = try #require(support.range(of: "struct ManualUpdateSection: View")).upperBound
@@ -250,7 +249,9 @@ struct RowAccessibilityTests {
         let manual = support[start..<end]
         for literal in [".onKeyPress(.downArrow)", ".onKeyPress(.upArrow)", ".focused($focusedKey, equals: key)",
                         ".focusable(onInspect != nil && UpdateRowFocus.isTabStop(key, in: keys, focused: tabStop, onScreen: onScreen && isEnabled))",
-                        ".accessibilityHint(tr(\"Naciśnij Return lub spację, aby pokazać szczegóły.\"))"] {
+                        ".accessibilityHint(isQueueable",
+                        "? tr(\"Naciśnij Return, aby pokazać szczegóły, lub spację, aby zmienić kolejkę.\")",
+                        ": tr(\"Naciśnij Return lub spację, aby pokazać szczegóły.\"))"] {
             #expect(manual.contains(literal), "\(literal)")
         }
     }
