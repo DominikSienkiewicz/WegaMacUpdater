@@ -14,9 +14,9 @@ struct UpdateRunHandOffGroup: View {
     let onPinManual: (ManualOutdatedApp) -> Void
 
     var body: some View {
-        if !scan.visibleManual.isEmpty {
+        if !scan.externalManualUpdates.isEmpty {
             ManualUpdateSection(
-                items: scan.visibleManual, busyToken: scan.manualBusy,
+                items: scan.externalManualUpdates, busyToken: scan.manualBusy,
                 onInstall: { token in Task { await scan.installManual(token: token) } },
                 title: tr("Do dokończenia u producenta"), tint: .wegaToffee,
                 inspectedKey: scan.inspectedKey, onIgnore: scan.ignoreManual,

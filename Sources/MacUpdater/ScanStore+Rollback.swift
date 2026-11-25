@@ -184,13 +184,20 @@ extension ScanStore {
     /// closed (there is nothing to clone), only disclosed: the row gets an honest "no
     /// protection" badge, and the log says so before the upgrade runs, not after.
     func resolveRollbackProtection() async {
-        guard let model, let casks = brewOutdated?.casks, !casks.isEmpty else {
+        let regularTokens = brewOutdated?.casks.map(\.name) ?? []
+        let replacementTokens = manualOutdated.compactMap { app -> String? in
+            guard case .cask(let token) = app.source,
+                  app.path.pathExtension.lowercased() == "app", !app.rolledBack else { return nil }
+            return token
+        }
+        let tokens = Set(regularTokens + replacementTokens)
+        guard let model, !tokens.isEmpty else {
             caskProtection = [:]
             caskProfiles = [:]
             caskProtectionResolved = []
             return
         }
-        let profiles = (try? await model.brewService.caskArtifactProfiles(tokens: casks.map(\.name))) ?? []
+        let profiles = (try? await model.brewService.caskArtifactProfiles(tokens: tokens.sorted())) ?? []
         var verdicts: [String: RollbackProtection.Verdict] = [:]
         for profile in profiles {
             let verdict = RollbackProtection.evaluate(profile: profile)
@@ -201,7 +208,7 @@ extension ScanStore {
             }
         }
         caskProtection = verdicts
-        caskProtectionResolved = Set(casks.map(\.name))
+        caskProtectionResolved = tokens
         caskProfiles = Dictionary(profiles.map { ($0.token, $0) }, uniquingKeysWith: { first, _ in first })
         // Sizes are a network round-trip per cask; they are not worth paying for until the
         // user asks to see the plan.

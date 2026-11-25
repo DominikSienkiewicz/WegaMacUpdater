@@ -7,23 +7,22 @@ import MacUpdaterCore
 // the per-item outcome, the run's report, and the restart offer that follows. The rollback net
 // around it is `ScanStore+Rollback`; deciding *what* to run is `ScanStore+UpdatePlan`.
 extension ScanStore {
-    func runUpdate(targetKeys: Set<String>) async {
+    func runUpdate(targetKeys: Set<String>, approvedReplacements: [QueuedCaskReplacement] = []) async {
         let targetKeys = ServiceVendorUpdatePolicy.eligibleKeys(DockerDesktopUpdatePolicy.eligibleKeys(targetKeys))
+        let replacements = approvedReplacements.filter { targetKeys.contains($0.key) }
         guard !targetKeys.isEmpty else { return }
         let inherited = UpdateDiagnostics.current
         let trace = inherited ?? DiagnosticRun(trigger: "foreground", subjects: targetKeys.sorted())
         defer { if inherited == nil { trace.finish() } }
         await UpdateDiagnostics.$current.withValue(trace) {
-            await runUpdateTraced(targetKeys: targetKeys)
+            await runUpdateTraced(targetKeys: targetKeys, replacements: replacements)
         }
     }
 
-    private func runUpdateTraced(targetKeys: Set<String>) async {
-        // REL-12 — a clean stop switch per run; a previous cancellation may not leak in.
-        resetUpdateInterruption()
+    private func runUpdateTraced(targetKeys: Set<String>, replacements: [QueuedCaskReplacement]) async {
         do {
             try await dependencies.upgrades.performWriteLease(.foregroundUpgrade) { lease in
-                await self.runUpdateCoordinated(targetKeys: targetKeys, operationLease: lease)
+                await self.runUpdateCoordinated(targetKeys: targetKeys, replacements: replacements, operationLease: lease)
             }
         } catch is CancellationError {
             UpdateDiagnostics.record("update.cancelled", fields: ["stage": "writeLease"])
@@ -35,9 +34,12 @@ extension ScanStore {
 
     private func runUpdateCoordinated(
         targetKeys: Set<String>,
+        replacements: [QueuedCaskReplacement],
         operationLease: OperationCoordinator.Lease
     ) async {
-        guard model != nil, !targetKeys.isEmpty else {
+        let packageItems = allItems.filter { targetKeys.contains($0.key) }
+        let plannedItems = packageItems + replacements.map(\.item)
+        guard model != nil, !plannedItems.isEmpty else {
             UpdateDiagnostics.record("update.skipped", fields: ["reason": model == nil ? "modelUnavailable" : "emptySelection"])
             return
         }
@@ -50,6 +52,7 @@ extension ScanStore {
             return
         }
         defer { dependencies.upgradeMutex.release() }
+        resetUpdateInterruption()
         // C2 stage 4 — the next run closes the previous run's summary, once it holds the lock.
         closeRunReport()
         updating = true
@@ -59,12 +62,11 @@ extension ScanStore {
         // C2 — Wega stands still for a run; she sniffs only while a scan runs.
         emitWegaState(WegaState(pose: .idle, line: tr("Aktualizuję, chwila…")))
 
-        let plan          = UpdatePlanner.plan(selectedKeys: targetKeys)
+        let plan          = UpdatePlanner.plan(selectedKeys: Set(packageItems.map(\.key)))
         // The rows this run is about, captured before anything changes: the post-upgrade
         // rescan rewrites `allItems`, and an outcome has to keep pointing at the item it
         // was produced for. `name`/`key` here are what the tools and the rescan both use.
-        let plannedKeys   = targetKeys
-        let plannedItems  = allItems.filter { plannedKeys.contains($0.key) }
+        let plannedKeys   = plannedItems.map(\.key)
         for item in plannedItems {
             UpdateDiagnostics.record("update.plannedItem", fields: [
                 "key": item.key, "token": item.name, "kind": String(describing: item.kind),
@@ -104,10 +106,10 @@ extension ScanStore {
         defer { endRunBoard() }
         // Held casks take no part in the preparation: their download, disk margin or snapshot
         // must not block the updates that need no password.
-        let heldCaskNames = beginPasswordHold(plannedCaskNames: plannedCaskNames, planned: plannedItems)
+        let heldCaskNames = beginPasswordHold(plannedCaskNames: plannedCaskNames, planned: packageItems)
         let runnableCaskNames = plannedCaskNames.filter { !heldCaskNames.contains($0) }
         // REL-12 — zeroth boundary: stopping here also skips the snapshot/preflight work.
-        guard !shouldStopUpdate(before: Array(plannedKeys)) else {
+        guard !shouldStopUpdate(before: plannedKeys) else {
             updating = false
             report(run: UpdateRunOutcome(), planned: plannedItems)
             return
@@ -127,7 +129,7 @@ extension ScanStore {
                 ])
                 var blockedRun = UpdateRunOutcome()
                 blockedRun.recordPublisherVetoes(
-                    plannedItems.filter { $0.kind == .cask },
+                    packageItems.filter { $0.kind == .cask },
                     audits: publisherVetoes
                 )
                 if !blockedRun.summary.isEmpty { report(run: blockedRun, planned: plannedItems) }
@@ -157,7 +159,7 @@ extension ScanStore {
         // recorded before any lane starts rather than alongside what the lanes produce.
         if let caskPreparation {
             run.recordPublisherVetoes(
-                plannedItems.filter { $0.kind == .cask },
+                packageItems.filter { $0.kind == .cask },
                 audits: caskPreparation.publisherVetoes
             )
         }
@@ -166,7 +168,7 @@ extension ScanStore {
         let caskLanePreparation = caskArgs != nil && caskPreparation?.trustedCaskNames.isEmpty == false
             ? caskPreparation
             : nil
-        markCasksThatWillNotRun(plannedItems, trusted: caskLanePreparation?.trustedCaskNames ?? [])
+        markCasksThatWillNotRun(packageItems, trusted: caskLanePreparation?.trustedCaskNames ?? [])
 
         // The four lanes overlap. They drive four different tools over four different sets
         // of paths, so nothing one of them touches is anything another one can reach — and
@@ -178,11 +180,11 @@ extension ScanStore {
         // it as an argument would send it across a task boundary; capturing it in a
         // `@MainActor` closure keeps it on the one actor it never leaves.
         let lanes: [@MainActor @Sendable () async -> UpgradeLaneOutput] = [
-            { .rows(await self.runFormulaLane(items: plannedItems, arguments: formulaArgs)) },
-            { .rows(await self.runCaskLane(items: plannedItems, preparation: caskLanePreparation)) },
-            { .rows(await self.runNpmLane(items: plannedItems, names: npmNames)) },
+            { .rows(await self.runFormulaLane(items: packageItems, arguments: formulaArgs)) },
+            { .rows(await self.runCaskLane(items: packageItems, preparation: caskLanePreparation)) },
+            { .rows(await self.runNpmLane(items: packageItems, names: npmNames)) },
             {
-                let mas = await self.runMasLane(items: plannedItems, appStoreIDs: masAppStoreIDs)
+                let mas = await self.runMasLane(items: packageItems, appStoreIDs: masAppStoreIDs)
                 return .appStore(items: mas.items, failure: mas.failure)
             }
         ]
@@ -197,7 +199,8 @@ extension ScanStore {
             if case .rows(let rows) = output { return rows }
             return []
         }
-        let byKey = Dictionary(laneRows.map { ($0.item.key, $0) }, uniquingKeysWith: { first, _ in first })
+        let replacementRows = await runQueuedCaskReplacements(replacements)
+        let byKey = Dictionary((laneRows + replacementRows).map { ($0.item.key, $0) }, uniquingKeysWith: { first, _ in first })
         for item in plannedItems {
             guard let result = byKey[item.key] else { continue }
             fold(result, into: &run)
@@ -252,14 +255,42 @@ extension ScanStore {
         // The rescan is the last phase an item has to clear: whatever the tool claimed, an
         // item the fresh list still reports was not updated, and a rescan that could not
         // answer leaves the upgrade unconfirmed rather than confirmed-good.
-        run.applyRescan(stillOutdatedKeys: Set(allItems.map(\.key)),
+        let unchangedReplacements = replacements.filter { !$0.reachedApprovedVersion }.map(\.key)
+        let outdated = stillOutdatedKeys.union(unchangedReplacements)
+        run.applyRescan(stillOutdatedKeys: outdated,
                         confirmed: Set(plannedItems.map(\.kind)).isSubset(of: confirmedSourceKinds))
 
+        let replacementPaths = Dictionary(replacements.map { ($0.token, $0.app.path) }, uniquingKeysWith: { first, _ in first })
+        let replacementOperations = Dictionary(replacementRows.compactMap { row in
+            row.operationID.map { (row.item.key, $0) }
+        }, uniquingKeysWith: { first, _ in first })
+        offerQueuedReplacementRestarts(
+            run.summary, paths: replacementPaths, operations: replacementOperations, running: runningApplications
+        )
         report(run: run, planned: plannedItems,
                caskOperationID: caskPreparation?.operation.operation.id,
-               caskAppPaths: caskPreparation?.appPaths ?? [:])
+               caskAppPaths: (caskPreparation?.appPaths ?? [:]).merging(replacementPaths) { first, _ in first },
+               replacementOperations: replacementOperations)
         // LT-01 — the run's committed snapshots are the undo section's content.
         refreshUndoableUpdates()
+    }
+
+    private func offerQueuedReplacementRestarts(
+        _ summary: UpdateRunSummary, paths: [String: URL],
+        operations: [String: UUID], running: [RunningApplicationTarget]
+    ) {
+        for outcome in summary.upgraded {
+            guard let operationID = operations[outcome.key],
+                  let candidate = RunningCaskDetector.runningApps(
+                    tokens: [outcome.name], appPaths: paths, running: running, overrides: MacUpdaterConstants.restartMap
+                  ).first, !restartCandidates.contains(candidate) else { continue }
+            restartCandidates.append(candidate)
+            restartDiagnosticOperationIDs[candidate.processName] = operationID
+        }
+    }
+
+    private var stillOutdatedKeys: Set<String> {
+        Set(allItems.map(\.key) + visibleManual.map(QueuedCaskReplacement.key(for:)))
     }
 
     /// Turns the run into what the user sees: the report the after-update summary shows (C2
@@ -267,7 +298,7 @@ extension ScanStore {
     /// row and a banner), and the banners whose button fixes a failure. A changed publisher
     /// waits in the report; `closeRunReport()` raises its sticky banner if it is still unsettled.
     func report(run: UpdateRunOutcome, planned: [OutdatedItem], caskOperationID: UUID? = nil,
-                caskAppPaths: [String: URL] = [:]) {
+                caskAppPaths: [String: URL] = [:], replacementOperations: [String: UUID] = [:]) {
         let summary = run.summary
         let report = UpdateRunReport.make(
             planned: planned, summary: summary,
@@ -275,7 +306,7 @@ extension ScanStore {
             wasStopped: updateInterruption.didSkipWork,
             startedAt: runBoard.startedAt, finishedAt: dependencies.now(),
             caskOperationID: caskOperationID, caskAppPaths: caskAppPaths,
-            stillOutdatedKeys: Set(allItems.map(\.key)),
+            replacementOperations: replacementOperations, stillOutdatedKeys: stillOutdatedKeys,
             confirmed: Set(planned.map(\.kind)).isSubset(of: confirmedSourceKinds)
         )
         setRunReport(report)
@@ -413,6 +444,9 @@ extension ScanStore {
     /// already recorded as skipped by `shouldStopUpdate`, and adding a verdict for it here
     /// would report on a row nothing ever attempted.
     func fold(_ result: LaneItemResult, into run: inout UpdateRunOutcome) {
+        if let veto = result.publisherVeto {
+            run.recordPublisherVetoes([result.item], audits: [result.item.name: veto])
+        }
         guard let outcome = result.outcome else { return }
         run.record([result.item], outcome: outcome)
         if let validation = result.validation {

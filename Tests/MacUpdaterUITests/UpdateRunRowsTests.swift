@@ -100,7 +100,7 @@ struct UpdateRunRowsTests {
         #expect(section.contains("runStatus: run?.rowStatus(for: item)"))
         #expect(section.contains(".opacity(run?.isDimmed(item.key) == true ? 0.55 : 1)"))
         let manual = try slice(support, from: "struct ManualUpdateSection: View", to: "struct ManualUpdateActionView: View")
-        #expect(manual.contains("note: run != nil ? tr(\"u producenta\") : subtitle"))
+        #expect(manual.contains("note: run != nil && queueableKeys.isDisjoint(with: keys) ? tr(\"u producenta\") : subtitle"))
         withLanguage(.en) { #expect(tr("u producenta") == "with the vendor") }
         let row = try slice(try source("Sources/MacUpdater/SharedViews.swift"), from: "struct PackageRow: View", to: "// MARK: - Rollback badge")
         #expect(row.contains("UpdateRunStatusChip(status: runStatus, isStopping: runIsStopping)"))
