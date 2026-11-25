@@ -269,10 +269,13 @@ struct UpdateBand<Action: View>: View {
                 .foregroundStyle(Color.wegaBandText)
                 .lineLimit(mode.headlineLineLimit(in: layout))
                 .accessibilityAddTraits(.isHeader)
-            Text(mode.line(results: presentation))
-                .font(.wega(.callout))
-                .foregroundStyle(Color.wegaBandSecondaryText)
-                .lineLimit(scan == nil && run == nil ? (layout == .regular ? 2 : 1) : layout.scanLineLimit)
+            let line = mode.line(results: presentation)
+            if !line.isEmpty {
+                Text(line)
+                    .font(.wega(.callout))
+                    .foregroundStyle(Color.wegaBandSecondaryText)
+                    .lineLimit(scan == nil && run == nil ? (layout == .regular ? 2 : 1) : layout.scanLineLimit)
+            }
             if layout != .regular {
                 compactRow
             }

@@ -72,9 +72,11 @@ struct UpdateView: View {
     @State private var showUpdateConfirmation = false
     /// UXP-11 — the sheet behind "Ukryte przez Twoje reguły".
     @State private var showsHiddenRules = false
+    @State private var showsRunSummary = false
     /// UX-18 — how the list is grouped; by urgency unless the user picks by source.
     @AppStorage(UpdateGrouping.storageKey) private var grouping: UpdateGrouping = .default
 
+    private var displayedReport: UpdateRunReport? { showsRunSummary ? scan.runReport : nil }
     private var allItems: [OutdatedItem] { scan.allItems }
     private var visibleItems: [OutdatedItem] { scan.visibleItems(for: updateFilter) }
     private var visibleManual: [ManualOutdatedApp] { scan.visibleManual }
@@ -139,6 +141,12 @@ struct UpdateView: View {
             .onChange(of: updateFilter) { _, filter in
                 UpdateFilterInteraction.apply(filter, to: scan)
             }
+            .onChange(of: scan.runReport?.finishedAt) { _, finishedAt in
+                showsRunSummary = false
+                if onScreen, finishedAt != nil, scan.scopeCounts.all > 0, !scopeHasUpdates {
+                    onScopeChange?(.all)
+                }
+            }
             .onAppear {
                 // The tree this view sits in is rebuilt whenever the language re-keys it
                 // (and whenever the sidebar tab changes), handing us fresh closures over
@@ -188,7 +196,7 @@ struct UpdateView: View {
                 run: { scan.startCheck() }
             ))
             .focusedSceneValue(\.runUpdateAction, WegaMenuAction(
-                isEnabled: scan.status == .results && allowsUpdateRun && scan.runReport == nil,
+                isEnabled: scan.status == .results && allowsUpdateRun && displayedReport == nil,
                 run: { requestUpdate() }
             ))
             // UXP-23 — ⌘. cancels the store's scan when no update runs; ⇧⌘A asks the select-all
@@ -199,7 +207,7 @@ struct UpdateView: View {
             ))
             .focusedSceneValue(\.selectAllVisibleAction, WegaMenuAction(
                 isEnabled: scan.status == .results && !visibleItems.isEmpty
-                    && ScanSelectionGate.allowsListSelection(isRefreshing: scan.isRefreshing, isUpdating: scan.updating) && scan.runReport == nil,
+                    && ScanSelectionGate.allowsListSelection(isRefreshing: scan.isRefreshing, isUpdating: scan.updating) && displayedReport == nil,
                 run: { scan.selectAllVisible(filter: updateFilter) }
             ))
     }
@@ -254,18 +262,18 @@ struct UpdateView: View {
     // MARK: Results
     private var resultsView: some View {
         VStack(spacing: 0) {
-            // The band reports the scan, the run, its check and its summary, and carries the update
-            // button; with nothing to update it says so (owner, 2026-11-22). The list header carries
-            // select-all, and gives its row to the summary's header while the summary is open.
             resultsBand
                 .padding(.horizontal, WegaLayout.listGutter)
                 .padding(.top, WegaLayout.sectionSpacing)
             VStack(alignment: .leading, spacing: 12) {
-                if scan.runReport != nil {
-                    UpdateRunSummaryHeader(remainingCount: scan.scopeCounts.all, categoryHasRows: showsRows,
-                                           onClose: { scan.closeRunReport() }, onShowAll: { onScopeChange?(.all) })
+                if displayedReport != nil {
+                    UpdateRunSummaryHeader(remainingCount: scan.scopeCounts.all, categoryHasRows: scopeHasUpdates,
+                                           onClose: { showsRunSummary = false }, onShowAll: { onScopeChange?(.all) })
                 } else {
                     listHeader
+                }
+                if let report = scan.runReport, displayedReport == nil {
+                    UpdateRunRecap(report: report, onShow: { showsRunSummary = true })
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -326,8 +334,8 @@ struct UpdateView: View {
             onShowPlan: { scan.showPlanPreview = true },
             onStop: { scan.cancelUpdate() },
             onShowLog: { scan.showLog = true },
-            summary: scan.runReport.map(summaryPresentation),
-            onCloseSummary: { scan.closeRunReport() },
+            summary: displayedReport.map(summaryPresentation),
+            onCloseSummary: { showsRunSummary = false },
             scanButton: scanRoundButton(style: .band),
             action: { layout in
                 UpdateBandButton(
@@ -360,7 +368,7 @@ struct UpdateView: View {
             lastCheck:      scan.lastCheck,
             freshness:      scan.freshness() ?? .fresh,
             sources:        UpdateBandPresentation.SourceChip.chips(from: scan.sourceReports),
-            wegaLine:       wegaLine,
+            wegaLine:       scan.runReport == nil ? wegaLine : "",
             incompleteNote: scan.lastScanComplete ? nil : tr("skan niepełny"),
             handOffCount:   scan.handOffCount(for: updateFilter),
             catalogAgeMinutes: scan.catalogAgeMinutes,
@@ -429,14 +437,7 @@ struct UpdateView: View {
                     .padding(.bottom, 8)
             }
 
-            // C2 stage 4 — the run's result takes the rows' place until the summary closes. A run
-            // that empties the list, or the category on screen, leaves it blank until then: no
-            // hero and no empty category before the result.
-            // Otherwise the rows on screen are the ones the scan is in the middle of replacing, so
-            // for its duration they are a report, not a menu: inert. The scanner lies on them
-            // (owner, 2026-11-22: people clicked rows that could not answer): a half veil, a
-            // sweeping line and a label, with nothing blurred, so every row stays readable.
-            if let report = scan.runReport {
+            if let report = displayedReport {
                 UpdateRunSummaryList(report: report, onShowLog: { scan.showLog = true }, handOffs: {
                     UpdateRunHandOffGroup(onPinManual: requestPinManual)
                 })
@@ -533,12 +534,11 @@ struct UpdateView: View {
         !(allItems.isEmpty && visibleManual.isEmpty)
     }
 
-    /// Whether the list shows rows rather than one of its empty states — the one answer
-    /// `listColumn`, the list header's scan note and a run's blank area read.
-    private var showsRows: Bool {
-        hasResults && (Self.filterHasContent(updateFilter, items: allItems, manual: visibleManual, isSecurity: scan.isSecurityApp)
-                       || !scan.restartCandidates.isEmpty)
+    private var scopeHasUpdates: Bool {
+        Self.filterHasContent(updateFilter, items: allItems, manual: visibleManual, isSecurity: scan.isSecurityApp)
     }
+
+    private var showsRows: Bool { scopeHasUpdates || !scan.restartCandidates.isEmpty }
 
     @ViewBuilder
     private var listColumn: some View {

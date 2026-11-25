@@ -3,16 +3,47 @@ import MacUpdaterCore
 
 // MARK: - C2 stage 4 — the list while the after-update summary is open
 //
-// The summary replaces the rows until it is closed: what the run did to every planned item, the
+// The expanded summary replaces the rows until it is collapsed: what the run did to every planned item, the
 // hand-offs the band counts, the restart bar and the run's log. The run's own rows can be neither
 // queued nor inspected (the inspector's after-update mode is stage 5), so ⇧⌘A and ⌘⏎ have nothing
 // to reach; the hand-off rows keep their inspector, as in the list.
+
+struct UpdateRunRecap: View {
+    let report: UpdateRunReport
+    let onShow: () -> Void
+
+    var title: String {
+        if report.status == .finished && report.holdsAttention {
+            return "\(report.statusTitle) · \(tr("Wymaga uwagi"))"
+        }
+        return report.statusTitle
+    }
+
+    var body: some View {
+        HStack(spacing: WegaLayout.checkboxSpacing) {
+            Label {
+                Text(title).foregroundStyle(.secondary)
+            } icon: {
+                Image(systemName: report.holdsAttention ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                    .foregroundStyle(report.holdsAttention ? Color.wegaToffee : Color.wegaSuccess)
+                    .accessibilityHidden(true)
+            }
+            .lineLimit(1)
+            .help(title)
+            Spacer(minLength: 0)
+            Button(tr("Pokaż podsumowanie"), action: onShow)
+                .buttonStyle(.link)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .font(.wega(.subheadline))
+    }
+}
 
 /// The list header's row while the summary is open: the queue column held empty, „Wynik
 /// aktualizacji” in the group headers' monospaced capitals and, while anything is left to update,
 /// the link that closes the summary — the same door as the band's „Zamknij podsumowanie”. The
 /// held queue column is as tall as the list header's select-all circle, its tallest control, so
-/// the list does not move when the summary opens or closes.
+/// the filter row and the summary header use the same height.
 struct UpdateRunSummaryHeader: View {
     let remainingCount: Int
     /// Whether the category on screen still has rows (`UpdateView.showsRows`).

@@ -23,6 +23,7 @@ extension Translations {
         "Bez potwierdzenia: %@": "Not confirmed: %@",
         "Nie zaczęłam: %@": "Not started: %@",
         "U producenta: %@": "With the developer: %@",
+        "Pokaż podsumowanie": "Show summary",
         "Zamknij podsumowanie": "Close summary",
         "Wynik aktualizacji": "Update result",
         "Wymaga uwagi": "Needs attention",
