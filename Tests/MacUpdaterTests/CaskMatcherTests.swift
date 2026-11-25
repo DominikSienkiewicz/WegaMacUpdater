@@ -2,6 +2,20 @@ import XCTest
 @testable import MacUpdaterCore
 
 final class CaskMatcherTests: XCTestCase {
+    func testGoogleGeminiDoesNotInheritTheMacPawCask() {
+        let match = CaskMatcher().match(
+            applicationName: "Gemini",
+            bundleIdentifier: "com.google.GeminiMacOS",
+            installedCasks: ["gemini"],
+            availableCasks: [
+                BrewCask(token: "gemini", name: ["Gemini"]),
+                BrewCask(token: "google-gemini", name: ["Gemini"]),
+            ]
+        )
+
+        XCTAssertEqual(match, .candidate(token: "google-gemini", provenance: .bundleIdentifier))
+    }
+
     func testUsesCustomMappingsBeforeDatabaseMatch() {
         let matcher = CaskMatcher(customMappings: ["CleanMyMac_5": "cleanmymac"])
 
