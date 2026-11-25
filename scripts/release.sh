@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
-# release.sh — bump the version, publish the approved release notes, and cut the tag.
+# release.sh — cut a release and push its commit and tag to start GitHub Actions.
 #
 # Usage:
-#   ./scripts/release.sh <major|minor|patch|X.Y.Z> [--notes FILE] [--dry-run]
+#   ./scripts/release.sh [major|minor|patch|X.Y.Z] [--notes FILE] [--dry-run]
 #
 # One phase. The release notes are written (and approved) BEFORE this script runs, and
 # the script copies them verbatim: it never derives, merges, reorders or rewrites text.
 # It bumps AppMetadata.version, writes CHANGELOG.md, commits `chore(release): vX.Y.Z`
-# with exactly those two files and creates the annotated tag.
+# with exactly those two files, creates the annotated tag and pushes both together.
 #
 # Notes come from --notes FILE, or, without it, from the [Unreleased] section of
 # CHANGELOG.md. Leading and trailing blank lines are trimmed; everything else is copied
@@ -16,27 +16,23 @@
 # because it would split the section. Empty notes are refused. With --notes,
 # [Unreleased] is emptied and the number of lines it held is reported.
 #
-# NOTHING IS EVER PUSHED. Until you run the printed `git push`, every step is local and
-# reversible. Push the commit and the tag together, so no ref can arrive without the
-# other:
-#
-#   git push --atomic origin main vX.Y.Z
-#
-# Pushing the tag is what starts the release: .github/workflows/release.yml triggers on
+# The atomic push starts .github/workflows/release.yml, which triggers on
 # `v*`, refuses a tag that disagrees with AppMetadata.version, builds, verifies and
-# publishes. See RELEASING.md.
+# publishes. If the push fails, retry the printed push to send the existing commit and
+# tag. The Claude Code release skill uses WEGA_RELEASE_LOCAL_ONLY=1 to keep the push
+# as a separate, approval-gated command. See RELEASING.md.
 #
 # Runs only on `main`, against a clean tree that is not behind origin/main. Being ahead
 # is allowed: the atomic push sends those commits with the tag, and release.yml gates
 # that exact commit anyway.
 #
 # Arguments:
-#   major|minor|patch  bump the current version accordingly (0.1.5 -> 0.2.0 for `minor`)
+#   major|minor|patch  bump the current version accordingly (default: patch)
 #   X.Y.Z              use this version verbatim
 #
 # Options:
 #   --notes FILE       publish the contents of FILE as the release notes
-#   --dry-run          resolve, run every check, print both diffs, change nothing
+#   --dry-run          print both diffs without writing release files, committing, tagging or pushing
 #   -h, --help         show this header
 
 set -euo pipefail
@@ -49,7 +45,7 @@ NOTES_FILE=""
 DRY_RUN=0
 
 usage() {
-  echo "usage: $0 <major|minor|patch|X.Y.Z> [--notes FILE] [--dry-run]" >&2
+  echo "usage: $0 [major|minor|patch|X.Y.Z] [--notes FILE] [--dry-run]" >&2
 }
 
 die() { echo "!! $1" >&2; shift; for line in "$@"; do echo "   $line" >&2; done; exit 1; }
@@ -58,17 +54,22 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1; shift ;;
     --notes)
-      [ $# -ge 2 ] && [ -n "$2" ] || { echo "--notes needs a file" >&2; usage; exit 2; }
+      [ $# -ge 2 ] && [ -n "$2" ] && [[ "$2" != -* ]] || { echo "--notes needs a file" >&2; usage; exit 2; }
       NOTES_FILE="$2"; shift 2 ;;
     -h|--help) awk 'NR==1{next} /^#/{sub(/^# ?/,"");print;next} {exit}' "$0"; exit 0 ;;
     -*) echo "unknown option: $1" >&2; usage; exit 2 ;;
     *)
+      [ -n "$1" ] || { usage; exit 2; }
       if [ -z "$SPEC" ]; then SPEC="$1"; else echo "unexpected extra argument: $1" >&2; exit 2; fi
       shift ;;
   esac
 done
 
-[ -n "$SPEC" ] || { usage; exit 2; }
+SPEC="${SPEC:-patch}"
+AUTO_PUSH=1
+if [ "$DRY_RUN" -eq 1 ] || [ "${WEGA_RELEASE_LOCAL_ONLY:-0}" = 1 ]; then
+  AUTO_PUSH=0
+fi
 
 # The notes path belongs to the caller's directory, and the next line leaves it.
 case "$NOTES_FILE" in
@@ -124,8 +125,19 @@ require_main() {
 }
 
 require_in_sync() {
-  git remote get-url origin >/dev/null 2>&1 || return 0
-  if ! git fetch --quiet origin main 2>/dev/null; then
+  local push_url
+  if ! git remote get-url origin >/dev/null 2>&1; then
+    [ "$AUTO_PUSH" -eq 0 ] || die "origin is required to publish a release"
+    return 0
+  fi
+  if [ "$AUTO_PUSH" -eq 1 ]; then
+    push_url="$(git remote get-url --push --all origin)" || die "cannot resolve the origin push URL"
+    case "$push_url" in
+      ''|*$'\n'*) die "origin must have exactly one push URL for an atomic release" ;;
+    esac
+  fi
+  if ! git fetch --quiet --no-tags origin main 2>/dev/null; then
+    [ "$AUTO_PUSH" -eq 0 ] || die "cannot fetch origin/main — no release was cut"
     echo "   fetch failed (offline?) — continuing against local refs only" >&2
     return 0
   fi
@@ -346,7 +358,8 @@ if ! git tag -a "$TAG" -m "Wega Mac Updater $VERSION"; then
 fi
 echo ">> tagged $TAG"
 
-cat <<EOF
+if [ "$AUTO_PUSH" -eq 0 ]; then
+  cat <<EOF
 
    nothing has been published yet.
 
@@ -354,3 +367,15 @@ cat <<EOF
    publish:     git push --atomic origin main $TAG
    undo:        git tag -d $TAG && git reset --hard HEAD~1
 EOF
+  exit 0
+fi
+
+RELEASE_COMMIT="$(git rev-parse "refs/tags/$TAG^{commit}")"
+MAIN_REFSPEC="$RELEASE_COMMIT:refs/heads/main"
+TAG_REFSPEC="refs/tags/$TAG:refs/tags/$TAG"
+if ! git push --atomic --no-follow-tags origin "$MAIN_REFSPEC" "$TAG_REFSPEC"; then
+  die "could not confirm the push of $TAG — the commit and tag are available locally" \
+    "Retry the same push after resolving the Git error:" \
+    "  git push --atomic --no-follow-tags origin $MAIN_REFSPEC $TAG_REFSPEC"
+fi
+echo ">> pushed $TAG and main — GitHub Actions will build and publish the release"
