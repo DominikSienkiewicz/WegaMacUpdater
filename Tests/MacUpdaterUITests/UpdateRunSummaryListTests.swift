@@ -411,8 +411,11 @@ struct UpdateRunSummaryListTests {
             """), "the category on screen has rows exactly when listColumn would not draw „Nic w tej kategorii”")
         let header = try slice(view, from: "private var listHeader: some View", to: "private var resultsBand: some View")
         #expect(!header.contains("runReport"), "listHeader's own body is not wrapped")
+        #expect(header.contains("SelectionCheckbox("))
+        #expect(header.contains("toggle: { scan.toggleAll(filter: updateFilter) }"))
         let list = try source(Self.summaryFile)
         let summaryHeader = try slice(list, from: "struct UpdateRunSummaryHeader: View", to: "struct UpdateRunSummaryList<HandOffs: View>")
+        #expect(!summaryHeader.contains("SelectionCheckbox("))
         for part in ["QueueColumnPlaceholder()", "Text(tr(\"Wynik aktualizacji\"))", ".textCase(.uppercase)", "Spacer(minLength: 0)",
                      "if remainingCount > 0 {", "Button(trf(\"Pozostałe aktualizacje: %@ ›\", \"\\(remainingCount)\"), action: close)",
                      ".buttonStyle(.link)"] {

@@ -40,10 +40,16 @@ struct VisibleOperationTargetsTests {
 
         #expect(!view.contains("\"\\(selected.count)\""),
                 "UX-01: the uninstall counter must not include selected rows hidden by search")
-        #expect(view.contains("pendingUninstallTargets"),
-                "UX-01: confirmation must retain the exact visible uninstall targets")
-        #expect(view.contains("uninstall(targets:"),
-                "UX-01: execution must consume the frozen targets shown in confirmation")
+        #expect(view.contains("\"\\(targets.count)\""))
+        #expect(view.contains("pendingUninstallTargets = targets"),
+                "UX-01: opening confirmation must freeze the visible uninstall targets")
+        #expect(view.range(of: #"UninstallDialog\(\s*targets:\s*pendingUninstallTargets\b"#, options: .regularExpression) != nil,
+                "UX-01: confirmation must show the frozen targets")
+        #expect(view.contains("let targets = pendingUninstallTargets"))
+        #expect(view.range(of: #"await quitThenUninstall\(\s*targets:\s*targets\b"#, options: .regularExpression) != nil)
+        #expect(view.contains("operations.runQuitPhase(targets: targets,"))
+        #expect(view.range(of: #"await uninstall\(\s*targets:\s*plan\.remove\b"#, options: .regularExpression) != nil,
+                "UX-01: execution must remove only the frozen targets cleared by the quit phase")
     }
 
     @Test func appStoreExecutionCannotExpandOneVisibleTargetIntoGlobalMasUpgrade() throws {

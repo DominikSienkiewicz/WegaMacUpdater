@@ -81,7 +81,7 @@ struct SudoPromptEntryPointPinTests {
         let live = try slice(store, from: "static let live = ScanStoreDependencies(", to: "\n    )\n")
         #expect(live.contains("sudoPolicyDistrust: { SudoPasswordPromptGate.shared.check() }"))
         let updating = try source("Sources/MacUpdater/ScanStore+Updating.swift")
-        #expect(updating.contains("beginPasswordHold(plannedCaskNames: plannedCaskNames, planned: plannedItems)"))
+        #expect(updating.contains("beginPasswordHold(plannedCaskNames: plannedCaskNames, planned: packageItems)"))
         #expect(updating.contains("passwordHold = dependencies.sudoPolicyDistrust()"))
         let lanes = try source("Sources/MacUpdater/ScanStore+UpgradeLanes.swift")
         let serial = try slice(lanes, from: "for token in lanes.serial {", to: "return inPlanOrder(results, plan: items)")
@@ -95,6 +95,12 @@ struct SudoPromptEntryPointPinTests {
         // Review 1: held casks take no part in the preparation, and stay held on the board.
         #expect(updating.contains("prepareForegroundCasks(runnableCaskNames, targetKeys: targetKeys.subtracting(heldForPasswordKeys))"))
         #expect(store.contains("board.rows[item.key] != nil && board.rows[item.key] != .heldForPassword"))
+
+        let replacements = try source("Sources/MacUpdater/ScanStore+QueuedCaskReplacement.swift")
+        let beforePreparation = try slice(replacements, from: "private func replaceQueuedCask(", to: "switch await CaskReplacementSafety.prepare(")
+        #expect(beforePreparation.contains("if profile.mayRequireAdminPassword, holdsPasswordPrompt(for: item) { return nil }"))
+        let beforeInstall = try slice(replacements, from: "switch await CaskReplacementSafety.prepare(", to: "return await runQueuedReplacement(")
+        #expect(beforeInstall.contains("guard !profile.mayRequireAdminPassword || !holdsPasswordPrompt(for: item) else {"))
     }
 
     /// Review 3 and 4: the banner's button is the card, and the warning above the list names what

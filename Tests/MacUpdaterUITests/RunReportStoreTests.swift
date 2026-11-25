@@ -537,26 +537,27 @@ struct RunReportStoreTests {
         #expect(store.runReport?.entries.first?.undoneTo == "1.2")
     }
 
-    @Test func selectAllIsRefusedWhileTheReportIsOpen() {
+    @Test func selectAllAndToggleAllWorkWithARetainedReport() throws {
         let (defaults, teardown) = TestDefaults.isolated("run-report-select-all")
         defer { teardown() }
         let store = makeStore(defaults: defaults).store
+        let queued = formula("queued-\(UUID().uuidString)")
         store.brewOutdated = BrewOutdated(formulae: [
-            BrewOutdatedItem(name: "queued-\(UUID().uuidString)", installedVersions: ["1"], currentVersion: "2"),
+            BrewOutdatedItem(name: queued.name, installedVersions: ["1"], currentVersion: "2"),
         ], casks: [])
         store.status = .results
         let done = formula("done-\(UUID().uuidString)")
         store.report(run: succeeded([done]), planned: [done])
+        let report = try #require(store.runReport)
 
         store.selectAllVisible(filter: .all)
-        #expect(store.selected.isEmpty, "⇧⌘A: the rows are not on screen while the summary is")
+        #expect(store.selected == [queued.key])
+        #expect(store.runReport == report)
+
         store.selected.removeAll()
         store.toggleAll(filter: .all)
-        #expect(store.selected.isEmpty, "the select-all checkbox, likewise")
-
-        store.closeRunReport()
-        store.selectAllVisible(filter: .all)
-        #expect(!store.selected.isEmpty, "sanity: the open summary was the only gate")
+        #expect(store.selected == [queued.key])
+        #expect(store.runReport == report)
     }
 
     // MARK: - Wiring
