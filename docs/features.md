@@ -172,11 +172,16 @@ empty key set as "everything" either, so no caller can arrive without a selectio
 the whole machine.
 
 Selecting in bulk is a choice you make, not a default you inherit: the list-wide checkbox
-ticks every visible row, and each section header — *Homebrew tools*, *Homebrew apps*,
+ticks visible package-manager rows, and each section header — *Homebrew tools*, *Homebrew apps*,
 *Mac App Store*, *npm globalne* — carries its own tri-state checkbox that ticks or clears
 just that group, leaving the other sections alone. All three controls share one column and
 one glyph, so "select this row", "select this group" and "select everything" read as the same
 choice at different widths.
+
+Eligible app-bundle repairs and takeovers under **Updates through Homebrew** can be ticked
+individually. The batch confirmation identifies the app and its path. Wega checks the
+installation and catalog offer again before running the protected Homebrew action.
+These replacements run one at a time as part of the same update run.
 
 #### The window opens with a result, not an empty screen
 
@@ -252,13 +257,13 @@ says the next one will be shown.
 
 #### Running the update
 
-The run happens in the band, and nothing covers the list. The band's heading reads *"Updating ·
+The band shows the run in progress. Its heading reads *"Updating ·
 since 08:14"* (the start time, never an estimate of the end), the stage line names the work
 (*"Installing firefox — 3 of 7"*; *"Installing packages — 3 of 7"* while several run at once),
 a ring counts whole packages as *3/7*, and the band holds **Stop After Active Installs** (and **Show log** once you have closed the log
-that opens with the run). The list stays readable and is locked: it is disabled with its checkboxes,
-banner actions and manual installs, its header says *"The list stays locked until the update
-ends."*, and no veil is drawn, so **Reduce Transparency** has nothing to remove. Casks and npm
+that opens with the run). During installation the list dims and reads *"The list unlocks
+when the update finishes"*. Its checkboxes and install actions are disabled. **Reduce
+Transparency** keeps the text and removes the dimming. Casks and npm
 globals show their own state on the row — *waiting*, *installing…*, *installed, checking*,
 *failed* or *won't start* (a row the run will not begin after a stop request or a vendor
 signature change); the Homebrew formula batch and the App Store batch say *in progress* once in
@@ -514,6 +519,11 @@ through anyway, the guard reads the bundle's version once more after the test: a
 app's own updater** (`replacedByAppUpdater`) — not as an update and not as a rollback — and the
 item is settled as aborted, so no "Cofnij aktualizację" entry points at a version that is gone.
 
+On 24 November 2026 Discord Stable's updater restored 0.0.423 over Homebrew's 0.0.424
+during validation, even after the ShipIt withdrawal was logged. A bundle identified as
+`com.hnc.Discord` now skips unattended launch and records `skipped(selfUpdaterMayDowngrade)`.
+The Gatekeeper, publisher, and on-disk version checks still run.
+
 Liveness is read repeatedly while
 the window is open **and once more on its closing edge**, and always through the handle the
 launch returned rather than by process name, so neither a death in the last poll gap nor a
@@ -570,15 +580,10 @@ updated, failed, rolled back, not confirmed, or not started (stopped before its 
 run). An item that produced no outcome is never dropped, and a run is never called successful
 just because the items that did report all passed.
 
-- The band's heading reads *"Updated 4 of 5"* (with *"· scan incomplete"* when the check itself
-  could not cover every source), and its eyebrow carries the status and the time range of the
-  run: *Update stopped* when you stopped it, *Update incomplete* when anything is not updated,
-  *Updated N packages* when everything is. A ring shows the share that succeeded. The band lists
-  the non-zero counts (*Updated: 4*, *Failed: 1*, *Rolled back: 1*, *Not confirmed: 1*,
-  *Not started: 1*, *With the developer: 2*) and, while a copy is still kept, *backup until
-  …*. The time range and the backup date appear only where the band is wide enough; the compact
-  and narrow bands show the status alone. **Close summary** returns to the normal list.
-- The list switches to the result: a group for what needs your attention (*Needs attention*:
+- After the check, the band and list show the remaining updates. A compact status reports
+  how the run ended and flags a result that needs attention. If the run emptied the current
+  category while other updates remain, the list switches to **All**.
+- **Show summary** opens the detailed results. They group what needs your attention (*Needs attention*:
   failed, rolled back, not confirmed, a changed developer signature), one for what was not started
   (*Not started*), one for the updates left to finish with the developer (*To finish with the
   developer*), and one for what was updated (*Updated*). Each row says in one line what happened
@@ -586,20 +591,16 @@ just because the items that did report all passed.
   still kept (the note then reads *undone to …* afterwards), **Trust the New Signature** on a
   changed signature (also in *Not started*, for a publisher mismatch found before the upgrade),
   and a **Show log** link that opens the run's log (in *Not started* too). A cask row shows the
-  app's name with its token beneath it. Nothing in this list can be selected or queued; a link
-  at the top of the list (*Remaining updates: N ›*) closes the summary and returns to them.
+  app's name with its token beneath it.
 - A cask whose publisher changed during the run does not count as confirmed until the check
   agrees: if the check still lists it, or could not answer for it, the summary says so rather
   than calling it updated. An update Wega never offered is never added to the summary.
 - A **rollback that failed** — the new version rejected *and* the old one not restored —
   still raises its own **red sticky banner** telling you to check that app before using it,
   in addition to its row in the summary.
-- The summary lives until you close it. It survives switching to another screen and the
-  language change, but not a relaunch. Any check you start (**Check now**, **⌘R**) or the next
-  run closes it; an undo's rescan, a background result and opening Settings do not. While it is
-  open, **⇧⌘A** and **⌘↩** are disabled.
-- If you close the summary while a *publisher changed* warning is still unresolved, that warning
-  comes back as the sticky banner it has always been, so it cannot disappear unnoticed.
+- Collapsing the details keeps the latest result available in the current session. You can
+  choose and start the next update on the normal list. A new check or update replaces the
+  report, and an unresolved publisher warning stays visible.
 - What stays a banner: errors of the check itself (an incomplete or failed scan, a Homebrew
   error), a missing App Management permission, the Touch ID hint, a failed undo, and a failed
   rollback. The old result banners (*Updated N packages*, *Update incomplete*, *Update stopped*)
@@ -703,6 +704,13 @@ Before anything is removed, Wega asks each running target it will remove to quit
 The confirmation sheet shows what will happen to each app that does not go through Homebrew: it goes to the Trash, the Wega helper will remove it without a password, or it cannot be removed and why. After the run, the success banner names each removed app and how it went (through Homebrew, to the Trash, or to the Trash through the Wega helper). If the helper moved an app but the Trash then refused it, the app stays in its staging folder, out of `/Applications` and not deleted; its row shows that path with **Show in Finder**, and its leftovers stay. If the helper accepted the version check but then does not answer the removal request within 10 minutes, or the connection to it is lost after the request was sent, the app's row says that the helper did not confirm the removal and that the app may already have left `/Applications`; the list refreshed after the run shows whether it is still there. Its leftovers stay as well. Every app that was not removed gets its own row under a one-line summary: its name, the folder it lives in when another copy shares its name, its reason and the button that helps; a long list scrolls instead of being cut off, and refreshing the list clears the result. An app macOS refuses to let Wega modify (App Management) opens the System Settings pane that grants it; an app owned by another user, a root-owned app the helper does not handle (outside the top of `/Applications`), or one whose bundle or folder you cannot write to, needs administrator rights and offers **Show in Finder**; an app that needs the Wega helper, or needs it reinstalled, also offers the button that opens the Settings window. The generic "uninstall incomplete" line is kept for removals that failed with an error of their own and names those apps; each one's row shows the error's key line (Homebrew's `Error:` line for a cask), and when the error is longer, its complete text under **Szczegóły**.
 
 ### Cleanup
+
+The scan groups physical application bundles with the same bundle identifier and displays
+each path and version. **Review copies** opens an Uninstall list scoped to the group with
+no selection. Wega rechecks that the chosen bundle and a surviving copy are still present.
+Shared application data is preserved. For a managed copy, the Homebrew route requires
+a verified link from the cask's record to the selected installation and a receipt that
+declares only the app bundle for removal.
 The **Porządki** sidebar section (⌘6) finds duplicate copies of command-line tools and what installers and shell tools leave behind. The scan is **read-only** and runs in these steps: the directories on `PATH` (D1), tool-owned version directories (D3), the Homebrew status of each duplicate, Homebrew leftovers (D4), one walk over your project folders, unused runtime versions (D5), Gradle distributions and JDKs (D6), old JetBrains IDE folders (D7) per-shell state (D8), `PATH` hygiene (D9) and, only when you switch it on, the Files and Folders map (D10). A detector that fails is reported as such while the others still report.
 
 - **Duplicates on `PATH` (D1).** Every command that resolves in more than one `PATH` directory is grouped; the first hit is *active*, later ones are *shadowed*. Each copy is classified by where it really lives: a Homebrew formula or cask, an app bundle, a version manager (uv, fnm, nvm, pyenv, SDKMAN, rustup, mise, asdf, Volta, pnpm), a package manager (npm, pnpm, bun, pipx, cargo, go), a native installer's version directory, a system location, or standalone. System copies are shown as *expected* and never offered for removal. So is a version manager's shim, found by the `PATH` directory it sits in (`~/.local/share/mise/shims`, `~/.asdf/shims`, `~/.pyenv/shims`) rather than by what it resolves to: it runs the version the manager selects. A shim that comes first on `PATH` is what Terminal runs, so the copies behind it are *shadowed* but offer nothing, since the manager may fall back to any of them as its `system` version. In a tool with two or more candidate copies (active or shadowed; system copies, shims and broken links are not candidates) a **zostaw** radio on each copy picks the one that stays, by default the active copy; the badge keeps saying what `PATH` does. Every other candidate offers the removal that fits its source, the active copy included, and moving the radio moves the buttons at once, without a scan. The choice is remembered per tool (the kept copy's `PATH` path and its source, stored locally and never exported) and dropped when a later scan no longer finds that copy from that source. A copy that came with an app offers **"Odinstaluj <App>…"**, which opens **Odinstaluj aplikacje** with that app selected (a protected or unlisted app opens it with nothing selected); nothing is removed until you confirm there. When the same app also provides a copy that stays, in this tool or another, the row keeps the instruction to remove the link with administrator rights instead. Removing the copy Terminal uses now adds, in the confirmation sheet, which copy Terminal will use afterwards. A broken link gets a copyable `unlink <path>` (`sudo unlink <path>` outside your home folder) only when Wega, resolving it again, finds its target missing or a link loop; a link it could not follow, such as one into a protected location, gets nothing to paste.
