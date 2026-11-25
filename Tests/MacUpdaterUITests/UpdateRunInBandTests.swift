@@ -10,9 +10,8 @@ import Testing
 /// for a refresh (`allowsSelection(isRefreshing:)`), never for an update.
 ///
 /// C2 stage 3 — the run used to stand the screen down under a veil with its bar at the bottom.
-/// It now lives in the band above the list: the stage, the ring and the stop. Nothing lies on
-/// the rows; `.disabled` alone keeps them inert, and the band and the run's log stay live
-/// because they sit outside the disabled screen.
+/// The band above the list shows the stage, the ring and the stop. A veil marks the locked
+/// list. The band and the run's log sit outside the disabled screen.
 @Suite("Update run in the band")
 @MainActor
 struct UpdateRunInBandTests {
@@ -40,14 +39,18 @@ struct UpdateRunInBandTests {
         #expect(controls.contains(".help(UpdateRunCopy.stopHelp)"))
     }
 
-    /// 0.8.0's veil of the window's own background kept the rows legible but still lay on them;
-    /// C2 takes it away. The band and its run views draw no material or glass either.
-    @Test func nothingLiesOnTheRowsDuringTheRun() throws {
+    @Test func aRunningUpdateShowsALockedListVeil() throws {
         let view = executableSource(try source("Sources/MacUpdater/UpdateView.swift"))
         let results = try slice(view, from: "private var resultsView: some View", to: "private var listHeader: some View")
-        #expect(!results.contains(".overlay"), "no veil, card or material lies on the rows")
-        #expect(!FileManager.default.fileExists(atPath: packageRoot().appendingPathComponent("Sources/MacUpdater/UpdateRunOverlay.swift").path))
-        for file in ["UpdateBand.swift", "UpdateBandRunViews.swift", "UpdateBandSummaryViews.swift"] {
+        let lockedBody = try #require(results.range(of: "screenBody\n                .disabled("))
+        let veil = try #require(results.range(of: "ScanListVeil(mode: .updating)"))
+        let log = try #require(results.range(of: "if scan.updating && scan.showLog {"))
+        #expect(lockedBody.lowerBound < veil.lowerBound && veil.upperBound < log.lowerBound)
+        #expect(results.contains("if scan.updating && (!scan.isRefreshing || !showsRows)"))
+    }
+
+    @Test func theUpdateVeilAndBandDoNotUseFrostedGlass() throws {
+        for file in ["ScanListVeil.swift", "UpdateBand.swift", "UpdateBandRunViews.swift", "UpdateBandSummaryViews.swift"] {
             let text = try source("Sources/MacUpdater/\(file)")
             #expect(!text.contains("Material") && !text.contains(".glassEffect("), "\(file)")
         }

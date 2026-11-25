@@ -272,12 +272,14 @@ struct UpdateView: View {
             .padding(.horizontal, WegaLayout.selectionColumnInset)
             .padding(.vertical, WegaLayout.sectionSpacing)
 
-            // Everything below the header is what a running update could be raced by, so for
-            // the run's duration `.disabled` makes it inert. Nothing is drawn over the rows (C2):
-            // the band above carries the run and its stop, and the run's log below the list
-            // stays live with it, both outside the disabled screen.
+            // The band and log stay outside the locked screen so their controls remain live.
             screenBody
                 .disabled(!ScanSelectionGate.allowsScreenInteraction(isUpdating: scan.updating))
+                .overlay {
+                    if scan.updating && (!scan.isRefreshing || !showsRows) {
+                        ScanListVeil(mode: .updating)
+                    }
+                }
             if scan.updating && scan.showLog {
                 BrewLogPanel(lines: scan.brewLog, onClose: { scan.showLog = false })
                     .padding(.horizontal, WegaLayout.listGutter)

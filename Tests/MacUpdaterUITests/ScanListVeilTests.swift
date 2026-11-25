@@ -35,7 +35,8 @@ struct ScanListVeilTests {
 
     @Test func theLabelSaysWhenTheListUnlocks() {
         withLanguage(.en) {
-            #expect(tr("Lista odblokuje się po skanie") == "The list unlocks when the scan finishes")
+            #expect(ScanListVeil.Mode.scanning.message == "The list unlocks when the scan finishes")
+            #expect(ScanListVeil.Mode.updating.message == "The list unlocks when the update finishes")
         }
     }
 
@@ -46,11 +47,11 @@ struct ScanListVeilTests {
         #expect(veil.contains("@Environment(\\.accessibilityReduceTransparency) private var reduceTransparency"))
         #expect(veil.contains(".opacity(Self.scrim(reduceTransparency: reduceTransparency))"))
         #expect(veil.contains(".allowsHitTesting(false)"), "the list still scrolls under it")
-        let branch = try #require(veil.range(of: "if Self.drawsBeam(reduceMotion: reduceMotion) {"))
+        let branch = try #require(veil.range(of: "if mode == .scanning && Self.drawsBeam(reduceMotion: reduceMotion) {"))
         let timeline = try #require(veil.range(of: "TimelineView(.animation"))
         #expect(branch.upperBound < timeline.lowerBound, "under Reduce Motion no timeline is built at all")
         #expect(veil.components(separatedBy: "TimelineView(").count == 2)
-        #expect(veil.contains(".accessibilityLabel(tr(\"Lista odblokuje się po skanie\"))"))
+        #expect(veil.contains(".accessibilityLabel(mode.message)"))
     }
 
     /// Only over rows a scan is replacing: not over the empty state, the band, the scope bar or a
