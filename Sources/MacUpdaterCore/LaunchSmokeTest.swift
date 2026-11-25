@@ -58,6 +58,8 @@ public enum LaunchSmokeTest {
         case awaitingAuthorization
         /// The staged updater could not be safely withdrawn, so the instance remains running.
         case selfUpdatePending
+        /// Starting the installed app can cause its updater to put an older version back.
+        case selfUpdaterMayDowngrade
         /// The app is on ``LaunchSmokeTestConfiguration/tokensExemptFromSmokeTest`` — its
         /// first run after an upgrade repairs privileged state, which must not be interrupted.
         case privilegedFirstRun
