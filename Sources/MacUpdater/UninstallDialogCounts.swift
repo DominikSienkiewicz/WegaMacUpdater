@@ -8,14 +8,13 @@ struct UninstallDialogCounts: Equatable {
     let blocked: Int
 
     init(targets: [ApplicationInfo], routes: [String: UninstallRouteDecision]) {
-        let nonBrew = targets.filter { !$0.isManagedByBrew }
-        let blockedCount = nonBrew.filter {
-            if case .blocked = routes[$0.id] { return true }
-            return false
-        }.count
-        brew = targets.count - nonBrew.count
-        blocked = blockedCount
-        trash = nonBrew.count - blockedCount
+        let removable = targets.filter {
+            if case .blocked = routes[$0.id] { return false }
+            return true
+        }
+        brew = removable.filter(\.isManagedByBrew).count
+        trash = removable.count - brew
+        blocked = targets.count - removable.count
     }
 
     var promisesTrash: Bool { trash > 0 }

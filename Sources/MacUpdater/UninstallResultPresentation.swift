@@ -219,6 +219,10 @@ enum UninstallResultPresentation {
             tr("wymaga konta administratora.")
         case .needsAdministratorRights:
             tr("wymaga uprawnień administratora — usuń ją w Finderze.")
+        case .multipleSelectedCopies:
+            tr("Wybierz jedną kopię tej aplikacji. Pozostałe kopie i wspólne dane zostaną zachowane.")
+        case .unverifiedCopy:
+            tr("Nie można bezpiecznie ustalić, która kopia zostałaby usunięta.")
         case .needsAppManagement:
             tr("macOS blokuje usuwanie — zezwól Wega w Zarządzaniu aplikacjami.")
         }

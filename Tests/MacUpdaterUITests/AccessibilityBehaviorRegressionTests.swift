@@ -115,7 +115,6 @@ final class AccessibilityBehaviorRegressionTests: XCTestCase {
     let hostingView = NSHostingView(
       rootView: UninstallDialog(
         targets: [target],
-        ambiguities: [],
         onCancel: {},
         onConfirm: { _ in }
       )

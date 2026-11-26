@@ -12,6 +12,8 @@ public enum UninstallBlock: Equatable, Sendable {
     case needsAdministratorAccount
     case needsAdministratorRights
     case needsAppManagement
+    case multipleSelectedCopies
+    case unverifiedCopy
 }
 
 /// Why an app is never offered for removal.
