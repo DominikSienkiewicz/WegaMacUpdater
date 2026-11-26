@@ -24,6 +24,7 @@ struct CleanupSpaceReview: Equatable, Identifiable {
 
     let id = UUID()
     let requiredBytes: Int64
+    var returnFilter: UpdateFilter = .all
     var reading: Reading
 
     var missingBytes: Int64? {
@@ -42,6 +43,14 @@ extension ScanStore {
         cleanupSpaceReview = CleanupSpaceReview(requiredBytes: budget.required, reading: .atDeferral(available: budget.available))
         dismissBanner()
         return true
+    }
+
+    func setCleanupReturnDestination(from source: SidebarSelection) {
+        cleanupSpaceReview?.returnFilter = source.filter ?? .all
+    }
+
+    func endCleanupSpaceReviewIfLeaving(from previous: SidebarSelection, to destination: SidebarSelection) {
+        if previous == .cleanup && destination != .cleanup { endCleanupSpaceReview() }
     }
 
     func endCleanupSpaceReview() {
