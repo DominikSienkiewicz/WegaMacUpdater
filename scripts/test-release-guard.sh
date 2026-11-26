@@ -7,6 +7,7 @@
 # odmówić tego, czego przepisać nie może, i atomowo wysłać commit oraz tag.
 #
 # `--publication-unit` uruchamia tylko testy publikacji z podstawioną warstwą Git remote.
+# `--reviewed-notes-unit` sprawdza przygotowanie i zatwierdzenie opisu z atrapą Claude Code.
 # Przypadki 1–16 sprawdzają zachowanie prawdziwego skryptu na jednorazowych repozytoriach.
 # Przypadek 17 czyta skill wydania (.claude/skills/release/SKILL.md) z drzewa repozytorium
 # i pilnuje, żeby wywoływał skrypt i push dokładnie w formie, którą przyjmują release.sh
@@ -73,7 +74,7 @@ set_changelog() {
 # Uruchamia release.sh w podanym katalogu; wynik w OUT (stdout+stderr) i RC.
 run_release() {
     local dir="$1"; shift
-    OUT="$(cd "$dir" && "$RELEASE_SH" "$@" 2>&1)"
+    OUT="$(cd "$dir" && PATH="$SANDBOX/claude-bin:$PATH" "$RELEASE_SH" "$@" 2>&1)"
     RC=$?
 }
 
@@ -120,8 +121,8 @@ snapshot() { printf '%s|%s|%s' "$(head_of "$1")" "$(tags_of "$1")" "$(dirty_of "
 
 write_notes() { printf '%s\n' "$2" > "$1"; }
 
-check_publication() {
-    local repo old commit tag git_bin="$SANDBOX/bin" push_args="$SANDBOX/push-args"
+stub_remote_git() {
+    local git_bin="$SANDBOX/bin"
     mkdir -p "$git_bin"
     cat > "$git_bin/git" <<'GIT'
 #!/usr/bin/env bash
@@ -141,10 +142,100 @@ case "$1" in
 esac
 GIT
     chmod +x "$git_bin/git"
-    local RELEASE_TEST_GIT
     RELEASE_TEST_GIT="$(command -v git)"
     export RELEASE_TEST_GIT
+}
 
+check_reviewed_notes() {
+    local repo old base notes
+    local RELEASE_TEST_PUSH_ARGS="$SANDBOX/review-push" RELEASE_TEST_REMOTE_TAGS="$SANDBOX/tags"
+    local RELEASE_TEST_INPUT="$SANDBOX/model-input" RELEASE_TEST_NOTES="$SANDBOX/expected-notes"
+    export RELEASE_TEST_PUSH_ARGS RELEASE_TEST_REMOTE_TAGS RELEASE_TEST_INPUT RELEASE_TEST_NOTES
+    repo="$(make_repo reviewed-notes '')"
+    set_changelog "$repo" $'# Changelog\n\n## [Unreleased]\n\n### Added\n- Curated draft\n\n## [0.1.0] — 2026-01-01\n\n- Earlier release\n'
+    base="$(head_of "$repo")"
+    git -C "$repo" commit --allow-empty -qm 'feat: add a preview' -m 'Select pending items in Settings.'
+    git -C "$repo" commit --allow-empty -qm 'fix: retain selection' -m 'Keep choices across refreshes.'
+    git -C "$repo" update-ref refs/remotes/origin/main "$(head_of "$repo")"
+    printf '%s\trefs/tags/v0.1.0\n' "$base" > "$RELEASE_TEST_REMOTE_TAGS"
+    printf '%s\n' '### Added' '- **Preview pending items** in Settings.' '' '### Fixed' '- Keep choices across refreshes.' > "$RELEASE_TEST_NOTES"
+    notes="$(cat "$RELEASE_TEST_NOTES")"
+    old="$(snapshot "$repo")"
+    PATH="$SANDBOX/bin:$PATH" WEGA_RELEASE_LOCAL_ONLY=0 run_release "$repo" <<< N
+    if [ "$RC" -eq 0 ] && [[ "$OUT" == *'feat: add a preview'*"$notes"*'Publish v0.1.1?'*'release cancelled'* ]] \
+       && [ "$(snapshot "$repo")" = "$old" ] && [ ! -e "$RELEASE_TEST_PUSH_ARGS" ] \
+       && [ -f "$RELEASE_TEST_INPUT" ] && grep -Fq 'Select pending items in Settings.' "$RELEASE_TEST_INPUT" \
+       && grep -Fq 'Keep choices across refreshes.' "$RELEASE_TEST_INPUT" \
+       && grep -Fq 'feat: add a preview' "$RELEASE_TEST_INPUT" && grep -Fq 'fix: retain selection' "$RELEASE_TEST_INPUT" \
+       && ! grep -Eq 'seed the fixture|changelog fixture|Earlier release' "$RELEASE_TEST_INPUT"; then
+        record_pass "Claude receives the complete messages in range and declining preserves the release"
+    else
+        record_fail "expected the draft from both commit bodies before declining"
+    fi
+
+    PATH="$SANDBOX/bin:$PATH" WEGA_RELEASE_LOCAL_ONLY=0 run_release "$repo" --dry-run
+    if [ "$RC" -eq 0 ] && [[ "$OUT" == *"$notes"*'>> dry run'* ]] && [[ "$OUT" != *'Publish v0.1.1?'* ]] \
+       && [ "$(snapshot "$repo")" = "$old" ] && [ ! -e "$RELEASE_TEST_PUSH_ARGS" ]; then
+        record_pass "dry-run shows the generated draft without publication"
+    else
+        record_fail "expected a read-only preview of the generated draft"
+    fi
+
+    local reply
+    for reply in failure blank malformed reference; do
+        PATH="$SANDBOX/bin:$PATH" RELEASE_TEST_REPLY="$reply" WEGA_RELEASE_LOCAL_ONLY=0 run_release "$repo" <<< N
+        if [ "$RC" -ne 0 ] && [[ "$OUT" != *'Publish v0.1.1?'* ]] \
+           && [ "$(snapshot "$repo")" = "$old" ] && [ ! -e "$RELEASE_TEST_PUSH_ARGS" ]; then
+            record_pass "Claude $reply stops before confirmation"
+        else
+            record_fail "expected Claude $reply to stop before approval"
+        fi
+    done
+
+    printf '%s\trefs/tags/v0.1.0\n' "$(head_of "$repo")" > "$RELEASE_TEST_REMOTE_TAGS"
+    rm -f "$RELEASE_TEST_INPUT"
+    PATH="$SANDBOX/bin:$PATH" WEGA_RELEASE_LOCAL_ONLY=0 run_release "$repo" <<< N
+    if [ "$RC" -ne 0 ] && [ ! -e "$RELEASE_TEST_INPUT" ] && [ "$(snapshot "$repo")" = "$old" ] \
+       && [[ "$OUT" != *'Publish v0.1.1?'* ]]; then
+        record_pass "empty release range stops before calling Claude"
+    else
+        record_fail "expected no proposal for an empty range"
+    fi
+    printf '%s\trefs/tags/v0.1.0\n' "$base" > "$RELEASE_TEST_REMOTE_TAGS"
+
+    git -C "$repo" tag v0.0.9 "$base"
+    git -C "$repo" tag v9.0.0 "$(git -C "$repo" commit-tree 'HEAD^{tree}' -m 'separate history')"
+    WEGA_RELEASE_LOCAL_ONLY=0 run_release "$repo" --dry-run
+    if [ "$RC" -eq 0 ] && [[ "$OUT" == *'Commits since local v0.0.9'*"$notes"* ]] \
+       && ! grep -Fq 'seed the fixture' "$RELEASE_TEST_INPUT"; then
+        record_pass "offline preview drafts from the latest reachable local version tag"
+    else
+        record_fail "expected to exclude earlier history in the offline draft"
+    fi
+    old="$(snapshot "$repo")"
+    rm -f "$RELEASE_TEST_INPUT"
+
+    PATH="$SANDBOX/bin:$PATH" RELEASE_TEST_REPLY=failure WEGA_RELEASE_LOCAL_ONLY=0 \
+        run_release "$repo" --notes "$RELEASE_TEST_NOTES" <<< N
+    if [ "$RC" -eq 0 ] && [[ "$OUT" == *"$notes"*'Publish v0.1.1?'* ]] \
+       && [ ! -e "$RELEASE_TEST_INPUT" ] && [ "$(snapshot "$repo")" = "$old" ]; then
+        record_pass "explicit notes are previewed without invoking Claude"
+    else
+        record_fail "expected to review the manual notes verbatim"
+    fi
+
+    PATH="$SANDBOX/bin:$PATH" WEGA_RELEASE_LOCAL_ONLY=0 run_release "$repo" <<< Y
+    if [ "$RC" -eq 0 ] && [[ "$OUT" == *"$notes"*'Publish v0.1.1?'* ]] \
+       && [ "$(section "$repo" 0.1.1)" = "$notes" ] && [ "$(git -C "$repo" log -1 --format=%b)" = "$notes" ] \
+       && [ -f "$RELEASE_TEST_PUSH_ARGS" ] && [ "$(git -C "$repo" rev-parse 'v0.1.1^{commit}')" = "$(head_of "$repo")" ]; then
+        record_pass "Y publishes the exact preview in the release commit and changelog"
+    else
+        record_fail "expected the reviewed draft in the published commit and changelog"
+    fi
+}
+
+check_publication() {
+    local repo old commit tag git_bin="$SANDBOX/bin" push_args="$SANDBOX/push-args"
     printf 'automatic release publication\n'
     local name
     for name in implicit explicit; do
@@ -276,10 +367,37 @@ GIT
     fi
 }
 
+mkdir -p "$SANDBOX/claude-bin"
+cat > "$SANDBOX/claude-bin/claude" <<'CLAUDE'
+#!/usr/bin/env bash
+set -eu
+[[ "$1" == -p && " $* " == *' --safe-mode '* && " $* " == *' --output-format text '* ]] || exit 2
+while [ "$#" -gt 0 ] && [ "$1" != --tools ]; do shift; done
+[ "$#" -ge 2 ] && [ -z "$2" ] || exit 2
+cat > "${RELEASE_TEST_INPUT:-/dev/null}"
+case "${RELEASE_TEST_REPLY:-ok}" in
+    failure) echo 'partial draft'; exit 1 ;;
+    blank) printf '   \n' ;;
+    malformed) echo '## Accidental release heading' ;;
+    reference) printf '%s\n' '- An inline link' '[settings]: https://example.invalid' ;;
+    ok)
+        if [ -n "${RELEASE_TEST_NOTES:-}" ]; then cat "$RELEASE_TEST_NOTES"; else echo '- Draft from commits'; fi
+        ;;
+esac
+CLAUDE
+chmod +x "$SANDBOX/claude-bin/claude"
+stub_remote_git
+if [ "${1-}" = "--reviewed-notes-unit" ]; then
+    check_reviewed_notes
+    exit "$((failures != 0))"
+fi
+
 check_publication
 if [ "${1-}" = "--publication-unit" ]; then
     exit "$((failures != 0))"
 fi
+
+check_reviewed_notes
 
 # --- 1 ------------------------------------------------------------------------
 printf 'notes file published verbatim\n'
@@ -314,7 +432,7 @@ verbatim_repo="$repo"
 verbatim_out="$OUT"
 
 # --- 2 ------------------------------------------------------------------------
-printf '[Unreleased] is the source without --notes\n'
+printf '[Unreleased] is the prepared source for a local cut without --notes\n'
 repo="$(make_repo fromunreleased $'### Fixed\n- a')"
 run_local_release "$repo" 0.2.0
 if [ "$RC" -eq 0 ] && [ "$(section "$repo" 0.2.0)" = $'### Fixed\n- a' ]; then
