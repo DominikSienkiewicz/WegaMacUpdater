@@ -23,6 +23,7 @@ struct XcodeCleanupTree: Hashable, Sendable {
         }) else { throw CocoaError(.fileReadUnknown) }
         defer { fts_close(tree) }
 
+        let checkouts = root.url.appending(path: "SourcePackages/checkouts", directoryHint: .isDirectory)
         var result = Self()
         var hardLinks = Set<ino_t>()
         while true {
@@ -44,6 +45,11 @@ struct XcodeCleanupTree: Hashable, Sendable {
             } else if node.pointee.fts_level == 1, info != FTS_SL, info != FTS_SLNONE {
                 let name = URL(filePath: String(cString: node.pointee.fts_path), directoryHint: .notDirectory).lastPathComponent
                 if !cacheContents.contains(name) { result.hasOnlyCacheContents = false }
+            } else if info == FTS_D, node.pointee.fts_level == 3 {
+                let directory = URL(filePath: String(cString: node.pointee.fts_path), directoryHint: .isDirectory)
+                if directory.deletingLastPathComponent().path.caseInsensitiveCompare(checkouts.path) == .orderedSame {
+                    result.hasOnlyCacheContents = false
+                }
             }
             let countsTowardSize = info != FTS_F || status.st_nlink <= 1 || hardLinks.insert(status.st_ino).inserted
             result.record(status, countsTowardSize: countsTowardSize)
