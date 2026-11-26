@@ -36,6 +36,18 @@ struct XcodeCleanupTests {
         #expect(FileManager.default.fileExists(atPath: sources.path))
     }
 
+    @Test func swiftPackagesUseTheContainingDirectoryName() async throws {
+        let fixture = try XcodeFixture()
+        defer { fixture.remove() }
+        _ = try fixture.project()
+        for name in ["Design Tools", "Networking.Core"] {
+            let manifest = fixture.home.appending(path: "src").appending(component: name).appending(component: "Package.swift")
+            try fixture.writeMetadata(workspace: manifest.path)
+            let project = try #require(try await fixture.engine.scan().first)
+            #expect(project.name == name)
+        }
+    }
+
     @Test func hashedProjectWithBuildOutputsAndNoMetadataIsReadOnly() async throws {
         let fixture = try XcodeFixture()
         defer { fixture.remove() }

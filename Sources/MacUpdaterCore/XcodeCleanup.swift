@@ -112,9 +112,10 @@ public struct XcodeCleanup: Sendable {
         let cacheKey = ProtectedLocationGuard.standardizedPath(entry.url).lowercased()
         let sourceIsOutside = pathKey != cacheKey && !pathKey.hasPrefix(cacheKey + "/")
         let container = workspace.lastPathComponent == "project.xcworkspace" ? workspace.deletingLastPathComponent() : workspace
-        let name = container.deletingPathExtension().lastPathComponent
+        let isPackageManifest = workspace.lastPathComponent == "Package.swift"
+        let name = isPackageManifest ? workspace.deletingLastPathComponent().lastPathComponent : container.deletingPathExtension().lastPathComponent
         let recognizedWorkspace = ["xcodeproj", "xcworkspace", "playground", "swiftpm"].contains(workspace.pathExtension.lowercased())
-            || workspace.lastPathComponent == "Package.swift"
+            || isPackageManifest
         return try item(entry, kind: .derivedData, name: name.isEmpty ? entry.url.lastPathComponent : name,
                         projectCache: recognizedWorkspace && sourceIsOutside)
     }
