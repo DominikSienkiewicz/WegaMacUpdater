@@ -235,7 +235,7 @@ final class CleanupHygienePresentationTests: XCTestCase {
                 .filesAndFolders, in: CleanupPresentation.sections(report, home: Fixture.home, tccMapEnabled: true)
             )
             XCTAssertEqual(map.rows, [])
-            XCTAssertTrue(map.notes.contains(tr("Mapa jest włączona. Kliknij „Skanuj”, żeby ją odczytać.")), "\(map.notes)")
+            XCTAssertTrue(map.notes.contains(tr("Mapa jest włączona. Kliknij „Sprawdź ponownie”, żeby ją odczytać.")), "\(map.notes)")
             XCTAssertFalse(map.notes.contains(Fixture.mapOffNote))
         }
     }

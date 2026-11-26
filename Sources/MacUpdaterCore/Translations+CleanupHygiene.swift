@@ -60,12 +60,12 @@ extension Translations {
             "The permissions database has no file or folder entries. Full Disk Access lives in the system database, which Wega does not map.",
 
         "PATH": "PATH",
-        "PATH jest przybliżony, więc Wega nie sprawdza jego wpisów. Kliknij „Odczytaj PATH”, a potem „Skanuj”.":
-            "PATH is approximate, so Wega does not check its entries. Click “Read PATH”, then “Scan”.",
+        "PATH jest przybliżony. Wybierz „Odczytaj PATH” w opcjach raportu, aby sprawdzić wpisy z Terminala.":
+            "PATH is approximate. Choose “Read PATH” in report options to check the entries from Terminal.",
         "Wpisy PATH są w porządku.": "The PATH entries are in order.",
         "Mapa, która przypisuje te wpisy do konkretnych kopii, jest wyłączona. Włącz ją w Ustawieniach.":
             "The map that ties these entries to specific copies is off. Turn it on in Settings.",
-        "Mapa jest włączona. Kliknij „Skanuj”, żeby ją odczytać.": "The map is on. Click “Scan” to read it.",
+        "Mapa jest włączona. Kliknij „Sprawdź ponownie”, żeby ją odczytać.": "The map is on. Click “Check again” to read it.",
         "Pełny dostęp do dysku, którego Wega potrzebuje do mapy, macOS daje też każdemu programowi, który Wega uruchamia: brew, npm, mas i powłoce, z której Wega odczytuje PATH. Gdy skończysz przeglądać mapę, usuń Wegę z listy Pełny dostęp do dysku.":
             "macOS also gives the Full Disk Access Wega needs for the map to every program Wega starts: brew, npm, mas and the shell Wega reads PATH from. When you have finished looking at the map, remove Wega from Full Disk Access.",
         "Wpisów Pełnego dostępu do dysku Wega nie mapuje: macOS trzyma je w bazie systemowej.":

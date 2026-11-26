@@ -241,6 +241,9 @@ public enum Plurals {
             few:  "…i %@ wcześniejsze wydania",
             many: "…i %@ wcześniejszych wydań"
         ),
+        "%@ wyników do przejrzenia": PluralForms(
+            one: "%@ wynik do przejrzenia", few: "%@ wyniki do przejrzenia", many: "%@ wyników do przejrzenia"
+        ),
         "Bez akcji: %@ narzędzi": PluralForms(
             one:  "Bez akcji: %@ narzędzie",
             few:  "Bez akcji: %@ narzędzia",
@@ -428,6 +431,9 @@ public enum Plurals {
             one:  "…and %@ earlier release",
             few:  "…and %@ earlier releases",
             many: "…and %@ earlier releases"
+        ),
+        "%@ wyników do przejrzenia": PluralForms(
+            one: "%@ result to review", few: "%@ results to review", many: "%@ results to review"
         ),
         "Bez akcji: %@ narzędzi": PluralForms(
             one:  "No action: %@ tool",

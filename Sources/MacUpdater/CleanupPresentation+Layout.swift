@@ -8,15 +8,20 @@ extension CleanupPresentation {
     /// tool (shell state, a protected location) is a group of its own with no name.
     struct ToolGroup: Equatable {
         let name: String?
-        let rows: [Row]
+        var rows: [Row]
+        var checkShellOrder = false
 
-        var isActionable: Bool { rows.contains(where: \.isActionable) }
+        var workingCopies: [CleanupFinding] {
+            rows.compactMap(\.finding).filter { $0.detector == .pathDuplicates && $0.status != .brokenLink && $0.realpath != nil }
+        }
+
+        var isActionable: Bool { checkShellOrder || rows.contains(where: \.isActionable) }
 
         /// A keep radio stays in sight even when the choice leaves nothing to do, so a click on it
         /// does not move the tool out from under the pointer.
         var staysShown: Bool { isActionable || rows.contains { $0.keep != nil } }
 
-        fileprivate func matches(_ query: String) -> Bool {
+        func matches(_ query: String) -> Bool {
             name?.localizedStandardContains(query) == true
                 || rows.contains { $0.title.localizedStandardContains(query) || $0.detail.localizedStandardContains(query) }
         }
@@ -50,8 +55,11 @@ extension CleanupPresentation {
 
     /// Nil only when a non-empty search matches nothing in the section. The counts always describe
     /// the whole section, so a search never changes what the header says.
-    static func layout(of section: Section, search: String) -> SectionLayout? {
-        let groups = toolGroups(of: section.rows)
+    static func layout(of section: Section, search: String, inspectedTool: String? = nil) -> SectionLayout? {
+        let groups = toolGroups(of: section)
+        func isShown(_ group: ToolGroup) -> Bool {
+            group.staysShown || (section.kind == .duplicates && inspectedTool != nil && inspectedTool == group.name && !group.workingCopies.isEmpty)
+        }
         let actionCount = groups.filter(\.isActionable).count
         let headerNote: String? = section.rows.isEmpty
             ? nil : actionCount == 0 ? tr("nic do zrobienia") : trf("%@ do zrobienia", "\(actionCount)")
@@ -61,21 +69,35 @@ extension CleanupPresentation {
             guard !matching.isEmpty else { return nil }
             return SectionLayout(shown: matching, quiet: [], actionCount: actionCount, headerNote: headerNote, quietTitle: nil)
         }
-        let quietGroups = groups.filter { !$0.staysShown }
+        let quietGroups = groups.filter { !isShown($0) }
         return SectionLayout(
-            shown: groups.filter(\.staysShown), quiet: quietItems(of: quietGroups), actionCount: actionCount,
+            shown: groups.filter(isShown), quiet: quietItems(of: quietGroups), actionCount: actionCount,
             headerNote: headerNote,
             quietTitle: quietTitle(count: quietGroups.count, namesTools: section.rows.contains { $0.groupHeader != nil })
         )
     }
 
-    private static func toolGroups(of rows: [Row]) -> [ToolGroup] {
+    static func toolGroups(of section: Section) -> [ToolGroup] {
         var groups: [ToolGroup] = []
-        for row in rows {
-            if row.groupHeader == nil, let last = groups.last, last.name != nil {
-                groups[groups.count - 1] = ToolGroup(name: last.name, rows: last.rows + [row])
+        var name: String?
+        var copyGroup: Int?
+        for row in section.rows {
+            if let header = row.groupHeader {
+                name = header
+                copyGroup = nil
+            }
+            let comparesCopies = section.kind == .duplicateApplications ||
+                (section.kind == .duplicates && (row.finding == nil || row.finding?.detector == .pathDuplicates))
+            if comparesCopies, let copyGroup {
+                groups[copyGroup].rows.append(row)
             } else {
-                groups.append(ToolGroup(name: row.groupHeader, rows: [row]))
+                if comparesCopies && name != nil { copyGroup = groups.count }
+                groups.append(ToolGroup(name: name, rows: [row]))
+            }
+        }
+        if section.approximateCopyOrder {
+            for index in groups.indices {
+                groups[index].checkShellOrder = groups[index].workingCopies.count > 1
             }
         }
         return groups

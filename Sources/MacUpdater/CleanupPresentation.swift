@@ -28,7 +28,7 @@ enum CleanupPresentation {
         let status: String
         /// The item's path, with `~` for the home directory.
         let title: String
-        let detail: String
+        var detail: String
         let sizeText: String?
         let button: ButtonKind?
         /// Shown beside the button or instead of it: the command to copy, the instruction to
@@ -40,6 +40,9 @@ enum CleanupPresentation {
         var isActionable = false
         /// Where a copy on `PATH` comes from; nil outside the duplicates section.
         var origin: Origin? = nil
+        var finding: CleanupFinding?
+        /// Additional evidence when the path row already has a separate source label.
+        var copyDetail: String?
 
         /// The source and directory of a copy, which tools installed in one place share.
         struct Origin: Equatable {
@@ -48,16 +51,17 @@ enum CleanupPresentation {
         }
 
         func appendingDetail(_ text: String) -> Row {
-            Row(
-                findingID: findingID, groupHeader: groupHeader, bucket: bucket, status: status, title: title,
-                detail: detail + " · " + text, sizeText: sizeText, button: button, note: note, keep: keep,
-                isActionable: isActionable, origin: origin
-            )
+            var updated = self
+            updated.detail += " · " + text
+            if let copyDetail {
+                updated.copyDetail = copyDetail.isEmpty ? text : copyDetail + " · " + text
+            }
+            return updated
         }
     }
 
     struct Section: Equatable {
-        enum Kind: Hashable {
+        enum Kind: String, Hashable {
             case duplicates, homebrew, runtimes, gradle, jetBrains, shellState, pathHygiene, protectedLocations, filesAndFolders
             case duplicateApplications
         }
@@ -67,6 +71,7 @@ enum CleanupPresentation {
         /// Paragraphs under the title: detector failures, an approximate `PATH`, or an explanation.
         let notes: [String]
         let rows: [Row]
+        var approximateCopyOrder = false
     }
 
     /// Everything the confirmation sheet states before a removal.
@@ -136,7 +141,9 @@ enum CleanupPresentation {
         let findings = { (kind: Section.Kind) in listed.filter { sectionKind(of: $0.detector) == kind } }
         let notes = { (kind: Section.Kind) in report.notes.filter { sectionKinds(of: $0).contains(kind) }.map(noteText) }
         let grouped = { (kind: Section.Kind, title: String, extraNotes: [String], empty: String) in
-            section(kind, title, notes: notes(kind) + extraNotes, rows: groupedRows(findings(kind), home: home), empty: empty)
+            var result = section(kind, title, notes: notes(kind) + extraNotes, rows: groupedRows(findings(kind), home: home), empty: empty)
+            result.approximateCopyOrder = kind == .duplicates && report.path.isApproximate
+            return result
         }
         var approximatePathNotes: [String] = []
         if report.path.isApproximate, listed.contains(where: { $0.detector == .pathDuplicates }) {
@@ -157,7 +164,7 @@ enum CleanupPresentation {
                     empty: tr("Nie znaleziono pozostałości po sesjach powłoki.")),
             report.path.isApproximate
                 ? Section(kind: .pathHygiene, title: tr("PATH"), notes: [
-                    tr("PATH jest przybliżony, więc Wega nie sprawdza jego wpisów. Kliknij „Odczytaj PATH”, a potem „Skanuj”."),
+                    tr("PATH jest przybliżony. Wybierz „Odczytaj PATH” w opcjach raportu, aby sprawdzić wpisy z Terminala."),
                 ] + notes(.pathHygiene), rows: [])
                 : grouped(.pathHygiene, tr("PATH"), [], tr("Wpisy PATH są w porządku.")),
         ]
@@ -203,7 +210,7 @@ enum CleanupPresentation {
     /// The sections a detector note is shown in. Homebrew's dependency-check notes concern the
     /// copies; only its failed leftovers query belongs to the Homebrew section. Gradle reads the
     /// same project walk as the version managers, so it repeats why the walk may have missed one.
-    private static func sectionKinds(of note: CleanupDetectorNote) -> [Section.Kind] {
+    static func sectionKinds(of note: CleanupDetectorNote) -> [Section.Kind] {
         switch (note.detector, note.kind) {
         case (.homebrew, .dryRunFailed): [.homebrew]
         case (.homebrew, _): [.duplicates]
@@ -271,7 +278,9 @@ enum CleanupPresentation {
             sizeText: finding.size.map(sizeText), button: control.button, note: control.note,
             keep: keep,
             isActionable: control.isActionable,
-            origin: origin(of: finding, title: title)
+            origin: origin(of: finding, title: title), finding: finding,
+            copyDetail: finding.detector == .pathDuplicates
+                ? detail(of: finding, home: home, namesTool: false, linkKeeps: linkKeeps, labelsSource: true) : nil
         )
     }
 
@@ -343,19 +352,21 @@ enum CleanupPresentation {
     }
 
     private static func detail(
-        of finding: CleanupFinding, home: URL, namesTool: Bool, linkKeeps: [String: CleanupKeep]
+        of finding: CleanupFinding, home: URL, namesTool: Bool, linkKeeps: [String: CleanupKeep], labelsSource: Bool = false
     ) -> String {
         var parts: [String] = namesTool ? [finding.tool] : []
-        if let source = finding.source, !isMapBundleEntry(finding) { parts.append(sourceText(source)) }
+        if let source = finding.source, !labelsSource, !isMapBundleEntry(finding) { parts.append(sourceText(source)) }
         if let version = finding.version {
             parts.append(version)
         } else if finding.source == .standalone, finding.status != .brokenLink {
             parts.append(tr("wersja nieznana"))
         }
-        parts.append(
-            linkedEntryText(finding.reason, linkKeeps: linkKeeps)
-                ?? reasonText(displayed(finding.reason, home: home), requiredBy: pinnedPaths(in: finding.status, home: home))
-        )
+        if !labelsSource || (finding.reason != .systemCopy && finding.reason != .currentVersion) {
+            parts.append(
+                linkedEntryText(finding.reason, linkKeeps: linkKeeps)
+                    ?? reasonText(displayed(finding.reason, home: home), requiredBy: pinnedPaths(in: finding.status, home: home))
+            )
+        }
         let users = processes(of: finding)
         if !users.isEmpty {
             parts.append(trf("używa: %@", users.map(processName).joined(separator: ", ")))
@@ -508,7 +519,7 @@ enum CleanupPresentation {
         }
     }
 
-    private static func sourceText(_ source: CleanupSource) -> String {
+    static func sourceText(_ source: CleanupSource) -> String {
         switch source {
         case .homebrewFormula(let name): trf("formuła Homebrew %@", name)
         case .homebrewCask(let token): trf("cask Homebrew %@", token)
@@ -608,7 +619,7 @@ enum CleanupPresentation {
         case .needsInUseAcknowledgement:
             nil
         case .changedSinceScan:
-            tr("Ten element zmienił się od skanu, więc niczego nie ruszono. Kliknij „Skanuj” i spróbuj ponownie.")
+            tr("Ten element zmienił się od skanu, więc niczego nie ruszono. Kliknij „Sprawdź ponownie” i spróbuj jeszcze raz.")
         case .nowRequiredBy(let dependents):
             trf("Niczego nie usunięto: tej formuły potrzebują teraz %@.", dependents.joined(separator: ", "))
         case .failed(let error):
@@ -849,11 +860,15 @@ extension CleanupPresentation {
         )
     }
 
+    static var mapAccessReminder: String {
+        tr("Pełny dostęp do dysku, którego Wega potrzebuje do mapy, macOS daje też każdemu programowi, który Wega uruchamia: brew, npm, mas i powłoce, z której Wega odczytuje PATH. Gdy skończysz przeglądać mapę, usuń Wegę z listy Pełny dostęp do dysku.")
+    }
+
     /// `mapNotes` and `mapRows` are the report's D10 notes and rows; `offRows` lists what may have
     /// entries while the switch is off. Every scan that opened the database repeats the Full Disk
     /// Access reminder, whether or not the map had rows.
     private static func filesAndFoldersSection(_ state: MapState, notes mapNotes: [String], rows mapRows: [Row], offRows: [Row]) -> Section {
-        let reminder = tr("Pełny dostęp do dysku, którego Wega potrzebuje do mapy, macOS daje też każdemu programowi, który Wega uruchamia: brew, npm, mas i powłoce, z której Wega odczytuje PATH. Gdy skończysz przeglądać mapę, usuń Wegę z listy Pełny dostęp do dysku.")
+        let reminder = mapAccessReminder
         let explanation = [
             tr("Narzędzie wiersza poleceń nie ma pakietu aplikacji, więc macOS zapisuje zgodę na dostęp do plików osobno dla każdej ścieżki, z której zostało uruchomione."),
             tr("Każda kopia z sekcji „Wiele kopii tego samego narzędzia” może mieć w Ustawieniach systemowych → Prywatność i ochrona → Pliki i foldery własny wpis."),
@@ -862,7 +877,7 @@ extension CleanupPresentation {
         case .off:
             (explanation + [tr("Mapa, która przypisuje te wpisy do konkretnych kopii, jest wyłączona. Włącz ją w Ustawieniach.")], offRows)
         case .notScanned:
-            (explanation + [tr("Mapa jest włączona. Kliknij „Skanuj”, żeby ją odczytać.")], [])
+            (explanation + [tr("Mapa jest włączona. Kliknij „Sprawdź ponownie”, żeby ją odczytać.")], [])
         case .notRead(let openedDatabase):
             (openedDatabase ? mapNotes + [reminder] : mapNotes, [])
         case .read:
@@ -913,7 +928,7 @@ extension CleanupPresentation {
                 guard let id = row.findingID, let linked = services[id] else { return row }
                 return row.appendingDetail(trf("wpisy w „Pliki i foldery”: %@", linked.map(serviceName).joined(separator: ", ")))
             }
-            return Section(kind: section.kind, title: section.title, notes: section.notes, rows: rows)
+            return Section(kind: section.kind, title: section.title, notes: section.notes, rows: rows, approximateCopyOrder: section.approximateCopyOrder)
         }
     }
 

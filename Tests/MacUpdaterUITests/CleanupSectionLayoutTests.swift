@@ -67,6 +67,28 @@ final class CleanupSectionLayoutTests: XCTestCase {
         ))
     }
 
+    func testToolReviewSurfacesApproximateCopiesAndSeparatesIndividualCleanupActions() throws {
+        let copies = [activeGit, systemGit]
+        let report = CleanupReport(
+            createdAt: .now, path: CleanupPathSnapshot(entries: ["/usr/bin"], ignoredEntries: [], shell: nil, capturedAt: nil, isApproximate: true),
+            findings: copies, notes: [], skippedProtected: []
+        )
+        let sections = CleanupPresentation.sections(report, home: home)
+        let duplicates = try XCTUnwrap(sections.first { $0.kind == .duplicates })
+        let layout = try XCTUnwrap(CleanupPresentation.layout(of: duplicates, search: ""))
+        XCTAssertEqual(layout.shown.map(\.name), ["git"])
+        XCTAssertEqual(layout.actionCount, 1)
+        XCTAssertEqual(layout.shown.first?.rows.compactMap(\.findingID), copies.map(\.id))
+
+        let packages = CleanupPresentation.Section(kind: .homebrew, title: "Homebrew", notes: [], rows: [
+            row(tool: "wget", title: "/cache/wget", actionable: true),
+            row(tool: nil, title: "/Cellar/wget", actionable: true),
+        ])
+        let packageLayout = try XCTUnwrap(CleanupPresentation.layout(of: packages, search: ""))
+        XCTAssertEqual(packageLayout.shown.map(\.name), ["wget", "wget"])
+        XCTAssertEqual(packageLayout.shown.map { $0.rows.count }, [1, 1])
+    }
+
     func testRowsSayWhetherTheyNeedAction() throws {
         let undecided = finding(Sample(
             path: "/usr/local/bin/ollama", source: .standalone, status: .shadowed, keep: .undecided

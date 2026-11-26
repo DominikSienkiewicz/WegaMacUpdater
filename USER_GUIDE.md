@@ -1242,8 +1242,13 @@ runtimes unavailable in the selected Xcode. An empty list, an unavailable toolch
 and a failed read have different messages. To manage a runtime, open Xcode from the
 list and choose **Xcode → Settings → Components**.
 
-**Tools.** Each report section lists the tools that need a decision first. The rest
-appear under **No action**, collapsed. **⌘F** searches the current view.
+**Tools.** Choose **Check tools**. Each result has its own card. Open **Show details**
+to compare locations, read the reason, or choose the copy to keep. Other cards stay in place.
+When the order of two copies is uncertain, **Check which copy Terminal uses** asks before
+reading your shell configuration and refreshes the report after a successful read.
+**⌘F** searches the report, including paths inside collapsed cards. Scan notes show
+any incomplete checks. The **Report options** menu contains the space estimates and the
+text and JSON exports.
 
 **Apps installed in several locations** shows separate copies with their paths and
 versions. Choose **Review copies…**, select one copy in **Uninstall**, and confirm.

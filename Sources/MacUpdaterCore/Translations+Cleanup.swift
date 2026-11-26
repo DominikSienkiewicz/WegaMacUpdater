@@ -193,8 +193,8 @@ extension Translations {
         "Usunięto. Wega odświeża wynik.": "Removed. Wega is refreshing the result.",
         "Tego elementu Wega nie usuwa sama — skorzystaj z polecenia lub wskazówki przy nim.":
             "Wega does not remove this item itself — use the command or the hint next to it.",
-        "Ten element zmienił się od skanu, więc niczego nie ruszono. Kliknij „Skanuj” i spróbuj ponownie.":
-            "This item changed since the scan, so nothing was touched. Click “Scan” and try again.",
+        "Ten element zmienił się od skanu, więc niczego nie ruszono. Kliknij „Sprawdź ponownie” i spróbuj jeszcze raz.":
+            "This item changed since the scan, so nothing was touched. Click “Check again” and retry.",
         "Niczego nie usunięto: tej formuły potrzebują teraz %@.": "Nothing was removed: %@ now need this formula.",
         "Usunięcie nie powiodło się (%@). Uruchom skan, żeby zobaczyć bieżący stan.": "The removal failed (%@). Run a scan to see the current state.",
 
@@ -212,6 +212,41 @@ extension Translations {
         "Ten katalog leży w lokalizacji chronionej, więc Wega go nie przeszuka.":
             "This folder is in a protected location, so Wega will not search it.",
         "Ten katalog jest już na liście.": "This folder is already on the list.",
+
+        "Porządki w narzędziach": "Tool cleanup",
+        "Wega poszuka dodatkowych kopii i plików po aktualizacjach.": "Wega will look for extra copies and files left behind by updates.",
+        "Sprawdź narzędzia": "Check tools",
+        "Ukryj szczegóły": "Hide details",
+        "Opcje raportu": "Report options",
+        "Sprawdzone obszary bez uwag": "Checked areas with nothing to review",
+        "Zakres skanu": "Scan scope",
+        "Uwagi do skanu": "Scan notes",
+        "Brak wyników do przejrzenia w sprawdzonych obszarach.": "Nothing to review in the areas checked.",
+        "Skan zakończony z uwagami": "Scan completed with notes",
+        "%@ jest w dwóch miejscach": "%@ was found in two locations",
+        "%@ jest w kilku miejscach": "%@ was found in multiple locations",
+        "Kopia z Homebrew": "Homebrew copy",
+        "Kopia systemowa": "System copy",
+        "Kilka kopii aplikacji %@": "Multiple copies of %@",
+        "Porównaj lokalizacje i wersje aplikacji.": "Compare the locations and versions of the app.",
+        "Homebrew ma pliki po aktualizacji %@": "Homebrew has files left over from updating %@",
+        "Starsze wersje lub pobrane pliki": "Older versions or downloaded files",
+        "Pliki Gradle %@": "Gradle %@ files",
+        "Żaden ze sprawdzonych projektów nie wskazuje tej dystrybucji.": "None of the projects checked references this distribution.",
+        "Pakiet %@ do przejrzenia": "Review the %@ package",
+        "Pliki poprzedniej wersji %@": "Files from a previous version of %@",
+        "Wega nie znalazła odwołania w sprawdzonych projektach.": "Wega found no reference in the projects it checked.",
+        "Pliki poprzednich sesji %@": "Files from previous %@ sessions",
+        "Niedziałający skrót do %@": "Broken link to %@",
+        "Kolejność wyszukiwania narzędzi w Terminalu": "Tool lookup order in Terminal",
+        "Wega jeszcze nie sprawdziła, którą kopię wybiera Terminal.": "Wega has yet to check which copy Terminal uses.",
+        "Sprawdź, którą kopię wybiera Terminal": "Check which copy Terminal uses",
+        "Pierwsza w ścieżce Terminala: %@": "First on the Terminal search path: %@",
+        "Pierwsza w ścieżce Terminala": "First on the Terminal search path",
+        "Dalsza w ścieżce Terminala": "Later on the Terminal search path",
+        "Pozostałe sprawdzone pozycje": "Other checked items",
+        "Po sprawdzeniu ścieżki Terminala Wega nie znalazła kilku kopii %@.": "After checking the Terminal search path, Wega found no duplicate copies of %@.",
+        "Szczegóły: %@": "Details for %@",
 
         // Section layout
         "%@ do zrobienia": "%@ to do",
