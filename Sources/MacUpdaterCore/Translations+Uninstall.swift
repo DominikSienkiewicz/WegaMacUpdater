@@ -32,6 +32,8 @@ extension Translations {
         "Pokaż, czego nie usunięto": "Show what was not removed",
         "Otwórz ustawienia pomocnika": "Open helper settings",
         "Lista aplikacji się odświeża — poczekaj, aż skończy.": "The app list is refreshing — wait until it finishes.",
+        "wraz z danymi Homebrew": "with Homebrew app data",
+        "Czyszczenie danych przez Homebrew": "Homebrew app data cleanup",
         "Resztki aplikacji": "App leftovers",
         "Prawdopodobne — sprawdź przed zaznaczeniem": "Probable — check before ticking",
         "lista Homebrew": "Homebrew list",

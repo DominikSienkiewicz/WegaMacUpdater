@@ -2,10 +2,12 @@ import MacUpdaterCore
 
 /// What the uninstall sheet will remove, and by which route. Names only the routes in use.
 enum UninstallScopeSummary {
-    static func headline(counts: UninstallDialogCounts, leftovers: Int) -> String {
-        let apps = trp("Usuń %@ aplikacji", counts.brew + counts.trash)
-        guard leftovers > 0 else { return apps }
-        return apps + " " + trp("i %@ wybranych resztek", leftovers)
+    static func headline(counts: UninstallDialogCounts, leftovers: Int, zapMode: Bool = false) -> String {
+        guard !counts.removesNothing else { return tr("Pokaż, czego nie usunięto") }
+        var action = trp("Usuń %@ aplikacji", counts.brew + counts.trash)
+        if zapMode && counts.brew > 0 { action += " " + tr("wraz z danymi Homebrew") }
+        if leftovers > 0 { action += " " + trp("i przenieś %@ pozycji do Kosza", leftovers) }
+        return action
     }
 
     static func text(counts: UninstallDialogCounts, leftovers: Int, zapMode: Bool) -> String {

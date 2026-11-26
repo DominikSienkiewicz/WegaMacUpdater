@@ -697,6 +697,13 @@ struct UninstallDialog: View {
     private var trashCount: Int { counts.trash }
     private var blockedCount: Int { counts.blocked }
     private var totalCount: Int { targets.count }
+    private var brewOptionsTargets: [ApplicationInfo] {
+        guard !duplicateReview else { return [] }
+        return targets.filter { app in
+            if case .blocked = routes[app.id] { return false }
+            return app.isManagedByBrew
+        }
+    }
     private var hasMixed: Bool { brewCount > 0 && trashCount > 0 }
     private var hasNonBrew: Bool { trashCount > 0 }
 
@@ -800,8 +807,13 @@ struct UninstallDialog: View {
                     .padding(.bottom, 12)
 
                     // Options — only shown when brew casks are selected
-                    if brewCount > 0 && !duplicateReview {
-                        VStack(spacing: 8) {
+                    if !brewOptionsTargets.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(tr("Czyszczenie danych przez Homebrew"))
+                                .font(.wega(.callout, weight: .semibold))
+                            Text(brewOptionsTargets.map(\.name).joined(separator: ", "))
+                                .font(.wega(.footnote))
+                                .foregroundStyle(.secondary)
                             UninstallOption(
                                 title:       tr("Tylko aplikacja"),
                                 subtitle:    tr("Usuwa plik .app. Preferencje i cache zostają w ~/Library."),
@@ -824,7 +836,6 @@ struct UninstallDialog: View {
 
                     if !counts.removesNothing {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(UninstallScopeSummary.headline(counts: counts, leftovers: selectedLeftovers.count))
                             Text(UninstallScopeSummary.text(
                                 counts: counts, leftovers: selectedLeftovers.count, zapMode: zapMode))
                         }
@@ -956,10 +967,7 @@ struct UninstallDialog: View {
     }
 
     private var confirmLabel: String {
-        if brewCount > 0 {
-            return zapMode ? tr("Usuń razem z resztkami") : tr("Usuń tylko aplikację")
-        }
-        return counts.promisesTrash ? tr("Przenieś do Kosza") : tr("Pokaż, czego nie usunięto")
+        UninstallScopeSummary.headline(counts: counts, leftovers: selectedLeftovers.count, zapMode: zapMode)
     }
 }
 

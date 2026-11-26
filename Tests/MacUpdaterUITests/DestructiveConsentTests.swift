@@ -49,6 +49,15 @@ struct DestructiveConsentTests {
         #expect(store.contains("pendingForceRestart ="))
     }
 
+    @Test func mixedRemovalConfirmationNamesTheAppsAndLocalItemsGoingToTrash() throws {
+        let scope = UninstallScopeSummary.headline(counts: counts(brew: 1, trash: 1), leftovers: 3)
+        #expect(scope == "Usuń 2 aplikacje i przenieś 3 pozycje do Kosza")
+        let view = try source("Sources/MacUpdater/UninstallView.swift")
+        let footer = try #require(view.components(separatedBy: "private var confirmLabel: String {").last)
+        #expect(footer.contains("UninstallScopeSummary."))
+        #expect(!footer.contains("Usuń tylko aplikację"))
+    }
+
     @Test func theFooterNamesEveryRoute() {
         let summary = UninstallScopeSummary.text(counts: counts(brew: 1, trash: 2), leftovers: 3, zapMode: true)
         #expect(summary == trf("Do Kosza: %@ · Homebrew: %@ (resztki z zap nie trafiają do Kosza)", "\(2 + 3)", "1"))
