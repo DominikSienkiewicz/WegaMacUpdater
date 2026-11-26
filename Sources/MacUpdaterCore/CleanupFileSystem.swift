@@ -261,6 +261,7 @@ public struct LiveCleanupFileSystem: CleanupFileSystem {
         guard let enumerator else { throw CleanupFileSystemError.io("\(directory.path): not enumerable") }
         var total: Int64 = 0
         while let item = enumerator.nextObject() as? URL {
+            try Task.checkCancellation()
             total += try ownAllocatedSize(of: item)
         }
         if let failure { throw mapped(failure, directory) }
