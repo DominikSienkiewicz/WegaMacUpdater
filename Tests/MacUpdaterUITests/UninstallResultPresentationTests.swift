@@ -44,7 +44,7 @@ struct UninstallResultPresentationTests {
         let results = Dictionary(uniqueKeysWithValues: cases.map { ($0.app.id, $0.result) })
 
         let report = UninstallResultPresentation.report(
-            results: results, apps: cases.map(\.app), leftoversTrashed: 0, leftoversFailed: 0
+            results: results, apps: cases.map(\.app)
         )
 
         #expect(report.rows.map(\.id) == cases.map(\.app.id))
@@ -58,11 +58,35 @@ struct UninstallResultPresentationTests {
         #expect(!summary.contains("\n"), "the banner keeps one summary line; the reasons live in the rows")
     }
 
+    @Test func fileGroupsOmitEmptyCategoriesAndPreserveOrderWithinEachCategory() {
+        let files: [UninstallFileResult] = [
+            .init(url: URL(filePath: "/fixture/shared"), status: .keptForAnotherApp),
+            .init(url: URL(filePath: "/fixture/moved"), status: .movedToTrash),
+            .init(url: URL(filePath: "/fixture/absent"), status: .alreadyAbsent),
+            .init(url: URL(filePath: "/fixture/locked"), status: .failed("locked")),
+        ]
+        let report = UninstallResultPresentation.report(results: [:], apps: [], files: files)
+        #expect(report.fileGroups.map(\.id) == [.trashed, .absent, .remaining])
+        #expect(report.fileGroups.map(\.files) == [[files[1]], [files[2]], [files[0], files[3]]])
+
+        let onlyAbsent = UninstallResultPresentation.report(results: [:], apps: [], files: [files[2]])
+        #expect(onlyAbsent.fileGroups.map(\.id) == [.absent])
+    }
+
+    @Test func fileResultPathsAreBehindExpandableGroupHeaders() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let view = try String(contentsOf: root.appending(path: "Sources/MacUpdater/UninstallResultList.swift"), encoding: .utf8)
+
+        #expect(view.contains("ForEach(report.fileGroups)"))
+        #expect(view.contains("WegaDisclosure(isExpanded: fileGroupBinding(for: group.id))"))
+    }
+
     @Test func mixedSkippedAndFailedNamesBoth() throws {
         let broken = app("Broken"), stubborn = app("Stubborn")
         let report = UninstallResultPresentation.report(
             results: [broken.id: .failed("nope"), stubborn.id: .skippedStillRunning],
-            apps: [broken, stubborn], leftoversTrashed: 0, leftoversFailed: 0
+            apps: [broken, stubborn]
         )
         #expect(report.rows.map(\.name) == ["Broken", "Stubborn"])
         let summary = try #require(report.summary)
@@ -70,7 +94,7 @@ struct UninstallResultPresentationTests {
     }
 
     @Test func nothingToReportIsEmpty() {
-        let report = UninstallResultPresentation.report(results: [:], apps: [], leftoversTrashed: 0, leftoversFailed: 0)
+        let report = UninstallResultPresentation.report(results: [:], apps: [])
         #expect(report.banner == nil)
         #expect(report.summary == nil)
         #expect(report.rows.isEmpty)
@@ -81,7 +105,12 @@ struct UninstallResultPresentationTests {
         let trashed = app("Trashed"), cask = app("Cask", brew: true), broken = app("Broken")
         let report = UninstallResultPresentation.report(
             results: [trashed.id: .movedToTrash, cask.id: .removedByHomebrew, broken.id: .failed("nope")],
-            apps: [trashed, cask, broken], leftoversTrashed: 2, leftoversFailed: 1
+            apps: [trashed, cask, broken],
+            files: [
+                .init(url: URL(filePath: "/fixture/a"), status: .movedToTrash),
+                .init(url: URL(filePath: "/fixture/b"), status: .movedToTrash),
+                .init(url: URL(filePath: "/fixture/c"), status: .failed("locked"))
+            ]
         )
         let banner = try #require(report.banner)
         #expect(banner.variant == .success)
@@ -99,7 +128,7 @@ struct UninstallResultPresentationTests {
         let helped = app("Helped"), trashed = app("Trashed")
         let report = UninstallResultPresentation.report(
             results: [helped.id: .movedToTrashByHelper, trashed.id: .movedToTrash],
-            apps: [helped, trashed], leftoversTrashed: 0, leftoversFailed: 0
+            apps: [helped, trashed]
         )
 
         let banner = try #require(report.banner)
@@ -138,11 +167,11 @@ struct UninstallResultPresentationTests {
         let cask = app("Cask", brew: true)
         let zapped = UninstallResultPresentation.report(
             results: [cask.id: .failed("zap failed")], apps: [cask],
-            leftoversTrashed: 0, leftoversFailed: 0, requestedZap: true
+            requestedZap: true
         )
         #expect(try #require(zapped.summary).contains("--force"))
         let plain = UninstallResultPresentation.report(
-            results: [cask.id: .failed("uninstall failed")], apps: [cask], leftoversTrashed: 0, leftoversFailed: 0
+            results: [cask.id: .failed("uninstall failed")], apps: [cask]
         )
         #expect(!(try #require(plain.summary)).contains("--force"))
     }
@@ -173,7 +202,7 @@ struct UninstallResultPresentationTests {
                 blocked.id: .blocked(.needsAppManagement),
                 running.id: .skippedStillRunning,
             ],
-            apps: [safari, blocked, running], leftoversTrashed: 0, leftoversFailed: 0
+            apps: [safari, blocked, running]
         )
         let summary = try #require(report.summary)
         #expect(!summary.contains("Odinstalowanie niepełne"))
@@ -192,7 +221,7 @@ struct UninstallResultPresentationTests {
         ).localizedDescription
 
         let report = UninstallResultPresentation.report(
-            results: [cask.id: .failed(failure)], apps: [cask], leftoversTrashed: 0, leftoversFailed: 0
+            results: [cask.id: .failed(failure)], apps: [cask]
         )
 
         let row = try #require(report.rows.first)
@@ -229,7 +258,7 @@ struct UninstallResultPresentationTests {
                 system.id: .blocked(.needsAdministratorRights),
                 user.id: .blocked(.needsAdministratorRights),
             ],
-            apps: [system, user], leftoversTrashed: 0, leftoversFailed: 0
+            apps: [system, user]
         )
 
         #expect(report.rows.map(\.id) == [system.id, user.id])
@@ -241,7 +270,7 @@ struct UninstallResultPresentationTests {
     @Test func aUniqueAppShowsNoLocation() throws {
         let only = app("Only")
         let report = UninstallResultPresentation.report(
-            results: [only.id: .skippedStillRunning], apps: [only], leftoversTrashed: 0, leftoversFailed: 0
+            results: [only.id: .skippedStillRunning], apps: [only]
         )
         #expect(try #require(report.rows.first).location == nil)
     }

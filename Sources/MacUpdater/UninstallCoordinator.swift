@@ -197,10 +197,8 @@ final class UninstallCoordinator: ObservableObject {
     struct Outcome {
         /// One result per target id.
         let results: [String: UninstallTargetResult]
-        /// UX-13: how many consented home-folder leftovers reached the Trash, and how many
-        /// could not be moved, so the result is reported honestly rather than swallowed.
-        var leftoversTrashed: Int = 0
-        var leftoversFailed: Int = 0
+        let files: [UninstallFileResult]
+        var leftoversTrashed: Int { files.count { $0.status == .movedToTrash } }
     }
 
     /// The helper took the request but never answered: it may have moved the app already, so
@@ -432,7 +430,8 @@ final class UninstallCoordinator: ObservableObject {
         } catch {
             let failure = UninstallTargetResult.failed(error.localizedDescription)
             let failed = Dictionary(uniqueKeysWithValues: targets.map { ($0.id, failure) })
-            return Outcome(results: failed.merging(skipped) { _, skip in skip })
+            let results = failed.merging(skipped) { _, skip in skip }
+            return Outcome(results: results, files: UninstallFilePlan(groups: leftovers, results: results).finished())
         }
     }
 
@@ -466,27 +465,9 @@ final class UninstallCoordinator: ObservableObject {
                 results[app.id] = await removeNonBrew(app)
             }
         }
-        let leftoverResult = dependencies.trashLeftovers(
-            options.duplicateReview == nil ? Self.releasedLeftovers(leftovers, results: results) : []
-        )
-        return Outcome(
-            results: results,
-            leftoversTrashed: leftoverResult.removed.count,
-            leftoversFailed: leftoverResult.failed.count
-        )
-    }
-
-    /// UX-13: a consented leftover is released only when its own app and every other target that
-    /// claims it (`coTargets`) were actually removed; the data of an app that stays installed is
-    /// never touched.
-    private static func releasedLeftovers(
-        _ leftovers: [LeftoverGroup],
-        results: [String: UninstallTargetResult]
-    ) -> [URL] {
-        let isRemoved = { (id: String) in results[id]?.isRemoved == true }
-        return leftovers.flatMap { group in
-            group.items.filter { isRemoved(group.id) && $0.coTargets.allSatisfy(isRemoved) }.map(\.url)
-        }
+        let plan = UninstallFilePlan(groups: leftovers, results: results, preservingOtherCopy: options.duplicateReview != nil)
+        let cleanup = dependencies.trashLeftovers(plan.ready)
+        return Outcome(results: results, files: plan.finished(cleanup))
     }
 
     /// The quit phase decided "stopped" before the force-quit sheet and the write lease, both of

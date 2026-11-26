@@ -123,6 +123,67 @@ struct UninstallCoordinatorRemovalTests {
         #expect(outcome.leftoversTrashed == bLeftovers.items.count)
     }
 
+    @Test func resultsExcludeAbsentFilesFromTrashCount() async {
+        let target = app("Fixture")
+        let missing = URL(filePath: "/fixture/already-absent")
+        let group = LeftoverGroup(app: target, items: [LeftoverItem(url: missing, source: .bundleIdentifier)])
+        let sut = coordinator(
+            facts: .userOwnedWritable,
+            trash: { _ in },
+            trashLeftovers: { files in
+                LeftoverCleanup.removeToTrash(files, trash: { _ in throw TrashRefused() }, lstat: { _ in nil })
+            }
+        )
+
+        let outcome = await sut.uninstall(targets: [target], zap: false, leftovers: [group], using: BrewService())
+
+        #expect(outcome.leftoversTrashed == 0)
+    }
+
+    @Test func fileReportKeepsTheOutcomeAndRecoveryActionForEverySelectedPath() async throws {
+        let target = app("Fixture"), skipped = app("Skipped")
+        let moved = URL(filePath: "/fixture/moved"), missing = URL(filePath: "/fixture/missing")
+        let locked = URL(filePath: "/fixture/locked"), shared = URL(filePath: "/fixture/shared")
+        let items = [moved, missing, locked].map { LeftoverItem(url: $0, source: .bundleIdentifier) }
+        let group = LeftoverGroup(app: target, items: items + [
+            LeftoverItem(url: shared, source: .bundleIdentifier, coTargets: [skipped.id])
+        ])
+        let sut = coordinator(
+            facts: .userOwnedWritable,
+            trash: { _ in },
+            trashLeftovers: { urls in
+                LeftoverCleanup.removeToTrash(urls, trash: { url in
+                    if url == locked { throw TrashRefused() }
+                }, lstat: { url in
+                    guard url != missing else { return nil }
+                    return CleanupEntry(url: url, kind: .file, isExecutable: false,
+                                        identity: .init(device: 1, inode: 1), modificationDate: nil)
+                })
+            }
+        )
+        let outcome = await sut.uninstall(
+            targets: [target], zap: false, leftovers: [group, leftovers(for: skipped)],
+            skipped: [skipped.id: .skippedStillRunning], using: BrewService()
+        )
+        let report = UninstallResultPresentation.report(
+            results: outcome.results, apps: [target, skipped], files: outcome.files
+        )
+        #expect(outcome.files.map(\.url) == [moved, missing, locked, shared] + leftovers(for: skipped).items.map(\.url))
+        #expect(outcome.files.map(\.status) == [
+            .movedToTrash, .alreadyAbsent, .failed("trash refused"), .keptForAnotherApp,
+            .keptForApp(skipped.name), .keptForApp(skipped.name)
+        ])
+        #expect(report.offersOpenTrash)
+        #expect(report.files.first(where: { $0.url == locked })?.action == .showInFinder(locked))
+        #expect(report.files.first(where: { $0.url == shared })?.action == .showInFinder(shared))
+        #expect(try #require(report.files.first { $0.url == missing }).action == nil)
+
+        let onlyMissing = UninstallResultPresentation.report(
+            results: [:], apps: [], files: [UninstallFileResult(url: missing, status: .alreadyAbsent)]
+        )
+        #expect(!onlyMissing.offersOpenTrash)
+    }
+
     private func coordinator(
         facts: UninstallBundleFacts,
         trash: @escaping @Sendable (URL) throws -> Void,

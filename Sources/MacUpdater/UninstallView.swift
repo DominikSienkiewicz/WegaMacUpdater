@@ -144,12 +144,12 @@ struct UninstallView: View {
                 if let scanError {
                     ErrorBanner(message: scanError).padding(.horizontal, 16).padding(.bottom, 8)
                 }
+                if let b = banner {
+                    BannerView(data: b) { banner = nil }.padding(.horizontal, 16).padding(.bottom, 8)
+                }
                 if let result {
                     UninstallResultList(report: result, onAction: perform) { self.result = nil }
                         .padding(.horizontal, 16).padding(.bottom, 8)
-                }
-                if let b = banner {
-                    BannerView(data: b) { banner = nil }.padding(.horizontal, 16).padding(.bottom, 8)
                 }
 
                 // Select-all row
@@ -334,6 +334,10 @@ struct UninstallView: View {
         switch action {
         case .showInFinder(let url):
             NSWorkspace.shared.activateFileViewerSelecting([url])
+        case .openTrash:
+            if let trash = FileManager.default.urls(for: .trashDirectory, in: .userDomainMask).first {
+                NSWorkspace.shared.open(trash)
+            }
         case .openAppManagementSettings:
             NSWorkspace.shared.open(AppManagementSettings.paneURL)
         case .openHelperSettings:
@@ -548,7 +552,8 @@ struct UninstallView: View {
         let zap = options.zap
         guard !targets.isEmpty else {
             show(UninstallResultPresentation.report(
-                results: skipped, apps: reportedApps, leftoversTrashed: 0, leftoversFailed: 0, requestedZap: zap
+                results: skipped, apps: reportedApps,
+                files: UninstallFilePlan(groups: leftovers, results: skipped).finished(), requestedZap: zap
             ))
             announcer.announce(AnnouncementCopy.uninstallNothingRemoved())
             return
@@ -579,8 +584,7 @@ struct UninstallView: View {
         let report = UninstallResultPresentation.report(
             results: outcome.results,
             apps: reportedApps,
-            leftoversTrashed: outcome.leftoversTrashed,
-            leftoversFailed: outcome.leftoversFailed,
+            files: outcome.files,
             requestedZap: zap
         )
         if !succeeded.isEmpty {
@@ -595,7 +599,7 @@ struct UninstallView: View {
     /// The success banner names what was removed; everything else stays together in `result`.
     private func show(_ report: UninstallResultReport) {
         banner = report.banner
-        result = report.summary == nil && report.rows.isEmpty ? nil : report
+        result = report.hasDetails ? report : nil
     }
 }
 
