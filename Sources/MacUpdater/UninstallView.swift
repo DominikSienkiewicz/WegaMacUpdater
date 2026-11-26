@@ -9,6 +9,7 @@ struct UninstallView: View {
     var onPreselectionUsed: () -> Void = {}
     var duplicateBundleIdentifier: String?
     var onEndDuplicateReview: () -> Void = {}
+    var onReviewPreselectedCopies: ((String) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
     /// The Settings window hosts the helper card that turns Wega's helper on.
@@ -509,8 +510,13 @@ struct UninstallView: View {
         protections = scan.protections
         if let duplicateBundleIdentifier {
             applyDuplicateReview(duplicateBundleIdentifier, to: scan)
-        } else if let preselection {
-            selected = UninstallSelection.preselection(for: preselection, in: apps, protections: protections)
+        } else if let preselection, let onReviewPreselectedCopies,
+                  let id = UninstallSelection.duplicateGroup(for: preselection, in: apps) {
+            onReviewPreselectedCopies(id)
+            return
+        }
+        if let preselection {
+            selected = UninstallSelection.preselection(for: preselection, in: appRows, protections: protections)
             onPreselectionUsed()
         }
         scanFailed = scan.scanFailed
