@@ -160,6 +160,10 @@ final class CleanupStore: ObservableObject {
             guard case .captured(let snapshot) = result else { return }
             self.pathSnapshot = snapshot
             self.persist("PATH") { try self.dependencies.savePath(snapshot) }
+            if self.report != nil {
+                self.phase = .scanning
+                await self.performScan()
+            }
         }
     }
 
