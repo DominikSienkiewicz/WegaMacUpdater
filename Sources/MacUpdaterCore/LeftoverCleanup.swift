@@ -15,6 +15,9 @@ public enum LeftoverCleanup {
     public struct Result: Equatable, Sendable {
         public var removed: [URL]
         public var failed: [URL]
+        /// A subset of `removed` whose original location was empty before the move.
+        public fileprivate(set) var alreadyAbsent: [URL] = []
+        public fileprivate(set) var failureReasons: [URL: String] = [:]
 
         public init(removed: [URL] = [], failed: [URL] = []) {
             self.removed = removed
@@ -36,6 +39,7 @@ public enum LeftoverCleanup {
         var result = Result()
         for item in items {
             if isGone(item, lstat: lstat) {
+                result.alreadyAbsent.append(item)
                 result.removed.append(item)
                 continue
             }
@@ -44,6 +48,7 @@ public enum LeftoverCleanup {
                 result.removed.append(item)
             } catch {
                 result.failed.append(item)
+                result.failureReasons[item] = error.localizedDescription
             }
         }
         return result

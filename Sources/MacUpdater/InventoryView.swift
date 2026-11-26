@@ -12,7 +12,7 @@ struct InventoryView: View {
     var onWegaState: ((WegaState) -> Void)?
     /// „Sprawdź aktualizacje” takes the user to Updates, where the scan shows and can be stopped.
     var onNavigate: ((SidebarSelection) -> Void)?
-    var onReviewUninstall: ((URL, String?) -> Void)?
+    var onReviewUninstall: ((URL) -> Void)?
 
     @EnvironmentObject private var model: AppViewModel
     @EnvironmentObject private var scanStore: ScanStore
@@ -267,8 +267,7 @@ struct InventoryView: View {
                                     showsLocation: app.bundleIdentifier.map(duplicates.contains) ?? false,
                                     activity: inventory.activity[app.installation],
                                     reviewUninstall: largeUnusedOnly && onReviewUninstall != nil ? { path in
-                                        let group = app.bundleIdentifier.flatMap { duplicates.contains($0) ? $0 : nil }
-                                        onReviewUninstall?(path, group)
+                                        onReviewUninstall?(path)
                                     } : nil,
                                     checkPresentation: presentation(for: app, checks: checks, now: now)
                                 )

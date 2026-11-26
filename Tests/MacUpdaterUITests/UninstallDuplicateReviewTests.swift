@@ -50,6 +50,110 @@ final class UninstallDuplicateReviewTests: XCTestCase {
         XCTAssertNil(review.target(for: fixture.second))
     }
 
+    func testOrdinaryListBlocksCopiesWithoutConfirmedHomebrewOwnership() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        let apps = [fixture.first, fixture.second]
+        let scan = await UninstallScan.collect(
+            directories: [fixture.root], installedCasks: { ["discord"] },
+            scanApplications: { _, _ in apps }, protections: { _ in [:] }
+        )
+        XCTAssertEqual(scan.protections[fixture.first.id], .unverifiedDuplicateCopy)
+        XCTAssertEqual(scan.protections[fixture.second.id], .unverifiedDuplicateCopy)
+    }
+
+    func testMixedBatchUsesExactRoutesAndConflictingCopiesDoNotBlockOtherApps() throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        try fixture.linkCask(to: fixture.second.path)
+        let inventory = fixture.copyInventory()
+        let manual = try XCTUnwrap(inventory.routed(fixture.first))
+        let brew = try XCTUnwrap(inventory.routed(fixture.second))
+        let other = ApplicationInfo(
+            path: fixture.root.appending(path: "Other.app"), name: "Other", bundleIdentifier: "example.other",
+            version: nil, installDate: nil, updateDate: nil, isManagedByBrew: false
+        )
+
+        XCTAssertEqual(inventory.duplicateGroup(for: manual.path), manual.bundleIdentifier)
+        let plan = inventory.selecting([manual, other])
+        XCTAssertFalse(manual.isManagedByBrew)
+        XCTAssertTrue(brew.isManagedByBrew)
+        XCTAssertNil(plan.block(for: manual))
+        XCTAssertEqual(plan.keptPaths(for: manual), [brew.path])
+        XCTAssertTrue(plan.preservesData(for: manual))
+        XCTAssertFalse(plan.preservesData(for: other))
+        let conflicting = inventory.selecting([manual, brew, other])
+        XCTAssertEqual(conflicting.block(for: manual), .multipleSelectedCopies)
+        XCTAssertEqual(conflicting.block(for: brew), .multipleSelectedCopies)
+        XCTAssertNil(conflicting.block(for: other))
+    }
+
+    @MainActor
+    func testChangedCopyIsRejectedBeforeQuitAndAtRemoval() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        try fixture.linkCask(to: fixture.second.path)
+        let inventory = fixture.copyInventory()
+        let app = try XCTUnwrap(inventory.routed(fixture.first))
+        let plan = inventory.selecting([app])
+        let coordinator = UninstallCoordinator(dependencies: .init(
+            uninstallCask: { _, _, _ in XCTFail("Unexpected Homebrew operation") },
+            trashItem: { _ in XCTFail("Unexpected Trash operation") },
+            trashLeftovers: { paths in XCTAssertTrue(paths.isEmpty); return .init() },
+            protection: { _ in nil },
+            runningApplications: { [RunningApplicationTarget(processIdentifier: 32, bundleURL: app.path,
+                bundleIdentifier: app.bundleIdentifier, appName: app.name, processName: app.name)] },
+            requestQuit: { _ in XCTFail("Unexpected quit"); return false },
+            forceKill: { _ in XCTFail("Unexpected force quit"); return false },
+            waitBetweenRunningChecks: {}, bundleFacts: { _ in .userOwnedWritable },
+            stageForTrash: { _, _ in throw StagingNotExpected() }
+        ))
+        let routes = await coordinator.routes(for: [app], copies: plan)
+        XCTAssertEqual(routes[app.id], .userTrash)
+        let moved = fixture.root.appending(path: "Moved.app")
+        try FileManager.default.moveItem(at: fixture.first.path, to: moved)
+        let quit = await coordinator.runQuitPhase(targets: [app], routes: routes, copies: plan, askForceQuit: { _ in .skip })
+        XCTAssertEqual(quit?.skipped[app.id], .blocked(.unverifiedCopy))
+        let removal = await coordinator.uninstall(targets: [app], zap: true, copies: plan, using: BrewService())
+        XCTAssertEqual(removal.results[app.id], .blocked(.unverifiedCopy))
+    }
+
+    func testARealInstallWithAConfirmedSymlinkIsSelectableButAnUnresolvedSiblingBlocksIt() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        let directory = fixture.first.path.deletingLastPathComponent()
+        let alias = directory.appending(component: "Discord Alias.app", directoryHint: .notDirectory)
+        let aliasID = InstallationIdentity(path: alias).rawValue
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: fixture.first.path)
+        func scan() async -> UninstallScan {
+            await UninstallScan.collect(
+                directories: [directory], installedCasks: { [] },
+                scanApplications: { url, tokens in try ApplicationScanner().scanApplications(in: url, installedCasks: tokens) }
+            )
+        }
+        let single = await scan()
+        XCTAssertNil(single.copies.duplicateGroup(for: fixture.first.path))
+        XCTAssertNil(single.protections[fixture.first.id])
+        guard case .symlink = single.protections[aliasID] else { return XCTFail("A symlink must stay protected") }
+        XCTAssertEqual(UninstallSelection.preselection(for: fixture.first.path, in: single.apps, protections: single.protections), [fixture.first.id])
+        let manual = try XCTUnwrap(single.apps.first { $0.id == fixture.first.id })
+        XCTAssertNil(single.copies.block(for: manual))
+        XCTAssertFalse(single.copies.preservesData(for: manual))
+
+        try FileManager.default.removeItem(at: alias)
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: fixture.second.path)
+        let other = await scan()
+        XCTAssertEqual(other.protections[fixture.first.id], .unverifiedDuplicateCopy)
+        XCTAssertEqual(single.copies.block(for: manual), .unverifiedCopy)
+        guard case .symlink = other.protections[aliasID] else { return XCTFail("A link to another installation must stay protected") }
+
+        try FileManager.default.removeItem(at: alias)
+        try FileManager.default.createDirectory(at: alias, withIntermediateDirectories: false)
+        var unverified = manual
+        unverified.path = alias
+        XCTAssertNil(UninstallCopyPlan(apps: [manual, unverified]).routed(manual))
+    }
+
     private struct Fixture {
         let root: URL
         let first: ApplicationInfo
@@ -80,6 +184,11 @@ final class UninstallDuplicateReviewTests: XCTestCase {
             try JSONSerialization.data(withJSONObject: [
                 "default": ["appdir": (declaredTarget ?? target).deletingLastPathComponent().path],
             ]).write(to: metadata.appending(component: "config.json", directoryHint: .notDirectory))
+        }
+
+        func copyInventory() -> UninstallCopyPlan {
+            UninstallCopyPlan(apps: [first, second], scanComplete: true,
+                              brewPrefix: root.appending(component: "Homebrew", directoryHint: .isDirectory))
         }
 
         func review() -> UninstallDuplicateReview {

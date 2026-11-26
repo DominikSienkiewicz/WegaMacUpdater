@@ -2,42 +2,42 @@ import SwiftUI
 import AppKit
 import MacUpdaterCore
 
-/// Spec §5.8: every decision the leftover section of the uninstall sheet renders — which items
-/// are ticked when it opens, which sit in the probable section, what select-all and deselect-all
-/// cover and how a row and the header read — so `UninstallLeftoverSelection` only draws them.
+/// File groups, selection policy and labels for the uninstall sheet.
 enum UninstallLeftoverPresentation {
-    /// One app's leftovers: its main list, then the items to check before ticking.
     struct Section: Identifiable {
         let group: LeftoverGroup
-        let main: [LeftoverItem]
-        /// Found only by a weak source, or still used by another installed app.
-        let probable: [LeftoverItem]
+        var cacheAndLogs: [LeftoverItem] = []
+        var personalData: [LeftoverItem] = []
+        var probable: [LeftoverItem] = []
 
         var id: String { group.id }
     }
 
-    /// One section per group, each list in the planner's canonical order.
     static func sections(_ groups: [LeftoverGroup]) -> [Section] {
-        groups.map { group in
-            Section(
-                group: group,
-                main: group.items.filter { !isProbable($0) },
-                probable: group.items.filter(isProbable)
-            )
+        let library = FileManager.default.homeDirectoryForCurrentUser.appending(component: "Library").pathComponents
+        return groups.map { group in
+            group.items.reduce(into: Section(group: group)) { section, item in
+                if !item.hasStrongUnsharedMatch {
+                    section.probable.append(item)
+                } else if isCacheOrLog(item, library: library) {
+                    section.cacheAndLogs.append(item)
+                } else {
+                    section.personalData.append(item)
+                }
+            }
         }
     }
 
-    /// The paths ticked when the sheet opens. Nothing is ticked when the app scan was incomplete:
-    /// an app missing from it may still use any of the items.
-    static func defaultSelection(_ groups: [LeftoverGroup], applicationsIncomplete: Bool) -> Set<String> {
-        guard !applicationsIncomplete else { return [] }
-        return Set(groups.flatMap(\.items).filter(\.isSelectedByDefault).map(\.url.path))
+    private static func isCacheOrLog(_ item: LeftoverItem, library: [String]) -> Bool {
+        let components = item.url.pathComponents
+        guard components.starts(with: library), components.count > library.count + 1 else { return false }
+        return components[library.count] == "Caches" || components[library.count] == "Logs"
     }
 
-    /// What "Zaznacz wszystko" ticks, and what decides which of the two labels the button shows:
-    /// the main lists only. Probable items are ticked one by one.
-    static func bulkPaths(_ groups: [LeftoverGroup]) -> [String] {
-        sections(groups).flatMap(\.main).map(\.url.path)
+    /// An incomplete inventory may miss another app that uses a cache, so each item needs individual consent.
+    static func bulkPaths(_ groups: [LeftoverGroup], applicationsIncomplete: Bool = false) -> [String] {
+        guard !applicationsIncomplete else { return [] }
+        return sections(groups).flatMap(\.cacheAndLogs).map(\.url.path)
     }
 
     /// What "Odznacz wszystko" unticks: every item of the sheet, probable ones ticked by hand too.
@@ -105,7 +105,7 @@ enum UninstallLeftoverPresentation {
             notes.append(tr("Lista Homebrew jest niedostępna — pokazano tylko resztki znalezione po identyfikatorze i nazwie."))
         }
         if applicationsIncomplete {
-            notes.append(tr("Lista aplikacji jest niepełna — nic nie jest zaznaczone domyślnie."))
+            notes.append(tr("Lista aplikacji jest niepełna. Inne aplikacje mogą używać tych plików. Wybierz je pojedynczo."))
         }
         return notes
     }
@@ -119,18 +119,11 @@ enum UninstallLeftoverPresentation {
     static func accessibilityLabel(_ item: LeftoverItem, size: LeftoverSize?) -> String {
         "\(displayPath(item)), \(sourceLabel(item)), \(sizeText(size))"
     }
-
-    private static func isProbable(_ item: LeftoverItem) -> Bool {
-        item.probableReason != nil || !item.sharedWith.isEmpty
-    }
 }
 
 // MARK: - UX-13 leftover selection
 
-/// The sheet section listing the leftovers found for the non-brew targets, per app: the main
-/// list, then the probable items. Selection is bound to the caller, which opens the sheet with
-/// `UninstallLeftoverPresentation.defaultSelection`; the copy makes clear the files go to the
-/// recoverable Trash. Sizes are measured here, one item at a time, after the sheet opens.
+/// Optional files that can accompany a non-Homebrew app to the Trash. Sizes arrive after the sheet opens.
 struct UninstallLeftoverSelection: View {
     let groups: [LeftoverGroup]
     @Binding var selected: Set<String>
@@ -140,8 +133,9 @@ struct UninstallLeftoverSelection: View {
 
     @State private var sizes: [String: LeftoverSize] = [:]
 
-    private var bulkPaths: [String] { UninstallLeftoverPresentation.bulkPaths(groups) }
-    private var allSelected: Bool { !bulkPaths.isEmpty && selected.isSuperset(of: bulkPaths) }
+    private var bulkPaths: [String] {
+        UninstallLeftoverPresentation.bulkPaths(groups, applicationsIncomplete: applicationsIncomplete)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -155,14 +149,21 @@ struct UninstallLeftoverSelection: View {
                     .font(.wega(.callout, monospaced: true))
                     .foregroundStyle(.tertiary)
                 Spacer()
-                if !bulkPaths.isEmpty {
-                    Button(allSelected ? tr("Odznacz wszystko") : tr("Zaznacz wszystko")) {
-                        if allSelected { selected.subtract(UninstallLeftoverPresentation.deselectAllPaths(groups)) }
-                        else { selected.formUnion(bulkPaths) }
+                if !selected.isEmpty {
+                    Button(tr("Odznacz wszystko")) {
+                        selected.subtract(UninstallLeftoverPresentation.deselectAllPaths(groups))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.link)
+                }
+            }
+            if !groups.isEmpty {
+                Text(tr("Domyślnie zachowasz wszystkie pliki z tej listy."))
                     .font(.wega(.subheadline))
-                    .foregroundStyle(Color.wegaHoney)
+                if !bulkPaths.isEmpty {
+                    Button(tr("Zaznacz pamięć podręczną i logi")) {
+                        selected.formUnion(bulkPaths)
+                    }
+                    .disabled(selected.isSuperset(of: bulkPaths))
                 }
             }
             Text(tr("Zaznaczone pliki trafią do Kosza — możesz je stamtąd przywrócić."))
@@ -194,13 +195,16 @@ struct UninstallLeftoverSelection: View {
                             .font(.wega(.subheadline, weight: .medium))
                             .foregroundStyle(.secondary)
                     }
-                    rows(section.main)
+                    if !section.cacheAndLogs.isEmpty {
+                        sectionHeading(tr("Pamięć podręczna i logi"))
+                        rows(section.cacheAndLogs)
+                    }
+                    if !section.personalData.isEmpty {
+                        sectionHeading(tr("Ustawienia, profile i inne dane aplikacji"))
+                        rows(section.personalData)
+                    }
                     if !section.probable.isEmpty {
-                        Text(tr("Prawdopodobne — sprawdź przed zaznaczeniem"))
-                            .font(.wega(.footnote, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 4)
-                            .accessibilityAddTraits(.isHeader)
+                        sectionHeading(tr("Prawdopodobne — sprawdź przed zaznaczeniem"))
                         rows(section.probable)
                     }
                 }
@@ -212,6 +216,14 @@ struct UninstallLeftoverSelection: View {
             in: RoundedRectangle(cornerRadius: 10)
         )
         .task(id: groups.map(\.id)) { await measureSizes() }
+    }
+
+    private func sectionHeading(_ title: String) -> some View {
+        Text(title)
+            .font(.wega(.footnote, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .padding(.top, 4)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private func rows(_ items: [LeftoverItem]) -> some View {
@@ -259,11 +271,19 @@ private struct UninstallLeftoverRow: View {
                     Text(UninstallLeftoverPresentation.sizeText(size))
                         .font(.wega(.footnote, monospaced: true))
                         .foregroundStyle(.secondary)
-                    Text(sourceLabel)
-                        .font(.wega(.footnote))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .help(sourceLabel)
+                    if item.sharedWith.isEmpty {
+                        Text(sourceLabel)
+                            .font(.wega(.footnote))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .help(sourceLabel)
+                    }
+                }
+                if !item.sharedWith.isEmpty {
+                    Label(sourceLabel, systemImage: "person.2")
+                        .font(.wega(.footnote, weight: .semibold))
+                        .foregroundStyle(Color.wegaHoney)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Text(UninstallLeftoverPresentation.displayPath(item))
                     .font(.wega(.footnote, monospaced: true))

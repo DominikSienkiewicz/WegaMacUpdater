@@ -138,11 +138,12 @@ struct LeftoverPathRulesTests {
         #expect(LeftoverPathRules.key(["a", "B"]) == "a/b")
     }
 
-    @Test func selectedByDefaultNeedsNoReasonAndNoSharing() {
+    @Test func strongUnsharedMatchNeedsNoReasonAndNoSharing() {
         let url = URL(filePath: "/tmp/x", directoryHint: .notDirectory)
         let plain = LeftoverItem(url: url, source: .bundleIdentifier)
         let probable = LeftoverItem(url: url, source: .appName, probableReason: .appName)
         let shared = LeftoverItem(url: url, source: .bundleIdentifier, sharedWith: ["Other"])
-        #expect([plain, probable, shared].map(\.isSelectedByDefault) == [true, false, false])
+        #expect([plain, probable, shared].allSatisfy { !$0.isSelectedByDefault })
+        #expect([plain, probable, shared].map(\.hasStrongUnsharedMatch) == [true, false, false])
     }
 }

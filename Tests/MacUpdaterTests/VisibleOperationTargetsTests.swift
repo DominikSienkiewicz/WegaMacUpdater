@@ -2,10 +2,10 @@ import Foundation
 import Testing
 @testable import MacUpdaterCore
 
-/// UX-01 — a filtered list must never hide an item that the next mutation will touch.
+/// UX-01 — every item the next mutation will touch must appear in confirmation.
 ///
 /// Target computation is covered by the pure planner/inventory suites. These checks pin
-/// the SwiftUI wiring: the update and uninstall buttons must freeze the visible targets,
+/// the SwiftUI wiring: updates freeze visible targets, and uninstall freezes the reviewed selection across filters,
 /// show that same collection in confirmation UI, and pass it into execution.
 @Suite("Visible operation targets")
 struct VisibleOperationTargetsTests {
@@ -39,10 +39,10 @@ struct VisibleOperationTargetsTests {
         let view = try source("Sources/MacUpdater/UninstallView.swift")
 
         #expect(!view.contains("\"\\(selected.count)\""),
-                "UX-01: the uninstall counter must not include selected rows hidden by search")
+                "UX-01: the counter must count only selected installations that still exist and are eligible")
         #expect(view.contains("\"\\(targets.count)\""))
         #expect(view.contains("pendingUninstallTargets = targets"),
-                "UX-01: opening confirmation must freeze the visible uninstall targets")
+                "UX-01: opening confirmation must freeze all eligible installations in the selection")
         #expect(view.range(of: #"UninstallDialog\(\s*targets:\s*pendingUninstallTargets\b"#, options: .regularExpression) != nil,
                 "UX-01: confirmation must show the frozen targets")
         #expect(view.contains("let targets = pendingUninstallTargets"))
@@ -114,7 +114,7 @@ struct VisibleOperationTargetsTests {
         #expect(runner.requests.map(\.arguments) == [["upgrade", "1", "2"]])
     }
 
-    @Test func uninstallTargetsExcludeASelectedRowHiddenBySearch() {
+    @Test func uninstallTargetsExcludeAnIDMissingFromInventory() {
         let visible = [app("/Applications/Slack.app", name: "Slack")]
         let hidden = app("/Applications/Firefox.app", name: "Firefox")
         let targets = InstallationInventory.selected(

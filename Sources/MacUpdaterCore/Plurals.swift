@@ -120,10 +120,15 @@ public enum Plurals {
             few:  "Usuń %@ aplikacje",
             many: "Usuń %@ aplikacji"
         ),
-        "i %@ wybranych resztek": PluralForms(
-            one:  "i %@ wybraną resztkę",
-            few:  "i %@ wybrane resztki",
-            many: "i %@ wybranych resztek"
+        "trwale wyczyść dane %@ pakietów Homebrew": PluralForms(
+            one:  "trwale wyczyść dane %@ pakietu Homebrew",
+            few:  "trwale wyczyść dane %@ pakietów Homebrew",
+            many: "trwale wyczyść dane %@ pakietów Homebrew"
+        ),
+        "i przenieś %@ pozycji do Kosza": PluralForms(
+            one:  "i przenieś %@ pozycję do Kosza",
+            few:  "i przenieś %@ pozycje do Kosza",
+            many: "i przenieś %@ pozycji do Kosza"
         ),
         // UXP-05 — notification body: the apps beyond the two that are named.
         "i %@ innych": PluralForms(
@@ -309,10 +314,15 @@ public enum Plurals {
             few:  "Remove %@ apps",
             many: "Remove %@ apps"
         ),
-        "i %@ wybranych resztek": PluralForms(
-            one:  "and %@ selected leftover",
-            few:  "and %@ selected leftovers",
-            many: "and %@ selected leftovers"
+        "trwale wyczyść dane %@ pakietów Homebrew": PluralForms(
+            one:  "permanently clear data for %@ Homebrew package",
+            few:  "permanently clear data for %@ Homebrew packages",
+            many: "permanently clear data for %@ Homebrew packages"
+        ),
+        "i przenieś %@ pozycji do Kosza": PluralForms(
+            one:  "and move %@ item to Trash",
+            few:  "and move %@ items to Trash",
+            many: "and move %@ items to Trash"
         ),
         "i %@ innych": PluralForms(
             one:  "and %@ more",

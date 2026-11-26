@@ -8,6 +8,17 @@ extension Translations {
         "To tylko dowiązanie do %@": "This is only a link to %@",
         "Nie można bezpiecznie ustalić, która kopia zostałaby usunięta.": "The copy that would be removed could not be verified.",
         "Wybierz jedną kopię do odinstalowania. Dane aplikacji zostaną zachowane.": "Choose one copy to uninstall. Its app data is kept.",
+        "Zaznacz widoczne": "Select visible",
+        "Odznacz widoczne": "Deselect visible",
+        "Wybrane (%@)": "Selected (%@)",
+        "Usuń z wyboru: %@": "Remove from selection: %@",
+        "Nie udało się odczytać listy Homebrew. Odśwież listę, aby ustalić sposób usunięcia.":
+            "The Homebrew list could not be read. Refresh the list to verify how this app can be removed.",
+        "Nie ustalono źródła": "Source unknown",
+        "Wybierz jedną kopię tej aplikacji. Pozostałe kopie i wspólne dane zostaną zachowane.":
+            "Select one copy of this app. Other copies and shared data will be kept.",
+        "Usuniesz": "You will remove",
+        "Zachowasz": "You will keep",
         "Wszystkie aplikacje": "All apps",
         "Brak kolejnej kopii": "No other copy found",
         "W tym skanie nie znaleziono już kilku kopii tej aplikacji.": "This scan found no extra copies of the app.",
@@ -32,6 +43,7 @@ extension Translations {
         "Pokaż, czego nie usunięto": "Show what was not removed",
         "Otwórz ustawienia pomocnika": "Open helper settings",
         "Lista aplikacji się odświeża — poczekaj, aż skończy.": "The app list is refreshing — wait until it finishes.",
+        "Czyszczenie danych przez Homebrew": "Homebrew app data cleanup",
         "Resztki aplikacji": "App leftovers",
         "Prawdopodobne — sprawdź przed zaznaczeniem": "Probable — check before ticking",
         "lista Homebrew": "Homebrew list",
@@ -44,7 +56,7 @@ extension Translations {
         "%@ · %@ zaznaczone": "%@ · %@ ticked",
         "Lista Homebrew jest niedostępna — pokazano tylko resztki znalezione po identyfikatorze i nazwie.":
             "The Homebrew list is unavailable — showing only leftovers found by bundle id and name.",
-        "Lista aplikacji jest niepełna — nic nie jest zaznaczone domyślnie.":
-            "The app list is incomplete — nothing is ticked by default.",
-    ]
+        "Lista aplikacji jest niepełna. Inne aplikacje mogą używać tych plików. Wybierz je pojedynczo.":
+            "The app list is incomplete. Other apps may use these files. Select them individually.",
+    ].merging(uninstallData) { first, _ in first }
 }

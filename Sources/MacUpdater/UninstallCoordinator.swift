@@ -4,9 +4,10 @@ import MacUpdaterCore
 /// REL-14: the result of an uninstall scan — the apps found plus every source that
 /// failed. `UninstallView` keeps the two apart so a scan failure is never rendered as
 /// "no apps found", and warns before a destructive action taken on partial data.
-struct UninstallScan: Equatable, Sendable {
+struct UninstallScan: Sendable {
     let apps: [ApplicationInfo]
     let failures: [ScanSourceFailure]
+    let copies: UninstallCopyPlan
     /// Apps that must never be offered for removal, keyed by `ApplicationInfo.id`.
     let protections: [String: UninstallProtection]
 
@@ -15,9 +16,11 @@ struct UninstallScan: Equatable, Sendable {
     init(
         apps: [ApplicationInfo],
         failures: [ScanSourceFailure] = [],
-        protections: [String: UninstallProtection] = [:]
+        protections: [String: UninstallProtection] = [:],
+        copies: UninstallCopyPlan = .init()
     ) {
         self.apps = apps
+        self.copies = copies
         self.failures = failures
         self.protections = protections
     }
@@ -27,6 +30,7 @@ struct UninstallScan: Equatable, Sendable {
     /// Cancellation is not a scan failure, so it is never recorded.
     static func collect(
         directories: [URL],
+        brewPrefix: URL? = nil,
         installedCasks: () async throws -> Set<String>,
         scanApplications: (_ directory: URL, _ installedCasks: Set<String>) throws -> [ApplicationInfo],
         protections: ([ApplicationInfo]) -> [String: UninstallProtection] = {
@@ -35,15 +39,20 @@ struct UninstallScan: Equatable, Sendable {
     ) async -> UninstallScan {
         var failures: [ScanSourceFailure] = []
 
+        var caskLookupUnavailable = false
         var installedCaskTokens: Set<String> = []
         do { installedCaskTokens = try await installedCasks() }
         catch BrewServiceError.brewNotFound {
             // The ordinary uninstall routes still work on a Mac without Homebrew.
         }
         catch is CancellationError {
+            caskLookupUnavailable = true
             // Cancellation is intentionally not recorded as a source failure.
         }
-        catch { failures.append(ScanSourceFailure(source: .homebrew, message: error.localizedDescription)) }
+        catch {
+            caskLookupUnavailable = true
+            failures.append(ScanSourceFailure(source: .homebrew, message: error.localizedDescription))
+        }
 
         var found: [ApplicationInfo] = []
         var applicationsFailure: ScanSourceFailure?
@@ -62,7 +71,19 @@ struct UninstallScan: Equatable, Sendable {
         let apps = InstallationInventory.deduplicated(found)
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
-        return UninstallScan(apps: apps, failures: failures, protections: protections(apps))
+        var blocked = protections(apps)
+        if caskLookupUnavailable {
+            for app in apps where !app.isManagedByMas && blocked[app.id] == nil {
+                blocked[app.id] = .unknownInstallationSource
+            }
+        }
+        let copies = UninstallCopyPlan(apps: apps, scanComplete: failures.isEmpty && !caskLookupUnavailable, brewPrefix: brewPrefix)
+        let routed = apps.map { app in
+            if let target = copies.routed(app) { return target }
+            if blocked[app.id] == nil { blocked[app.id] = .unverifiedDuplicateCopy }
+            return app
+        }
+        return UninstallScan(apps: routed, failures: failures, protections: blocked, copies: copies)
     }
 }
 
@@ -133,6 +154,7 @@ struct UninstallQuitResult: Equatable {
     /// Targets that cannot be told apart from another copy of the app, so no process
     /// was asked to quit or killed.
     var ambiguous: Set<String> = []
+    var blocked: [String: UninstallTargetResult] = [:]
 }
 
 /// Performs application discovery and destructive uninstall I/O outside SwiftUI.
@@ -197,10 +219,9 @@ final class UninstallCoordinator: ObservableObject {
     struct Outcome {
         /// One result per target id.
         let results: [String: UninstallTargetResult]
-        /// UX-13: how many consented home-folder leftovers reached the Trash, and how many
-        /// could not be moved, so the result is reported honestly rather than swallowed.
-        var leftoversTrashed: Int = 0
-        var leftoversFailed: Int = 0
+        let files: [UninstallFileResult]
+        var failedZapIDs: Set<String> = []
+        var leftoversTrashed: Int { files.count { $0.status == .movedToTrash } }
     }
 
     /// The helper took the request but never answered: it may have moved the app already, so
@@ -238,7 +259,15 @@ final class UninstallCoordinator: ObservableObject {
     /// happen before the user consents. Brew-managed targets keep the Homebrew path. When a
     /// target would use the helper, one bounded handshake first checks that it is current, so a
     /// stale or silent helper blocks the target before anything is quit.
-    func routes(for targets: [ApplicationInfo]) async -> [String: UninstallRouteDecision] {
+    func routes(for targets: [ApplicationInfo], copies: UninstallCopyPlan = .init()) async -> [String: UninstallRouteDecision] {
+        var routes = await bundleRoutes(for: targets)
+        for app in targets {
+            if let block = copies.block(for: app) { routes[app.id] = .blocked(block) }
+        }
+        return routes
+    }
+
+    private func bundleRoutes(for targets: [ApplicationInfo]) async -> [String: UninstallRouteDecision] {
         let factsByID = Dictionary(uniqueKeysWithValues: targets.filter { !$0.isManagedByBrew }.map {
             ($0.id, dependencies.bundleFacts($0))
         })
@@ -258,11 +287,15 @@ final class UninstallCoordinator: ObservableObject {
 
     /// Asks every running target to quit before polling them all together. A refused
     /// request is not a failure by itself: the app may still quit after a save prompt.
-    func requestQuit(_ targets: [ApplicationInfo]) async -> UninstallQuitResult {
+    func requestQuit(_ targets: [ApplicationInfo], copies: UninstallCopyPlan = .init()) async -> UninstallQuitResult {
         var result = UninstallQuitResult()
         var pending: [ApplicationInfo] = []
         let states = resolveAll(targets)
         for app in targets {
+            if let block = copies.block(for: app) {
+                result.blocked[app.id] = .blocked(block)
+                continue
+            }
             switch states[app.id] ?? .notRunning {
             case .notRunning: result.stopped.insert(app.id)
             case .ambiguousBundleIdentifier: result.ambiguous.insert(app.id)
@@ -282,28 +315,34 @@ final class UninstallCoordinator: ObservableObject {
     func runQuitPhase(
         targets: [ApplicationInfo],
         routes: [String: UninstallRouteDecision],
+        copies: UninstallCopyPlan = .init(),
         askForceQuit: @MainActor (_ stillRunning: [ApplicationInfo]) async -> UninstallForceQuitChoice
     ) async -> UninstallQuitFlow.Plan? {
         let split = UninstallQuitFlow.partition(targets: targets, routes: routes)
-        let quit = await requestQuit(split.attempt)
+        let quit = await requestQuit(split.attempt, copies: copies)
         var choice: UninstallForceQuitChoice?
         var forced: UninstallQuitResult?
         if !quit.stillRunning.isEmpty {
             let answer = await askForceQuit(quit.stillRunning)
             choice = answer
-            if answer == .forceQuit { forced = await forceQuit(quit.stillRunning) }
+            if answer == .forceQuit { forced = await forceQuit(quit.stillRunning, copies: copies) }
         }
         guard let plan = UninstallQuitFlow.plan(targets: split.attempt, quit: quit, choice: choice, forced: forced)
         else { return nil }
-        return (plan.remove, plan.skipped.merging(split.blocked) { quitResult, _ in quitResult })
+        let blocked = quit.blocked.merging(forced?.blocked ?? [:]) { _, latest in latest }
+        return (plan.remove, plan.skipped.merging(split.blocked) { _, reason in reason }.merging(blocked) { _, reason in reason })
     }
 
     /// Kills only the process each app resolves to right now, never one resolved earlier:
     /// the app may have quit, or relaunched under a new PID, since the quit phase.
-    func forceQuit(_ apps: [ApplicationInfo]) async -> UninstallQuitResult {
+    func forceQuit(_ apps: [ApplicationInfo], copies: UninstallCopyPlan = .init()) async -> UninstallQuitResult {
         var result = UninstallQuitResult()
         var pending: [ApplicationInfo] = []
         for app in apps {
+            if let block = copies.block(for: app) {
+                result.blocked[app.id] = .blocked(block)
+                continue
+            }
             switch resolveAll([app])[app.id] ?? .notRunning {
             case .notRunning: result.stopped.insert(app.id)
             case .ambiguousBundleIdentifier: result.ambiguous.insert(app.id)
@@ -363,7 +402,7 @@ final class UninstallCoordinator: ObservableObject {
             return try await OperationCoordinator.shared.withRead(label: "uninstall scan") {
                 let scanner = ApplicationScanner()
                 return await UninstallScan.collect(
-                    directories: directories,
+                    directories: directories, brewPrefix: BinaryLocator().locateBrewPrefix(),
                     installedCasks: { try await brewService.installedCasks() },
                     scanApplications: { directory, installedCasks in
                         try scanner.scanApplications(in: directory, installedCasks: installedCasks)
@@ -416,7 +455,7 @@ final class UninstallCoordinator: ObservableObject {
         zap: Bool,
         leftovers: [LeftoverGroup] = [],
         skipped: [String: UninstallTargetResult] = [:],
-        duplicateReview: UninstallDuplicateReview? = nil,
+        copies: UninstallCopyPlan = .init(),
         using brewService: BrewService
     ) async -> Outcome {
         do {
@@ -425,14 +464,15 @@ final class UninstallCoordinator: ObservableObject {
                     targets: targets,
                     leftovers: leftovers,
                     skipped: skipped,
-                    options: UninstallRemovalOptions(zap: zap, duplicateReview: duplicateReview),
+                    options: UninstallRemovalOptions(zap: zap, copies: copies),
                     using: brewService
                 )
             }
         } catch {
             let failure = UninstallTargetResult.failed(error.localizedDescription)
             let failed = Dictionary(uniqueKeysWithValues: targets.map { ($0.id, failure) })
-            return Outcome(results: failed.merging(skipped) { _, skip in skip })
+            let results = failed.merging(skipped) { _, skip in skip }
+            return Outcome(results: results, files: UninstallFilePlan(groups: leftovers, results: results).finished())
         }
     }
 
@@ -447,46 +487,31 @@ final class UninstallCoordinator: ObservableObject {
         defer { state = .idle }
 
         var results = skipped
+        var failedZapIDs = Set<String>()
         for app in targets {
             if let protection = dependencies.protection(app) {
                 results[app.id] = .protected(protection)
-            } else if let duplicateReview = options.duplicateReview,
-                      targets.count != 1 || !duplicateReview.stillAllows(app) {
-                results[app.id] = .protected(.unverifiedDuplicateCopy)
+            } else if let block = options.copies.block(for: app) {
+                results[app.id] = .blocked(block)
             } else if let stillRunning = runningAtRemoval(app) {
                 results[app.id] = stillRunning
             } else if app.isManagedByBrew, let token = app.caskToken {
+                let usesZap = options.zap && !options.copies.preservesData(for: app)
                 do {
-                    try await dependencies.uninstallCask(brewService, token, options.zap && options.duplicateReview == nil)
+                    try await dependencies.uninstallCask(brewService, token, usesZap)
                     results[app.id] = .removedByHomebrew
                 } catch {
+                    if usesZap { failedZapIDs.insert(app.id) }
                     results[app.id] = .failed(error.localizedDescription)
                 }
             } else {
                 results[app.id] = await removeNonBrew(app)
             }
         }
-        let leftoverResult = dependencies.trashLeftovers(
-            options.duplicateReview == nil ? Self.releasedLeftovers(leftovers, results: results) : []
-        )
-        return Outcome(
-            results: results,
-            leftoversTrashed: leftoverResult.removed.count,
-            leftoversFailed: leftoverResult.failed.count
-        )
-    }
-
-    /// UX-13: a consented leftover is released only when its own app and every other target that
-    /// claims it (`coTargets`) were actually removed; the data of an app that stays installed is
-    /// never touched.
-    private static func releasedLeftovers(
-        _ leftovers: [LeftoverGroup],
-        results: [String: UninstallTargetResult]
-    ) -> [URL] {
-        let isRemoved = { (id: String) in results[id]?.isRemoved == true }
-        return leftovers.flatMap { group in
-            group.items.filter { isRemoved(group.id) && $0.coTargets.allSatisfy(isRemoved) }.map(\.url)
-        }
+        let preservedAppIDs = Set(targets.filter { options.copies.preservesData(for: $0) }.map(\.id))
+        let plan = UninstallFilePlan(groups: leftovers, results: results, preservedAppIDs: preservedAppIDs)
+        let cleanup = dependencies.trashLeftovers(plan.ready)
+        return Outcome(results: results, files: plan.finished(cleanup), failedZapIDs: failedZapIDs)
     }
 
     /// The quit phase decided "stopped" before the force-quit sheet and the write lease, both of

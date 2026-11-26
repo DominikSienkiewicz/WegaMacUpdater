@@ -18,6 +18,36 @@ struct UninstallProtectedRowsTests {
         )
     }
 
+    @Test func changingSearchKeepsTheSelectionForConfirmation() throws {
+        let view = try String(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MacUpdater/UninstallView.swift"), encoding: .utf8)
+        #expect(!view.contains("selected.formIntersection(filtered.map"))
+        #expect(view.contains("UninstallSelection.targets(filtered: appRows"))
+        #expect(view.contains("UninstallSelectionBasket("))
+    }
+
+    @Test func togglingVisibleChangesOnlyUnprotectedSearchResults() {
+        let slack = app("Slack"), zoom = app("Zoom"), protected = app("System")
+        let protections = [protected.id: UninstallProtection.systemApplication]
+        let visible = [zoom, protected]
+        let both = UninstallSelection.togglingVisible(visible, in: [slack.id], protections: protections)
+        #expect(both == [slack.id, zoom.id])
+        #expect(UninstallSelection.togglingVisible(visible, in: both, protections: protections) == [slack.id])
+        #expect(UninstallSelection.togglingVisible([], in: both, protections: protections) == both)
+        let basket = UninstallSelection.targets(filtered: [zoom, slack, protected], selected: both, protections: protections)
+        #expect(basket.map(\.id) == [zoom.id, slack.id])
+    }
+
+    @Test func aPartialRefreshKeepsMissingSelectionsWithoutArmingAnAbsentTarget() {
+        let first = app("Slack"), missing = app("Zoom")
+        let selected: Set<String> = [first.id, missing.id]
+        let partial = UninstallSelection.afterRefresh(selected, apps: [first], protections: [:], scanComplete: false)
+        #expect(partial == selected)
+        #expect(UninstallSelection.targets(filtered: [first], selected: partial, protections: [:]).map(\.id) == [first.id])
+        #expect(UninstallSelection.afterRefresh(partial, apps: [first], protections: [:], scanComplete: true) == [first.id])
+    }
+
     @Test func selectAllSkipsProtectedRows() {
         let apps = [app("Alpha"), app("Safari"), app("Gamma")]
         let protections = [apps[1].id: UninstallProtection.systemApplication]

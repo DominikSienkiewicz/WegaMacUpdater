@@ -218,7 +218,7 @@ struct UX13LeftoverUninstallTests {
         let item = try #require(scan.groups.first?.items.first)
         #expect(item.source == .homebrewZap(token: "zed"))
         #expect(item.sharedWith == ["Zed — /Applications/Zed Preview.app"])
-        #expect(!item.isSelectedByDefault)
+        #expect(!item.hasStrongUnsharedMatch)
     }
 
     @Test func measureLeftoverMeasuresTheItem() async throws {

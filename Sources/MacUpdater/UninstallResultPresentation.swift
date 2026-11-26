@@ -1,9 +1,10 @@
 import Foundation
 import MacUpdaterCore
 
-/// What the user can do about an app that was not removed.
+/// A destination offered for a completed move or an item that needs attention.
 enum UninstallResultAction: Equatable {
     case showInFinder(URL)
+    case openTrash
     case openAppManagementSettings
     /// Opens Wega's Settings window, whose helper card turns the helper on.
     case openHelperSettings
@@ -11,6 +12,7 @@ enum UninstallResultAction: Equatable {
     var title: String {
         switch self {
         case .showInFinder: tr("Pokaż w Finderze")
+        case .openTrash: tr("Otwórz Kosz")
         case .openAppManagementSettings: tr("Otwórz ustawienia prywatności")
         case .openHelperSettings: tr("Otwórz ustawienia pomocnika")
         }
@@ -30,12 +32,16 @@ struct UninstallResultRow: Identifiable, Equatable {
     let actions: [UninstallResultAction]
 }
 
-/// The outcome of one uninstall run as the view shows it: a success banner naming what was
-/// removed, one summary line, and one row per app that was not removed.
+/// The outcome of one run, including a receipt for every selected leftover.
 struct UninstallResultReport: Equatable {
     let banner: BannerData?
     let summary: String?
     let rows: [UninstallResultRow]
+    let files: [UninstallFileResult]
+    let offersOpenTrash: Bool
+
+    var fileGroups: [UninstallFileGroup] { UninstallFileGroup.groups(for: files) }
+    var hasDetails: Bool { summary != nil || !rows.isEmpty || !files.isEmpty || offersOpenTrash }
 }
 
 /// Turns the per-target results of an uninstall run into what the view shows, so every app
@@ -44,20 +50,28 @@ enum UninstallResultPresentation {
     static func report(
         results: [String: UninstallTargetResult],
         apps: [ApplicationInfo],
-        leftoversTrashed: Int,
-        leftoversFailed: Int,
-        requestedZap: Bool = false
+        files: [UninstallFileResult] = [],
+        failedZapIDs: Set<String> = []
     ) -> UninstallResultReport {
         let reported = apps.filter { results[$0.id] != nil }
         let removed = reported.filter { results[$0.id]?.isRemoved == true }
         let rows = rows(results: results, apps: reported)
+        let leftoversTrashed = files.count { $0.status == .movedToTrash }
+        let leftoversFailed = files.count { file in
+            if case .failed = file.status { return true }
+            return false
+        }
         return UninstallResultReport(
             banner: successBanner(removed: removed, results: results, leftoversTrashed: leftoversTrashed),
             summary: summaryLine(
                 reported: reported, results: results, rows: rows,
-                leftoversFailed: leftoversFailed, requestedZap: requestedZap
+                leftoversFailed: leftoversFailed, failedZapIDs: failedZapIDs
             ),
-            rows: rows
+            rows: rows,
+            files: files,
+            offersOpenTrash: leftoversTrashed > 0 || removed.contains {
+                results[$0.id] == .movedToTrash || results[$0.id] == .movedToTrashByHelper
+            }
         )
     }
 
@@ -163,10 +177,10 @@ enum UninstallResultPresentation {
         results: [String: UninstallTargetResult],
         rows: [UninstallResultRow],
         leftoversFailed: Int,
-        requestedZap: Bool
+        failedZapIDs: Set<String>
     ) -> String? {
         var parts: [String] = []
-        let failure = failureNote(reported: reported, results: results, zap: requestedZap)
+        let failure = failureNote(reported: reported, results: results, failedZapIDs: failedZapIDs)
         if let failure { parts.append(failure.note) }
         let skippedCount = rows.count - (failure?.count ?? 0)
         if skippedCount > 0 {
@@ -184,24 +198,24 @@ enum UninstallResultPresentation {
     private static func failureNote(
         reported: [ApplicationInfo],
         results: [String: UninstallTargetResult],
-        zap: Bool
+        failedZapIDs: Set<String>
     ) -> (note: String, count: Int)? {
-        var failed: [(name: String, requestedZap: Bool)] = []
-        for app in reported {
-            guard case .failed = results[app.id] else { continue }
-            if app.isManagedByBrew {
-                failed.append((app.name, zap))
-            } else {
-                failed.append((app.name, false))
-            }
+        let failed = reported.filter { app in
+            if case .failed = results[app.id] { return true }
+            return false
         }
         guard !failed.isEmpty else { return nil }
         var note = trf(
             "Odinstalowanie niepełne — nie usunięto: %@. Powody poniżej.",
-            "\(failed.map(\.name).joined(separator: ", "))"
+            failed.map(\.name).joined(separator: ", ")
         )
-        if failed.contains(where: \.requestedZap) {
-            note += " " + tr("Nie uruchomiono --force; wybrane usunięcie wraz z resztkami nie zostało po cichu zmienione.")
+        let zapFailures = failed.filter { failedZapIDs.contains($0.id) }
+        if !zapFailures.isEmpty {
+            let forceNote = tr("Nie uruchomiono --force; wybrane usunięcie wraz z resztkami nie zostało po cichu zmienione.")
+            let scoped = zapFailures.count == failed.count
+                ? forceNote
+                : trf("%@: %@", zapFailures.map(\.name).joined(separator: ", "), forceNote)
+            note += " " + scoped
         }
         return (note, failed.count)
     }
@@ -219,6 +233,10 @@ enum UninstallResultPresentation {
             tr("wymaga konta administratora.")
         case .needsAdministratorRights:
             tr("wymaga uprawnień administratora — usuń ją w Finderze.")
+        case .multipleSelectedCopies:
+            tr("Wybierz jedną kopię tej aplikacji. Pozostałe kopie i wspólne dane zostaną zachowane.")
+        case .unverifiedCopy:
+            tr("Nie można bezpiecznie ustalić, która kopia zostałaby usunięta.")
         case .needsAppManagement:
             tr("macOS blokuje usuwanie — zezwól Wega w Zarządzaniu aplikacjami.")
         }

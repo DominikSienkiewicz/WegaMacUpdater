@@ -3,7 +3,7 @@ import MacUpdaterCore
 
 struct UninstallRemovalOptions: Sendable {
     let zap: Bool
-    let duplicateReview: UninstallDuplicateReview?
+    let copies: UninstallCopyPlan
 }
 
 struct UninstallDuplicateReview: Sendable {
@@ -34,7 +34,7 @@ struct UninstallDuplicateReview: Sendable {
         self.brewPrefix = brewPrefix
         self.fileSystem = fileSystem
         copies = Self.physicalCopies(self.apps, fileSystem: fileSystem)
-        targets = scanComplete ? Self.removalTargets(copies, brewPrefix: brewPrefix, fileSystem: fileSystem) : [:]
+        targets = scanComplete ? Self.removalTargets(copies, entries: self.apps, brewPrefix: brewPrefix, fileSystem: fileSystem) : [:]
     }
 
     var visibleApps: [ApplicationInfo] {
@@ -49,11 +49,10 @@ struct UninstallDuplicateReview: Sendable {
     func stillAllows(_ app: ApplicationInfo) -> Bool {
         guard scanComplete, let expected = copies.first(where: { $0.app.id == app.id }) else { return false }
         let current = Self.physicalCopies(apps, fileSystem: fileSystem)
-        guard current.contains(where: { $0.path == expected.path && $0.identity == expected.identity }),
-              current.contains(where: { other in
-                  other.path != expected.path && copies.contains { $0.path == other.path && $0.identity == other.identity }
-              }),
-              let routed = Self.removalTargets(current, brewPrefix: brewPrefix, fileSystem: fileSystem)[app.id] else { return false }
+        guard current.count == copies.count,
+              current.contains(where: { $0.path == expected.path && $0.identity == expected.identity }),
+              current.allSatisfy({ copy in copies.contains { $0.path == copy.path && $0.identity == copy.identity } }),
+              let routed = Self.removalTargets(current, entries: apps, brewPrefix: brewPrefix, fileSystem: fileSystem)[app.id] else { return false }
         return app.isManagedByBrew == routed.isManagedByBrew && app.caskToken == routed.caskToken
     }
 
@@ -71,23 +70,39 @@ struct UninstallDuplicateReview: Sendable {
     }
 
     private static func removalTargets(
-        _ copies: [Copy], brewPrefix: URL?, fileSystem: any CleanupFileSystem
+        _ copies: [Copy], entries: [ApplicationInfo], brewPrefix: URL?, fileSystem: any CleanupFileSystem
     ) -> [String: ApplicationInfo] {
-        guard copies.count > 1 else { return [:] }
-        let marked = copies.filter { $0.app.isManagedByBrew }
-        let tokens = Set(marked.compactMap { $0.app.caskToken })
+        guard entries.count > 1, !copies.isEmpty,
+              accountsForEveryEntry(entries, copies: copies, fileSystem: fileSystem) else { return [:] }
+        let marked = entries.filter(\.isManagedByBrew)
+        let tokens = Set(marked.compactMap(\.caskToken))
         if marked.isEmpty { return Dictionary(uniqueKeysWithValues: copies.map { ($0.app.id, $0.app) }) }
         guard tokens.count == 1, let token = tokens.first, let brewPrefix,
               let binding = caskBinding(token: token, brewPrefix: brewPrefix, fileSystem: fileSystem),
               copies.contains(where: { $0.path == binding.target && !$0.app.isManagedByMas }) else { return [:] }
         return Dictionary(uniqueKeysWithValues: copies.compactMap { copy in
             let managed = copy.path == binding.target
-            guard !managed || binding.appOnlyRemoval else { return nil }
+            guard !managed || copies.count == 1 || binding.appOnlyRemoval else { return nil }
             var app = copy.app
             app.isManagedByBrew = managed
             app.caskToken = managed ? token : nil
             return (app.id, app)
         })
+    }
+
+    /// A second inventory row can be a symlink to the same bundle. An unreadable row or a
+    /// link to a different installation cannot establish which copies the user would keep.
+    private static func accountsForEveryEntry(
+        _ entries: [ApplicationInfo], copies: [Copy], fileSystem: any CleanupFileSystem
+    ) -> Bool {
+        let physicalIDs = Set(copies.map { $0.app.id })
+        return entries.allSatisfy { app in
+            if physicalIDs.contains(app.id) { return true }
+            guard (try? fileSystem.entry(at: app.path))?.kind == .symlink,
+                  let resolved = try? fileSystem.realpath(app.path),
+                  let destination = try? fileSystem.entry(at: resolved), destination.kind == .directory else { return false }
+            return copies.contains { $0.path == InstallationIdentity(path: resolved) && $0.identity == destination.identity }
+        }
     }
 
     private static func caskBinding(
