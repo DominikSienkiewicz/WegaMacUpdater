@@ -23,6 +23,10 @@ struct UninstallCopyPlan: Sendable {
 
     func review(for identifier: String) -> UninstallDuplicateReview? { reviews[identifier] }
 
+    func duplicateGroup(for bundle: URL) -> String? {
+        UninstallSelection.duplicateGroup(for: bundle, in: reviews.values.flatMap(\.visibleApps))
+    }
+
     func routed(_ app: ApplicationInfo) -> ApplicationInfo? {
         guard !uncertain.contains(app.id) else { return nil }
         guard let review = app.bundleIdentifier.flatMap({ reviews[$0] }) else { return app }
@@ -44,7 +48,8 @@ struct UninstallCopyPlan: Sendable {
     }
 
     func preservesData(for app: ApplicationInfo) -> Bool {
-        app.bundleIdentifier.flatMap { reviews[$0] } != nil
+        guard let review = app.bundleIdentifier.flatMap({ reviews[$0] }) else { return false }
+        return !review.visibleApps.isEmpty
     }
 
     func keptPaths(for app: ApplicationInfo) -> [URL] {

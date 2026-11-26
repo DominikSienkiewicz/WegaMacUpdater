@@ -269,9 +269,9 @@ struct DetailColumn: View {
                 case .migration:
                     MigrationView(onWegaState: { wegaState = $0 }, onNavigate: navigate(fromBanner:))
                 case .inventory:
-                    InventoryView(onWegaState: { wegaState = $0 }, onNavigate: onNavigate, onReviewUninstall: { path, group in
+                    InventoryView(onWegaState: { wegaState = $0 }, onNavigate: onNavigate, onReviewUninstall: { path in
                         uninstallPreselection = path
-                        duplicateReviewBundleIdentifier = group
+                        duplicateReviewBundleIdentifier = nil
                         onNavigate(.uninstall)
                     })
                 case .rollback:

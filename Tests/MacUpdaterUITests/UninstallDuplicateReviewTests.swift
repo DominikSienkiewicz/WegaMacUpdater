@@ -74,6 +74,7 @@ final class UninstallDuplicateReviewTests: XCTestCase {
             version: nil, installDate: nil, updateDate: nil, isManagedByBrew: false
         )
 
+        XCTAssertEqual(inventory.duplicateGroup(for: manual.path), manual.bundleIdentifier)
         let plan = inventory.selecting([manual, other])
         XCTAssertFalse(manual.isManagedByBrew)
         XCTAssertTrue(brew.isManagedByBrew)
@@ -115,6 +116,42 @@ final class UninstallDuplicateReviewTests: XCTestCase {
         XCTAssertEqual(quit?.skipped[app.id], .blocked(.unverifiedCopy))
         let removal = await coordinator.uninstall(targets: [app], zap: true, copies: plan, using: BrewService())
         XCTAssertEqual(removal.results[app.id], .blocked(.unverifiedCopy))
+    }
+
+    func testARealInstallWithAConfirmedSymlinkIsSelectableButAnUnresolvedSiblingBlocksIt() async throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanUp() }
+        let directory = fixture.first.path.deletingLastPathComponent()
+        let alias = directory.appending(component: "Discord Alias.app", directoryHint: .notDirectory)
+        let aliasID = InstallationIdentity(path: alias).rawValue
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: fixture.first.path)
+        func scan() async -> UninstallScan {
+            await UninstallScan.collect(
+                directories: [directory], installedCasks: { [] },
+                scanApplications: { url, tokens in try ApplicationScanner().scanApplications(in: url, installedCasks: tokens) }
+            )
+        }
+        let single = await scan()
+        XCTAssertNil(single.copies.duplicateGroup(for: fixture.first.path))
+        XCTAssertNil(single.protections[fixture.first.id])
+        guard case .symlink = single.protections[aliasID] else { return XCTFail("A symlink must stay protected") }
+        XCTAssertEqual(UninstallSelection.preselection(for: fixture.first.path, in: single.apps, protections: single.protections), [fixture.first.id])
+        let manual = try XCTUnwrap(single.apps.first { $0.id == fixture.first.id })
+        XCTAssertNil(single.copies.block(for: manual))
+        XCTAssertFalse(single.copies.preservesData(for: manual))
+
+        try FileManager.default.removeItem(at: alias)
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: fixture.second.path)
+        let other = await scan()
+        XCTAssertEqual(other.protections[fixture.first.id], .unverifiedDuplicateCopy)
+        XCTAssertEqual(single.copies.block(for: manual), .unverifiedCopy)
+        guard case .symlink = other.protections[aliasID] else { return XCTFail("A link to another installation must stay protected") }
+
+        try FileManager.default.removeItem(at: alias)
+        try FileManager.default.createDirectory(at: alias, withIntermediateDirectories: false)
+        var unverified = manual
+        unverified.path = alias
+        XCTAssertNil(UninstallCopyPlan(apps: [manual, unverified]).routed(manual))
     }
 
     private struct Fixture {
