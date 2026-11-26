@@ -49,7 +49,7 @@ extension Translations {
         "%@ · %@ zaznaczone": "%@ · %@ ticked",
         "Lista Homebrew jest niedostępna — pokazano tylko resztki znalezione po identyfikatorze i nazwie.":
             "The Homebrew list is unavailable — showing only leftovers found by bundle id and name.",
-        "Lista aplikacji jest niepełna — nic nie jest zaznaczone domyślnie.":
-            "The app list is incomplete — nothing is ticked by default.",
-    ]
+        "Lista aplikacji jest niepełna. Inne aplikacje mogą używać tych plików. Wybierz je pojedynczo.":
+            "The app list is incomplete. Other apps may use these files. Select them individually.",
+    ].merging(uninstallData) { first, _ in first }
 }

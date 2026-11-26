@@ -23,7 +23,9 @@ public struct LeftoverItem: Equatable, Sendable, Identifiable {
     public let sharedWith: [String]
     public let coTargets: [String]
 
-    public var isSelectedByDefault: Bool { probableReason == nil && sharedWith.isEmpty }
+    /// Even an exact match may contain the user's local profile.
+    public var isSelectedByDefault: Bool { false }
+    public var hasStrongUnsharedMatch: Bool { probableReason == nil && sharedWith.isEmpty }
     public var id: String { url.path }
 
     public init(

@@ -53,9 +53,9 @@ struct LeftoverOwnershipTests {
         )
 
         #expect(item(stable, in: chromeRun)?.sharedWith == [])
-        #expect(item(stable, in: chromeRun)?.isSelectedByDefault == true)
+        #expect(item(stable, in: chromeRun)?.hasStrongUnsharedMatch == true)
         #expect(item(canary, in: chromeRun)?.sharedWith == ["Google Chrome Canary"])
-        #expect(item(canary, in: chromeRun)?.isSelectedByDefault == false)
+        #expect(item(canary, in: chromeRun)?.hasStrongUnsharedMatch == false)
 
         let canaryRun = plan(
             [app(id: "canary", name: "Google Chrome Canary", bundleID: "com.google.Chrome.canary", zap: zap)],
@@ -63,9 +63,9 @@ struct LeftoverOwnershipTests {
         )
 
         #expect(item(stable, in: canaryRun)?.sharedWith == ["Google Chrome"])
-        #expect(item(stable, in: canaryRun)?.isSelectedByDefault == false)
+        #expect(item(stable, in: canaryRun)?.hasStrongUnsharedMatch == false)
         #expect(item(canary, in: canaryRun)?.sharedWith == [])
-        #expect(item(canary, in: canaryRun)?.isSelectedByDefault == true)
+        #expect(item(canary, in: canaryRun)?.hasStrongUnsharedMatch == true)
     }
 
     @Test func secondCopyClaimsEverything() throws {
@@ -87,7 +87,7 @@ struct LeftoverOwnershipTests {
 
         #expect(Set(items.map(\.url)) == paths)
         #expect(items.allSatisfy { $0.sharedWith == ["Obsidian — ~/Applications/Obsidian.app"] })
-        #expect(items.allSatisfy { !$0.isSelectedByDefault && $0.coTargets.isEmpty })
+        #expect(items.allSatisfy { !$0.hasStrongUnsharedMatch && $0.coTargets.isEmpty })
     }
 
     @Test func otherAppsZapPatternClaims() throws {
@@ -197,7 +197,7 @@ struct LeftoverOwnershipTests {
         #expect(groups.flatMap(\.items).count == 2)
         #expect(item(caches, in: groups)?.coTargets == ["second"])
         #expect(item(helperHostPreferences, in: groups)?.coTargets == ["second", "helper"])
-        #expect(groups.flatMap(\.items).allSatisfy { $0.sharedWith.isEmpty && $0.isSelectedByDefault })
+        #expect(groups.flatMap(\.items).allSatisfy { $0.sharedWith.isEmpty && $0.hasStrongUnsharedMatch })
     }
 
     // MARK: - Bundle-id rule

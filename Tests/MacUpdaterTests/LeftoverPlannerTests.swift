@@ -119,7 +119,7 @@ struct LeftoverPlannerTests {
         #expect(groups.map(\.appID) == ["target"])
         let items = groups.flatMap(\.items)
         #expect(items.map(\.url) == expected)
-        #expect(items.allSatisfy { $0.source == .bundleIdentifier && $0.isSelectedByDefault })
+        #expect(items.allSatisfy { $0.source == .bundleIdentifier && $0.hasStrongUnsharedMatch })
     }
 
     /// ByHost names are `<id>.<UUID>.plist`: a longer id's file is another app's.
@@ -159,7 +159,7 @@ struct LeftoverPlannerTests {
 
     // MARK: - Homebrew zap list
 
-    @Test func strongZapItemsAreTickedInsideLibrary() throws {
+    @Test func strongZapItemsInsideLibraryHaveReliableOwnership() throws {
         let support = try fixture.folder("Library/Application Support/obsidian")
         let preferences = try fixture.file("Library/Preferences/md.obsidian.plist")
         let obsidian = app(name: "Obsidian", bundleID: "md.obsidian", cask: cask("obsidian", .token, zap: [
@@ -171,7 +171,7 @@ struct LeftoverPlannerTests {
         #expect(items.map(\.url) == [support, preferences])
         #expect(items.map(\.source) == [.homebrewZap(token: "obsidian"), .homebrewZap(token: "obsidian")])
         #expect(items.first?.probableReason == nil)
-        #expect(items.allSatisfy { $0.isSelectedByDefault })
+        #expect(items.allSatisfy { $0.hasStrongUnsharedMatch })
     }
 
     /// Real cask data: Word's zap list (strong through its container) also names the vendor folder.
@@ -187,7 +187,7 @@ struct LeftoverPlannerTests {
         #expect(items.map(\.url) == [vendor, container])
         #expect(items.map(\.source) == [.homebrewZap(token: "microsoft-word"), .homebrewZap(token: "microsoft-word")])
         #expect(items.map(\.probableReason) == [.notNamedForApp, nil])
-        #expect(items.map(\.isSelectedByDefault) == [false, true])
+        #expect(items.map(\.hasStrongUnsharedMatch) == [false, true])
     }
 
     /// Real cask data: Chrome's zap list names Google's updater, which other Google apps share.
@@ -206,8 +206,8 @@ struct LeftoverPlannerTests {
         #expect(items.map(\.probableReason) == [.notNamedForApp, .notNamedForApp, nil])
     }
 
-    /// Real cask data: Obsidian, Zed and Slack name their own folders, so their items stay ticked.
-    @Test func strongZapItemsNamedForTheAppAreTicked() throws {
+    /// Real cask data: Obsidian, Zed and Slack name their own folders, so their items retain strong ownership.
+    @Test func strongZapItemsNamedForTheAppHaveReliableOwnership() throws {
         let recents = LeftoverPathRules.recentDocumentsFolder.joined(separator: "/")
         let expected: [URL] = try [
             fixture.folder("Library/Application Support/obsidian"),
@@ -234,7 +234,7 @@ struct LeftoverPlannerTests {
         let items = apps.flatMap(plannedItems)
 
         #expect(items.map(\.url) == expected)
-        #expect(items.allSatisfy { $0.probableReason == nil && $0.isSelectedByDefault })
+        #expect(items.allSatisfy { $0.probableReason == nil && $0.hasStrongUnsharedMatch })
     }
 
     /// The cask token names the app too, and a state suffix is not part of the name.
@@ -277,7 +277,7 @@ struct LeftoverPlannerTests {
         #expect(items.map(\.url) == [support, caches])
         #expect(items.first?.source == .homebrewZap(token: "obsidian"))
         #expect(items.first?.probableReason == .caskMatchedByName)
-        #expect(items.first?.isSelectedByDefault == false)
+        #expect(items.first?.hasStrongUnsharedMatch == false)
         #expect(items.last?.source == .bundleIdentifier)
         #expect(items.last?.probableReason == nil)
     }
@@ -291,7 +291,7 @@ struct LeftoverPlannerTests {
         #expect(items.map(\.url) == [config])
         #expect(items.first?.source == .homebrewZap(token: "zed"))
         #expect(items.first?.probableReason == .outsideLibrary)
-        #expect(items.first?.isSelectedByDefault == false)
+        #expect(items.first?.hasStrongUnsharedMatch == false)
     }
 
     @Test func wildcardExpansionGatesEachMatch() throws {
