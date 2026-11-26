@@ -58,6 +58,13 @@ struct DestructiveConsentTests {
         #expect(!footer.contains("Usuń tylko aplikację"))
     }
 
+    @Test func confirmationDistinguishesPermanentHomebrewCleanupFromTrashingLocalFiles() {
+        let scope = UninstallScopeSummary.headline(counts: counts(brew: 2, trash: 1), leftovers: 1, permanentCleanupCount: 1)
+        #expect(scope.contains("trwale"))
+        #expect(scope.contains("1 pakietu Homebrew"))
+        #expect(scope.contains("1 pozycję do Kosza"))
+    }
+
     @Test func theFooterNamesEveryRoute() {
         let summary = UninstallScopeSummary.text(counts: counts(brew: 1, trash: 2), leftovers: 3, zapMode: true)
         #expect(summary == trf("Do Kosza: %@ · Homebrew: %@ (resztki z zap nie trafiają do Kosza)", "\(2 + 3)", "1"))

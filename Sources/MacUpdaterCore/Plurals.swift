@@ -120,6 +120,11 @@ public enum Plurals {
             few:  "Usuń %@ aplikacje",
             many: "Usuń %@ aplikacji"
         ),
+        "trwale wyczyść dane %@ pakietów Homebrew": PluralForms(
+            one:  "trwale wyczyść dane %@ pakietu Homebrew",
+            few:  "trwale wyczyść dane %@ pakietów Homebrew",
+            many: "trwale wyczyść dane %@ pakietów Homebrew"
+        ),
         "i przenieś %@ pozycji do Kosza": PluralForms(
             one:  "i przenieś %@ pozycję do Kosza",
             few:  "i przenieś %@ pozycje do Kosza",
@@ -308,6 +313,11 @@ public enum Plurals {
             one:  "Remove %@ app",
             few:  "Remove %@ apps",
             many: "Remove %@ apps"
+        ),
+        "trwale wyczyść dane %@ pakietów Homebrew": PluralForms(
+            one:  "permanently clear data for %@ Homebrew package",
+            few:  "permanently clear data for %@ Homebrew packages",
+            many: "permanently clear data for %@ Homebrew packages"
         ),
         "i przenieś %@ pozycji do Kosza": PluralForms(
             one:  "and move %@ item to Trash",

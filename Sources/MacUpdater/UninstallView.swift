@@ -949,6 +949,8 @@ struct UninstallDialog: View {
                         .disabled(isRefreshing)
                 } else {
                     Button(confirmLabel, role: .destructive) { confirm() }
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                         .keyboardShortcut(.delete, modifiers: .command)
                         .buttonStyle(.borderedProminent)
                         .tint(Color.wegaDanger)
@@ -972,7 +974,9 @@ struct UninstallDialog: View {
     }
 
     private var confirmLabel: String {
-        UninstallScopeSummary.headline(counts: counts, leftovers: selectedLeftovers.count, zapMode: zapMode)
+        UninstallScopeSummary.headline(
+            counts: counts, leftovers: selectedLeftovers.count, permanentCleanupCount: zapMode ? brewOptionsTargets.count : 0
+        )
     }
 }
 
