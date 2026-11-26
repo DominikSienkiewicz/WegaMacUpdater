@@ -235,8 +235,9 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           awk -v heading="## [$VERSION]" '
             index($0, heading) == 1 { found = 1; next }
-            found && /^## \[/ { exit }
-            found { print }
+            found && (/^## \[/ || /^\[Unreleased\]: /) { exit }
+            found && /^[[:space:]]*$/ { if (started) blanks = blanks $0 "\n"; next }
+            found { printf "%s%s\n", blanks, $0; blanks = ""; started = 1 }
           ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
           RELEASE_FLAGS=()
           if [[ "$STABLE_RELEASE" != "true" ]]; then

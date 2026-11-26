@@ -39,7 +39,7 @@ Wega's docs are split by audience. **Start with the one that matches what you wa
 | Ship a release | [Distribution](docs/distribution.md) — cutting a release and how the app self-updates |
 | Contribute code | [CONTRIBUTING.md](CONTRIBUTING.md) — build/test setup, CI gates, the catalog-signature gate |
 | Report a vulnerability | [SECURITY.md](SECURITY.md) — the private disclosure channel; please don't use public issues |
-| Cut a patch release | `./scripts/release.sh` — see [RELEASING.md](RELEASING.md) |
+| Cut a patch release | `./scripts/release.sh` shows the commits and Claude Code's draft. Review the notes and answer `Y` to publish. See [RELEASING.md](RELEASING.md). |
 
 ## Architecture
 
@@ -261,12 +261,13 @@ Committed snapshots are kept for seven days, which is how long **Undo update** s
 
 ## How a release reaches a Mac
 
-From the tag to an installed update: only a signed and notarized build becomes a stable
-release, and Wega's self-update looks only at stable releases.
+A maintainer reviews the release notes before publishing the tag. Only a signed and
+notarized build becomes a stable release that Wega offers as a self-update.
 
 ```mermaid
 flowchart LR
-    tag["release.sh<br/>commit preview, confirmation, annotated tag"]
+    tag["release.sh<br/>review notes, confirm, tag"]
+    claude["Claude Code CLI"]
     ci["GitHub Actions<br/>build.yml gate, then release.yml"]
     notary["Apple notary service"]
     rel[("GitHub Release<br/>WegaMacUpdater.pkg and .dmg")]
@@ -274,6 +275,8 @@ flowchart LR
     helper["WegaPrivilegedHelper<br/>root"]
     user["User"]
 
+    tag -->|"commit subjects and bodies"| claude
+    claude -->|"proposed release notes"| tag
     tag -->|"atomic push of main and the v* tag"| ci
     ci <-->|"notarytool submit, stapler staple"| notary
     ci -->|"gh release create; prerelease unless signed and notarized"| rel

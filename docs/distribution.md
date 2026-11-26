@@ -18,7 +18,7 @@ self-update verification only trust binaries signed by that team, so release sig
 
 ### Cutting a release
 
-`scripts/build-pkg.sh` builds a universal, ad-hoc-or-signed `.pkg` **and** a drag-to-Applications `.dmg`. Run the release script on `main` to preview the commits for the next patch version. After you confirm, it uses the committed `[Unreleased]` notes and pushes the release commit and annotated tag together, starting GitHub Actions.
+`scripts/build-pkg.sh` builds a universal, ad-hoc-or-signed `.pkg` **and** a drag-to-Applications `.dmg`. Run the release script on `main` to see the commits for the next patch and the notes Claude Code drafted from their full messages. Answer `Y` to store the displayed notes in the release commit and changelog and push the commit and annotated tag together, starting GitHub Actions.
 
 ```bash
 ./scripts/release.sh

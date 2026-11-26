@@ -4,15 +4,16 @@ A release is a pushed `v*` tag. Everything else — building, signing, notarizin
 and publishing — is done by [`.github/workflows/release.yml`](.github/workflows/release.yml)
 in reaction to that tag.
 
-Run the release script on a clean `main` with the notes committed under `[Unreleased]` in
-`CHANGELOG.md`. Omit the version to bump the patch number.
+Run the release script on a clean `main` with a signed-in Claude Code CLI. Omit the version
+to bump the patch number.
 
 ```bash
 ./scripts/release.sh
 ```
 
-Review the commit list and answer `y` to publish. The script pushes the release commit and its
-tag together. GitHub Actions builds and publishes the release from the tag.
+Review the commit list and the proposed English release notes. Answer `Y` to publish that
+text, or press Enter to cancel. The script pushes the release commit and its tag together.
+GitHub Actions builds and publishes the release from the tag.
 
 The Claude Code `release` skill proposes the version and notes for approval. After approval,
 it cuts the release locally with `WEGA_RELEASE_LOCAL_ONLY=1` and makes the separately approved
@@ -34,15 +35,17 @@ atomic push from the primary checkout.
   [Republishing the app catalog](#10-republishing-the-app-catalog). It is a separate key and
   a separate artifact from the release signing, and nothing in the pipeline reminds you.
 
-## 2. Write the notes
+## 2. Review the release notes
 
-Write and approve the release notes **before** cutting the release. The script copies them
-verbatim. The section becomes the GitHub Release description as it stands.
+The script sends the subjects and full bodies of all commits in the displayed range to
+Claude Code in one request. It shows existing `[Unreleased]` entries for comparison,
+then prints the exact draft that approval will put in their place. Declining leaves the
+release files, commits and tags untouched.
 
-Put the notes in one of two places:
-
-- the `## [Unreleased]` section of `CHANGELOG.md`, already committed on `main` — uncommitted edits to a tracked file make the script refuse; or
-- a file passed with `--notes FILE` — the section body only.
+To use your own wording, run `./scripts/release.sh --notes FILE`. The file holds the
+section body and bypasses Claude. For unattended publication, `--yes --notes FILE` uses
+the approved file and `--yes` alone uses the committed `[Unreleased]` section. The
+Claude Code release skill uses the same prepared-notes path for its local cut.
 
 A summary paragraph above the first `### ` heading is allowed. Any `### ` headings are kept
 as written (`### Added`, `### Known issues`, …). A line starting with `## ` is refused, because
@@ -59,18 +62,15 @@ copied byte for byte. Empty notes are refused.
 ./scripts/release.sh 0.2.0      # explicit version
 ```
 
-Add `--notes FILE` to publish the contents of a file in place of `[Unreleased]`.
-
 The script shows commit hashes and subjects up to the current `main` tip. The range starts
 after the newest version tag on `origin` whose commit is in that history. For a first release,
 the list starts at the beginning of the history. The prompt defaults to cancellation.
-Use `--yes` when a non-interactive invocation already has approval.
 
 After confirmation the script bumps `AppMetadata.version`, writes `## [X.Y.Z] — YYYY-MM-DD` into
-`CHANGELOG.md` with the notes beneath it, commits `chore(release): vX.Y.Z` containing exactly
-those two files, creates the annotated tag `vX.Y.Z`, and atomically pushes the release commit
-and its tag to `origin`. With `--notes`, the script empties `[Unreleased]` and reports how many
-lines it contained.
+`CHANGELOG.md` and empties `[Unreleased]`. The reviewed Markdown becomes both the versioned
+section and the body of `chore(release): vX.Y.Z`. The commit contains exactly those two
+files. The script creates the annotated tag `vX.Y.Z` and atomically pushes the commit and
+tag to `origin`. The versioned section supplies the `body` returned by GitHub's Releases API.
 
 It refuses to run when:
 
@@ -81,6 +81,7 @@ It refuses to run when:
 - automatic publication cannot fetch `origin/main`, read its release tags, or resolve a single
   push URL for `origin`;
 - `CHANGELOG.md` has no `## [Unreleased]` heading;
+- the automatic draft has no commits to summarize, the clone is shallow or Claude Code fails;
 - the notes are empty, contain a line starting with `## `, or the notes file is unreadable.
 
 `--notes` without a value is a usage error, and the old second-phase and abort options are gone.
@@ -91,8 +92,11 @@ It refuses to run when:
 ./scripts/release.sh --dry-run
 ```
 
-The preview prints the commit list and both diffs without a confirmation prompt. It leaves
-the release files, commit history, and tags untouched.
+The preview generates and displays a draft plus the version and changelog diffs. It leaves
+the release files, commits and tags untouched. If origin's tags are unavailable, the
+preview uses the newest reachable local version tag, or all history if no such tag exists.
+A subsequent interactive run generates its own draft for approval. Use `--notes FILE` for
+both runs to reuse precise wording.
 
 ## 5. Retry a failed push
 
@@ -200,8 +204,9 @@ Someone pushed to `origin/main` since you last synced. Bring your local `main` u
 then run the script again. Being *ahead* of `origin/main` is not an error.
 
 **`CHANGELOG.md has no '## [Unreleased]' heading` / the notes are empty**
-The notes come from `--notes FILE` or from `[Unreleased]`, and the script refuses to publish
-an empty section. Write the notes first (see section 2).
+The script needs the `[Unreleased]` heading to insert a versioned section. Its body may
+be empty when Claude drafts the notes. If generation fails, check the Claude Code login,
+retry, or pass a nonempty notes file as described in section 2.
 
 **A notes line starting with `## `**
 It would split the release section in two. Demote it to `### ` or reword it.
