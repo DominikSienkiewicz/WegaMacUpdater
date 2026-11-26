@@ -62,6 +62,27 @@ final class CleanupStoreTests: XCTestCase {
         XCTAssertEqual(store.phase, .idle)
     }
 
+    func testCheckingTerminalCopiesRefreshesTheDisplayedReportOnlyAfterCapture() async {
+        for result in [CleanupPathReadResult.captured(CleanupStoreFixtures.shellPath), .failed, .cancelled] {
+            let boundary = FakeCleanupBoundary()
+            let previous = CleanupStoreFixtures.report(tool: "previous")
+            boundary.persistedReport = previous
+            boundary.pathReadResult = result
+            let store = CleanupStore(dependencies: boundary.dependencies)
+
+            store.readPath()
+            await store.task?.value
+
+            if case .captured(let path) = result {
+                XCTAssertEqual(boundary.scannedPaths, [path])
+                XCTAssertEqual(store.report, boundary.scanResult)
+            } else {
+                XCTAssertTrue(boundary.scannedPaths.isEmpty)
+                XCTAssertEqual(store.report, previous)
+            }
+        }
+    }
+
     func testFailedReadKeepsThePreviousSnapshot() async {
         let previous = CleanupStoreFixtures.shellPath
         for result in [CleanupPathReadResult.failed, .unsupportedShell("fish")] {

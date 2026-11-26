@@ -326,7 +326,7 @@ final class CleanupPresentationTests: XCTestCase {
             let notRemovable = try XCTUnwrap(CleanupPresentation.outcomeMessage(.notRemovable))
             let failed = try XCTUnwrap(CleanupPresentation.outcomeMessage(.failed("CleanupFileSystemError.io")))
 
-            XCTAssertTrue(rescan.contains(tr("Skanuj")), rescan)
+            XCTAssertTrue(rescan.contains(tr("Sprawdź ponownie")), rescan)
             XCTAssertTrue(dependents.contains("awscli, gh"), dependents)
             XCTAssertEqual(Set([rescan, dependents, notRemovable, failed]).count, 4)
             XCTAssertNil(CleanupPresentation.outcomeMessage(.needsInUseAcknowledgement([Fixture.processWithArguments])))

@@ -315,7 +315,12 @@ JDKs remain in the scan report even when their source is unknown or Homebrew alr
 lists their update. These reporting associations do not extend app-bundle rollback to
 installer packages or Java runtimes.
 
-Cleanup offers two on-demand file reviews. **Old installers** finds `.dmg` and `.pkg`
+In **Cleanup → Tools**, choose **Check tools** to review additional copies and files left by updates.
+Each result has its own card. **Show details** reveals locations and the evidence for that result.
+When the order of two copies is uncertain, Wega can read the shell’s search path with your
+confirmation and refresh the report.
+
+Cleanup also offers two on-demand file reviews. **Old installers** finds `.dmg` and `.pkg`
 files in a folder you choose. **Xcode cleanup** lists each project's build data and
 shows release archives separately. Both views display file sizes and modification dates.
 **Simulator runtimes** lists the platforms and versions reported by the selected Xcode
