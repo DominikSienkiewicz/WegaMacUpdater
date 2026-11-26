@@ -185,6 +185,8 @@ final class InventoryStore: ObservableObject {
     /// When the last successful read finished, partial reads included. `nil` until then;
     /// a cancelled or failed read leaves it alone.
     @Published private(set) var lastReadAt: Date?
+    @Published private(set) var footprintMeasurement: InventoryFootprintMeasurement?
+    @Published private(set) var footprintFailureRead: Date?
     /// Set by a change no store counts: an uninstall reports itself through `markStale()`.
     @Published private var markedStale = false
     /// The counts the last successful read started from.
@@ -225,6 +227,26 @@ final class InventoryStore: ObservableObject {
     /// An uninstall changed the app set behind the list. The list stays on screen, but it no
     /// longer claims to be current and the next entry reads again.
     func markStale() { markedStale = true }
+
+    func measureFootprints(for read: Date) async {
+        guard lastReadAt == read, !isScanning, footprintMeasurement?.readAt != read else { return }
+        let installations = apps
+        footprintFailureRead = nil
+        do {
+            let sizes = try await operations.withRead(label: "inventory sizes") {
+                try await InventoryFootprintReader().measure(installations)
+            }
+            try Task.checkCancellation()
+            guard lastReadAt == read, !isScanning else { return }
+            let report = try await InventoryFootprintHistory.shared.record(sizes, apps: installations, readAt: read)
+            guard lastReadAt == read, !Task.isCancelled else { return }
+            footprintMeasurement = report
+        } catch is CancellationError {
+            return
+        } catch {
+            if lastReadAt == read { footprintFailureRead = read }
+        }
+    }
 
     func scan(
         using loader: any InventorySnapshotLoading,

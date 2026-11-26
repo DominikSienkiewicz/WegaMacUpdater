@@ -2,9 +2,10 @@ import Foundation
 
 /// The column the inventory table is sorted by.
 public enum InventorySortKey: String, CaseIterable, Sendable {
-    case name, version, bundleId, source, updateDate, diskUsage
+    case name, version, bundleId, source, updateDate, diskUsage, diskGrowth
 
-    public var initiallyAscending: Bool { self != .diskUsage }
+    public var measuresDisk: Bool { self == .diskUsage || self == .diskGrowth }
+    public var initiallyAscending: Bool { !measuresDisk }
 }
 
 /// Ordering for the inventory table. Lifted out of `InventoryView` so the
@@ -22,7 +23,8 @@ public enum InventorySort {
     public static func comparator(
         key: InventorySortKey,
         ascending: Bool,
-        footprints: [InstallationIdentity: InventoryFootprint] = [:]
+        footprints: [InstallationIdentity: InventoryFootprint] = [:],
+        changes: [InstallationIdentity: InventoryFootprintChange] = [:]
     ) -> (ApplicationInfo, ApplicationInfo) -> Bool {
         let before: (ApplicationInfo, ApplicationInfo) -> Bool
         switch key {
@@ -31,10 +33,13 @@ public enum InventorySort {
         case .bundleId:   before = { ($0.bundleIdentifier ?? "") < ($1.bundleIdentifier ?? "") }
         case .source:     before = { sourceRank($0) < sourceRank($1) }
         case .updateDate: before = { ($0.updateDate ?? .distantPast) < ($1.updateDate ?? .distantPast) }
-        case .diskUsage:
+        case .diskUsage, .diskGrowth:
+            func bytes(_ keyPath: InstallationIdentity) -> Int64? {
+                key == .diskGrowth ? changes[keyPath]?.totalBytes : footprints[keyPath]?.totalBytes
+            }
             return { a, b in
-                let left = footprints[a.installation]?.totalBytes
-                let right = footprints[b.installation]?.totalBytes
+                let left = bytes(a.installation)
+                let right = bytes(b.installation)
                 switch (left, right) {
                 case let (left?, right?) where left != right: return ascending ? left < right : left > right
                 case (_?, nil): return true
@@ -56,9 +61,10 @@ public enum InventorySort {
         _ apps: [ApplicationInfo],
         by key: InventorySortKey,
         ascending: Bool,
-        footprints: [InstallationIdentity: InventoryFootprint] = [:]
+        footprints: [InstallationIdentity: InventoryFootprint] = [:],
+        changes: [InstallationIdentity: InventoryFootprintChange] = [:]
     ) -> [ApplicationInfo] {
-        apps.sorted(by: comparator(key: key, ascending: ascending, footprints: footprints))
+        apps.sorted(by: comparator(key: key, ascending: ascending, footprints: footprints, changes: changes))
     }
 
     private static func sourceRank(_ app: ApplicationInfo) -> Int {

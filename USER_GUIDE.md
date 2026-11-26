@@ -166,6 +166,14 @@ the same identifier, Wega counts each bundle separately and leaves out their sha
 data. Protected locations such as app containers are outside this estimate. Unknown
 sizes appear at the end in both directions.
 
+After clicking **Size**, select **Change since last measurement** to see which apps
+grew most. The first measurement establishes a baseline. Click **Refresh Inventory**
+while viewing sizes to take a fresh measurement. Click a change to see how much the
+bundle, caches and application support each grew or shrank. A dash indicates that
+the two measurements could not be compared. This happens for a newly seen copy, an
+unreadable folder, or a total whose treatment of shared data changed. Wega keeps
+the last measurement locally between launches.
+
 The **Sprawdzenie** (Check status) column describes an update check of that particular
 installed copy, separately from its Brew/App Store/manual origin. Click the status for
 the sources, last attempt and last complete check. **Wymaga sprawdzenia** (Needs checking)

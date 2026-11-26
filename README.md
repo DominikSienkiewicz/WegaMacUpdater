@@ -320,7 +320,9 @@ From there you can review the copies and choose one to uninstall with its shared
 preserved. Links to an existing copy count as part of that installation.
 
 In Inventory, click **Size** to measure and sort installations from largest to smallest.
-Click a result for the bundle, cache and application support breakdown.
+Click a result for the bundle, cache and application support breakdown. **Change since
+last measurement** ranks their growth since the previous local measurement. Refresh
+Inventory while viewing sizes to take another measurement.
 
 Cask repair checks version and build changes before recording success. Homebrew and
 Discord's own updater can both act on the same bundle. Wega verifies Discord Stable on

@@ -757,7 +757,9 @@ termination, including when a stale confirmation requests force termination.
 ### Inventory
 **Size** measures allocated disk space in the background when you select that column.
 The first click orders installations from largest to smallest. Click a value to see
-the bundle, cache and application support measurements. The [user guide](../USER_GUIDE.md#checking-status-in-inventory)
+the bundle, cache and application support measurements. **Change since last measurement**
+orders comparable totals by growth and shows component changes for installations with
+the same path and bundle identifier. The [user guide](../USER_GUIDE.md#checking-status-in-inventory)
 describes which locations contribute to the estimate.
 
 The **Check status** column and **Needs checking** filter expose the latest per-installation

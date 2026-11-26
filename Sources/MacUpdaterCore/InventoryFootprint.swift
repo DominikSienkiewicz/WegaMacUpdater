@@ -1,14 +1,16 @@
 import Foundation
 
-public struct InventoryFootprint: Equatable, Sendable {
+public struct InventoryFootprint: Equatable, Codable, Sendable {
     public let bundleBytes: Int64?
     public let cacheBytes: Int64?
     public let dataBytes: Int64?
     public let includesLibrary: Bool
 
     public var totalBytes: Int64? {
+        guard let bundleBytes, bundleBytes >= 0 else { return nil }
         guard includesLibrary else { return bundleBytes }
-        guard let bundleBytes, let cacheBytes, let dataBytes else { return nil }
+        guard let cacheBytes, let dataBytes, cacheBytes >= 0, dataBytes >= 0,
+              cacheBytes <= .max - bundleBytes, dataBytes <= .max - bundleBytes - cacheBytes else { return nil }
         return bundleBytes + cacheBytes + dataBytes
     }
 }
