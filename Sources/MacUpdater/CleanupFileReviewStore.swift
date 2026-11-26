@@ -67,6 +67,8 @@ final class CleanupFileReviewStore: ObservableObject {
     @Published private(set) var movedName: String?
     @Published private(set) var scanCancelled = false
     @Published var allInstallerAges = false
+    @Published private(set) var loadingRuntimes = false
+    @Published private(set) var runtimeReport: SimulatorRuntimeReport?
 
     var installerFolder: URL? {
         guard case let .installers(folder, _)? = request else { return nil }
@@ -75,12 +77,22 @@ final class CleanupFileReviewStore: ObservableObject {
 
     private let installers = OldInstallerScanner()
     private let xcode = XcodeCleanup()
+    private let loadRuntimes: @Sendable () async -> SimulatorRuntimeReport
     private let coordinator: OperationCoordinator
     private var request: CleanupFileRequest?
     private(set) var task: Task<Void, Never>?
 
-    init(coordinator: OperationCoordinator = .shared) {
+    init(coordinator: OperationCoordinator = .shared,
+         loadRuntimes: @escaping @Sendable () async -> SimulatorRuntimeReport = { await SimulatorRuntimeInventory().read() }) {
         self.coordinator = coordinator
+        self.loadRuntimes = loadRuntimes
+    }
+
+    func refreshRuntimes() async {
+        guard !loadingRuntimes else { return }
+        loadingRuntimes = true
+        runtimeReport = await loadRuntimes()
+        loadingRuntimes = false
     }
 
     func scan(_ request: CleanupFileRequest) {
