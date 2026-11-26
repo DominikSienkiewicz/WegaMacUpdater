@@ -1,9 +1,10 @@
 import Foundation
 import MacUpdaterCore
 
-/// What the user can do about an app that was not removed.
+/// A destination offered for a completed move or an item that needs attention.
 enum UninstallResultAction: Equatable {
     case showInFinder(URL)
+    case openTrash
     case openAppManagementSettings
     /// Opens Wega's Settings window, whose helper card turns the helper on.
     case openHelperSettings
@@ -11,6 +12,7 @@ enum UninstallResultAction: Equatable {
     var title: String {
         switch self {
         case .showInFinder: tr("Pokaż w Finderze")
+        case .openTrash: tr("Otwórz Kosz")
         case .openAppManagementSettings: tr("Otwórz ustawienia prywatności")
         case .openHelperSettings: tr("Otwórz ustawienia pomocnika")
         }
@@ -30,12 +32,16 @@ struct UninstallResultRow: Identifiable, Equatable {
     let actions: [UninstallResultAction]
 }
 
-/// The outcome of one uninstall run as the view shows it: a success banner naming what was
-/// removed, one summary line, and one row per app that was not removed.
+/// The outcome of one run, including a receipt for every selected leftover.
 struct UninstallResultReport: Equatable {
     let banner: BannerData?
     let summary: String?
     let rows: [UninstallResultRow]
+    let files: [UninstallFileResult]
+    let offersOpenTrash: Bool
+
+    var fileGroups: [UninstallFileGroup] { UninstallFileGroup.groups(for: files) }
+    var hasDetails: Bool { summary != nil || !rows.isEmpty || !files.isEmpty || offersOpenTrash }
 }
 
 /// Turns the per-target results of an uninstall run into what the view shows, so every app
@@ -44,20 +50,28 @@ enum UninstallResultPresentation {
     static func report(
         results: [String: UninstallTargetResult],
         apps: [ApplicationInfo],
-        leftoversTrashed: Int,
-        leftoversFailed: Int,
+        files: [UninstallFileResult] = [],
         requestedZap: Bool = false
     ) -> UninstallResultReport {
         let reported = apps.filter { results[$0.id] != nil }
         let removed = reported.filter { results[$0.id]?.isRemoved == true }
         let rows = rows(results: results, apps: reported)
+        let leftoversTrashed = files.count { $0.status == .movedToTrash }
+        let leftoversFailed = files.count { file in
+            if case .failed = file.status { return true }
+            return false
+        }
         return UninstallResultReport(
             banner: successBanner(removed: removed, results: results, leftoversTrashed: leftoversTrashed),
             summary: summaryLine(
                 reported: reported, results: results, rows: rows,
                 leftoversFailed: leftoversFailed, requestedZap: requestedZap
             ),
-            rows: rows
+            rows: rows,
+            files: files,
+            offersOpenTrash: leftoversTrashed > 0 || removed.contains {
+                results[$0.id] == .movedToTrash || results[$0.id] == .movedToTrashByHelper
+            }
         )
     }
 
