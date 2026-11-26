@@ -49,20 +49,36 @@ struct DestructiveConsentTests {
         #expect(store.contains("pendingForceRestart ="))
     }
 
-    @Test func mixedRemovalConfirmationNamesTheAppsAndLocalItemsGoingToTrash() throws {
-        let scope = UninstallScopeSummary.headline(counts: counts(brew: 1, trash: 1), leftovers: 3)
-        #expect(scope == "Usuń 2 aplikacje i przenieś 3 pozycje do Kosza")
-        let view = try source("Sources/MacUpdater/UninstallView.swift")
-        let footer = try #require(view.components(separatedBy: "private var confirmLabel: String {").last)
-        #expect(footer.contains("UninstallScopeSummary."))
-        #expect(!footer.contains("Usuń tylko aplikację"))
+    @Test func mixedRemovalConfirmationNamesTheAppsAndLocalItemsGoingToTrash() {
+        let dialog = UninstallDialog(
+            targets: [app("Cask", brew: true), app("Manual")],
+            selectedLeftovers: .constant(["/one", "/two", "/three"]),
+            onCancel: {}, onConfirm: { _ in }
+        )
+        withLanguage(.pl) { #expect(dialog.confirmLabel == "Usuń 2 aplikacje i przenieś 3 pozycje do Kosza") }
+        withLanguage(.en) { #expect(dialog.confirmLabel == "Remove 2 apps and move 3 items to Trash") }
     }
 
     @Test func confirmationDistinguishesPermanentHomebrewCleanupFromTrashingLocalFiles() {
-        let scope = UninstallScopeSummary.headline(counts: counts(brew: 2, trash: 1), leftovers: 1, permanentCleanupCount: 1)
-        #expect(scope.contains("trwale"))
-        #expect(scope.contains("1 pakietu Homebrew"))
-        #expect(scope.contains("1 pozycję do Kosza"))
+        withLanguage(.pl) {
+            let scope = UninstallScopeSummary.headline(counts: counts(brew: 2, trash: 1), leftovers: 1, permanentCleanupCount: 1)
+            #expect(scope.contains("trwale"))
+            #expect(scope.contains("1 pakietu Homebrew"))
+            #expect(scope.contains("1 pozycję do Kosza"))
+        }
+    }
+
+    @Test func homebrewCleanupOffersOnlyCasksWhoseDataMayBeRemoved() {
+        let ordinary = app("Single", brew: true)
+        let copied = app("Twin", brew: true)
+        let blocked = app("Blocked", brew: true)
+        let dialog = UninstallDialog(
+            targets: [ordinary, copied, blocked, app("Manual")],
+            keptCopies: [copied.id: [URL(fileURLWithPath: "/Elsewhere/Twin.app")]],
+            routes: [blocked.id: .blocked(.unverifiedCopy)],
+            onCancel: {}, onConfirm: { _ in }
+        )
+        #expect(dialog.brewOptionsTargets.map(\.id) == [ordinary.id])
     }
 
     @Test func theFooterNamesEveryRoute() {

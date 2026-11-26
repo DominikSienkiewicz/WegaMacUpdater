@@ -605,7 +605,6 @@ struct UninstallDialog: View {
     let targets: [ApplicationInfo]
     let duplicateReview: Bool
     let keptCopies: [String: [URL]]
-    var preservedCopyIDs: Set<String> { Set(keptCopies.keys) }
     /// REL-14: the scan behind these targets failed to read one or more sources, so the
     /// list may be missing installations. The dialog warns before the destructive action.
     var scanIncomplete: Bool = false
@@ -696,11 +695,11 @@ struct UninstallDialog: View {
     private var trashCount: Int { counts.trash }
     private var blockedCount: Int { counts.blocked }
     private var totalCount: Int { targets.count }
-    private var brewOptionsTargets: [ApplicationInfo] {
+    var brewOptionsTargets: [ApplicationInfo] {
         guard !duplicateReview else { return [] }
         return targets.filter { app in
             if case .blocked = routes[app.id] { return false }
-            return app.isManagedByBrew
+            return app.isManagedByBrew && keptCopies[app.id] == nil
         }
     }
     private var hasMixed: Bool { brewCount > 0 && trashCount > 0 }
@@ -940,7 +939,7 @@ struct UninstallDialog: View {
         UninstallDialogKeyboardBehavior.perform(.confirm, zapMode: zapMode, onCancel: onCancel, onConfirm: onConfirm)
     }
 
-    private var confirmLabel: String {
+    var confirmLabel: String {
         UninstallScopeSummary.headline(
             counts: counts, leftovers: selectedLeftovers.count, permanentCleanupCount: zapMode ? brewOptionsTargets.count : 0
         )
