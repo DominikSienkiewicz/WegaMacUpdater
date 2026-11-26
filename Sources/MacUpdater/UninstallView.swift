@@ -356,7 +356,9 @@ struct UninstallView: View {
 
     @ViewBuilder
     private func sourceLabel(_ app: ApplicationInfo) -> some View {
-        if app.isManagedByBrew {
+        if protections[app.id] == .unknownInstallationSource {
+            WegaBadge(label: tr("Nie ustalono źródła"), variant: .manual)
+        } else if app.isManagedByBrew {
             WegaBadge(label: "brew", variant: .brew)
         } else if app.isManagedByMas {
             WegaBadge(label: "mas", variant: .appStore)

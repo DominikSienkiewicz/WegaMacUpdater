@@ -20,6 +20,7 @@ public enum UninstallProtection: Equatable, Sendable {
     case systemApplication
     case symlink(destination: String)
     case unverifiedDuplicateCopy
+    case unknownInstallationSource
 }
 
 /// What happened to one uninstall target. Only the `removed*` cases mean the app is gone, so

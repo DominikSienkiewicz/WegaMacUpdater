@@ -8,6 +8,9 @@ extension Translations {
         "To tylko dowiązanie do %@": "This is only a link to %@",
         "Nie można bezpiecznie ustalić, która kopia zostałaby usunięta.": "The copy that would be removed could not be verified.",
         "Wybierz jedną kopię do odinstalowania. Dane aplikacji zostaną zachowane.": "Choose one copy to uninstall. Its app data is kept.",
+        "Nie udało się odczytać listy Homebrew. Odśwież listę, aby ustalić sposób usunięcia.":
+            "The Homebrew list could not be read. Refresh the list to verify how this app can be removed.",
+        "Nie ustalono źródła": "Source unknown",
         "Wszystkie aplikacje": "All apps",
         "Brak kolejnej kopii": "No other copy found",
         "W tym skanie nie znaleziono już kilku kopii tej aplikacji.": "This scan found no extra copies of the app.",

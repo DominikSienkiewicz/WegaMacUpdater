@@ -35,15 +35,20 @@ struct UninstallScan: Equatable, Sendable {
     ) async -> UninstallScan {
         var failures: [ScanSourceFailure] = []
 
+        var caskLookupUnavailable = false
         var installedCaskTokens: Set<String> = []
         do { installedCaskTokens = try await installedCasks() }
         catch BrewServiceError.brewNotFound {
             // The ordinary uninstall routes still work on a Mac without Homebrew.
         }
         catch is CancellationError {
+            caskLookupUnavailable = true
             // Cancellation is intentionally not recorded as a source failure.
         }
-        catch { failures.append(ScanSourceFailure(source: .homebrew, message: error.localizedDescription)) }
+        catch {
+            caskLookupUnavailable = true
+            failures.append(ScanSourceFailure(source: .homebrew, message: error.localizedDescription))
+        }
 
         var found: [ApplicationInfo] = []
         var applicationsFailure: ScanSourceFailure?
@@ -62,7 +67,13 @@ struct UninstallScan: Equatable, Sendable {
         let apps = InstallationInventory.deduplicated(found)
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
-        return UninstallScan(apps: apps, failures: failures, protections: protections(apps))
+        var blocked = protections(apps)
+        if caskLookupUnavailable {
+            for app in apps where !app.isManagedByMas && blocked[app.id] == nil {
+                blocked[app.id] = .unknownInstallationSource
+            }
+        }
+        return UninstallScan(apps: apps, failures: failures, protections: blocked)
     }
 }
 
