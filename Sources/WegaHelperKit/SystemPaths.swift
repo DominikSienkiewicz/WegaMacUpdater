@@ -59,6 +59,8 @@ public enum SystemPaths {
     public static let osascript = URL(fileURLWithPath: "/usr/bin/osascript")
     public static let mdls = URL(fileURLWithPath: "/usr/bin/mdls")
     public static let pkgutil = URL(fileURLWithPath: "/usr/sbin/pkgutil")
+    public static let xcodeSelect = URL(fileURLWithPath: "/usr/bin/xcode-select")
+    public static let xcrun = URL(fileURLWithPath: "/usr/bin/xcrun")
     public static let launchctl = URL(fileURLWithPath: "/bin/launchctl")
 
     /// Login shell used when `$SHELL` is unset.
