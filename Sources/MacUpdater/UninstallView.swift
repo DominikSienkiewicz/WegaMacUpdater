@@ -130,7 +130,7 @@ struct UninstallView: View {
                     Button { Task { await refresh() } } label: {
                         Label(tr("Odśwież"), systemImage: "arrow.clockwise")
                     }
-                    .disabled(isLoading || isUninstalling)
+                    .disabled(isLoading || isUninstalling || isPreparingDialog)
 
                     Button {
                         Task { await presentUninstallDialog() }
@@ -140,7 +140,7 @@ struct UninstallView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.wegaDanger)
-                    .disabled(targets.isEmpty || isUninstalling || isPreparingDialog)
+                    .disabled(targets.isEmpty || isLoading || isUninstalling || isPreparingDialog)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -408,7 +408,7 @@ struct UninstallView: View {
     /// call while one is preparing returns at once.
     private func presentUninstallDialog() async {
         let targets = self.targets
-        guard !targets.isEmpty, !isUninstalling, !isPreparingDialog else { return }
+        guard !targets.isEmpty, !isLoading, !isUninstalling, !isPreparingDialog else { return }
         isPreparingDialog = true
         defer { isPreparingDialog = false }
         pendingUninstallTargets = targets
