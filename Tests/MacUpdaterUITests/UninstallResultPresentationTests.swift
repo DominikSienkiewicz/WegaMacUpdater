@@ -163,11 +163,49 @@ struct UninstallResultPresentationTests {
         #expect(reason != UninstallResultPresentation.blockReason(.needsHelper))
     }
 
+    @Test func successfulZapInMixedBatchDoesNotDescribeAnotherCasksFailure() throws {
+        let plainCopy = app("Twin", brew: true), withZap = app("Other", brew: true)
+        let report = UninstallResultPresentation.report(
+            results: [plainCopy.id: .failed("plain uninstall failed"), withZap.id: .removedByHomebrew],
+            apps: [plainCopy, withZap], failedZapIDs: []
+        )
+
+        let summary = try #require(report.summary)
+        #expect(summary.contains(plainCopy.name))
+        #expect(!summary.contains("--force"))
+
+        let bothFailed = UninstallResultPresentation.report(
+            results: [plainCopy.id: .failed("plain uninstall failed"), withZap.id: .failed("zap failed")],
+            apps: [plainCopy, withZap], failedZapIDs: [withZap.id]
+        )
+        #expect(try #require(bothFailed.summary).contains("\(withZap.name): Nie uruchomiono --force"))
+    }
+
+    @MainActor
+    @Test func outcomeIdentifiesOnlyActualFailedZapCommands() async {
+        let failing = app("Failing", brew: true), successful = app("Successful", brew: true)
+        let coordinator = UninstallCoordinator(dependencies: .init(
+            uninstallCask: { _, token, _ in
+                if token == "failing" { throw CocoaError(.fileWriteNoPermission) }
+            },
+            trashItem: { _ in throw CocoaError(.featureUnsupported) },
+            trashLeftovers: { _ in .init() },
+            protection: { _ in nil }, runningApplications: { [] },
+            requestQuit: { _ in false }, forceKill: { _ in false }, waitBetweenRunningChecks: {},
+            bundleFacts: { _ in .userOwnedWritable },
+            stageForTrash: { _, _ in throw StagingNotExpected() }
+        ))
+        let zapped = await coordinator.uninstall(targets: [failing, successful], zap: true, using: BrewService())
+        let plain = await coordinator.uninstall(targets: [failing, successful], zap: false, using: BrewService())
+        #expect(zapped.failedZapIDs == [failing.id])
+        #expect(plain.failedZapIDs.isEmpty)
+    }
+
     @Test func failedBrewZapKeepsItsForceNote() throws {
         let cask = app("Cask", brew: true)
         let zapped = UninstallResultPresentation.report(
             results: [cask.id: .failed("zap failed")], apps: [cask],
-            requestedZap: true
+            failedZapIDs: [cask.id]
         )
         #expect(try #require(zapped.summary).contains("--force"))
         let plain = UninstallResultPresentation.report(

@@ -51,7 +51,7 @@ enum UninstallResultPresentation {
         results: [String: UninstallTargetResult],
         apps: [ApplicationInfo],
         files: [UninstallFileResult] = [],
-        requestedZap: Bool = false
+        failedZapIDs: Set<String> = []
     ) -> UninstallResultReport {
         let reported = apps.filter { results[$0.id] != nil }
         let removed = reported.filter { results[$0.id]?.isRemoved == true }
@@ -65,7 +65,7 @@ enum UninstallResultPresentation {
             banner: successBanner(removed: removed, results: results, leftoversTrashed: leftoversTrashed),
             summary: summaryLine(
                 reported: reported, results: results, rows: rows,
-                leftoversFailed: leftoversFailed, requestedZap: requestedZap
+                leftoversFailed: leftoversFailed, failedZapIDs: failedZapIDs
             ),
             rows: rows,
             files: files,
@@ -177,10 +177,10 @@ enum UninstallResultPresentation {
         results: [String: UninstallTargetResult],
         rows: [UninstallResultRow],
         leftoversFailed: Int,
-        requestedZap: Bool
+        failedZapIDs: Set<String>
     ) -> String? {
         var parts: [String] = []
-        let failure = failureNote(reported: reported, results: results, zap: requestedZap)
+        let failure = failureNote(reported: reported, results: results, failedZapIDs: failedZapIDs)
         if let failure { parts.append(failure.note) }
         let skippedCount = rows.count - (failure?.count ?? 0)
         if skippedCount > 0 {
@@ -198,24 +198,24 @@ enum UninstallResultPresentation {
     private static func failureNote(
         reported: [ApplicationInfo],
         results: [String: UninstallTargetResult],
-        zap: Bool
+        failedZapIDs: Set<String>
     ) -> (note: String, count: Int)? {
-        var failed: [(name: String, requestedZap: Bool)] = []
-        for app in reported {
-            guard case .failed = results[app.id] else { continue }
-            if app.isManagedByBrew {
-                failed.append((app.name, zap))
-            } else {
-                failed.append((app.name, false))
-            }
+        let failed = reported.filter { app in
+            if case .failed = results[app.id] { return true }
+            return false
         }
         guard !failed.isEmpty else { return nil }
         var note = trf(
             "Odinstalowanie niepełne — nie usunięto: %@. Powody poniżej.",
-            "\(failed.map(\.name).joined(separator: ", "))"
+            failed.map(\.name).joined(separator: ", ")
         )
-        if failed.contains(where: \.requestedZap) {
-            note += " " + tr("Nie uruchomiono --force; wybrane usunięcie wraz z resztkami nie zostało po cichu zmienione.")
+        let zapFailures = failed.filter { failedZapIDs.contains($0.id) }
+        if !zapFailures.isEmpty {
+            let forceNote = tr("Nie uruchomiono --force; wybrane usunięcie wraz z resztkami nie zostało po cichu zmienione.")
+            let scoped = zapFailures.count == failed.count
+                ? forceNote
+                : trf("%@: %@", zapFailures.map(\.name).joined(separator: ", "), forceNote)
+            note += " " + scoped
         }
         return (note, failed.count)
     }
