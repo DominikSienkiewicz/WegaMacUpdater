@@ -8,6 +8,7 @@
 #
 # `--publication-unit` uruchamia tylko testy publikacji z podstawioną warstwą Git remote.
 # `--reviewed-notes-unit` sprawdza przygotowanie i zatwierdzenie opisu z atrapą Claude Code.
+# `--release-body-unit` sprawdza treść przekazaną przez workflow do atrapy gh.
 # Przypadki 1–16 sprawdzają zachowanie prawdziwego skryptu na jednorazowych repozytoriach.
 # Przypadek 17 czyta skill wydania (.claude/skills/release/SKILL.md) z drzewa repozytorium
 # i pilnuje, żeby wywoływał skrypt i push dokładnie w formie, którą przyjmują release.sh
@@ -367,6 +368,45 @@ check_publication() {
     fi
 }
 
+check_release_body() {
+    local fixture="$SANDBOX/release-body" step="$SANDBOX/create-release.sh"
+    mkdir -p "$fixture/bin"
+    ruby -ryaml -e '
+        steps = YAML.load_file(ARGV.fetch(0)).fetch("jobs").fetch("release").fetch("steps")
+        puts steps.find { |s| s["name"] == "Create GitHub Release" }.fetch("run")
+    ' "$ROOT/.github/workflows/release.yml" > "$step" || { record_fail "missing release workflow step"; return; }
+    cat > "$fixture/bin/gh" <<'GH'
+#!/usr/bin/env bash
+set -eu
+[[ "$1 $2 $3" == "release create v0.1.0" ]]
+while [ "$#" -gt 0 ] && [ "$1" != --notes-file ]; do shift; done
+cp "$2" "$RUNNER_TEMP/api-body"
+GH
+    chmod +x "$fixture/bin/gh"
+    printf '%s\n' '### Added' '- Select pending items.  ' '' '### Fixed' '- Selection survives a refresh.' > "$fixture/approved"
+    local history
+    for history in first later; do
+        {
+            printf '## [Unreleased]\n\n## [0.1.0] — 2026-01-01\n\n'
+            cat "$fixture/approved"
+            printf '\n'
+            if [ "$history" = later ]; then printf '## [0.0.9] — 2025-12-01\n\n- Older change.\n\n'; fi
+            printf '[Unreleased]: https://example.invalid/compare/v0.1.0...HEAD\n'
+        } > "$fixture/CHANGELOG.md"
+        if (cd "$fixture" && PATH="$fixture/bin:$PATH" RUNNER_TEMP="$fixture" STABLE_RELEASE=true \
+                GITHUB_REF_NAME=v0.1.0 /bin/bash -eu "$step") && cmp -s "$fixture/approved" "$fixture/api-body"; then
+            record_pass "$history stable release sends the exact approved Markdown to GitHub"
+        else
+            record_fail "$history stable release body differs from the approved Markdown"
+        fi
+    done
+}
+
+if [ "${1-}" = "--release-body-unit" ]; then
+    check_release_body
+    exit "$((failures != 0))"
+fi
+
 mkdir -p "$SANDBOX/claude-bin"
 cat > "$SANDBOX/claude-bin/claude" <<'CLAUDE'
 #!/usr/bin/env bash
@@ -398,6 +438,8 @@ if [ "${1-}" = "--publication-unit" ]; then
 fi
 
 check_reviewed_notes
+
+check_release_body
 
 # --- 1 ------------------------------------------------------------------------
 printf 'notes file published verbatim\n'
