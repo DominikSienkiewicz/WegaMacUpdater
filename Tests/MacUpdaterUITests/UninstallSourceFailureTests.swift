@@ -11,6 +11,7 @@ final class UninstallSourceFailureTests: XCTestCase {
         )
         var storeApp = app
         storeApp.path = URL(filePath: "/Applications/Store.app")
+        storeApp.bundleIdentifier = "org.example.store"
         storeApp.isManagedByMas = true
         let apps = [app, storeApp]
         func scan(error: Error) async -> UninstallScan {

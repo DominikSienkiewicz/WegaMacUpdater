@@ -222,7 +222,10 @@ struct UninstallLeftoverPresentationTests {
         #expect(beforeFirstAwait.contains("!isPreparingDialog else { return }"))
         #expect(beforeFirstAwait.contains("isPreparingDialog = true"))
         #expect(beforeFirstAwait.contains("defer { isPreparingDialog = false }"), "cleared on every exit path")
-        #expect(view.contains(".disabled(targets.isEmpty || isUninstalling || isPreparingDialog)"))
+        #expect(view.contains(".disabled(targets.isEmpty || isLoading || isUninstalling || isPreparingDialog)"))
+        #expect(beforeFirstAwait.contains("!isLoading"))
+        #expect(view.contains(".disabled(isLoading || isUninstalling || isPreparingDialog)"),
+                "the scan that verified the source and paths cannot be replaced while the sheet is being prepared")
     }
 }
 
